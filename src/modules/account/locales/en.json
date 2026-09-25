@@ -21,8 +21,7 @@
         },
         "update": {
             "success": "Profile updated.",
-            "email-already-used": "Email was already used.",
-            "not-found": "Account not found."
+            "email-already-used": "Email was already used."
         },
         "password-change": {
             "wrong-current": "The current password is incorrect.",

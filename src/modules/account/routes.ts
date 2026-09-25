@@ -33,7 +33,7 @@ import {
 } from '@kernel/middlewares/authorizations';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getAccount } from './controllers/get-account';
-import { replaceAccount, patchAccount } from './controllers/update-account';
+import { replaceAccount, updateAccount } from './controllers/update-account';
 import { postLogin } from './controllers/post-login';
 import { postSignup } from './controllers/post-signup';
 import { postResetRequest } from './controllers/post-reset-request';
@@ -120,7 +120,7 @@ router.patch(
     isAuth,
     upload.image(),
     requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
-    patchAccount
+    updateAccount
 );
 
 // DELETE /account — request account deletion (requires auth). Critical: destruction.

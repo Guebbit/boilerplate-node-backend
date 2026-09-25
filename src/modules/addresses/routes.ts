@@ -10,8 +10,8 @@ import { Router } from 'express';
 import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
 import { noStore } from '@infrastructure/http/middlewares/cache';
 import { getAddresses } from './controllers/get-addresses';
-import { postAddress } from './controllers/add-address';
-import { replaceAddress, patchAddress } from './controllers/update-address';
+import { postAddress } from './controllers/post-address';
+import { replaceAddress, updateAddress } from './controllers/update-address';
 import { deleteAddress } from './controllers/delete-address';
 
 /** Express router for the address book. */
@@ -29,9 +29,9 @@ router.get('/addresses', isAuth, getAddresses);
 // POST /account/addresses — add an entry (requires auth)
 router.post('/addresses', isAuth, postAddress);
 
-// PUT /account/addresses/:addressId (replace) and PATCH (merge) — AUDIT_0924 D17d.
+// PUT /account/addresses/:addressId (replace) and PATCH (merge) (requires auth)
 router.put('/addresses/:addressId', isAuth, replaceAddress);
-router.patch('/addresses/:addressId', isAuth, patchAddress);
+router.patch('/addresses/:addressId', isAuth, updateAddress);
 
 // DELETE /account/addresses/:addressId — remove an entry (requires auth)
 router.delete('/addresses/:addressId', isAuth, deleteAddress);

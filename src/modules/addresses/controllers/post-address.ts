@@ -1,9 +1,7 @@
 /**
  * @module
- * Adding an entry to the address book — the one shipping-address write left that isn't PUT/PATCH
- * on an existing entry. The edit half moved to `./update-address.ts`, built on the shared
- * PUT/PATCH factory (AUDIT_0924 D17d). The read lives in `./get-addresses.ts`, the removal in
- * `./delete-address.ts`.
+ * Adding an entry to the address book. The edit lives in `./update-address.ts`, the read in
+ * `./get-addresses.ts`, the removal in `./delete-address.ts`.
  */
 
 import type { Request, Response } from 'express';

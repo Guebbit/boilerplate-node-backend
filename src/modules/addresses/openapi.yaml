@@ -208,7 +208,7 @@ components:
             additionalProperties: false
             properties:
                 # `null` clears the nickname; `fullName`/`street`/`city`/`zip`/`country` below stay
-                # NON-nullable — omitting one leaves it unchanged, but a `null` is a 400: those are
+                # NON-nullable — omitting one leaves it unchanged, but a `null` is a 422: those are
                 # required on the resource itself, an address is not valid without them.
                 label:
                     type: string
@@ -233,13 +233,10 @@ components:
                     type: string
                     minLength: 1
                     nullable: true
-                # `null`/absent/`false` are all "no promotion asked" — see this operation's own
-                # description. `nullable: true` only so a PUT's fill-omitted-with-null step (D17)
-                # has a legal value to fill this optional field with; the repository already
-                # treats anything but a literal `true` as a no-op.
+                # Absent and `false` are both "no promotion asked" — see this operation's own
+                # description.
                 default:
                     type: boolean
-                    nullable: true
 
         # PUT /account/addresses/{addressId} — RFC 9110 §9.3.4: the body IS the new resource, so
         # every writable field this resource has must be nameable and the identity fields are
@@ -272,9 +269,9 @@ components:
                     type: string
                     minLength: 1
                     nullable: true
+                # Not nullable, so a PUT that omits it leaves the default assignment alone.
                 default:
                     type: boolean
-                    nullable: true
 
         AddressesResponse:
             type: object

@@ -12,7 +12,7 @@ import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getUsers } from './controllers/get-users';
 import { createUser } from './controllers/create-user';
-import { replaceUser, patchUser } from './controllers/update-user';
+import { replaceUser, updateUser } from './controllers/update-user';
 import { deleteUsers } from './controllers/delete-users';
 import { restoreUsers } from './controllers/restore-users';
 import { getUserItem } from './controllers/get-user-item';
@@ -63,7 +63,7 @@ router.patch(
     requirePermission('users.any.update'),
     uploadLimiter,
     upload.image(),
-    patchUser
+    updateUser
 );
 
 // DELETE /users/:id — soft delete unless ?hardDelete=true

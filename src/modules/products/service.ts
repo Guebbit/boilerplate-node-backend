@@ -31,7 +31,7 @@ import {
 } from '@infrastructure/http/response';
 import type { FacetCount } from '@types';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
-import { clearedOrValue } from '@infrastructure/surfaces/create-update-controller';
+import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@types';
@@ -306,7 +306,7 @@ export const create = (
  */
 export const update = (
     product: ProductDocument,
-    // `imageUrl`/`weight` widened to accept `null` — AUDIT_0924 D17c — since the domain type
+    // `imageUrl`/`weight` widened to accept `null`, since the domain type
     // `Product` states them as always a real value (`imageUrl`) or absent-means-zero (`weight`),
     // never explicitly cleared. `imageUrl: null` resolves to {@link DEFAULT_PRODUCT_IMAGE_URL}
     // below rather than ever reaching the document as a null; `weight: null` genuinely unsets it.
@@ -334,14 +334,14 @@ export const update = (
     if (data.active !== undefined) product.active = data.active;
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
-    // `null` clears a recorded weight back to unset (AUDIT_0924 D17c) — $unset on save.
+    // `null` clears a recorded weight back to unset — $unset on save.
     if (data.weight !== undefined) product.weight = clearedOrValue(data.weight);
     if (data.taxClass !== undefined) product.taxClass = data.taxClass;
     if (data.requiresShipping !== undefined) product.requiresShipping = data.requiresShipping;
 
     // If a new image was uploaded, update the url, thumbnail and pending key together — see
     // `applyImageWriteback`'s own docblock for the gate shared with `users`' own `update`.
-    // `null` (AUDIT_0924 D17c) resolves to the default placeholder before it gets there:
+    // `null` resolves to the default placeholder before it gets there:
     // `applyImageWriteback` only ever sees a real value, so "cleared" and "set to this string"
     // are the SAME code path, old-image deletion included.
     const oldImageUrl = applyImageWriteback(product, {

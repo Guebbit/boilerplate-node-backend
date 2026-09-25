@@ -1,59 +1,48 @@
 /**
  * @module
- * The update controller shared by every module whose resource takes both PUT (replace) and PATCH
- * (merge) — AUDIT_0924 D17. One pipeline, and the verb only changes the front of it:
+ * The update controller shared by every resource that takes both PUT (replace) and PATCH (merge).
+ * One pipeline; the verb only changes the front of it:
  *
  * ```
- * PUT   body → validate(ReplaceSchema) → fill every omitted writable field with null ─┐
- * PATCH body → validate(PatchSchema)   ───────────────────────────────────────────────┴→ update(id, changes)
- *                                                                     value → $set · null → $unset
+ * PUT   body → validate(ReplaceSchema) → fill omitted clearable fields with null ─┐
+ * PATCH body → validate(PatchSchema)   ───────────────────────────────────────────┴→ update(id, changes)
+ *                                                                 value → $set · null → $unset
  * ```
  *
- * A PUT is a PATCH that names every field: once omitted fields are filled with `null`, both verbs
- * hand the module's own `update(id, changes)` the same kind of change-set, and that function never
- * learns which verb produced it. `null` is the one way to say "clear this field" (RFC 7396 for
- * PATCH; a PUT body IS the new resource, so an omitted optional field means the same thing) — `''`
- * is never a synonym, which is why every optional free-text field in the contract carries
- * `minLength: 1` and rejects it as a 422 instead.
- *
- * See: docs/theory/request-flow.md, AUDIT_0924's D17 decision.
+ * See: docs/theory/request-flow.md#put-replaces-patch-merges
  */
 
 import type { Request, Response } from 'express';
-import type { ZodType } from 'zod';
+import type { ZodObject, ZodType } from 'zod';
 import { successResponse } from '@infrastructure/http/response';
-import { extractAndValidateId, callerContextOf } from '@infrastructure/http/request';
 import {
-    catchAsNotFound,
+    extractAndValidateId,
+    readInput,
+    type RequestInputDeclaration
+} from '@infrastructure/http/request';
+import {
+    catchAs,
     namedHandler,
     operationName,
     parseBody,
     refused,
     type ServiceResult
 } from '@infrastructure/http/controller';
-import { recordAudit, type AuditAction } from '@infrastructure/observability/audit';
 
 /** What makes one entity's update different from another's. */
-export interface UpdateControllerSpec<TReplace extends ZodType, TPatch extends ZodType, TRow> {
-    /** The entity, lower-case and singular — `'order'`; the audit `target_type` and log name. */
+export interface UpdateControllerSpec<TReplace extends ZodObject, TPatch extends ZodObject, TRow> {
+    /** The entity, lower-case and singular — `'user'`. Names both handlers. */
     entity: string;
     /** The PUT body's schema — every writable field, required ones genuinely required. */
     replaceSchema: TReplace;
     /** The PATCH body's schema — every writable field optional, nullable where clearing it is legal. */
     patchSchema: TPatch;
+    /** The fields a multipart body carries as strings — the same declaration `readInput` takes. */
+    input?: Omit<RequestInputDeclaration<string>, 'surface' | 'ids'>;
     /**
-     * The fields a PUT must name — `Object.keys(replaceSchema.shape)`, computed by the caller
-     * (never hand-kept here) so a field added to the schema is filled without anyone remembering
-     * to. Passed rather than read off `replaceSchema` inside this factory because `.shape` only
-     * exists on a `ZodObject`, and constraining `TReplace` to one would leak Zod's own object type
-     * into every module's spec for a single derived list — see {@link fillOmittedWithNull}.
-     */
-    writableFields: readonly string[];
-    /**
-     * The module's own merge, already written and already used by both verbs before this
-     * factory existed: 404 when absent, 422/409 when the change itself is refused, the saved row
-     * otherwise. `changes` carries `null` for "clear this field" — turning that into `$unset`
-     * (rather than storing a literal `null`) is this function's own job, not the controller's.
+     * The module's own merge: 404 when absent, 422/409 when the change itself is refused, the
+     * saved row otherwise. A `null` in `changes` means "clear this field" — turning it into
+     * `$unset` rather than a stored `null` is this function's job (see `clearedOrValue`).
      */
     update: (
         id: string,
@@ -66,127 +55,103 @@ export interface UpdateControllerSpec<TReplace extends ZodType, TPatch extends Z
      */
     present: (row: TRow, request: Request) => unknown;
     /**
-     * The module's own audit action for a successful update, recorded here once `update()`
-     * resolves. Omit it — every module this factory has been wired to so far already calls
-     * `recordAudit` inside its own `update()`, often with more nuance than one static action can
-     * carry (users' ban/unban split, a deactivation's analytics event): passing one here on top of
-     * that would double-log every successful update, not just add noise. Pass one only for a
-     * module whose `update()` does not already audit itself.
-     */
-    auditAction?: AuditAction;
-    /** The i18n key answered when the id is well-formed but matches nothing. */
-    notFoundKey: string;
-    /**
-     * Where the row's id comes from, when it is not `:id` in the path — `PUT /account` and
-     * `PATCH /account` act on the caller's OWN record, which has no id anywhere in the request:
-     * it is `request.authContext.id`, already guaranteed present by the `isAuth` middleware every
-     * mount behind this runs after. Omit it for the ordinary `/x/:id` shape, which still 422s a
-     * missing or malformed path id the way every other id-taking controller does.
+     * Where the row's id comes from when it is not a validated `:id` path param — the caller's own
+     * record, or a differently named param. Omit it for `/x/:id`, which 422s a malformed id.
      */
     idFrom?: (request: Request) => string;
 }
 
 /**
- * Fill every field {@link UpdateControllerSpec.replaceSchema} declares but the caller's PUT body
- * omitted, with `null` — "the body IS the new resource" (RFC 9110 §9.3.4) stated as a change-set
- * a PATCH could have sent. Only ever reaches an omitted key that `replaceSchema.safeParse` already
- * accepted as legal to omit (a required-but-missing field already failed validation before this
- * runs), so blanket-filling every gap is safe.
+ * The fields a PUT clears by omitting them: every field whose schema accepts `null`. A field that
+ * cannot be `null` — a password, a consent flag — is left unchanged when omitted instead.
+ *
+ * @param schema - the PUT body's schema
+ * @returns the names of its nullable fields
+ */
+export const clearableFields = (schema: ZodObject): string[] =>
+    // The base `ZodObject` types its shape loosely; every value in it is a field schema.
+    Object.entries<ZodType>(schema.shape)
+        .filter(([, field]) => field.safeParse(null).success)
+        .map(([name]) => name);
+
+/**
+ * Fill every clearable field the caller's PUT body omitted with `null` — "the body IS the new
+ * resource" (RFC 9110 §9.3.4) stated as a change-set a PATCH could have sent.
  *
  * @param body - the already-validated PUT body
- * @param writableFields - `Object.keys(replaceSchema.shape)`
- * @returns `body`, with every field from `writableFields` present — `null` where it was absent
+ * @param fields - {@link clearableFields} of the PUT schema
+ * @returns `body`, with every one of `fields` present — `null` where it was absent
  */
 export const fillOmittedWithNull = (
     body: Record<string, unknown>,
-    writableFields: readonly string[]
+    fields: readonly string[]
 ): Record<string, unknown> => {
     const filled = { ...body };
-    for (const field of writableFields) if (!(field in filled)) filled[field] = null;
+    for (const field of fields) if (!(field in filled)) filled[field] = null;
     return filled;
 };
-
-/**
- * One field's contribution to a Mongoose document assignment: a stored `null` was never this
- * repo's spelling for "no value" (see this module's own docblock) — an UNSET field is what a
- * cleared optional field looks like on disk, and assigning `undefined` to a hydrated document's
- * path is what makes `.save()` emit `$unset` for it rather than writing a literal `null`
- * (verified against a real in-memory MongoDB: `doc.field = undefined; await doc.save()` removes
- * the path entirely). Every module's own `update()` wraps an incoming field's value with this
- * before assigning it, wherever `null` is a legal value for that field.
- *
- * @param value - a field's value off a change-set this controller built
- * @returns `value` unchanged, or `undefined` when it was `null`
- */
-export const clearedOrValue = <T>(value: T | null): T | undefined => value ?? undefined;
 
 /**
  * Build a module's update controller: one PUT (replace) handler and one PATCH (merge) handler,
  * sharing everything but which schema validates the body and whether omitted fields are filled.
  *
  * @param spec - the things that differ per entity
- * @returns `{ replace, patch }` — two named express handlers over one body
+ * @returns `{ replace, update }` — two named express handlers over one pipeline
  */
-export const createUpdateController = <TReplace extends ZodType, TPatch extends ZodType, TRow>({
+export const createUpdateController = <TReplace extends ZodObject, TPatch extends ZodObject, TRow>({
     entity,
     replaceSchema,
     patchSchema,
-    writableFields,
+    input,
     update,
     present,
-    auditAction,
-    notFoundKey,
     idFrom
 }: UpdateControllerSpec<TReplace, TPatch, TRow>): {
     replace: (request: Request, response: Response) => Promise<void>;
-    patch: (request: Request, response: Response) => Promise<void>;
+    update: (request: Request, response: Response) => Promise<void>;
 } => {
+    // Derived once per controller, not per request — the schema never changes.
+    const replaceFills = clearableFields(replaceSchema);
+
     /**
-     * The one pipeline both verbs run: validate → (PUT only) fill omitted fields with `null` →
-     * `update(id, changes)` → audit → respond. `schema` and `fillOmitted` are the only two things
-     * that differ between `replace` and `patch` below.
+     * The one pipeline both verbs run: id → decode → validate → (PUT only) fill → `update()` →
+     * respond. `schema` and `fills` are the only two things that differ between the verbs.
      */
     const run =
-        (operation: string, schema: ZodType, fillOmitted: boolean) =>
+        (operation: string, schema: ZodObject, fills: readonly string[]) =>
         (request: Request, response: Response): Promise<void> => {
-            // `idFrom` (UpdateControllerSpec's own docblock): `/account`'s two verbs act on the
-            // caller's own record, so there is no path id to 422 — skip straight to it.
             const id = idFrom ? idFrom(request) : extractAndValidateId(request, response, 'path');
             if (!id) return Promise.resolve();
 
-            const body = parseBody(schema, request.body, response) as
-                | Record<string, unknown>
-                | undefined;
+            // `create` is `readInput`'s body-only surface: the id was resolved above, and a path
+            // param merged into this object would fail the body's strict schema.
+            const body = parseBody(
+                schema,
+                readInput(request, { ...input, surface: 'create' }),
+                response
+            );
             if (body === undefined) return Promise.resolve();
 
-            const changes = fillOmitted ? fillOmittedWithNull(body, writableFields) : body;
+            const changes = fillOmittedWithNull(body, fills);
 
+            // The PATCH schema's output type is the contract of `update()`; a filled PUT body is
+            // the same shape, since every field it adds is one the PUT schema itself accepts null for.
             return update(id, changes as TPatch['_output'], request)
                 .then((result) => {
                     // Sends the error envelope (404, 409, 422) and stops here if refused.
                     if (refused(response, result)) return;
-
-                    // See `UpdateControllerSpec.auditAction` — most modules already recorded
-                    // their own entry inside `update()` and pass nothing here.
-                    if (auditAction)
-                        recordAudit(callerContextOf(request), {
-                            action: auditAction,
-                            outcome: 'success',
-                            target_type: entity,
-                            target_id: id
-                        });
                     return Promise.resolve(present(result.data, request)).then((shaped) => {
                         successResponse(response, shaped, 200, result.message);
                     });
                 })
-                .catch(catchAsNotFound(response, operation, notFoundKey));
+                .catch(catchAs(response, operation));
         };
 
     const replaceOperation = operationName('replace', entity);
-    const patchOperation = operationName('patch', entity);
+    const updateOperation = operationName('update', entity);
 
     return {
-        replace: namedHandler(replaceOperation, run(replaceOperation, replaceSchema, true)),
-        patch: namedHandler(patchOperation, run(patchOperation, patchSchema, false))
+        replace: namedHandler(replaceOperation, run(replaceOperation, replaceSchema, replaceFills)),
+        update: namedHandler(updateOperation, run(updateOperation, patchSchema, []))
     };
 };

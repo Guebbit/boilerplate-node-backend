@@ -26,7 +26,7 @@ import type { WebhookSubscriptionDocument } from '../model';
 import { webhookSubscriptionRepository } from '../repository';
 import { mintRingSecret, removeRingSecret } from '../secrets';
 import { getWebhookSubscriptionCap } from '../config';
-import { clearedOrValue } from '@infrastructure/surfaces/create-update-controller';
+import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { webhooksAuditActions } from '../audit';
 
 /** A subscription alongside whichever plaintext secrets this call just minted — shown once. */
@@ -160,7 +160,7 @@ export const update = (
             if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
 
             if (body.url !== undefined) subscription.url = body.url;
-            // `null` clears the description (AUDIT_0924 D17c) — $unset on save.
+            // `null` clears the description — $unset on save.
             if (body.description !== undefined)
                 subscription.description = clearedOrValue(body.description);
             if (body.eventTypes !== undefined) subscription.eventTypes = body.eventTypes;

@@ -159,9 +159,9 @@ and `catchAs`. Helpers rather than a wrapper, deliberately: a wrapper that owned
 move the stack trace off the handler, degrade the inference `parseBody`'s return type carries, and
 hide the literal `.catch(` that `scripts/eslint/controller-chain-must-catch.ts` looks for.
 
-**Three endpoints deliberately do not parse a generated schema, and say so in place.**
-`post-signup` and `put-account` are validated by their service against `zodUserSchema`, whose
-messages come from the dictionary — parsing first would answer in Zod's own English and break the
+**Two endpoints deliberately do not parse a generated schema, and say so in place.**
+`post-signup` is validated by its service against `zodUserSchema`, whose messages come from the
+dictionary — parsing first would answer in Zod's own English and break the
 `Content-Language` guarantee `tests/integration/locale.test.ts` asserts. `post-login` answers one
 way for every wrong credential: parsing first makes a too-short password a 422 while a wrong
 password of the right length is a 401, and it answers before `recordLoginFailure`, so the attempt
@@ -181,6 +181,39 @@ Heavy tasks (email, PDF generation) are pushed to [RabbitMQ](../tools/rabbitmq.m
 ### Signals everywhere
 
 [Winston](../tools/winston.md), [Prometheus](../tools/prometheus.md), [OpenTelemetry](../tools/opentelemetry.md), and [Grafana](../tools/grafana.md) make it easier to debug the same request from multiple angles. Each log line carries a `trace_id` that links back to the full trace in Grafana → Tempo.
+
+## PUT replaces, PATCH merges
+
+Every resource with an update answers both verbs, through one shared controller —
+`createUpdateController` in `@infrastructure/surfaces/create-update-controller`. The verb only
+changes the front of the pipeline; the module's own `update(id, changes)` never learns which one
+produced the change-set.
+
+```mermaid
+flowchart LR
+    P["PUT body"] --> VR["validate<br/>Replace*Request"] --> F["fill every omitted<br/>nullable field with null"] --> U
+    M["PATCH body"] --> VP["validate<br/>Update*Request"] --> U["module's update(id, changes)"]
+    U --> S["value → $set<br/>null → $unset"]
+```
+
+| Verb  | The body is                              | An omitted field                     | `null`           |
+| ----- | ---------------------------------------- | ------------------------------------ | ---------------- |
+| PUT   | the whole new resource (RFC 9110 §9.3.4) | cleared — unless it cannot be `null` | clears the field |
+| PATCH | only what changes (RFC 7396)             | left alone                           | clears the field |
+
+- **`null` is the one way to say "clear this field".** `''` is never a synonym: every optional
+  free-text field in the contract carries `minLength: 1`, so a blank string is a 422.
+- **A field that cannot be `null` cannot be cleared** — a password, a consent flag, an address's
+  `default`. A PUT that omits one leaves it unchanged. The factory reads which fields those are
+  off the schema itself (`clearableFields`), so nobody keeps the list by hand.
+- **A cleared field is unset on disk, never a stored `null`.** `clearedOrValue`
+  (`@infrastructure/persistence/changes`) turns the change-set's `null` into `undefined`, which
+  `.save()` writes as `$unset`.
+- **The module's `update()` audits itself.** The factory never records an audit entry, so no
+  update is logged twice.
+
+`tests/cross-cutting/replace-patch-parity.test.ts` checks that each resource's PUT and PATCH
+schemas declare the same fields.
 
 ## The database error interpreter
 

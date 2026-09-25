@@ -1,12 +1,11 @@
 /**
- * `createUpdateController` — AUDIT_0924 D17's shared PUT/PATCH factory.
+ * `createUpdateController` — the shared PUT/PATCH factory.
  *
  * The property under test is the pipeline the module docblock states: PUT fills every omitted
- * writable field with `null` before handing the change-set to the module's own `update()`; PATCH
- * hands over only what the caller actually sent. `clearedOrValue` and `fillOmittedWithNull` are
- * pinned on their own too — they are the two facts every module's `update()` and every route's
- * PUT depend on, and a mutant in either would still pass a route-level test that never sends a
- * `null`.
+ * clearable field with `null` before handing the change-set to the module's own `update()`; PATCH
+ * hands over only what the caller actually sent. `clearableFields` and `fillOmittedWithNull` are
+ * pinned on their own too — every route's PUT depends on them, and a mutant in either would still
+ * pass a route-level test that never omits a field.
  */
 import { z } from 'zod';
 import type { Request } from 'express';
@@ -14,64 +13,52 @@ import { asStub } from '@tests/stub';
 import { makeResponseStub } from '@tests/express';
 import { generateReject, generateSuccess } from '@infrastructure/http/response';
 import {
-    clearedOrValue,
+    clearableFields,
     createUpdateController,
-    fillOmittedWithNull
+    fillOmittedWithNull,
+    type UpdateControllerSpec
 } from '@infrastructure/surfaces/create-update-controller';
-import { emitAuditEvent, coreAuditActions } from '@infrastructure/observability/audit';
-
-// Only the sink is replaced, same pattern as `tests/unit/kernel/authorizations.test.ts` — the
-// real `buildAuditEvent`/`recordAudit` stay in force so a shape drift fails here.
-jest.mock('@infrastructure/observability/audit', () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
-        '@infrastructure/observability/audit'
-    );
-    const emitAuditEvent = jest.fn();
-    return {
-        ...actual,
-        emitAuditEvent,
-        recordAudit: (
-            context: Parameters<typeof actual.recordAudit>[0],
-            fields: Parameters<typeof actual.recordAudit>[1]
-        ) => {
-            if (!context) return;
-            emitAuditEvent(actual.buildAuditEvent(context, fields));
-        }
-    };
-});
-
-const mockedEmitAuditEvent = emitAuditEvent as jest.MockedFunction<typeof emitAuditEvent>;
 
 /** A believable ObjectId — `extractAndValidateId` refuses anything else with a 422. */
 const VALID_ID = '507f1f77bcf86cd799439011';
 
-const replaceSchema = z.object({
+/** A PUT schema with one required field, one clearable one, and one that cannot be `null`. */
+const replaceSchema = z.strictObject({
     title: z.string().min(1),
-    note: z.string().min(1).nullable().optional()
+    note: z.string().min(1).nullable().optional(),
+    featured: z.boolean().optional()
 });
+
+/** The matching PATCH schema — every field optional. */
 const patchSchema = replaceSchema.partial();
 
-const makeRequest = (body: unknown, id: string | undefined = VALID_ID) =>
+/** The spec every case starts from; each case overrides only what it is about. */
+type WidgetSpec = UpdateControllerSpec<typeof replaceSchema, typeof patchSchema, unknown>;
+
+/** A controller over {@link replaceSchema}, with a `update()` that succeeds unless overridden. */
+const makeController = (overrides: Partial<WidgetSpec> = {}) =>
+    createUpdateController({
+        entity: 'widget',
+        replaceSchema,
+        patchSchema,
+        update: jest.fn().mockResolvedValue(generateSuccess({ title: 'x' })),
+        present: (row) => row,
+        ...overrides
+    });
+
+/** A request stub; `multipart` makes `request.is('multipart/form-data')` answer yes. */
+const makeRequest = (body: unknown, id: string | undefined = VALID_ID, multipart = false) =>
     asStub<Request>({
         params: { id },
         query: {},
         body,
-        is: () => false
+        is: (type: string) => (multipart && type === 'multipart/form-data' ? type : false)
     });
 
 describe('createUpdateController', () => {
-    it('PUT fills an omitted optional field with null', async () => {
+    it('PUT fills an omitted clearable field with null', async () => {
         const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
-        const { replace } = createUpdateController({
-            entity: 'widget',
-            replaceSchema,
-            patchSchema,
-            writableFields: ['title', 'note'],
-            update,
-            present: (row) => row,
-            auditAction: coreAuditActions.SECURITY_FORBIDDEN,
-            notFoundKey: 'widgets.not-found'
-        });
+        const { replace } = makeController({ update });
 
         await replace(makeRequest({ title: 'x' }), makeResponseStub());
 
@@ -84,16 +71,7 @@ describe('createUpdateController', () => {
 
     it('PATCH sends only what the caller actually sent, no filling', async () => {
         const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
-        const { patch } = createUpdateController({
-            entity: 'widget',
-            replaceSchema,
-            patchSchema,
-            writableFields: ['title', 'note'],
-            update,
-            present: (row) => row,
-            auditAction: coreAuditActions.SECURITY_FORBIDDEN,
-            notFoundKey: 'widgets.not-found'
-        });
+        const { update: patch } = makeController({ update });
 
         await patch(makeRequest({ title: 'x' }), makeResponseStub());
 
@@ -102,16 +80,7 @@ describe('createUpdateController', () => {
 
     it('PUT passes an explicit null straight through, not re-wrapped', async () => {
         const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
-        const { replace } = createUpdateController({
-            entity: 'widget',
-            replaceSchema,
-            patchSchema,
-            writableFields: ['title', 'note'],
-            update,
-            present: (row) => row,
-            auditAction: coreAuditActions.SECURITY_FORBIDDEN,
-            notFoundKey: 'widgets.not-found'
-        });
+        const { replace } = makeController({ update });
 
         await replace(makeRequest({ title: 'x', note: null }), makeResponseStub());
 
@@ -122,18 +91,18 @@ describe('createUpdateController', () => {
         );
     });
 
+    it('decodes a declared boolean off a multipart body before validating it', async () => {
+        const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
+        const { update: patch } = makeController({ update, input: { booleans: ['featured'] } });
+
+        await patch(makeRequest({ featured: 'false' }, VALID_ID, true), makeResponseStub());
+
+        expect(update).toHaveBeenCalledWith(VALID_ID, { featured: false }, expect.anything());
+    });
+
     it('answers 422 for a malformed id, never reaching update', async () => {
         const update = jest.fn();
-        const { patch } = createUpdateController({
-            entity: 'widget',
-            replaceSchema,
-            patchSchema,
-            writableFields: ['title', 'note'],
-            update,
-            present: (row) => row,
-            auditAction: coreAuditActions.SECURITY_FORBIDDEN,
-            notFoundKey: 'widgets.not-found'
-        });
+        const { update: patch } = makeController({ update });
         const response = makeResponseStub();
 
         await patch(makeRequest({ title: 'x' }, 'not-an-id'), response);
@@ -144,16 +113,7 @@ describe('createUpdateController', () => {
 
     it('answers 422 for a schema violation, never reaching update', async () => {
         const update = jest.fn();
-        const { patch } = createUpdateController({
-            entity: 'widget',
-            replaceSchema,
-            patchSchema,
-            writableFields: ['title', 'note'],
-            update,
-            present: (row) => row,
-            auditAction: coreAuditActions.SECURITY_FORBIDDEN,
-            notFoundKey: 'widgets.not-found'
-        });
+        const { update: patch } = makeController({ update });
         const response = makeResponseStub();
 
         // `title` violates `minLength: 1` once present but blank.
@@ -163,70 +123,33 @@ describe('createUpdateController', () => {
         expect(update).not.toHaveBeenCalled();
     });
 
-    it('sends the refusal the service returns, e.g. a 409, without auditing success', async () => {
-        const update = jest.fn().mockResolvedValue(generateReject(409, ['conflict']));
-        const { patch } = createUpdateController({
-            entity: 'widget',
-            replaceSchema,
-            patchSchema,
-            writableFields: ['title', 'note'],
-            update,
-            present: (row) => row,
-            auditAction: coreAuditActions.SECURITY_FORBIDDEN,
-            notFoundKey: 'widgets.not-found'
+    it('sends the refusal the service returns, e.g. a 409', async () => {
+        const { update: patch } = makeController({
+            update: jest.fn().mockResolvedValue(generateReject(409, ['conflict']))
         });
         const response = makeResponseStub();
 
         await patch(makeRequest({ title: 'x' }), response);
 
         expect(response.status).toHaveBeenCalledWith(409);
-        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
     });
 
-    it('audits and responds through present() on success', async () => {
-        const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x', id: VALID_ID }));
-        const present = jest.fn((row: { title: string }) => ({ shaped: row.title }));
-        const { patch } = createUpdateController({
-            entity: 'widget',
-            replaceSchema,
-            patchSchema,
-            writableFields: ['title', 'note'],
-            update,
-            present,
-            auditAction: coreAuditActions.SECURITY_FORBIDDEN,
-            notFoundKey: 'widgets.not-found'
-        });
+    it('responds through present() on success', async () => {
+        const present = jest.fn((row: unknown) => ({ shaped: row }));
+        const { update: patch } = makeController({ present });
         const response = makeResponseStub();
 
         await patch(makeRequest({ title: 'x' }), response);
 
-        expect(present).toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(200);
         expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ data: { shaped: 'x' } })
-        );
-        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
-            expect.objectContaining({
-                action: coreAuditActions.SECURITY_FORBIDDEN,
-                target_type: 'widget',
-                target_id: VALID_ID,
-                outcome: 'success'
-            })
+            expect.objectContaining({ data: { shaped: { title: 'x' } } })
         );
     });
 
     it('reads the id from idFrom instead of the path, for a self-service resource like /account', async () => {
         const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
-        const { patch } = createUpdateController({
-            entity: 'widget',
-            replaceSchema,
-            patchSchema,
-            writableFields: ['title', 'note'],
-            update,
-            present: (row) => row,
-            notFoundKey: 'widgets.not-found',
-            idFrom: () => 'the-callers-own-id'
-        });
+        const { update: patch } = makeController({ update, idFrom: () => 'the-callers-own-id' });
 
         // No `:id` at all — `idFrom` is the only source, exactly like `/account`'s own route.
         await patch(makeRequest({ title: 'x' }, undefined), makeResponseStub());
@@ -237,27 +160,12 @@ describe('createUpdateController', () => {
             expect.anything()
         );
     });
+});
 
-    it('never audits on its own when auditAction is omitted, trusting update() already did', async () => {
-        // DM2 (DECISION_MADE.md): every module wired to this factory so far already calls
-        // `recordAudit` inside its own `update()` — a static action here on top of that would
-        // double-log every successful update, not add a second, less specific entry on purpose.
-        const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x', id: VALID_ID }));
-        const { patch } = createUpdateController({
-            entity: 'widget',
-            replaceSchema,
-            patchSchema,
-            writableFields: ['title', 'note'],
-            update,
-            present: (row) => row,
-            notFoundKey: 'widgets.not-found'
-        });
-        const response = makeResponseStub();
-
-        await patch(makeRequest({ title: 'x' }), response);
-
-        expect(response.status).toHaveBeenCalledWith(200);
-        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+describe('clearableFields', () => {
+    it('lists exactly the fields that accept null', () => {
+        // `title` is required, `featured` optional but never null — neither is a PUT's to clear.
+        expect(clearableFields(replaceSchema)).toEqual(['note']);
     });
 });
 
@@ -280,17 +188,5 @@ describe('fillOmittedWithNull', () => {
         const body = { a: 1 };
         fillOmittedWithNull(body, ['a', 'b']);
         expect(body).toEqual({ a: 1 });
-    });
-});
-
-describe('clearedOrValue', () => {
-    it('turns null into undefined, for $unset on save', () => {
-        expect(clearedOrValue(null)).toBeUndefined();
-    });
-
-    it('leaves every other value exactly as it was', () => {
-        expect(clearedOrValue('x')).toBe('x');
-        expect(clearedOrValue(0)).toBe(0);
-        expect(clearedOrValue(false)).toBe(false);
     });
 });

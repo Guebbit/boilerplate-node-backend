@@ -29,8 +29,8 @@ export interface RequestImage {
     /**
      * The url to persist: this request's upload if it carried one and it was digested inline
      * (no broker configured), the pending-image placeholder if a broker will digest it later, or
-     * the body's own `imageUrl` otherwise — which, since AUDIT_0924 D17c, may itself be `null`
-     * (the caller clearing the image) rather than only a string or absent. An upload always wins
+     * the body's own `imageUrl` otherwise — a string, absent, or `null` (the caller clearing the
+     * image). An upload always wins
      * over the body's own value when both are present: the caller sent bytes, which is a
      * stronger statement of intent than whatever the JSON body also happened to say.
      */
@@ -61,9 +61,9 @@ export interface RequestImage {
  * Read the image a write request carries, and the undo for it.
  *
  * An uploaded file outranks a body `imageUrl` — a caller that sent bytes meant those bytes. Never
- * destructure a `''` default (AUDIT_0924 D17c) — `''` is invalid input everywhere now
- * (`ImageUrl`'s own `minLength: 1`); `undefined` already means "no change" to every `.optional()`
- * update schema, and `null` (on the no-upload/body-only path) means "clear it".
+ * destructure a `''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`); `undefined`
+ * means "no change" to every `.optional()` update schema, and `null` (on the no-upload/body-only
+ * path) means "clear it".
  *
  * @param request - an Express request already through the upload middleware
  */
@@ -107,11 +107,47 @@ export const readUploadedImage = (
     return {
         // Non-string, non-null values (number, bool, …) must reach the validator untouched so
         // zod can reject them with the correct i18n message — coercing them away here would mask
-        // the type error (200 instead of 422). `null` is legitimate now (D17c): a body clearing
-        // the image, which is why the cast below widened to include it.
+        // the type error (200 instead of 422). `null` is a body clearing the image.
         imageUrl: bodyImageUrl as string | null | undefined,
         thumbnailUrl: undefined,
         pendingImageKey: undefined,
         deleteUpload: () => Promise.resolve(false)
     };
+};
+
+/** The image fields a write persists — {@link RequestImage} minus its undo. */
+export type ImageChanges = Pick<RequestImage, 'imageUrl' | 'thumbnailUrl' | 'pendingImageKey'>;
+
+/**
+ * Run a write with this request's image folded into it, and delete the upload again when the write
+ * is refused or throws — an upload nothing references is an orphan.
+ *
+ * `changedImageUrl` is the validated change-set's own `imageUrl`, used only when no file was
+ * uploaded: on a multipart PUT that is the `null` the fill step put there, which an upload in the
+ * same request must still win over.
+ *
+ * @param request - an Express request already through the upload middleware
+ * @param changedImageUrl - the change-set's `imageUrl`
+ * @param write - the module's write, given the image fields to persist
+ * @returns whatever `write` resolved to
+ */
+export const writeWithUploadedImage = <TResult extends { success: boolean }>(
+    request: Parameters<typeof readUploadedImage>[0],
+    changedImageUrl: string | null | undefined,
+    write: (image: ImageChanges) => Promise<TResult>
+): Promise<TResult> => {
+    const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
+    const discardUpload = (): Promise<unknown> => deleteUpload().catch(() => undefined);
+
+    return write({
+        imageUrl: imageUrl === undefined ? changedImageUrl : imageUrl,
+        thumbnailUrl,
+        pendingImageKey
+    })
+        .then((result) => (result.success ? result : discardUpload().then(() => result)))
+        .catch((error: unknown) =>
+            discardUpload().then((): never => {
+                throw error;
+            })
+        );
 };

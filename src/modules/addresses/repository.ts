@@ -15,7 +15,7 @@ import {
 } from '@infrastructure/persistence/create-repository';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { encryptAddressItem, decryptAddressItem } from './pii';
-import { clearedOrValue } from '@infrastructure/surfaces/create-update-controller';
+import { clearedOrValue } from '@infrastructure/persistence/changes';
 
 /**
  * Every book this module hands back is decrypted first — `findByUserId` and every write method's
@@ -113,7 +113,7 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
         const entry = book?.items.find((item) => String(item._id) === addressId);
         if (!book || !entry) return null;
 
-        // `label`/`phone` are AUDIT_0924 D17c's nullable fields — `null` clears them
+        // `label`/`phone` are the nullable fields — `null` clears them
         // ($unset on save, via `clearedOrValue`); the other five are required on the resource
         // itself, so the contract refuses `null` for them before this ever runs.
         if (changes.label !== undefined) entry.label = clearedOrValue(changes.label);

@@ -1,7 +1,7 @@
 /**
- * A PUT and a PATCH on the same resource declare the same writable fields — AUDIT_0924 D17's
- * shared `createUpdateController` factory only works because `TReplace`/`TPatch` are the same
- * shape apart from which properties are `required`. A field added to one schema and forgotten on
+ * A PUT and a PATCH on the same resource declare the same writable fields — the shared
+ * `createUpdateController` factory only works because `TReplace`/`TPatch` are the same shape
+ * apart from which properties are `required`. A field added to one schema and forgotten on
  * the other is a field a PUT can set but a PATCH cannot, or the reverse — invisible in either
  * schema alone, since each is independently valid YAML.
  *
@@ -23,14 +23,11 @@ interface SchemaShape {
 
 /**
  * `Replace<Entity>Request`/`Update<Entity>Request` name the same entity — `Replace` and `Update`
- * are this repo's own two prefixes for a factory-backed resource (D17), never part of an entity's
- * own name, so stripping either leaves the same remainder for a matched pair. Excludes the
- * `Multipart` variant: the factory validates the JSON-shaped schema for both content types (D17d),
- * so only that one has to agree. `Patch<Entity>Request` named the merge half until the spectral
- * naming rule (`operation-id-no-http-verb-prefix`/`request-schema-no-http-verb-prefix`, which
- * forbids a leading HTTP verb) forced a rename to `Update`; a resource that instead spells its
- * merge half `Merge<Entity>Request` (`locales`' bulk entry replace) is a different, deliberately
- * separate convention this regex is not meant to catch.
+ * are this repo's own two prefixes for a factory-backed resource, never part of an entity's own
+ * name, so stripping either leaves the same remainder for a matched pair.
+ *
+ * Multipart: excluded — the factory validates the JSON-shaped schema for both content types.
+ * `Merge*`:  `locales`' bulk entry replace, a deliberately separate convention.
  */
 const REPLACE_OR_UPDATE = /^(Replace|Update)(.+)Request$/;
 
@@ -56,7 +53,7 @@ const schemas = (): SchemaShape[] =>
  * BOTH verbs declared one — a lone `Replace*` with no `Update*` counterpart (or the reverse) is
  * dropped here rather than left for the canary below to count as if it proved anything: the
  * canary must fail on an empty sweep, and a lone schema is exactly what an empty sweep looks like
- * once a rename (like `Patch*` → `Update*`) silently breaks the pairing regex.
+ * once a rename silently breaks the pairing regex.
  */
 const pairedSchemas = (): Map<string, [SchemaShape, SchemaShape]> => {
     const byEntity = new Map<string, SchemaShape[]>();
@@ -74,11 +71,16 @@ const pairedSchemas = (): Map<string, [SchemaShape, SchemaShape]> => {
     );
 };
 
-describe('Replace/Patch schema parity', () => {
-    it('finds at least one genuine Replace/Update pair — a canary against an empty sweep', () => {
-        // Counts PAIRS, not raw regex matches: a lone `Replace*`/`Update*` schema with no partner
-        // (an unmigrated resource, or a renamed one whose pairing broke) must not count here.
-        expect(pairedSchemas().size).toBeGreaterThanOrEqual(2);
+describe('Replace/Update schema parity', () => {
+    it('finds exactly the known Replace/Update pairs — a canary against an empty sweep', () => {
+        // The exact set, not a minimum: a pair whose naming drifts drops out of the sweep silently,
+        // and `>= N` would still pass. A resource moving onto the factory adds its entity here.
+        expect([...pairedSchemas().keys()].toSorted()).toEqual([
+            'Account',
+            'Address',
+            'FeedbackRequestStatus',
+            'UserById'
+        ]);
     });
 
     it('declares the same property names on both verbs of every resource that has both', () => {
