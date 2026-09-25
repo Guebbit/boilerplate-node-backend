@@ -191,11 +191,10 @@ it, for a customer and an operator alike.
 never a field an admin assigns — they follow a parcel event `delivery` records, through
 `markShipped`/`markDelivered` (see "Who writes the status" above), or an admin override's own door
 when the ordinary sequence needs correcting. `PUT /orders/:id` covers only `paid → processing` and
-the fields that stay caller-editable.
-
-For the same reason `update` refuses to rewrite `items` while `inventory` still binds stock to the
-order (`ORDER_ITEMS_HELD`): the reservation froze its own copy of the basket, and a later commit
-would decrement products the order no longer contains.
+`email`; `items`/`userId` are not in `UpdateOrderByIdRequest` at all — they stay `POST /orders`
+(create)-only. Rewriting a document that already carries a sequential invoice number has no safe
+meaning: EU VAT practice corrects an issued invoice with a credit note, not a rewrite, and a real
+order-edit flow (stock delta, refund/charge, tax) is a feature of its own.
 
 ### Deciding and enforcing stay separate
 

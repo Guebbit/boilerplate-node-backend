@@ -9,7 +9,6 @@
  * the order.
  */
 
-import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, saveProduct } from '@modules/products/tests/factories';
@@ -93,14 +92,6 @@ const seedOrder = async () => {
 
 /** Re-read an order after something else moved it, so `update` works on current state. */
 const reload = async (order: OrderDocument) => (await orderRepository.findById(String(order._id)))!;
-
-/**
- * Give an order's held units back.
- *
- * `create` holds stock against the lines it wrote, and `update` refuses to rewrite lines the
- * shelf is holding — so an items test has to say which of the two situations it is in.
- */
-const releaseHold = (order: OrderDocument) => inventoryService.releaseForOrder(String(order._id));
 
 describe('create', () => {
     it('creates an order and answers 201', async () => {
@@ -452,19 +443,6 @@ describe('update', () => {
         expect(reloaded!.email).toBe('new@example.com');
     });
 
-    it('reassigns the owner', async () => {
-        const { order } = await seedOrder();
-        const other = await createUser({ email: 'other@example.com' });
-
-        await update(order, { userId: String(other._id) });
-
-        const reloaded = await orderRepository.findById(String(order._id));
-        expect(String(reloaded!.userId)).toBe(String(other._id));
-        // Stored as an ObjectId, not the string it arrived as — otherwise every scoped
-        // aggregation stops matching this order.
-        expect(reloaded!.userId).toBeInstanceOf(Types.ObjectId);
-    });
-
     it('leaves untouched fields alone', async () => {
         // Each assignment is guarded by `!== undefined`, so a partial update must be partial.
         const { order } = await seedOrder();
@@ -477,87 +455,13 @@ describe('update', () => {
         expect(reloaded!.items).toHaveLength(2);
     });
 
-    /**
-     * The reservation froze its own copy of the basket, and the counters answer to that copy.
-     * Rewriting `order.items` underneath it leaves a later `commitForOrder` decrementing products
-     * the order no longer contains, while the ones it now contains were never held.
-     */
-    it('refuses to rewrite the items while the shelf is still holding them', async () => {
-        const { order } = await seedOrder();
-        const replacement = await createProduct({ title: 'Monitor', price: 200 });
-
-        const result = await update(order, {
-            items: [{ productId: String(replacement._id), quantity: 3 }]
-        });
-
-        expect(result.success).toBe(false);
-        expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0].code).toBe('ORDER_ITEMS_HELD');
-        const reloaded = await reload(order);
-        expect(reloaded.items).toHaveLength(2);
-    });
-
-    it('replaces the items with fresh snapshots when given', async () => {
-        const { order } = await seedOrder();
-        await releaseHold(order);
-        const replacement = await createProduct({ title: 'Monitor', price: 200 });
-
-        await update(order, { items: [{ productId: String(replacement._id), quantity: 3 }] });
-
-        const reloaded = await orderRepository.findById(String(order._id));
-        expect(reloaded!.items).toHaveLength(1);
-        expect((reloaded!.items[0].product as { title: string }).title).toBe('Monitor');
-        expect(reloaded!.items[0].quantity).toBe(3);
-    });
-
-    it('deletes the cached invoice once the lines it describes no longer exist', async () => {
-        const { order } = await seedOrder();
-        await releaseHold(order);
-        const replacement = await createProduct({ title: 'Monitor', price: 200 });
-        deleteCachedInvoiceMock.mockClear();
-
-        await update(order, { items: [{ productId: String(replacement._id), quantity: 3 }] });
-
-        expect(deleteCachedInvoiceMock).toHaveBeenCalledWith(String(order._id));
-    });
-
-    it('leaves the cache alone for a write that never touches the lines', async () => {
+    it('leaves the cache alone since update never touches order lines', async () => {
         const { order } = await seedOrder();
         deleteCachedInvoiceMock.mockClear();
 
         await update(order, { email: 'new-address@example.com' });
 
         expect(deleteCachedInvoiceMock).not.toHaveBeenCalled();
-    });
-
-    it('rejects with 404 when a replacement product does not exist', async () => {
-        const { order } = await seedOrder();
-        await releaseHold(order);
-
-        const result = await update(order, { items: [{ productId: MISSING_ID, quantity: 1 }] });
-
-        expect(asReject(result).status).toBe(404);
-    });
-
-    it('leaves the existing items intact when a replacement product is missing', async () => {
-        const { order } = await seedOrder();
-        await releaseHold(order);
-
-        await update(order, { items: [{ productId: MISSING_ID, quantity: 1 }] });
-
-        const reloaded = await orderRepository.findById(String(order._id));
-        expect(reloaded!.items).toHaveLength(2);
-    });
-
-    it('treats an empty items array as "no change", not as "empty the order"', async () => {
-        // `data.items && data.items.length > 0` — an order with zero lines is not a legal state,
-        // so an empty array must be ignored rather than obeyed.
-        const { order } = await seedOrder();
-
-        await update(order, { items: [] });
-
-        const reloaded = await orderRepository.findById(String(order._id));
-        expect(reloaded!.items).toHaveLength(2);
     });
 });
 

@@ -442,6 +442,29 @@ describe('PUT /orders/{id}', () => {
         expect(response.status).toBe(403);
         expect(response).toSatisfyApiSpec();
     });
+
+    // `items`/`userId` are legal on `POST /orders` (create) but not here — rewriting frozen,
+    // already-invoiced lines has no safe meaning (see `services/crud.ts`'s `update`), and
+    // reassigning the owner belongs to a support tool, not this endpoint. `additionalProperties:
+    // false` on `UpdateOrderByIdRequest` is what actually enforces it; this pins that a real HTTP
+    // request hits that refusal, not just the generated Zod schema in isolation.
+    it.each(['items', 'userId'])('rejects a body carrying `%s`', async (field) => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+        const extra =
+            field === 'items'
+                ? { items: [{ productId: String(user._id), quantity: 1 }] }
+                : { userId: String(user._id) };
+
+        const response = await api()
+            .put(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer)
+            .send({ email: 'billing@example.com', ...extra });
+
+        expect(response.status).toBe(422);
+        expect(response.body.success).toBe(false);
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('DELETE /orders and DELETE /orders/{id}/hard', () => {

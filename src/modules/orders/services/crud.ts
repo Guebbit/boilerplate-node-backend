@@ -30,13 +30,9 @@ import { ORDER_STATUS_CHANGED } from '../events';
 import { orderRepository } from '../repository';
 import { canTransition, statusesLeadingTo, statusesReachableFrom } from '../domain';
 import { resolveCurrentImages } from './current';
-import { freezeOrderLines } from './snapshot';
 import { placeOrder } from './place';
 import { deleteCachedInvoice } from './invoice';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
-// `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
-// mode on a malformed id) lives in the repository layer; this is the only import of it here.
-import { toObjectId } from '@infrastructure/persistence/create-repository';
 import {
     readAll,
     MAX_CONFIGURED_PAGE_SIZE,
@@ -162,9 +158,7 @@ export const getByTransferReference = (reference: string): Promise<OrderDocument
     orderRepository.findOne({ transferReference: reference });
 
 /**
- * Looks up each line's product by id — the read `create` and `rewriteItems` both need before they
- * can freeze a snapshot, kept in one place so the two writers can't drift on how a line's product
- * is resolved.
+ * Looks up each line's product by id — the read `create` needs before it can freeze a snapshot.
  * @param items - `{ productId, quantity }` pairs
  * @returns each item paired with its product, or `null` when the id no longer resolves
  */
@@ -296,50 +290,6 @@ const transitionRefused = (
 };
 
 /**
- * Rewrites an order's line items in place — refused outright while the shelf is still holding this
- * order's reservation (the reservation froze its own copy of the basket, and a later
- * `commitForOrder` would decrement products the order no longer contains; `inventory` owns the
- * question), otherwise re-resolves and re-freezes the replacement lines onto `order.items`.
- * @param order - the order being edited; `order.items` is mutated in place on success
- * @param requestedItems - the caller's replacement `{ productId, quantity }` lines
- * @returns a rejection if refused, `undefined` once `order.items` has been rewritten
- */
-const rewriteItems = (
-    order: OrderDocument,
-    requestedItems: CartItem[]
-): Promise<ResponseReject | undefined> =>
-    inventoryService.isStockBoundToOrder(String(order._id)).then((bound) => {
-        if (bound)
-            return generateReject(409, [
-                {
-                    code: 'ORDER_ITEMS_HELD',
-                    message: t('orders.items-held')
-                }
-            ]);
-
-        return resolveItemProducts(requestedItems).then((resolvedItems) => {
-            const missingProduct = resolvedItems.some(({ product }) => !product);
-            if (missingProduct) return generateReject(404, [t('products.not-found')]);
-
-            /*
-             * No fresh buyer context on an admin PATCH — `update()` takes no `CallerContext`.
-             * Reuse whatever language the order's own lines are already frozen in, so an admin
-             * editing line items doesn't silently switch the order to a different language
-             * mid-flight.
-             */
-            const lineLocale = order.items[0]?.locale ?? getDefaultLocale();
-            return freezeOrderLines(
-                lineLocale,
-                resolvedItems.map(({ product }) => product!),
-                resolvedItems.map(({ item }) => item.quantity)
-            ).then((lines) => {
-                order.items = lines;
-                return undefined;
-            });
-        });
-    });
-
-/**
  * Applies an admin's already-validated status move: a conditional write, not the blind
  * `order.status = next; save()` this replaces — a customer cancel landing between the read at the
  * top of `update` and this write must not be silently overwritten by a stale `next`.
@@ -384,9 +334,7 @@ const applyStatusMove = (
  * reachable here is to `processing`; `shipped`/`delivered` are `delivery`'s own doors and
  * cancellation lives in `cancelById` — `transitionRefused` refuses both below.
  */
-// `async` for the same reason the repositories are: `toObjectId(data.userId)` below throws on a
-// malformed id, and a function typed `Promise<T>` must reject rather than throw synchronously.
-export const update = async (
+export const update = (
     order: OrderDocument,
     data: UpdateOrderByIdRequest
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
@@ -395,34 +343,17 @@ export const update = async (
 
     // Asked before anything is assigned, so a refusal is never a partial write.
     const refusal = transitionRefused(previousStatus, nextStatus);
-    if (refusal) return refusal;
+    if (refusal) return Promise.resolve(refusal);
 
     // `order.status` is deliberately NOT assigned here — see below, where the status
     // half of this write goes through a conditional `findOneAndUpdate` instead of riding along
     // on this document's blind `save()`.
     if (data.email !== undefined) order.email = data.email;
-    if (data.userId !== undefined) order.userId = toObjectId(data.userId);
 
-    const requestedItems = data.items;
-    const itemsRewritten = Boolean(requestedItems && requestedItems.length > 0);
-    const updateItemsPromise =
-        requestedItems && requestedItems.length > 0
-            ? rewriteItems(order, requestedItems)
-            : Promise.resolve();
+    return orderRepository.save(order).then((saved) => {
+        if (nextStatus === undefined || nextStatus === previousStatus) return generateSuccess(saved);
 
-    return updateItemsPromise.then((earlyResult) => {
-        if (earlyResult) return earlyResult;
-        return orderRepository.save(order).then((saved) => {
-            // The cached PDF (if one exists) now describes lines that no longer exist. Deleted,
-            // not re-rendered here: the next `GET /orders/{id}/invoice` renders fresh and refills
-            // the cache — nothing on this write path needs the bytes.
-            if (itemsRewritten) void deleteCachedInvoice(String(saved._id));
-
-            if (nextStatus === undefined || nextStatus === previousStatus)
-                return generateSuccess(saved);
-
-            return applyStatusMove(saved, previousStatus, nextStatus);
-        });
+        return applyStatusMove(saved, previousStatus, nextStatus);
     });
 };
 
