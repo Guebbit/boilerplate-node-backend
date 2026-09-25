@@ -65,8 +65,15 @@ export interface UpdateControllerSpec<TReplace extends ZodType, TPatch extends Z
      * with, so an update never hands out a field a read would not.
      */
     present: (row: TRow, request: Request) => unknown;
-    /** The module's own audit action for a successful update. */
-    auditAction: AuditAction;
+    /**
+     * The module's own audit action for a successful update, recorded here once `update()`
+     * resolves. Omit it — every module this factory has been wired to so far already calls
+     * `recordAudit` inside its own `update()`, often with more nuance than one static action can
+     * carry (users' ban/unban split, a deactivation's analytics event): passing one here on top of
+     * that would double-log every successful update, not just add noise. Pass one only for a
+     * module whose `update()` does not already audit itself.
+     */
+    auditAction?: AuditAction;
     /** The i18n key answered when the id is well-formed but matches nothing. */
     notFoundKey: string;
 }
@@ -148,12 +155,15 @@ export const createUpdateController = <TReplace extends ZodType, TPatch extends 
                     // Sends the error envelope (404, 409, 422) and stops here if refused.
                     if (refused(response, result)) return;
 
-                    recordAudit(callerContextOf(request), {
-                        action: auditAction,
-                        outcome: 'success',
-                        target_type: entity,
-                        target_id: id
-                    });
+                    // See `UpdateControllerSpec.auditAction` — most modules already recorded
+                    // their own entry inside `update()` and pass nothing here.
+                    if (auditAction)
+                        recordAudit(callerContextOf(request), {
+                            action: auditAction,
+                            outcome: 'success',
+                            target_type: entity,
+                            target_id: id
+                        });
                     return Promise.resolve(present(result.data, request)).then((shaped) => {
                         successResponse(response, shaped, 200, result.message);
                     });

@@ -26,7 +26,7 @@ import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-
 import { zodUserSchema, TokenType, hashToken, toUser, DEFAULT_USER_IMAGE_URL } from './model';
 import { clearedOrValue } from '@infrastructure/surfaces/create-update-controller';
 import type { UserDocument, Token, UserWire } from './model';
-import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest, User } from '@types';
+import type { CreateUserRequest, SearchUsersRequest, PatchUserByIdRequest, User } from '@types';
 import { userRepository } from './repository';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
@@ -209,19 +209,19 @@ export const create = (
 
 /**
  * Update an existing user document. Returns a result envelope instead of throwing, the protocol
- * every service here follows. Typed off `UpdateUserByIdRequest` rather than a hand-picked `Pick`:
+ * every service here follows. Typed off `PatchUserByIdRequest` rather than a hand-picked `Pick`:
  * the old hand-picked list was missing `active`, so `active: false` fired `USER_DEACTIVATED`
  * without ever writing the field.
  */
 export const update = (
     user: UserDocument,
-    data: UpdateUserByIdRequest & {
-        /** Not on `UpdateUserByIdRequest` — `readOnly` on the contract, set only by the server. */
+    data: PatchUserByIdRequest & {
+        /** Not on `PatchUserByIdRequest` — `readOnly` on the contract, set only by the server. */
         thumbnailUrl?: string;
         /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
         pendingImageKey?: string;
         /**
-         * Not on `UpdateUserByIdRequest` either — consent is `account`'s own self-service field
+         * Not on `PatchUserByIdRequest` either — consent is `account`'s own self-service field
          * (`UpdateAccountRequest`), deliberately absent from the ADMIN `/users/:id` contract:
          * consent is the data subject's to give, never an operator's to set on their behalf.
          * Rides along the same way `thumbnailUrl` does, from the one caller (`account`'s
@@ -285,7 +285,7 @@ export const update = (
  */
 const updateSavedUser = (
     user: UserDocument,
-    data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
+    data: Pick<PatchUserByIdRequest, 'active' | 'role'>,
     context: CallerContext,
     oldImageUrl?: string
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
@@ -356,7 +356,9 @@ const auditActionForUpdate = (wasActive: boolean | undefined, active?: boolean):
 /** Update an existing user by ID. Fetches the document then delegates to update(). */
 export const updateById = (
     id: string,
-    data: UpdateUserByIdRequest & { pendingImageKey?: string },
+    // `thumbnailUrl`/`pendingImageKey`: not on the contract, server-derived — see `update()`'s
+    // own docblock for why each rides along the same way.
+    data: PatchUserByIdRequest & { thumbnailUrl?: string; pendingImageKey?: string },
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     // Credentials included: `data.password`, when present, is assigned onto this document.

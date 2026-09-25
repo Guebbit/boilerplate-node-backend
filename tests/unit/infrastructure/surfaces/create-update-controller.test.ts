@@ -214,6 +214,28 @@ describe('createUpdateController', () => {
             })
         );
     });
+
+    it('never audits on its own when auditAction is omitted, trusting update() already did', async () => {
+        // DM2 (DECISION_MADE.md): every module wired to this factory so far already calls
+        // `recordAudit` inside its own `update()` — a static action here on top of that would
+        // double-log every successful update, not add a second, less specific entry on purpose.
+        const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x', id: VALID_ID }));
+        const { patch } = createUpdateController({
+            entity: 'widget',
+            replaceSchema,
+            patchSchema,
+            writableFields: ['title', 'note'],
+            update,
+            present: (row) => row,
+            notFoundKey: 'widgets.not-found'
+        });
+        const response = makeResponseStub();
+
+        await patch(makeRequest({ title: 'x' }), response);
+
+        expect(response.status).toHaveBeenCalledWith(200);
+        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+    });
 });
 
 describe('fillOmittedWithNull', () => {

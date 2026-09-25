@@ -130,9 +130,9 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [Users]
-            summary: Edit user
-            description: Updates the email or password of the user identified by `{id}` in the path. Optional image can be uploaded.
-            operationId: updateUserById
+            summary: Replace user
+            description: Replaces every writable field of the user identified by `{id}` in the path — RFC 9110 §9.3.4, an omitted optional field is cleared. `password` keeps its own flow and is never cleared this way; leave it out to keep it unchanged. Optional image can be uploaded.
+            operationId: replaceUserById
             security:
                 - bearerAuth: []
             parameters:
@@ -142,10 +142,42 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateUserByIdRequest'
+                            $ref: '#/components/schemas/ReplaceUserByIdRequest'
                     multipart/form-data:
                         schema:
-                            $ref: '#/components/schemas/UpdateUserByIdRequestMultipart'
+                            $ref: '#/components/schemas/ReplaceUserByIdRequestMultipart'
+            responses:
+                '200':
+                    description: Replaced user
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `uploadLimiter` sits in front of this route — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        patch:
+            tags: [Users]
+            summary: Edit user
+            description: Merges the given fields into the user identified by `{id}` in the path — RFC 7396, an omitted field is left unchanged, `null` clears an optional one. Optional image can be uploaded.
+            operationId: patchUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PatchUserByIdRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/PatchUserByIdRequestMultipart'
             responses:
                 '200':
                     description: Updated user
@@ -389,7 +421,11 @@ components:
                 locale:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
 
-        UpdateUserByIdRequest:
+        # PATCH /users/{id} — RFC 7396: every field optional, omitted means unchanged. `password`
+        # keeps its own flow (never cleared, never required) so it is optional-non-nullable on
+        # both this and the Replace schema below, and excluded from `writableFields` in code —
+        # see `create-update-controller.ts#UpdateControllerSpec.writableFields`.
+        PatchUserByIdRequest:
             type: object
             additionalProperties: false
             properties:
@@ -424,9 +460,80 @@ components:
                     minLength: 1
                     nullable: true
 
-        UpdateUserByIdRequestMultipart:
+        PatchUserByIdRequestMultipart:
             type: object
             additionalProperties: false
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                username:
+                    type: string
+                    minLength: 1
+                role:
+                    type: string
+                active:
+                    type: boolean
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+                locale:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                phone:
+                    type: string
+                    minLength: 1
+                    nullable: true
+                website:
+                    type: string
+                    minLength: 1
+                    nullable: true
+
+        # PUT /users/{id} — RFC 9110 §9.3.4: the body IS the new resource, so every writable field
+        # this resource has must be nameable and the identity fields are genuinely required.
+        # `password` stays optional-non-nullable, same reasoning as the Patch schema above — a PUT
+        # that omits it leaves the stored hash untouched, it does not clear it.
+        ReplaceUserByIdRequest:
+            type: object
+            additionalProperties: false
+            required: [email, username, role, active]
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                username:
+                    type: string
+                    minLength: 1
+                role:
+                    type: string
+                active:
+                    type: boolean
+                imageUrl:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                locale:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                phone:
+                    type: string
+                    minLength: 1
+                    nullable: true
+                website:
+                    type: string
+                    minLength: 1
+                    nullable: true
+
+        ReplaceUserByIdRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [email, username, role, active]
             properties:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'

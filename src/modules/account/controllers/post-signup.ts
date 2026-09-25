@@ -65,7 +65,11 @@ export const postSignup = (
                 passwordConfirm,
                 analyticsConsent,
                 termsAccepted,
-                imageUrl,
+                // `null` has no meaning on signup — there is no existing account to CLEAR an
+                // image from — but `readUploadedImage` reads the raw body ahead of any schema
+                // validation, so a caller could still send one. Coalesced away to `undefined`,
+                // same as an absent field: `SignupInput.imageUrl`'s own docblock is the contract.
+                imageUrl: imageUrl ?? undefined,
                 thumbnailUrl,
                 pendingImageKey
             },

@@ -11,7 +11,8 @@ import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewa
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getUsers } from './controllers/get-users';
-import { writeUsers } from './controllers/write-users';
+import { createUser } from './controllers/create-user';
+import { replaceUser, patchUser } from './controllers/update-user';
 import { deleteUsers } from './controllers/delete-users';
 import { restoreUsers } from './controllers/restore-users';
 import { getUserItem } from './controllers/get-user-item';
@@ -41,7 +42,7 @@ router.post('/search', requirePermission('users.any.read'), privateNoCache, getU
 router.get('/', requirePermission('users.any.read'), privateNoCache, getUsers);
 
 // POST /users (create)
-router.post('/', requirePermission('users.any.create'), uploadLimiter, upload.image(), writeUsers);
+router.post('/', requirePermission('users.any.create'), uploadLimiter, upload.image(), createUser);
 
 // DELETE /users — id in body
 router.delete('/', requirePermission('users.any.delete'), deleteUsers);
@@ -49,13 +50,20 @@ router.delete('/', requirePermission('users.any.delete'), deleteUsers);
 // GET /users/:id — never Redis-cached (D2), same reasoning as the search routes above.
 router.get('/:id', requirePermission('users.any.read'), privateNoCache, getUserItem);
 
-// PUT /users/:id (update)
+// PUT /users/:id (replace) and PATCH /users/:id (merge) — AUDIT_0924 D17d.
 router.put(
     '/:id',
     requirePermission('users.any.update'),
     uploadLimiter,
     upload.image(),
-    writeUsers
+    replaceUser
+);
+router.patch(
+    '/:id',
+    requirePermission('users.any.update'),
+    uploadLimiter,
+    upload.image(),
+    patchUser
 );
 
 // DELETE /users/:id — soft delete unless ?hardDelete=true

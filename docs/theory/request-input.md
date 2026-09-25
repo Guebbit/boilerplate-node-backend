@@ -59,7 +59,7 @@ reason: adding one fails that test once, which is the prompt to update this page
 | -------- | ----------------------- | -------------------------------------------------------------- |
 | `search` | body, query             | the four endpoints with a `POST …/search` sibling              |
 | `list`   | query                   | the four GET-only collection reads, which have no such sibling |
-| `write`  | params, body            | `updateProduct`/`writeUsers`/`writeOrders`, cart PUT           |
+| `write`  | params, body            | `updateProduct`/`writeOrders`, cart PUT                        |
 | `create` | body                    | `createProduct` — a route that never carries an id in its path |
 | `delete` | params, query, body     | the three soft/hard delete controllers                         |
 | `path`   | params                  | `DELETE /cart/{productId}`, which declares no body             |
@@ -237,10 +237,12 @@ generating them from the spec would make the discrepancies below _unwritable_: a
 not read a source the contract does not declare, because nobody would be writing the source list.
 
 It is not done, and the order matters. Four things stand in the way, none fatal: one controller
-serves several operations (`writeProducts`, `writeUsers` and `writeOrders` each cover three
-operationIds with three different declared bodies), so a generated per-operation declaration would
-have to be wired per route rather than per controller; `booleans`/`stringArrays` derive from the _multipart_ schema variant, not the JSON
-one; `GET /products` and `POST /products/search` are two operations deliberately sharing one
+serves several operations (`writeOrders` still covers three operationIds with three different
+declared bodies — `users`' own equivalent moved onto the shared PUT/PATCH factory in AUDIT_0924
+D17d instead, which reads params and body itself rather than going through `readInput`'s `write`
+surface at all), so a generated per-operation declaration would have to be wired per route rather
+than per controller; `booleans`/`stringArrays` derive from the _multipart_ schema variant, not the
+JSON one; `GET /products` and `POST /products/search` are two operations deliberately sharing one
 controller, so their declarations would need unioning; and orval generates clients and schemas,
 not server-side input declarations, so this would be new machinery to own.
 

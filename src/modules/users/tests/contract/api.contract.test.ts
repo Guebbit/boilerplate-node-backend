@@ -209,56 +209,185 @@ describe('POST /users', () => {
 });
 
 describe('PUT /users/{id}', () => {
-    // Regression guard: the controller once defaulted `requirePassword` to true on updates too,
-    // so an admin couldn't edit a user without resubmitting their password.
-    it('updates a user without resubmitting a password', async () => {
+    // AUDIT_0924 D17: a PUT body IS the new resource (RFC 9110 §9.3.4) — every omitted optional
+    // field is cleared, not left alone. `password` is the one exception (D17d): it keeps its own
+    // flow and is never cleared this way, so it is left out of this body entirely.
+    it('replaces every writable field, clearing every omitted optional one', async () => {
         const { bearer } = await authenticateAs('admin');
-        const target = await createUser({
-            username: 'editnocredential',
-            email: 'editnocredential@example.com'
-        });
+        const target = await createUser(
+            {
+                username: 'replacefull',
+                email: 'replacefull@example.com',
+                imageUrl: 'https://cdn.example.com/avatars/original.png',
+                phone: '+15551234567'
+            },
+            'customer'
+        );
 
         const response = await api()
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({ email: target.email, username: 'editednocredential' });
+            .send({ email: target.email, username: 'replacedfull', role: 'customer', active: true });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        expect(response.body.data.imageUrl).not.toBe(
+            'https://cdn.example.com/avatars/original.png'
+        );
+        expect(response.body.data.phone).toBeUndefined();
+    });
+
+    // `email`/`username`/`role`/`active` are the Replace schema's `required` set — an omitted one
+    // is a malformed PUT, not a value to fill in.
+    it('refuses a body missing one of the required identity fields', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser(
+            { username: 'replacepartial', email: 'replacepartial@example.com' },
+            'customer'
+        );
+
+        const response = await api()
+            .put(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ role: 'customer' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // Regression guard: the controller once defaulted `requirePassword` to true on updates too,
+    // so an admin couldn't edit a user without resubmitting their password.
+    it('updates a user without resubmitting a password', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser(
+            { username: 'editnocredential', email: 'editnocredential@example.com' },
+            'customer'
+        );
+
+        const response = await api()
+            .put(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({
+                email: target.email,
+                username: 'editednocredential',
+                role: 'customer',
+                active: true
+            });
 
         expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
     });
 
-    it('leaves an existing avatar untouched on a JSON edit that uploads no new image', async () => {
+    // B25: this path already ran the breach check inside `userService.update` — no behaviour
+    // change here, only the missing contract-level coverage the box asks for.
+    it('refuses a breached password', async () => {
         const { bearer } = await authenticateAs('admin');
-        const target = await createUser({
-            username: 'editkeepsimage',
-            email: 'editkeepsimage@example.com',
-            imageUrl: 'https://cdn.example.com/avatars/original.png'
-        });
+        const target = await createUser(
+            { username: 'editbreached', email: 'editbreached@example.com' },
+            'customer'
+        );
 
         const response = await api()
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({ email: target.email, username: 'editednocredential2' });
+            .send({
+                email: target.email,
+                username: target.username,
+                role: 'customer',
+                active: true,
+                password: 'Password1!'
+            });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('PATCH /users/{id}', () => {
+    // The live bug AUDIT_0924 D17 was named for: the paired frontend's `updateOwnRole` sends
+    // `{ role }` alone — a full PUT body 422ed against the old always-strict validator.
+    it('merges only the given field, leaving email and username unchanged', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser(
+            { username: 'patchrole', email: 'patchrole@example.com' },
+            'customer'
+        );
+
+        const response = await api()
+            .patch(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ role: 'customer' });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        expect(response.body.data.email).toBe(target.email);
+        expect(response.body.data.username).toBe(target.username);
+    });
+
+    it('leaves an existing avatar untouched on a JSON edit that uploads no new image', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({
+            username: 'patchkeepsimage',
+            email: 'patchkeepsimage@example.com',
+            imageUrl: 'https://cdn.example.com/avatars/original.png'
+        });
+
+        const response = await api()
+            .patch(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ username: 'patcheditkeepsimage' });
 
         expect(response.status).toBe(200);
         expect(response.body.data.imageUrl).toBe('https://cdn.example.com/avatars/original.png');
         expect(response).toSatisfyApiSpec();
     });
 
-    // B25: this path already ran the breach check inside `userService.update` — no behaviour
-    // change here, only the missing contract-level coverage the box asks for.
-    it('refuses a breached password', async () => {
+    it('null clears an optional field', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser({
-            username: 'editbreached',
-            email: 'editbreached@example.com'
+            username: 'patchclearsphone',
+            email: 'patchclearsphone@example.com',
+            phone: '+15551234567'
         });
 
         const response = await api()
-            .put(`/users/${String(target._id)}`)
+            .patch(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({ email: target.email, username: target.username, password: 'Password1!' });
+            .send({ phone: null });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.phone).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('"" is refused, never a synonym for null', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({
+            username: 'patchemptyphone',
+            email: 'patchemptyphone@example.com'
+        });
+
+        const response = await api()
+            .patch(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ phone: '' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('refuses a breached password', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({
+            username: 'patchbreached',
+            email: 'patchbreached@example.com'
+        });
+
+        const response = await api()
+            .patch(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ password: 'Password1!' });
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();

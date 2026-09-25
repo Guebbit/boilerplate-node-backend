@@ -29,9 +29,12 @@ export interface RequestImage {
     /**
      * The url to persist: this request's upload if it carried one and it was digested inline
      * (no broker configured), the pending-image placeholder if a broker will digest it later, or
-     * the body's own `imageUrl` otherwise.
+     * the body's own `imageUrl` otherwise — which, since AUDIT_0924 D17c, may itself be `null`
+     * (the caller clearing the image) rather than only a string or absent. An upload always wins
+     * over the body's own value when both are present: the caller sent bytes, which is a
+     * stronger statement of intent than whatever the JSON body also happened to say.
      */
-    imageUrl: string | undefined;
+    imageUrl: string | null | undefined;
     /**
      * The thumbnail url to persist alongside {@link imageUrl} — set together with it in the
      * inline case, the pending-thumbnail placeholder together with the placeholder `imageUrl`, and
@@ -57,9 +60,10 @@ export interface RequestImage {
 /**
  * Read the image a write request carries, and the undo for it.
  *
- * An uploaded file outranks a body `imageUrl` — a caller that sent bytes meant those bytes.
- * Destructure with a default (`const { imageUrl = '' } = readUploadedImage(request)`) where the
- * endpoint's schema wants a string rather than an absent field.
+ * An uploaded file outranks a body `imageUrl` — a caller that sent bytes meant those bytes. Never
+ * destructure a `''` default (AUDIT_0924 D17c) — `''` is invalid input everywhere now
+ * (`ImageUrl`'s own `minLength: 1`); `undefined` already means "no change" to every `.optional()`
+ * update schema, and `null` (on the no-upload/body-only path) means "clear it".
  *
  * @param request - an Express request already through the upload middleware
  */
@@ -101,10 +105,11 @@ export const readUploadedImage = (
     const bodyImageUrl = bodyRecordOf(request).imageUrl;
 
     return {
-        // Non-string values (number, bool, …) must reach the validator untouched so zod can
-        // reject them with the correct i18n message. Silently coercing to `undefined` would
-        // trigger the controller's `= ''` default and mask the type error (200 instead of 422).
-        imageUrl: bodyImageUrl as string | undefined,
+        // Non-string, non-null values (number, bool, …) must reach the validator untouched so
+        // zod can reject them with the correct i18n message — coercing them away here would mask
+        // the type error (200 instead of 422). `null` is legitimate now (D17c): a body clearing
+        // the image, which is why the cast below widened to include it.
+        imageUrl: bodyImageUrl as string | null | undefined,
         thumbnailUrl: undefined,
         pendingImageKey: undefined,
         deleteUpload: () => Promise.resolve(false)
