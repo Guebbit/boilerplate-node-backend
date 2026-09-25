@@ -151,9 +151,7 @@ export const createUpdateController = <TReplace extends ZodType, TPatch extends 
         (request: Request, response: Response): Promise<void> => {
             // `idFrom` (UpdateControllerSpec's own docblock): `/account`'s two verbs act on the
             // caller's own record, so there is no path id to 422 — skip straight to it.
-            const id = idFrom
-                ? idFrom(request)
-                : extractAndValidateId(request, response, 'path');
+            const id = idFrom ? idFrom(request) : extractAndValidateId(request, response, 'path');
             if (!id) return Promise.resolve();
 
             const body = parseBody(schema, request.body, response) as

@@ -12,7 +12,7 @@
 import { callerContextOf } from '@infrastructure/http/request';
 import { readUploadedImage } from '@infrastructure/http/uploads';
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
-import { ReplaceAccountBody, PatchAccountBody } from '@api/schemas.zod';
+import { ReplaceAccountBody, UpdateAccountBody } from '@api/schemas.zod';
 import { accountService } from '../services';
 import { userService } from '@modules/users';
 
@@ -46,7 +46,7 @@ const writableFields = Object.keys(ReplaceAccountBody.shape).filter(
 export const { replace: replaceAccount, patch: patchAccount } = createUpdateController({
     entity: 'account',
     replaceSchema: ReplaceAccountBody,
-    patchSchema: PatchAccountBody,
+    patchSchema: UpdateAccountBody,
     writableFields,
     // Guaranteed present: every mount behind this factory runs after `isAuth` — see
     // `UpdateControllerSpec.idFrom`'s own docblock (DM3, DECISION_MADE.md).

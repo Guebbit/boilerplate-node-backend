@@ -90,14 +90,13 @@ declaring a body on its GET.
 |                                                                         | `hardDelete`                                    | params, query, body — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one    |
 | `DELETE /orders`, `DELETE /orders/:id`, `DELETE /orders/:id/hard`       | `id`                                            | params, body                               | validated as an ObjectId, 422 on failure                      |
 |                                                                         | `hardDelete`                                    | params, query, body — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one    |
-| `POST /orders`, `PUT /orders`, `PUT /orders/:id`                        | `id`                                            | params, body                               | first non-empty wins                                          |
+| `POST /orders`, `PUT /orders/:id`                                       | `id`                                            | params, body                               | first non-empty wins                                          |
 |                                                                         | everything else                                 | body                                       | untouched                                                     |
-| `POST /products`, `PUT /products`, `PUT /products/:id`                  | `id`                                            | params, body                               | first non-empty wins                                          |
+| `POST /products`, `PATCH /products/:id`                                 | `id`                                            | params, body                               | first non-empty wins                                          |
 |                                                                         | `active`                                        | body                                       | boolean; decoded only on `multipart/form-data`                |
 |                                                                         | `categories`, `tags`                            | body                                       | string array; decoded only on multipart                       |
 |                                                                         | everything else                                 | body                                       | untouched                                                     |
-| `POST /users`, `PUT /users`, `PUT /users/:id`                           | `id`                                            | params, body                               | first non-empty wins                                          |
-|                                                                         | `active`, `sendSetupEmail`                      | body                                       | boolean; decoded only on multipart                            |
+| `POST /users`                                                           | `active`, `sendSetupEmail`                      | body                                       | boolean; decoded only on multipart                            |
 |                                                                         | everything else                                 | body                                       | untouched                                                     |
 | `POST /cart`                                                            | `productId`, `quantity`                         | body                                       | Zod, then `isValidObjectId`                                   |
 | `PUT /cart/:productId`                                                  | `productId`                                     | params, body                               | first non-empty wins, then `isValidObjectId`                  |
@@ -238,10 +237,10 @@ not read a source the contract does not declare, because nobody would be writing
 
 It is not done, and the order matters. Four things stand in the way, none fatal: one controller
 serves several operations (`writeOrders` still covers three operationIds with three different
-declared bodies — `users`' own equivalent moved onto the shared PUT/PATCH factory in AUDIT_0924
-D17d instead, which reads params and body itself rather than going through `readInput`'s `write`
+declared bodies — `users`' own equivalent moved onto the shared PUT/PATCH factory (`dcd1e0c0`)
+instead, which reads params and body itself rather than going through `readInput`'s `write`
 surface at all), so a generated per-operation declaration would have to be wired per route rather
-than per controller; `booleans`/`stringArrays` derive from the _multipart_ schema variant, not the
+than per controller; `booleans`/`stringArrays` derive from the `multipart` schema variant, not the
 JSON one; `GET /products` and `POST /products/search` are two operations deliberately sharing one
 controller, so their declarations would need unioning; and orval generates clients and schemas,
 not server-side input declarations, so this would be new machinery to own.

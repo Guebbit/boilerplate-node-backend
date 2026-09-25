@@ -227,7 +227,12 @@ describe('PUT /users/{id}', () => {
         const response = await api()
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({ email: target.email, username: 'replacedfull', role: 'customer', active: true });
+            .send({
+                email: target.email,
+                username: 'replacedfull',
+                role: 'customer',
+                active: true
+            });
 
         expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();

@@ -9,7 +9,7 @@
 import { callerContextOf } from '@infrastructure/http/request';
 import { readUploadedImage } from '@infrastructure/http/uploads';
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
-import { ReplaceUserByIdBody, PatchUserByIdBody } from '@api/schemas.zod';
+import { ReplaceUserByIdBody, UpdateUserByIdBody } from '@api/schemas.zod';
 import { userService } from '../service';
 
 /**
@@ -21,7 +21,9 @@ type UpdateResult = Awaited<ReturnType<typeof userService.updateById>>;
 // `password` is excluded here (DM1, DECISION_MADE.md): it is optional-non-nullable on both
 // schemas — omitted means "leave it unchanged" on every verb, never "clear it" — so a PUT that
 // omits it must not have `fillOmittedWithNull` fill it with `null` and wipe the stored hash.
-const writableFields = Object.keys(ReplaceUserByIdBody.shape).filter((field) => field !== 'password');
+const writableFields = Object.keys(ReplaceUserByIdBody.shape).filter(
+    (field) => field !== 'password'
+);
 
 /**
  * `PUT /users/:id` and `PATCH /users/:id` — one handler pair over `userService.updateById`, which
@@ -37,7 +39,7 @@ const writableFields = Object.keys(ReplaceUserByIdBody.shape).filter((field) => 
 export const { replace: replaceUser, patch: patchUser } = createUpdateController({
     entity: 'user',
     replaceSchema: ReplaceUserByIdBody,
-    patchSchema: PatchUserByIdBody,
+    patchSchema: UpdateUserByIdBody,
     writableFields,
     update: (id, changes, request) => {
         const {

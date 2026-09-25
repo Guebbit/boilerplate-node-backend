@@ -231,7 +231,11 @@ describe('createUpdateController', () => {
         // No `:id` at all — `idFrom` is the only source, exactly like `/account`'s own route.
         await patch(makeRequest({ title: 'x' }, undefined), makeResponseStub());
 
-        expect(update).toHaveBeenCalledWith('the-callers-own-id', { title: 'x' }, expect.anything());
+        expect(update).toHaveBeenCalledWith(
+            'the-callers-own-id',
+            { title: 'x' },
+            expect.anything()
+        );
     });
 
     it('never audits on its own when auditAction is omitted, trusting update() already did', async () => {

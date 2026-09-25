@@ -315,7 +315,7 @@ export interface SignupInput {
     passwordConfirm: string;
 
     /**
-     * Optional like `PatchAccountRequest`'s, but with no "leave it alone" reading — there is no
+     * Optional like `UpdateAccountRequest`'s, but with no "leave it alone" reading — there is no
      * prior value at signup, so absent and `false` mean the same thing here.
      */
     analyticsConsent: boolean | undefined;

@@ -92,7 +92,7 @@ paths:
             tags: [Account]
             summary: Update own profile
             description: Merges the given fields into the authenticated user's own profile — email, username, locale, image (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change-confirm` proves the new address, and a notice is sent to the OLD address the moment the change is requested. Sending the CURRENT address cancels a pending change.
-            operationId: patchAccount
+            operationId: updateAccount
             security:
                 - bearerAuth: []
             requestBody:
@@ -100,10 +100,10 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PatchAccountRequest'
+                            $ref: '#/components/schemas/UpdateAccountRequest'
                     multipart/form-data:
                         schema:
-                            $ref: '#/components/schemas/PatchAccountRequestMultipart'
+                            $ref: '#/components/schemas/UpdateAccountRequestMultipart'
             responses:
                 '200':
                     description: Updated profile
@@ -1256,7 +1256,7 @@ components:
                     enum: [true]
                 # Optional, unlike `termsAccepted`: the second signup checkbox, opt-in and
                 # unchecked by default. Absent is the same as `false` — there is no "leave it
-                # alone" reading at signup, unlike `PatchAccountRequest`'s.
+                # alone" reading at signup, unlike `UpdateAccountRequest`'s.
                 analyticsConsent:
                     type: boolean
 
@@ -1320,7 +1320,7 @@ components:
         # endpoints' to change, and the password has its own flow (`POST /account/password`)
         # because it must prove knowledge of the current one.
         # PATCH /account — RFC 7396: every field optional, omitted means unchanged.
-        PatchAccountRequest:
+        UpdateAccountRequest:
             type: object
             additionalProperties: false
             properties:
@@ -1353,7 +1353,7 @@ components:
                 analyticsConsent:
                     type: boolean
 
-        PatchAccountRequestMultipart:
+        UpdateAccountRequestMultipart:
             type: object
             additionalProperties: false
             properties:

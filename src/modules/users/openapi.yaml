@@ -164,7 +164,7 @@ paths:
             tags: [Users]
             summary: Edit user
             description: Merges the given fields into the user identified by `{id}` in the path — RFC 7396, an omitted field is left unchanged, `null` clears an optional one. Optional image can be uploaded.
-            operationId: patchUserById
+            operationId: updateUserById
             security:
                 - bearerAuth: []
             parameters:
@@ -174,10 +174,10 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PatchUserByIdRequest'
+                            $ref: '#/components/schemas/UpdateUserByIdRequest'
                     multipart/form-data:
                         schema:
-                            $ref: '#/components/schemas/PatchUserByIdRequestMultipart'
+                            $ref: '#/components/schemas/UpdateUserByIdRequestMultipart'
             responses:
                 '200':
                     description: Updated user
@@ -425,7 +425,7 @@ components:
         # keeps its own flow (never cleared, never required) so it is optional-non-nullable on
         # both this and the Replace schema below, and excluded from `writableFields` in code —
         # see `create-update-controller.ts#UpdateControllerSpec.writableFields`.
-        PatchUserByIdRequest:
+        UpdateUserByIdRequest:
             type: object
             additionalProperties: false
             properties:
@@ -460,7 +460,7 @@ components:
                     minLength: 1
                     nullable: true
 
-        PatchUserByIdRequestMultipart:
+        UpdateUserByIdRequestMultipart:
             type: object
             additionalProperties: false
             properties:

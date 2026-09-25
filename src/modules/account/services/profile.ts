@@ -19,7 +19,7 @@ import {
 import { sendAccountMail } from './mail';
 import { sendVerificationEmail, markVerified, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
 import { verifyOwnPassword } from './authentication';
-import { PatchAccountBody } from '@api/schemas.zod';
+import { UpdateAccountBody } from '@api/schemas.zod';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
 import {
     generateSuccess,
@@ -256,7 +256,7 @@ export const removeOwnAccount = (
 /**
  * What `PUT /account` and `PATCH /account` both ultimately write, validated with this codebase's
  * messages. `email`/`username` come from `zodUserSchema` (carries the i18n thunks); `locale`,
- * `imageUrl`, `phone`, `website` come straight from `PatchAccountBody` — the merge-shaped
+ * `imageUrl`, `phone`, `website` come straight from `UpdateAccountBody` — the merge-shaped
  * contract schema (AUDIT_0924 D17d), since every field this function sees is already optional by
  * the time it runs: `update-account.ts`'s PUT path already filled an omitted one with `null`
  * before calling here. `.partial()` last: every field is optional, and absence means "leave it
@@ -265,15 +265,15 @@ export const removeOwnAccount = (
 const zodProfileSchema = zodUserSchema
     .pick({ email: true, username: true })
     .extend({
-        locale: PatchAccountBody.shape.locale,
-        imageUrl: PatchAccountBody.shape.imageUrl,
-        phone: PatchAccountBody.shape.phone,
-        website: PatchAccountBody.shape.website,
+        locale: UpdateAccountBody.shape.locale,
+        imageUrl: UpdateAccountBody.shape.imageUrl,
+        phone: UpdateAccountBody.shape.phone,
+        website: UpdateAccountBody.shape.website,
         // Absence still means "leave it alone", same as every other field here, not "withdraw
-        // consent". `optionalBooleanSchema`, not `PatchAccountBody.shape` directly: a multipart
+        // consent". `optionalBooleanSchema`, not `UpdateAccountBody.shape` directly: a multipart
         // request carries this as a string, and `'false'` is truthy.
         analyticsConsent: optionalBooleanSchema,
-        // Not on `PatchAccountBody` — both are `readOnly`/absent from the contract because the
+        // Not on `UpdateAccountBody` — both are `readOnly`/absent from the contract because the
         // server, not the client, produces them. They ride along here only because the controller
         // passes them from its own `readUploadedImage` call, the same way `imageUrl` does when an
         // upload — rather than a body value — is what set it.
