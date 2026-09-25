@@ -46,7 +46,7 @@ router.post(
     '/checkout',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
     requirePermission('cart.self.checkout'),
-    invalidateCache(['orders', 'products']),
+    invalidateCache(['products']),
     postCheckout
 );
 

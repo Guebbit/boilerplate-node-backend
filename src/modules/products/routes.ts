@@ -36,7 +36,7 @@ export const router = Router();
 router.use(getAuth);
 
 /**
- * D2: a caller who reads exactly what a guest reads shares the guest's cached entry; a caller who
+ * A caller who reads exactly what a guest reads shares the guest's cached entry; a caller who
  * sees more (admins — inactive products included) bypasses Redis entirely rather than risk
  * serving or storing their wider answer under that shared key. `hasAnonymousReadScope` is what
  * makes this safe BY CONSTRUCTION — see its own docblock.

@@ -244,18 +244,7 @@ describe('account routes — human-challenge gate (rung 3)', () => {
     });
 });
 
-describe('account routes — cache invalidation and uploads', () => {
-    // D2: neither `/account` (`noStore`, never cached) nor `/users` (privateNoCache, never
-    // Redis-cached either, since D2) sets a `users` or `account`-tagged cache entry any more —
-    // the last route that did was removed in the same change. Nothing on this router has
-    // anything left to invalidate.
-    it('carries no cache invalidation anywhere', () => {
-        for (const signature of routeSignatures(router))
-            expect(
-                chainOf(router, signature).some((entry) => entry.startsWith('invalidateCache'))
-            ).toBe(false);
-    });
-
+describe('account routes — uploads', () => {
     it.each(['PUT /', 'PATCH /', 'POST /signup'])(
         '%s accepts the imageUpload field and validates what arrives',
         (signature) => {

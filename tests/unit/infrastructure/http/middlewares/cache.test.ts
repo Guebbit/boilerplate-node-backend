@@ -36,8 +36,8 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 const mockedCache = jest.mocked(cache);
 
 /**
- * The `scopeKey` every test below uses unless it is specifically exercising the D2 mechanism
- * (`CacheOptions.scopeKey` itself) — a caller who always shares the one answer every other
+ * The `scopeKey` every test below uses unless it is specifically exercising
+ * `CacheOptions.scopeKey` itself — a caller who always shares the one answer every other
  * caller does, the ordinary case for every route in this suite's fixtures.
  */
 const GUEST_SCOPE = () => 'guest';
@@ -682,10 +682,10 @@ describe('setCache', () => {
     });
 
     /**
-     * D2: a caller `scopeKey` says sees more than the shared answer (an admin viewing inactive
-     * rows a guest never does) must never touch Redis for this request — not read from it, in
-     * case a wider answer got in under the shared key some other way, and not write to it, since
-     * that would be exactly the bug this decision closes.
+     * A caller `scopeKey` says sees more than the shared answer (an admin viewing inactive rows a
+     * guest never does) must never touch Redis for this request — not read from it, in case a
+     * wider answer got in under the shared key some other way, and not write to it, since that
+     * would put the wider answer there.
      */
     describe('scopeKey bypass', () => {
         it('never reads from Redis for a caller scopeKey says sees more', async () => {

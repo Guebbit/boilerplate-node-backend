@@ -79,7 +79,7 @@ const orderScope = (context?: Parameters<typeof accessibleFilter>[0]) =>
     accessibleFilter(context, 'Order');
 
 /**
- * `hasAnonymousReadScope` — what `infrastructure/http/middlewares/cache.ts`'s D2 fix uses to
+ * `hasAnonymousReadScope` — what `infrastructure/http/middlewares/cache.ts` uses to
  * decide whether a caller may share the guest cache entry. Built on `accessibleFilter` (proven
  * above), so these are about the COMPARISON, not about re-proving any one role's rules.
  */

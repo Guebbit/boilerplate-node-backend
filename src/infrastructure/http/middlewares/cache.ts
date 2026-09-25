@@ -178,7 +178,7 @@ interface CacheOptions {
     /**
      * The cache identity two spellings of ONE question share.
      *
-     * Default key starts with `METHOD:path`. Wrong for the four searches, where `GET
+     * Default key starts with `METHOD:path`. Wrong for a search with two spellings, where `GET
      * /products?text=x` and `POST /products/search {text}` reach the same controller and answer —
      * declaring the same `keyAs` on both makes them one entry, so whichever asks first warms
      * the other.
@@ -196,21 +196,16 @@ interface CacheOptions {
 
     /**
      * Whether THIS caller's answer is safe to share with every other cacheable caller, and under
-     * what key.
+     * what key. Required, same reasoning as `keyParameters`: a correctness question.
      *
-     * Returns the scope string cacheable callers share — `'guest'` for every route in this
-     * codebase today, since RFC 9111 §3.5 rules out caching an answer that depends on WHO is
-     * asking, and the only routes still declaring a `CacheOptions` are the ones whose answer does
-     * not (see `docs/theory/request-input.md` / the D2 audit note this type replaces). Returns
-     * `undefined` for a caller who sees something a guest does not — an admin viewing inactive
-     * rows — which BYPASSES Redis for this request entirely rather than risk serving or storing a
-     * wider answer under the shared key.
+     * A string:  the scope cacheable callers share — `'guest'` on every route today, since
+     *            RFC 9111 §3.5 rules out caching an answer that depends on WHO is asking.
+     * undefined: a caller who sees more than a guest (an admin viewing inactive rows) — BYPASSES
+     *            Redis for this request, rather than serve or store a wider answer.
+     * Safe by:   `kernel/access/query.ts#hasAnonymousReadScope`, which compares compiled read
+     *            filters, so a role that widens visibility fails it with no cache change.
      *
-     * Required, same reasoning as `keyParameters`: which requests may share an answer is a
-     * correctness question, not a missed optimisation. `kernel/access/query.ts#hasAnonymousReadScope`
-     * is what makes answering it safe BY CONSTRUCTION — compare the caller's compiled read filter
-     * to an anonymous one's, so a role change that widens visibility fails this comparison on its
-     * own, with nobody having to remember to touch the cache key too.
+     * See: docs/tools/redis-cache.md#no-caching-depends-on-who-is-asking
      */
     scopeKey: (request: Request) => string | undefined;
 }
@@ -517,13 +512,12 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
 /**
  * `setCache` for a module's two search spellings — `GET /x` and `POST /x/search` — which must
  * share one `keyAs` identity (see the note on it above) so that whichever spelling asks first
- * warms the other. Every module wired the same fields onto both routes by hand; this is that
- * declaration, made once and reused, so the two routes cannot drift apart into two keys.
+ * warms the other. One declaration for both routes, so they cannot drift apart into two keys.
  *
  * @param entity - the module's cache tag, and half of its `keyAs` — `'products'` → `products:search`
  * @param keyParameters - the module's own schema-derived key parameters
  * @param scopeKey - see {@link CacheOptions.scopeKey} — the module's own guest-equivalence check
- * @param seconds - TTL; defaults to the hour every search endpoint but `feedback` uses
+ * @param seconds - TTL; defaults to an hour
  */
 export const searchCache = (
     entity: string,
@@ -579,16 +573,14 @@ export const noStore = (request: Request, response: Response, next: NextFunction
 };
 
 /**
- * For a GET whose answer depends on who is asking (`orders`, `users`, `feedback`) — never a
- * SERVER-side cache, which is the D2 fix: RFC 9111 §3.5 rules out a shared cache storing an
- * authenticated answer, and keying Redis per caller (what this codebase used to do) only grows
- * the store for an optimisation nobody but that one caller ever benefits from. Unlike
- * {@link noStore}, the BROWSER may still keep its own private copy — it just has to prove it is
- * still fresh before reusing it, which Express's own strong ETag (`app.set('etag', 'strong')`)
- * already makes cheap: a `304` on no change, a full body the moment there is one.
+ * For a GET whose answer depends on who is asking (`orders`, `users`, `feedback`).
  *
- * `Vary: Authorization` for the same reason `setCache` sets it: an intermediary that ignores
- * `private` must still be told the answer depends on who asked, not just what was asked.
+ * Server:  never cached — RFC 9111 §3.5 rules out a shared cache storing an authenticated answer,
+ *          and a per-caller key only grows the store for one caller's benefit.
+ * Browser: may keep a private copy, unlike {@link noStore}, but must revalidate it first — cheap
+ *          with Express's strong ETag (`app.set('etag', 'strong')`): `304` on no change.
+ * Vary:    `Authorization`, as `setCache` sets it — an intermediary that ignores `private` must
+ *          still learn the answer depends on who asked.
  */
 export const privateNoCache = (request: Request, response: Response, next: NextFunction) => {
     response.set('Cache-Control', 'private, no-cache');

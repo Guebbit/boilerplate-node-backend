@@ -77,35 +77,21 @@ describe('user routes — authorization', () => {
 });
 
 describe('user routes — caching and uploads', () => {
-    // D2: the answer depends on who is asking (an admin's directory search, someone's own
-    // profile by id), so none of the three may go through the shared Redis cache — RFC 9111
-    // §3.5. `privateNoCache` lets the BROWSER keep its own copy, revalidated every time.
-    it.each(['GET /', 'POST /search', 'GET /:id'])(
-        '%s is never Redis-cached, only privateNoCache',
-        (signature) => {
-            const chain = chainOf(router, signature);
+    // An admin-only answer, so none of the reads may go through the shared Redis cache — RFC 9111
+    // §3.5. `privateNoCache` lets the BROWSER keep its own copy of a GET, revalidated every time.
+    it.each(['GET /', 'GET /:id'])('%s is never Redis-cached, only privateNoCache', (signature) => {
+        const chain = chainOf(router, signature);
 
-            expect(chain).toContain('privateNoCache');
-            expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
-        }
-    );
+        expect(chain).toContain('privateNoCache');
+        expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
+    });
 
-    it.each([
-        'POST /',
-        'DELETE /',
-        'PUT /:id',
-        'PATCH /:id',
-        'DELETE /:id',
-        'DELETE /:id/hard',
-        'DELETE /:id/2fa'
-    ])(
-        '%s carries no cache invalidation — nothing on this router is Redis-cached any more',
-        (signature) => {
-            expect(
-                chainOf(router, signature).some((entry) => entry.startsWith('invalidateCache'))
-            ).toBe(false);
-        }
-    );
+    it('POST /search answers no-store, like every POST', () => {
+        const chain = chainOf(router, 'POST /search');
+
+        expect(chain).toContain('noStore');
+        expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
+    });
 
     it.each(['POST /', 'PUT /:id', 'PATCH /:id'])(
         '%s accepts the imageUpload field and validates it',

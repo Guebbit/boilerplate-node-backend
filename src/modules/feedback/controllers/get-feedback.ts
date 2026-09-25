@@ -1,8 +1,9 @@
 /**
  * @module
  * Controller for `GET /feedback` and `POST /feedback/search` — the admin triage queue in its
- * query and DTO body spellings, built on the same factory `products` shares. Never Redis-cached
- * (D2): the answer is one admin's queue, not a shared shop-wide answer. See docs/modules/feedback.md.
+ * query and DTO body spellings, built on the shared search-controller factory. Never
+ * Redis-cached: the answer is one admin's queue, not a shared shop-wide answer.
+ * See docs/modules/feedback.md.
  */
 
 import type { FeedbackRequestsResponse } from '@types';

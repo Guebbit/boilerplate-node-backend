@@ -17,7 +17,7 @@ import { deleteUsers } from './controllers/delete-users';
 import { restoreUsers } from './controllers/restore-users';
 import { getUserItem } from './controllers/get-user-item';
 import { deleteUserTwoFactor } from './controllers/delete-user-two-factor';
-import { privateNoCache } from '@infrastructure/http/middlewares/cache';
+import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
 /** Express router for user management (admin only). */
@@ -33,12 +33,11 @@ export const router = Router();
 router.use(getAuth, isAuthOrCredential);
 
 // POST /users/search — must come before /:id to avoid matching "search" as an id. Never
-// Redis-cached (D2): every worker keyed this per admin caller although the answer never depended
-// on WHICH admin asked, only that they could — an expanding, never-shared store for no benefit.
-// `privateNoCache` lets the browser keep its own copy, revalidated every time.
-router.post('/search', requirePermission('users.any.read'), privateNoCache, getUsers);
+// Redis-cached: an admin-only answer, which a shared cache must never hold — RFC 9111 §3.5.
+// `noStore`, like every POST answer.
+router.post('/search', requirePermission('users.any.read'), noStore, getUsers);
 
-// GET /users
+// GET /users. `privateNoCache`: the browser may keep its own copy, revalidated every time.
 router.get('/', requirePermission('users.any.read'), privateNoCache, getUsers);
 
 // POST /users (create)
@@ -47,10 +46,10 @@ router.post('/', requirePermission('users.any.create'), uploadLimiter, upload.im
 // DELETE /users — id in body
 router.delete('/', requirePermission('users.any.delete'), deleteUsers);
 
-// GET /users/:id — never Redis-cached (D2), same reasoning as the search routes above.
+// GET /users/:id — never Redis-cached, same reasoning as the search routes above.
 router.get('/:id', requirePermission('users.any.read'), privateNoCache, getUserItem);
 
-// PUT /users/:id (replace) and PATCH /users/:id (merge) — AUDIT_0924 D17d.
+// PUT /users/:id (replace) and PATCH /users/:id (merge)
 router.put(
     '/:id',
     requirePermission('users.any.update'),

@@ -15,7 +15,7 @@ import { postFeedbackContact } from './controllers/post-feedback-contact';
 import { getFeedback } from './controllers/get-feedback';
 import { replaceFeedbackStatus, updateFeedbackStatus } from './controllers/update-feedback-status';
 import { deleteFeedback } from './controllers/delete-feedback';
-import { privateNoCache } from '@infrastructure/http/middlewares/cache';
+import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { contactLimiters } from './rate-limits';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
@@ -51,15 +51,15 @@ router.use(getAuth, isAuthOrCredential);
  * The DTO form of `GET /` — a GET body has no defined semantics, so this exists to carry filters.
  * Mounted ABOVE any future `/:id` route so "search" can't later match as an id.
  *
- * Never Redis-cached (D2): this is one admin's queue, filtered by them, and used to be keyed per
- * admin caller for no shared benefit. `privateNoCache` lets the browser keep its own copy,
- * revalidated every time.
+ * Never Redis-cached: an admin-only queue, which a shared cache must never hold — RFC 9111 §3.5.
+ * `noStore`, like every POST answer.
  */
-router.post('/search', requirePermission('feedback.any.read'), privateNoCache, getFeedback);
+router.post('/search', requirePermission('feedback.any.read'), noStore, getFeedback);
 
+// `privateNoCache`: the browser may keep its own copy, revalidated every time.
 router.get('/', requirePermission('feedback.any.read'), privateNoCache, getFeedback);
 
-// PUT /feedback/:id (replace) and PATCH /feedback/:id (merge) — AUDIT_0924 D17d.
+// PUT /feedback/:id (replace) and PATCH /feedback/:id (merge)
 router.put('/:id', requirePermission('feedback.any.update'), replaceFeedbackStatus);
 router.patch('/:id', requirePermission('feedback.any.update'), updateFeedbackStatus);
 

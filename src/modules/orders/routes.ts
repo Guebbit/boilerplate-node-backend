@@ -15,7 +15,7 @@ import { getOrderItem } from './controllers/get-order-item';
 import { getOrderInvoice } from './controllers/get-order-invoice';
 import { postCancelOrder } from './controllers/post-cancel-order';
 import { postOrderStatusOverride } from './controllers/post-order-status-override';
-import { invalidateCache, privateNoCache } from '@infrastructure/http/middlewares/cache';
+import { invalidateCache, noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { invoiceLimiter } from './rate-limits';
@@ -35,12 +35,13 @@ export const router = Router();
  */
 router.use(getAuth, isAuth);
 
-// POST /orders/search — must come before /:id. Never Redis-cached (D2): the answer depends on who
-// is asking (non-admin sees only their own orders), so a shared cache must never hold it — RFC
-// 9111 §3.5. `privateNoCache` lets the browser keep its own copy, revalidated every time.
-router.post('/search', privateNoCache, getOrders);
+// POST /orders/search — must come before /:id. Never Redis-cached: the answer depends on who is
+// asking (non-admin sees only their own orders), so a shared cache must never hold it — RFC 9111
+// §3.5. `noStore`, like every POST answer.
+router.post('/search', noStore, getOrders);
 
-// GET /orders — list (non-admin sees own orders only)
+// GET /orders — list (non-admin sees own orders only). `privateNoCache`: the browser may keep its
+// own copy, revalidated every time.
 router.get('/', privateNoCache, getOrders);
 
 // POST /orders — admin creates order directly. idempotencyKey first: a retried creation must
@@ -73,8 +74,8 @@ router.post(
 // actually flushed. `invoiceLimiter` guards the Chromium launch every render spawns.
 router.get('/:id/invoice', invoiceLimiter, getOrderInvoice);
 
-// GET /orders/:id — never Redis-cached (D2), same reasoning as the search routes above: this is
-// the caller's OWN order.
+// GET /orders/:id — never Redis-cached, same reasoning as the search routes above: this is the
+// caller's OWN order.
 router.get('/:id', privateNoCache, getOrderItem);
 
 // PUT /orders/:id — admin only (update)

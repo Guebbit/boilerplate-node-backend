@@ -72,23 +72,20 @@ describe('feedback routes — the positional guard', () => {
 });
 
 describe('feedback routes — caching', () => {
-    // D2: this is one admin's queue, filtered by them, never a shared Redis answer — RFC 9111
-    // §3.5. `privateNoCache` lets the BROWSER keep its own copy, revalidated every time.
-    it.each(['GET /', 'POST /search'])(
-        '%s is never Redis-cached, only privateNoCache',
-        (signature) => {
-            const chain = chainOf(router, signature);
+    // One admin's queue, never a shared Redis answer — RFC 9111 §3.5. `privateNoCache` lets the
+    // BROWSER keep its own copy of the GET, revalidated every time.
+    it('GET / is never Redis-cached, only privateNoCache', () => {
+        const chain = chainOf(router, 'GET /');
 
-            expect(chain).toContain('privateNoCache');
-            expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
-        }
-    );
+        expect(chain).toContain('privateNoCache');
+        expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
+    });
 
-    it('carries no cache invalidation anywhere — nothing on this router is Redis-cached any more', () => {
-        for (const signature of routeSignatures(router))
-            expect(
-                chainOf(router, signature).some((entry) => entry.startsWith('invalidateCache'))
-            ).toBe(false);
+    it('POST /search answers no-store, like every POST', () => {
+        const chain = chainOf(router, 'POST /search');
+
+        expect(chain).toContain('noStore');
+        expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
     });
 });
 

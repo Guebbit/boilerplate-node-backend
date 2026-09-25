@@ -43,7 +43,7 @@ export const router = Router();
  * one failure this tier cannot afford. Costs one conditional request per read, answered `304`
  * when nothing changed.
  *
- * `scopeKey`, D2: three of the four never see `request.authContext` at all (no `getAuth` mounted
+ * `scopeKey`: three of the four never see `request.authContext` at all (no `getAuth` mounted
  * ahead of them), so they are trivially guest-equivalent; `GET /locales` does take `getAuth`, for
  * the admin manifest that includes inactive languages — `hasAnonymousReadScope` is what tells
  * that caller apart from a guest and bypasses Redis for them, safe BY CONSTRUCTION.
@@ -58,7 +58,7 @@ const publicLocaleCache = setCache(3600, {
 
 // GET /locales — which languages this deployment offers, and what each of them can do.
 // `getAuth` (and only that: no token still answers) so an admin's manifest can include the
-// inactive rows a visitor is not offered. Before the cache, which scopes its key by caller.
+// inactive rows a visitor is not offered. Before the cache, whose `scopeKey` reads that caller.
 router.get('/', getAuth, publicLocaleCache, getLocales);
 
 // GET /locales/tenants — the keyspaces an entry can belong to. Before `/:locale`, see above.

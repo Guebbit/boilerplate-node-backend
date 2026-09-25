@@ -48,10 +48,10 @@ describe('cart routes — authorization', () => {
 });
 
 describe('cart routes — caching', () => {
-    it('clears orders and products at checkout, where both actually change', () => {
-        // Checkout is the one cart route with effects outside the cart: it creates an order and
-        // commits reserved stock. Nothing else here changes a cacheable resource.
-        expect(chainOf(router, 'POST /checkout')).toContain('invalidateCache([orders|products])');
+    it('clears products at checkout, where stock actually changes', () => {
+        // Checkout is the one cart route with effects outside the cart: it commits reserved stock.
+        // Orders are never Redis-cached, so there is no `orders` entry to clear.
+        expect(chainOf(router, 'POST /checkout')).toContain('invalidateCache([products])');
     });
 
     it('caches nothing, because a cart is per-caller state', () => {

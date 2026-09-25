@@ -67,16 +67,10 @@ Every route declares which query parameters change its answer, and the key is bu
 plus the resolved `scopeKey` and the locale:
 
 ```ts
-router.get(
-    '/',
-    setCache(3600, {
-        tags: ['products'],
-        keyParameters: searchProductsKeyParameters,
-        scopeKey: (request) =>
-            hasAnonymousReadScope(callerScope, request.authContext) ? 'guest' : undefined
-    }),
-    getProducts
-);
+// `cacheScopeKey` is the `hasAnonymousReadScope` check above: 'guest', or undefined to bypass.
+const cacheProductsSearch = searchCache('products', searchProductsKeyParameters, cacheScopeKey);
+
+router.get('/', cacheProductsSearch, getProducts);
 router.get(
     '/:id',
     setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: cacheScopeKey }),
@@ -87,9 +81,9 @@ router.get(
 `keyParameters` is required rather than optional, because it decides which requests share a cached
 response — a parameter the controller reads but the key omits would serve one search's results
 for another, and that is a correctness bug rather than a missed optimisation. Most routes declare
-`[]`: a path-only route has no query parameter that changes anything. The three search
-controllers export theirs as `Object.keys(schema.shape)`, derived from the very schema they
-validate against, so the list cannot drift from what the controller actually reads.
+`[]`: a path-only route has no query parameter that changes anything. The one cached search
+controller, `products`', exports its own as `Object.keys(schema.shape)`, derived from the very
+schema it validates against, so the list cannot drift from what the controller actually reads.
 
 Two URLs asking for the same thing therefore land on one entry, and an undeclared parameter
 cannot mint a new one:

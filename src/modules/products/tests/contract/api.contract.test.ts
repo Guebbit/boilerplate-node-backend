@@ -164,8 +164,7 @@ describe('GET /products', () => {
 
     // The shared `Text` schema (`shared/contracts/openapi.root.yaml`) caps free-text search at
     // 200 chars — an anonymous caller could otherwise hand Mongo an unbounded pattern. Every
-    // search endpoint inherits this through `$ref`; `contract-search-parity.test.ts` guards the
-    // other three (`users`, `feedback`, `locales`) from drifting away from it.
+    // search endpoint inherits this through `$ref`.
     it('rejects a search text over 200 characters, instead of forwarding it to Mongo', async () => {
         const response = await api().get(`/products?text=${'a'.repeat(201)}`);
 

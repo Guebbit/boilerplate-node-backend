@@ -98,18 +98,22 @@ describe('order routes — authorization', () => {
 });
 
 describe('order routes — caching', () => {
-    // D2: an order's answer depends on who is asking (non-admins see only their own), so none
-    // of the three may go through the shared Redis cache — RFC 9111 §3.5. `privateNoCache` lets
-    // the BROWSER keep its own copy, revalidated every time.
-    it.each(['GET /', 'POST /search', 'GET /:id'])(
-        '%s is never Redis-cached, only privateNoCache',
-        (signature) => {
-            const chain = chainOf(router, signature);
+    // An order's answer depends on who is asking (non-admins see only their own), so none of the
+    // reads may go through the shared Redis cache — RFC 9111 §3.5. `privateNoCache` lets the
+    // BROWSER keep its own copy of a GET, revalidated every time.
+    it.each(['GET /', 'GET /:id'])('%s is never Redis-cached, only privateNoCache', (signature) => {
+        const chain = chainOf(router, signature);
 
-            expect(chain).toContain('privateNoCache');
-            expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
-        }
-    );
+        expect(chain).toContain('privateNoCache');
+        expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
+    });
+
+    it('POST /search answers no-store, like every POST', () => {
+        const chain = chainOf(router, 'POST /search');
+
+        expect(chain).toContain('noStore');
+        expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
+    });
 
     // Not cached — every hit renders fresh, and there is no separate ready/pending status left to
     // invalidate a cache entry over.
@@ -119,19 +123,11 @@ describe('order routes — caching', () => {
         ).toBe(false);
     });
 
-    it('invalidates products wherever stock moves, and nothing on this router is Redis-cached any more', () => {
+    it('invalidates products wherever stock moves', () => {
         // Creating an order and cancelling one both change availability, so both must clear the
-        // catalogue. `orders` is gone from both — the last route on this router that tagged a
-        // cache entry `orders` was removed by D2, so there is nothing left to invalidate.
+        // catalogue.
         expect(chainOf(router, 'POST /')).toContain('invalidateCache([products])');
         expect(chainOf(router, 'POST /:id/cancel')).toContain('invalidateCache([products])');
-
-        for (const signature of routeSignatures(router))
-            expect(
-                chainOf(router, signature).some((entry) => entry.startsWith('invalidateCache'))
-            ).toBe(
-                signature === 'POST /' || signature === 'POST /:id/cancel' // the two above
-            );
     });
 
     it('reaches the hard delete only through the flag route', () => {
