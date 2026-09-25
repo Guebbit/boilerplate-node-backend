@@ -412,24 +412,10 @@ describe('POST /orders/search', () => {
 });
 
 /*
- * The admin writes addressed by body and by path. `email` is the edit: it is the one field every
- * order carries that no lifecycle rule guards, so the case is about the contract, not the rules.
+ * The admin write, addressed by path. `email` is the edit: it is the one field every order
+ * carries that no lifecycle rule guards, so the case is about the contract, not the rules.
  */
-describe('PUT /orders and PUT /orders/{id}', () => {
-    it('matches the contract with the id in the body', async () => {
-        const { bearer, user } = await authenticateAs('admin');
-        const order = await seedOrderFor(user);
-
-        const response = await api()
-            .put('/orders')
-            .set('Authorization', bearer)
-            .send({ id: String(order._id), email: 'billing@example.com' });
-
-        expect(response.status).toBe(200);
-        expect(response.body.data.email).toBe('billing@example.com');
-        expect(response).toSatisfyApiSpec();
-    });
-
+describe('PUT /orders/{id}', () => {
     it('matches the contract with the id in the path', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const order = await seedOrderFor(user);

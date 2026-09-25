@@ -27,7 +27,6 @@ describe('order routes — what is mounted', () => {
             'POST /search',
             'GET /',
             'POST /',
-            'PUT /',
             'DELETE /',
             'POST /:id/cancel',
             'POST /:id/status-override',
@@ -56,7 +55,6 @@ describe('order routes — authorization', () => {
         'POST /search',
         'GET /',
         'POST /',
-        'PUT /',
         'DELETE /',
         'POST /:id/cancel',
         'POST /:id/status-override',
@@ -71,7 +69,7 @@ describe('order routes — authorization', () => {
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
 
-    it.each(['POST /', 'PUT /', 'DELETE /', 'PUT /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
+    it.each(['POST /', 'DELETE /', 'PUT /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
         '%s is admin-only',
         (signature) => {
             expect(guardsOn(router, signature)).toContain('requirePermissionGuard');

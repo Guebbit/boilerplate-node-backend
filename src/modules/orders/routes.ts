@@ -54,9 +54,6 @@ router.post(
     writeOrders
 );
 
-// PUT /orders — admin, id in body (update)
-router.put('/', requirePermission('orders.any.update'), writeOrders);
-
 // DELETE /orders — admin, id in body
 router.delete('/', requirePermission('orders.any.delete'), deleteOrders);
 

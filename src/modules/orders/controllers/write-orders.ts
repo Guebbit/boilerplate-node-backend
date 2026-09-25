@@ -6,45 +6,35 @@
 
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
-import { t } from '@infrastructure/i18n';
-import { CreateOrderBody, UpdateOrderBody, UpdateOrderByIdBody } from '@api/schemas.zod';
+import { CreateOrderBody, UpdateOrderByIdBody } from '@api/schemas.zod';
 import { orderService } from '../services';
-import { rejectResponse } from '@infrastructure/http/response';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
-import type { CreateOrderRequest, UpdateOrderRequest, UpdateOrderByIdRequest } from '@types';
+import type { CreateOrderRequest, UpdateOrderByIdRequest } from '@types';
 import { orderCreatedTotal } from '../metrics';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 import { respondWithOrder } from './respond';
 
 /**
  * POST /orders — create a new order from an explicit payload (admin).
- * PUT /orders(/:id) — update an order by body or path id (admin); PUT without an id is 422.
+ * PUT /orders/:id — update an order by path id (admin).
  *
  * Creation bypasses the cart — items come straight from the body — which is what makes this
  * admin rather than the checkout path in `@modules/cart`.
  */
 export const writeOrders = (
-    request: Request<
-        ParamsDictionary,
-        unknown,
-        CreateOrderRequest | UpdateOrderRequest | UpdateOrderByIdRequest
-    >,
+    request: Request<ParamsDictionary, unknown, CreateOrderRequest | UpdateOrderByIdRequest>,
     response: Response
 ): Promise<void> => {
     // One declaration instead of reading `request.params.id` and the body separately — see
     // docs/theory/request-input.md. Orders carry no multipart variant, so nothing needs decoding.
+    // `PUT /orders/:id` is the only surviving update route, so a present id always came from the
+    // path (AUDIT_0924 D17b removed the id-in-body PUT).
     const { id } = readInput(request, { surface: 'write', ids: ['id'] });
 
     /**
      * NO ID = new order
      */
     if (!id) {
-        // PUT without an id is invalid
-        if (request.method === 'PUT') {
-            rejectResponse(response, 422, [t('generic.error-missing-data')]);
-            return Promise.resolve();
-        }
-
         const parseResult = CreateOrderBody.safeParse(request.body);
         if (!parseResult.success) {
             rejectValidation(response, parseResult.error);
@@ -75,9 +65,7 @@ export const writeOrders = (
     /**
      * ID = edit order
      */
-    // UpdateOrderBody requires `id` in the body; UpdateOrderByIdBody takes it from the path instead.
-    const schema = request.params.id ? UpdateOrderByIdBody : UpdateOrderBody;
-    const parseResult = schema.safeParse(request.body);
+    const parseResult = UpdateOrderByIdBody.safeParse(request.body);
     if (!parseResult.success) {
         rejectValidation(response, parseResult.error);
         return Promise.resolve();

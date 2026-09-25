@@ -1,7 +1,7 @@
 /**
  * @module
- * Controller for `POST /users`, `PUT /users` and `PUT /users/:id` — staff create/update, with
- * the create-vs-update branch decided by whether an id is present.
+ * Controller for `POST /users` and `PUT /users/:id` — staff create/update, with the
+ * create-vs-update branch decided by whether an id is present.
  *
  * See: docs/modules/users.md
  */
@@ -17,16 +17,14 @@ import { readUploadedImage } from '@infrastructure/http/uploads';
 import type {
     CreateUserRequest,
     CreateUserRequestMultipart,
-    UpdateUserRequest,
-    UpdateUserRequestMultipart,
     UpdateUserByIdRequest,
     UpdateUserByIdRequestMultipart,
     User
 } from '@types';
 
 /**
- * POST /users creates; PUT /users or PUT /users/:id updates — one handler for both.
- * An id (path or body) triggers update; its absence creates (POST only; PUT without id → 422).
+ * POST /users creates; PUT /users/:id updates — one handler for both.
+ * An id (from the path) triggers update; its absence creates (POST only).
  */
 export const writeUsers = (
     request: Request<
@@ -34,8 +32,6 @@ export const writeUsers = (
         unknown,
         | CreateUserRequest
         | CreateUserRequestMultipart
-        | UpdateUserRequest
-        | UpdateUserRequestMultipart
         | UpdateUserByIdRequest
         | UpdateUserByIdRequestMultipart
         // Express 5 leaves `request.body` UNDEFINED when no parser matched the content-type, and
@@ -101,14 +97,6 @@ export const writeUsers = (
      * NO ID = new user
      */
     if (!id) {
-        // PUT without an id is invalid
-        if (request.method === 'PUT') {
-            rejectResponse(response, 422, [t('generic.error-missing-data')]);
-            // The response is already sent — a rejected cleanup must not become an unhandled
-            // promise rejection on top of it.
-            return deleteUpload().catch(() => undefined);
-        }
-
         // Neither a password nor a way to get one to the user: `userService.create` would fill
         // the field with a value nobody is ever told and leave the account permanently unusable.
         // No cast: `password` is already on every branch of `request.body`'s own generated type.

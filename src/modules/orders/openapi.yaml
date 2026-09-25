@@ -98,42 +98,6 @@ paths:
                 # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-        put:
-            tags: [Orders]
-            summary: Update order
-            description: Updates an existing order identified by id in the request body.
-            operationId: updateOrder
-            x-alias-of: updateOrderById
-            security:
-                - bearerAuth: []
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/UpdateOrderRequest'
-            responses:
-                '200':
-                    description: Updated order
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/OrderEnvelope'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Three refusals share this status, told apart by `errors[].code`:
-                #  - `ORDER_TRANSITION_NOT_ALLOWED` — a move the lifecycle does not have, such as
-                #    `delivered` on a `pending` order, or `paid` on anything (only a confirmed
-                #    payment writes that). `errors[].details` carries `{ from, to, allowed }` so a
-                #    client can offer the moves that ARE open.
-                #  - `ORDER_CANCEL_VIA_CANCEL_ENDPOINT` — `cancelled` is a legal move and not a
-                #    field: it releases the held stock and refunds. Use `POST /orders/{id}/cancel`.
-                #  - `ORDER_ITEMS_HELD` — `items` cannot be rewritten while the order's stock is
-                #    still held or already sold, because the reservation froze the old lines.
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Orders]
             summary: Delete order
@@ -537,27 +501,6 @@ components:
                     items:
                         $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
             description: Create a new order.
-
-        UpdateOrderRequest:
-            type: object
-            additionalProperties: false
-            required: [id]
-            properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                status:
-                    type: string
-                    enum: [pending, paid, processing, shipped, delivered, cancelled]
-                    description: Updated order status
-                userId:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                email:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
-                items:
-                    type: array
-                    minItems: 1
-                    items:
-                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
 
         UpdateOrderByIdRequest:
             type: object

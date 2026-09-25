@@ -78,36 +78,6 @@ paths:
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-        put:
-            tags: [Users]
-            summary: Edit user
-            description: Updates an existing user's email or password. Optional image can be uploaded.
-            operationId: updateUser
-            x-alias-of: updateUserById
-            security:
-                - bearerAuth: []
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/UpdateUserRequest'
-                    multipart/form-data:
-                        schema:
-                            $ref: '#/components/schemas/UpdateUserRequestMultipart'
-            responses:
-                '200':
-                    description: Updated user
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                # `uploadLimiter` sits in front of this route — see routes.ts.
-                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Users]
             summary: Delete user
@@ -418,61 +388,6 @@ components:
                     description: Optional user profile image
                 locale:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
-
-        UpdateUserRequest:
-            type: object
-            additionalProperties: false
-            required: [id]
-            properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                email:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
-                username:
-                    type: string
-                password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
-                role:
-                    type: string
-                active:
-                    type: boolean
-                imageUrl:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
-                locale:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
-                phone:
-                    type: string
-                website:
-                    type: string
-
-        UpdateUserRequestMultipart:
-            type: object
-            additionalProperties: false
-            required: [id]
-            properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                email:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
-                username:
-                    type: string
-                password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
-                role:
-                    type: string
-                active:
-                    type: boolean
-                imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
-                    type: string
-                    format: binary
-                    description: Optional user profile image
-                locale:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
-                phone:
-                    type: string
-                website:
-                    type: string
 
         UpdateUserByIdRequest:
             type: object

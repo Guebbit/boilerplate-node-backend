@@ -26,7 +26,6 @@ const ALL = [
     'POST /search',
     'GET /',
     'POST /',
-    'PUT /',
     'DELETE /',
     'GET /:id',
     'PUT /:id',
@@ -92,7 +91,6 @@ describe('user routes — caching and uploads', () => {
 
     it.each([
         'POST /',
-        'PUT /',
         'DELETE /',
         'PUT /:id',
         'DELETE /:id',
@@ -107,7 +105,7 @@ describe('user routes — caching and uploads', () => {
         }
     );
 
-    it.each(['POST /', 'PUT /', 'PUT /:id'])(
+    it.each(['POST /', 'PUT /:id'])(
         '%s accepts the imageUpload field and validates it',
         (signature) => {
             const chain = chainOf(router, signature);

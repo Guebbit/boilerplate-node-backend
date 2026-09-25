@@ -43,9 +43,6 @@ router.get('/', requirePermission('users.any.read'), privateNoCache, getUsers);
 // POST /users (create)
 router.post('/', requirePermission('users.any.create'), uploadLimiter, upload.image(), writeUsers);
 
-// PUT /users — id in body (update)
-router.put('/', requirePermission('users.any.update'), uploadLimiter, upload.image(), writeUsers);
-
 // DELETE /users — id in body
 router.delete('/', requirePermission('users.any.delete'), deleteUsers);
 

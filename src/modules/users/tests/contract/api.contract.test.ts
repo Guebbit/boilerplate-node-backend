@@ -336,28 +336,10 @@ describe('POST /users/{id}/restore', () => {
 });
 
 /*
- * The body-addressed twins of `PUT /users/{id}` and `DELETE /users/{id}`, the explicit hard
- * delete, the admin 2FA reset — and the refusals every one of them owes an anonymous caller.
+ * The body-addressed twin of `DELETE /users/{id}`, the explicit hard delete, the admin 2FA
+ * reset — and the refusals every one of them owes an anonymous caller. `PUT /users` (id in the
+ * body) had no frontend caller and duplicated `PUT /users/{id}` — removed, AUDIT_0924 D17b.
  */
-describe('PUT /users — the id in the body', () => {
-    it('matches the contract for an admin edit', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const target = await createUser({ email: 'body-edit@example.com', username: 'bodyedit' });
-
-        const response = await api()
-            .put('/users')
-            .set('Authorization', bearer)
-            // `email` resent, as every PUT /users/{id} case here does: the service validates it as
-            // present although `UpdateUserRequest` does not list it as required.
-            .send({ id: String(target._id), email: target.email, username: 'bodyedited' });
-
-        expect(response.status).toBe(200);
-        expect(response.body.data.username).toBe('bodyedited');
-        expect(response).toSatisfyApiSpec();
-        assertNoCredentials(response.body);
-    });
-});
-
 describe('DELETE /users — the id in the body', () => {
     it('matches the contract for a soft delete', async () => {
         const { bearer } = await authenticateAs('admin');
