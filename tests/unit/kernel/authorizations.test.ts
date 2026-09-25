@@ -28,7 +28,7 @@ import {
     requireFreshAuth,
     requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
-import { registerAuthResolver } from '@kernel/authentication';
+import { registerAuthResolver, registerCredentialResolver } from '@kernel/authentication';
 import { emitAuditEvent, coreAuditActions } from '@infrastructure/observability/audit';
 import { makeResponseStub } from '@tests/express';
 import { asCustomer, asAdmin } from '../../support/callers';
@@ -82,8 +82,15 @@ registerAuthResolver({
     fromRefreshToken: (token) => fromRefreshToken(token) as never
 });
 
+/** Fakes `@modules/api-keys`' own resolver, for `getAuth`'s `sk_...` branch. */
+const fromBearerToken = jest.fn<Promise<unknown>, [string]>();
+registerCredentialResolver({
+    fromBearerToken: (token) => fromBearerToken(token) as never
+});
+
 const mockedVerifyAccessToken = fromAccessToken;
 const mockedVerifyRefreshToken = fromRefreshToken;
+const mockedResolveCredential = fromBearerToken;
 const mockedEmitAuditEvent = emitAuditEvent as jest.MockedFunction<typeof emitAuditEvent>;
 
 /** Request stub carrying an optional Authorization header and auth context. */
@@ -223,13 +230,32 @@ describe('getAuth', () => {
         expect(request.authContext).toBeUndefined();
     });
 
-    it('proceeds anonymously when the user lookup itself fails', async () => {
-        mockedVerifyAccessToken.mockRejectedValue(new Error('database unavailable'));
+    it('proceeds anonymously when the user lookup fails for a reason that is not infrastructure', async () => {
+        // Not every rejection is a DB outage — an unrecognised shape must still fail OPEN, the
+        // same as an invalid token, rather than 503ing on anything unfamiliar.
+        mockedVerifyAccessToken.mockRejectedValue(new Error('unexpected'));
 
         const request = makeRequest({ authorization: 'Bearer valid.token' });
         const next = await runUntilNext(getAuth, request, makeResponseStub());
 
         expect(next).toHaveBeenCalledTimes(1);
+        expect(next).toHaveBeenCalledWith();
+        expect(request.authContext).toBeUndefined();
+    });
+
+    // D16: a DB blip must not be told to the client as "your credentials are wrong" (RFC 9110
+    // §15.5.2). `getAuth` forwards it to the global error handler instead, which answers 503.
+    it('forwards an infrastructure failure to the error handler, instead of going anonymous', async () => {
+        const outage = Object.assign(new Error('server selection timed out'), {
+            name: 'MongooseServerSelectionError'
+        });
+        mockedVerifyAccessToken.mockRejectedValue(outage);
+
+        const request = makeRequest({ authorization: 'Bearer valid.token' });
+        const next = await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(next).toHaveBeenCalledTimes(1);
+        expect(next).toHaveBeenCalledWith(outage);
         expect(request.authContext).toBeUndefined();
     });
 
@@ -269,6 +295,23 @@ describe('getAuth', () => {
         // JWT boundary at all, credential or not.
         expect(next).toHaveBeenCalledTimes(1);
         expect(mockedVerifyAccessToken).not.toHaveBeenCalled();
+    });
+
+    // D16, the credential twin of the JWT-path test above: `resolveCredential` failing because
+    // the database is unreachable is not "unknown credential" (which resolves `undefined`, never
+    // rejects — see `resolveCredential`'s own docblock).
+    it('forwards an infrastructure failure on the credential path too, instead of going anonymous', async () => {
+        const outage = Object.assign(new Error('server selection timed out'), {
+            name: 'MongooseServerSelectionError'
+        });
+        mockedResolveCredential.mockRejectedValue(outage);
+
+        const request = makeRequest({ authorization: 'Bearer sk_test_abc' });
+        const next = await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(next).toHaveBeenCalledTimes(1);
+        expect(next).toHaveBeenCalledWith(outage);
+        expect(request.caller).toBeUndefined();
     });
 });
 

@@ -10,9 +10,22 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
+import { isDuplicateKey, isConnectionError } from '@infrastructure/persistence/mongo-errors';
+import { isRedisConnectionError } from '@infrastructure/adapters/redis';
 import { generateReject, rejectResponse } from './response';
 import type { Response } from 'express';
+
+/**
+ * Whether a failure means an infrastructure dependency (Mongo, Redis) was unreachable, rather
+ * than a request the server understood and refused. RFC 9110 §15.5.4: 503 says the SERVER is
+ * temporarily broken; every other branch below is about the REQUEST. `kernel/middlewares/
+ * authorizations.ts`'s `getAuth` is the other caller — a DB blip while resolving a token must not
+ * read as "invalid credentials".
+ *
+ * @param error - whatever the caught rejection actually was
+ */
+export const isInfrastructureError = (error: unknown): boolean =>
+    isConnectionError(error) || isRedisConnectionError(error);
 
 /**
  * Decide which driver failures describe the REQUEST rather than the server — the single place
@@ -53,6 +66,9 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
         // not as a one-off `.catch()` at each of `users`' three write paths.
         if ((error as { name?: string }).name === 'AccessInvariantError')
             return [409, (error as { message?: string }).message ?? 'Unknown error'];
+        // Mongo/Redis unreachable — the server is temporarily broken, not the request. Checked
+        // before the generic fallback below, which would otherwise answer 500 and imply a bug.
+        if (isInfrastructureError(error)) return [503, 'Service unavailable'];
         // An unknown server-side failure, but still Error-SHAPED — own or inherited `.message`,
         // never gated on `instanceof`: a driver/test fixture built via `Object.assign` onto a
         // non-Error prototype is exactly as readable here as a real `Error`. The `||` guards

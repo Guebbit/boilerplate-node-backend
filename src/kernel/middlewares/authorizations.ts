@@ -34,6 +34,7 @@ import {
     type StepUpTier
 } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
+import { isInfrastructureError } from '@infrastructure/http/errors';
 import { rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { environmentNumber } from '@infrastructure/runtime/environment';
@@ -71,6 +72,22 @@ const auditRefusal = (
     });
 
 /**
+ * `getAuth`'s shared `.catch()`: an infrastructure failure goes to the global error handler as a
+ * 503, anything else (an invalid/expired token, a user who no longer exists) proceeds anonymous —
+ * see `getAuth`'s own docblock for why the two must not be told apart the same way.
+ *
+ * @param next - called once, with the error only when it is an infrastructure failure
+ * @param error - whatever the resolver's promise rejected with
+ */
+const continueOrFailInfra = (next: NextFunction, error: unknown): void => {
+    if (isInfrastructureError(error)) {
+        next(error);
+        return;
+    }
+    next();
+};
+
+/**
  * Pull the bearer token out of the `Authorization` header, if any.
  *
  * @param request - the incoming request
@@ -79,19 +96,24 @@ const auditRefusal = (
 export const getTokenBearer = (request: Request) => request.header('Authorization')?.split(' ')[1];
 
 /**
- * Resolve `request.authContext` from a bearer token when one is present, then always continue.
+ * Resolve `request.authContext` from a bearer token when one is present, then continue.
  *
- * Never rejects on the JWT path: an absent or invalid token just leaves `authContext` unset, so
- * this can sit in front of routes that work for both anonymous and authenticated callers —
- * `isAuth`/`requirePermission` are what actually gate a route.
+ * An absent, invalid or expired token — or one naming a user who no longer exists — just leaves
+ * `authContext` unset: this sits in front of routes that work for both anonymous and
+ * authenticated callers, and `isAuth`/`requirePermission` are what actually gate one. A resolver
+ * failure that means the DATABASE was unreachable is different: forwarded to `next(error)` so the
+ * global handler answers 503, never disguised as "your credentials are wrong" (RFC 9110 §15.5.2;
+ * see `infrastructure/http/errors.ts#isInfrastructureError`).
  *
- * The CREDENTIAL path (`sk_...`, resolved by `@modules/api-keys` when present) is the one
- * exception: a credential that resolves but is over its own request budget is refused here, with
- * `apiKeyLimiter`'s 429 — the request never reaches a route only to be refused there instead.
+ * The CREDENTIAL path (`sk_...`, resolved by `@modules/api-keys` when present) gets the same
+ * treatment, plus one exception of its own: a credential that resolves but is over its own
+ * request budget is refused here, with `apiKeyLimiter`'s 429 — the request never reaches a route
+ * only to be refused there instead.
  *
  * @param request - populated with `authContext` (JWT) or `caller`/`credentialId` (credential) on success
  * @param response - unused on the JWT path; answers 429 on the credential path's own rate limit
- * @param next - always called on the JWT path; called by `apiKeyLimiter` on the credential path
+ * @param next - called once on every path — with the error for an infrastructure failure,
+ *   otherwise with none
  */
 export const getAuth = (request: Request, response: Response, next: NextFunction) => {
     // Two modules can share a URL prefix (e.g. `account` and `addresses` both under `/account`),
@@ -125,7 +147,9 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
                 request.credentialId = resolved.credentialId;
                 apiKeyLimiter(request, response, next);
             })
-            .catch(() => next());
+            .catch((error: unknown) => {
+                continueOrFailInfra(next, error);
+            });
         return;
     }
 
@@ -146,11 +170,11 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
                 // Resolved once, here, so nothing below turns two role names into keys again.
                 request.caller = callerInScope(request.authContext, 'tenant');
             }
+            next();
         })
-        .catch(() => {
-            // Invalid or expired token — proceed without authenticated user
-        })
-        .finally(next);
+        .catch((error: unknown) => {
+            continueOrFailInfra(next, error);
+        });
 };
 
 /**

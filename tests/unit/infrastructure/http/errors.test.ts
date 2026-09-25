@@ -12,6 +12,7 @@
 import { asStub } from '@tests/stub';
 import {
     databaseErrorInterpreter,
+    isInfrastructureError,
     rejectDatabaseEnvelope,
     rejectDatabaseError
 } from '@infrastructure/http/errors';
@@ -296,6 +297,52 @@ describe('rejectDatabaseError', () => {
 
         const body = response.json.mock.calls[0]![0] as { errors: unknown[] };
         expect(JSON.stringify(body.errors)).not.toContain('shard-02');
+    });
+});
+
+/** A Mongo/Mongoose topology error: identified by `name`, carrying no `kind` or `code`. */
+const makeConnectionError = () =>
+    Object.assign(new Error('connection <monitor> to 127.0.0.1:27017 closed'), {
+        name: 'MongoServerSelectionError'
+    });
+
+/** A node-redis error: same shape, a different registry of names. */
+const makeRedisError = () =>
+    Object.assign(new Error('The client is closed'), { name: 'ClientClosedError' });
+
+describe('isInfrastructureError', () => {
+    it('recognises a Mongo connection failure', () => {
+        expect(isInfrastructureError(makeConnectionError())).toBe(true);
+    });
+
+    it('recognises a Redis connection failure', () => {
+        expect(isInfrastructureError(makeRedisError())).toBe(true);
+    });
+
+    it('is false for a request-shape error, and for nothing at all', () => {
+        expect(isInfrastructureError(makeBsonError())).toBe(false);
+        expect(isInfrastructureError(undefined)).toBe(false);
+    });
+});
+
+describe('connection-error branch', () => {
+    // D16: an anonymous caller's login attempt must not be told "your credentials are wrong"
+    // (401) when the real answer is "the database is unreachable" — RFC 9110 §15.5.2 vs §15.5.4.
+    it('answers 503, not the catch-all 500, for a Mongo outage', () => {
+        expect(databaseErrorInterpreter(makeConnectionError())).toEqual([
+            503,
+            'Service unavailable'
+        ]);
+    });
+
+    it('answers 503 for a Redis outage too', () => {
+        expect(databaseErrorInterpreter(makeRedisError())).toEqual([503, 'Service unavailable']);
+    });
+
+    it('does not leak the driver message into the 503', () => {
+        const [, message] = databaseErrorInterpreter(makeConnectionError());
+
+        expect(message).not.toContain('27017');
     });
 });
 

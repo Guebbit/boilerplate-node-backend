@@ -7,6 +7,7 @@
         "error-invalid-data": "Errore: dati forniti non validi.",
         "error-missing-data": "Errore: dati mancanti.",
         "error-internal": "Qualcosa è andato storto dalla nostra parte.",
+        "error-service-unavailable": "Questo servizio non è temporaneamente disponibile. Riprova tra poco.",
         "error-unauthorized": "Non hai effettuato l’accesso, oppure la sessione è scaduta.",
         "error-forbidden": "Non hai i permessi per farlo.",
         "error-not-found": "Questo elemento non esiste più.",

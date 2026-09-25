@@ -66,4 +66,43 @@ describe('handleUncaughtError', () => {
         expect(next).toHaveBeenCalledWith(error);
         expect(response.status).not.toHaveBeenCalled();
     });
+
+    // D16: a DB/Redis outage answers 503 (RFC 9110 §15.5.4), not the generic 500 every other
+    // server-side failure gets — the whole point being that a client can tell "retry shortly"
+    // apart from "something is broken".
+    describe('a Mongo/Redis outage (the databaseErrorInterpreter 503 branch)', () => {
+        const outage = Object.assign(new Error('server selection timed out'), {
+            name: 'MongoServerSelectionError'
+        });
+
+        /** `setHeader` is the one extra call this branch makes, beyond `status`/`json`. */
+        const responseWithHeaders = () =>
+            Object.assign(makeResponseStub(), { setHeader: jest.fn() });
+
+        it('answers 503, not 500', () => {
+            const response = responseWithHeaders();
+
+            handleUncaughtError(outage, requestStub(), response, NEXT);
+
+            expect(response.status).toHaveBeenCalledWith(503);
+        });
+
+        it('sets Retry-After as a hint for the client', () => {
+            const response = responseWithHeaders();
+
+            handleUncaughtError(outage, requestStub(), response, NEXT);
+
+            expect(response.setHeader).toHaveBeenCalledWith('Retry-After', expect.any(String));
+        });
+
+        it('does not leak the driver message into the body', () => {
+            const response = responseWithHeaders();
+
+            handleUncaughtError(outage, requestStub(), response, NEXT);
+
+            expect(JSON.stringify(response.json.mock.calls[0]![0])).not.toContain(
+                'server selection'
+            );
+        });
+    });
 });

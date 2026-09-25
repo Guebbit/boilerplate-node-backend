@@ -3,7 +3,11 @@
  */
 
 import mongoose from 'mongoose';
-import { isDuplicateKey, isBadObjectId } from '@infrastructure/persistence/mongo-errors';
+import {
+    isDuplicateKey,
+    isBadObjectId,
+    isConnectionError
+} from '@infrastructure/persistence/mongo-errors';
 
 /** A driver duplicate-key error: the numeric `code` is the discriminator, never the message. */
 const makeDuplicateKeyError = () =>
@@ -56,5 +60,35 @@ describe('isBadObjectId', () => {
         // rejection that only LOOKS like one must not pass — that gap is exactly what motivated
         // the widened `unknown` catch this helper exists to narrow safely.
         expect(isBadObjectId({ name: 'CastError', kind: 'ObjectId' })).toBe(false);
+    });
+});
+
+describe('isConnectionError', () => {
+    it.each([
+        'MongoServerSelectionError',
+        'MongooseServerSelectionError',
+        'MongoNetworkError',
+        'MongoNotConnectedError',
+        'MongoNetworkTimeoutError'
+    ])('recognises %s by name, never instanceof', (name) => {
+        expect(isConnectionError(Object.assign(new Error('unreachable'), { name }))).toBe(true);
+    });
+
+    it('recognises the bare MongooseError buffering-timeout message', () => {
+        const error = new mongoose.Error(
+            'Operation `users.findOne()` buffering timed out after 10000ms'
+        );
+        expect(isConnectionError(error)).toBe(true);
+    });
+
+    it('is false for a bare MongooseError that is a programmer error, not an outage', () => {
+        // The base class every other Mongoose throw also uses — the message is the only signal,
+        // and an unrelated one must not be mistaken for the outage case above.
+        expect(isConnectionError(new mongoose.Error('Aggregate has empty pipeline'))).toBe(false);
+    });
+
+    it('is false for an ordinary error, and for nothing at all', () => {
+        expect(isConnectionError(new Error('validation failed'))).toBe(false);
+        expect(isConnectionError(undefined)).toBe(false);
     });
 });

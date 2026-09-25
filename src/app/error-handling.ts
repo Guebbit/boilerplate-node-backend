@@ -60,6 +60,14 @@ const CLIENT_ERROR_COPY: Record<number, { code: string; messageKey: string }> = 
 };
 
 /**
+ * A rough hint, not a promise — how long a client should wait before retrying a 503. There is no
+ * backoff state to read this from (an infra outage's real duration is unknown), so one constant
+ * for every 503 is honest about that, rather than inventing a number that looks computed.
+ * RFC 9110 §10.2.3.
+ */
+const RETRY_AFTER_SECONDS = 5;
+
+/**
  * What status this error should answer, decided once so the log line and the response cannot
  * disagree about it.
  *
@@ -132,6 +140,17 @@ export const handleUncaughtError = (
      *
      * See: docs/theory/request-flow.md#the-500-branch-says-nothing
      */
+    if (status === 503) {
+        // RFC 9110 §10.2.3 — a hint for the client's retry, not a guarantee.
+        response.setHeader('Retry-After', RETRY_AFTER_SECONDS.toString());
+        return rejectResponse(response, 503, [
+            {
+                code: 'SERVICE_UNAVAILABLE',
+                message: t('generic.error-service-unavailable')
+            }
+        ]);
+    }
+
     if (status >= 500)
         return rejectResponse(response, 500, [
             {

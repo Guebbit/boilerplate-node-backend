@@ -98,3 +98,29 @@ export const closeRedisClient = (client: RedisClient | undefined): Promise<void>
               () => client.destroy()
           )
         : Promise.resolve();
+
+/**
+ * node-redis error NAMES that mean "no server was reachable" — checked by `.name`, not
+ * `instanceof`, for the same reason `mongo-errors.ts#isConnectionError` is: safe even if a
+ * dependency pulls in a second copy of the package.
+ * https://github.com/redis/node-redis/blob/master/docs/v5-to-v6.md#error-hierarchy
+ */
+const REDIS_CONNECTION_ERROR_NAMES = new Set([
+    'ClientClosedError',
+    'ClientOfflineError',
+    'ConnectionTimeoutError',
+    'SocketClosedUnexpectedlyError',
+    'SocketTimeoutError'
+]);
+
+/**
+ * Whether a Redis failure means the server was unreachable, as opposed to a command it understood
+ * and refused. Same status this deserves as a Mongo outage — see
+ * `infrastructure/http/errors.ts#databaseErrorInterpreter`.
+ *
+ * @param error - whatever the caught rejection actually was
+ */
+export const isRedisConnectionError = (error: unknown): boolean => {
+    const { name } = (error ?? {}) as { name?: unknown };
+    return typeof name === 'string' && REDIS_CONNECTION_ERROR_NAMES.has(name);
+};
