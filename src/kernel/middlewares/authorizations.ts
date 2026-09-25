@@ -96,19 +96,17 @@ const continueOrFailInfra = (next: NextFunction, error: unknown): void => {
 export const getTokenBearer = (request: Request) => request.header('Authorization')?.split(' ')[1];
 
 /**
- * Resolve `request.authContext` from a bearer token when one is present, then continue.
+ * Resolve `request.authContext` from a bearer token when one is present, then continue. This sits
+ * in front of routes that work for both anonymous and authenticated callers.
  *
- * An absent, invalid or expired token — or one naming a user who no longer exists — just leaves
- * `authContext` unset: this sits in front of routes that work for both anonymous and
- * authenticated callers, and `isAuth`/`requirePermission` are what actually gate one. A resolver
- * failure that means the DATABASE was unreachable is different: forwarded to `next(error)` so the
- * global handler answers 503, never disguised as "your credentials are wrong" (RFC 9110 §15.5.2;
- * see `infrastructure/http/errors.ts#isInfrastructureError`).
- *
- * The CREDENTIAL path (`sk_...`, resolved by `@modules/api-keys` when present) gets the same
- * treatment, plus one exception of its own: a credential that resolves but is over its own
- * request budget is refused here, with `apiKeyLimiter`'s 429 — the request never reaches a route
- * only to be refused there instead.
+ * No caller:  an absent, invalid or expired token, or one naming a user who no longer exists,
+ *             leaves `authContext` unset — `isAuth`/`requirePermission` are what gate a route.
+ * Outage:     a resolver failure meaning Mongo/Redis was unreachable goes to `next(error)`, so the
+ *             global handler answers 503, never "your credentials are wrong" (RFC 9110 §15.5.2;
+ *             see `infrastructure/http/errors.ts#isInfrastructureError`).
+ * Credential: `sk_...` (resolved by `@modules/api-keys` when present) gets the same treatment,
+ *             plus `apiKeyLimiter`'s 429 for one over its own request budget — refused here, not
+ *             at the route.
  *
  * @param request - populated with `authContext` (JWT) or `caller`/`credentialId` (credential) on success
  * @param response - unused on the JWT path; answers 429 on the credential path's own rate limit

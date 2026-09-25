@@ -463,17 +463,14 @@ export type JobPriority = 'normal' | 'high';
 const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 4, high: 8 };
 
 /**
- * Deliveries a QUORUM QUEUE itself will attempt before dead-lettering a message — RabbitMQ's own
- * `delivery-count`, incremented on EVERY redelivery regardless of cause (a consumer that crashed
- * mid-handler included), unlike the app's `x-death`-based {@link defaultMaxAttempts}, which only
- * grows on a `nack` the app chose to send. A message that kills its consumer before the handler
- * can nack it is dead-lettered to the retry queue after this many tries, and `handleDelivery`
- * parks it once those retry cycles have used up its attempts.
+ * Deliveries a QUORUM QUEUE itself attempts before dead-lettering a message.
  *
- * Set explicitly rather than trusting RabbitMQ 4's own default (20, https://www.rabbitmq.com/docs/quorum-queues#delivery-limit)
- * — a message that kills the process on contact should not get 20 servers' worth of chances
- * before this queue's own dead-letter target (`<queue>.retry`, the same one `nack` routes to)
- * takes over.
+ * Counts: RabbitMQ's own `delivery-count`, on EVERY redelivery — a crashed consumer included —
+ *         unlike the app's `x-death`-based {@link defaultMaxAttempts}, which only grows on a nack.
+ * Then:   the message goes to `<queue>.retry`, the same target a nack uses, and `handleDelivery`
+ *         parks it once those retry cycles have used up its attempts.
+ * Why 3:  RabbitMQ 4's default is 20 — too many chances for a message that kills the process on
+ *         contact. https://www.rabbitmq.com/docs/quorum-queues#delivery-limit
  */
 const QUORUM_DELIVERY_LIMIT = 3;
 
