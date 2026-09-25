@@ -55,14 +55,14 @@ happened to pass — and a seventh combination has to be added there deliberatel
 reviewed against the spec. `tests/contract/request-sources.test.ts` pins the set for exactly that
 reason: adding one fails that test once, which is the prompt to update this page alongside it.
 
-| Surface  | Sources (highest first) | Used by                                                        |
-| -------- | ----------------------- | -------------------------------------------------------------- |
-| `search` | body, query             | the four endpoints with a `POST …/search` sibling              |
-| `list`   | query                   | the four GET-only collection reads, which have no such sibling |
-| `write`  | params, body            | `updateProduct`/`writeOrders`, cart PUT                        |
-| `create` | body                    | `createProduct` — a route that never carries an id in its path |
-| `delete` | params, query, body     | the three soft/hard delete controllers                         |
-| `path`   | params                  | `DELETE /cart/{productId}`, which declares no body             |
+| Surface  | Sources (highest first) | Used by                                                                  |
+| -------- | ----------------------- | ------------------------------------------------------------------------ |
+| `search` | body, query             | the four endpoints with a `POST …/search` sibling                        |
+| `list`   | query                   | the four GET-only collection reads, which have no such sibling           |
+| `write`  | params, body            | `updateProduct`, cart PUT                                                |
+| `create` | body                    | `createProduct`, and the PUT/PATCH factory's body (its id is read apart) |
+| `delete` | params, query, body     | the three soft/hard delete controllers                                   |
+| `path`   | params                  | `DELETE /cart/{productId}`, which declares no body; `writeOrders`        |
 
 `search` and `list` differ on one question: **is there a route that can carry a body?** A GET
 cannot — RFC 9110 §9.3.1 gives content on a GET no defined semantics and the Fetch spec refuses to
@@ -90,7 +90,7 @@ declaring a body on its GET.
 |                                                                         | `hardDelete`                                    | params, query, body — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one    |
 | `DELETE /orders`, `DELETE /orders/:id`, `DELETE /orders/:id/hard`       | `id`                                            | params, body                               | validated as an ObjectId, 422 on failure                      |
 |                                                                         | `hardDelete`                                    | params, query, body — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one    |
-| `POST /orders`, `PUT /orders/:id`                                       | `id`                                            | params, body                               | first non-empty wins                                          |
+| `POST /orders`, `PUT /orders/:id`                                       | `id`                                            | params                                     | absent means create                                           |
 |                                                                         | everything else                                 | body                                       | untouched                                                     |
 | `POST /products`, `PATCH /products/:id`                                 | `id`                                            | params, body                               | first non-empty wins                                          |
 |                                                                         | `active`                                        | body                                       | boolean; decoded only on `multipart/form-data`                |
@@ -176,7 +176,7 @@ two dispositions, because the safe direction differs:
 
 A read can fail closed and still answer; a write has no safe narrowing of a value it cannot
 understand, only a rejection. `status` on feedback is the live pair — `toFeedbackStatus` in
-`src/modules/feedback/service.ts` for the read, `put-feedback-status.ts` for the write.
+`src/modules/feedback/service.ts` for the read, `update-feedback-status.ts` for the write.
 
 ## Declaring it
 
@@ -236,10 +236,8 @@ generating them from the spec would make the discrepancies below _unwritable_: a
 not read a source the contract does not declare, because nobody would be writing the source list.
 
 It is not done, and the order matters. Four things stand in the way, none fatal: one controller
-serves several operations (`writeOrders` still covers three operationIds with three different
-declared bodies — `users`' own equivalent moved onto the shared PUT/PATCH factory (`dcd1e0c0`)
-instead, which reads params and body itself rather than going through `readInput`'s `write`
-surface at all), so a generated per-operation declaration would have to be wired per route rather
+serves several operations (`writeOrders` covers two operationIds with two different declared
+bodies), so a generated per-operation declaration would have to be wired per route rather
 than per controller; `booleans`/`stringArrays` derive from the `multipart` schema variant, not the
 JSON one; `GET /products` and `POST /products/search` are two operations deliberately sharing one
 controller, so their declarations would need unioning; and orval generates clients and schemas,

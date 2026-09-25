@@ -25,11 +25,9 @@ export const writeOrders = (
     request: Request<ParamsDictionary, unknown, CreateOrderRequest | UpdateOrderByIdRequest>,
     response: Response
 ): Promise<void> => {
-    // One declaration instead of reading `request.params.id` and the body separately — see
-    // docs/theory/request-input.md. Orders carry no multipart variant, so nothing needs decoding.
-    // `PUT /orders/:id` is the only surviving update route, so a present id always came from the
-    // path (AUDIT_0924 D17b removed the id-in-body PUT).
-    const { id } = readInput(request, { surface: 'write', ids: ['id'] });
+    // `path`: `PUT /orders/:id` is the one update route, so an id only ever comes from the path —
+    // see docs/theory/request-input.md. Orders carry no multipart variant, so nothing needs decoding.
+    const { id } = readInput(request, { surface: 'path', ids: ['id'] });
 
     /**
      * NO ID = new order
