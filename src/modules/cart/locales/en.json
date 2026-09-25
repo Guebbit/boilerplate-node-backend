@@ -16,6 +16,8 @@
         "shipping-method-not-found": "The chosen shipping method does not exist.",
         "shipping-not-applicable": "Your cart contains only digital products, which do not need a shipping method.",
         "shipping-method-weight": "The chosen shipping method does not carry a basket this heavy.",
+        "shipping-method-required": "Your cart contains physical products — choose a shipping method to continue.",
+        "address-required": "The chosen shipping method needs a delivery address — choose or add one to continue.",
         "payment-method-not-available": "The chosen payment method is not offered by this shop.",
         "bank-transfer-limit": "You already have too many orders awaiting a bank transfer. Complete or cancel one before placing another."
     }

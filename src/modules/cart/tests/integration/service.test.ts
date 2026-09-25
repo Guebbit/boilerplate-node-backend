@@ -52,6 +52,7 @@ import {
     productRemoveFromCartsById
 } from '@modules/cart/services';
 import { cartRepository } from '@modules/cart/repository';
+import { addressAdd } from '@modules/addresses';
 import { userService } from '@modules/users';
 import { asCustomer, testCallerContext } from '@tests/callers';
 import { registerModules } from '@kernel/registry';
@@ -76,6 +77,19 @@ const storedQuantity = async (userId: string, productId: string): Promise<number
     const cart = await cartRepository.findByUserId(userId);
     return cart?.items.find((item) => String(item.productId) === productId)?.quantity;
 };
+
+/**
+ * Gives a user a default address — the checkout rule requires one for `standard`/`express`
+ * (both `requiresAddress`), which most of this file's cases have no reason to set up themselves.
+ */
+const giveUserAnAddress = (userId: string) =>
+    addressAdd(userId, {
+        fullName: 'Ada Lovelace',
+        street: 'Via Roma 1',
+        city: 'Modena',
+        zip: '41121',
+        country: 'IT'
+    });
 
 describe('cart storage', () => {
     it('holds no cart document until the first write', async () => {
@@ -599,7 +613,9 @@ describe('orderConfirm', () => {
         await cartItemSetById(user.id, String(keyboard._id), 2);
         await cartItemSetById(user.id, String(mouse._id), 1);
 
-        const result = await orderConfirm(user.id, testCallerContext);
+        // `pickup`: both products are physical, so checkout now needs a method — pickup needs
+        // no address either, keeping this test about order creation, not shipping.
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
 
         expect(result.success).toBe(true);
         await expect(countOrders({ userId: user._id })).resolves.toBe(1);
@@ -613,7 +629,7 @@ describe('orderConfirm', () => {
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
-        await orderConfirm(user.id, testCallerContext);
+        await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
 
         // Ordering matters: the cart must only be cleared after the order was created, or a
         // failure mid-checkout loses the basket.
@@ -669,6 +685,7 @@ describe('orderConfirm', () => {
 
     it('freezes the chosen shipping method and its cost onto the order', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id); // `express` requires one
         const product = await createProduct({ price: 25 });
         await cartItemSetById(user.id, String(product._id), 2);
 
@@ -682,6 +699,7 @@ describe('orderConfirm', () => {
 
     it('prices the free-above rule against the lines being bought', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id); // `standard` requires one
         const product = await createProduct({ price: 60 });
         await cartItemSetById(user.id, String(product._id), 2); // 120 ≥ standard's 100
 
@@ -710,7 +728,9 @@ describe('orderConfirm', () => {
 
     it('an omitted method leaves both shipping fields absent', async () => {
         const user = await createUser();
-        const product = await createProduct();
+        // Digital: a physical line would now refuse checkout outright with no method chosen —
+        // this case is about what an omitted method itself leaves behind, not that refusal.
+        const product = await createProduct({ requiresShipping: false });
         await cartItemSetById(user.id, String(product._id), 1);
 
         await orderConfirm(user.id, testCallerContext);
@@ -725,6 +745,7 @@ describe('orderConfirm', () => {
 
     it('a chosen method that costs nothing still freezes the method, unlike no method at all', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id); // `standard` requires one
         const product = await createProduct({ price: 500 });
         await cartItemSetById(user.id, String(product._id), 1);
 
@@ -748,8 +769,48 @@ describe('orderConfirm', () => {
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 
+    it('refuses a physical basket with no shipping method at all', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        const result = await orderConfirm(user.id, testCallerContext);
+
+        expect(asReject(result).status).toBe(422);
+        expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_REQUIRED');
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+    });
+
+    it('refuses a physical basket under an address-requiring method with no address on file', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        // `standard.requiresAddress` is true, and this user's book is empty.
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
+
+        expect(asReject(result).status).toBe(422);
+        expect(asReject(result).errors[0].code).toBe('CART_ADDRESS_REQUIRED');
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+    });
+
+    it('accepts a physical basket under pickup with no address at all', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        // `pickup.requiresAddress` is false, so the empty address book is not an obstacle.
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
+
+        expect(result.success).toBe(true);
+        const order = await findOrder({ userId: user._id });
+        expect(order!.shippingMethod).toBe('pickup');
+        expect(order!.shippingAddress).toBeUndefined();
+    });
+
     it('refuses a shipping method the basket is too heavy for', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id); // `express` requires one
         // Express's ceiling is 5000g; two of these clear it.
         const product = await createProduct({ weight: 3000 });
         await cartItemSetById(user.id, String(product._id), 2);
@@ -763,6 +824,7 @@ describe('orderConfirm', () => {
 
     it('accepts the same basket under a method with room for it', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id); // `standard` requires one
         // Over express's 5000g ceiling, comfortably under standard's 30000g one.
         const product = await createProduct({ weight: 3000 });
         await cartItemSetById(user.id, String(product._id), 2);
@@ -774,6 +836,7 @@ describe('orderConfirm', () => {
 
     it('treats a product with no weight as weighing nothing, never refusing on that account', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id); // `express` requires one
         const product = await createProduct(); // no `weight` override
         await cartItemSetById(user.id, String(product._id), 1);
 
@@ -796,6 +859,7 @@ describe('orderConfirm', () => {
 
     it('still allows a shipping method when only SOME lines are digital', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id); // `standard` requires one
         const ebook = await createProduct({ requiresShipping: false });
         const mug = await createProduct({ requiresShipping: true, price: 500 });
         await cartItemSetById(user.id, String(ebook._id), 1);
@@ -813,7 +877,7 @@ describe('orderConfirm', () => {
         const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
         await cartItemSetById(user.id, String(keyboard._id), 2);
 
-        const result = await orderConfirm(user.id, testCallerContext);
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
         await flush();
 
         expect(result.success).toBe(true);
@@ -863,7 +927,7 @@ describe('orderConfirm — paymentMethod', () => {
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
-        await orderConfirm(user.id, testCallerContext);
+        await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
 
         const order = await findOrder({ userId: user._id });
         expect(order!.paymentMethod).toBe('card');
@@ -908,7 +972,7 @@ describe('orderConfirm — paymentMethod', () => {
                         user.id,
                         testCallerContext,
                         undefined,
-                        undefined,
+                        'pickup',
                         'bank_transfer'
                     );
 
@@ -931,7 +995,7 @@ describe('orderConfirm — paymentMethod', () => {
             const product = await createProduct();
             await cartItemSetById(user.id, String(product._id), 1);
 
-            await orderConfirm(user.id, testCallerContext, undefined, undefined, 'bank_transfer');
+            await orderConfirm(user.id, testCallerContext, undefined, 'pickup', 'bank_transfer');
 
             const stored = await findOrder({ userId: user._id });
             // `toJSON()`'s static type mirrors the stored document, not the transform this
@@ -961,7 +1025,7 @@ describe('orderConfirm — paymentMethod', () => {
             const product = await createProduct();
             await cartItemSetById(user.id, String(product._id), 1);
 
-            await orderConfirm(user.id, testCallerContext, undefined, undefined, 'bank_transfer');
+            await orderConfirm(user.id, testCallerContext, undefined, 'pickup', 'bank_transfer');
             await flush();
 
             expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
@@ -1017,7 +1081,7 @@ describe('orderConfirm — paymentMethod', () => {
                 user.id,
                 testCallerContext,
                 undefined,
-                undefined,
+                'pickup',
                 'bank_transfer'
             );
 

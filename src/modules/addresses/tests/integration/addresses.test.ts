@@ -138,7 +138,13 @@ describe('checkout and the address', () => {
         await addressService.addressAdd(user.id, HOME);
         await cartWith(user.id);
 
-        const result = await cartService.orderConfirm(user.id, testCallerContext);
+        // `standard` requires an address — this is the case that resolves it from the default.
+        const result = await cartService.orderConfirm(
+            user.id,
+            testCallerContext,
+            undefined,
+            'standard'
+        );
 
         expect(result.success).toBe(true);
         expect(result.success && result.data?.shippingAddress).toMatchObject({
@@ -155,7 +161,12 @@ describe('checkout and the address', () => {
         const view = await addressService.addressesGet(user.id);
         const office = view.addresses.find(({ label }) => label === 'office');
 
-        const result = await cartService.orderConfirm(user.id, testCallerContext, office!.id);
+        const result = await cartService.orderConfirm(
+            user.id,
+            testCallerContext,
+            office!.id,
+            'standard'
+        );
 
         expect(result.success).toBe(true);
         expect(result.success && result.data?.shippingAddress?.street).toBe('Via Milano 2');
@@ -215,7 +226,13 @@ describe('checkout and the address', () => {
         const user = await createUser();
         await cartWith(user.id);
 
-        const result = await cartService.orderConfirm(user.id, testCallerContext);
+        // `pickup` needs no address, so an empty book still checks out.
+        const result = await cartService.orderConfirm(
+            user.id,
+            testCallerContext,
+            undefined,
+            'pickup'
+        );
 
         expect(result.success).toBe(true);
         expect(result.success && result.data?.shippingAddress).toBeUndefined();

@@ -15,12 +15,28 @@ import type { ShippingMethod } from '@types';
  * method" and "no method" stay distinct, and carries no weight ceiling — nothing about a counter
  * collection cares how heavy the box is. `tracked` decides whether
  * `POST /delivery/order/{orderId}/ship` requires a tracking code — `express` is the one method
- * worth the carrier's own visibility; `standard` and `pickup` are not.
+ * worth the carrier's own visibility; `standard` and `pickup` are not. `requiresAddress` is what
+ * checkout enforces to decide whether an address is mandatory — `pickup` is the one method that
+ * ships nowhere, so it is also the one that needs none.
  */
 export const SHIPPING_METHODS: readonly ShippingMethod[] = [
-    { id: 'standard', price: 5, freeAbove: 100, tracked: false, maxWeight: 30_000 },
-    { id: 'express', price: 15, tracked: true, maxInsuredValue: 500, maxWeight: 5000 },
-    { id: 'pickup', price: 0, tracked: false }
+    {
+        id: 'standard',
+        price: 5,
+        freeAbove: 100,
+        tracked: false,
+        maxWeight: 30_000,
+        requiresAddress: true
+    },
+    {
+        id: 'express',
+        price: 15,
+        tracked: true,
+        maxInsuredValue: 500,
+        maxWeight: 5000,
+        requiresAddress: true
+    },
+    { id: 'pickup', price: 0, tracked: false, requiresAddress: false }
 ];
 
 /** The method behind an id, or undefined — the caller decides what absence answers. */

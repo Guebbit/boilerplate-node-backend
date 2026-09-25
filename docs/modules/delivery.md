@@ -65,6 +65,12 @@ the real basket doesn't fit (`CART_SHIPPING_METHOD_WEIGHT`, 409) — the server-
 the lines actually joined, is what actually decides. A product with no `weight` set counts as 0g,
 never as a refusal on its own account.
 
+`requiresAddress` says whether the method needs somewhere to ship to — standard and express do,
+pickup does not. `cart`'s checkout enforces the whole rule from this one flag: a basket holding any
+`requiresShipping: true` line needs a method at all (`CART_SHIPPING_METHOD_REQUIRED`, 422), and once
+a method is chosen, `requiresAddress` decides whether an address is then mandatory too
+(`CART_ADDRESS_REQUIRED`, 422) — see [Checkout](./cart-checkout.md).
+
 ## The pipeline
 
 Two halves that never touch. The cart only ever reaches the pure rates on the left; the parcel on

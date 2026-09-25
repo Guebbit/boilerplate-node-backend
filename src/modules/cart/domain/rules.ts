@@ -72,6 +72,43 @@ export const basketWeight = (lines: readonly WeighedCartLine[]): number => {
 };
 
 /**
+ * Whether the basket needs a shipment at all — mirrors {@link basketWeight}'s own predicate, so
+ * "counts toward weight" and "needs a method" never disagree about the same line.
+ */
+const needsShipping = (lines: readonly WeighedCartLine[]): boolean =>
+    lines.some((line) => line.product?.requiresShipping !== false);
+
+/** What a checkout still owes delivery, once the basket itself is known good. */
+export type ShippingRequirementVerdict =
+    | { ok: true }
+    | { ok: false; reason: 'method-required' }
+    | { ok: false; reason: 'address-required' };
+
+/**
+ * Does this checkout have what shipping the basket needs? A digital-only basket needs neither. A
+ * basket with any physical line needs a method; if that method itself needs an address
+ * (`ShippingMethod.requiresAddress`), it needs one of those too. Mirrors `orders`' invariant that
+ * a shippable order always names how it ships, deliberately unshared for the same reason
+ * {@link evaluateCheckout}'s own docblock gives: a cart is a draft, an order a commitment.
+ *
+ * @param lines - the basket's lines, joined to their products
+ * @param method - the chosen shipping method, or `undefined` for none
+ * @param hasAddress - whether a shipping address was resolved for this checkout
+ * @returns `ok`, or which requirement is missing
+ */
+export const evaluateShippingRequirement = (
+    lines: readonly WeighedCartLine[],
+    method: { requiresAddress?: boolean } | undefined,
+    hasAddress: boolean
+): ShippingRequirementVerdict => {
+    if (!needsShipping(lines)) return { ok: true };
+    if (!method) return { ok: false, reason: 'method-required' };
+    if (method.requiresAddress === true && !hasAddress)
+        return { ok: false, reason: 'address-required' };
+    return { ok: true };
+};
+
+/**
  * Reasons are named, not numbered: the checkout-failure analytics event reports them verbatim.
  *
  * The stock refusal carries the lines that caused it. A verdict that only said "something is

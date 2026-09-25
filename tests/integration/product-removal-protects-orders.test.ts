@@ -61,7 +61,7 @@ afterEach(() => resetDomainEvents());
 const placePendingOrder = async (product: Awaited<ReturnType<typeof createProduct>>) => {
     const user = await createUser();
     await cartItemSetById(user.id, String(product._id), 1);
-    const result = await orderConfirm(user.id, testCallerContext);
+    const result = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
     if (!result.success) throw new Error('setup: checkout was refused');
     // The confirmation email already fired at placement — every assertion below cares only
     // about what happens AFTER the product stops being sellable. `flush()` first, so that
@@ -135,7 +135,7 @@ describe('a payment attempt racing the removal event', () => {
         const product = await createProduct({ onHand: 5 });
         const user = await createUser();
         await cartItemSetById(user.id, String(product._id), 1);
-        const checkout = await orderConfirm(user.id, testCallerContext);
+        const checkout = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
         if (!checkout.success) throw new Error('setup: checkout was refused');
         const orderId = String(checkout.data._id);
 
@@ -163,7 +163,7 @@ describe('admin offline recording on an order whose product is gone', () => {
         const product = await createProduct({ onHand: 5 });
         const user = await createUser();
         await cartItemSetById(user.id, String(product._id), 1);
-        const checkout = await orderConfirm(user.id, testCallerContext);
+        const checkout = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
         if (!checkout.success) throw new Error('setup: checkout was refused');
         const orderId = String(checkout.data._id);
 

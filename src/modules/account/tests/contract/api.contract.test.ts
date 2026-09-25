@@ -1134,7 +1134,10 @@ describe('the address book: /account/addresses', () => {
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 1 });
 
-        const response = await api().post('/cart/checkout').set('Authorization', bearer);
+        const response = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'standard' });
 
         expect(response.status).toBe(201);
         expect(response.body.data.order.shippingAddress).toMatchObject({

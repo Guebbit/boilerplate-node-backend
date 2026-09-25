@@ -20,7 +20,8 @@ describe('findShippingMethod', () => {
             price: 15,
             tracked: true,
             maxInsuredValue: 500,
-            maxWeight: 5000
+            maxWeight: 5000,
+            requiresAddress: true
         });
     });
 
@@ -76,10 +77,16 @@ describe('methodFitsWeight', () => {
         // No shipped method actually declares one today — proven against a value built
         // in-line, not `SHIPPING_METHODS`, so this rule stays covered either way.
         expect(
-            methodFitsWeight({ id: 'heavy', price: 0, tracked: false, minWeight: 1000 }, 999)
+            methodFitsWeight(
+                { id: 'heavy', price: 0, tracked: false, requiresAddress: true, minWeight: 1000 },
+                999
+            )
         ).toBe(false);
         expect(
-            methodFitsWeight({ id: 'heavy', price: 0, tracked: false, minWeight: 1000 }, 1000)
+            methodFitsWeight(
+                { id: 'heavy', price: 0, tracked: false, requiresAddress: true, minWeight: 1000 },
+                1000
+            )
         ).toBe(true);
     });
 });
@@ -114,5 +121,20 @@ describe('SHIPPING_METHODS', () => {
         // The shipping door reads this to decide whether a code is required — an accidentally
         // missing flag here would surface as `undefined` there, not a clean refusal.
         for (const method of SHIPPING_METHODS) expect(typeof method.tracked).toBe('boolean');
+    });
+
+    it('gives every method a real boolean requiresAddress flag', () => {
+        // Checkout's shipping rule reads this to decide whether an address is mandatory — an
+        // accidentally missing flag here would surface as `undefined` there, never refusing.
+        for (const method of SHIPPING_METHODS)
+            expect(typeof method.requiresAddress).toBe('boolean');
+    });
+
+    it('needs an address for every method except pickup', () => {
+        const byId = Object.fromEntries(SHIPPING_METHODS.map((method) => [method.id, method]));
+
+        expect(byId.standard?.requiresAddress).toBe(true);
+        expect(byId.express?.requiresAddress).toBe(true);
+        expect(byId.pickup?.requiresAddress).toBe(false);
     });
 });

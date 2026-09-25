@@ -55,6 +55,10 @@ export const receiveStock = (owner: Caller, productId: string, quantity: number)
  * The cart is filled line by line because that is what `POST /cart` takes; the lines land in one
  * order either way, since a cart belongs to one account and this awaits each add.
  *
+ * Defaults to `pickup`: every demo product is physical, so checkout now refuses a basket with no
+ * method at all, and `pickup` is the one method that needs no address — not every seeded shopper
+ * has one. A flow demonstrating a real shipment (`standard`) overrides it.
+ *
  * @param caller - the shopper
  * @param lines - what they are buying
  * @param options - the checkout body's own optional fields
@@ -67,7 +71,10 @@ export const checkout = async (
 ): Promise<string> => {
     for (const line of lines) await caller.call('POST', '/cart', line);
 
-    const { order } = await caller.call<CheckoutData>('POST', '/cart/checkout', options);
+    const { order } = await caller.call<CheckoutData>('POST', '/cart/checkout', {
+        shippingMethodId: 'pickup',
+        ...options
+    });
     return order.id;
 };
 

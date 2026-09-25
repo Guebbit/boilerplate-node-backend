@@ -36,6 +36,7 @@ import { cartRepository } from '../repository';
 import {
     evaluateCheckout,
     basketWeight,
+    evaluateShippingRequirement,
     type CheckoutShortfall,
     type UnavailableCartLine
 } from '../domain';
@@ -285,6 +286,26 @@ const runCheckout = async (
                 code: 'CART_SHIPPING_NOT_APPLICABLE',
                 message: t('cart.shipping-not-applicable')
             }
+        ]);
+
+    /*
+     * The full rule, once shipping applicability itself is settled above: a physical basket
+     * names a method, and — only when that method demands it — an address. Neither is required
+     * of a digital-only basket, unchanged from before this rule existed.
+     */
+    const shippingRequirement = evaluateShippingRequirement(
+        joined,
+        shippingMethod,
+        address !== undefined
+    );
+    if (!shippingRequirement.ok)
+        return generateReject(422, [
+            shippingRequirement.reason === 'method-required'
+                ? {
+                      code: 'CART_SHIPPING_METHOD_REQUIRED',
+                      message: t('cart.shipping-method-required')
+                  }
+                : { code: 'CART_ADDRESS_REQUIRED', message: t('cart.address-required') }
         ]);
 
     /*

@@ -4,6 +4,6 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-export { evaluateCheckout, basketWeight } from './rules';
+export { evaluateCheckout, basketWeight, evaluateShippingRequirement } from './rules';
 
-export type { CheckoutShortfall, UnavailableCartLine } from './rules';
+export type { CheckoutShortfall, UnavailableCartLine, ShippingRequirementVerdict } from './rules';
