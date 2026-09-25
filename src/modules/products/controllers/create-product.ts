@@ -28,9 +28,18 @@ export const createProduct = (
     >,
     response: Response
 ) => {
-    const { price, active, onHand, weight, categories, tags, translations } = readInput(request, {
+    const {
+        price,
+        active,
+        requiresShipping,
+        onHand,
+        weight,
+        categories,
+        tags,
+        translations
+    } = readInput(request, {
         surface: 'create',
-        booleans: ['active'],
+        booleans: ['active', 'requiresShipping'],
         numbers: ['price', 'onHand', 'weight'],
         stringArrays: ['categories', 'tags'],
         jsonFields: ['translations']
@@ -47,6 +56,7 @@ export const createProduct = (
                 ...request.body,
                 price,
                 active,
+                requiresShipping,
                 onHand,
                 weight,
                 categories,
