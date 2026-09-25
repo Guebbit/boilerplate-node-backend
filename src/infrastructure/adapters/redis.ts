@@ -9,7 +9,14 @@
  * attempts because node-redis rejects a second `connect()` racing the first).
  */
 
-import { createClient } from 'redis';
+import {
+    createClient,
+    ClientClosedError,
+    ClientOfflineError,
+    ConnectionTimeoutError,
+    SocketClosedUnexpectedlyError,
+    SocketTimeoutError
+} from 'redis';
 
 /**
  * `redis://host:port`, built from separate host/port variables — the fallback shape when no full
@@ -100,18 +107,18 @@ export const closeRedisClient = (client: RedisClient | undefined): Promise<void>
         : Promise.resolve();
 
 /**
- * node-redis error NAMES that mean "no server was reachable" — checked by `.name`, not
- * `instanceof`, for the same reason `mongo-errors.ts#isConnectionError` is: safe even if a
- * dependency pulls in a second copy of the package.
+ * node-redis error classes that mean "no server was reachable". Matched with `instanceof`, not by
+ * `.name` the way `mongo-errors.ts` matches the driver's: these classes never set `.name`, so every
+ * one of them reports itself as a plain `Error`.
  * https://github.com/redis/node-redis/blob/master/docs/v5-to-v6.md#error-hierarchy
  */
-const REDIS_CONNECTION_ERROR_NAMES = new Set([
-    'ClientClosedError',
-    'ClientOfflineError',
-    'ConnectionTimeoutError',
-    'SocketClosedUnexpectedlyError',
-    'SocketTimeoutError'
-]);
+const REDIS_CONNECTION_ERRORS = [
+    ClientClosedError,
+    ClientOfflineError,
+    ConnectionTimeoutError,
+    SocketClosedUnexpectedlyError,
+    SocketTimeoutError
+];
 
 /**
  * Whether a Redis failure means the server was unreachable, as opposed to a command it understood
@@ -120,7 +127,5 @@ const REDIS_CONNECTION_ERROR_NAMES = new Set([
  *
  * @param error - whatever the caught rejection actually was
  */
-export const isRedisConnectionError = (error: unknown): boolean => {
-    const { name } = (error ?? {}) as { name?: unknown };
-    return typeof name === 'string' && REDIS_CONNECTION_ERROR_NAMES.has(name);
-};
+export const isRedisConnectionError = (error: unknown): boolean =>
+    REDIS_CONNECTION_ERRORS.some((ErrorClass) => error instanceof ErrorClass);
