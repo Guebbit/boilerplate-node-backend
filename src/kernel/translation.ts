@@ -18,15 +18,25 @@
  * See: docs/tools/i18n.md
  */
 
-import type { UpsertTranslationsRequest } from '@types';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
-import { t, getCurrentLocale, localeCandidatesFor } from '@infrastructure/i18n';
+import { t, getCurrentLocale, getFallbackLocale, localeCandidatesFor } from '@infrastructure/i18n';
 
 /**
  * One entity's translated field values, keyed by field name — `{ title, description }` for a
  * product. An absent key means untranslated, never an empty string.
  */
 export type TranslatedFields = Record<string, string>;
+
+/**
+ * One or more locales for one entity, keyed by locale tag — an object upserts that locale's row,
+ * `null` deletes it. The kernel's own vocabulary for what `modules/locales`' contract calls
+ * `UpsertTranslationsRequest`: a caller building this needs no import from `src/modules/*`, and
+ * this file keeps working (falling back, see {@link planTranslations}) with `locales` absent.
+ */
+export type TranslationBatch = Record<
+    string,
+    { fields: TranslatedFields; origin?: 'machine' | 'human' } | null
+>;
 
 /**
  * What `modules/locales` supplies once, from its own `onRegistered`.
@@ -86,7 +96,7 @@ export interface TranslationPort {
      */
     plan: (
         entityType: string,
-        payload: UpsertTranslationsRequest
+        payload: TranslationBatch
     ) => Promise<TranslationWritePlan | ResponseReject>;
 
     /**
@@ -176,20 +186,56 @@ export const searchTranslatedEntityIds = (
         : Promise.resolve([]);
 
 /**
+ * Whether a write can resolve to more than the fallback language — `false` once nothing is
+ * registered, same door {@link planTranslations} falls back through. A caller building its own UI
+ * affordance (an admin form's language tabs) asks this instead of guessing from a failed plan.
+ */
+export const isTranslationAvailable = (): boolean => translationPort !== undefined;
+
+/**
  * The validate half of a write, for a caller with its own entity to write alongside the
  * translations — see {@link TranslationPort.plan}.
  *
- * Unregistered is a hard failure rather than a silent no-op, unlike this file's other entry
- * points: a caller reaching this expects to WRITE, and pretending the batch validated when
- * nothing is registered to ask would be the one lie in this module that costs data.
+ * Unregistered falls back to fallback-language-only content (D-LO1): a batch naming only the
+ * fallback locale plans a single upsert; naming anything else, or leaving the fallback slot empty
+ * or deleted, is a 422 — `locales` being absent makes the shop monolingual, it does not make
+ * writing content impossible.
  */
 export const planTranslations = (
     entityType: string,
-    payload: UpsertTranslationsRequest
+    payload: TranslationBatch
 ): Promise<TranslationWritePlan | ResponseReject> => {
-    if (!translationPort)
-        return Promise.resolve(generateReject(500, [t('generic.error-internal')]));
-    return translationPort.plan(entityType, payload);
+    if (translationPort) return translationPort.plan(entityType, payload);
+
+    const fallbackLocale = getFallbackLocale();
+    const otherLocale = Object.keys(payload).find((locale) => locale !== fallbackLocale);
+    if (otherLocale !== undefined)
+        return Promise.resolve(
+            generateReject(422, [
+                {
+                    code: 'VALIDATION_ERROR',
+                    message: t('translation.error-locale-unavailable', { locale: otherLocale }),
+                    details: { field: otherLocale }
+                }
+            ])
+        );
+
+    const fallbackSlot = payload[fallbackLocale];
+    if (!fallbackSlot || Object.keys(fallbackSlot.fields).length === 0)
+        return Promise.resolve(
+            generateReject(422, [
+                {
+                    code: 'VALIDATION_ERROR',
+                    message: t('translation.error-fallback-required', { locale: fallbackLocale }),
+                    details: { field: fallbackLocale }
+                }
+            ])
+        );
+
+    return Promise.resolve({
+        fallbackLocale,
+        planned: [{ locale: fallbackLocale, kind: 'upsert', fields: fallbackSlot.fields }]
+    });
 };
 
 /**
