@@ -35,12 +35,14 @@ import { REAUTH_TIME_CRITICAL, REAUTH_TIME_SENSITIVE } from '@kernel/middlewares
 import { router as accountRouter } from '@modules/account/routes';
 import { router as cartRouter } from '@modules/cart/routes';
 import { router as paymentsRouter } from '@modules/payments/routes';
+import { router as deliveryRouter } from '@modules/delivery/routes';
 
-/** The three routers with money or identity routes, keyed the same way `STEP_UP_ROUTES` is. */
+/** The four routers with money or identity routes, keyed the same way `STEP_UP_ROUTES` is. */
 const ROUTERS: Record<string, Router> = {
     account: accountRouter,
     cart: cartRouter,
-    payments: paymentsRouter
+    payments: paymentsRouter,
+    delivery: deliveryRouter
 };
 
 /**
@@ -71,7 +73,13 @@ const STEP_UP_ROUTES: Record<string, string> = {
     'account DELETE /2fa': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
     // Regenerating backup codes discards the old set — the same stolen-but-fresh-session risk
     // as disabling a factor.
-    'account POST /2fa/backup-codes': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`
+    'account POST /2fa/backup-codes': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    // Freshness here is a property of the REQUEST, not the route: a plain ship/deliver never
+    // needs it, a `forced: true` one does — the same `orders.any.override` tier the direct
+    // status-override route inherits automatically through `requirePermission`, restated here
+    // because `service.ts`'s own permission check has no way to demand a step-up on its own.
+    'delivery POST /order/:orderId/ship': `requireFreshAuthWhen(${REAUTH_TIME_CRITICAL})`,
+    'delivery POST /order/:orderId/deliver': `requireFreshAuthWhen(${REAUTH_TIME_CRITICAL})`
 };
 
 /** Every step-up label actually mounted on a router, keyed the same way as {@link STEP_UP_ROUTES}. */

@@ -15,7 +15,7 @@
  *     no channel for the middle term the only place that could reach `request.locale` was the
  *     controller. So the whole email — compose AND publish — climbed one layer, in five handlers.
  *   - `orders` ended up publishing the confirmation mail for an admin-created order from
- *     `controllers/write-orders.ts`, while the identical mail for a checkout went out from
+ *     `controllers/create-order.ts`, while the identical mail for a checkout went out from
  *     `cart/services/checkout.ts`. One fact, two layers, and nothing anywhere said which was
  *     right.
  *   - `feedback` published its support notification from a controller while its sibling `delivery`

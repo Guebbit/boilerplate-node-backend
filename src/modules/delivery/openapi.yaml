@@ -82,6 +82,41 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /delivery/order/{orderId}/start:
+        post:
+            tags: [Delivery]
+            summary: Begin fulfilling a paid order
+            description: >-
+                Reports that fulfilment has started — the order moves `paid → processing`. No
+                parcel exists yet at this point; that comes later, at
+                `POST /delivery/order/{orderId}/ship`. Narrower than `orders.any.update` on
+                purpose — `delivery.any.start` lets the warehouse begin work on an order without
+                being handed the run of the order record. Refuses an order that is not `paid`
+                with a named 409.
+            operationId: startFulfilment
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The order to start fulfilling
+            responses:
+                '200':
+                    description: The order, now `processing`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../orders/openapi.yaml#/components/schemas/OrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /delivery/order/{orderId}/deliver:
         post:
             tags: [Delivery]

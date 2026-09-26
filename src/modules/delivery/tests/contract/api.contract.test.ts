@@ -1,7 +1,7 @@
 /**
  * @module
- * Contract tests for /delivery. Four routes, three audiences: the methods list is public, the
- * shipment read is the owner's, the two write doors are staff's. These pin that each contract
+ * Contract tests for /delivery. Five routes, three audiences: the methods list is public, the
+ * shipment read is the owner's, the three write doors are staff's. These pin that each contract
  * branch is reached over HTTP; the moves' own rules live in the unit and integration suites.
  */
 
@@ -9,9 +9,13 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/callers';
 import { api, authenticateAs } from '@tests/http';
+import { setCookie } from '@tests/cookies';
+import { freezeDate, advanceDate } from '@tests/clock';
+import { createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { deliveryService } from '@modules/delivery/service';
+import { REAUTH_TIME_CRITICAL } from '@kernel/middlewares/authorizations';
 import { OrderStatus } from '@types';
 
 setupTestDb();
@@ -72,6 +76,51 @@ describe('GET /delivery/order/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /delivery/order/{orderId}/start', () => {
+    it('matches the contract and moves a paid order to processing', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/start`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('processing');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for an order that is not paid', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/start`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a customer, who holds no delivery.any.start', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const order = await createOrder(user, [toOrderItem(await createProduct(), 1)], {
+            status: OrderStatus.paid
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/start`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
         expect(response).toSatisfyApiSpec();
     });
 });
@@ -149,5 +198,71 @@ describe('POST /delivery/order/{orderId}/deliver', () => {
         expect(response).toSatisfyApiSpec();
         const stored = await readOrder(String(order._id));
         expect(stored?.status).toBe(OrderStatus.processing);
+    });
+});
+
+/**
+ * `remember: 'short'` so the refresh cookie outlives the clock advance below — see
+ * `account/tests/contract/api.contract.test.ts`'s own `staleButRefreshedBearer` for why an
+ * unqualified login's refresh token would otherwise expire first and mask the freshness gate
+ * behind a plain "token expired" 401.
+ */
+const loginAdminRemembered = async () => {
+    const user = await createAdminUser({ verifiedAt: new Date() });
+    const response = await api()
+        .post('/account/login')
+        .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'short' });
+    const jwtCookie = setCookie(response, 'jwt');
+    if (!jwtCookie) throw new Error('login set no jwt cookie');
+    return jwtCookie;
+};
+
+/**
+ * Beyond `REAUTH_TIME_CRITICAL`, but still holding a USABLE access token — `auth_time` is copied
+ * forward on refresh, never re-stamped, so a refreshed token is exactly what a stolen-but-stale
+ * session looks like.
+ */
+const staleButRefreshedBearer = async (jwtCookie: string): Promise<`Bearer ${string}`> => {
+    advanceDate((REAUTH_TIME_CRITICAL + 1) * 1000);
+    const refreshed = await api().get('/account/refresh').set('Cookie', jwtCookie);
+    return `Bearer ${refreshed.body.data.token as string}`;
+};
+
+describe('forced ship/deliver demands the same step-up POST /orders/{id}/status-override does (SD-10)', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('answers 401 for a forced deliver from a stale-but-refreshed session', async () => {
+        freezeDate();
+        const jwtCookie = await loginAdminRemembered();
+        const bearer = await staleButRefreshedBearer(jwtCookie);
+        const product = await createProduct();
+        const owner = await createAdminUser({
+            email: 'stepup-owner@example.com',
+            username: 'stepupowner'
+        });
+        const order = await createOrder(owner, [toOrderItem(product, 1)], {
+            status: OrderStatus.processing
+        });
+        await deliveryService.recordShipment(String(order._id), 'TRK-STEPUP', testCallerContext);
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/deliver`)
+            .set('Authorization', bearer)
+            .send({ forced: true, reason: 'testing the step-up gate' });
+
+        expect(response.status).toBe(401);
+    });
+
+    it('never demands step-up for a plain, unforced deliver from the same stale session', async () => {
+        freezeDate();
+        const jwtCookie = await loginAdminRemembered();
+        const bearer = await staleButRefreshedBearer(jwtCookie);
+        const { order } = await authenticateWithShipment();
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/deliver`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
     });
 });

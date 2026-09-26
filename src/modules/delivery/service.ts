@@ -15,7 +15,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import type { ShippingMethodsResponse, Shipment, AuthContext } from '@types';
+import type { ShippingMethodsResponse, Shipment, Order, AuthContext } from '@types';
 import { OrderStatus } from '@types';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -63,6 +63,37 @@ export const getForOrder = (
         return shipmentRepository.findByOrderId(orderId).then((shipment) => {
             if (!shipment) return generateReject(404, [t('delivery.not-shipped')]);
             return generateSuccess(toShipmentResponse(shipment));
+        });
+    });
+
+/** The refusal {@link startFulfilment} answers when the order is not `paid`. */
+const notPaid = (): ResponseReject =>
+    generateReject(409, [{ code: 'ORDER_NOT_PAID', message: t('delivery.not-paid') }]);
+
+/**
+ * Report that fulfilment has started on a paid order — the `paid → processing` door, before any
+ * parcel exists to record. No `forced` variant: the admin override (`orders.any.override`,
+ * `POST /orders/{id}/status-override`) is the other reachable path onto `processing`, and adding
+ * a second forcing shape here would only duplicate it.
+ * @param orderId - the order to start fulfilling
+ * @param authContext - the caller, for the response's own `actions`
+ * @param context - the caller, for the audit entry — a narrower, already-resolved shape than
+ *   `authContext`, which is why both travel here rather than one being derived from the other
+ */
+export const startFulfilment = (
+    orderId: string,
+    authContext: AuthContext | undefined,
+    context: CallerContext
+): Promise<ResponseSuccess<Order> | ResponseReject> =>
+    orderService.getById(orderId).then((order) => {
+        if (!order) return generateReject(404, [t('delivery.order-not-found')]);
+        if (!canTransition(order.status, OrderStatus.processing, 'system')) return notPaid();
+
+        return orderService.markProcessing(orderId).then((moved) => {
+            if (!moved) return notPaid();
+
+            auditOrderEvent(context, orderId, deliveryAuditActions.ADMIN_ORDER_FULFILMENT_STARTED);
+            return orderService.withActions(moved, authContext).then(generateSuccess);
         });
     });
 
@@ -310,6 +341,7 @@ export const findShipmentsForOrders = (orderIds: string[]): Promise<ShipmentDocu
 export const deliveryService = {
     listMethods,
     getForOrder,
+    startFulfilment,
     recordShipment,
     recordDelivery
 };

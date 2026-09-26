@@ -1016,7 +1016,7 @@ components:
         OrderActions:
             type: object
             additionalProperties: false
-            required: [transitions, cancel, pay]
+            required: [transitions, cancel, pay, start, ship, deliver, override]
             description: >-
                 What the requesting caller may do to this order, decided by the server. A client
                 renders its controls from this rather than re-implementing the lifecycle: the rules
@@ -1043,6 +1043,31 @@ components:
                         only a confirmed charge writes. Not in `transitions`, because no request may
                         make that move: a client starts the flow with `POST /payments/intent` and
                         the provider's yes does the rest.
+                start:
+                    type: boolean
+                    description: >-
+                        Whether `POST /delivery/order/{id}/start` would be accepted for this
+                        caller. Not in `transitions`: `paid → processing` is `system`-only there,
+                        reached only by reporting the fact through `delivery`'s own door.
+                ship:
+                    type: boolean
+                    description: >-
+                        Whether `POST /delivery/order/{id}/ship` would be accepted for this
+                        caller. Not in `transitions`, for the same reason `start` is not.
+                deliver:
+                    type: boolean
+                    description: >-
+                        Whether `POST /delivery/order/{id}/deliver` would be accepted for this
+                        caller. Not in `transitions`, for the same reason `start` is not.
+                override:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OrderStatus'
+                    description: >-
+                        The statuses `POST /orders/{id}/status-override` would accept as a
+                        destination for this caller right now — empty for anyone without
+                        `orders.any.override`, or once the order has left every overridable status.
+                    example: [processing, shipped, delivered]
 
         # One VAT rate's slice of the whole order — goods and shipping folded into the same row,
         # since shipping is taxed at each line's own rate rather than carrying one of its own. See
@@ -1626,6 +1651,8 @@ paths:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1methods'
     /delivery/order/{orderId}:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}'
+    /delivery/order/{orderId}/start:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1start'
     /delivery/order/{orderId}/ship:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1ship'
     /delivery/order/{orderId}/deliver:

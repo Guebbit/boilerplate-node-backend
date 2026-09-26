@@ -14,6 +14,7 @@ describe('delivery routes', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /methods',
             'GET /order/:orderId',
+            'POST /order/:orderId/start',
             'POST /order/:orderId/ship',
             'POST /order/:orderId/deliver'
         ]);
@@ -33,6 +34,10 @@ describe('delivery routes', () => {
 
         expect(guards).toContain('isAuth');
         expect(guards).not.toContain('requirePermissionGuard');
+    });
+
+    it('restricts starting fulfilment to an operator holding delivery.any.start', () => {
+        expect(guardsOn(router, 'POST /order/:orderId/start')).toContain('requirePermissionGuard');
     });
 
     it('restricts recording a shipment to an operator', () => {

@@ -51,10 +51,10 @@ export const markPaid = (orderId: string): Promise<OrderDocument | null> =>
     markSystemMove(orderId, OrderStatus.paid);
 
 /**
- * Report that fulfilment started on a paid order. `delivery`'s own door for this move is not
- * built yet (see `src/modules/orders/domain/lifecycle.ts`'s `paid → processing` edge); until it
- * is, `orders/services/override.ts`'s `overrideStatus` is the only reachable path onto
- * `processing`, and it does not call this function — `applyOverride` writes the move itself.
+ * Report that fulfilment started on a paid order. `delivery`'s own door for this move —
+ * `POST /delivery/order/{id}/start` — is the one caller; the admin override
+ * (`orders/services/override.ts`'s `overrideStatus`) reaches `processing` too, but does not call
+ * this function — `applyOverride` writes that move itself.
  * @param orderId - the order fulfilment started on
  * @returns the order as it now stands, or `null` if it was not awaiting fulfilment
  */

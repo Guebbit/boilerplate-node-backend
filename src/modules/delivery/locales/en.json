@@ -1,6 +1,7 @@
 {
     "delivery": {
         "order-not-found": "The order was not found",
+        "not-paid": "This order is not awaiting fulfilment",
         "not-shipped": "Nothing has shipped for this order yet",
         "not-processing": "This order is not ready to ship",
         "not-shippable-for-delivery": "This order has not shipped yet",

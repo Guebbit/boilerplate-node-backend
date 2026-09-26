@@ -5,13 +5,14 @@
  * `withActions` puts the answer on the wire.
  */
 
-import { callerForSubject } from '@kernel/permissions';
+import { callerForSubject, isSystemActor } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
-import type { AuthContext, Order } from '@types';
+import type { AuthContext, Order, OrderActions } from '@types';
 import type { OrderDocument } from '../model';
 import { accessibleFilter } from '@kernel/access/query';
 import { orderRepository } from '../repository';
-import { orderActionsFor } from '../domain';
+import { OrderStatus } from '@types';
+import { orderActionsFor, statusesLeadingTo, overridableTargetsFrom } from '../domain';
 import type { OrderActor } from '../domain';
 import { resolveCurrentImages } from './current';
 
@@ -36,19 +37,58 @@ export const ownerScope = (userId: string): Record<string, unknown> =>
     orderRepository.ownerScope(userId);
 
 /**
- * Which column of the lifecycle table a caller reads. Two actors reach the HTTP surface;
- * `system` names moves that follow a fact from outside the application, and no request may
- * claim it.
+ * Which column of the lifecycle table a caller reads. Three actors reach this function, only two
+ * of them over HTTP; `system` names moves that follow a fact from outside the application — the
+ * reservation-sweep expiry is the one caller that passes `SYSTEM_ACTOR` here instead of a request's
+ * own `AuthContext`, and no request may claim the same column by holding the admin role alone.
  *
- * Gated on `orders.any.update` by name, the same key `cancelById` asks for its own
+ * `SYSTEM_ACTOR` carries `roles.tenant: 'admin'` for every ORDINARY permission check, so this must
+ * ask the identity question FIRST — an `authContext && holdsKey(...)` check alone would read it as
+ * a plain admin and hand the sweep's expiry the admin column's wider `cancelled` rule, exactly the
+ * race B21 closes (see `../domain/lifecycle.ts`'s own comment on `pending.cancelled`).
+ *
+ * Otherwise gated on `orders.any.update` by name, the same key `cancelById` asks for its own
  * operator/customer split — a broader check would have missed a moderator or manager and
  * silently reduced them to the customer's lifecycle column.
  * @returns the actor whose permissions apply
  */
-export const actorOf = (authContext?: AuthContext): OrderActor =>
-    authContext && holdsKey(callerForSubject(authContext, 'Order'), 'orders.any.update')
+export const actorOf = (authContext?: AuthContext): OrderActor => {
+    if (isSystemActor(authContext)) return 'system';
+    return authContext && holdsKey(callerForSubject(authContext, 'Order'), 'orders.any.update')
         ? 'admin'
         : 'customer';
+};
+
+/**
+ * `delivery`'s three action doors, plus `orders`' own override — none of them decided by
+ * `actorOf`'s customer/admin split, since a warehouse operator holds `delivery.any.start` without
+ * `orders.any.update` and would otherwise read as a plain customer. Each is asked of the caller's
+ * OWN key, at the same tenant scope `actorOf` already resolves — `delivery.any.start`/`.update`
+ * and `orders.any.override` are all tenant-scoped keys, so one `callerForSubject(...,'Order')`
+ * caller answers all four regardless of which subject each key is declared under.
+ * @param status - the order's current status
+ * @param authContext - the caller, or `undefined` for no request behind this read
+ */
+const deliveryAndOverrideActions = (
+    status: OrderStatus,
+    authContext: AuthContext | undefined
+): Pick<OrderActions, 'start' | 'ship' | 'deliver' | 'override'> => {
+    if (!authContext) return { start: false, ship: false, deliver: false, override: [] };
+
+    const caller = callerForSubject(authContext, 'Order');
+    // `statusesLeadingTo`, not a raw `canTransition(status, target, 'system')`: the latter
+    // answers `true` for an ECHO write (status already equals target, legal for every status but
+    // `paid`), which would read e.g. `start` as true for an order already `processing`.
+    // `statusesLeadingTo` excludes `from === to` by construction.
+    const reachesVia = (target: OrderStatus): boolean =>
+        statusesLeadingTo(target, 'system').includes(status);
+    return {
+        start: holdsKey(caller, 'delivery.any.start') && reachesVia(OrderStatus.processing),
+        ship: holdsKey(caller, 'delivery.any.update') && reachesVia(OrderStatus.shipped),
+        deliver: holdsKey(caller, 'delivery.any.update') && reachesVia(OrderStatus.delivered),
+        override: holdsKey(caller, 'orders.any.override') ? [...overridableTargetsFrom(status)] : []
+    };
+};
 
 /**
  * The single-order response body: the order as it serializes, plus what this caller may do to
@@ -64,6 +104,9 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
 
     return resolveCurrentImages([serialized]).then(([resolved]) => ({
         ...resolved,
-        actions: orderActionsFor(order.status, actorOf(authContext))
+        actions: {
+            ...orderActionsFor(order.status, actorOf(authContext)),
+            ...deliveryAndOverrideActions(order.status, authContext)
+        }
     }));
 };

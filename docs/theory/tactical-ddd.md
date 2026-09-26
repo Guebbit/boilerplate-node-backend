@@ -129,8 +129,9 @@ actor into a second table would let the two disagree, so it rides on the edge it
 
 `system` is not a privilege level above `admin`. It is **narrower**: the moves an operator may never
 make by hand, because something outside the application has to have happened first. Money landing
-is one; fulfilment starting (`paid → processing`) is the other, once that edge moves off `admin`
-onto its own `delivery`-owned start action — see "Action endpoints execute" below.
+is one; fulfilment starting (`paid → processing`) is the other, off `admin` onto its own
+`delivery`-owned start action (`POST /delivery/order/{id}/start`) — see "Action endpoints execute"
+below.
 
 ### What it replaced
 

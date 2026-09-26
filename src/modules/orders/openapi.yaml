@@ -180,10 +180,42 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [Orders]
+            summary: Replace order
+            description: >-
+                Replaces the order identified by `{id}` in the path (RFC 9110 §9.3.4). `email` is
+                the only writable field — `status` moves only through an action endpoint
+                (`POST /orders/{id}/cancel`, `POST /orders/{id}/status-override`), never a field
+                on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
+            operationId: replaceOrderById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceOrderByIdRequest'
+            responses:
+                '200':
+                    description: Replaced order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        # Merges, unlike the replacing PUT above.
+        patch:
+            tags: [Orders]
             summary: Edit order
             description: >-
-                Updates the order identified by `{id}` in the path. `email` is the only writable
-                field — `status` moves only through an action endpoint
+                Updates the order identified by `{id}` in the path, merging — an omitted `email`
+                leaves the stored one untouched. `status` moves only through an action endpoint
                 (`POST /orders/{id}/cancel`, `POST /orders/{id}/status-override`), never a field
                 on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
             operationId: updateOrderById
@@ -500,6 +532,17 @@ components:
         # through this body would let an admin skip `processing` by writing `paid → shipped`
         # directly, and could save `email` before a refused status move answers 409 — a
         # half-applied write. Neither is possible with `status` excluded by construction.
+        # PUT names the whole resource: `email` is not nullable (an order always has one), so it
+        # is required rather than treated as clearable-by-omission.
+        ReplaceOrderByIdRequest:
+            type: object
+            additionalProperties: false
+            required: [email]
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+
+        # PATCH merges: an omitted `email` leaves the stored one untouched.
         UpdateOrderByIdRequest:
             type: object
             additionalProperties: false

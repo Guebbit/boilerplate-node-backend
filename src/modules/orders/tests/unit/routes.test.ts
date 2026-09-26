@@ -33,6 +33,7 @@ describe('order routes — what is mounted', () => {
             'GET /:id/invoice',
             'GET /:id',
             'PUT /:id',
+            'PATCH /:id',
             'DELETE /:id',
             'POST /:id/restore',
             'DELETE /:id/hard'
@@ -61,6 +62,7 @@ describe('order routes — authorization', () => {
         'GET /:id/invoice',
         'GET /:id',
         'PUT /:id',
+        'PATCH /:id',
         'DELETE /:id',
         'DELETE /:id/hard'
     ])('%s requires a logged-in caller', (signature) => {
@@ -69,7 +71,7 @@ describe('order routes — authorization', () => {
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
 
-    it.each(['POST /', 'DELETE /', 'PUT /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
+    it.each(['POST /', 'DELETE /', 'PUT /:id', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
         '%s is admin-only',
         (signature) => {
             expect(guardsOn(router, signature)).toContain('requirePermissionGuard');

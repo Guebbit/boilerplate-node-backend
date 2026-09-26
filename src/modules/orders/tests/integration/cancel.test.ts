@@ -22,7 +22,8 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { ordersAuditActions } from '../../audit';
 import { ordersAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
-import { asCustomer, asAdmin, asModerator, testCallerContext } from '@tests/callers';
+import { asCustomer, asAdmin, asModerator, asWarehouse, testCallerContext } from '@tests/callers';
+import { SYSTEM_ACTOR } from '@kernel/permissions';
 
 // The queue, not the copy: `mail-copy.test.ts` pins what the email says.
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -153,6 +154,24 @@ describe('cancelById', () => {
         expect(allowed.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
         expect(stored?.status).toBe('cancelled');
+    });
+
+    /**
+     * B21: the reservation-sweep expiry (the system actor) must never cancel an order that has
+     * already been paid, even when its own deadline check runs just after payment landed —
+     * `pending.cancelled` is the ONLY edge the system actor holds, unlike `admin`'s wider one.
+     */
+    it("the system actor cannot cancel an order that is already paid — closes B21's race", async () => {
+        const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
+        const order = await seedOrder(owner);
+        await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
+
+        const refused = await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+
+        expect(refused.success).toBe(false);
+        expect(refused.status).toBe(409);
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored?.status).toBe('paid');
     });
 
     it('a soft-deleted order is a 404 for its owner — hidden means hidden', async () => {
@@ -300,8 +319,8 @@ describe('cancelById — the bank-transfer-expired email', () => {
             paymentMethod: 'bank_transfer'
         });
 
-        // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext.
-        await orderService.cancelById(String(order._id), asAdmin());
+        // Mirrors module.ts's RESERVATION_EXPIRED handler: the real system actor, no CallerContext.
+        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
@@ -315,7 +334,7 @@ describe('cancelById — the bank-transfer-expired email', () => {
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], { paymentMethod: 'card' });
 
-        await orderService.cancelById(String(order._id), asAdmin());
+        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
@@ -371,7 +390,15 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(order, asUser(user));
 
-        expect(body.actions).toEqual({ transitions: ['cancelled'], cancel: true, pay: true });
+        expect(body.actions).toEqual({
+            transitions: ['cancelled'],
+            cancel: true,
+            pay: true,
+            start: false,
+            ship: false,
+            deliver: false,
+            override: []
+        });
     });
 
     it('offers an operator nothing on a terminal order', async () => {
@@ -382,7 +409,15 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(cancelled!, asAdmin());
 
-        expect(body.actions).toEqual({ transitions: [], cancel: false, pay: false });
+        expect(body.actions).toEqual({
+            transitions: [],
+            cancel: false,
+            pay: false,
+            start: false,
+            ship: false,
+            deliver: false,
+            override: []
+        });
     });
 
     it('never offers `paid` to anyone, because no request may claim `system`', async () => {
@@ -393,6 +428,92 @@ describe('withActions', () => {
             const body = await orderService.withActions(order, caller);
             expect((body.actions as { transitions: string[] }).transitions).not.toContain('paid');
         }
+    });
+
+    it("gives the warehouse `start` on a paid order, without `orders.any.update`'s admin column", async () => {
+        // Holds `delivery.any.start` but not `orders.any.update` — `actorOf` alone would read
+        // this caller as a plain customer, which must not decide `start`/`ship`/`deliver`.
+        const user = await createUser();
+        const order = await seedOrder(user);
+        const paid = await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
+
+        const body = await orderService.withActions(paid!, asWarehouse());
+
+        expect(body.actions!.start).toBe(true);
+        expect(body.actions!.ship).toBe(false);
+        expect(body.actions!.deliver).toBe(false);
+        expect(body.actions!.override).toEqual([]);
+    });
+
+    it("never offers `start` once already `processing` — an echo write isn't a fresh offer", async () => {
+        // The regression a raw `canTransition(status, target, 'system')` would reintroduce: that
+        // check answers true for a write onto the SAME status (legal for everything but `paid`),
+        // which would keep `start` (or `ship`/`deliver` below) true forever once first reached.
+        const user = await createUser();
+        const order = await seedOrder(user);
+        const processing = await orderRepository.updateStatusIfIn(
+            String(order._id),
+            ['pending'],
+            'processing'
+        );
+
+        const body = await orderService.withActions(processing!, asWarehouse());
+
+        expect(body.actions!.start).toBe(false);
+    });
+
+    it('gives the warehouse `ship` once processing, and `deliver` once shipped', async () => {
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        const processing = await orderRepository.updateStatusIfIn(
+            String(order._id),
+            ['pending'],
+            'processing'
+        );
+        const whileProcessing = await orderService.withActions(processing!, asWarehouse());
+        expect(whileProcessing.actions!.ship).toBe(true);
+
+        const shipped = await orderRepository.updateStatusIfIn(
+            String(order._id),
+            ['processing'],
+            'shipped'
+        );
+        const whileShipped = await orderService.withActions(shipped!, asWarehouse());
+        expect(whileShipped.actions!.deliver).toBe(true);
+        // The same echo regression `start`'s own test guards against: `ship` must not still read
+        // true now that the order has actually reached `shipped`.
+        expect(whileShipped.actions!.ship).toBe(false);
+
+        const delivered = await orderRepository.updateStatusIfIn(
+            String(order._id),
+            ['shipped'],
+            'delivered'
+        );
+        const whileDelivered = await orderService.withActions(delivered!, asWarehouse());
+        expect(whileDelivered.actions!.deliver).toBe(false);
+    });
+
+    it('offers an override holder every forward destination, on a customer-only status too', async () => {
+        // `admin` holds `orders.any.override`, which `overridableTargetsFrom` answers from the
+        // index-based rule alone — a `paid` order can be overridden straight to any later status.
+        const user = await createUser();
+        const order = await seedOrder(user);
+        const paid = await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
+
+        const body = await orderService.withActions(paid!, asAdmin());
+
+        expect(body.actions!.override).toEqual(['processing', 'shipped', 'delivered']);
+    });
+
+    it("never offers the warehouse `orders.any.override`'s destinations", async () => {
+        const user = await createUser();
+        const order = await seedOrder(user);
+        const paid = await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
+
+        const body = await orderService.withActions(paid!, asWarehouse());
+
+        expect(body.actions!.override).toEqual([]);
     });
 
     it('carries the serialized order, not the document', async () => {
