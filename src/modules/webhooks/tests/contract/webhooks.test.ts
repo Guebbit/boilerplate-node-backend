@@ -137,39 +137,75 @@ describe('POST /webhooks/subscriptions', () => {
     });
 });
 
-describe('PATCH /webhooks/subscriptions/:id', () => {
-    it('rotates the secret ring, returning newSecret and leaving the old one active too', async () => {
+describe('PUT /webhooks/subscriptions/:id', () => {
+    it('replaces a subscription, clearing an omitted description', async () => {
         const { bearer } = await authenticateAsRole('manager');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
-            .send(subscriptionBody());
+            .send(subscriptionBody({ description: 'was here' }));
 
         const response = await api()
-            .patch(`/webhooks/subscriptions/${String(created.body.data.id)}`)
+            .put(`/webhooks/subscriptions/${String(created.body.data.id)}`)
             .set('Authorization', bearer)
-            .send({ rotateSecret: true });
+            .send({
+                url: 'https://example.test/inbox-2',
+                eventTypes: ['order.paid'],
+                enabled: false
+            });
 
         expect(response.status).toBe(200);
-        expect(typeof response.body.data.newSecret).toBe('string');
-        expect(response.body.data.secretIds).toHaveLength(2);
+        expect(response.body.data.url).toBe('https://example.test/inbox-2');
+        expect(response.body.data.enabled).toBe(false);
+        expect(response.body.data.description).toBeUndefined();
         expect(response).toSatisfyApiSpec();
     });
 
-    it('422s a removeSecretId that would empty the ring', async () => {
+    it('422s a body missing a required field', async () => {
         const { bearer } = await authenticateAsRole('manager');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
             .send(subscriptionBody());
-        const [onlySecretId] = created.body.data.secretIds as string[];
+
+        const response = await api()
+            .put(`/webhooks/subscriptions/${String(created.body.data.id)}`)
+            .set('Authorization', bearer)
+            .send({ url: 'https://example.test/inbox-2', eventTypes: ['order.paid'] });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('404s an id from outside this admin’s reach', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+
+        const response = await api()
+            .put('/webhooks/subscriptions/000000000000000000000000')
+            .set('Authorization', bearer)
+            .send(subscriptionBody({ enabled: true }));
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('PATCH /webhooks/subscriptions/:id', () => {
+    it('leaves an omitted field unchanged', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const created = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody({ description: 'was here' }));
 
         const response = await api()
             .patch(`/webhooks/subscriptions/${String(created.body.data.id)}`)
             .set('Authorization', bearer)
-            .send({ removeSecretId: onlySecretId });
+            .send({ enabled: false });
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(200);
+        expect(response.body.data.enabled).toBe(false);
+        expect(response.body.data.description).toBe('was here');
         expect(response).toSatisfyApiSpec();
     });
 
@@ -182,6 +218,79 @@ describe('PATCH /webhooks/subscriptions/:id', () => {
             .send({ enabled: false });
 
         expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /webhooks/subscriptions/:id/rotate-secret', () => {
+    it('rotates the secret ring, returning newSecret and leaving the old one active too', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const created = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
+
+        const response = await api()
+            .post(`/webhooks/subscriptions/${String(created.body.data.id)}/rotate-secret`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(typeof response.body.data.newSecret).toBe('string');
+        expect(response.body.data.secretIds).toHaveLength(2);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('404s an id from outside this admin’s reach', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+
+        const response = await api()
+            .post('/webhooks/subscriptions/000000000000000000000000/rotate-secret')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId', () => {
+    it('422s a removal that would empty the ring', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const created = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
+        const [onlySecretId] = created.body.data.secretIds as string[];
+
+        const response = await api()
+            .delete(
+                `/webhooks/subscriptions/${String(created.body.data.id)}/secrets/${onlySecretId}`
+            )
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('drops the old secret once a rotation leaves two', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const created = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
+        const [originalSecretId] = created.body.data.secretIds as string[];
+        await api()
+            .post(`/webhooks/subscriptions/${String(created.body.data.id)}/rotate-secret`)
+            .set('Authorization', bearer);
+
+        const response = await api()
+            .delete(
+                `/webhooks/subscriptions/${String(created.body.data.id)}/secrets/${originalSecretId}`
+            )
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.secretIds).toHaveLength(1);
+        expect(response.body.data.secretIds).not.toContain(originalSecretId);
         expect(response).toSatisfyApiSpec();
     });
 });

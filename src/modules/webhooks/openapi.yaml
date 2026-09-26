@@ -63,14 +63,42 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /webhooks/subscriptions/{id}:
+        put:
+            tags: [Webhooks]
+            summary: Replace a webhook subscription
+            description: |
+                Full replace of url/description/eventTypes/enabled — an omitted `description` is
+                cleared. Never touches the secret ring; rotate or drop a secret through its own
+                action route below.
+            operationId: replaceWebhookSubscription
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceWebhookSubscriptionRequest'
+            responses:
+                '200':
+                    description: Replaced subscription
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookSubscriptionCreatedEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
             tags: [Webhooks]
             summary: Update a webhook subscription
             description: |
-                Partial update. `rotateSecret: true` adds a new secret to the ring and returns its
-                plaintext in `newSecret` — the ring then carries two active secrets, and deliveries
-                sign with both (two space-separated `v1,` values in `webhook-signature`) until
-                `removeSecretId` names the old one to drop. Both may be sent in the same request.
+                Partial update of url/description/eventTypes/enabled. Never touches the secret
+                ring; rotate or drop a secret through its own action route below.
             operationId: updateWebhookSubscription
             security:
                 - bearerAuth: []
@@ -105,6 +133,66 @@ paths:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
                 '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /webhooks/subscriptions/{id}/rotate-secret:
+        post:
+            tags: [Webhooks]
+            summary: Rotate a webhook subscription's secret
+            description: |
+                Adds a new secret to the ring and returns its plaintext once, in `newSecret` — the
+                ring then carries two active secrets, and deliveries sign with both (two
+                space-separated `v1,` values in `webhook-signature`) until the old one is dropped
+                through `DELETE .../secrets/{secretId}`. Split out from the old `PATCH` body's
+                `rotateSecret` flag: a command, not state, so it gets its own route instead of
+                sharing one with url/description/eventTypes/enabled.
+            operationId: rotateWebhookSubscriptionSecret
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Subscription with a newly minted secret
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookSubscriptionCreatedEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /webhooks/subscriptions/{id}/secrets/{secretId}:
+        delete:
+            tags: [Webhooks]
+            summary: Drop one secret from a subscription's ring
+            description: |
+                The other half of a rotation, once every consumer has switched. Refuses to empty
+                the ring — a subscription with no secret can never sign a delivery. The remove twin
+                of `POST .../rotate-secret`, split out for the same reason.
+            operationId: removeWebhookSubscriptionSecret
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                - name: secretId
+                  in: path
+                  required: true
+                  schema: { type: string }
+                  description: A ring entry's id, from `secretIds`.
+            responses:
+                '200':
+                    description: Subscription with that secret removed
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookSubscriptionCreatedEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -287,7 +375,7 @@ components:
                     description: The newly minted secret, in plaintext. Shown here once, on creation, and never again.
                 newSecret:
                     type: string
-                    description: A rotated-in secret's plaintext, present only when `PATCH` was sent with `rotateSecret:true`.
+                    description: A rotated-in secret's plaintext, present only in the response of `POST .../rotate-secret`.
 
         WebhookDeliveryStatus:
             type: string
@@ -354,6 +442,30 @@ components:
                     items: { type: string }
                     minItems: 1
 
+        ReplaceWebhookSubscriptionRequest:
+            type: object
+            additionalProperties: false
+            required: [url, eventTypes, enabled]
+            properties:
+                url:
+                    type: string
+                    format: uri
+                    pattern: '(?:^https://)'
+                    description: Must be `https://` — same rule `CreateWebhookSubscriptionRequest` states.
+                # `null` clears it, same as PATCH — a PUT names every field, and an omitted one
+                # here clears too, since it has nothing to say by default.
+                description:
+                    type: string
+                    minLength: 1
+                    nullable: true
+                eventTypes:
+                    type: array
+                    items: { type: string }
+                    minItems: 1
+                enabled:
+                    type: boolean
+                    description: Setting this true re-arms a subscription the auto-disable guard turned off, and clears `disabledAt`.
+
         UpdateWebhookSubscriptionRequest:
             type: object
             additionalProperties: false
@@ -375,12 +487,6 @@ components:
                 enabled:
                     type: boolean
                     description: Setting this true re-arms a subscription the auto-disable guard turned off, and clears `disabledAt`.
-                rotateSecret:
-                    type: boolean
-                    description: Add a new secret to the ring; its plaintext comes back once, in `newSecret`.
-                removeSecretId:
-                    type: string
-                    description: Drop this secret id from the ring — the other half of a rotation, once every consumer has switched.
 
         WebhookSubscriptionsResponse:
             type: object
