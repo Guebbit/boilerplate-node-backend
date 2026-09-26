@@ -445,6 +445,23 @@ describe('withActions', () => {
         expect(body.actions!.override).toEqual([]);
     });
 
+    it("never offers `start` once already `processing` — an echo write isn't a fresh offer", async () => {
+        // The regression a raw `canTransition(status, target, 'system')` would reintroduce: that
+        // check answers true for a write onto the SAME status (legal for everything but `paid`),
+        // which would keep `start` (or `ship`/`deliver` below) true forever once first reached.
+        const user = await createUser();
+        const order = await seedOrder(user);
+        const processing = await orderRepository.updateStatusIfIn(
+            String(order._id),
+            ['pending'],
+            'processing'
+        );
+
+        const body = await orderService.withActions(processing!, asWarehouse());
+
+        expect(body.actions!.start).toBe(false);
+    });
+
     it('gives the warehouse `ship` once processing, and `deliver` once shipped', async () => {
         const user = await createUser();
         const order = await seedOrder(user);
@@ -464,6 +481,17 @@ describe('withActions', () => {
         );
         const whileShipped = await orderService.withActions(shipped!, asWarehouse());
         expect(whileShipped.actions!.deliver).toBe(true);
+        // The same echo regression `start`'s own test guards against: `ship` must not still read
+        // true now that the order has actually reached `shipped`.
+        expect(whileShipped.actions!.ship).toBe(false);
+
+        const delivered = await orderRepository.updateStatusIfIn(
+            String(order._id),
+            ['shipped'],
+            'delivered'
+        );
+        const whileDelivered = await orderService.withActions(delivered!, asWarehouse());
+        expect(whileDelivered.actions!.deliver).toBe(false);
     });
 
     it('offers an override holder every forward destination, on a customer-only status too', async () => {

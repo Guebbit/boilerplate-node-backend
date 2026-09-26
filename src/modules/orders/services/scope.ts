@@ -12,7 +12,7 @@ import type { OrderDocument } from '../model';
 import { accessibleFilter } from '@kernel/access/query';
 import { orderRepository } from '../repository';
 import { OrderStatus } from '@types';
-import { orderActionsFor, canTransition, overridableTargetsFrom } from '../domain';
+import { orderActionsFor, statusesLeadingTo, overridableTargetsFrom } from '../domain';
 import type { OrderActor } from '../domain';
 import { resolveCurrentImages } from './current';
 
@@ -76,16 +76,16 @@ const deliveryAndOverrideActions = (
     if (!authContext) return { start: false, ship: false, deliver: false, override: [] };
 
     const caller = callerForSubject(authContext, 'Order');
+    // `statusesLeadingTo`, not a raw `canTransition(status, target, 'system')`: the latter
+    // answers `true` for an ECHO write (status already equals target, legal for every status but
+    // `paid`), which would read e.g. `start` as true for an order already `processing`.
+    // `statusesLeadingTo` excludes `from === to` by construction.
+    const reachesVia = (target: OrderStatus): boolean =>
+        statusesLeadingTo(target, 'system').includes(status);
     return {
-        start:
-            holdsKey(caller, 'delivery.any.start') &&
-            canTransition(status, OrderStatus.processing, 'system'),
-        ship:
-            holdsKey(caller, 'delivery.any.update') &&
-            canTransition(status, OrderStatus.shipped, 'system'),
-        deliver:
-            holdsKey(caller, 'delivery.any.update') &&
-            canTransition(status, OrderStatus.delivered, 'system'),
+        start: holdsKey(caller, 'delivery.any.start') && reachesVia(OrderStatus.processing),
+        ship: holdsKey(caller, 'delivery.any.update') && reachesVia(OrderStatus.shipped),
+        deliver: holdsKey(caller, 'delivery.any.update') && reachesVia(OrderStatus.delivered),
         override: holdsKey(caller, 'orders.any.override') ? [...overridableTargetsFrom(status)] : []
     };
 };
