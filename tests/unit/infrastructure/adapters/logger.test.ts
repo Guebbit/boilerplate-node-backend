@@ -358,7 +358,7 @@ describe('the personal-data policy', () => {
         delete process.env.NODE_LOG_PERSONAL_FIELDS;
         const redacted = redactSensitiveFields({ [field]: 'the-value' }) as Record<string, unknown>;
 
-        expect(redacted[field]).toMatch(/^sha256:[\da-f]{12}$/);
+        expect(redacted[field]).toMatch(/^hmac:[\da-f]{12}$/);
         expect(redacted[field]).not.toBe('the-value');
     });
 
@@ -440,7 +440,7 @@ describe('the personal-data policy', () => {
             unknown
         >;
 
-        expect(redacted.EMAIL).toMatch(/^sha256:[\da-f]{12}$/);
+        expect(redacted.EMAIL).toMatch(/^hmac:[\da-f]{12}$/);
     });
 
     it('never hashes a credential — SENSITIVE_FIELDS wins on any name overlap', () => {

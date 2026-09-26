@@ -129,15 +129,15 @@ const DEV_LOG_HASH_KEY = 'dev-log-hash-key';
  *
  * Truncated to 12 hex characters (48 bits): a LOG CORRELATION aid, not a security boundary the
  * way a password hash is — nobody needs 256 bits of collision resistance to notice "same user,
- * three log lines". `sha256:` prefixed so a reader (or downstream parser) can tell a digest from
- * a value that merely looks like one.
+ * three log lines". `hmac:` prefixed, not `sha256:` — the algorithm name alone can't tell a
+ * reader (or downstream parser) whether the digest was keyed, and this one only ever is (PL-35).
  */
 const applyPersonalFieldMode = (value: string): string => {
     const mode = resolvePersonalFieldMode();
     if (mode === 'plain') return value;
     if (mode === 'redact') return REDACTED;
     const key = process.env.NODE_LOG_HASH_KEY || DEV_LOG_HASH_KEY;
-    return `sha256:${createHmac('sha256', key).update(value).digest('hex').slice(0, 12)}`;
+    return `hmac:${createHmac('sha256', key).update(value).digest('hex').slice(0, 12)}`;
 };
 
 /**
