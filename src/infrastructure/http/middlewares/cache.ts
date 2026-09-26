@@ -223,11 +223,7 @@ interface CacheOptions {
  * a key is built at all (see {@link CacheOptions.scopeKey}), never which one; `serveOrArm`
  * bypasses Redis entirely, with no key built, when it answers `false`.
  */
-const getCacheKey = (
-    request: Request,
-    sortedKeyParameters: readonly string[],
-    keyAs?: string
-) => {
+const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], keyAs?: string) => {
     // Path only. `originalUrl` is the sole place the mounted prefix and the route path are
     // already joined, so it is split rather than reassembled from `baseUrl` + `path`.
     const [path] = request.originalUrl.split('?');
