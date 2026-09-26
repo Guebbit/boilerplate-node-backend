@@ -210,6 +210,7 @@ and that is written down nowhere else in either repository.
 | --------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `audit-logs`    | `admin`                    | This module owns the trail and its own `GET /audit`; `observability` mounts a second, platform-scoped read (`GET /observability/audit`) over the same collection, and the screen that renders either is the frontend's admin dashboard. |
 | `observability` | `admin` + `realtime`       | Its two surfaces are consumed by two different frontend modules: the health and metrics reads by `admin`, the SSE stream by `realtime`.                                                                                                 |
+| `addresses`     | `account`                  | The frontend keeps the address book inside `account` rather than its own module — see the pairing test's own reason for it.                                                                                                             |
 | everything else | the same name              | —                                                                                                                                                                                                                                       |
 
 And one frontend module answers to nothing here: `demo`, a client-side showcase of the shared UI
