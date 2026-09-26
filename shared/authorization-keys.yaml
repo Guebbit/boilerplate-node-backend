@@ -33,9 +33,9 @@ version: 1
 # shop needs them apart: a support agent may update a user and may not delete one, a warehouse
 # operator may adjust stock and may not delete a product.
 #
-# `checkout`, `sweep` and `override` are the three additions beyond CASL's own CRUD vocabulary,
-# and all three follow the same rule: a verb is added only when CRUD cannot say the thing, never
-# when CRUD is merely inconvenient, and the reason is recorded on the key itself.
+# `checkout`, `sweep`, `override` and `start` are the four additions beyond CASL's own CRUD
+# vocabulary, and all four follow the same rule: a verb is added only when CRUD cannot say the
+# thing, never when CRUD is merely inconvenient, and the reason is recorded on the key itself.
 #   - `checkout` is `cart.self.checkout`'s action, and nowhere else. CRUD has no verb for "spend
 #     the basket": `create` on `Cart` collided with `orders.any.create` (raising an order on
 #     someone else's behalf) and `update` said nothing about what changed.
@@ -44,6 +44,9 @@ version: 1
 #   - `override` is `orders.any.override`'s action, and nowhere else. It skips the normal
 #     lifecycle gate to force a delivery move or correct a status by hand, with a recorded
 #     reason — `update` would hide that this write deliberately bypasses the ordinary rule.
+#   - `start` is `delivery.any.start`'s action, and nowhere else. Moving a paid order into
+#     `processing` creates no shipment yet — there is no parcel row to `update` — and it is a
+#     narrower grant than `orders.any.update`, which lets an admin rewrite the order outright.
 actions:
     - read
     - create
@@ -52,6 +55,7 @@ actions:
     - checkout
     - sweep
     - override
+    - start
 
 # The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
 scopes:
@@ -288,6 +292,16 @@ keys:
       action: update
       scope: tenant
       description: Advance a consignment through the courier's steps.
+    # Narrower than `orders.any.update` on purpose: the warehouse may begin work on a paid order
+    # without being handed the run of the order record. `paid → processing` is `system`-only in
+    # `orders/domain/lifecycle.ts` until a door here calls `orders/services/status.ts`'s
+    # `markProcessing` — until then this key is declared but unused by any route.
+    - key: delivery.any.start
+      module: delivery
+      subject: Shipment
+      action: start
+      scope: tenant
+      description: Begin fulfilling a paid order — the move into `processing`, before any parcel exists to record.
 
     # -- feedback ------------------------------------------------------------------------------
     - key: feedback.any.read

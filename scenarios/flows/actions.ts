@@ -144,19 +144,21 @@ export const recordOfflinePayment = (
     owner.call('POST', `/payments/order/${orderId}/offline`, { method }).then(() => undefined);
 
 /**
- * Move an order one step along the lifecycle as an operator would.
+ * Move a paid order into `processing`, as an operator would. `paid → processing` left
+ * `PUT /orders/{id}` with SH1 — it is `system`-only in `orders/domain/lifecycle.ts` until
+ * `delivery` grows its own door for it, so the admin override
+ * (`POST /orders/{id}/status-override`) is the only reachable path onto it today, the same one a
+ * mis-scanned parcel or a manual correction uses.
  *
- * `PUT /orders/{id}` only — `shipped`/`delivered` are not requestable through it (see
- * {@link shipOrder}, {@link deliverOrder}), so `status` here is for the move that still is
- * (`processing`, an admin correction). One request, on purpose: `canTransition` refuses a jump,
- * and a shortcut that wrote a later status directly would skip that transition's own side
- * effects — the stock movement and the audit row that make this dataset worth more than a
- * written one.
- *
- * @param owner - a caller holding `orders.any.update`
+ * @param owner - a caller holding `orders.any.override`
  */
-export const advanceOrder = (owner: Caller, orderId: string, status: string): Promise<void> =>
-    owner.call('PUT', `/orders/${orderId}`, { status }).then(() => undefined);
+export const startProcessing = (owner: Caller, orderId: string): Promise<void> =>
+    owner
+        .call('POST', `/orders/${orderId}/status-override`, {
+            to: 'processing',
+            reason: 'scenario seed: begin fulfilment'
+        })
+        .then(() => undefined);
 
 /**
  * Record a parcel's handover to the carrier — the door that moves an order `processing → shipped`

@@ -128,8 +128,9 @@ are the ordinary doors; a `forced` move through the same request instead goes th
 actor into a second table would let the two disagree, so it rides on the edge itself.
 
 `system` is not a privilege level above `admin`. It is **narrower**: the moves an operator may never
-make by hand, because something outside the application has to have happened first. Money landing is
-the only one today.
+make by hand, because something outside the application has to have happened first. Money landing
+is one; fulfilment starting (`paid → processing`) is the other, since SH1 took that edge off `admin`
+— see "Action endpoints execute" below.
 
 ### What it replaced
 
@@ -167,34 +168,38 @@ was `succeeded`, so the guard passed.
 
 ### How it is enforced
 
-| Call site                                                              | Question asked                                                                                                                                                |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `orders/services/crud.ts` — `update`                                   | `canTransition(from, to, 'admin')` — refuses `cancelled`/`shipped`/`delivered` outright, see below                                                            |
-| `orders/services/cancel.ts` — `cancelById`                             | `statusesLeadingTo(cancelled, actorOf(caller))`                                                                                                               |
-| `orders/services/status.ts` — `markPaid`/`markShipped`/`markDelivered` | a fixed single `from` per function — each already knows the one legal source status for its own move, so there is no table lookup, only the conditional write |
-| `payments/services/intent.ts`/`settlement.ts`                          | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below)               |
-| `orders/services/override.ts`                                          | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces                   |
+| Call site                                                                            | Question asked                                                                                                                                                |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orders/services/cancel.ts` — `cancelById`                                            | `statusesLeadingTo(cancelled, actorOf(caller))`                                                                                                               |
+| `orders/services/status.ts` — `markPaid`/`markProcessing`/`markShipped`/`markDelivered` | a fixed single `from` per function — each already knows the one legal source status for its own move, so there is no table lookup, only the conditional write |
+| `payments/services/intent.ts`/`settlement.ts`                                         | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below)               |
+| `orders/services/override.ts`                                                         | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces                   |
 
 `cancelById` asks as the CALLER's actor, because the table answers differently for each: a customer
 may cancel from `pending` and `paid`, an operator also from `processing`.
 
-### `update` decides, `cancelById` executes
+### Action endpoints execute; `update` no longer decides
 
-The two are not interchangeable, and `update` refuses `cancelled` outright with
-`ORDER_CANCEL_VIA_CANCEL_ENDPOINT`. The lifecycle grants an operator that edge — but a cancellation
-is a SEQUENCE, not a field: the hold is released and `ORDER_CANCELLED` is announced so `payments`
-refunds. Executed as an assignment plus a save, a paid order ends `cancelled` with the customer's
-money kept and the stock held until the sweep. `POST /orders/{id}/cancel` is the only path that runs
-it, for a customer and an operator alike.
+`orders/services/crud.ts`'s `update` carries no status logic at all: `UpdateOrderByIdRequest`
+declares `email` only, so there is no move left for it to refuse or apply, and no partial-write
+window between an email save and a status move to guard against — the shape this repo used to get
+wrong (see "What it replaced" above) is now impossible by construction rather than guarded.
 
-`update` refuses `shipped`/`delivered` for the same shape of reason: those moves are
-never a field an admin assigns — they follow a parcel event `delivery` records, through
-`markShipped`/`markDelivered` (see "Who writes the status" above), or an admin override's own door
-when the ordinary sequence needs correcting. `PUT /orders/:id` covers only `paid → processing` and
-`email`; `items`/`userId` are not in `UpdateOrderByIdRequest` at all — they stay `POST /orders`
-(create)-only. Rewriting a document that already carries a sequential invoice number has no safe
-meaning: EU VAT practice corrects an issued invoice with a credit note, not a rewrite, and a real
-order-edit flow (stock delta, refund/charge, tax) is a feature of its own.
+`POST /orders/{id}/cancel` is the one path that runs a cancellation, for a customer and an operator
+alike: the hold is released and `ORDER_CANCELLED` is announced so `payments` refunds. A plain field
+write could never do that — a paid order set to `cancelled` by assignment would end with the
+customer's money kept and the stock held until the sweep.
+
+`shipped`/`delivered` are never a field an admin assigns either — they follow a parcel event
+`delivery` records, through `markShipped`/`markDelivered` (see "Who writes the status" above).
+`paid → processing` joined them with SH1: it now follows a fulfilment-start fact the same way, once
+`delivery` grows its own door for it. Until then, the admin override
+(`POST /orders/{id}/status-override`) is the only reachable path onto it — the same door a
+mis-scanned parcel or a manual correction already uses. `items`/`userId` are not in
+`UpdateOrderByIdRequest` at all either — they stay `POST /orders` (create)-only. Rewriting a
+document that already carries a sequential invoice number has no safe meaning: EU VAT practice
+corrects an issued invoice with a credit note, not a rewrite, and a real order-edit flow (stock
+delta, refund/charge, tax) is a feature of its own.
 
 ### Deciding and enforcing stay separate
 

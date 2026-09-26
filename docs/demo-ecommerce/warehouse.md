@@ -128,6 +128,13 @@ along with nothing but the record of the handover itself. Either way, the three 
 recording the handover all happen on their own: you do not separately create the parcel, or write
 the status field, or send the email.
 
+::: tip Starting work on a paid order
+The diagram starts from "order is paid" because packing it is the same rule applied one step
+earlier: nobody sets `processing` directly either. There is no dedicated door for it yet — an
+admin's forced correction (→ [Correcting a mistake](./manager.md#correcting-a-mistake)) is the
+only way to reach it today, the same door a mis-scanned parcel uses.
+:::
+
 **There is no courier simulation.** Recording the arrival is a real action on a real
 parcel, the same way recording the handover is — not a button standing in for a delivery company's
 own report. → [`delivery`](../modules/delivery.md)

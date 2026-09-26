@@ -72,13 +72,13 @@ that, never re-resolve against whoever is reading it now — see
 
 The status enum is the module's public vocabulary:
 
-| Status                  | What it means                                | Who moves it                                                                     |
-| ----------------------- | -------------------------------------------- | -------------------------------------------------------------------------------- |
-| `pending`               | created, unpaid, units held                  | checkout or an admin                                                             |
-| `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                                           |
-| `processing`            | fulfilment started                           | admin                                                                            |
-| `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md), reporting a recorded handover/arrival               |
-| `cancelled`             | units released, refund issued if one was due | admin, an expired hold, or the system when a held product is removed/deactivated |
+| Status                  | What it means                                | Who moves it                                                                                                          |
+| ----------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `pending`               | created, unpaid, units held                  | checkout or an admin                                                                                                  |
+| `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                                                                                |
+| `processing`            | fulfilment started                           | [`delivery`](./delivery.md), reporting a recorded fulfilment-start fact (until that door exists, an admin correction) |
+| `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md), reporting a recorded handover/arrival                                                    |
+| `cancelled`             | units released, refund issued if one was due | admin, an expired hold, or the system when a held product is removed/deactivated                                      |
 
 Any of these except `paid` (`system`-only, absolute) can also be reached by an admin override with
 a reason — see [Who writes the status](#who-writes-the-status) below.
@@ -133,7 +133,7 @@ module announcing and a sibling reacting.
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     P["pending<br/><i>created · units held</i>"] -->|"payments confirms<br/>(system)"| PA["paid<br/><i>units committed</i>"]
-    PA -->|admin| PR["processing"]
+    PA -->|"system, via<br/>delivery's start door"| PR["processing"]
     PR -->|"system, via<br/>delivery's ship door"| SH["shipped"]
     SH -->|"system, via<br/>delivery's deliver door"| DE["delivered"]
     P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
@@ -157,13 +157,13 @@ override all ASK for a move, never assign the field themselves. See
 
 ## Who writes the status
 
-| Move                                        | Who asks                                                                         | Through                                |
-| ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------- |
-| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm     |
-| `paid` → `processing`                       | `admin`                                                                          | `PUT /orders/:id`, `orders.any.update` |
-| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/order/{id}/ship`       |
-| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/order/{id}/deliver`    |
-| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel`             |
+| Move                                        | Who asks                                                                         | Through                                                                                                              |
+| ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                   |
+| `paid` → `processing`                       | `system`                                                                         | `delivery`'s own start door (not yet built) — until then, `POST /orders/{id}/status-override`, `orders.any.override` |
+| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/order/{id}/ship`                                                                                     |
+| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/order/{id}/deliver`                                                                                  |
+| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel`                                                                                           |
 
 ### The admin override
 
@@ -181,8 +181,8 @@ name. Two modes, both requiring a `reason`, both writing an embedded override-hi
   alone, forward to `processing`/`shipped`/`delivered` only. No parcel, no shipped email — but
   webhooks still fire, since a subscriber's own view of the order genuinely changed.
 
-`PUT /orders/:id` never accepts `shipped`/`delivered` from anyone, override holder included — the
-override's own two doors are the only way to reach those statuses outside the ordinary sequence.
+`PUT /orders/:id` carries no `status` field at all — the override's own two doors are the only way
+to reach `processing`/`shipped`/`delivered` outside the ordinary sequence, override holder included.
 
 Either mode also commits the order's stock hold (`inventory.commitForOrder`) whenever it moves the
 order out of `pending` — the same commit a normal payment confirmation triggers. Without it, the

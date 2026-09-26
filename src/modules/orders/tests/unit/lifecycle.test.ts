@@ -75,6 +75,24 @@ describe('who may write `paid`', () => {
     });
 });
 
+describe('who may write `processing`', () => {
+    it('lets nothing but a recorded fulfilment-start fact reach it', () => {
+        // Neither a request a human makes directly, same as `shipped`/`delivered` below —
+        // `delivery`'s own door records the fact first, then reports it here. See
+        // `src/modules/orders/services/status.ts`'s `markProcessing`.
+        for (const actor of EVERY_ACTOR)
+            expect(statusesLeadingTo(OrderStatus.processing, actor)).toEqual(
+                actor === 'system' ? [OrderStatus.paid] : []
+            );
+    });
+
+    it('refuses an admin writing it by hand', () => {
+        // `PUT /orders/:id` never carries `status` at all; the admin override
+        // (`orders.any.override`, step-up) is the only reachable path onto this status today.
+        expect(canTransition(OrderStatus.paid, OrderStatus.processing, 'admin')).toBe(false);
+    });
+});
+
 describe('who may write `shipped` and `delivered`', () => {
     it('lets nothing but a recorded parcel fact reach either', () => {
         // Neither is a request a human makes directly — `delivery`'s own doors record the
@@ -194,12 +212,9 @@ describe('canTransition', () => {
             OrderStatus.cancelled
         ]);
         expect(statusesReachableFrom(OrderStatus.pending, 'system')).toEqual([OrderStatus.paid]);
-        expect(statusesReachableFrom(OrderStatus.paid, 'admin')).toEqual([
-            OrderStatus.processing,
-            OrderStatus.cancelled
-        ]);
-        // `processing` is an operator move, not a customer one — unlike `paid` above, nothing
-        // else in this file pins that a customer is refused it.
+        // `processing` left `admin`'s reach with SH1 — a paid order's only admin-reachable move
+        // through the ordinary lifecycle is now `cancelled`, same as a customer's.
+        expect(statusesReachableFrom(OrderStatus.paid, 'admin')).toEqual([OrderStatus.cancelled]);
         expect(statusesReachableFrom(OrderStatus.paid, 'customer')).toEqual([
             OrderStatus.cancelled
         ]);
@@ -249,7 +264,7 @@ describe('orderActionsFor', () => {
             pay: true
         });
         expect(orderActionsFor(OrderStatus.paid, 'admin')).toEqual({
-            transitions: [OrderStatus.processing, OrderStatus.cancelled],
+            transitions: [OrderStatus.cancelled],
             cancel: true,
             pay: false
         });
