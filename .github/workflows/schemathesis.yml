@@ -8,10 +8,10 @@ name: Schemathesis (stateful contract fuzz)
 # own official Docker image, in this workflow only, against the real app booted via `npm run demo`
 # (in-memory Mongo, cache/queue disabled — the same profile the paired frontend's e2e suite uses).
 #
-# The image tag is PINNED, not `:stable`. `:stable` moved from v3 to v4.28.0 on 2026-09-22 and
-# broke every night from 09-03 onward: first a missing module, then `--stateful` itself, which v4
-# renamed to the `stateful` phase. A floating tag means this workflow's meaning changes under it
-# with no diff to review — bump the pin by hand when there's a reason to.
+# The image tag is PINNED, not `:stable`. `:stable` moved from v3 to v4.28.0 on 2026-09-03, first
+# breaking on a missing module, then on `--stateful` itself (v4 renamed it to the `stateful`
+# phase). A floating tag means this workflow's meaning changes under it with no diff to review —
+# bump the pin by hand when there's a reason to.
 #
 # `--generation-deterministic` pins the generation seed, so a red run is reproducible by re-running
 # it — the same requirement that keeps this a HUNTER-not-a-gate, like fuzz.yml and mutation.yml:
@@ -66,8 +66,7 @@ jobs:
 
             # /products is public and unauthenticated — the same default probe
             # scripts/testing/run-prism-smoke-test.ts uses to know the app is actually up.
-            # 120s, not 60: two nights failed here under the old timeout with nothing printed to
-            # say why, so a slow boot now has room and a failure now has a log to show for it.
+            # 120s: a slow boot needs the room, and a failure prints demo.log to show why.
             - name: Wait for the API to accept requests
               run: |
                   if ! timeout 120 bash -c 'until curl -sf http://localhost:${{ env.NODE_PORT }}/products >/dev/null; do sleep 1; done'; then
@@ -131,9 +130,9 @@ jobs:
                   retention-days: 14
 
     schemathesis-notify:
-        # Mirrors mutation.yml's mutation-notify: one issue, updated in place, surfaces a nightly
-        # red run where the repo is already read instead of adding a channel nobody watches. This
-        # job existed nowhere before, which is exactly how 23 straight red nights went unnoticed.
+        # One issue, updated in place, surfaces a nightly red run where the repo is already read
+        # instead of adding a channel nobody watches. Shares `notify-failure` with `mutation.yml`'s
+        # `mutation-notify`.
         needs: [schemathesis]
         if: always() && contains(needs.*.result, 'failure')
         runs-on: ubuntu-latest
@@ -141,39 +140,11 @@ jobs:
         permissions:
             issues: write
         steps:
+            - name: Checkout
+              uses: actions/checkout@v4
             - name: Open or update the nightly-failure issue
-              uses: actions/github-script@v7
+              uses: ./.github/actions/notify-failure
               with:
-                  script: |
-                      const title = 'Nightly Schemathesis run failed';
-                      const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-                      const body = [
-                          `The Schemathesis workflow failed on ${new Date().toISOString().slice(0, 10)}.`,
-                          '',
-                          `Run: ${runUrl}`
-                      ].join('\n');
-
-                      const { data: openIssues } = await github.rest.issues.listForRepo({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          state: 'open',
-                          labels: 'schemathesis'
-                      });
-                      const existing = openIssues.find((issue) => issue.title === title);
-
-                      if (existing) {
-                          await github.rest.issues.createComment({
-                              owner: context.repo.owner,
-                              repo: context.repo.repo,
-                              issue_number: existing.number,
-                              body
-                          });
-                      } else {
-                          await github.rest.issues.create({
-                              owner: context.repo.owner,
-                              repo: context.repo.repo,
-                              title,
-                              body,
-                              labels: ['schemathesis']
-                          });
-                      }
+                  title: 'Nightly Schemathesis run failed'
+                  label: 'schemathesis'
+                  workflow-name: 'Schemathesis'

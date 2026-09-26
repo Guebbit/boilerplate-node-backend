@@ -136,7 +136,7 @@ Following those links to build a legal, in-order **sequence** of requests is not
 docker run --rm --network host \
   -v "$PWD/openapi.yaml:/spec/openapi.yaml:ro" \
   -v "$PWD/tmp/reports/schemathesis:/reports" \
-  schemathesis/schemathesis:v4.28.0 \
+  "$SCHEMATHESIS_IMAGE" \
   run /spec/openapi.yaml \
   --url http://localhost:3000 \
   --checks all --phases=stateful --generation-deterministic \
@@ -146,10 +146,10 @@ docker run --rm --network host \
 The reasoning against a Python dependency in the first section still holds for the single-request case, which is why `tests/fuzz/` stays hand-rolled. It does not hold for sequences: the `stateful` phase is not a capability worth re-deriving from four building blocks when the actual gap is state, not generation. `--generation-deterministic` keeps a red run reproducible, same requirement as the seeded run below. Python never enters `package.json` — the workflow is the only place it exists, exactly like `test:prism`'s relationship with the Prism CLI.
 
 The image tag is pinned to a specific release, not `:stable` — a floating tag moved from v3 to v4
-on 2026-09-22 and broke every night from 09-03 onward, first on a missing module, then on
-`--stateful` itself (v4 renamed it to the `stateful` phase, and `--hypothesis-derandomize` to
-`--generation-deterministic`). Nothing about a floating base image told anyone the meaning of a
-passing run had changed underneath it; a pin at least makes that a diff someone has to write.
+on 2026-09-03, first breaking on a missing module, then on `--stateful` itself (v4 renamed it to
+the `stateful` phase, and `--hypothesis-derandomize` to `--generation-deterministic`). Nothing
+about a floating base image told anyone the meaning of a passing run had changed underneath it; a
+pin at least makes that a diff someone has to write.
 
 The workflow logs in as the demo profile's admin first and hands Schemathesis the bearer token
 (`--header "Authorization: Bearer …"`), so the chains reach the routes that need a session instead
@@ -157,8 +157,7 @@ of stopping at the first 401.
 
 Nightly and advisory: a stateful failure is a finding, not something a merge should block on. A
 red run also opens (or comments on) a `schemathesis`-labelled issue, the same pattern
-`mutation.yml`'s `mutation-notify` uses — 23 straight red nights went unnoticed before either
-existed.
+`mutation.yml`'s `mutation-notify` uses.
 
 ## Where the per-request fuzzer runs
 
