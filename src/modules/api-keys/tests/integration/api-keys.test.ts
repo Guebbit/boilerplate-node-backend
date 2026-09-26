@@ -179,9 +179,10 @@ describe('an expired credential', () => {
 });
 
 describe('a hard-deleted user takes their credentials with them', () => {
-    // The module's `subscribe()` only runs through `registerModules` — the top-level `import
-    // '@modules/api-keys/module'` above registers the credential resolver but not this listener,
-    // same reasoning as `wishlist/tests/integration/service.test.ts`.
+    // `subscribe()` (this listener) and `onRegistered` (the credential resolver, D15) are both
+    // manifest hooks that only run through `registerModules` — the top-level `import
+    // '@modules/api-keys/module'` above installs neither by itself, same reasoning as
+    // `wishlist/tests/integration/service.test.ts`.
     beforeEach(() => {
         resetDomainEvents();
         registerModules(enabledModules);
