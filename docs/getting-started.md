@@ -181,11 +181,12 @@ never as anything that says why.
 ## The one command before you commit
 
 ```bash
-npm run complete     # build + all tests + lint + format check — ~60s
+npm run complete     # build + all tests + lint + format check — several minutes
 ```
 
 This is exactly what the pre-commit hook runs, so running it by hand only ever saves you a rejected
-commit. Its mutating twin, `npm run complete`, fixes lint and formatting instead of reporting them.
+commit. Its mutating twin, `npm run complete:fix`, fixes lint and formatting instead of reporting
+them.
 
 Deliberately outside that gate, run by hand when you want them: `npm run mutation` (Stryker,
 minutes), `npm run test:fuzz`, `npm run test:prism` (boots a mock server on a real port).

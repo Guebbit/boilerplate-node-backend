@@ -126,7 +126,7 @@ Four ideas carry the whole repository:
 ## Before you commit
 
 ```bash
-npm run complete    # build + all tests + lint + format check — ~90s
+npm run complete    # build + all tests + lint + format check — several minutes
 ```
 
 Exactly what the pre-commit hook runs; `npm run complete:fix` is the same gate with lint and

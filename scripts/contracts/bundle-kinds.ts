@@ -15,7 +15,7 @@
  *
  * `tests/cross-cutting/contract-bundles.test.ts` asserts that comparison on every run.
  *
- * See: docs/api/contract-fragmentation.md#the-eight-bundles
+ * See: docs/api/contract-fragmentation.md#the-seven-bundles
  */
 
 import { existsSync, readFileSync } from 'node:fs';

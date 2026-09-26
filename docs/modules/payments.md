@@ -30,6 +30,8 @@ flowchart LR
     payments --> users
     orders -. "order.refund_owed" .-> payments
     users -. "user.deleted" .-> payments
+    payments -. "payment.failed" .-> webhooks
+    payments -. "payment.succeeded" .-> webhooks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;

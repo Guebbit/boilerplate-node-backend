@@ -37,6 +37,9 @@ flowchart LR
     products -. "product.deleted" .-> orders
     users -. "user.deleted" .-> orders
     orders -. "order.refund_owed" .-> payments
+    orders -. "order.cancelled" .-> webhooks
+    orders -. "order.created" .-> webhooks
+    orders -. "order.status_changed" .-> webhooks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;

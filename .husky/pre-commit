@@ -1,9 +1,8 @@
 # The full gate, and the only one: build, lint, both spec lints, format check, the contract-bundle
-# and cross-repo contract checks, then unit, cross-cutting, integration and contract tests.
+# and cross-repo contract checks, then unit, cross-cutting, integration, contract and fuzz tests.
 #
-# About 90 seconds, which is why it is not split into tiers. Integration and contract cost 14s and
-# 49s against an in-memory Mongo — there is nothing worth trading away, and one gate is easier to
-# trust than three.
+# Several minutes, fuzz being most of it — there is nothing worth trading away, and one gate is
+# easier to trust than three.
 #
 # `check:spec-identity` SKIPS rather than fails when the paired frontend is not on disk, so a
 # half-cloned pair can still commit. It stays fatal under CI, where a missing sibling means the

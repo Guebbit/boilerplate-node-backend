@@ -9,8 +9,9 @@ import { orderRepository } from '../repository';
 
 /**
  * How wide the sequence portion of an invoice number is padded, e.g. `000041`. Not configurable:
- * EU invoice numbering only requires the number to be sequential and gapless within the year, not
- * a fixed width — a padding-width setting would be a knob with nothing real behind it.
+ * EU invoice numbering only requires the number to be sequential within the year, not a fixed
+ * width — a padding-width setting would be a knob with nothing real behind it. A gap in that
+ * sequence is legally acceptable — see {@link allocateInvoiceNumber}'s own docblock.
  */
 const SEQUENCE_WIDTH = 6;
 
