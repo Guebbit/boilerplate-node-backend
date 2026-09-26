@@ -23,14 +23,12 @@ get right before anyone writes one.
 
 ## Start here
 
-This stack is **container-first**: the shipped `.env` uses compose service hostnames, because the
-things that make it worth cloning — Tempo, Loki, Prometheus, Grafana, Alloy, Umami — only exist
-inside the compose stack.
+This stack is **container-first**: the shipped `.env` uses compose service hostnames.
 
 ```bash
 npm install
 cp .env-example .env      # then set NODE_TOKEN_ACCESS and NODE_TOKEN_REFRESH
-npm run compose:restart   # docker or podman, auto-detected
+npm run compose:up        # docker or podman, auto-detected — 5 containers: app, cron, database, redis, rabbitmq
 ```
 
 That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting, so the
@@ -42,10 +40,15 @@ curl http://localhost:3000/            # health probe, with trace headers
 curl http://localhost:3000/products    # the seeded demo data
 ```
 
-::: warning Use the scripts, not a bare `compose up`
-The scripts pass the runtime's Promtail override with `-f`. A bare `compose up` runs the base file
-only: Loki stays empty and Grafana's log panels stay blank, with no error anywhere.
-:::
+Tempo, Loki, Prometheus, Grafana, Alloy and Umami are opt-in — the things that make this stack
+worth cloning, but a weight most machines don't want running by default:
+
+```bash
+npm run compose:up:full   # adds observability + analytics + the docs site (17 containers)
+```
+
+`compose:restart` and `compose:rebuild` honour the same profiles: set `COMPOSE_PROFILES` in `.env`
+once to keep the full stack across restarts, instead of passing `:full` every time.
 
 → Host mode, the collections, the pre-commit gate: **[Getting Started](./docs/getting-started.md)**
 → Ports and running the pair: **[Pairing & Ports](./docs/tools/pairing-and-ports.md)**

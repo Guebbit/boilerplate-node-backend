@@ -79,6 +79,8 @@
         "sweep:reservations": "tsx scripts/ops/sweep-reservations.ts",
         "refresh:breached-passwords": "tsx scripts/ops/refresh-breached-passwords.ts",
         "compose": "${CONTAINER_ENGINE:-podman} compose",
+        "compose:up": "npm run compose -- up -d",
+        "compose:up:full": "npm run compose -- --profile observability --profile analytics --profile docs up -d",
         "compose:restart": "npm run compose -- down && npm run compose -- up -d",
         "compose:rebuild": "npm run compose -- down -v && npm run compose -- build --no-cache && npm run compose -- up -d",
         "compose:kill": "npm run compose -- kill",

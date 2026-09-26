@@ -2,10 +2,11 @@
 
 From a fresh clone to a browsable API with demo data. Five minutes, four commands.
 
-This stack is **container-first**: the shipped `.env` uses compose service hostnames, because the
-things that make this boilerplate worth cloning — Tempo, Loki, Prometheus, Grafana, Alloy, Umami —
-only exist inside the compose stack. Host mode is supported and has its own scripts; it is the
-secondary path.
+This stack is **container-first**: the shipped `.env` uses compose service hostnames. The default
+profile is lean — 5 containers (`app`, `cron`, `database`, `redis`, `rabbitmq`) — with Tempo, Loki,
+Prometheus, Grafana, Alloy and Umami opt-in behind the `observability`/`analytics` profiles
+(`npm run compose:up:full`, or `COMPOSE_PROFILES` in `.env` to keep them across every restart). Host
+mode is supported and has its own scripts; it is the secondary path.
 
 ## First run
 
@@ -13,7 +14,7 @@ secondary path.
 flowchart TD
     Clone(["Fresh clone"]) --> Install["npm install"]
     Install --> Env["cp .env-example .env,\nset the two NODE_TOKEN_* vars"]
-    Env --> Up["npm run compose:restart"]
+    Env --> Up["npm run compose:up\n(or compose:up:full)"]
     Up --> Boot["app container runs\nnpm run db:bootstrap on its own"]
     Boot --> Ready(["Seeded API on :3000"])
 
@@ -27,24 +28,18 @@ flowchart TD
 npm install
 cp .env-example .env
 # edit .env: set NODE_TOKEN_ACCESS and NODE_TOKEN_REFRESH to any two long random strings
-npm run compose:restart          # or: npm run compose:restart
+npm run compose:up               # the lean default, or: npm run compose:up:full
 ```
 
 On Podman, also set `CONTAINER_LOGS_PATH`, `PROMTAIL_CONFIG` and `CONTAINER_LOG_DRIVER` in `.env`
-(see `.env-example` → _Promtail Log Collection_). Nothing to set on Docker.
+(see `.env-example` → _Promtail Log Collection_) — only read once the `observability` profile is
+running. Nothing to set on Docker.
 
 That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting the
 server, so the database is indexed and seeded on first boot — you get demo products, users and
 orders rather than empty lists, without asking for them. Which mongod that lands in, and what
 happens on the second boot, is [Which database am I looking at?](#which-database-am-i-looking-at)
 below.
-
-::: warning Use the scripts, not a bare `compose up`
-Each script passes its runtime's Promtail override with `-f`, which is what gives Promtail a host
-log path to tail. A bare `podman compose up` runs the base file only: Loki stays empty and Grafana's
-log panels stay blank, with no error anywhere. `COMPOSE_FILE` in `.env` does not fix it —
-podman-compose ignores it there.
-:::
 
 ## Check it worked
 
@@ -54,14 +49,14 @@ curl http://localhost:3000/products                  # the seeded demo data
 curl http://localhost:3000/observability/metrics      # Prometheus exposition
 ```
 
-| What                | Where                    | Notes                             |
-| ------------------- | ------------------------ | --------------------------------- |
-| API                 | `http://localhost:3000`  | `NODE_PORT`                       |
-| Grafana             | `http://localhost:3001`  | dashboards, logs, traces          |
-| Docs (this site)    | `http://localhost:3090`  | or `npm run docs:dev` on the host |
-| Prometheus          | `http://localhost:9090`  |                                   |
-| RabbitMQ management | `http://localhost:15672` |                                   |
-| Umami               | `http://localhost:3080`  |                                   |
+| What                | Where                    | Notes                                                      |
+| ------------------- | ------------------------ | ---------------------------------------------------------- |
+| API                 | `http://localhost:3000`  | `NODE_PORT`                                                |
+| Grafana             | `http://localhost:3001`  | needs `compose:up:full` — dashboards, logs, traces         |
+| Docs (this site)    | `http://localhost:3090`  | needs `compose:up:full`, or `npm run docs:dev` on the host |
+| Prometheus          | `http://localhost:9090`  | needs `compose:up:full`                                    |
+| RabbitMQ management | `http://localhost:15672` |                                                            |
+| Umami               | `http://localhost:3080`  | needs `compose:up:full`                                    |
 
 The full list, and the env var for every port, is in
 [Pairing & Ports](./tools/pairing-and-ports.md). This repo owns `3000–3099`; the paired frontend

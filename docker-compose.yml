@@ -70,8 +70,10 @@ services:
             # raising only the one above just moves which bucket a live run trips over. Both are
             # declared here for the same reason: a run raises them from the shell, never in `.env`.
             NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '${NODE_AUTH_RATE_LIMIT_ADDRESS_MAX:-30}'
-            # Observability: send traces to OTel Collector, which fans out to backends.
-            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otel-collector:4318'
+            # Observability: send traces to OTel Collector, which fans out to backends. Empty by
+            # default — the `observability` profile is opt-in, and an empty value is a documented
+            # no-op (docs/getting-started-production.md).
+            OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
             NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'
             # The three URLs `GET /observability/health` reports as `integrations.loki`,
             # `integrations.umami` and `integrations.faro`. They are declarative — the app never
@@ -84,14 +86,14 @@ services:
             NODE_UMAMI_HOST: 'http://localhost:${UMAMI_PORT:-3080}'
             NODE_FARO_COLLECTOR_URL: 'http://localhost:${ALLOY_FARO_PORT:-12347}/collect'
             # Where `emitAnalyticsEvent` delivers (see infrastructure/observability/analytics).
-            # `umami` is the default and needs the website id as well as the host above — the
-            # same fixed id `umami-init` seeds and the paired frontend hardcodes, so both halves
-            # of a funnel land on one website instead of two.
+            # `none` by default — the `analytics` profile is opt-in; set `umami` (needs the
+            # website id and the host below) once that profile is running, or `posthog` for an
+            # identity-shaped funnel.
             #
             # The host is the SERVICE name here, not localhost: unlike NODE_UMAMI_HOST above —
             # which is declarative, describing what a browser reaches — this one is dialled by
             # the API from inside the compose network, where `localhost` is its own container.
-            NODE_ANALYTICS_PROVIDER: '${NODE_ANALYTICS_PROVIDER:-umami}'
+            NODE_ANALYTICS_PROVIDER: '${NODE_ANALYTICS_PROVIDER:-none}'
             NODE_UMAMI_INGEST_HOST: 'http://umami:3000'
             NODE_UMAMI_WEBSITE_ID: '${UMAMI_WEBSITE_ID:-00000000-0000-4000-8000-000000000001}'
 
@@ -140,8 +142,6 @@ services:
             redis:
                 condition: service_started
             rabbitmq:
-                condition: service_started
-            otel-collector:
                 condition: service_started
 
         # Health check to verify the container is ready to accept traffic
@@ -194,7 +194,7 @@ services:
             NODE_ENV: 'development'
             NODE_REDIS_URL: 'redis://redis:6379'
             NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
-            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otel-collector:4318'
+            OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
             NODE_SERVICE_NAME: 'cron'
         volumes:
             - .:/app:Z
@@ -296,6 +296,7 @@ services:
     # Tempo: stores OpenTelemetry traces. Receives OTLP/gRPC from the OTel Collector.
     tempo:
         logging: *container-logging
+        profiles: ['observability']
         image: grafana/tempo:2.6.1
         restart: unless-stopped
         command: ['-config.file=/etc/tempo/tempo.yaml']
@@ -308,6 +309,7 @@ services:
     # Receives OTLP/HTTP on :4318 and OTLP/gRPC on :4317, then fans out to Tempo.
     otel-collector:
         logging: *container-logging
+        profiles: ['observability']
         image: otel/opentelemetry-collector-contrib:0.114.0
         restart: unless-stopped
         command: ['--config=/etc/otel-collector-config.yaml']
@@ -322,6 +324,7 @@ services:
     # Prometheus: scrapes /metrics from the app and stores numeric time-series.
     prometheus:
         logging: *container-logging
+        profiles: ['observability']
         image: prom/prometheus:v2.55.1
         restart: unless-stopped
         command:
@@ -339,6 +342,7 @@ services:
     # Alertmanager: receives firing alerts from Prometheus and routes notifications.
     alertmanager:
         logging: *container-logging
+        profiles: ['observability']
         image: prom/alertmanager:v0.27.0
         restart: unless-stopped
         command: ['--config.file=/etc/alertmanager/alertmanager.yml']
@@ -350,6 +354,7 @@ services:
     # Loki: stores log lines shipped by Promtail. Grafana queries it for log exploration.
     loki:
         logging: *container-logging
+        profiles: ['observability']
         image: grafana/loki:3.3.2
         restart: unless-stopped
         command: ['-config.file=/etc/loki/loki-config.yaml']
@@ -362,6 +367,7 @@ services:
     # Promtail: tails Docker container log files and ships them to Loki.
     promtail:
         logging: *container-logging
+        profiles: ['observability']
         image: grafana/promtail:3.3.2
         restart: unless-stopped
         command: ['-config.file=/etc/promtail/promtail-config.yaml']
@@ -382,6 +388,7 @@ services:
     # Grafana: single UI to explore traces (Tempo), metrics (Prometheus), and logs (Loki).
     grafana:
         logging: *container-logging
+        profiles: ['observability']
         image: grafana/grafana:11.4.0
         restart: unless-stopped
         environment:
@@ -404,6 +411,7 @@ services:
     # them into Loki (logs) and the OTel Collector -> Tempo (traces). See the config for wiring.
     alloy:
         logging: *container-logging
+        profiles: ['observability']
         image: grafana/alloy:v1.5.1
         restart: unless-stopped
         command:
@@ -424,6 +432,7 @@ services:
     # The frontend loads its tracking script from this origin; events land in umami-db.
     umami:
         logging: *container-logging
+        profiles: ['analytics']
         image: ghcr.io/umami-software/umami:postgresql-v2.14.0
         restart: unless-stopped
         environment:
@@ -442,6 +451,7 @@ services:
     # Postgres backing store for Umami (kept separate from the app's MongoDB).
     umami-db:
         logging: *container-logging
+        profiles: ['analytics']
         image: postgres:16-alpine
         restart: unless-stopped
         environment:
@@ -460,6 +470,7 @@ services:
     # Umami's default seeded account, so the stack comes up ready to log in (no manual step).
     umami-init:
         logging: *container-logging
+        profiles: ['analytics']
         image: postgres:16-alpine
         restart: 'no'
         entrypoint: ['/bin/sh', '/umami-init.sh']
@@ -482,6 +493,7 @@ services:
     # Docs: VitePress static site served by Nginx.
     docs:
         logging: *container-logging
+        profiles: ['docs']
         build:
             context: .
             dockerfile: docker/Dockerfile.docs
