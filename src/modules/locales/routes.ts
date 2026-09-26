@@ -57,7 +57,7 @@ const publicLocaleCache = setCache(3600, {
     keyParameters: [],
     browserRevalidate: true,
     scopeKey: (request: Request) =>
-        hasAnonymousReadScope(localeService.callerScope, request.authContext) ? 'guest' : undefined
+        hasAnonymousReadScope(localeService.callerScope, request.authContext)
 });
 
 // GET /locales — which languages this deployment offers, and what each of them can do.

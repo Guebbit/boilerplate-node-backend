@@ -41,8 +41,8 @@ router.use(getAuth);
  * serving or storing their wider answer under that shared key. `hasAnonymousReadScope` is what
  * makes this safe BY CONSTRUCTION — see its own docblock.
  */
-const cacheScopeKey = (request: Request): string | undefined =>
-    hasAnonymousReadScope(callerScope, request.authContext) ? 'guest' : undefined;
+const cacheScopeKey = (request: Request): boolean =>
+    hasAnonymousReadScope(callerScope, request.authContext);
 
 /**
  * Shared cache middleware for both search entry points, keyed on the query parameters that
@@ -87,7 +87,7 @@ router.delete(
 // answer and there is nobody to bypass the cache for.
 router.get(
     '/categories',
-    setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: () => 'guest' }),
+    setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: () => true }),
     getCatalogueFacets
 );
 

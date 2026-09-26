@@ -40,7 +40,7 @@ const mockedCache = jest.mocked(cache);
  * `CacheOptions.scopeKey` itself — a caller who always shares the one answer every other
  * caller does, the ordinary case for every route in this suite's fixtures.
  */
-const GUEST_SCOPE = () => 'guest';
+const GUEST_SCOPE = () => true;
 
 const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 const ORIGINAL_TTL_MAX = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
@@ -282,16 +282,13 @@ describe('setCache', () => {
         expect(next).toHaveBeenCalledWith(redisError);
     });
 
-    it('stores successful uncached responses, keyed by whatever scopeKey resolves', async () => {
+    it('stores successful uncached responses, keyed with the fixed guest scope', async () => {
         mockedCache.getCacheValue.mockResolvedValue(undefined);
 
-        // A stand-in for `hasAnonymousReadScope`'s own answer in a real route — this test's job
-        // is only to prove the key carries whatever `scopeKey` returns, not to re-test that
-        // comparison (`tests/unit/kernel/access-query.test.ts` owns that).
         const middleware = setCache(120, {
             tags: ['products'],
             keyParameters: [],
-            scopeKey: () => 'tenant:acme'
+            scopeKey: GUEST_SCOPE
         });
         const { response, headers } = createResponse();
         const next = jest.fn() as NextFunction;
@@ -312,7 +309,7 @@ describe('setCache', () => {
 
         // Redis holds the entry past its soft expiry: 120s TTL + min(60, 120)s grace.
         expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
-            'GET:/products?:tenant:acme:en',
+            'GET:/products?:guest:en',
             expect.stringContaining('"status":201,"body":{"success":true,"data":[]}'),
             180,
             ['products']
@@ -356,7 +353,7 @@ describe('setCache', () => {
 
     // A caller `scopeKey` shares the guest entry with answers `public, max-age` — the whole point
     // being that the body is the SAME one a guest gets, so a shared/edge cache may hold it too.
-    // A caller who sees more (`scopeKey` returns `undefined`) answers `private, no-cache` instead:
+    // A caller who sees more (`scopeKey` returns `false`) answers `private, no-cache` instead:
     // that caller's wider answer must never be stored as if it were the generic one, and Redis is
     // bypassed for them entirely (`describe('the cache is bypassed...')` below). Both cases name
     // `Authorization` in `Vary` regardless — an intermediary that ignores `private` must still be
@@ -369,7 +366,7 @@ describe('setCache', () => {
             GUEST_SCOPE,
             'public, max-age=30, stale-while-revalidate=60, stale-if-error=300'
         ],
-        ['sees more than guest', () => undefined, 'private, no-cache']
+        ['sees more than guest', () => false, 'private, no-cache']
     ])(
         'varies a caller who %s on Authorization and Accept-Language',
         async (_label, scopeKey, cacheControl) => {
@@ -692,7 +689,7 @@ describe('setCache', () => {
             const middleware = setCache(60, {
                 tags: ['products'],
                 keyParameters: [],
-                scopeKey: () => undefined
+                scopeKey: () => false
             });
             const next = jest.fn() as NextFunction;
 
@@ -715,7 +712,7 @@ describe('setCache', () => {
             const middleware = setCache(60, {
                 tags: ['products'],
                 keyParameters: [],
-                scopeKey: () => undefined
+                scopeKey: () => false
             });
             const { response } = createResponse();
 
@@ -740,7 +737,7 @@ describe('setCache', () => {
             const middleware = setCache(60, {
                 tags: ['products'],
                 keyParameters: [],
-                scopeKey: () => undefined
+                scopeKey: () => false
             });
             const { response, headers } = createResponse();
 
