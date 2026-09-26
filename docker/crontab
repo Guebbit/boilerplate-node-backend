@@ -12,14 +12,15 @@
 # else checks that it does.
 #
 # Staggered five minutes apart, nightly at low-traffic hours (the container's default TZ, UTC), so
-# five jobs each opening their own Mongo connection do not all land on the pool at once.
+# the nightly jobs each opening their own Mongo connection do not all land on the pool at once.
 #
-# `sweep:webhook-retries` is the one job below NOT on that nightly schedule — it runs every
-# minute, because the sweep interval IS the retry granularity: a webhook retry due in 5 seconds is
-# only actually retried on the next minute boundary — see
-# docs/modules/webhooks.md#the-delivery-path. A minute-scale query against an indexed
-# `{ status, nextAttemptAt }` is cheap regardless of how the nightly jobs are staggered, so it
-# needs no offset from them.
+# `sweep:webhook-retries`, `sweep:payment-effects` and `sweep:reservations` are the three jobs
+# below NOT on that nightly schedule — each runs every 5 minutes or faster, because the sweep
+# interval IS the retry/expiry granularity for what it covers (webhook retries down to a minute
+# boundary, a stuck stock commit, a stale reservation hold) — see
+# docs/modules/webhooks.md#the-delivery-path, docs/modules/payments.md#pending-effects and
+# docs/modules/inventory-reservations.md. A query against an indexed field is cheap regardless of
+# how the nightly jobs are staggered, so none of the three needs an offset from them.
 #
 # No output redirects: supercronic hands each job's stdout/stderr straight to its own
 # (`-passthrough-logs`), which is the container's log stream Promtail ships.
