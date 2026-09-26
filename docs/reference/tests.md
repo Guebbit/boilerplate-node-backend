@@ -196,6 +196,19 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 | `tests/unit/support/file-sandbox.test.ts`                       | The file sandbox redirects every file-writing setting, refuses to run or delete outside its root, and attributes a leftover file to the test file that left it.       | [Test layout](#a-test-leaves-no-files-behind)            |
 | `tests/unit/scripts/pairing/spec-identity.test.ts`              | The cross-repo shared-file list and its comparison.                                                                                                                   | [Pairing & Ports](../tools/pairing-and-ports.md)         |
 
+### Why `ts-jest` stays pinned at `29.4.9`
+
+Two packages fail ts-jest's type-check under `module`/`moduleResolution: node16`
+(`tsconfig.jest.json`), while `npx tsc --traceResolution` resolves both fine — reproduced in total
+isolation, so it's ts-jest's resolver, not this repo's tsconfig:
+
+| Package                     | Where it bites                                                    | Workaround                                                                                                                                                        |
+| --------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@typescript-eslint/parser` | `tests/unit/scripts/eslint/typescript-eslint-parser.shim.d.ts`    | an ambient re-export through a relative path, sidestepping the broken bare-specifier lookup — `require` at runtime was never affected, only the static type-check |
+| `@casl/ability`             | any spec importing it under the same ts-jest/`node16` combination | same pin                                                                                                                                                          |
+
+Reworking the resolution strategy is the real fix; pinning `ts-jest` is the workaround until then.
+
 ### `tests/unit/infrastructure/runtime/` and `persistence/`
 
 | File                                                     | What it guarantees                                                                                                          | Read next                                |
