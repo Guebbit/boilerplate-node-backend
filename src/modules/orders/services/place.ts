@@ -1,21 +1,17 @@
 /**
  * @module
- * The one function that writes a new order — the aggregate `crud.ts`'s admin `create` and
- * `@modules/cart`'s checkout both funnel through, so the write itself (freeze the lines, hold the
- * stock, allocate the invoice number, mint a `bank_transfer` reference) exists in exactly one
- * place, in that order (B20): the stock hold is taken BEFORE the order is written, so a refused
- * hold burns neither a row nor an invoice number. Everything caller-specific — payment-method
- * validation, the open-transfer cap, resolving a shipping address/method, cart pre-flight and
- * clearing — stays with the caller; this function only takes what it needs to hold the stock and
- * write the row.
+ * The one function that writes a new order — `crud.ts`'s admin `create` and `@modules/cart`'s
+ * checkout both funnel through it, so the write itself exists in exactly one place.
  *
- * `PlaceOrderOutcome` is a plain verdict, not an HTTP envelope: `create` and checkout map it to
- * their own wire shapes, which differ (`ORDER_INSUFFICIENT_STOCK` vs `CART_INSUFFICIENT_STOCK`) —
- * this function has no opinion on that, the same way `checkOrderLines` never did.
- *
- * The bank-transfer reference is minted here rather than fetched from `payments`: it names a row
- * on THIS collection, so minting it as part of the same write is what makes a retried place unable
- * to mint a second one for the same order.
+ * Order:     freeze the lines, hold the stock, allocate the invoice number, write the row. The
+ *            hold comes BEFORE the write, so a refused hold burns neither a row nor a number.
+ * Verdict:   `PlaceOrderOutcome` is a plain verdict, not an HTTP envelope — `create` and checkout
+ *            map it to their own wire shapes (`ORDER_INSUFFICIENT_STOCK` vs
+ *            `CART_INSUFFICIENT_STOCK`), the same way `checkOrderLines` never opines either.
+ * Scope:     payment-method validation, the open-transfer cap, resolving a shipping
+ *            address/method, cart pre-flight and clearing all stay with the caller.
+ * Reference: the bank-transfer reference is minted here, not fetched from `payments` — it names a
+ *            row on THIS collection, so a retried place can't mint a second one for the order.
  */
 
 import { Types } from 'mongoose';
@@ -94,7 +90,7 @@ export type PlaceOrderOutcome =
  * row. Never rejects on a refusal — `checkOrderLines`/the stock hold answer through the returned
  * verdict, the same convention `checkOrderLines` itself already uses.
  *
- * Hold BEFORE write, deliberately (B20): the id is generated up front and `reserveForOrder` only
+ * Hold BEFORE write, deliberately: the id is generated up front and `reserveForOrder` only
  * ever needs it, so a refused hold writes nothing at all — no order to roll back, no invoice
  * number burned on a sale that never happened. A hold taken and then lost to a failed write is the
  * one case this still has to unwind by hand; a genuine crash between the two leaves only a hold,
@@ -139,12 +135,13 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
     if (!outcome.held)
         return { ok: false, reason: 'insufficient-stock', shortfalls: outcome.shortfalls };
 
-    // Only spent once the hold is secured — a refused reserve above returns before this ever runs,
-    // so a stock refusal no longer burns a sequential invoice number.
-    const invoiceNumber = await allocateInvoiceNumber();
-
-    // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback (B20): the hold is already taken by this point, so a failed order write must give it back rather than leave it standing on a row that was never created
+    // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: the hold is already taken by this point, so a failed invoice allocation or order write must give it back rather than leave it standing on a row that was never created
     try {
+        // Only spent once the hold is secured — a refused reserve above returns before this ever
+        // runs. Allocated INSIDE this try, not before it, so a throw here still releases the hold
+        // instead of leaving it standing with no order and no number spent on it.
+        const invoiceNumber = await allocateInvoiceNumber();
+
         const order = await orderRepository.create({
             _id: orderId,
             userId: toObjectId(input.userId),
