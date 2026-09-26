@@ -61,8 +61,15 @@ const afterCancel = async (
      * callers (a customer cancelling, the sweep's deadline) can race, and exactly
      * one moves the counters. Unchecked here: a hold already expired is an ordinary
      * sequence, the units are already back.
+     *
+     * A release that claims nothing is not automatically a no-op (B2): a PAID order's hold is
+     * `committed`, not `held`, so `releaseForOrder` never matches it — the units already left
+     * `onHand` at payment, not merely `reserved`. `restockForOrder` is what gives those back, and
+     * its own claim (`committed → restocked`) is exactly as safe to call speculatively: a hold
+     * that is anything else claims nothing there either.
      */
-    await inventoryService.releaseForOrder(String(order._id));
+    const released = await inventoryService.releaseForOrder(String(order._id));
+    if (!released) await inventoryService.restockForOrder(String(order._id));
 
     // The fact is announced once, unconditionally — whatever a listener does with it (webhooks'
     // own delivery has its own retry story) is no longer this function's concern.

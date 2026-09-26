@@ -63,7 +63,8 @@ const conditionFor = (
         case StockMovementReason.expire: {
             return { reserved: { $gte: quantity } };
         }
-        case StockMovementReason.receive: {
+        case StockMovementReason.receive:
+        case StockMovementReason.restock: {
             return {};
         }
         case StockMovementReason.adjust: {

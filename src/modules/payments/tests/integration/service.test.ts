@@ -603,6 +603,31 @@ describe('the confirm commits the order’s held units', () => {
 });
 
 /**
+ * B2: cancelling a PAID order only ever released a hold that payment had already turned into a
+ * sale — `releaseForOrder` claims `held → released`, but a paid hold is `committed`, so it matched
+ * nothing and the units were lost from the shelf for good. `restockForOrder` is what gives them
+ * back once the release itself finds nothing to do.
+ */
+describe('cancelling a paid order restocks its units (B2)', () => {
+    it('gives on-hand back, records a restock movement, and refuses a second cancel', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        await payFor(String(order._id), user);
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+
+        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+
+        expect(cancelled.success).toBe(true);
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
+        const movements = await inventoryService.listMovements({ productId: String(product._id) });
+        expect(movements.items.filter((row) => row.reason === 'restock')).toHaveLength(1);
+
+        const second = await orderService.cancelById(String(order._id), auth(user));
+        expect(second.success).toBe(false);
+        expect(asReject(second).status).toBe(409);
+    });
+});
+
+/**
  * B14: a crash between the `succeeded` write and the stock commit used to lose the commit
  * forever — a redelivered webhook stops at the payment's own conditional write (already
  * `succeeded`, so a retry moves nothing) and never reaches the commit again. The `pendingEffects`

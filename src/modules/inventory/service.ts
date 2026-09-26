@@ -390,6 +390,41 @@ export const releaseForOrder = async (
 };
 
 /**
+ * Give a PAID order's committed units back to the shelf — the customer cancelled after payment,
+ * so `commitForOrder` already took them out of `onHand`, not merely out of a hold (B2).
+ *
+ * Same claim-then-act shape as {@link releaseForOrder}, but never merged into it: the sweep only
+ * ever releases a stale HOLD, and folding restock in there would let it put a just-paid order's
+ * units back on sale the moment its unrelated reservation record aged past the sweep's cutoff.
+ * Only a cancel calls this, and only once `releaseForOrder` has already found nothing to release —
+ * see `orders/services/cancel.ts`.
+ *
+ * @param orderId - the order whose committed units are coming back
+ * @returns whether this call was the one that restocked
+ */
+export const restockForOrder = async (orderId: string): Promise<boolean> => {
+    const hold = await reservationRepository.claimStatus(orderId, 'committed', 'restocked');
+    if (!hold) return false;
+
+    for (const { productId, quantity } of hold.items) {
+        const restocked = await applyTransition(
+            StockMovementReason.restock,
+            String(productId),
+            quantity,
+            { reference: orderId }
+        );
+        if (!restocked)
+            // Stryker disable all
+            logger.error(
+                `Inventory: could not restock ${quantity} of product ${String(productId)} for order ${orderId} — the hold was claimed but the counters refused`
+            );
+        // Stryker restore all
+    }
+
+    return true;
+};
+
+/**
  * Are this order's units bound to the lines it currently holds?
  *
  * The hold freezes its own copy of the basket; `held`/`committed` means the counters answer to
@@ -679,6 +714,7 @@ export const inventoryService = {
     reserveForOrder,
     commitForOrder,
     releaseForOrder,
+    restockForOrder,
     isStockBoundToOrder,
     runReservationSweep,
     ensureLevel,
