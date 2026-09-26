@@ -88,6 +88,11 @@ list is checked on every regenerate, so it is never repeated by hand here.
 One collection, two services over it: `/users` (admin) and `/account` (signup, login, reset) both
 write through `userService`, never the collection directly.
 
+`PUT /users/{id}` replaces the record (a field left out reverts to its default); `PATCH /users/{id}`
+merges (a field left out keeps its current value) — the same replace/merge split
+[`request-flow.md`](../theory/request-flow.md) documents for the rest of the API, through the same
+shared factory.
+
 `phone` is stored AES-256-GCM under `NODE_PII_ENCRYPTION_KEY`
 (`@infrastructure/security/pii-encryption`) — `service.ts`'s `update` encrypts it on the one write
 path, `toUser` (`model.ts`) decrypts it on the way out, whether the source document was hydrated or

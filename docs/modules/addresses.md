@@ -67,7 +67,7 @@ import in `module.yaml` is for the event's name constant alone.
 
 ## The pipeline
 
-One collection, four routes, one cross-cutting read.
+One collection, five routes, one cross-cutting read.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
@@ -75,6 +75,7 @@ flowchart LR
     G["GET /account/addresses"] --> B["the book"]
     A["POST /account/addresses"] --> B
     U["PUT /account/addresses/:id"] --> B
+    PA["PATCH /account/addresses/:id"] --> B
     D["DELETE /account/addresses/:id"] --> B
     B -->|"addressForCheckout"| C["cart's checkout"]
     US["users"] -. "user.deleted" .-> X["book deleted"]
@@ -82,7 +83,7 @@ flowchart LR
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
-    class G,A,U,D entry;
+    class G,A,U,PA,D entry;
     class B,X own;
     class C,US peer;
 ```
