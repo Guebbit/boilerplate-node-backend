@@ -191,22 +191,8 @@ describe('POST /users', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    // B25: this 422 already fired on PUT (below); POST skipped the check entirely, so an admin
-    // could hand a brand-new account a password already on every breach list.
-    it('refuses a breached password, and creates no user row', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const response = await api().post('/users').set('Authorization', bearer).send({
-            email: 'breached-create@example.com',
-            username: 'breachedcreateuser',
-            // A listed, composition-valid entry in `breached-passwords/list.txt` — same fixture
-            // `account/tests/integration/service-flows.test.ts` uses for its own breach case.
-            password: 'Password1!'
-        });
-
-        expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
-        expect(await userRepository.findOne({ email: 'breached-create@example.com' })).toBeNull();
-    });
+    // The breach check on create (and that it creates no user row) is table-driven across every
+    // password-set path now, in `tests/contract/password-set-paths.test.ts`.
 });
 
 describe('PUT /users/{id}', () => {
@@ -283,29 +269,8 @@ describe('PUT /users/{id}', () => {
         assertNoCredentials(response.body);
     });
 
-    // B25: this path already ran the breach check inside `userService.update` — no behaviour
-    // change here, only the missing contract-level coverage the box asks for.
-    it('refuses a breached password', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const target = await createUser(
-            { username: 'editbreached', email: 'editbreached@example.com' },
-            'customer'
-        );
-
-        const response = await api()
-            .put(`/users/${String(target._id)}`)
-            .set('Authorization', bearer)
-            .send({
-                email: target.email,
-                username: target.username,
-                role: 'customer',
-                active: true,
-                password: 'Password1!'
-            });
-
-        expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
-    });
+    // The breach check on PUT is table-driven across every password-set path now, in
+    // `tests/contract/password-set-paths.test.ts`.
 });
 
 describe('PATCH /users/{id}', () => {
@@ -381,21 +346,8 @@ describe('PATCH /users/{id}', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('refuses a breached password', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const target = await createUser({
-            username: 'patchbreached',
-            email: 'patchbreached@example.com'
-        });
-
-        const response = await api()
-            .patch(`/users/${String(target._id)}`)
-            .set('Authorization', bearer)
-            .send({ password: 'Password1!' });
-
-        expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
-    });
+    // The breach check on PATCH is table-driven across every password-set path now, in
+    // `tests/contract/password-set-paths.test.ts`.
 });
 
 describe('DELETE /users/{id} — the audit action names which discharge happened', () => {

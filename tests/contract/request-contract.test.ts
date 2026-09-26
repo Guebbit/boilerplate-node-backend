@@ -37,10 +37,12 @@
  * this specific scenario behave correctly".
  */
 import '@tests/contract';
+import type { Response } from 'supertest';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { validPayload, invalidPayloads } from '@tests/contract-data';
+import { listOperations, type SchemaNode } from '@tests/spec-walk';
 import {
     CreateUserBody,
     CreateProductBody,
@@ -311,6 +313,120 @@ describe('POST /account/login (contract-derived, invalid payloads only)', () => 
 
             expect(response.status).toBe(422);
             expect(response.body.success).toBe(false);
+            expect(response).toSatisfyApiSpec();
+        }
+    );
+});
+
+// ─── invalid QUERY parameters ──────────────────────────────────────────────────────────────────
+//
+// Everything above sends a bad BODY. This is the query-side counterpart: every `in: query`
+// parameter the spec constrains with an `enum` or a `pattern` gets one case here, an
+// obviously-violating value against the real route, expecting 422.
+
+/** An admin-authenticated GET against `path`, with `query` appended as-is. */
+const adminQuery =
+    (path: string) =>
+    async (query: string): Promise<Response> => {
+        const { bearer } = await authenticateAs('admin');
+        return api().get(`${path}?${query}`).set('Authorization', bearer);
+    };
+
+/** A locale row real enough for `/locales/{locale}/...` to reach its own query validation, rather than 404ing on an unknown tag first. */
+const withRealLocale = async (): Promise<string> => {
+    const tag = 'qp';
+    await localeRepository.create(makeLocale({ tag, name: tag, nativeName: tag }));
+    return tag;
+};
+
+/** One way to reach an operation with an enum/pattern query parameter, over real HTTP. */
+interface QueryFixture {
+    request: (query: string) => Promise<Response>;
+}
+
+const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
+    'GET /audit': { request: adminQuery('/audit') },
+    'GET /observability/audit': { request: adminQuery('/observability/audit') },
+    'GET /feedback': { request: adminQuery('/feedback') },
+    'GET /orders': { request: adminQuery('/orders') },
+    'GET /inventory/movements': { request: adminQuery('/inventory/movements') },
+    'GET /webhooks/deliveries': { request: adminQuery('/webhooks/deliveries') },
+    'GET /locales/{locale}/messages': {
+        // Public: no `security` on this operation at all.
+        request: async (query) => {
+            const tag = await withRealLocale();
+            return api().get(`/locales/${tag}/messages?${query}`);
+        }
+    },
+    'GET /locales/{locale}/entries': {
+        request: async (query) => {
+            const [tag, { bearer }] = await Promise.all([
+                withRealLocale(),
+                authenticateAs('admin')
+            ]);
+            return api().get(`/locales/${tag}/entries?${query}`).set('Authorization', bearer);
+        }
+    }
+};
+
+/**
+ * (operation, parameter) pairs where a declared enum/pattern violation does NOT answer 422 today
+ * — verified live, not assumed:
+ *
+ * - `GET /locales/{locale}/messages` `tenant`: NOT a bug — `services/messages.ts#readMessages`
+ *   answers 404 for anything that isn't a configured frontend tenant, malformed or merely unknown
+ *   alike, so a 403 or an empty 200 for "wrong kind of tenant" can't leak that a draft translation
+ *   exists under a different (backend) tenant. A malformed id is just one more way to not be a
+ *   frontend tenant.
+ */
+const KNOWN_GAPS = new Set(['GET /locales/{locale}/messages::tenant']);
+
+/** A value that violates `schema`'s `enum` or `pattern` — whichever the field declares. */
+const invalidQueryValue = (schema: SchemaNode): string => {
+    if (schema.enum) return 'not-a-declared-enum-value';
+    if (schema.pattern) {
+        const regex = new RegExp(schema.pattern);
+        // Deliberately not fenced by a range check for exactly-one-char patterns etc.: the goal
+        // is ONE string this pattern refuses, not a generic negation of an arbitrary regex.
+        const candidate = ['INVALID VALUE !!!', '???', '__nope__', ''].find(
+            (value) => !regex.test(value)
+        );
+        if (candidate === undefined)
+            throw new Error(
+                `invalidQueryValue: every candidate satisfies ${schema.pattern} — add a garbage string that doesn't.`
+            );
+        return candidate;
+    }
+    throw new Error('invalidQueryValue: schema has neither enum nor pattern to violate');
+};
+
+/** Every (operation, parameter) pair this sweep can generate a violation for. */
+const QUERY_CASES = listOperations().flatMap((operation) =>
+    operation.queryParameters
+        .filter((param) => param.schema?.enum !== undefined || param.schema?.pattern !== undefined)
+        .map((param) => ({
+            key: `${operation.method.toUpperCase()} ${operation.path}`,
+            paramName: param.name,
+            schema: param.schema!
+        }))
+);
+
+describe('invalid query parameters (contract-derived)', () => {
+    it('has a fixture for every operation with an enum/pattern query parameter', () => {
+        const missing = [...new Set(QUERY_CASES.map(({ key }) => key))].filter(
+            (key) => !(key in QUERY_FIXTURES)
+        );
+        expect(missing).toEqual([]);
+    });
+
+    it.each(QUERY_CASES.filter(({ key, paramName }) => !KNOWN_GAPS.has(`${key}::${paramName}`)))(
+        '$key rejects an invalid $paramName with 422',
+        async ({ key, paramName, schema }) => {
+            const response = await QUERY_FIXTURES[key]!.request(
+                `${paramName}=${encodeURIComponent(invalidQueryValue(schema))}`
+            );
+
+            expect(response.status).toBe(422);
             expect(response).toSatisfyApiSpec();
         }
     );

@@ -12,34 +12,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
 import { codeFor } from '@tests/totp';
-import { createUser, userRepository } from '@modules/users/tests/factories';
+import { userRepository } from '@modules/users/tests/factories';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
-import * as auditPort from '@infrastructure/observability/audit';
-import { observePort } from '@tests/ports';
-import { accountAuditActions } from '../../audit';
-
-/* Replaced, not spied on — see `tests/support/ports.ts` for why. */
-jest.mock('@infrastructure/observability/audit', () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
-        '@infrastructure/observability/audit'
-    );
-    const emitAuditEvent = jest.fn();
-    return {
-        __esModule: true,
-        ...actual,
-        emitAuditEvent,
-        // `recordAudit` closes over its own module's real `emitAuditEvent`, immune to the
-        // override above — reroute it through the replacement so a spy on `emitAuditEvent` still
-        // sees every `recordAudit` call, exactly as it saw every direct one before.
-        recordAudit: (
-            context: Parameters<typeof actual.recordAudit>[0],
-            fields: Parameters<typeof actual.recordAudit>[1]
-        ) => {
-            if (!context) return;
-            emitAuditEvent(actual.buildAuditEvent(context, fields));
-        }
-    };
-});
 
 setupTestDb();
 
@@ -50,7 +24,6 @@ beforeAll(() => {
 afterAll(() => {
     enableDemoProfile(false);
 });
-afterEach(() => jest.restoreAllMocks());
 
 /**
  * A start response's `state` and `verifier` cookies, as one `Cookie` request header — both are
@@ -162,47 +135,8 @@ describe('GET /account/oauth/:provider/callback', () => {
         expect(matches).toBe(1);
     });
 
-    /*
-     * B4: `recordLogin` (services/oauth.ts) used to hardcode `actor_role: 'user'` and never
-     * touched `authLoginTotal` — an admin logging in through a provider was audited as a plain
-     * user, and invisible to the shared login metric every other method reports through.
-     */
-    it('audits an admin already linked to the provider as admin, once, on login', async () => {
-        const admin = await createUser(
-            { email: 'oauth.demo@example.com', verifiedAt: new Date() },
-            'admin'
-        );
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-
-        // First callback: no identity linked yet, email matches — this is the LINK branch, not
-        // login, and audits its own AUTH_OAUTH_LINKED. Cleared before the case under test so only
-        // the second callback's events are asserted.
-        await (async () => {
-            const start = await api().get('/account/oauth/fake');
-            const callbackUrl = new URL(start.headers.location);
-            await api()
-                .get(callbackUrl.pathname + callbackUrl.search)
-                .set('Cookie', attemptCookies(start));
-        })();
-        auditSpy.mockClear();
-
-        const start = await api().get('/account/oauth/fake');
-        const callbackUrl = new URL(start.headers.location);
-        const response = await api()
-            .get(callbackUrl.pathname + callbackUrl.search)
-            .set('Cookie', attemptCookies(start));
-
-        expect(response.status).toBe(302);
-        const loginCalls = auditSpy.mock.calls.filter(
-            ([event]) => event.action === accountAuditActions.AUTH_LOGIN
-        );
-        expect(loginCalls).toHaveLength(1);
-        expect(loginCalls[0][0]).toMatchObject({
-            actor_user_id: admin.id,
-            actor_role: 'admin',
-            outcome: 'success'
-        });
-    });
+    // B4 (an admin logging in through an already-linked identity was audited/metriced as a plain
+    // user): table-driven across every login path now, in `login-paths.contract.test.ts`.
 });
 
 /** One full start → callback round trip through the fake provider. */
@@ -214,41 +148,9 @@ const fakeLogin = async () => {
         .set('Cookie', attemptCookies(start));
 };
 
-/*
- * B24: an already-linked identity used to resolve straight to a session (case 1 in
- * `services/oauth.ts`) regardless of `active`/`deletedAt` — the ONLY thing standing between a
- * deactivated account and a live cookie was the password path's own filter, which OAuth never
- * went through. `verifiedAt` is set here so the fallback this account now falls through to
- * (`findByOAuthIdentity` no longer matches it) reaches the mint-time guard in `jwt.ts` instead of
- * stopping one branch earlier on an unrelated unverified-email check.
- */
-describe('GET /account/oauth/:provider/callback — deactivated/deleted account (B24)', () => {
-    it('refuses the login: redirects with an error, sets no session cookie, audits no AUTH_LOGIN', async () => {
-        const user = await createUser({
-            email: 'oauth.demo@example.com',
-            verifiedAt: new Date(),
-            active: false,
-            deletedAt: new Date()
-        });
-        await userRepository.linkOAuthAccount(user.id, {
-            provider: 'fake',
-            providerId: 'fake-oauth-subject',
-            connectedAt: new Date()
-        });
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-
-        const response = await fakeLogin();
-
-        expect(response.status).toBe(302);
-        expect(response.headers.location).toContain('error=');
-        expect(setCookie(response, 'jwt')).toBeUndefined();
-        expect(setCookie(response, 'isAuth')).toBeUndefined();
-        const loginCalls = auditSpy.mock.calls.filter(
-            ([event]) => event.action === accountAuditActions.AUTH_LOGIN
-        );
-        expect(loginCalls).toHaveLength(0);
-    });
-});
+// A deactivated or soft-deleted account's already-linked identity refusing the login, with no
+// session and no successful AUTH_LOGIN, is table-driven across every login path now, in
+// `login-paths.contract.test.ts`.
 
 describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
     it('challenges instead of minting a session, and mints one only once the code is answered', async () => {
