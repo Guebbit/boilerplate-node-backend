@@ -219,12 +219,20 @@ still land that charge on its own, and recording money too would risk charging t
 attempt that never got that far (`requires_confirmation`, `declined`) is simply overwritten: the row
 becomes the offline one.
 
-**Refunding a `manual` payment moves the status and nothing else.** There is no provider to ask, so
-`refundedByHand` on the payment is the admin's own record that the money actually went back to the
-customer outside this application. Every other refund still dispatches to the provider named on the
-payment's own `provider` field — never the deployment's currently configured one, so a refund of an
-older payment still reaches the provider that actually took the money even after a deployment
-switches to another.
+**Only an operator can say a `manual` refund actually happened.** There is no provider to ask, so
+money that left the system by hand can only be confirmed returned by a person: the automatic
+listener (a customer's own cancel) leaves the payment `succeeded` and writes an unattended
+`payment.refund_owed_by_hand` audit row instead of guessing; `refundByOrder` — already admin-only,
+with the same fresh-session tier as recording one — is the only door that may set
+`refundedByHand: true` (B1b). A cancelled hand-paid order therefore shows `succeeded` until an
+operator confirms it, not "refunded" for money nobody actually moved.
+
+Every other refund dispatches to the provider named on the payment's own `provider` field — never
+the deployment's currently configured one (B1c) — so a refund of an older payment still reaches the
+provider that actually took the money even after a deployment switches to another. The provider is
+asked BEFORE the status moves (B1): a rejection leaves the payment `succeeded`, so the retry sweep
+(`ORDER_REFUND_OWED`, above) can actually retry it, instead of a failed attempt being recorded as a
+successful one.
 
 Requires `payments.any.create`, the same fresh-session tier as a refund (`payments.any.update`) — an
 admin's own word that money arrived is exactly as consequential as one that it left.

@@ -182,6 +182,25 @@ export const cancelById = (
 };
 
 /**
+ * Mark a refund owed outside a cancel — `payments`' own "the money landed on an order no longer
+ * payable" branch (B1) is the one caller: by the time it runs, something else already moved this
+ * order to `cancelled`, so there is no cancel here to carry the marker the way `cancelById` does.
+ * Feeds the same `retryPendingEffects` sweep below, and the same `ORDER_REFUND_OWED` retry path.
+ *
+ * @param orderId - the order whose payment settlement is putting the money back
+ */
+export const markRefundOwed = (orderId: string): Promise<void> =>
+    orderRepository.addPendingEffect(orderId, 'refund');
+
+/**
+ * Discharge {@link markRefundOwed}'s marker once the refund it was written for actually returns.
+ *
+ * @param orderId - the order whose refund just landed
+ */
+export const clearRefundOwed = (orderId: string): Promise<void> =>
+    orderRepository.clearPendingEffect(orderId, 'refund').then(() => undefined);
+
+/**
  * `scripts/ops/sweep-order-effects.ts`'s sweep: the retry behind {@link cancelById}'s marker.
  *
  * Re-announces `ORDER_REFUND_OWED` — never `ORDER_CANCELLED` (B6) — for every order still owing a

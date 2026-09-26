@@ -100,10 +100,19 @@ export interface PaymentProvider {
     retrieve(providerRef: string): Promise<ProviderPaymentState>;
 
     /**
-     * Return the money of a succeeded charge. Idempotent at the provider's side; the caller guards
-     * its own side by only refunding a `succeeded` payment.
+     * Return the money of a succeeded charge.
+     *
+     * `idempotencyKey` is what makes a RETRY of this call safe at the provider, not just at this
+     * application: two calls carrying the same key (`refund:{paymentId}`) return the same refund
+     * rather than returning the money twice — Stripe's own idempotency keys work this way. The
+     * caller's own conditional `succeeded → refunded` write is the other half, for the case where
+     * this application's two callers never reach the provider at the same time to begin with.
      */
-    refund(providerRef: string, charge: { amount: number; currency: string }): Promise<void>;
+    refund(
+        providerRef: string,
+        charge: { amount: number; currency: string },
+        idempotency: { idempotencyKey: string }
+    ): Promise<void>;
 
     /**
      * Turn a raw webhook delivery into an event this module can act on.
@@ -138,4 +147,22 @@ export const resolvePaymentProvider = (): PaymentProvider => {
     // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are keys
     // of PROVIDERS by construction, a guarantee the compiler cannot follow across the call.
     return PROVIDERS[name]!;
+};
+
+/**
+ * The implementation a PAYMENT'S OWN `provider` field names — for confirming, syncing or
+ * refunding a payment already made, which must go back to whichever provider actually took the
+ * money (B1c). `resolvePaymentProvider` answers a different question — which provider a NEW
+ * intent opens under — and the two must not be conflated: a deployment that switches
+ * `NODE_PAYMENT_PROVIDER` must not silently redirect an old payment's refund to the new one.
+ *
+ * @param name - a payment's own `provider` field
+ * @throws {Error} when this build has no implementation registered under that name — dormant
+ *   today (only `fake` is ever written), live the day a second provider is added and a deployment
+ *   switches
+ */
+export const providerNamed = (name: string): PaymentProvider => {
+    const provider = PROVIDERS[name];
+    if (!provider) throw new Error(`Unknown payment provider: ${name}`);
+    return provider;
 };

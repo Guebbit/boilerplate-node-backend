@@ -13,7 +13,12 @@ export const paymentsAuditActions = {
     PAYMENT_CONFIRMED: 'payment.confirmed',
     PAYMENT_FAILED: 'payment.failed',
     ADMIN_PAYMENT_REFUNDED: 'admin.payment.refunded',
-    PAYMENT_RECORDED_OFFLINE: 'payment.recorded_offline'
+    PAYMENT_RECORDED_OFFLINE: 'payment.recorded_offline',
+    /**
+     * A cancel owed a refund on a hand-paid order, and the automatic listener left it alone
+     * (B1b) — only an operator's own `refundByOrder` may say the cash actually went back.
+     */
+    PAYMENT_REFUND_OWED_BY_HAND: 'payment.refund_owed_by_hand'
 } as const;
 
 /** Augments infrastructure's audit action map with this module's own action strings. */

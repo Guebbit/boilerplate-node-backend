@@ -24,11 +24,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { paymentsAnalyticsEvents } from '../analytics';
 import { paymentsAuditActions } from '../audit';
-import {
-    resolvePaymentProvider,
-    type ProviderPaymentState,
-    type ProviderWebhookEvent
-} from '../providers';
+import { providerNamed, type ProviderPaymentState, type ProviderWebhookEvent } from '../providers';
 import { claimWebhookEvent, releaseWebhookEvent, paymentRepository } from '../repository';
 import { CONFIRMABLE_PAYMENT_STATUSES } from '../model';
 import type { PaymentDocument } from '../model';
@@ -144,8 +140,25 @@ export const settlePayment = (
              * straight back — the invariant is the module docblock's rule 2. `performRefund`
              * rather than a bare `provider.refund`, so the payment ends up saying `refunded`
              * and the at-most-once guard is the same one every other refund goes through.
+             *
+             * The marker is written BEFORE the attempt (B1): unlike a cancel, nothing here
+             * retries this call itself, so a throw with no durable note first would lose the
+             * refund exactly like the bug this fixes. A failure is logged, never rethrown — this
+             * settlement must still answer its own caller (a webhook, confirm or sync) — and
+             * `orders`' own `ORDER_REFUND_OWED` sweep is what finishes it if this attempt didn't.
              */
-            const refunded = await performRefund(orderId);
+            await orderService.markRefundOwed(orderId);
+            const refunded = await performRefund(orderId)
+                .then((result) => orderService.clearRefundOwed(orderId).then(() => result))
+                .catch((error: unknown) => {
+                    // Stryker disable all
+                    logger.error({
+                        message: `Payments: could not refund order ${orderId} after its payment landed on an order no longer payable — left for the retry sweep`,
+                        error
+                    });
+                    // Stryker restore all
+                    return null;
+                });
             await paymentRepository.clearPendingEffects(orderId);
             return { payment: refunded ?? succeeded, orderLost: true };
         }
@@ -266,17 +279,18 @@ const findConfirmable = (
  * second one.
  * @param payment - the payment, already read for this caller
  * @param allowed - the statuses this action may run from
- * @param providerCall - the provider-specific action (confirm or re-read), given the payment's own
- *   `providerRef`
+ * @param providerCall - the provider-specific action (confirm or re-read), given the payment
+ *   itself — narrowed to prove `providerRef` is present — so it can reach the provider named on
+ *   THIS payment (B1c) rather than the deployment's currently configured one
  */
 const settleFound = (
     payment: PaymentDocument,
     allowed: readonly PaymentStatus[],
-    providerCall: (providerRef: string) => Promise<ProviderPaymentState>
+    providerCall: (payment: PaymentDocument & { providerRef: string }) => Promise<ProviderPaymentState>
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> => {
     const found = findConfirmable(payment, allowed);
     if ('success' in found) return Promise.resolve(found);
-    return providerCall(found.providerRef)
+    return providerCall(found)
         .then((state) => settlePayment(found, state))
         .then(settlementResponse);
 };
@@ -289,15 +303,14 @@ const settleFound = (
  * @param authContext - the caller; the payment must be theirs
  * @param context - the caller context to audit/analyse the attempt against
  * @param allowed - the statuses this action may run from
- * @param providerCall - the provider-specific action (confirm or re-read), given the payment's own
- *   `providerRef`
+ * @param providerCall - the provider-specific action (confirm or re-read) — see {@link settleFound}
  */
 const settleVia = (
     paymentId: string,
     authContext: AuthContext | undefined,
     context: CallerContext,
     allowed: readonly PaymentStatus[],
-    providerCall: (providerRef: string) => Promise<ProviderPaymentState>
+    providerCall: (payment: PaymentDocument & { providerRef: string }) => Promise<ProviderPaymentState>
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository
         .findByIdScoped(paymentId, callerScope(authContext))
@@ -324,8 +337,8 @@ export const confirmPayment = (
     authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    settleVia(paymentId, authContext, context, CONFIRMABLE_PAYMENT_STATUSES, (providerRef) =>
-        resolvePaymentProvider().confirm(providerRef, paymentMethodRef)
+    settleVia(paymentId, authContext, context, CONFIRMABLE_PAYMENT_STATUSES, (payment) =>
+        providerNamed(payment.provider).confirm(payment.providerRef, paymentMethodRef)
     );
 
 /**
@@ -352,8 +365,8 @@ export const syncPayment = (
             if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status))
                 return generateSuccess(payment, 200);
 
-            return settleFound(payment, SETTLEABLE_PAYMENT_STATUSES, (providerRef) =>
-                resolvePaymentProvider().retrieve(providerRef)
+            return settleFound(payment, SETTLEABLE_PAYMENT_STATUSES, (found) =>
+                providerNamed(found.provider).retrieve(found.providerRef)
             );
         })
         .then((result) => reportAttempt(result, paymentId, context));
