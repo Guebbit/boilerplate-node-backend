@@ -24,13 +24,53 @@ import {
 import {
     createRepository,
     toObjectId,
+    type AppendOnlyLedger,
     type Lean,
     type Repository,
     type Wire
 } from '@infrastructure/persistence/create-repository';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import type { CounterDelta } from './domain';
-import type { StockMovement } from '@types';
+import { StockMovementReason, type StockMovement } from '@types';
+
+/**
+ * Which condition guards a given transition, in Mongo's own filter syntax. Kept here, not in
+ * `service.ts` — `QueryFilter` stays a repository-only import, so a service can only ask this
+ * module to move counters, never hand it a raw Mongo condition to run.
+ *
+ * Stays in step with `counterDeltaFor`'s reason→deltas table (`./domain`) by hand: a manual
+ * invariant with no test of its own; `tests/unit/transitions.test.ts` covers `counterDeltaFor`
+ * itself, not this. `commit` and `adjust` read `onHand`/`reserved` directly rather than
+ * `available`, matching the invariant each protects: a sale must find both real, a correction must
+ * not cut below what's promised.
+ *
+ * @param reason - the transition
+ * @param quantity - how many units; signed only for `adjust`
+ * @returns the Mongo condition `applyDelta` must match for the transition to apply
+ */
+const conditionFor = (
+    reason: StockMovementReason,
+    quantity: number
+): QueryFilter<StockLevelDocument> => {
+    switch (reason) {
+        case StockMovementReason.reserve: {
+            return { available: { $gte: quantity } };
+        }
+        case StockMovementReason.commit: {
+            return { onHand: { $gte: quantity }, reserved: { $gte: quantity } };
+        }
+        case StockMovementReason.release:
+        case StockMovementReason.expire: {
+            return { reserved: { $gte: quantity } };
+        }
+        case StockMovementReason.receive: {
+            return {};
+        }
+        case StockMovementReason.adjust: {
+            return { $expr: { $gte: [{ $add: ['$onHand', quantity] }, '$reserved'] } };
+        }
+    }
+};
 
 /**
  * One row of the stock board — this module's own counters ONLY, no product fields. The title a
@@ -70,7 +110,8 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
     deleteByProductId: (productId: string) => Promise<void>;
     applyDelta: (
         productId: string,
-        condition: QueryFilter<StockLevelDocument>,
+        reason: StockMovementReason,
+        quantity: number,
         delta: CounterDelta
     ) => Promise<boolean>;
     stockBoard: (options: {
@@ -134,15 +175,15 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * to restate the arithmetic `counterDeltaFor` already decided.
      *
      * @param productId - the product whose counters move
-     * @param condition - the transition's own guard, `productId` and `available`/`onHand`/
-     *   `reserved` comparisons — the service layer decides what each transition requires
+     * @param reason - the transition; decides the guard via `conditionFor`
+     * @param quantity - how many units the transition guards for; signed only for `adjust`
      * @param delta - the pair `counterDeltaFor` computed for this transition
      * @returns whether the condition matched and the counters actually moved
      */
-    applyDelta: (productId: string, condition: QueryFilter<StockLevelDocument>, delta) =>
+    applyDelta: (productId: string, reason: StockMovementReason, quantity: number, delta) =>
         stockLevelModel
             .updateOne(
-                { productId: toObjectId(productId), ...condition },
+                { productId: toObjectId(productId), ...conditionFor(reason, quantity) },
                 {
                     $inc: {
                         onHand: delta.onHandDelta,
@@ -221,9 +262,11 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
 
 /**
  * The ledger. Append-only: `create` and `search` are the whole surface — there is deliberately
- * no update or delete, because a trail the application can edit is not a trail.
+ * no update or delete, because a trail the application can edit is not a trail. Typed through
+ * {@link AppendOnlyLedger} rather than the full `Repository`, so `deleteOne` is a compile error
+ * for any caller, not just an unused method.
  */
-export const stockMovementRepository: Repository<StockMovementDocument, StockMovement> =
+export const stockMovementRepository: AppendOnlyLedger<StockMovementDocument, StockMovement> =
     createRepository<StockMovementDocument, StockMovement>(stockMovementModel, {
         transform: applyStockMovementTransform,
         searchable: {

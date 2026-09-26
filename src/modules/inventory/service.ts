@@ -7,7 +7,6 @@
  */
 
 import { Types } from 'mongoose';
-import type { QueryFilter } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import {
@@ -29,7 +28,6 @@ import { counterDeltaFor } from './domain';
 import { reservationTtlMinutes, lowStockThreshold } from './config';
 import { stockLevelRepository, stockMovementRepository, reservationRepository } from './repository';
 import { RESERVATION_EXPIRED } from './events';
-import type { StockLevelDocument } from './model';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
@@ -68,41 +66,6 @@ export interface MovementFilters {
 
 /** How many holds one sweep will expire before asking to be run again. */
 const SWEEP_BATCH_SIZE = 200;
-
-/**
- * Which condition guards a given transition — kept as a table so it stays in sync with
- * `counterDeltaFor`'s reason→deltas table (`./domain`), a manual invariant with no test of its
- * own; `tests/unit/transitions.test.ts` covers `counterDeltaFor` itself, not this function. `commit`
- * and `adjust` read `onHand`/`reserved` directly rather than `available`, matching the invariant
- * each protects: a sale must find both real, a correction must not cut below what's promised.
- *
- * @param reason - the transition
- * @param quantity - how many units; signed only for `adjust`
- * @returns the Mongo condition `applyDelta` must match for the transition to apply
- */
-const conditionFor = (
-    reason: StockMovementReason,
-    quantity: number
-): QueryFilter<StockLevelDocument> => {
-    switch (reason) {
-        case StockMovementReason.reserve: {
-            return { available: { $gte: quantity } };
-        }
-        case StockMovementReason.commit: {
-            return { onHand: { $gte: quantity }, reserved: { $gte: quantity } };
-        }
-        case StockMovementReason.release:
-        case StockMovementReason.expire: {
-            return { reserved: { $gte: quantity } };
-        }
-        case StockMovementReason.receive: {
-            return {};
-        }
-        case StockMovementReason.adjust: {
-            return { $expr: { $gte: [{ $add: ['$onHand', quantity] }, '$reserved'] } };
-        }
-    }
-};
 
 /**
  * Move one product's counters and record why, or do neither.
@@ -145,11 +108,7 @@ const applyTransition = async (
         await stockLevelRepository.ensure(productId);
     }
     const delta = counterDeltaFor(reason, quantity);
-    const moved = await stockLevelRepository.applyDelta(
-        productId,
-        conditionFor(reason, quantity),
-        delta
-    );
+    const moved = await stockLevelRepository.applyDelta(productId, reason, quantity, delta);
     if (!moved) return false;
 
     await stockMovementRepository.create({
