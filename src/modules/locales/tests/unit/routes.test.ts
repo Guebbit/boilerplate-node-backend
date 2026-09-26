@@ -29,6 +29,7 @@ const PUBLIC = ['GET /', 'GET /tenants', 'GET /:locale/messages', 'GET /:locale'
 const ADMIN = [
     'POST /',
     'PUT /:locale',
+    'PATCH /:locale',
     'DELETE /:locale',
     'GET /:locale/entries',
     'POST /:locale/entries',

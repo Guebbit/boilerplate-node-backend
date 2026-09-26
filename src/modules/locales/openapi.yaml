@@ -162,11 +162,44 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [System]
+            summary: Replace a language
+            description: |
+                Replaces a language's display names, writing direction and visibility (RFC 9110
+                §9.3.4 — every writable field is required, none of them has a legal "cleared"
+                state). The tag itself is immutable — it is what every entry references, so
+                changing it would be a rename of the whole dictionary rather than an edit of this
+                record.
+            operationId: replaceLocale
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceLocaleRequest'
+            responses:
+                '200':
+                    description: The updated language
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LanguageEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        patch:
+            tags: [System]
             summary: Edit a language
             description: |
-                Updates a language's display names, writing direction or visibility. The tag itself
-                is immutable — it is what every entry references, so changing it would be a rename
-                of the whole dictionary rather than an edit of this record.
+                Merges a language's display names, writing direction or visibility (RFC 7396, an
+                omitted field is left unchanged). The tag itself is immutable — it is what every
+                entry references, so changing it would be a rename of the whole dictionary rather
+                than an edit of this record.
             operationId: updateLocale
             security:
                 - bearerAuth: []
@@ -1009,6 +1042,26 @@ components:
                 active:
                     type: boolean
                     default: true
+
+        # PUT /locales/{locale} — RFC 9110 §9.3.4: the body IS the new resource. Every field is
+        # required because none of the four has a legal "cleared" state — `name`/`nativeName` are
+        # always set, and `direction`/`active` always hold a concrete value (a Mongoose schema
+        # default, never an absence).
+        ReplaceLocaleRequest:
+            type: object
+            additionalProperties: false
+            required: [name, nativeName, direction, active]
+            properties:
+                name:
+                    type: string
+                    minLength: 1
+                nativeName:
+                    type: string
+                    minLength: 1
+                direction:
+                    $ref: '#/components/schemas/LocaleDirection'
+                active:
+                    type: boolean
 
         UpdateLocaleRequest:
             type: object

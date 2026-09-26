@@ -18,7 +18,8 @@ import { localeService } from './services';
 import { getLocales, getLocaleDictionary } from './controllers/get-locales';
 import { getLocaleMessages } from './controllers/get-locale-messages';
 import { getLocaleTenants } from './controllers/get-locale-tenants';
-import { createLocale, updateLocale } from './controllers/write-locales';
+import { createLocale } from './controllers/create-locale';
+import { replaceLocale, updateLocale } from './controllers/update-locale';
 import { deleteLocale } from './controllers/delete-locale';
 import { getLocaleEntries } from './controllers/get-locale-entries';
 import {
@@ -82,7 +83,16 @@ router.post(
     invalidateCache(['locales']),
     createLocale
 );
+// PUT /locales/:locale (replace) and PATCH /locales/:locale (merge).
 router.put(
+    '/:locale',
+    getAuth,
+    isAuthOrCredential,
+    requirePermission('locales.any.update'),
+    invalidateCache(['locales']),
+    replaceLocale
+);
+router.patch(
     '/:locale',
     getAuth,
     isAuthOrCredential,
