@@ -1646,6 +1646,10 @@ paths:
         $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1subscriptions'
     /webhooks/subscriptions/{id}:
         $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1subscriptions~1{id}'
+    /webhooks/subscriptions/{id}/rotate-secret:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1subscriptions~1{id}~1rotate-secret'
+    /webhooks/subscriptions/{id}/secrets/{secretId}:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1subscriptions~1{id}~1secrets~1{secretId}'
     /webhooks/deliveries:
         $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1deliveries'
     /webhooks/deliveries/{id}/replay:

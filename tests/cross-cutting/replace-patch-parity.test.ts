@@ -81,7 +81,8 @@ describe('Replace/Update schema parity', () => {
             'FeedbackRequestStatus',
             'Locale',
             'Product',
-            'UserById'
+            'UserById',
+            'WebhookSubscription'
         ]);
     });
 

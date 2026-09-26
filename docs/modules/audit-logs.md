@@ -49,13 +49,16 @@ narrower one.
 ::: tip How ~53 call sites reach a module nothing imports, for the WRITE
 They do not — and this is still true despite the module now having a router. Every
 `emitAuditEvent` call in the app talks to `@infrastructure/observability/audit`, which knows only
-that a sink _may_ exist. **This module installs that sink itself, at import time** — the same way
-it hands `basePath`/`routes` to the app tier for the read side.
+that a sink _may_ exist. **This module installs that sink itself, from its own `onRegistered`
+hook** — run once every enabled module is known, not merely on import, the same way it hands
+`basePath`/`routes` to the app tier for the read side.
 
 Registering a function is not a database call: `record` is fire-and-forget and only touches Mongo
 when an entry actually fires, which cannot happen before the app serves a request. Doing it here
-rather than in `app.ts` is what keeps the assembly file from naming a domain. With this module
-deleted, the audit trail stops being stored and everything else still builds.
+rather than in `app.ts` is what keeps the assembly file from naming a domain, and doing it from
+`onRegistered` rather than at import time means importing this file for a type or a test no longer
+installs the sink too. With this module deleted, the audit trail stops being stored and everything
+else still builds.
 :::
 
 Retention is a database fact, not a cron job: `expireAfterSeconds: 7776000` on `timestamp` is
@@ -96,7 +99,7 @@ ordinary routes, in two different modules, over one collection.
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     C["~53 call sites<br/><i>emitAuditEvent</i>"] --> P["@infrastructure/observability/audit<br/><i>knows only that a sink may exist</i>"]
-    P -.->|"the sink, installed at import time"| R["record<br/><i>fire-and-forget</i>"]
+    P -.->|"the sink, installed by onRegistered"| R["record<br/><i>fire-and-forget</i>"]
     R --> M[("auditlogs")]
     M -->|"TTL · expireAfterSeconds 7776000"| X(("gone after<br/>90 days"))
     O["observability<br/><i>GET /observability/audit</i><br/>platform.observability.any.read"] --> M

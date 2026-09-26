@@ -15,9 +15,7 @@ import { userService } from '@modules/users';
 import { assignRole } from '@modules/access';
 import { permissionsOfRole } from '@kernel/permissions';
 import { resolveCredential } from '@kernel/authentication';
-// `module.ts`'s side effect (`registerCredentialResolver`) is what makes `resolveCredential`
-// answer anything at all — importing the module is what a real boot does.
-import '@modules/api-keys/module';
+import apiKeysModule from '@modules/api-keys/module';
 import { mint, revoke } from '@modules/api-keys/services/api-keys';
 import { apiKeyRepository } from '@modules/api-keys/repository';
 import { mintApiKey } from '@modules/api-keys/credentials';
@@ -27,6 +25,10 @@ import { resetDomainEvents } from '@kernel/events';
 import { enabledModules } from '../../../../modules';
 
 setupTestDb();
+
+// `onRegistered`'s `registerCredentialResolver` call is what makes `resolveCredential` answer
+// anything at all — running it here is what a real boot does once this module is enabled (D15).
+apiKeysModule.onRegistered?.();
 
 /** A real, persisted user this suite can change the ROLE of between mint and use. */
 const createRealUser = (id: string) =>

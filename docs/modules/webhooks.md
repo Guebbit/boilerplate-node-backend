@@ -181,8 +181,10 @@ claim ever ran. Now:
 `webhook-id`/`webhook-timestamp`/`webhook-signature` headers a growing set of the ecosystem already
 verifies with no custom code — the format is the interoperable part; the ~30 lines of `node:crypto`
 around it are not worth a dependency. A subscription's secret ring is a list, not one value, so
-`PATCH .../subscriptions/:id` can rotate without downtime: two active secrets sign two
-space-separated `v1,...` values in one header during the overlap.
+`POST .../subscriptions/:id/rotate-secret` can rotate without downtime: two active secrets sign
+two space-separated `v1,...` values in one header during the overlap, until
+`DELETE .../secrets/:secretId` drops the old one. Split from `PUT`/`PATCH .../subscriptions/:id`
+on purpose — a command, not state, gets its own route rather than a flag on the update body.
 
 **The body is the Standard Webhooks envelope too.** `{ type, timestamp, data }` — `type` is the
 event name (`order.created`, `payment.failed`, …), `timestamp` is when the event occurred (fixed
@@ -209,7 +211,7 @@ its own `asyncapi.yaml` fragment and changes nothing else.
 ## Managing it
 
 Subscriptions, the secret ring and the delivery log all have an admin screen now, in the paired
-`boilerplate-vue-frontend` — `webhooks` there, its own five routes over this module's seven
+`boilerplate-vue-frontend` — `webhooks` there, its own five routes over this module's ten
 endpoints. "Usable via any HTTP client" is still true (nothing here requires the UI), but no longer
 the only way in. See that repo's `docs/modules/webhooks.md` for the client side, including why
 `rotateSecret`'s response never gets cached client-side.

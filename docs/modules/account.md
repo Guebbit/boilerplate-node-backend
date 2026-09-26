@@ -37,9 +37,10 @@ flowchart LR
 ## The story
 
 This module answers the kernel's one question: **who is making this request?** It registers an
-auth resolver at import time — not in a boot step — because installing a function touches no
-connection, and every guard in the application depends on it existing before the first request
-arrives.
+auth resolver from its own `onRegistered` hook — run once every enabled module is known, not
+merely on import — because installing a function touches no connection, and every guard in the
+application depends on it existing before the first request arrives. Registering there rather than
+at import time means importing this file for a type or a test no longer installs the resolver too.
 
 It owns no collection of its own. The User record belongs to [`users`](./users.md) and is reached
 through that module's barrel; the address book that used to live here moved to its own module,

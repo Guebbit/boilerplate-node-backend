@@ -10,6 +10,8 @@
 export const webhooksAuditActions = {
     ADMIN_WEBHOOK_SUBSCRIPTION_CREATED: 'admin.webhook_subscription.created',
     ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED: 'admin.webhook_subscription.updated',
+    ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_ROTATED: 'admin.webhook_subscription.secret_rotated',
+    ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_REMOVED: 'admin.webhook_subscription.secret_removed',
     ADMIN_WEBHOOK_SUBSCRIPTION_DELETED: 'admin.webhook_subscription.deleted',
     ADMIN_WEBHOOK_DELIVERY_REPLAYED: 'admin.webhook_delivery.replayed',
     /** `system.` — no caller behind it: `services/attempt.ts`'s own consecutive-failure streak

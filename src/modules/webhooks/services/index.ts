@@ -23,6 +23,8 @@ export const webhooksService = {
     listSubscriptions: subscriptions.list,
     createSubscription: subscriptions.create,
     updateSubscription: subscriptions.update,
+    rotateSubscriptionSecret: subscriptions.rotateSecret,
+    removeSubscriptionSecret: subscriptions.removeSecret,
     removeSubscription: subscriptions.remove,
     listDeliveries: deliveries.list,
     replayDelivery: deliveries.replay
