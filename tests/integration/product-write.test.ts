@@ -14,11 +14,14 @@ import type { ProductDocument } from '@modules/products';
 import { translationRepository } from '@modules/locales/repository';
 import { givenLocale } from '@modules/locales/tests/factories';
 import { localeService } from '@modules/locales/services';
-// Imported for its side effect: loading the module list runs `locales/module.ts`'s import-time
-// `registerTranslationPort` — the only legal way `products` reaches translation data.
-import '../../src/modules';
+import { registerModules } from '@kernel/registry';
+import localesModule from '@modules/locales/module';
 
 setupTestDb();
+
+// `registerModules` runs locales' `onRegistered` (D15), which is the only thing that installs
+// the translation port `products` writes through — importing the module list is no longer enough.
+beforeAll(() => registerModules([localesModule]));
 
 beforeAll(() => {
     localeService.setTranslatables({
