@@ -130,6 +130,13 @@ export const create = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const passwordProvided = nonBlankPassword(data.password);
 
+    // Neither a password nor a way to get one to the user: `userRepository.create` below would
+    // fill the field with a value nobody is ever told, and the account would be permanently
+    // unusable. Enforced HERE, not only in the controller that used to be the one caller — any
+    // other caller of this service must trip the same rule.
+    if (!passwordProvided && !data.sendSetupEmail)
+        return Promise.resolve(generateReject(422, [t('users.field-password-or-setup-required')]));
+
     // Checked before anything is written — same rule `update` follows. Only ever run against an
     // OPERATOR-SUPPLIED password: the generated fallback just below is 32 random bytes, and
     // checking a value nobody chose against a breach list would only ever waste the round trip.
