@@ -119,12 +119,12 @@ what a route guard and a listing actually answer.
 | `guest`      | r        | —    | —      | —        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
 | `unverified` | r        | —    | r      | r        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
 | `customer`   | r        | x    | r      | r        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
-| `manager`    | RCUD     | x    | RCUD   | r        | R         | R        | R        | RCUD    | R     | —       | R          | RCUD     | —        | —             |
-| `warehouse`  | r        | x    | R      | —        | RC        | RU       | —        | r       | —     | —       | —          | —        | —        | —             |
+| `manager`    | RCUD     | x    | RCUD   | r        | R         | RSTART   | R        | RCUD    | R     | —       | R          | RCUD     | —        | —             |
+| `warehouse`  | r        | x    | R      | —        | RC        | RUSTART  | —        | r       | —     | —       | —          | —        | —        | —             |
 | `support`    | r        | x    | R      | R        | —         | R        | RUD      | r       | RU    | —       | R          | —        | —        | —             |
 | `editor`     | RCUD     | x    | —      | —        | —         | R        | —        | RCUD    | —     | —       | —          | —        | —        | —             |
 | `moderator`  | r        | x    | RCUD   | RCU      | —         | R        | —        | r       | RCUD  | —       | R          | —        | —        | —             |
-| `admin`      | RCUD     | x    | RCUDO  | RCU      | RCS       | RU       | RUD      | RCUD    | RCUD  | D       | R          | RCUD     | RCD      | —             |
+| `admin`      | RCUD     | x    | RCUDO  | RCU      | RCS       | RUSTART  | RUD      | RCUD    | RCUD  | D       | R          | RCUD     | RCD      | —             |
 | `operator`   | —        | —    | —      | —        | —         | —        | —        | —       | —     | —       | —          | —        | —        | R             |
 
 UPPERCASE — the `any`-breadth key, every row · lowercase — `self`, the caller’s own · `r` read · `c` create · `u` update · `d` delete · `x` checkout · `s` sweep · `o` override · — nothing

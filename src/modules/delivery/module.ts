@@ -24,7 +24,7 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
-    permissions: ['delivery.any.read', 'delivery.any.update'],
+    permissions: ['delivery.any.read', 'delivery.any.update', 'delivery.any.start'],
     routes: router,
     personalData: [
         {

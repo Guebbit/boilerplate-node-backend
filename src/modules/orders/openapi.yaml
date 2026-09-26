@@ -181,7 +181,11 @@ paths:
         put:
             tags: [Orders]
             summary: Edit order
-            description: Updates the order identified by `{id}` in the path.
+            description: >-
+                Updates the order identified by `{id}` in the path. `email` is the only writable
+                field — `status` moves only through an action endpoint
+                (`POST /orders/{id}/cancel`, `POST /orders/{id}/status-override`), never a field
+                on this body. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
             operationId: updateOrderById
             security:
                 - bearerAuth: []
@@ -203,14 +207,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Two refusals share this status, told apart by `errors[].code`:
-                #  - `ORDER_TRANSITION_NOT_ALLOWED` — a move the lifecycle does not have, such as
-                #    `delivered` on a `pending` order, or `paid` on anything (only a confirmed
-                #    payment writes that). `errors[].details` carries `{ from, to, allowed }` so a
-                #    client can offer the moves that ARE open.
-                #  - `ORDER_CANCEL_VIA_CANCEL_ENDPOINT` — `cancelled` is a legal move and not a
-                #    field: it releases the held stock and refunds. Use `POST /orders/{id}/cancel`.
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         # Same as DELETE /orders
@@ -500,14 +496,14 @@ components:
                         $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
             description: Create a new order.
 
+        # `status` is deliberately not a field here — see the route's own description. Moving it
+        # through this body let an admin write `paid → shipped` directly, skipping `processing`
+        # entirely, and saved `email` before a refused status move could 409, a half-applied
+        # write; both are now impossible by construction.
         UpdateOrderByIdRequest:
             type: object
             additionalProperties: false
             properties:
-                status:
-                    type: string
-                    enum: [pending, paid, processing, shipped, delivered, cancelled]
-                    description: Updated order status
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
 

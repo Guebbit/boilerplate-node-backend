@@ -13,7 +13,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { cartService } from '../../services';
 import { orderService } from '@modules/orders';
-import { orderRepository, readOrder } from '@modules/orders/tests/factories';
+import { orderRepository, readOrder, countOrders } from '@modules/orders/tests/factories';
 import { inventoryService } from '@modules/inventory';
 import { cartRepository } from '@modules/cart/repository';
 import { logger } from '@infrastructure/adapters/logger';
@@ -227,25 +227,18 @@ describe('a rollback that itself fails', () => {
         jest.restoreAllMocks();
     });
 
-    it('answers the refusal, not a 500, when the order cannot be deleted', async () => {
+    /*
+     * B20: the hold is taken BEFORE the order is written, so a refused reserve now has no order
+     * to roll back at all — `orderRepository.create`/`deleteOne` and the invoice counter are
+     * never reached. This replaces a test that forced `reserveForOrder` to refuse AFTER the write
+     * and asserted the (then-necessary) rollback-of-a-rollback; that scenario is unreachable now.
+     */
+    it('writes no order and burns no invoice number when the hold is refused', async () => {
         const user = await createUser();
-        const product = await createProduct({ onHand: 5 });
+        const product = await createProduct({ onHand: 1 });
         await cartService.cartItemAddById(user.id, String(product._id), 2);
-        const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
-        // Refused by the RESERVE, not the pre-flight — the only path that writes an order and
-        // then has to take it back. Forced rather than raced, so the branch is reached every run.
-        jest.spyOn(inventoryService, 'reserveForOrder').mockResolvedValue({
-            held: false,
-            shortfalls: [
-                {
-                    productId: String(product._id),
-                    title: product.title,
-                    requested: 2,
-                    available: 0
-                }
-            ]
-        });
-        jest.spyOn(orderRepository, 'deleteOne').mockRejectedValue(new Error('mongo is down'));
+        const createSpy = jest.spyOn(orderRepository, 'create');
+        const counterSpy = jest.spyOn(orderRepository, 'incrementInvoiceCounter');
 
         const result = await cartService.orderConfirm(
             user.id,
@@ -254,16 +247,11 @@ describe('a rollback that itself fails', () => {
             'pickup'
         );
 
-        // The checkout failed on stock; a broken cleanup must not relabel that as a server
-        // error, or the customer is told to retry something that cannot succeed.
         expect(result.success).toBe(false);
-        expect(result.status).toBe(409);
         expect(!result.success && result.errors[0]?.code).toBe('CART_INSUFFICIENT_STOCK');
-        // The reserve already deleted the hold row, so no sweep can find the order left
-        // behind — this log is the only trace it ever existed.
-        expect(logged).toHaveBeenCalledWith(
-            expect.objectContaining({ message: 'Rollback: order not deleted' })
-        );
+        expect(createSpy).not.toHaveBeenCalled();
+        expect(counterSpy).not.toHaveBeenCalled();
+        expect(await countOrders({ userId: user._id })).toBe(0);
     });
 
     it('still retracts the order when the hold refuses to release', async () => {
@@ -292,11 +280,12 @@ describe('a rollback that itself fails', () => {
         expect(deleted).toHaveBeenCalledTimes(1);
     });
 
-    it('answers the admin create refusal too when the order cannot be deleted', async () => {
+    // B20, the admin-create door: same shared `placeOrder`, so the same "nothing written" rule.
+    it('writes no order and burns no invoice number when the admin create is refused', async () => {
         const user = await createUser();
         const scarce = await createProduct({ onHand: 1 });
-        const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
-        jest.spyOn(orderRepository, 'deleteOne').mockRejectedValue(new Error('mongo is down'));
+        const createSpy = jest.spyOn(orderRepository, 'create');
+        const counterSpy = jest.spyOn(orderRepository, 'incrementInvoiceCounter');
 
         const result = await orderService.create(
             user.id,
@@ -305,14 +294,35 @@ describe('a rollback that itself fails', () => {
             testCallerContext
         );
 
-        // Same compensation as checkout, so the same rule: the stock refusal is the honest
-        // answer, and a broken cleanup does not get to overwrite it with a 500.
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
         expect(!result.success && result.errors[0]?.code).toBe('ORDER_INSUFFICIENT_STOCK');
-        expect(logged).toHaveBeenCalledWith(
-            expect.objectContaining({ message: 'Rollback: order not deleted' })
-        );
+        expect(createSpy).not.toHaveBeenCalled();
+        expect(counterSpy).not.toHaveBeenCalled();
+        expect(await countOrders({ userId: user._id })).toBe(0);
+    });
+
+    /*
+     * B20's other half: once the hold IS taken, a write that fails must give it back rather than
+     * leave a hold standing on a row that was never created.
+     */
+    it('gives the hold back when the order write itself fails', async () => {
+        const user = await createUser();
+        const product = await createProduct({ onHand: 5 });
+        jest.spyOn(orderRepository, 'create').mockRejectedValueOnce(new Error('mongo is down'));
+
+        await expect(
+            orderService.create(
+                user.id,
+                user.email,
+                [{ productId: String(product._id), quantity: 2 }],
+                testCallerContext
+            )
+        ).rejects.toThrow('mongo is down');
+
+        // The write never happened, so the hold it would have belonged to must not linger either.
+        expect(await countersOf(product._id)).toEqual({ onHand: 5, reserved: 0, available: 5 });
+        expect(await countOrders({ userId: user._id })).toBe(0);
     });
 });
 

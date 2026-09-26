@@ -182,6 +182,17 @@ describe('updateProfile', () => {
         expect(response.data.pendingEmail).toBeUndefined();
     });
 
+    it('restating the current address in a different case is a no-op too (B5)', async () => {
+        const user = await createUser({ email: 'same@example.com', verifiedAt: new Date() });
+
+        const response = asSuccess(
+            await updateProfile(user.id, { email: 'SAME@Example.com' }, testCallerContext)
+        );
+
+        expect(response.data.verifiedAt).toEqual(user.verifiedAt);
+        expect(response.data.pendingEmail).toBeUndefined();
+    });
+
     it('restating the CURRENT address is a no-op — a pending change survives it', async () => {
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
         await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);

@@ -32,23 +32,26 @@ describe('counterDeltaFor', () => {
         [StockMovementReason.release, { onHandDelta: 0, reservedDelta: -3 }],
         [StockMovementReason.expire, { onHandDelta: 0, reservedDelta: -3 }],
         [StockMovementReason.receive, { onHandDelta: 3, reservedDelta: 0 }],
-        [StockMovementReason.adjust, { onHandDelta: 3, reservedDelta: 0 }]
+        [StockMovementReason.adjust, { onHandDelta: 3, reservedDelta: 0 }],
+        [StockMovementReason.restock, { onHandDelta: 3, reservedDelta: 0 }]
     ])('gives %s the contract-documented signed delta', (reason, expected) => {
         expect(counterDeltaFor(reason, 3)).toEqual(expected);
     });
 
-    it('lets only a receipt or an adjustment change how many units exist', () => {
+    it('lets only a sale, a receipt, an adjustment or a restock change how many units exist', () => {
         const changesOnHand = EVERY_REASON.filter(
             (reason) => counterDeltaFor(reason, 5).onHandDelta !== 0
         );
 
         // `commit` is here too, and that is correct — a sale removes units. The point of the
-        // assertion is that nothing a CUSTOMER does before paying appears in this list.
+        // assertion is that nothing a CUSTOMER does before paying, or before cancelling a hold
+        // that never became a sale, appears in this list.
         expect(changesOnHand.toSorted()).toEqual(
             [
                 StockMovementReason.commit,
                 StockMovementReason.receive,
-                StockMovementReason.adjust
+                StockMovementReason.adjust,
+                StockMovementReason.restock
             ].toSorted()
         );
     });

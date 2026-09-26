@@ -40,9 +40,8 @@ export const scopeOfKey = (key: string): AuthorizationScope =>
  * The action vocabulary a declared KEY may carry, as a runtime array so both the type below and
  * the Zod schema that validates the shared YAML are drawn from the one list. `manage` is
  * deliberately absent: there is no wildcard of any kind, so nothing declares it as ITS action.
- * `checkout` and `sweep` are the two additions beyond CASL's own CRUD set —
- * `cart.self.checkout`'s and `inventory.any.sweep`'s actions, and nowhere else. See each key's own
- * description in `shared/authorization-keys.yaml`.
+ * `checkout`, `sweep`, `override` and `start` are the four additions beyond CASL's own CRUD set —
+ * each one's own key in `shared/authorization-keys.yaml` says why CRUD couldn't say the thing.
  */
 const PERMISSION_ACTIONS = [
     'read',
@@ -51,7 +50,8 @@ const PERMISSION_ACTIONS = [
     'delete',
     'checkout',
     'sweep',
-    'override'
+    'override',
+    'start'
 ] as const;
 
 /** See {@link PERMISSION_ACTIONS}. */

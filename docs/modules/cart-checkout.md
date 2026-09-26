@@ -31,7 +31,7 @@ flowchart TD
     B --> C["5 · resolve the address,<br/>only when the method needs one<br/><i>account — addressForCheckout</i>"]
     C --> D["6 · join the lines against the catalogue<br/><i>products</i>"]
     D --> E["7 · evaluate the rules,<br/>the method/address requirement,<br/>and the method's weight range<br/><i>cart/domain — evaluateShippingRequirement, basketWeight</i>"]
-    E --> F["8 · placeOrder<br/><i>orders — freeze lines, invoice number,<br/>mint transfer reference, hold stock, write</i>"]
+    E --> F["8 · placeOrder<br/><i>orders — freeze lines, hold stock,<br/>invoice number, mint transfer reference, write</i>"]
     F --> H["9 · empty the cart, conditionally<br/><i>cart — on the __v it was read at</i>"]
     H --> I["10 · queue the email<br/><i>orders picks confirmation vs. transfer<br/>instructions off the order's paymentMethod</i>"]
 

@@ -445,16 +445,20 @@ describe('PUT /orders/{id}', () => {
 
     // `items`/`userId` are legal on `POST /orders` (create) but not here — rewriting frozen,
     // already-invoiced lines has no safe meaning (see `services/crud.ts`'s `update`), and
-    // reassigning the owner belongs to a support tool, not this endpoint. `additionalProperties:
-    // false` on `UpdateOrderByIdRequest` is what actually enforces it; this pins that a real HTTP
-    // request hits that refusal, not just the generated Zod schema in isolation.
-    it.each(['items', 'userId'])('rejects a body carrying `%s`', async (field) => {
+    // reassigning the owner belongs to a support tool, not this endpoint. `status` left this body
+    // entirely with SH1 — it moves only through an action endpoint now (see the route's own
+    // description). `additionalProperties: false` on `UpdateOrderByIdRequest` is what actually
+    // enforces all three; this pins that a real HTTP request hits that refusal, not just the
+    // generated Zod schema in isolation.
+    it.each(['items', 'userId', 'status'])('rejects a body carrying `%s`', async (field) => {
         const { bearer, user } = await authenticateAs('admin');
         const order = await seedOrderFor(user);
         const extra =
             field === 'items'
                 ? { items: [{ productId: String(user._id), quantity: 1 }] }
-                : { userId: String(user._id) };
+                : field === 'userId'
+                  ? { userId: String(user._id) }
+                  : { status: 'processing' };
 
         const response = await api()
             .put(`/orders/${String(order._id)}`)

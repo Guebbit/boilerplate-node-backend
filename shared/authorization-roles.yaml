@@ -91,6 +91,9 @@ roles:
           - payments.self.read
           - inventory.any.read
           - delivery.any.read
+          # `paid → processing` left `orders.any.update`'s reach with SH1 — a manager still needs
+          # to start fulfilment on an order, the same as before, through this door instead.
+          - delivery.any.start
           - feedback.any.read
           - users.any.read
           - audit.any.read
@@ -116,6 +119,9 @@ roles:
           - inventory.any.create
           - delivery.any.read
           - delivery.any.update
+          # The fix this plan exists for, part two: starting work on a paid order no longer needs
+          # a manager's `orders.any.update` first — this is the warehouse's own door for it.
+          - delivery.any.start
           - cart.self.checkout
 
     - name: support
@@ -218,6 +224,7 @@ roles:
           - inventory.any.sweep
           - delivery.any.read
           - delivery.any.update
+          - delivery.any.start
           - feedback.any.read
           - feedback.any.update
           - feedback.any.delete

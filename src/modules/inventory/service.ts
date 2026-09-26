@@ -7,7 +7,6 @@
  */
 
 import { Types } from 'mongoose';
-import type { QueryFilter } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import {
@@ -29,7 +28,7 @@ import { counterDeltaFor } from './domain';
 import { reservationTtlMinutes, lowStockThreshold } from './config';
 import { stockLevelRepository, stockMovementRepository, reservationRepository } from './repository';
 import { RESERVATION_EXPIRED } from './events';
-import type { StockLevelDocument } from './model';
+import type { ReservationDocument } from './model';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
@@ -68,41 +67,6 @@ export interface MovementFilters {
 
 /** How many holds one sweep will expire before asking to be run again. */
 const SWEEP_BATCH_SIZE = 200;
-
-/**
- * Which condition guards a given transition — kept as a table so it stays in sync with
- * `counterDeltaFor`'s reason→deltas table (`./domain`), a manual invariant with no test of its
- * own; `tests/unit/transitions.test.ts` covers `counterDeltaFor` itself, not this function. `commit`
- * and `adjust` read `onHand`/`reserved` directly rather than `available`, matching the invariant
- * each protects: a sale must find both real, a correction must not cut below what's promised.
- *
- * @param reason - the transition
- * @param quantity - how many units; signed only for `adjust`
- * @returns the Mongo condition `applyDelta` must match for the transition to apply
- */
-const conditionFor = (
-    reason: StockMovementReason,
-    quantity: number
-): QueryFilter<StockLevelDocument> => {
-    switch (reason) {
-        case StockMovementReason.reserve: {
-            return { available: { $gte: quantity } };
-        }
-        case StockMovementReason.commit: {
-            return { onHand: { $gte: quantity }, reserved: { $gte: quantity } };
-        }
-        case StockMovementReason.release:
-        case StockMovementReason.expire: {
-            return { reserved: { $gte: quantity } };
-        }
-        case StockMovementReason.receive: {
-            return {};
-        }
-        case StockMovementReason.adjust: {
-            return { $expr: { $gte: [{ $add: ['$onHand', quantity] }, '$reserved'] } };
-        }
-    }
-};
 
 /**
  * Move one product's counters and record why, or do neither.
@@ -145,11 +109,7 @@ const applyTransition = async (
         await stockLevelRepository.ensure(productId);
     }
     const delta = counterDeltaFor(reason, quantity);
-    const moved = await stockLevelRepository.applyDelta(
-        productId,
-        conditionFor(reason, quantity),
-        delta
-    );
+    const moved = await stockLevelRepository.applyDelta(productId, reason, quantity, delta);
     if (!moved) return false;
 
     await stockMovementRepository.create({
@@ -200,6 +160,53 @@ const levelFor = async (productId: string): Promise<InventoryLevel | null> => {
 };
 
 /**
+ * Give back every line already taken for a reserve that will not complete, and delete the hold
+ * that named them — shared by a refused line and a line whose write threw.
+ *
+ * The hold is narrowed to `taken` FIRST, before a single counter moves: a crash partway through
+ * this cleanup then leaves a hold that still names only real reservations, never a line whose
+ * counters were never touched — the exact leak B15 fixes (`docs/modules/inventory-reservations.md`).
+ * Each release is logged rather than allowed to throw, so one failed give-back doesn't stop the
+ * others or hide which line it was.
+ *
+ * @param orderId - the order whose reserve is being unwound
+ * @param taken - the lines actually taken before the refusal or throw
+ * @param hold - the hold document to delete once its lines are given back
+ * @param note - why the ledger shows this release
+ */
+const giveBackAndDeleteHold = async (
+    orderId: string,
+    taken: readonly StockLine[],
+    hold: ReservationDocument,
+    note: string
+): Promise<void> => {
+    await reservationRepository.narrowToTaken(orderId, taken);
+    await Promise.all(
+        taken.map((line) =>
+            applyTransition(StockMovementReason.release, line.productId, line.quantity, {
+                reference: orderId,
+                note
+            }).catch((error: unknown) => {
+                // Stryker disable all
+                logger.error({
+                    message: `Inventory: could not release ${line.quantity} of product ${line.productId} while rolling back a failed reserve for order ${orderId}`,
+                    error
+                });
+                // Stryker restore all
+            })
+        )
+    );
+    await reservationRepository.deleteOne(hold).catch((error: unknown) => {
+        // Stryker disable all
+        logger.error({
+            message: `Inventory: could not delete the hold for order ${orderId} after rolling back its reserve`,
+            error
+        });
+        // Stryker restore all
+    });
+};
+
+/**
  * Hold every line for an order, or hold none of it.
  *
  * Exactly-once: the hold is written first, and its unique `orderId` means a retried checkout
@@ -207,6 +214,10 @@ const levelFor = async (productId: string): Promise<InventoryLevel | null> => {
  * so two checkouts racing the last unit resolve inside mongod. A failed line rolls back through
  * `applyTransition` — same as every other change — so the ledger shows the take and give-back
  * rather than netting them to silence.
+ *
+ * A line that THROWS (a database hiccup, not a refusal) is exception-safe too: the `try` unwinds
+ * through {@link giveBackAndDeleteHold} exactly like a refusal, then rethrows — so a hold never
+ * survives naming lines this call never actually took (B15).
  *
  * @param orderId - the order the hold belongs to
  * @param lines - what it claims
@@ -225,41 +236,52 @@ export const reserveForOrder = async (
     if (!hold) return { held: true };
 
     const taken: StockLine[] = [];
-    for (const line of lines) {
-        const held = await applyTransition(
-            StockMovementReason.reserve,
-            line.productId,
-            line.quantity,
-            { reference: orderId }
-        );
-        if (!held) {
-            /*
-             * Read the blocker back before unwinding, so the reported number is the one that
-             * actually refused this line, not what a pre-flight saw earlier. Read from this
-             * module's own level, the source of truth — never the product's synced copy, which
-             * can lag by one transition. A deleted product or a level that never existed reads as
-             * nothing available, which is true either way.
-             */
-            const [blockerLevel, blockerProduct] = await Promise.all([
-                stockLevelRepository.findByProductId(line.productId),
-                productService.findByIdRaw(line.productId)
-            ]);
-            const shortfall: StockShortfall = {
-                productId: line.productId,
-                title: blockerProduct?.title ?? '',
-                requested: line.quantity,
-                available: blockerLevel?.available ?? 0
-            };
+    // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback (B15): a thrown error partway through must give back only the lines actually taken, then rethrow, so no safe wrapper covers this
+    try {
+        for (const line of lines) {
+            const held = await applyTransition(
+                StockMovementReason.reserve,
+                line.productId,
+                line.quantity,
+                { reference: orderId }
+            );
+            if (!held) {
+                /*
+                 * Read the blocker back before unwinding, so the reported number is the one that
+                 * actually refused this line, not what a pre-flight saw earlier. Read from this
+                 * module's own level, the source of truth — never the product's synced copy, which
+                 * can lag by one transition. A deleted product or a level that never existed reads
+                 * as nothing available, which is true either way.
+                 */
+                const [blockerLevel, blockerProduct] = await Promise.all([
+                    stockLevelRepository.findByProductId(line.productId),
+                    productService.findByIdRaw(line.productId)
+                ]);
+                const shortfall: StockShortfall = {
+                    productId: line.productId,
+                    title: blockerProduct?.title ?? '',
+                    requested: line.quantity,
+                    available: blockerLevel?.available ?? 0
+                };
 
-            for (const undo of taken)
-                await applyTransition(StockMovementReason.release, undo.productId, undo.quantity, {
-                    reference: orderId,
-                    note: 'rolled back — another line could not be held'
-                });
-            await reservationRepository.deleteOne(hold);
-            return { held: false, shortfalls: [shortfall] };
+                await giveBackAndDeleteHold(
+                    orderId,
+                    taken,
+                    hold,
+                    'rolled back — another line could not be held'
+                );
+                return { held: false, shortfalls: [shortfall] };
+            }
+            taken.push(line);
         }
-        taken.push(line);
+    } catch (error) {
+        await giveBackAndDeleteHold(
+            orderId,
+            taken,
+            hold,
+            'rolled back — reserve failed partway through'
+        );
+        throw error;
     }
 
     return { held: true };
@@ -366,6 +388,56 @@ export const releaseForOrder = async (
 
     return true;
 };
+
+/**
+ * Give a PAID order's committed units back to the shelf — the customer cancelled after payment,
+ * so `commitForOrder` already took them out of `onHand`, not merely out of a hold (B2).
+ *
+ * Same claim-then-act shape as {@link releaseForOrder}, but never merged into it: the sweep only
+ * ever releases a stale HOLD, and folding restock in there would let it put a just-paid order's
+ * units back on sale the moment its unrelated reservation record aged past the sweep's cutoff.
+ * Only a cancel calls this, and only once `releaseForOrder` has already found nothing to release —
+ * see `orders/services/cancel.ts`.
+ *
+ * @param orderId - the order whose committed units are coming back
+ * @returns whether this call was the one that restocked
+ */
+export const restockForOrder = async (orderId: string): Promise<boolean> => {
+    const hold = await reservationRepository.claimStatus(orderId, 'committed', 'restocked');
+    if (!hold) return false;
+
+    for (const { productId, quantity } of hold.items) {
+        const restocked = await applyTransition(
+            StockMovementReason.restock,
+            String(productId),
+            quantity,
+            { reference: orderId }
+        );
+        if (!restocked)
+            // Stryker disable all
+            logger.error(
+                `Inventory: could not restock ${quantity} of product ${String(productId)} for order ${orderId} — the hold was claimed but the counters refused`
+            );
+        // Stryker restore all
+    }
+
+    return true;
+};
+
+/**
+ * Extend a still-open hold to `hours` from now — a card payment gone `processing` (a SEPA debit,
+ * some bank redirects) can take days to settle, and the standard hold window would let the
+ * reservation sweep cancel an order whose money is still genuinely in flight (B3). A hold already
+ * claimed (committed/released/restocked) or missing matches nothing: there is no deadline left on
+ * it to move, and this is silent about that — the caller has no decision to make either way.
+ *
+ * @param orderId - the order whose hold might still be open
+ * @param hours - how many hours from now the hold should now expire
+ */
+export const extendHoldForOrder = (orderId: string, hours: number): Promise<void> =>
+    reservationRepository
+        .extendExpiry(orderId, new Date(Date.now() + hours * 60 * 60_000))
+        .then(() => undefined);
 
 /**
  * Are this order's units bound to the lines it currently holds?
@@ -657,6 +729,8 @@ export const inventoryService = {
     reserveForOrder,
     commitForOrder,
     releaseForOrder,
+    restockForOrder,
+    extendHoldForOrder,
     isStockBoundToOrder,
     runReservationSweep,
     ensureLevel,

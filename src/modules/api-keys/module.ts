@@ -14,9 +14,11 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerCredentialResolver } from '@kernel/authentication';
+import { onDomainEvent } from '@kernel/events';
+import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
 import { fromBearerToken } from './services/resolver';
-import { findOwnApiKeys } from './services/api-keys';
+import { findOwnApiKeys, apiKeysDeleteByUserId } from './services/api-keys';
 
 /**
  * Installs the credential resolver once this module is known to be enabled (D15) — registering it
@@ -45,5 +47,12 @@ export default {
             section: 'apiKeys',
             collect: (subject) => findOwnApiKeys(subject.userId)
         }
-    ]
+    ],
+    subscribe: () => {
+        // A destroyed account takes its minted credentials with it — the same event `addresses`,
+        // `cart`, `wishlist` and `payments` each listen for on their own collection. Without this,
+        // an erased user's keys stayed live: the credential resolver refuses them once the user is
+        // gone, but the rows themselves outlived the account.
+        onDomainEvent(USER_DELETED, ({ userId }) => apiKeysDeleteByUserId(userId));
+    }
 } satisfies AppModule;

@@ -9,6 +9,14 @@ repositories and is easy to get wrong from either side.
 > This repository **owns** the shared, domain-shaped documents. The frontend **holds
 > byte-identical copies** of the two it consumes and never edits them.
 
+**One backend, one frontend, lockstep.** There is exactly one paired frontend and one shared
+contract; nothing here is versioned or published for a second consumer to pin an older copy of.
+That is a deliberate choice, not a gap: a versioned, publishable contract artefact is worth building
+once a second real consumer exists (a second frontend, a mobile client, a partner integration), not
+before. Until then, `sync:frontend` copying two files on every change is the cheapest correct thing,
+and `spec-identity` (both repos), `contracts-bundle-freshness` and the nightly Schemathesis run are
+what make "lockstep" a checked claim rather than a hope.
+
 ## The seven bundles
 
 `openapi.yaml` is not a special case. Seven documents are produced here from per-module
@@ -49,8 +57,10 @@ npm run contracts:bundle -- bruno     # one collection, from the committed contr
 npm run check:contracts-bundle        # fail if any committed bundle is stale
 ```
 
-`tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
-every run, so a fragment edited without re-bundling fails the build rather than drifting.
+`check:contracts-bundle` asserts every bundle equals its committed file, so a fragment edited
+without re-bundling fails it locally. In CI, `npm ci`'s `postinstall` rebuilds every bundle before
+that check gets a turn, so it is the `contracts-bundle-freshness` job's `git diff` against the
+checkout — not this check — that actually catches a missed re-bundle on a push.
 
 Nothing else is shared. `shared/contracts/spectral.yaml`, `check-baseline.ts`, `report-results.ts` and
 `generate-asyncapi-types.ts` were on the list once, hand-maintained on both sides and compared but never
@@ -237,8 +247,10 @@ ordering lives inside `scripts/contracts/build-bundles.ts` rather than as an `&&
 which is what makes that flag narrow the run instead of silently doing everything else. See
 [Regenerating After a Change](./regenerating.md#regenerate-one-bundle-only).
 
-`tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
-every run, so a fragment edited without re-bundling fails the build rather than drifting.
+`check:contracts-bundle` asserts every bundle equals its committed file, so a fragment edited
+without re-bundling fails it locally. In CI, `npm ci`'s `postinstall` rebuilds every bundle before
+that check gets a turn, so it is the `contracts-bundle-freshness` job's `git diff` against the
+checkout — not this check — that actually catches a missed re-bundle on a push.
 
 ### Why the REST contract stopped concatenating, and the rest did not
 

@@ -209,6 +209,55 @@ describe('reserveForOrder', () => {
         spy.mockRestore();
     });
 
+    /*
+     * B15: a throw mid-loop (not a refusal) used to leave the hold naming a line whose counters
+     * never moved. A later release then read that line's quantity off the hold and subtracted it
+     * from whatever the counter actually held — here, another order's own reservation.
+     */
+    it('gives back only what it actually took when a later line throws, and steals nothing from another hold', async () => {
+        const productA = await createProduct({ title: 'A', onHand: 10 });
+        const productB = await createProduct({ title: 'B', onHand: 10 });
+        const otherOrderId = anOrderId();
+        await reserveForOrder(otherOrderId, [{ productId: String(productB._id), quantity: 4 }]);
+
+        const realApplyDelta = stockLevelRepository.applyDelta;
+        let calls = 0;
+        const spy = jest
+            .spyOn(stockLevelRepository, 'applyDelta')
+            .mockImplementation((productId, reason, quantity, delta) => {
+                calls += 1;
+                // The 1st call after this spy is installed is A's own line, which must succeed so
+                // there is something to roll back; the 2nd is B's, made to throw like a database
+                // hiccup rather than a refusal.
+                return calls === 2
+                    ? Promise.reject(new Error('connection reset'))
+                    : realApplyDelta(productId, reason, quantity, delta);
+            });
+
+        const orderId = anOrderId();
+        await expect(
+            reserveForOrder(orderId, [
+                { productId: String(productA._id), quantity: 2 },
+                { productId: String(productB._id), quantity: 3 }
+            ])
+        ).rejects.toThrow('connection reset');
+        spy.mockRestore();
+
+        // The other order's hold on B is untouched — the bug this guards against subtracted 3
+        // from it (dropping it to 1) because the failed hold still named a line it never took.
+        expect(await countersOf(String(productB._id))).toEqual({
+            onHand: 10,
+            reserved: 4,
+            available: 6
+        });
+        expect(await countersOf(String(productA._id))).toEqual({
+            onHand: 10,
+            reserved: 0,
+            available: 10
+        });
+        expect(await reservationRepository.findByOrderId(orderId)).toBeNull();
+    });
+
     it('refuses when the units exist but are all held', async () => {
         const product = await createProduct({ onHand: 4 });
         await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 4 }]);

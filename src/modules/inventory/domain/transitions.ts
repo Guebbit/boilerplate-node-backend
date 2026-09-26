@@ -2,8 +2,8 @@
  * @module
  * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database. A product
  * carries two counters, `onHand` (units that exist) and `reserved` (units an open order has
- * claimed). Six transitions move those counters, and this file is the one place that says what
- * each does — a seventh is one entry here plus one enum value in `openapi.yaml`. What a customer
+ * claimed). Seven transitions move those counters, and this file is the one place that says what
+ * each does — an eighth is one entry here plus one enum value in `openapi.yaml`. What a customer
  * may actually buy from those two counters is `@modules/products`'s `availableStock`
  * (`src/modules/products/domain/stock.ts`), not this module's own concern.
  *
@@ -25,10 +25,10 @@ export interface CounterDelta {
 }
 
 /**
- * The six transitions, as a total map from reason to what it does. Only `receive`, `adjust` and
- * `commit` change how many units exist; `commit` moves both columns together so a sale doesn't
- * change availability; `release` and `expire` are the same arithmetic under two names, kept
- * separate because the ledger records which story it was.
+ * The seven transitions, as a total map from reason to what it does. `receive`, `adjust`, `commit`
+ * and `restock` change how many units exist; `commit` moves both columns together so a sale
+ * doesn't change availability; `release` and `expire` are the same arithmetic under two names,
+ * kept separate because the ledger records which story it was.
  * @param reason - which transition
  * @param quantity - how many units; signed only for `adjust`, positive for everything else
  * @returns the pair of counter deltas the transition implies
@@ -53,6 +53,13 @@ export const counterDeltaFor = (reason: StockMovementReason, quantity: number): 
 
         // A delivery. The only transition that can create units.
         case StockMovementReason.receive: {
+            return { onHandDelta: quantity, reservedDelta: 0 };
+        }
+
+        // A paid order's committed units come back — cancelled after `commit` already took them
+        // out of `onHand`, not merely out of a hold. `reserved` is untouched: `commit` already
+        // took it down, and nothing reserved these units again in the meantime.
+        case StockMovementReason.restock: {
             return { onHandDelta: quantity, reservedDelta: 0 };
         }
 

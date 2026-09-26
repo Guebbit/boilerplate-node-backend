@@ -28,7 +28,7 @@ flowchart LR
     payments --> inventory
     payments --> orders
     payments --> users
-    orders -. "order.cancelled" .-> payments
+    orders -. "order.refund_owed" .-> payments
     users -. "user.deleted" .-> payments
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -45,8 +45,10 @@ flowchart LR
 ## The story
 
 A payment is _about_ an order: the intent freezes its total, the confirm moves its status to
-`paid`. The arrow never comes back — [`orders`](./orders.md) announces `order.cancelled` and this
-module answers with the refund.
+`paid`. The arrow never comes back — [`orders`](./orders.md) announces `order.refund_owed` and this
+module answers with the refund. Split from `order.cancelled` itself (B6): retrying the refund must
+never re-deliver the customer-facing cancellation webhook every time a provider outage outlasts one
+sweep pass.
 
 **`settlePayment` is the one place where the money and the goods agree.** It commits the order's
 held units itself rather than announcing and hoping, because that instant is the only moment a hold
@@ -85,6 +87,12 @@ card payment the bank decides to challenge:
 Both answer **200**, not an error: the browser has a next step, and a 4xx would tell it to stop.
 `POST /payments/{id}/sync` re-reads the provider and settles, which is what makes the happy path
 feel synchronous.
+
+**`processing` also extends the order's stock hold**, to `NODE_BANK_TRANSFER_HOLD_HOURS` from that
+moment (B3) — a SEPA debit or a bank redirect can take days, and the ordinary 30-minute window
+would let [`inventory`](./inventory-reservations.md)'s reservation sweep cancel an order whose
+money is still on its way. `requires_action` gets no such grace: it means the browser has a
+challenge to answer, not the provider a payment to finish.
 
 **`POST /payments/webhook` is the authority**, and the browser never is. It arrives whether or not
 the customer kept the tab open, and it is the one route in the module mounted above the auth wall:
@@ -125,6 +133,26 @@ refund then finds nothing `succeeded` to return. So `settlePayment` decides "kee
 put it straight back" on the order's status as read _after_ its own payment write, never on the
 copy `markPaid` answered. Either the cancel's refund sees `succeeded`, or this re-read sees
 `cancelled`; the conditional `succeeded → refunded` write makes sure only one of them refunds.
+
+## Pending effects
+
+The `succeeded` write, the stock commit and clearing the marker that says which is still owed are
+three separate steps, and only the first is durable on its own. `settlePayment` sets
+`pendingEffects: ['commit']` in the SAME write that moves the payment to `succeeded`, then commits
+the order's held stock (`inventoryService.commitForOrder`) and clears the marker — on both the
+happy path and the "order lost" refund path.
+
+A crash between the status write and the clear (a dead process, a database hiccup on the order
+read or the commit itself) leaves a payment reading `succeeded` with nothing set aside for its
+order. Unlike a webhook, nothing redelivers a settlement that already answered its caller — so
+`npm run sweep:payment-effects` (`payments/services/effects.ts#retryPendingEffects`, every 5
+minutes, see `docs/reference/ops.md#scheduled-jobs`) is the only thing that ever retries it. It
+repeats the commit for any order still expecting one — safe, since claiming a hold is
+exactly-once — clears the marker for one that isn't (the order-lost path already refunded it), and
+leaves the marker standing on anything younger than a minute, so it never races a settlement still
+mid-flight.
+
+`pendingEffects` is internal bookkeeping, omitted from the wire the same way `providerRef` is.
 
 ## Status transitions
 
@@ -197,12 +225,20 @@ still land that charge on its own, and recording money too would risk charging t
 attempt that never got that far (`requires_confirmation`, `declined`) is simply overwritten: the row
 becomes the offline one.
 
-**Refunding a `manual` payment moves the status and nothing else.** There is no provider to ask, so
-`refundedByHand` on the payment is the admin's own record that the money actually went back to the
-customer outside this application. Every other refund still dispatches to the provider named on the
-payment's own `provider` field — never the deployment's currently configured one, so a refund of an
-older payment still reaches the provider that actually took the money even after a deployment
-switches to another.
+**Only an operator can say a `manual` refund actually happened.** There is no provider to ask, so
+money that left the system by hand can only be confirmed returned by a person: the automatic
+listener (a customer's own cancel) leaves the payment `succeeded` and writes an unattended
+`payment.refund_owed_by_hand` audit row instead of guessing; `refundByOrder` — already admin-only,
+with the same fresh-session tier as recording one — is the only door that may set
+`refundedByHand: true` (B1b). A cancelled hand-paid order therefore shows `succeeded` until an
+operator confirms it, not "refunded" for money nobody actually moved.
+
+Every other refund dispatches to the provider named on the payment's own `provider` field — never
+the deployment's currently configured one (B1c) — so a refund of an older payment still reaches the
+provider that actually took the money even after a deployment switches to another. The provider is
+asked BEFORE the status moves (B1): a rejection leaves the payment `succeeded`, so the retry sweep
+(`ORDER_REFUND_OWED`, above) can actually retry it, instead of a failed attempt being recorded as a
+successful one.
 
 Requires `payments.any.create`, the same fresh-session tier as a refund (`payments.any.update`) — an
 admin's own word that money arrived is exactly as consequential as one that it left.
@@ -326,7 +362,7 @@ flowchart LR
     ST -.->|declined| E["order stays pending<br/><i>units still held</i>"]
     ST -->|succeeded| F["order → paid<br/><i>orders</i>"]
     F --> G["commit the hold<br/><i>inventory</i>"]
-    OC["orders"] -. "order.cancelled" .-> R["refund<br/><i>if one was due</i>"]
+    OC["orders"] -. "order.refund_owed" .-> R["refund<br/><i>if one was due</i>"]
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef port fill:#ede9fe,stroke:#7c3aed,color:#111827;

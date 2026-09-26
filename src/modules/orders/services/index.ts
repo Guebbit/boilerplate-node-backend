@@ -28,7 +28,7 @@ import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { detachUserId, anonymizeDueOrders } from './retention';
 import { callerScope, ownerScope, withActions } from './scope';
-import { cancelById, retryPendingEffects } from './cancel';
+import { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
 import { markPaid, markShipped, markDelivered } from './status';
 import { overrideStatus, forceMove } from './override';
 import { unavailableLines } from './availability';
@@ -58,7 +58,7 @@ export {
 export { retractOrder } from './retract';
 export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
 export { sendOrderPlacedEmail, mailBuyer } from './notify';
-export { cancelById, retryPendingEffects } from './cancel';
+export { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
 export { markPaid, markShipped, markDelivered } from './status';
 export { overrideStatus, forceMove } from './override';
 export { detachUserId, anonymizeDueOrders } from './retention';
@@ -110,6 +110,8 @@ export const orderService = {
     reapExpiredInvoices,
     cancelById,
     retryPendingEffects,
+    markRefundOwed,
+    clearRefundOwed,
     unavailableLines,
     withActions
 };

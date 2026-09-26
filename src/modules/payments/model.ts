@@ -56,9 +56,21 @@ export interface PaymentDocument extends Document {
      * was done by hand.
      */
     refundedByHand?: boolean;
+    /**
+     * Effects still owed for this payment's current `succeeded` write — hidden from the API, like
+     * `providerRef`. Set in the SAME write that moves the payment to `succeeded`, so a crash
+     * before the effect actually runs (today, only `commit`: taking the held stock) leaves a
+     * durable note that it is still owed. `payments/services/effects.ts#retryPendingEffects`
+     * finds these on a schedule and finishes or drops them; `settlement.ts` clears the field once
+     * the effect has run or the order it was for is no longer payable.
+     */
+    pendingEffects?: PaymentEffect[];
     createdAt?: Date;
     updatedAt?: Date;
 }
+
+/** The one effect a `succeeded` write can still owe once it returns — see {@link PaymentDocument.pendingEffects}. */
+export type PaymentEffect = 'commit';
 
 /** Payment Document model type. Queries live in `./repository`, rules in `./service`. */
 export type PaymentModel = Model<PaymentDocument>;
@@ -121,6 +133,10 @@ export const paymentSchema = new Schema<PaymentDocument>(
         // Offline-only, and only once refunded — see `refunds.ts`'s dispatch on `provider`.
         refundedByHand: {
             type: Boolean
+        },
+        pendingEffects: {
+            type: [String],
+            enum: ['commit']
         }
     },
     {
@@ -128,18 +144,26 @@ export const paymentSchema = new Schema<PaymentDocument>(
     }
 );
 
+// Backs `effects.ts#retryPendingEffects`'s own scan: which payments still owe an effect, oldest
+// first. `updatedAt` in the key (not just a query filter) is what lets the sweep skip a payment
+// this same second's settlement is still in the middle of, without a second index for that alone.
+paymentSchema.index(
+    { pendingEffects: 1, updatedAt: 1 },
+    { name: 'payments_pendingEffects_updatedAt' }
+);
+
 /**
  * Normalizes a serialized payment: `_id` → `id`, drops `__v`, and strips `providerRef`. Owed to the
  * repository factory for its lean reads (see `normalize` in
  * @infrastructure/persistence/create-repository).
  *
- * `providerRef` is omitted here rather than left to each caller: it is the handle that operates on
- * real money at the provider, no client has an operation that needs it — every endpoint takes this
- * API's own id — and the contract declares `additionalProperties: false`, so a serializer that let
- * it through would fail the spec as well as publish it.
+ * `providerRef` and `pendingEffects` are omitted here rather than left to each caller: both are
+ * internal bookkeeping (a provider handle, a retry marker) no client operation reads, and the
+ * contract declares `additionalProperties: false`, so a serializer that let either through would
+ * fail the spec as well as publish it.
  */
 export const applyPaymentTransform = applySerialization(paymentSchema, {
-    omit: ['providerRef']
+    omit: ['providerRef', 'pendingEffects']
 });
 
 /**

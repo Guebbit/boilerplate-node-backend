@@ -27,7 +27,11 @@ export const ORDER_LIFECYCLE: Readonly<
         [OrderStatus.cancelled]: ['customer', 'admin']
     },
     [OrderStatus.paid]: {
-        [OrderStatus.processing]: ['admin'],
+        // `system`, not `admin`: this follows fulfilment starting being recorded through
+        // `delivery`'s own door, never a direct admin write — see
+        // `src/modules/orders/services/status.ts`'s `markProcessing`. Reachable by `admin` only
+        // through the override door (`canOverrideTo`) until that door exists.
+        [OrderStatus.processing]: ['system'],
         [OrderStatus.cancelled]: ['customer', 'admin']
     },
     [OrderStatus.processing]: {

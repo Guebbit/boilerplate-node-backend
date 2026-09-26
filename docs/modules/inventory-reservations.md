@@ -9,10 +9,10 @@ fixed window.
 **Breaks if you change** — the conditional status claim. It is the entire correctness of this module.
 :::
 
-## Two counters, four transitions
+## Two counters, five transitions
 
 Every product row carries `onHand` and `reserved`. [`products`](./products.md) never writes either,
-and neither does anything else — the four transitions below are the only writers in the
+and neither does anything else — the five transitions below are the only writers in the
 application.
 
 ```mermaid
@@ -22,23 +22,33 @@ flowchart LR
     H -->|"commitForOrder<br/><i>payment confirmed</i>"| C["committed<br/><i>onHand −n · reserved −n</i>"]
     H -->|"releaseForOrder<br/><i>order cancelled</i>"| R["released<br/><i>reserved −n</i>"]
     H -->|"releaseForOrder<br/><i>the sweep</i>"| R
+    C -->|"restockForOrder<br/><i>a PAID order cancelled</i>"| S["restocked<br/><i>onHand +n</i>"]
 
     classDef open fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef none fill:#f1f5f9,stroke:#94a3b8,color:#111827;
     class H open;
-    class C,R done;
+    class C,R,S done;
     class N none;
 ```
 
-`held` is the only non-terminal state, and `expiresAt` is what makes it non-permanent.
+`held` is the only non-terminal state, and `expiresAt` is what makes it non-permanent — `committed`
+is otherwise terminal too, except for the one door `restockForOrder` opens onto `restocked` (B2).
 
-| Transition        | Called by                                          | Counters                   | Ledger `reason` |
-| ----------------- | -------------------------------------------------- | -------------------------- | --------------- |
-| `reserveForOrder` | [checkout](./cart-checkout.md), admin order create | `reserved` +n              | `reserve`       |
-| `commitForOrder`  | [`payments`](./payments.md) on confirm             | `onHand` −n, `reserved` −n | `commit`        |
-| `releaseForOrder` | [`orders`](./orders.md) on cancel                  | `reserved` −n              | `release`       |
-| `releaseForOrder` | the sweep                                          | `reserved` −n              | `expire`        |
+| Transition        | Called by                                                                | Counters                   | Ledger `reason` |
+| ----------------- | ------------------------------------------------------------------------ | -------------------------- | --------------- |
+| `reserveForOrder` | [checkout](./cart-checkout.md), admin order create                       | `reserved` +n              | `reserve`       |
+| `commitForOrder`  | [`payments`](./payments.md) on confirm                                   | `onHand` −n, `reserved` −n | `commit`        |
+| `releaseForOrder` | [`orders`](./orders.md) on cancel                                        | `reserved` −n              | `release`       |
+| `releaseForOrder` | the sweep                                                                | `reserved` −n              | `expire`        |
+| `restockForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing | `onHand` +n                | `restock`       |
+
+**`restockForOrder` is never merged into `releaseForOrder`**, on purpose: the sweep only ever
+releases a stale HOLD, and folding restock into that same function would let it put a just-paid
+order's units back on sale the moment its unrelated reservation record aged past the sweep's
+cutoff — a sale undone by a timer, not by anyone cancelling anything. A cancel calls it explicitly,
+only after `releaseForOrder`'s own claim on `held → released` has already missed — exactly what a
+PAID order's `committed` hold does, every time.
 
 Two more `reason` values exist and belong to no reservation at all: `receive`
 (`POST /inventory/receipts`) and `adjust` (`POST /inventory/adjustments`), which move `onHand`
@@ -84,9 +94,11 @@ either counter at any point in time.
 
 ## The sweep
 
-`POST /inventory/reservations/sweep` releases every hold past its `expiresAt`. It is an admin route
-rather than an internal timer, which is a deliberate call: the operation is idempotent, cheap, and
-occasionally something an operator wants to force.
+`POST /inventory/reservations/sweep` releases every hold past its `expiresAt`; `npm run
+sweep:reservations` (B3) is the same work, driven every 5 minutes rather than on demand — see
+[Scheduled jobs](../reference/ops.md#scheduled-jobs). The admin route stays, deliberately: the
+operation is idempotent and cheap, and occasionally something an operator wants to force between
+ticks.
 
 The `status: 1, expiresAt: 1` index exists for exactly that query, and for nothing else.
 
@@ -100,6 +112,17 @@ window and falls back to `NODE_RESERVATION_TTL_MINUTES` only when the caller giv
 checkout hands it a longer one for a `bank_transfer` order (`NODE_BANK_TRANSFER_HOLD_HOURS`, a
 week by default). The sweep itself needed no change to honour this: it only ever reads each hold's
 own stored `expiresAt`, never a constant. See [Payments — Bank transfer](./payments.md#bank-transfer).
+
+**A card payment gone `processing` gets the same week, after the fact (B3).** `extendHoldForOrder`
+pushes a still-`held` hold's `expiresAt` out to `NODE_BANK_TRANSFER_HOLD_HOURS` from now, called by
+`settlePayment` the moment the provider reports `processing` — a SEPA debit, some bank redirects,
+can take days to settle, and the ordinary 30-minute window would let the sweep cancel an order
+whose money is still genuinely on its way. `requires_action` gets no such grace: that state means
+the BROWSER has a challenge to answer, not the provider a payment to finish, so the ordinary window
+already fits it. No setting of its own — reusing the bank-transfer window is the whole point: both
+are "this payment method settles over days", the same fact under two names. Guarded on
+`status: 'held'`, the same as every other lifecycle write here, so a hold already claimed has
+nothing left on it to extend.
 
 ## The threshold, and its two readers
 

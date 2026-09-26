@@ -253,6 +253,18 @@ export interface Repository<TDocument extends Document, TWire> {
 }
 
 /**
+ * The surface an append-only collection may use: write new rows, read them back — never
+ * `deleteOne`, `save` or `build`, which a trail an application can edit or hydrate-and-mutate is
+ * not a trail. A module with such a collection (an audit log, a stock ledger) types its exported
+ * repository through this instead of the full {@link Repository}, so the missing methods are a
+ * compile error at the export, not just methods nobody happens to call yet.
+ */
+export type AppendOnlyLedger<TDocument extends Document, TWire> = Pick<
+    Repository<TDocument, TWire>,
+    'create' | 'search'
+>;
+
+/**
  * A filter narrowed by an authorization scope: both must match. The scope alone when there is no
  * filter, the filter alone when there is no scope, `$and` of the two otherwise.
  *
