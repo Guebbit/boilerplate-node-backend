@@ -14,7 +14,7 @@
  * The selection lives here rather than in `package.json` because npm appends `--` arguments to the
  * LAST command of a chain only, so a `&&`-joined ordering would silently drop the flag.
  *
- * See: docs/api/contract-fragmentation.md#the-eight-bundles
+ * See: docs/api/contract-fragmentation.md#the-seven-bundles
  */
 
 import { writeFileSync } from 'node:fs';

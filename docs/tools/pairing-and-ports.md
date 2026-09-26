@@ -149,8 +149,9 @@ not a new defect.** The frontend compares against whichever backend its own `.en
 backend (unset, or `../boilerplate-node-backend`, is the default) and then run `sync:frontend` from
 here, in that order. The two backends' bundles are function-identical, and this one bundles
 byte-stably; the PHP twin does not, which is why the frontend's own check compares YAML parsed
-rather than as raw bytes. See the frontend's `docs/reference/contracts.md#keeping-the-pair-in-step`
-for the full mechanism.
+rather than as raw bytes. See the frontend's
+`boilerplate-vue-frontend/docs/reference/contracts.md#keeping-the-pair-in-step` for the full
+mechanism.
 
 Deliberately **not** on it: `public/favicon/*`, `.prettierrc`, `.dockerignore`, `.husky/*`,
 `docker/nginx.docs.conf`, `docs/.vitepress/theme/*`. They are identical by convention, not by

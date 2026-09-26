@@ -15,6 +15,10 @@
  *     and `docs:build` already fails on a dead one.
  *   - Resolution is by SUFFIX, so `orders/model.ts` matches `src/modules/orders/model.ts` without
  *     every page having to spell a path from the root.
+ *   - A `#anchor` riding on a path this repo tracks is checked too, against that page's own
+ *     headings — a page renamed out from under a citation elsewhere still resolves as a FILE, and
+ *     only the anchor half used to go unchecked. Limited to a page in THIS repo: the peer's
+ *     headings are its own tree to answer for, not ours to parse.
  *   - `@`-prefixed tokens are rewritten through `tsconfig`'s own path aliases, so `@modules/x`
  *     is checked and `@asyncapi/cli` — matching no alias — is read as the npm package it is.
  *   - Tokens starting with `/` are HTTP routes, not files. The contract owns those, and
@@ -68,12 +72,45 @@ interface Finding {
 }
 
 /**
- * Normalize one inline code span into the path it claims, or `undefined` when it claims none.
- *
- * Trailing `:42` / `:functionName` and `#anchor` are locators within a file, not part of it, and
- * a trailing slash is a directory's punctuation.
+ * A page's heading slugs, VitePress's own way — lowercased, inline `` ` ``/`*`/`_` stripped,
+ * punctuation dropped, spaces to hyphens — plus any explicit `{#custom-id}` a heading carries.
+ * Approximate on purpose: VitePress de-duplicates a repeated heading with a `-1`/`-2` suffix, and
+ * this does not, so a genuine collision under-reports rather than over-reports.
  */
-const toPath = (span: string): string | undefined => {
+const slugify = (heading: string): string =>
+    heading
+        .replaceAll(/[*_`~]/g, '')
+        .trim()
+        .toLowerCase()
+        .replaceAll(/[^\s\w-]/g, '')
+        .replaceAll(/\s+/g, '-')
+        .replaceAll(/-+/g, '-')
+        .replaceAll(/^-|-$/g, '');
+
+/** Every anchor a markdown page answers to: one per heading, its own `{#id}` if it wrote one. */
+const headingSlugs = (markdown: string): Set<string> => {
+    const slugs = new Set<string>();
+
+    for (const line of markdown.split('\n')) {
+        const heading = /^#{1,6}\s+(.+)$/.exec(line)?.[1];
+        if (!heading) continue;
+
+        const explicit = /{#([\w-]+)}\s*$/.exec(heading)?.[1];
+        slugs.add(explicit ?? slugify(heading.replace(/{#[\w-]+}\s*$/, '')));
+    }
+
+    return slugs;
+};
+
+/**
+ * Normalize one inline code span into the path it claims (with any `#anchor` kept, separately),
+ * or `undefined` when it claims none.
+ *
+ * Trailing `:42` / `:functionName` is a locator within a file, not part of it, and a trailing
+ * slash is a directory's punctuation. The `#anchor`, unlike those two, is itself a claim — a page
+ * this repo can check once the target is a page it tracks — so it survives to {@link tokenOf}.
+ */
+const toPath = (span: string): { path: string; anchor?: string } | undefined => {
     if (NOT_A_PATH.test(span)) return undefined;
     if (/^(https?|mailto):/.test(span)) return undefined;
     // VitePress resolves these against the page, and `docs:build` already fails on a dead one.
@@ -81,14 +118,14 @@ const toPath = (span: string): string | undefined => {
     // An HTTP route. The contract owns those, and `lint:openapi` refuses one that does not exist.
     if (span.startsWith('/')) return undefined;
 
-    const token = span
-        .split('#')[0]
+    const [beforeAnchor, anchor] = span.split('#');
+    const path = beforeAnchor
         .split(':')[0]
         .replaceAll(/[,.;]+$/g, '')
         .replaceAll(/\/+$/g, '');
-    if (!token || token.startsWith('-') || token.startsWith('$')) return undefined;
+    if (!path || path.startsWith('-') || path.startsWith('$')) return undefined;
 
-    return token;
+    return { path, anchor };
 };
 
 /** What one page's inline code spans resolve to: the paths it claims, filtered to the real ones. */
@@ -105,6 +142,7 @@ const scanPage = (
         roots: Set<string>;
         own: Set<string>;
         peer: Set<string> | undefined;
+        anchorsOf: (ownPath: string) => Set<string> | undefined;
     }
 ): Scan => {
     const scan: Scan = { tokens: [], findings: [] };
@@ -115,41 +153,85 @@ const scanPage = (
         if (line.includes(IGNORE_LINE)) continue;
 
         for (const [, span] of line.matchAll(/`([^`]+)`/g)) {
-            const token = tokenOf(span, context.aliases, context.roots);
-            if (!token) continue;
+            const claim = tokenOf(span, context.aliases, context.roots);
+            if (!claim) continue;
 
-            scan.tokens.push(token);
-            if (!isReal(token, context.own, context.peer)) scan.findings.push(token);
+            scan.tokens.push(claim.path);
+            if (!isReal(claim, context.own, context.peer, context.anchorsOf))
+                scan.findings.push(claim.anchor ? `${claim.path}#${claim.anchor}` : claim.path);
         }
     }
 
     return scan;
 };
 
-/** One code span reduced to the repo path it claims, or nothing when it claims none. */
+/** One code span's path claim, and any `#anchor` locator riding along with it. */
+interface Claim {
+    path: string;
+    anchor?: string;
+}
+
+/** One code span reduced to the repo path (and anchor) it claims, or nothing when it claims none. */
 const tokenOf = (
     span: string,
     aliases: { prefix: string; target: string }[],
     roots: Set<string>
-): string | undefined => {
+): Claim | undefined => {
     const claimed = toPath(span);
     if (!claimed) return undefined;
 
-    const token = throughAliases(aliases, claimed);
-    if (!token || !claimsAPath(roots, token) || allowed(token)) return undefined;
+    const path = throughAliases(aliases, claimed.path);
+    if (!path || !claimsAPath(roots, path) || allowed(path)) return undefined;
 
-    return token;
+    return { path, anchor: claimed.anchor };
 };
 
 /**
- * Whether the file a token names exists. A citation of the paired repo resolves over THERE, by its
- * DIRECTORY name — the one thing that catches a page addressing it by its package name instead.
+ * Whether the file a claim names exists, and — when it names an anchor too — whether that page
+ * actually carries a heading answering to it. A citation of the paired repo resolves over THERE,
+ * by its DIRECTORY name; the anchor half only ever applies to a page (`.md`) in THIS repo, since
+ * that is the only tree a heading can be read out of here.
  */
-const isReal = (token: string, own: Set<string>, peer: Set<string> | undefined): boolean => {
-    if (!token.startsWith(`${PEER_DIRECTORY}/`)) return resolves(own, token);
+const isReal = (
+    claim: Claim,
+    own: Set<string>,
+    peer: Set<string> | undefined,
+    anchorsOf: (ownPath: string) => Set<string> | undefined
+): boolean => {
+    if (claim.path.startsWith(`${PEER_DIRECTORY}/`))
+        // No peer checkout (a bare clone, a worktree): the cross-repo half is skipped, not failed.
+        return !peer || resolves(peer, claim.path.slice(PEER_DIRECTORY.length + 1));
 
-    // No peer checkout (a bare clone, a worktree): the cross-repo half is skipped, not failed.
-    return !peer || resolves(peer, token.slice(PEER_DIRECTORY.length + 1));
+    if (!resolves(own, claim.path)) return false;
+    if (!claim.anchor) return true;
+
+    const slugs = anchorsOf(claim.path);
+    // Not a page this repo tracks the heading text of (a non-`.md` file, or one `resolves` only
+    // matched by a spelling other than a bare `.md` file) — the anchor claim goes unchecked, the
+    // same way a peer-repo path already does above.
+    return !slugs || slugs.has(claim.anchor);
+};
+
+/**
+ * Every tail one of THESE pages answers to, mapped back to its actual path — the same suffix idea
+ * as {@link trackedTargets}, so an anchor lookup can go straight from a claim's spelling to the
+ * page whose headings settle it.
+ *
+ * Scoped to the pages this sweep already reads (`docs/**\/*.md`), not every `.md` file the repo
+ * tracks — `.2brain/llm-wiki/<source path>.md` mirrors every SOURCE file under its own path plus
+ * `.md`, so a repo-wide glob here would resolve `orders/repository.ts#findByIdScoped`'s anchor
+ * against that unrelated generated summary instead of skipping it as the non-page it cites.
+ */
+const anchorPageFor = (pages: string[]): Map<string, string> => {
+    const byTail = new Map<string, string>();
+
+    for (const page of pages) {
+        const segments = page.split('/');
+        for (let index = 0; index < segments.length; index += 1)
+            byTail.set(segments.slice(index).join('/'), page);
+    }
+
+    return byTail;
 };
 
 const run = (): number => {
@@ -167,10 +249,23 @@ const run = (): number => {
         .split('\n')
         .filter((file) => file.endsWith('.md'));
 
+    const anchorPages = anchorPageFor(pages);
+    // One read per cited page, not per citation — a heavily-linked page (the glossary, the module
+    // index) would otherwise reparse its own headings dozens of times over one sweep.
+    const slugsCache = new Map<string, Set<string>>();
+    const anchorsOf = (ownPath: string): Set<string> | undefined => {
+        const page = anchorPages.get(ownPath) ?? anchorPages.get(`${ownPath}.md`);
+        if (!page) return undefined;
+
+        if (!slugsCache.has(page))
+            slugsCache.set(page, headingSlugs(readFileSync(path.join(ROOT, page), 'utf8')));
+        return slugsCache.get(page);
+    };
+
     const findings: Finding[] = [];
     let references = 0;
 
-    const context = { aliases, roots, own: own.targets, peer: peerTargets };
+    const context = { aliases, roots, own: own.targets, peer: peerTargets, anchorsOf };
 
     for (const page of pages) {
         const scan = scanPage(readFileSync(path.join(ROOT, page), 'utf8'), context);

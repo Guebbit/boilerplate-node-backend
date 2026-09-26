@@ -13,7 +13,7 @@
  * Adding a bundle is one entry here plus its spec file: the CLI, the staleness check and the
  * cross-cutting test all iterate this list.
  *
- * See: docs/api/contract-fragmentation.md#the-eight-bundles
+ * See: docs/api/contract-fragmentation.md#the-seven-bundles
  */
 
 import type { ContractBundle } from './bundle-kinds';
