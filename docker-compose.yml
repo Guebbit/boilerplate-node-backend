@@ -334,6 +334,8 @@ services:
             - ./docker/observability/prometheus.config.yaml:/etc/prometheus/prometheus.yml:Z
             - ./docker/observability/prometheus.alert-rules.yaml:/etc/prometheus/rules/alerts.yml:Z
             - prometheus_volume:/prometheus
+            # Written by `npm run setup`, read-only here — see prometheus.config.yaml's own comment.
+            - ./tmp/secrets/prometheus-metrics-token:/etc/prometheus/secrets/metrics-token:ro,Z
         ports:
             - '${PROMETHEUS_PORT:-9090}:9090'
         depends_on:

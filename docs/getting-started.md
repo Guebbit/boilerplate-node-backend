@@ -1,6 +1,7 @@
 # Getting Started
 
-From a fresh clone to a browsable API with demo data. Five minutes, four commands.
+From a fresh clone to a browsable API with demo data. Five minutes, three commands, no manual
+editing.
 
 This stack is **container-first**: the shipped `.env` uses compose service hostnames. The default
 profile is lean — 5 containers (`app`, `cron`, `database`, `redis`, `rabbitmq`) — with Tempo, Loki,
@@ -13,21 +14,20 @@ mode is supported and has its own scripts; it is the secondary path.
 ```mermaid
 flowchart TD
     Clone(["Fresh clone"]) --> Install["npm install"]
-    Install --> Env["cp .env-example .env,\nset the two NODE_TOKEN_* vars"]
-    Env --> Up["npm run compose:up\n(or compose:up:full)"]
+    Install --> Setup["npm run setup\ncreates .env, fills every secret"]
+    Setup --> Up["npm run compose:up\n(or compose:up:full)"]
     Up --> Boot["app container runs\nnpm run db:bootstrap on its own"]
     Boot --> Ready(["Seeded API on :3000"])
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef done fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class Clone,Install,Env,Up,Boot step;
+    class Clone,Install,Setup,Up,Boot step;
     class Ready done;
 ```
 
 ```bash
 npm install
-cp .env-example .env
-# edit .env: set NODE_TOKEN_ACCESS and NODE_TOKEN_REFRESH to any two long random strings
+npm run setup                    # creates .env from .env-example, fills every secret it refuses to boot without
 npm run compose:up               # the lean default, or: npm run compose:up:full
 ```
 

@@ -27,8 +27,8 @@ This stack is **container-first**: the shipped `.env` uses compose service hostn
 
 ```bash
 npm install
-cp .env-example .env      # then set NODE_TOKEN_ACCESS and NODE_TOKEN_REFRESH
-npm run compose:up        # docker or podman, auto-detected — 5 containers: app, cron, database, redis, rabbitmq
+npm run setup              # creates .env from .env-example, fills every secret it refuses to boot without
+npm run compose:up         # podman by default, CONTAINER_ENGINE=docker for Docker — 5 containers: app, cron, database, redis, rabbitmq
 ```
 
 That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting, so the
