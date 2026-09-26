@@ -21,9 +21,9 @@ import { translationRepository } from './repository';
 import { planForPort, writeForPort } from './services/translations';
 
 /**
- * Everything this module installs once every enabled module is known (D15): the two kernel ports
- * it owns, plus its own `translatables` lookup — the app tier used to build that lookup and hand
- * it in by name, which meant deleting this module also meant editing `app.ts`.
+ * Everything this module installs once every enabled module is known: the two kernel ports it
+ * owns, plus its own `translatables` lookup — built here, by this module, rather than by the app
+ * tier collecting it and handing it in by name.
  *
  * Ports are registered HERE rather than at import time, so importing this file (a type, a test)
  * no longer installs them — only a module `registerModules` actually runs `onRegistered` for does.
@@ -55,7 +55,7 @@ const onRegistered = (modules: readonly AppModule[]): void => {
                 .then((rows) => new Map(rows.map((row) => [row.locale, row.fields])))
     });
 
-    localeService.setTranslatables(resolveTranslatables([...modules]));
+    localeService.setTranslatables(resolveTranslatables(modules));
 };
 
 /** This module's manifest entry: routes and its own locales. */

@@ -188,7 +188,7 @@ export interface AppModule {
      * Runs once, right after {@link subscribe} — every enabled module is known by then, so a
      * module that needs a cross-module lookup (`locales`' `translatables`, `account`'s
      * `personalData` sections) can resolve it itself here instead of `app.ts` collecting it and
-     * handing it in by name (D15: `app.ts` stops importing `locales`/`account` for this).
+     * handing it in by name — `app.ts` no longer imports `locales`/`account` for this.
      *
      * Also where a module installs its own kernel port (an auth resolver, a translation port, a
      * locale override provider, an audit sink) — moving that call here from module-file import
@@ -382,7 +382,7 @@ export const resolveConsumers = (appModules: AppModule[]): readonly ModuleConsum
  * @throws {Error} when two modules declare the same entity type
  */
 export const resolveTranslatables = (
-    appModules: AppModule[]
+    appModules: readonly AppModule[]
     // `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
     // this a lookup by an unregistered `entityType` string would type-check as always present.
 ): Readonly<Record<string, TranslatableTarget | undefined>> =>
@@ -403,7 +403,7 @@ export const resolveTranslatables = (
  * @param appModules - the enabled module list
  */
 export const resolvePersonalDataSections = (
-    appModules: AppModule[]
+    appModules: readonly AppModule[]
 ): readonly PersonalDataSection[] =>
     appModules.flatMap((appModule) =>
         appModule.personalData === 'none' ? [] : appModule.personalData
