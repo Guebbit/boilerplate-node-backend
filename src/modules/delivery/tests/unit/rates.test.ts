@@ -9,7 +9,6 @@ import {
     findShippingMethod,
     priceShipping,
     methodFitsWeight,
-    methodsForWeight,
     SHIPPING_METHODS
 } from '../../domain/rates';
 
@@ -88,25 +87,6 @@ describe('methodFitsWeight', () => {
                 1000
             )
         ).toBe(true);
-    });
-});
-
-describe('methodsForWeight', () => {
-    it('returns every method when no weight is given', () => {
-        expect(methodsForWeight(undefined)).toEqual(SHIPPING_METHODS);
-    });
-
-    it('excludes a method a heavy basket does not fit', () => {
-        // Over express's 5000g ceiling, under standard's 30000g one, pickup has no ceiling.
-        const methods = methodsForWeight(10_000).map(({ id }) => id);
-
-        expect(methods).toEqual(['standard', 'pickup']);
-    });
-
-    it('excludes every method with a ceiling once the basket clears all of them', () => {
-        const methods = methodsForWeight(40_000).map(({ id }) => id);
-
-        expect(methods).toEqual(['pickup']);
     });
 });
 

@@ -26,17 +26,10 @@ export const postCheckout = (request: Request, response: Response) => {
     // `?? {}` because a checkout without a body is legal and Express 5 leaves `body` undefined.
     const body = parseBody(CheckoutBody, request.body ?? {}, response);
     if (!body) return;
-    const { addressId, shippingMethodId, paymentMethod, notes } = body;
+    const { addressId, paymentMethod, notes } = body;
 
     return cartService
-        .orderConfirm(
-            userId,
-            callerContextOf(request),
-            addressId,
-            shippingMethodId,
-            paymentMethod,
-            notes
-        )
+        .orderConfirm(userId, callerContextOf(request), addressId, paymentMethod, notes)
         .then((result) => {
             cartCheckoutTotal.inc({ status: result.success ? 'success' : 'failure' });
             if (refused(response, result)) return;

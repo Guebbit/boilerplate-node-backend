@@ -26,7 +26,8 @@ export {
     cartItemUpdateQuantity,
     cartItemAddById,
     cartItemRemoveById,
-    cartRemove
+    cartRemove,
+    cartShippingMethodSet
 } from './items';
 export { orderConfirm } from './checkout';
 export { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
@@ -42,6 +43,7 @@ export const cartService = {
     cartItemAddById: items.cartItemAddById,
     cartItemRemoveById: items.cartItemRemoveById,
     cartRemove: items.cartRemove,
+    cartShippingMethodSet: items.cartShippingMethodSet,
     cartDeleteByUserId: cleanup.cartDeleteByUserId,
     orderConfirm: checkout.orderConfirm,
     reorderIntoCart: reorder.reorderIntoCart,

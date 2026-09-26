@@ -61,13 +61,3 @@ export const priceShipping = (method: ShippingMethod, itemsTotal: number): numbe
 export const methodFitsWeight = (method: ShippingMethod, weight: number): boolean =>
     (method.minWeight === undefined || weight >= method.minWeight) &&
     (method.maxWeight === undefined || weight <= method.maxWeight);
-
-/**
- * The methods that fit a given basket weight — `SHIPPING_METHODS` itself when `weight` is
- * omitted, since an unknown weight excludes nothing.
- * @param weight - the basket's total weight in grams, or `undefined` to skip filtering
- */
-export const methodsForWeight = (weight?: number): readonly ShippingMethod[] =>
-    weight === undefined
-        ? SHIPPING_METHODS
-        : SHIPPING_METHODS.filter((method) => methodFitsWeight(method, weight));

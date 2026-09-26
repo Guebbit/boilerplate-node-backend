@@ -135,12 +135,13 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .post('/cart')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 2 });
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
 
         const results = await raceN(RACE_SIZE, () =>
-            api()
-                .post('/cart/checkout')
-                .set('Authorization', bearer)
-                .send({ shippingMethodId: 'pickup' })
+            api().post('/cart/checkout').set('Authorization', bearer).send({})
         );
 
         expectNoServerErrors(results);
@@ -155,12 +156,13 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .post('/cart')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 2 });
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
 
         const results = await raceN(RACE_SIZE, () =>
-            api()
-                .post('/cart/checkout')
-                .set('Authorization', bearer)
-                .send({ shippingMethodId: 'pickup' })
+            api().post('/cart/checkout').set('Authorization', bearer).send({})
         );
 
         const successes = countStatus(results, 200) + countStatus(results, 201);
@@ -176,12 +178,13 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .post('/cart')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 2 });
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
 
         await raceN(RACE_SIZE, () =>
-            api()
-                .post('/cart/checkout')
-                .set('Authorization', bearer)
-                .send({ shippingMethodId: 'pickup' })
+            api().post('/cart/checkout').set('Authorization', bearer).send({})
         );
 
         const cart = await cartModel.findOne({ userId: user._id });
@@ -199,12 +202,13 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .post('/cart')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 3 });
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
 
         await raceN(RACE_SIZE, () =>
-            api()
-                .post('/cart/checkout')
-                .set('Authorization', bearer)
-                .send({ shippingMethodId: 'pickup' })
+            api().post('/cart/checkout').set('Authorization', bearer).send({})
         );
 
         const orders = await orderModel.find({ userId: user._id });
@@ -225,12 +229,13 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .post('/cart')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 3 });
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
 
         const results = await raceN(RACE_SIZE, () =>
-            api()
-                .post('/cart/checkout')
-                .set('Authorization', bearer)
-                .send({ shippingMethodId: 'pickup' })
+            api().post('/cart/checkout').set('Authorization', bearer).send({})
         );
 
         expectNoServerErrors(results);
@@ -258,11 +263,12 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .post('/cart')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 1 });
-
-        const response = await api()
-            .post('/cart/checkout')
+        await api()
+            .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
+
+        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
         expect(response.status).toBe(201);
     });

@@ -1221,10 +1221,11 @@ describe('the address book: /account/addresses', () => {
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 1 });
 
-        const response = await api()
-            .post('/cart/checkout')
+        await api()
+            .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'standard' });
+        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
         expect(response.status).toBe(201);
         expect(response.body.data.order.shippingAddress).toMatchObject({

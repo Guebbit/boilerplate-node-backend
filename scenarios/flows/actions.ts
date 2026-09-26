@@ -59,6 +59,9 @@ export const receiveStock = (owner: Caller, productId: string, quantity: number)
  * method at all, and `pickup` is the one method that needs no address — not every seeded shopper
  * has one. A flow demonstrating a real shipment (`standard`) overrides it.
  *
+ * The shipping method is the cart's own choice now (`PUT /cart/shipping-method`), set here before
+ * checkout rather than sent in its body — see `docs/modules/cart-checkout.md`.
+ *
  * @param caller - the shopper
  * @param lines - what they are buying
  * @param options - the checkout body's own optional fields
@@ -71,10 +74,10 @@ export const checkout = async (
 ): Promise<string> => {
     for (const line of lines) await caller.call('POST', '/cart', line);
 
-    const { order } = await caller.call<CheckoutData>('POST', '/cart/checkout', {
-        shippingMethodId: 'pickup',
-        ...options
-    });
+    const { shippingMethodId = 'pickup', ...rest } = options;
+    await caller.call('PUT', '/cart/shipping-method', { shippingMethodId });
+
+    const { order } = await caller.call<CheckoutData>('POST', '/cart/checkout', rest);
     return order.id;
 };
 

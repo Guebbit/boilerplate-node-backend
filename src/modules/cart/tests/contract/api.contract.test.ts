@@ -200,6 +200,95 @@ describe('PUT /cart/{productId}', () => {
     });
 });
 
+describe('PUT /cart/shipping-method', () => {
+    it('matches the contract when choosing a method that fits the basket', async () => {
+        const { bearer } = await authenticateWithCart();
+        const response = await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'standard' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.shippingMethodId).toBe('standard');
+        expect(response.body.data.summary.shippingCost).toBeGreaterThanOrEqual(0);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the contract when clearing the choice with null', async () => {
+        const { bearer } = await authenticateWithCart();
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'standard' });
+
+        const response = await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: null });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.shippingMethodId).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for an unknown method', async () => {
+        const { bearer } = await authenticateWithCart();
+        const response = await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'teleport' });
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a digital-only basket', async () => {
+        const { bearer } = await authenticateAs('user');
+        const digital = await createProduct({ requiresShipping: false });
+        await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(digital._id), quantity: 1 });
+
+        const response = await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'standard' });
+
+        expect(response.status).toBe(409);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it("matches the error contract for a basket outside the method's weight range", async () => {
+        const { bearer } = await authenticateAs('user');
+        // express's ceiling is 5000g.
+        const heavy = await createProduct({ weight: 6000, requiresShipping: true });
+        await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(heavy._id), quantity: 1 });
+
+        const response = await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'express' });
+
+        expect(response.status).toBe(409);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a malformed body', async () => {
+        const { bearer } = await authenticateWithCart();
+        const response = await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({});
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
 describe('DELETE /cart/{productId}', () => {
     it('matches the contract when removing an item', async () => {
         const { bearer, product } = await authenticateWithCart();
@@ -244,10 +333,11 @@ describe('GET /cart/summary', () => {
 describe('POST /cart/checkout', () => {
     it('matches the contract when the cart becomes an order', async () => {
         const { bearer } = await authenticateWithCart();
-        const response = await api()
-            .post('/cart/checkout')
+        await api()
+            .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
+        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
         expect(response.status).toBe(201);
         expect(response).toSatisfyApiSpec();
@@ -259,10 +349,14 @@ describe('POST /cart/checkout', () => {
      */
     it('wires notes through to the order', async () => {
         const { bearer } = await authenticateWithCart();
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
         const response = await api()
             .post('/cart/checkout')
             .set('Authorization', bearer)
-            .send({ notes: 'Leave with the concierge', shippingMethodId: 'pickup' });
+            .send({ notes: 'Leave with the concierge' });
 
         expect(response.status).toBe(201);
         expect(response).toSatisfyApiSpec();
@@ -293,10 +387,14 @@ describe('POST /cart/checkout', () => {
         });
         const addressId = address.body.data.addresses[0].id as string;
 
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
         const response = await api()
             .post('/cart/checkout')
             .set('Authorization', bearer)
-            .send({ addressId, shippingMethodId: 'pickup' });
+            .send({ addressId });
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
@@ -306,9 +404,10 @@ describe('POST /cart/checkout', () => {
     it('empties the cart on success', async () => {
         const { bearer } = await authenticateWithCart();
         await api()
-            .post('/cart/checkout')
+            .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
+        await api().post('/cart/checkout').set('Authorization', bearer).send({});
         const response = await api().get('/cart').set('Authorization', bearer);
 
         expect(response.body.data.items).toHaveLength(0);
@@ -376,10 +475,14 @@ describe('POST /cart/checkout', () => {
             withEnvironment('NODE_BANK_TRANSFER_IBAN', 'DE89370400440532013000', async () => {
                 const { bearer } = await authenticateWithCart();
 
+                await api()
+                    .put('/cart/shipping-method')
+                    .set('Authorization', bearer)
+                    .send({ shippingMethodId: 'pickup' });
                 const response = await api()
                     .post('/cart/checkout')
                     .set('Authorization', bearer)
-                    .send({ paymentMethod: 'bank_transfer', shippingMethodId: 'pickup' });
+                    .send({ paymentMethod: 'bank_transfer' });
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.order.paymentMethod).toBe('bank_transfer');

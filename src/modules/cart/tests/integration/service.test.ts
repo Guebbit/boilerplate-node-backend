@@ -70,7 +70,10 @@ import { MISSING_ID } from '@tests/ids';
 setupTestDb();
 
 /** What every read answers for a user with nothing in their cart. */
-const EMPTY_CART = { items: [], summary: { itemsCount: 0, totalQuantity: 0, total: 0 } };
+const EMPTY_CART = {
+    items: [],
+    summary: { itemsCount: 0, totalQuantity: 0, itemsTotal: 0, shippingCost: 0, totalPrice: 0 }
+};
 
 /** Reads the persisted quantity for a product, so assertions survive the round trip to Mongo. */
 const storedQuantity = async (userId: string, productId: string): Promise<number | undefined> => {
@@ -230,7 +233,13 @@ describe('cartGetForBadge', () => {
 
         // Distinct numbers on purpose: 2 lines, 5 units, 80.00 total — no two of the three can
         // be confused for each other if one is computed wrongly.
-        expect(summary).toEqual({ itemsCount: 2, totalQuantity: 5, total: 80 });
+        expect(summary).toEqual({
+            itemsCount: 2,
+            totalQuantity: 5,
+            itemsTotal: 80,
+            shippingCost: 0,
+            totalPrice: 80
+        });
     });
 
     it('reports a zeroed summary for an empty cart', async () => {
@@ -291,7 +300,13 @@ describe('cartItemSetById', () => {
         expect(result.success).toBe(true);
         expect(result.data).toEqual({
             items: [{ productId: String(product._id), quantity: 2 }],
-            summary: { itemsCount: 1, totalQuantity: 2, total: 50 }
+            summary: {
+                itemsCount: 1,
+                totalQuantity: 2,
+                itemsTotal: 50,
+                shippingCost: 0,
+                totalPrice: 50
+            }
         });
     });
 
@@ -615,7 +630,8 @@ describe('orderConfirm', () => {
 
         // `pickup`: both products are physical, so checkout needs a method — pickup needs no
         // address either, keeping this test about order creation, not shipping.
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
         await expect(countOrders({ userId: user._id })).resolves.toBe(1);
@@ -629,7 +645,8 @@ describe('orderConfirm', () => {
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
-        await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+        await orderConfirm(user.id, testCallerContext, undefined);
 
         // Ordering matters: the cart must only be cleared after the order was created, or a
         // failure mid-checkout loses the basket.
@@ -689,7 +706,8 @@ describe('orderConfirm', () => {
         const product = await createProduct({ price: 25 });
         await cartItemSetById(user.id, String(product._id), 2);
 
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'express');
+        await cartRepository.setShippingMethod(user.id, 'express');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
         const order = await findOrder({ userId: user._id });
@@ -703,7 +721,8 @@ describe('orderConfirm', () => {
         const product = await createProduct({ price: 60 });
         await cartItemSetById(user.id, String(product._id), 2); // 120 ≥ standard's 100
 
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
+        await cartRepository.setShippingMethod(user.id, 'standard');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
         const order = await findOrder({ userId: user._id });
@@ -715,7 +734,8 @@ describe('orderConfirm', () => {
         const product = await createProduct({ onHand: 5 });
         await cartItemSetById(user.id, String(product._id), 2);
 
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'teleport');
+        await cartRepository.setShippingMethod(user.id, 'teleport');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(asReject(result).status).toBe(404);
         expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_NOT_FOUND');
@@ -750,7 +770,8 @@ describe('orderConfirm', () => {
         await cartItemSetById(user.id, String(product._id), 1);
 
         // `standard` (5, freeAbove: 100) — a 500 line total clears the threshold.
-        await orderConfirm(user.id, testCallerContext, undefined, 'standard');
+        await cartRepository.setShippingMethod(user.id, 'standard');
+        await orderConfirm(user.id, testCallerContext, undefined);
 
         const order = await findOrder({ userId: user._id });
         expect(order!.shippingMethod).toBe('standard');
@@ -762,7 +783,8 @@ describe('orderConfirm', () => {
         const ebook = await createProduct({ requiresShipping: false });
         await cartItemSetById(user.id, String(ebook._id), 1);
 
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
+        await cartRepository.setShippingMethod(user.id, 'standard');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_NOT_APPLICABLE');
@@ -787,7 +809,8 @@ describe('orderConfirm', () => {
         await cartItemSetById(user.id, String(product._id), 1);
 
         // `standard.requiresAddress` is true, and this user's book is empty.
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
+        await cartRepository.setShippingMethod(user.id, 'standard');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(asReject(result).status).toBe(422);
         expect(asReject(result).errors[0].code).toBe('CART_ADDRESS_REQUIRED');
@@ -800,7 +823,8 @@ describe('orderConfirm', () => {
         await cartItemSetById(user.id, String(product._id), 1);
 
         // `pickup.requiresAddress` is false, so the empty address book is not an obstacle.
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
         const order = await findOrder({ userId: user._id });
@@ -816,7 +840,8 @@ describe('orderConfirm', () => {
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
         const order = await findOrder({ userId: user._id });
@@ -837,7 +862,8 @@ describe('orderConfirm', () => {
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
-        const result = await orderConfirm(user.id, testCallerContext, addressId, 'pickup');
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+        const result = await orderConfirm(user.id, testCallerContext, addressId);
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
@@ -851,7 +877,8 @@ describe('orderConfirm', () => {
         const product = await createProduct({ weight: 3000 });
         await cartItemSetById(user.id, String(product._id), 2);
 
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'express');
+        await cartRepository.setShippingMethod(user.id, 'express');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_WEIGHT');
@@ -865,7 +892,8 @@ describe('orderConfirm', () => {
         const product = await createProduct({ weight: 3000 });
         await cartItemSetById(user.id, String(product._id), 2);
 
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
+        await cartRepository.setShippingMethod(user.id, 'standard');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
     });
@@ -876,7 +904,8 @@ describe('orderConfirm', () => {
         const product = await createProduct(); // no `weight` override
         await cartItemSetById(user.id, String(product._id), 1);
 
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'express');
+        await cartRepository.setShippingMethod(user.id, 'express');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
     });
@@ -901,7 +930,8 @@ describe('orderConfirm', () => {
         await cartItemSetById(user.id, String(ebook._id), 1);
         await cartItemAddById(user.id, String(mug._id), 1);
 
-        await orderConfirm(user.id, testCallerContext, undefined, 'standard');
+        await cartRepository.setShippingMethod(user.id, 'standard');
+        await orderConfirm(user.id, testCallerContext, undefined);
 
         const order = await findOrder({ userId: user._id });
         expect(order!.shippingMethod).toBe('standard');
@@ -913,7 +943,8 @@ describe('orderConfirm', () => {
         const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
         await cartItemSetById(user.id, String(keyboard._id), 2);
 
-        const result = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
         await flush();
 
         expect(result.success).toBe(true);
@@ -963,7 +994,8 @@ describe('orderConfirm — paymentMethod', () => {
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
-        await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+        await orderConfirm(user.id, testCallerContext, undefined);
 
         const order = await findOrder({ userId: user._id });
         expect(order!.paymentMethod).toBe('card');
@@ -984,7 +1016,6 @@ describe('orderConfirm — paymentMethod', () => {
                     user.id,
                     testCallerContext,
                     undefined,
-                    undefined,
                     'bank_transfer'
                 );
 
@@ -1004,11 +1035,11 @@ describe('orderConfirm — paymentMethod', () => {
                     await cartItemSetById(user.id, String(product._id), 1);
 
                     const before = Date.now();
+                    await cartRepository.setShippingMethod(user.id, 'pickup');
                     const result = await orderConfirm(
                         user.id,
                         testCallerContext,
                         undefined,
-                        'pickup',
                         'bank_transfer'
                     );
 
@@ -1031,7 +1062,8 @@ describe('orderConfirm — paymentMethod', () => {
             const product = await createProduct();
             await cartItemSetById(user.id, String(product._id), 1);
 
-            await orderConfirm(user.id, testCallerContext, undefined, 'pickup', 'bank_transfer');
+            await cartRepository.setShippingMethod(user.id, 'pickup');
+            await orderConfirm(user.id, testCallerContext, undefined, 'bank_transfer');
 
             const stored = await findOrder({ userId: user._id });
             // `toJSON()`'s static type mirrors the stored document, not the transform this
@@ -1061,7 +1093,8 @@ describe('orderConfirm — paymentMethod', () => {
             const product = await createProduct();
             await cartItemSetById(user.id, String(product._id), 1);
 
-            await orderConfirm(user.id, testCallerContext, undefined, 'pickup', 'bank_transfer');
+            await cartRepository.setShippingMethod(user.id, 'pickup');
+            await orderConfirm(user.id, testCallerContext, undefined, 'bank_transfer');
             await flush();
 
             expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
@@ -1089,7 +1122,6 @@ describe('orderConfirm — paymentMethod', () => {
                 user.id,
                 testCallerContext,
                 undefined,
-                undefined,
                 'bank_transfer'
             );
 
@@ -1113,11 +1145,11 @@ describe('orderConfirm — paymentMethod', () => {
             });
             await cartItemSetById(user.id, String(product._id), 1);
 
+            await cartRepository.setShippingMethod(user.id, 'pickup');
             const result = await orderConfirm(
                 user.id,
                 testCallerContext,
                 undefined,
-                'pickup',
                 'bank_transfer'
             );
 

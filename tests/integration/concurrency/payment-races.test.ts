@@ -82,10 +82,11 @@ const loggedInCustomer = async (): Promise<string> => {
 const orderAwaitingPayment = async (productId: string, quantity: number) => {
     const bearer = await loggedInCustomer();
     await api().post('/cart').set('Authorization', bearer).send({ productId, quantity });
-    const checkout = await api()
-        .post('/cart/checkout')
+    await api()
+        .put('/cart/shipping-method')
         .set('Authorization', bearer)
         .send({ shippingMethodId: 'pickup' });
+    const checkout = await api().post('/cart/checkout').set('Authorization', bearer).send({});
     if (checkout.status !== 201) throw new Error(`checkout: ${JSON.stringify(checkout.body)}`);
     const orderId = String(checkout.body.data.order.id);
 
@@ -241,15 +242,16 @@ describe('P4 — more buyers than units, all at once', () => {
                     .post('/cart')
                     .set('Authorization', bearer)
                     .send({ productId: String(product._id), quantity: 1 });
+                await api()
+                    .put('/cart/shipping-method')
+                    .set('Authorization', bearer)
+                    .send({ shippingMethodId: 'pickup' });
                 return bearer;
             })
         );
 
         const results = await raceN(RACE_SIZE, (index) =>
-            api()
-                .post('/cart/checkout')
-                .set('Authorization', buyers[index])
-                .send({ shippingMethodId: 'pickup' })
+            api().post('/cart/checkout').set('Authorization', buyers[index]).send({})
         );
 
         expectNoServerErrors(results);

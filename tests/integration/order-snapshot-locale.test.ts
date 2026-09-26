@@ -13,6 +13,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
 import { cartService } from '@modules/cart';
+import { cartRepository } from '@modules/cart/repository';
 import { asSuccess } from '@tests/response';
 import { translationRepository } from '@modules/locales/repository';
 import { givenLocale } from '@modules/locales/tests/factories';
@@ -91,12 +92,8 @@ describe("cartService.orderConfirm freezes the snapshot in the buyer's stored lo
         await givenTranslation(String(product._id), 'it', { title: 'Cuccia' });
 
         await cartService.cartItemSetById(user.id, String(product._id), 1);
-        const result = await cartService.orderConfirm(
-            user.id,
-            testCallerContext,
-            undefined,
-            'pickup'
-        );
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+        const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         const order = asSuccess(result).data;
         expect(order.items[0].locale).toBe('it');
