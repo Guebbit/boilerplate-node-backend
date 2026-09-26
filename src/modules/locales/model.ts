@@ -9,9 +9,18 @@
 
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
+import { z } from 'zod';
 import { LocaleDirection, TranslationOrigin } from '@types';
 import type { Language, LocaleEntry, Translation } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+
+/**
+ * A display name that survives being trimmed. Shared by `create-locale.ts` and `update-locale.ts`.
+ * `minLength: 1` in `openapi.yaml` accepts a single space, which Mongoose then trims to `""` at a
+ * `required: true` column. Trimming before the length check here catches that at validation, with
+ * a field-named error, instead of as a generic Mongoose 422.
+ */
+export const localeDisplayName = z.string().trim().min(1);
 
 /**
  * A BCP 47 tag the way every lookup and write in this module compares it: trimmed, lowercased.

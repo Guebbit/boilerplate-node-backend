@@ -10,21 +10,12 @@
  */
 
 import type { Request, Response } from 'express';
-import { z } from 'zod';
 import { CreateLocaleBody } from '@api/schemas.zod';
 import type { CreateLocaleRequest, Language } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
-
-/**
- * A display name that survives being trimmed.
- * `minLength: 1` in `openapi.yaml` accepts a single space, which Mongoose then trims to
- * `""` at a `required: true` column. Trimming before the length check here catches that
- * at validation, with a field-named error, instead of as a generic Mongoose 422.
- */
-const displayName = z.string().trim().min(1);
 
 /**
  * POST /locales (admin)
@@ -35,8 +26,8 @@ export const createLocale = (
     response: Response
 ) => {
     const parseResult = CreateLocaleBody.extend({
-        name: displayName,
-        nativeName: displayName
+        name: localeService.localeDisplayName,
+        nativeName: localeService.localeDisplayName
     }).safeParse(request.body);
     if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
 

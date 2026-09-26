@@ -1363,6 +1363,9 @@ components:
                         - $ref: '#/components/schemas/TranslationOrigin'
                     default: human
 
+        # Shared by both `PUT` and `PATCH` — the two verbs interpret an absent key differently
+        # (untouched under PATCH, deleted under PUT), so that meaning lives in each operation's own
+        # description, not here.
         UpsertTranslationsRequest:
             type: object
             additionalProperties:
@@ -1371,13 +1374,13 @@ components:
                 allOf:
                     - $ref: '#/components/schemas/UpsertTranslationRequest'
                 description: >-
-                    Upserts this locale's row when an object, deletes it when `null`. A key this
-                    map does not name is left exactly as it is — see the operation description for
-                    the full three-way table.
+                    Upserts this locale's row when an object, deletes it when `null`. See the
+                    operation description for what a key this map does not name means for the verb
+                    in use.
             description: >-
-                One or more locales for one entity, keyed by locale tag. A key absent from this map
-                leaves that locale untouched; see the operation description for what an object and
-                a `null` each mean.
+                One or more locales for one entity, keyed by locale tag. See the operation
+                description for what an object, a `null`, and an absent key each mean for the verb
+                in use.
             example:
                 it:
                     fields:

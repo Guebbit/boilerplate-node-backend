@@ -14,6 +14,31 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { localeService } from '../services';
 
+/** The two routes differ by one word, so they are one handler and a mode. */
+const writeEntityTranslations = (
+    request: Request<{ entityType: string; id: string }, unknown, UpsertTranslationsRequest>,
+    response: Response,
+    mode: 'replace' | 'upsert'
+) => {
+    const schema =
+        mode === 'replace' ? ReplaceEntityTranslationsBody : UpsertEntityTranslationsBody;
+    const body = parseBody(schema, request.body, response);
+    if (!body) return;
+
+    const write =
+        mode === 'replace'
+            ? localeService.replaceEntityTranslations
+            : localeService.upsertEntityTranslations;
+
+    return write(request.params.entityType, request.params.id, body, callerContextOf(request))
+        .then((result) => {
+            if (refused(response, result)) return;
+
+            return successResponse(response, result.data);
+        })
+        .catch(catchAs(response, `${mode}EntityTranslations`));
+};
+
 /**
  * PUT /locales/translations/:entityType/:id (admin)
  * Replace the whole set — a locale stored and not sent is deleted. See `openapi.yaml` for the
@@ -23,24 +48,7 @@ import { localeService } from '../services';
 export const replaceEntityTranslations = (
     request: Request<{ entityType: string; id: string }, unknown, UpsertTranslationsRequest>,
     response: Response
-) => {
-    const body = parseBody(ReplaceEntityTranslationsBody, request.body, response);
-    if (!body) return;
-
-    return localeService
-        .replaceEntityTranslations(
-            request.params.entityType,
-            request.params.id,
-            body,
-            callerContextOf(request)
-        )
-        .then((result) => {
-            if (refused(response, result)) return;
-
-            return successResponse(response, result.data);
-        })
-        .catch(catchAs(response, 'replaceEntityTranslations'));
-};
+) => writeEntityTranslations(request, response, 'replace');
 
 /**
  * PATCH /locales/translations/:entityType/:id (admin)
@@ -53,21 +61,4 @@ export const replaceEntityTranslations = (
 export const upsertEntityTranslations = (
     request: Request<{ entityType: string; id: string }, unknown, UpsertTranslationsRequest>,
     response: Response
-) => {
-    const body = parseBody(UpsertEntityTranslationsBody, request.body, response);
-    if (!body) return;
-
-    return localeService
-        .upsertEntityTranslations(
-            request.params.entityType,
-            request.params.id,
-            body,
-            callerContextOf(request)
-        )
-        .then((result) => {
-            if (refused(response, result)) return;
-
-            return successResponse(response, result.data);
-        })
-        .catch(catchAs(response, 'upsertEntityTranslations'));
-};
+) => writeEntityTranslations(request, response, 'upsert');
