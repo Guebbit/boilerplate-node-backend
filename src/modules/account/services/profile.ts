@@ -299,17 +299,19 @@ interface EmailChangeOutcome {
 }
 
 /**
- * Applies `PUT/PATCH /account`'s `email` field to `user.pendingEmail` — never straight to `user.email`.
- * The account keeps its current, PROVEN address until the new one is confirmed through
- * `POST /account/email-change-confirm` — docs/modules/account.md#proving-an-address.
+ * Applies `PUT/PATCH /account`'s `email` field to `user.pendingEmail` — never straight to
+ * `user.email`. The account keeps its current, PROVEN address until the new one is confirmed
+ * through `POST /account/email-change-confirm` — docs/modules/account.md#proving-an-address.
  *
- * Three outcomes: an absent field leaves everything alone; the CURRENT address is a no-op — a
- * `PUT` (`email` required) or a save that merely didn't change it must not silently cancel a
- * pending change the caller never asked to cancel, see {@link cancelPendingEmailChange} for the
- * explicit action that does; any OTHER address is checked against every account's `email` AND
- * `pendingEmail` before being accepted. That check is the REQUEST-TIME half of the collision
- * rule — `users_pending_email` and `users_email` (both unique) are the swap-time half, since the
- * two are up to 24 hours apart and only the indexes are still there for both.
+ * Outcomes:
+ * - Absent field:    leaves everything alone.
+ * - CURRENT address: a no-op. A `PUT` (`email` required), or a save that merely didn't change it,
+ *                    must not silently cancel a pending change the caller never asked to cancel —
+ *                    see {@link cancelPendingEmailChange} for that explicit action.
+ * - Any OTHER address: checked against every account's `email` AND `pendingEmail` first — the
+ *                    REQUEST-TIME half of the collision rule. `users_pending_email` and
+ *                    `users_email` (both unique) are the swap-time half, since the two are up to
+ *                    24 hours apart and only the indexes are still there for both.
  *
  * Mutates `user` in place; the caller's own `save()` (inside `userService.update`) persists it.
  * @param user - the loaded document; must carry `pendingEmail` (`findByIdWithCredentials`)
@@ -333,9 +335,11 @@ const applyEmailChangeRequest = (
 };
 
 /**
- * `DELETE /account/pending-email` — the explicit cancel {@link applyEmailChangeRequest} no longer
- * performs as a side effect of resending the current address. A no-op when nothing is pending, so
- * a client can call it without checking `GET /account` first.
+ * `DELETE /account/pending-email` — the explicit cancel. Resending the current address through
+ * {@link applyEmailChangeRequest} never performs one as a side effect. A no-op when nothing is
+ * pending, so a client can call it without checking `GET /account` first — but when something WAS
+ * pending, the live `email-change` link is revoked in the same call, so it cannot still swap in
+ * the address this cancel just gave up on (PL-26).
  */
 export const cancelPendingEmailChange = (
     userId: string,
@@ -345,15 +349,32 @@ export const cancelPendingEmailChange = (
         .findByIdWithPendingEmail(userId)
         .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);
-            return userService.cancelPendingEmail(user).then((saved) => {
-                recordAudit(context, {
-                    action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELLED,
-                    outcome: 'success'
-                });
-                return generateSuccess(saved, 200, t('account.email-change.cancelled'));
-            });
+            const hadPending = Boolean(user.pendingEmail);
+            return userService
+                .cancelPendingEmail(user)
+                .then((saved) => revokeCancelledChange(hadPending, saved, context))
+                .then((saved) => generateSuccess(saved, 200, t('account.email-change.cancelled')));
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+
+/**
+ * Revoke the now-pointless `email-change` token and audit the cancel — only when a change was
+ * actually pending, so a no-op cancel doesn't claim (or log) one that never happened (PL-26).
+ */
+const revokeCancelledChange = (
+    hadPending: boolean,
+    user: UserDocument,
+    context: CallerContext
+): Promise<UserDocument> => {
+    if (!hadPending) return Promise.resolve(user);
+    return userService.tokenRemoveAll(user, EMAIL_CHANGE_TOKEN_TYPE).then(() => {
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELLED,
+            outcome: 'success'
+        });
+        return user;
+    });
+};
 
 /**
  * The two mails a genuine `pendingEmail` request sends: a notice to the OLD address — no token,

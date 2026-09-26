@@ -286,8 +286,9 @@ export const completeEmailChange = (
     context: CallerContext
 ): Promise<UserDocument> => {
     const newEmail = user.pendingEmail;
-    // Defensive: `findLiveToken` only returns a holder of a live `email-change` token, and issuing
-    // one always sets `pendingEmail` first — this is unreachable outside a caller bug.
+    // Defensive: `findLiveToken` only returns a holder of a live `email-change` token. Issuing one
+    // always sets `pendingEmail` first, and cancelling one revokes it before clearing `pendingEmail`
+    // (`cancelPendingEmailChange`) — this is unreachable outside a caller bug.
     if (!newEmail) return Promise.resolve(user);
 
     return userService

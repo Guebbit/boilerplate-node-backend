@@ -13,7 +13,7 @@ import { accountService } from '../services';
 
 /**
  * DELETE /account/pending-email — the explicit action that cancels a pending email change.
- * Resending the current address on `PUT`/`PATCH /account` no longer does — see
+ * Resending the current address on `PUT`/`PATCH /account` is a no-op, not an implicit cancel — see
  * docs/modules/account.md#proving-an-address.
  */
 export const cancelPendingEmail = (request: Request, response: Response) => {
