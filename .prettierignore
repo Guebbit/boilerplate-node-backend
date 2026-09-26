@@ -25,6 +25,10 @@ tmp/reports/stryker-incremental.json
 .claude/
 CLAUDE.md
 
+# 2brain's generated wiki (see CLAUDE.md): a tool writes it, not anyone typing Markdown or YAML —
+# same reasoning as the Stryker cache above.
+.2brain/
+
 # The three shared authorization artefacts. Committed with identical bytes in the PHP twin, which
 # formats YAML with dprint rather than Prettier. Two formatters over one shared file is a silent
 # fork — the same reasoning that excludes the Spectral rulesets over there.

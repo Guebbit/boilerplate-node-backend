@@ -28,12 +28,13 @@ scrape_configs:
       # refresh one — so it authenticates with a static bearer credential, which is the mechanism
       # `scrape_configs` provides for exactly this.
       #
-      # This value must equal NODE_METRICS_TOKEN in the API's .env. It is a development default
-      # and belongs on the list of secrets to change before this faces anything, alongside
-      # NODE_TOKEN_ACCESS and NODE_TOKEN_REFRESH.
+      # `credentials_file`, not an inline value: Prometheus has no access to `.env`, so
+      # `npm run setup` writes this file with the API's own NODE_METRICS_TOKEN
+      # (docker-compose.yml mounts it read-only). Prometheus re-reads the file on every scrape, so
+      # rotating the token needs no restart on this side.
       authorization:
           type: Bearer
-          credentials: change-me-dev-metrics-token
+          credentials_file: /etc/prometheus/secrets/metrics-token
       # Prometheus has no access to `.env` and does no variable substitution, so this port is a
       # literal and must be kept equal to NODE_PORT. Change NODE_PORT alone and the target goes
       # DOWN with a connection error — which reads as "the API is down" rather than "the scrape

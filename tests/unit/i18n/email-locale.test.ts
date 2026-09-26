@@ -93,7 +93,7 @@ describe('the producer resolves the copy before publishing', () => {
         // `data.locale` is the `<html lang>` value the template prints — a finished string like
         // any other, not something the worker resolves against.
         expect(payload.data.locale).toBe('it');
-        expect(payload.data.footer).toBe('Inviata dal team di Ecommerce Demo.');
+        expect(payload.data.footer).toBe('Inviata dal nostro team.');
     });
 
     it('ignores the ambient locale — the argument decides, not the scope', async () => {

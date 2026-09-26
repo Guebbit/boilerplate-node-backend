@@ -6,14 +6,6 @@ rules:
     operation-operationId: error
     operation-tags: error
 
-    # --- Avoid nullable (optional) ---
-    avoid-nullable:
-        description: 'Prefer optional properties over nullable=true for codegen friendliness.'
-        severity: warn
-        given: '$..nullable'
-        then:
-            function: falsy
-
     # --- Catch the common typo: $refs instead of $ref ---
     no-refs-typo:
         description: "Do not use '$refs' (typo). Use '$ref'."

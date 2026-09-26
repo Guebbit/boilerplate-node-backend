@@ -23,14 +23,12 @@ get right before anyone writes one.
 
 ## Start here
 
-This stack is **container-first**: the shipped `.env` uses compose service hostnames, because the
-things that make it worth cloning — Tempo, Loki, Prometheus, Grafana, Alloy, Umami — only exist
-inside the compose stack.
+This stack is **container-first**: the shipped `.env` uses compose service hostnames.
 
 ```bash
 npm install
-cp .env-example .env      # then set NODE_TOKEN_ACCESS and NODE_TOKEN_REFRESH
-npm run compose:restart   # docker or podman, auto-detected
+npm run setup              # creates .env from .env-example, fills every secret it refuses to boot without
+npm run compose:up         # podman by default, CONTAINER_ENGINE=docker for Docker — 5 containers: app, cron, database, redis, rabbitmq
 ```
 
 That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting, so the
@@ -42,10 +40,15 @@ curl http://localhost:3000/            # health probe, with trace headers
 curl http://localhost:3000/products    # the seeded demo data
 ```
 
-::: warning Use the scripts, not a bare `compose up`
-The scripts pass the runtime's Promtail override with `-f`. A bare `compose up` runs the base file
-only: Loki stays empty and Grafana's log panels stay blank, with no error anywhere.
-:::
+Tempo, Loki, Prometheus, Grafana, Alloy and Umami are opt-in — the things that make this stack
+worth cloning, but a weight most machines don't want running by default:
+
+```bash
+npm run compose:up:full   # adds observability + analytics + the docs site (17 containers)
+```
+
+`compose:restart` and `compose:rebuild` honour the same profiles: set `COMPOSE_PROFILES` in `.env`
+once to keep the full stack across restarts, instead of passing `:full` every time.
 
 → Host mode, the collections, the pre-commit gate: **[Getting Started](./docs/getting-started.md)**
 → Ports and running the pair: **[Pairing & Ports](./docs/tools/pairing-and-ports.md)**
@@ -140,4 +143,17 @@ Per-suite numbers, so a doubling reads as a regression rather than as a mood:
 
 ## License
 
-AGPL-3.0. See [LICENSE](./LICENSE).
+AGPL-3.0-or-later. See [LICENSE](./LICENSE).
+
+Every site built on this backend is a network service, so AGPL §13 applies: if you modify it, you
+must offer everyone who interacts with it remotely a way to get the Corresponding Source of your
+modified version — not just to someone you hand a copy to. The paired frontend is shipped straight
+to browsers, so the same obligation covers it and the AGPL toolkits it bundles
+(`@guebbit/vue-toolkit`, `@guebbit/js-toolkit`).
+
+This binds _you_, the operator, not your users. It is not legal advice — some organisations forbid
+AGPL dependencies outright; check before adopting.
+
+The dev/production containers this repo composes carry their own licences, independent of the
+above: `mongo` (SSPL), `redis` (RSAL/SSPL), and Grafana Labs' own images — Grafana, Loki, Tempo,
+Alloy (AGPL). Prometheus and Alertmanager are unrelated CNCF projects, Apache-2.0.

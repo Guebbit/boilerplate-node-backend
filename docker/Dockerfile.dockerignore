@@ -26,6 +26,10 @@ clients
 # IDE
 .idea
 
+# 2brain's generated wiki (see CLAUDE.md): committed so a teammate without 2brain installed can
+# still read it, but nothing at runtime or in the image build reads it.
+.2brain
+
 # App build output
 dist
 

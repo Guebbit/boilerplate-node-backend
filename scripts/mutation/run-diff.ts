@@ -47,20 +47,19 @@ const baseArgument = process.argv.find((a) => a.startsWith('--base='));
 const base = baseArgument ? baseArgument.slice('--base='.length) : 'origin/main';
 
 /** Every file the diff touched, changed or added or renamed into — unfiltered. */
-const changedFiles = (): string[] =>
-    execFileSync(
-        'git',
-        ['diff', '--name-only', '--diff-filter=ACMR', `${mergeBase(base, 'mutation-diff')}...HEAD`],
-        {
-            cwd: REPO_ROOT,
-            encoding: 'utf8'
-        }
-    )
+const changedFiles = (baseCommit: string): string[] =>
+    execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', `${baseCommit}...HEAD`], {
+        cwd: REPO_ROOT,
+        encoding: 'utf8'
+    })
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line !== '');
 
-const files = changedMutable(changedFiles(), mutableFiles());
+const baseCommit = mergeBase(base, 'mutation-diff');
+if (baseCommit === undefined) process.exit(0);
+
+const files = changedMutable(changedFiles(baseCommit), mutableFiles());
 
 if (files.length === 0) {
     console.log('[mutation-diff] no mutable source files changed — nothing to measure.');

@@ -44,6 +44,6 @@
         "password-breached": "Questa password è comparsa in una violazione di dati e non può essere usata. Scegline un'altra."
     },
     "email": {
-        "footer": "Inviata dal team di Ecommerce Demo."
+        "footer": "Inviata dal nostro team."
     }
 }

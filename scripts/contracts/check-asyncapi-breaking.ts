@@ -47,7 +47,10 @@ const describe = (change: DiffOutputItem): string =>
 /** The leading `MAJOR` segment of an AsyncAPI version string. */
 const majorVersion = (version: string): string => version.split('.')[0] ?? version;
 
-const before = bundleAt(mergeBase(base, 'asyncapi-breaking'));
+const baseCommit = mergeBase(base, 'asyncapi-breaking');
+if (baseCommit === undefined) process.exit(0);
+
+const before = bundleAt(baseCommit);
 const after = readFileSync(path.join(REPO_ROOT, BUNDLE), 'utf8');
 
 if (before === undefined) {
