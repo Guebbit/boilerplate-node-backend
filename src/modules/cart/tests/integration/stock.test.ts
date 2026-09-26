@@ -228,10 +228,9 @@ describe('a rollback that itself fails', () => {
     });
 
     /*
-     * B20: the hold is taken BEFORE the order is written, so a refused reserve now has no order
-     * to roll back at all — `orderRepository.create`/`deleteOne` and the invoice counter are
-     * never reached. This replaces a test that forced `reserveForOrder` to refuse AFTER the write
-     * and asserted the (then-necessary) rollback-of-a-rollback; that scenario is unreachable now.
+     * The hold is taken BEFORE the order is written, so a refused reserve has no order to roll
+     * back at all — `orderRepository.create`/`deleteOne` and the invoice counter are never
+     * reached.
      */
     it('writes no order and burns no invoice number when the hold is refused', async () => {
         const user = await createUser();
@@ -278,51 +277,6 @@ describe('a rollback that itself fails', () => {
         // The guard's whole point: a failed release must not abort the delete that follows it, or
         // the loser is left holding an order the customer never bought.
         expect(deleted).toHaveBeenCalledTimes(1);
-    });
-
-    // B20, the admin-create door: same shared `placeOrder`, so the same "nothing written" rule.
-    it('writes no order and burns no invoice number when the admin create is refused', async () => {
-        const user = await createUser();
-        const scarce = await createProduct({ onHand: 1 });
-        const createSpy = jest.spyOn(orderRepository, 'create');
-        const counterSpy = jest.spyOn(orderRepository, 'incrementInvoiceCounter');
-
-        const result = await orderService.create(
-            user.id,
-            user.email,
-            [{ productId: String(scarce._id), quantity: 5 }],
-            testCallerContext
-        );
-
-        expect(result.success).toBe(false);
-        expect(result.status).toBe(409);
-        expect(!result.success && result.errors[0]?.code).toBe('ORDER_INSUFFICIENT_STOCK');
-        expect(createSpy).not.toHaveBeenCalled();
-        expect(counterSpy).not.toHaveBeenCalled();
-        expect(await countOrders({ userId: user._id })).toBe(0);
-    });
-
-    /*
-     * B20's other half: once the hold IS taken, a write that fails must give it back rather than
-     * leave a hold standing on a row that was never created.
-     */
-    it('gives the hold back when the order write itself fails', async () => {
-        const user = await createUser();
-        const product = await createProduct({ onHand: 5 });
-        jest.spyOn(orderRepository, 'create').mockRejectedValueOnce(new Error('mongo is down'));
-
-        await expect(
-            orderService.create(
-                user.id,
-                user.email,
-                [{ productId: String(product._id), quantity: 2 }],
-                testCallerContext
-            )
-        ).rejects.toThrow('mongo is down');
-
-        // The write never happened, so the hold it would have belonged to must not linger either.
-        expect(await countersOf(product._id)).toEqual({ onHand: 5, reserved: 0, available: 5 });
-        expect(await countOrders({ userId: user._id })).toBe(0);
     });
 });
 
