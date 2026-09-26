@@ -28,6 +28,7 @@ import type {
     TranslationOrigin
 } from '@types';
 import { frontendTenantIds } from './tenants';
+import { withTransaction } from '@infrastructure/runtime/database';
 
 /** One key and its translation, as a write supplies them. */
 export interface EntryInput {
@@ -191,6 +192,12 @@ const removeEntry = (entry: LocaleEntryDocument): Promise<number> =>
  * `replace` is the only difference between the two bulk routes — a single `deleteMany` of keys the
  * caller did not send. One `bulkWrite` rather than a loop of upserts: five hundred keys is the
  * size an import actually arrives in.
+ *
+ * D17e-2: the upsert and the removal run in one transaction — the repo's first. Unlike the
+ * revision bump this module's own docblock explains as deliberately non-transactional, a crash
+ * between these two has no such grace: `replace` promises the removed keys are gone, and a
+ * process dying between the bulk upsert and the `deleteMany` would otherwise leave stale keys
+ * silently surviving a caller who asked for exactly the set they sent.
  */
 const importEntries = async (
     locale: string,
@@ -203,19 +210,24 @@ const importEntries = async (
 
     const removedKeys = replace ? [...existing].filter((key) => !incoming.has(key)) : [];
 
-    if (inputs.length > 0)
-        await localeEntryModel.bulkWrite(
-            [...incoming].map(([key, value]) => ({
-                updateOne: {
-                    filter: { locale, tenant, key },
-                    update: { $set: { value }, $setOnInsert: { locale, tenant, key } },
-                    upsert: true
-                }
-            }))
-        );
+    await withTransaction(async (session) => {
+        if (inputs.length > 0)
+            await localeEntryModel.bulkWrite(
+                [...incoming].map(([key, value]) => ({
+                    updateOne: {
+                        filter: { locale, tenant, key },
+                        update: { $set: { value }, $setOnInsert: { locale, tenant, key } },
+                        upsert: true
+                    }
+                })),
+                { session }
+            );
 
-    if (removedKeys.length > 0)
-        await localeEntryModel.deleteMany({ locale, tenant, key: { $in: removedKeys } }).exec();
+        if (removedKeys.length > 0)
+            await localeEntryModel
+                .deleteMany({ locale, tenant, key: { $in: removedKeys } }, { session })
+                .exec();
+    });
 
     const created = [...incoming.keys()].filter((key) => !existing.has(key)).length;
 

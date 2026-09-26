@@ -14,7 +14,7 @@ import {
     localeRepository,
     translationRepository
 } from '@modules/locales/repository';
-import type { LocaleDocument } from '@modules/locales/model';
+import { localeEntryModel, type LocaleDocument } from '@modules/locales/model';
 import { localeService } from '@modules/locales/services';
 
 setupTestDb();
@@ -196,6 +196,28 @@ describe('importEntries', () => {
         await localeEntryRepository.importEntries('es', FRONTEND, [], { replace: true });
 
         expect(await localeEntryRepository.listKeys('it', FRONTEND)).toEqual(['cart.title']);
+    });
+
+    // D17e-2: the upsert and the removal run in one transaction — a failure between them must
+    // roll back the whole batch, not leave the upserted keys behind with the stale ones.
+    it('rolls back the upserts when the removal step fails', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito', 'cart.empty': 'Vacío' });
+
+        jest.spyOn(localeEntryModel, 'deleteMany').mockImplementationOnce(() => {
+            throw new Error('simulated failure between the upsert and the removal');
+        });
+
+        await expect(
+            localeEntryRepository.importEntries(
+                'es',
+                FRONTEND,
+                [{ key: 'cart.new', value: 'Nuevo' }],
+                { replace: true }
+            )
+        ).rejects.toThrow('simulated failure');
+
+        const remaining = await localeEntryRepository.listKeys('es', FRONTEND);
+        expect(remaining.toSorted()).toEqual(['cart.empty', 'cart.title']);
     });
 });
 
