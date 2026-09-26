@@ -7,7 +7,7 @@
  * See: docs/modules/wishlist.md
  */
 
-import type { UpdateWriteOpResult } from 'mongoose';
+import type { UpdateWriteOpResult, ClientSession } from 'mongoose';
 import { wishlistModel, applyWishlistTransform } from './model';
 import type { WishlistDocument } from './model';
 import {
@@ -33,7 +33,7 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
     findByUserId: (userId: string) => Promise<WishlistDocument | null>;
     addLine: (userId: string, productId: string) => Promise<WishlistDocument>;
     removeLine: (userId: string, productId: string) => Promise<WishlistDocument | null>;
-    deleteByUserId: (userId: string) => Promise<void>;
+    deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
 } = {
     ...createRepository<WishlistDocument, Wire<WishlistDocument>>(wishlistModel, {
@@ -91,9 +91,9 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
      * Delete a user's wishlist outright — what a hard account deletion owes it. An orphaned
      * wishlist would outlive the account with no way to reach it.
      */
-    deleteByUserId: async (userId: string) =>
+    deleteByUserId: (userId: string, session?: ClientSession) =>
         wishlistModel
-            .deleteOne({ userId: toObjectId(userId) })
+            .deleteOne({ userId: toObjectId(userId) }, session ? { session } : undefined)
             .exec()
             .then(() => {
                 // explicit void return

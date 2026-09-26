@@ -33,7 +33,6 @@ flowchart LR
     cart --> products
     cart --> users
     products -. "product.deleted" .-> cart
-    users -. "user.deleted" .-> cart
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;

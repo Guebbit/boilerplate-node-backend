@@ -5,6 +5,7 @@
  * default", and that's a property of the list, not of one entry.
  */
 
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -89,6 +90,9 @@ export const addressForCheckout = (
         return book?.items.find((item) => item.default) ?? undefined;
     });
 
-/** What a hard account deletion owes the book — see `module.ts`'s subscription. */
-export const addressesDeleteByUserId = (userId: string): Promise<void> =>
-    addressBookRepository.deleteByUserId(userId);
+/**
+ * What a hard account deletion owes the book — DDD-D6's `personalData.erase` hook (see
+ * `module.ts`'s manifest), joining the caller's own hard-delete transaction.
+ */
+export const addressesDeleteByUserId = (userId: string, session: ClientSession): Promise<void> =>
+    addressBookRepository.deleteByUserId(userId, session);

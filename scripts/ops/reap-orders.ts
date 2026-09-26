@@ -5,7 +5,7 @@
  *
  * Unlike `reap-quarantine.ts` and `reap-inactive-accounts.ts`, this never deletes a row: an order
  * is an invoice, kept whole under Art. 17(3)(b)/(e) regardless of what happens to the account
- * that placed it. `users`' `USER_DELETED` listener (`orders/module.ts`) unsets `userId` and
+ * that placed it. `users`' `personalData.erase` hook (`orders/module.ts`) unsets `userId` and
  * stamps `anonymizeAfter` to `max(now, createdAt + NODE_ORDER_PII_RETENTION_DAYS)` the moment an
  * account is erased — an order already past its own window is due almost immediately, not given a
  * fresh retention period. This script is the other half — once that date arrives, it replaces the

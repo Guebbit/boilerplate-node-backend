@@ -6,6 +6,7 @@
  * because Mongoose's generics are too large for TypeScript to infer at an export boundary (TS7056).
  */
 
+import type { ClientSession } from 'mongoose';
 import {
     paymentModel,
     paymentWebhookEventModel,
@@ -95,7 +96,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             receivedAt: Date;
         }
     ) => Promise<PaymentDocument | null>;
-    detachUserId: (userId: string) => Promise<number>;
+    detachUserId: (userId: string, session?: ClientSession) => Promise<number>;
     deleteAbandonedBefore: (cutoff: Date) => Promise<number>;
     updateStatusIfIn: (
         orderId: string,
@@ -222,12 +223,12 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * @param userId - the erased account's id
      * @returns how many payments were detached
      */
-    detachUserId: (userId: string) =>
+    detachUserId: (userId: string, session?: ClientSession) =>
         paymentModel
             .updateMany(
                 { userId: toObjectId(userId) },
                 { $unset: { userId: 1 } },
-                { timestamps: false }
+                { timestamps: false, ...(session ? { session } : {}) }
             )
             .exec()
             .then(({ modifiedCount }) => modifiedCount),

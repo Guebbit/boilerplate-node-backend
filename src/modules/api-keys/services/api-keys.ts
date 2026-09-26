@@ -6,6 +6,7 @@
  * `shared/authorization-keys.yaml`, and `Caller.tenantId` is null only in platform scope).
  */
 
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import {
     generateReject,
@@ -59,9 +60,12 @@ export const findOwnApiKeys = (userId: string): Promise<ApiKey[]> =>
         MAX_CONFIGURED_PAGE_SIZE
     );
 
-/** What a hard account deletion owes this collection — see `module.ts`'s subscription. */
-export const apiKeysDeleteByUserId = (userId: string): Promise<void> =>
-    apiKeyRepository.deleteByUserId(userId);
+/**
+ * What a hard account deletion owes this collection — DDD-D6's `personalData.erase` hook (see
+ * `module.ts`'s manifest), joining the caller's own hard-delete transaction.
+ */
+export const apiKeysDeleteByUserId = (userId: string, session: ClientSession): Promise<void> =>
+    apiKeyRepository.deleteByUserId(userId, session);
 
 /** List this tenant's credentials, newest first. Never returns a secret — see `model.ts`'s transform. */
 export const list = (

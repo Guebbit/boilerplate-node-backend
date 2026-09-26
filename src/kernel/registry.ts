@@ -11,6 +11,7 @@
 
 import type { Router } from 'express';
 import type { ZodType } from 'zod';
+import type { ClientSession } from 'mongoose';
 import { assertRequiredConfig, type NonModuleChecks } from '@kernel/required-config';
 import type { RateLimitBudget } from '@types';
 
@@ -160,6 +161,17 @@ export interface PersonalDataSection {
 
     /** Everything this module holds about the subject, already in wire shape. */
     collect: (subject: PersonalDataSubject) => Promise<unknown>;
+
+    /**
+     * DDD-D6: erase this section's rows for one user, given the session a hard delete's
+     * transaction is running in — every write inside must take `{ session }`, or it commits
+     * outside the transaction and survives a rollback the rest of the erasure didn't.
+     *
+     * Optional, unlike {@link collect}: a section with nothing here is folded into the erasing
+     * module's own row (there is no second collection to touch), not a gap — `resolvePersonalDataErasers`
+     * skips it rather than calling a no-op.
+     */
+    erase?: (userId: string, session: ClientSession) => Promise<void>;
 }
 
 /**
@@ -415,6 +427,25 @@ export const resolvePersonalDataSections = (
 ): readonly PersonalDataSection[] =>
     appModules.flatMap((appModule) =>
         appModule.personalData === 'none' ? [] : appModule.personalData
+    );
+
+/**
+ * DDD-D6: every registered module's {@link PersonalDataSection.erase}, flattened — a section with
+ * none contributes nothing, the same way `'none'` does for {@link resolvePersonalDataSections}.
+ *
+ * `users/module.ts`'s own `onRegistered` hook builds this once every module is known and hands it
+ * to `users/service.ts`'s hard-delete path, the same pattern `resolvePersonalDataSections` and
+ * `account`'s registry follow — this file stays free of any `src/modules/*` import either way.
+ *
+ * @param appModules - the enabled module list
+ */
+export const resolvePersonalDataErasers = (
+    appModules: readonly AppModule[]
+): readonly ((userId: string, session: ClientSession) => Promise<void>)[] =>
+    appModules.flatMap((appModule) =>
+        appModule.personalData === 'none'
+            ? []
+            : appModule.personalData.flatMap((section) => (section.erase ? [section.erase] : []))
     );
 
 /**

@@ -4,6 +4,7 @@
  * the export's own JSDoc below for why.
  */
 
+import type { ClientSession } from 'mongoose';
 import { addressBookModel, applyAddressBookTransform } from './model';
 import type { AddressBookDocument } from './model';
 import type { AddressInput, UpdateAddressRequest } from '@types';
@@ -50,7 +51,7 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
         changes: UpdateAddressRequest
     ) => Promise<AddressBookDocument | null>;
     removeEntry: (userId: string, addressId: string) => Promise<AddressBookDocument | null>;
-    deleteByUserId: (userId: string) => Promise<void>;
+    deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
 } = {
     ...createRepository<AddressBookDocument, Wire<AddressBookDocument>>(addressBookModel, {
         transform: applyAddressBookTransform
@@ -150,9 +151,9 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
     /**
      * Delete a user's book outright — what a hard account deletion owes it.
      */
-    deleteByUserId: (userId: string) =>
+    deleteByUserId: (userId: string, session?: ClientSession) =>
         addressBookModel
-            .deleteOne({ userId: toObjectId(userId) })
+            .deleteOne({ userId: toObjectId(userId) }, session ? { session } : undefined)
             .exec()
             .then(() => {
                 // explicit void return

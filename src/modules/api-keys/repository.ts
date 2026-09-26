@@ -5,6 +5,7 @@
  * see {@link findActiveByPrefix}.
  */
 
+import type { ClientSession } from 'mongoose';
 import { createRepository, type Repository } from '@infrastructure/persistence/create-repository';
 import { apiKeyModel, applyApiKeyTransform, type ApiKeyDocument } from './model';
 import type { ApiKey } from '@types';
@@ -50,9 +51,9 @@ const touchLastUsed = (id: string): Promise<void> =>
  * `createdByUserId` is stored as a plain string (never `toObjectId`d — see `./model`), so it's
  * matched as-is.
  */
-const deleteByUserId = (userId: string): Promise<void> =>
+const deleteByUserId = (userId: string, session?: ClientSession): Promise<void> =>
     apiKeyModel
-        .deleteMany({ createdByUserId: userId })
+        .deleteMany({ createdByUserId: userId }, session ? { session } : undefined)
         .exec()
         .then(() => {
             // explicit void return

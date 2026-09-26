@@ -19,37 +19,27 @@ flowchart LR
     users["users<br/><i>this module</i>"]
     access["access"]
     account["account"]
-    addresses["addresses"]
     api_keys["api-keys"]
     cart["cart"]
     orders["orders"]
     payments["payments"]
     webhooks["webhooks"]
-    wishlist["wishlist"]
 
     account --> users
-    addresses --> users
     api_keys --> users
     cart --> users
     orders --> users
     payments --> users
     webhooks --> users
-    wishlist --> users
     users --> access
     users -. "user.setup-requested" .-> account
-    users -. "user.deleted" .-> addresses
-    users -. "user.deleted" .-> api_keys
-    users -. "user.deleted" .-> cart
-    users -. "user.deleted" .-> orders
-    users -. "user.deleted" .-> payments
-    users -. "user.deleted" .-> wishlist
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class access,account,addresses,api_keys,payments,webhooks,wishlist supporting;
+    class access,account,api_keys,payments,webhooks supporting;
     class users centre;
 ```
 

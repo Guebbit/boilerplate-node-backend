@@ -8,7 +8,7 @@
 
 import { orderModel, applyOrderTransform, invoiceCounterModel } from './model';
 import type { OrderDocument, OrderPendingEffect, OrderStatusOverride } from './model';
-import type { PipelineStage, QueryFilter } from 'mongoose';
+import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
 import {
@@ -297,8 +297,8 @@ const existingIds = (ids: readonly string[]): Promise<Set<string>> =>
 
 /**
  * Unset `userId` on every order this account placed, and mark each for
- * `scripts/ops/reap-orders.ts` to scrub later — `users`' `USER_DELETED` listener. The order row is
- * never touched otherwise: it is the invoice, kept whole until its own `anonymizeAfter`.
+ * `scripts/ops/reap-orders.ts` to scrub later — `users`' `personalData.erase` hook. The order row
+ * is never touched otherwise: it is the invoice, kept whole until its own `anonymizeAfter`.
  *
  * An aggregation-pipeline update, not a flat `$set`, because the clock runs PER ORDER: a decade-old
  * order is due almost immediately, not ten years from today. `anonymizeAfter = max(now, createdAt +
@@ -309,7 +309,11 @@ const existingIds = (ids: readonly string[]): Promise<Set<string>> =>
  * @param retentionDays - how many days of PII an order gets from ITS OWN `createdAt`
  * @returns how many orders were detached
  */
-const detachUserId = (userId: string, retentionDays: number): Promise<number> => {
+const detachUserId = (
+    userId: string,
+    retentionDays: number,
+    session?: ClientSession
+): Promise<number> => {
     const now = new Date();
 
     return orderModel
@@ -338,7 +342,7 @@ const detachUserId = (userId: string, retentionDays: number): Promise<number> =>
             // array to query updates unless the `updatePipeline` option is set"), since an array
             // and an update-operator OBJECT are both valid `updateMany` arguments with different
             // semantics. https://mongoosejs.com/docs/api/query.html#Query.prototype.setUpdate()
-            { timestamps: false, updatePipeline: true }
+            { timestamps: false, updatePipeline: true, ...(session ? { session } : {}) }
         )
         .exec()
         .then(({ modifiedCount }) => modifiedCount);
@@ -464,7 +468,11 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     addPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<void>;
     countOpenBankTransfers: (userId: string) => Promise<number>;
     existingIds: (ids: readonly string[]) => Promise<Set<string>>;
-    detachUserId: (userId: string, retentionDays: number) => Promise<number>;
+    detachUserId: (
+        userId: string,
+        retentionDays: number,
+        session?: ClientSession
+    ) => Promise<number>;
     scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
     incrementInvoiceCounter: (year: number) => Promise<number>;
 } = {

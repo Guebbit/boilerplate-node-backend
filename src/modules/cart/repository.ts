@@ -7,7 +7,7 @@
  * See: docs/modules/cart.md
  */
 
-import type { UpdateWriteOpResult, QueryFilter } from 'mongoose';
+import type { UpdateWriteOpResult, QueryFilter, ClientSession } from 'mongoose';
 import { Types } from 'mongoose';
 import { cartModel, applyCartTransform, CART_LINE_MAX } from './model';
 import type { CartDocument } from './model';
@@ -156,7 +156,7 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
     removeLine: (userId: string, productId: string) => Promise<CartDocument | null>;
     clearLines: (userId: string) => Promise<CartDocument | null>;
     clearLinesIfUnchanged: (userId: string, version: number) => Promise<CartDocument | null>;
-    deleteByUserId: (userId: string) => Promise<void>;
+    deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
 } = {
     ...createRepository<CartDocument, Wire<CartDocument>>(cartModel, {
@@ -242,9 +242,9 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
      * free on account deletion — an orphaned cart would outlive the account it belongs to with no
      * way to reach it.
      */
-    deleteByUserId: (userId: string) =>
+    deleteByUserId: (userId: string, session?: ClientSession) =>
         cartModel
-            .deleteOne({ userId: toObjectId(userId) })
+            .deleteOne({ userId: toObjectId(userId) }, session ? { session } : undefined)
             .exec()
             .then(() => {
                 // explicit void return

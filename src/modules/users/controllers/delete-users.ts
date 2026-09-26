@@ -12,7 +12,7 @@ import { usersAuditActions } from '../audit';
 /**
  * DELETE /users — delete a user by id in the request body (admin).
  * DELETE /users/:id — delete by path id. `?hardDelete=true` deletes permanently, else soft.
- * Hard delete announces `USER_DELETED`, cascading to every module subscribed to it — see
+ * Hard delete runs every registered `personalData.erase` hook (DDD-D6) in one transaction — see
  * docs/modules/users.md's generated neighbourhood diagram for the current list, checked on every
  * regenerate rather than named here, where it would go stale silently.
  *
