@@ -4,8 +4,8 @@
  * taking money can be bought rather than built. Depends on orders (a payment freezes an order's
  * total and refunds answer `ORDER_REFUND_OWED`, not the customer-facing `ORDER_CANCELLED` — see
  * `docs/modules/payments.md`) and on inventory (the confirm commits an order's held stock
- * into a sale). Depends on users to resolve the payer, and to detach one on `USER_DELETED` — the
- * payment survives account erasure, same as the order it paid for.
+ * into a sale). Depends on users to resolve the payer, and to detach one through its own
+ * `personalData.erase` hook — the payment survives account erasure, same as the order it paid for.
  *
  * See: docs/modules/payments.md
  */
@@ -14,7 +14,6 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { ORDER_REFUND_OWED } from '@modules/orders';
-import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
 import { refundForOrder, detachUserId, findOwnPaymentsForExport } from './services';
 import { validateBankTransferConfig, validateStripeSecretKey } from './config';
@@ -70,15 +69,16 @@ export default {
     personalData: [
         {
             section: 'payments',
-            collect: (subject) => findOwnPaymentsForExport(subject.userId)
+            collect: (subject) => findOwnPaymentsForExport(subject.userId),
+            // DDD-D6: detach, never delete — the payment survives the account, inside the same
+            // hard-delete transaction. See `detachUserId`.
+            erase: detachUserId
         }
     ],
     subscribe: () => {
         // `ORDER_REFUND_OWED`, not `ORDER_CANCELLED` — the event exists only when a refund is
         // owed, so there is no boolean left to branch on.
         onDomainEvent(ORDER_REFUND_OWED, ({ orderId }) => refundForOrder(orderId));
-        // Detach, never delete: the payment survives the account.
-        onDomainEvent(USER_DELETED, ({ userId }) => detachUserId(userId));
     },
     locales: path.join(__dirname, 'locales'),
     /**

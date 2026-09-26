@@ -8,6 +8,9 @@ import { asStub } from '@tests/stub';
 import { observePort } from '@tests/ports';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext, callerContextAs } from '@tests/callers';
+import { systemCallerContext } from '@kernel/permissions';
+import type { ClientSession } from 'mongoose';
+import { personalDataErasers, setPersonalDataErasers } from '../../erasure-registry';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import * as userService from '@modules/users/service';
 import { USER_SETUP_REQUESTED } from '../../events';
@@ -863,5 +866,96 @@ describe('userService.remove', () => {
         await userService.remove(user, true);
 
         expect(await userRepository.findById(id)).toBeNull();
+    });
+
+    // T6: a hard delete with no audit context (every HTTP-driven caller) must NOT record a
+    // system row — `createDeleteController`'s own spec already records one, and a second row
+    // here would double the audit trail for the exact same delete.
+    it('records no audit row when called with no context', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser();
+
+        await userService.remove(user, true);
+
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+
+    // T6: the inactivity reaper is the one caller with no request behind it, and passes its own
+    // system context — this is the row that closes the "reaper writes no audit row" gap.
+    it('records SYSTEM_USER_ERASED when hard-deleted with a system audit context', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser();
+        const id = user._id.toString();
+
+        await userService.remove(user, true, systemCallerContext('User'));
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.SYSTEM_USER_ERASED,
+                outcome: 'success',
+                target_type: 'user',
+                target_id: id
+            })
+        );
+    });
+
+    it('records no audit row for a soft delete even with a system audit context', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser();
+
+        await userService.remove(user, false, systemCallerContext('User'));
+
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+
+    // DDD-D6: the erasure cascade and the document delete run in one transaction — a failure
+    // ANYWHERE in it must roll back the whole thing, not leave the user gone with some of the
+    // cascade already committed, or the user still there with part of the cascade already run.
+    describe('atomicity of the erasure cascade', () => {
+        const originalErasers = personalDataErasers();
+
+        afterEach(() => {
+            setPersonalDataErasers(originalErasers);
+        });
+
+        it('rolls back an already-run eraser when a later one fails', async () => {
+            const user = await createUser();
+            const id = user._id.toString();
+            const firstEraser = jest.fn(
+                (userId: string, session: ClientSession) => userRepository.deleteOne(user, session) // stands in for a real eraser's write
+            );
+            const failingEraser = jest.fn(() => {
+                throw new Error('simulated failure partway through the cascade');
+            });
+            setPersonalDataErasers([firstEraser, failingEraser]);
+
+            await expect(userService.remove(user, true)).rejects.toThrow('simulated failure');
+
+            expect(firstEraser).toHaveBeenCalledTimes(1);
+            expect(failingEraser).toHaveBeenCalledTimes(1);
+            // The document delete never ran either — it comes after every eraser in the same
+            // transaction — and the stand-in "eraser" above got rolled back with it.
+            expect(await userRepository.findById(id)).not.toBeNull();
+        });
+
+        it('runs every eraser exactly once, in order, before deleting the document', async () => {
+            const user = await createUser();
+            const id = user._id.toString();
+            const order: string[] = [];
+            const first = jest.fn(() => {
+                order.push('first');
+                return Promise.resolve();
+            });
+            const second = jest.fn(() => {
+                order.push('second');
+                return Promise.resolve();
+            });
+            setPersonalDataErasers([first, second]);
+
+            await userService.remove(user, true);
+
+            expect(order).toEqual(['first', 'second']);
+            expect(await userRepository.findById(id)).toBeNull();
+        });
     });
 });

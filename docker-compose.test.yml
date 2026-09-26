@@ -33,8 +33,22 @@ services:
         #
         # Nothing seeds this either — the gate's suites create the rows they assert on. The demo
         # shop belongs to the dev stack and to `npm run demo`, not here.
+        #
+        # DDD-D2: a single-member replica set, same reasoning as `docker-compose.yml`'s `database`
+        # service — the gate's own suites use multi-document transactions now. The member host is
+        # spelled out as this service's own compose name (`mongo:27017`) for the same reason: left
+        # to its own default, `rs.initiate()` would advertise `localhost:27017`, unreachable from
+        # the `app` container that reaches this one by service name.
+        command: ['mongod', '--replSet', 'rs0']
         healthcheck:
-            test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+            test:
+                [
+                    'CMD',
+                    'mongosh',
+                    '--quiet',
+                    '--eval',
+                    "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }) }; db.adminCommand('ping').ok"
+                ]
             interval: 5s
             timeout: 5s
             retries: 12

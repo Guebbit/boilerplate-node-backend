@@ -2,7 +2,9 @@
  * @module
  * The address book — one document per user, the shipping addresses a checkout resolves against.
  * Its own module so nothing has to import `account` for it: `cart`'s checkout is the only sibling
- * consumer, and `users` reaches it only through the event bus below, never an import.
+ * consumer, and `users` reaches it only through its `personalData.erase` hook below, never an
+ * import — the same pattern `cart`, `wishlist`, `payments` and `orders` each declare on their own
+ * collection.
  *
  * Owns:   the address book, outright.
  * Shares: the `/account` URL prefix with `account` — see `./routes.ts` and `getAuth`'s early
@@ -14,8 +16,6 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
-import { onDomainEvent } from '@kernel/events';
-import { USER_DELETED } from '@modules/users';
 import { addressesDeleteByUserId, addressesGet } from './service';
 import { router } from './routes';
 
@@ -27,13 +27,11 @@ export default {
     personalData: [
         {
             section: 'addresses',
-            collect: (subject) => addressesGet(subject.userId).then((view) => view.addresses)
+            collect: (subject) => addressesGet(subject.userId).then((view) => view.addresses),
+            // DDD-D6: a destroyed account takes its address book with it, inside the same
+            // transaction — see `addressesDeleteByUserId`.
+            erase: addressesDeleteByUserId
         }
     ],
-    subscribe: () => {
-        // A destroyed account takes its address book with it — the same event `cart`, `wishlist`,
-        // `payments` and `orders` each listen for on their own collection.
-        onDomainEvent(USER_DELETED, ({ userId }) => addressesDeleteByUserId(userId));
-    },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

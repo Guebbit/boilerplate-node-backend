@@ -11,13 +11,25 @@
  */
 
 import path from 'node:path';
-import type { AppModule } from '@kernel/registry';
+import { resolvePersonalDataErasers, type AppModule } from '@kernel/registry';
 import type { ExportSession } from '@types';
 import { router } from './routes';
 import { userRepository } from './repository';
 import { userService } from './service';
 import { isLiveRefreshSession, type Token } from './model';
+import { setPersonalDataErasers } from './erasure-registry';
 import './events';
+
+/**
+ * DDD-D6: resolves every module's `personalData.erase` hook once every module is known, and
+ * hands the list to `./service.ts`'s hard-delete path through `./erasure-registry.ts` — the same
+ * pattern `account/module.ts`'s `onRegistered` follows for `personalData` export sections.
+ *
+ * @param modules - every enabled module, for the erase-hook list
+ */
+const onRegistered = (modules: readonly AppModule[]): void => {
+    setPersonalDataErasers(resolvePersonalDataErasers(modules));
+};
 
 /**
  * This caller's own live refresh sessions, metadata only — keeps `type` (a stored `Session`
@@ -45,6 +57,7 @@ export default {
      */
     permissions: ['users.any.read', 'users.any.create', 'users.any.update', 'users.any.delete'],
     routes: router,
+    onRegistered,
     locales: path.join(__dirname, 'locales'),
     /*
      * `account`'s signup and profile-update flows write through this same `userRepository` —

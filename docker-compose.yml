@@ -222,6 +222,12 @@ services:
         # Same
         restart: unless-stopped
 
+        # DDD-D2: a single-member replica set, not a standalone `mongod` — multi-document
+        # transactions refuse `startTransaction()` outright on a standalone server. One member
+        # costs nothing extra (no real replication, no extra network hop); the healthcheck below
+        # initiates it on first boot.
+        command: ['mongod', '--replSet', 'rs0']
+
         # Same
         environment:
             # Name of the database to create. Must match the database in NODE_DB_URI.
@@ -244,9 +250,24 @@ services:
         ports:
             - '${NODE_HOST:-127.0.0.1}:${NODE_MONGODB_PORT:-27017}:27017'
 
-        # The app's boot-time db:bootstrap waits on this before it runs.
+        # The app's boot-time db:bootstrap waits on this before it runs. Also initiates the
+        # replica set on the very first check: `rs.status()` throws until `rs.initiate()` has run
+        # once, and `--replSet` on its own does not do that for you. Idempotent — every later
+        # check finds `rs.status()` already succeeding and skips straight to the ping.
+        #
+        # The member host is spelled out as this service's own compose name (`database:27017`),
+        # never left to `rs.initiate()`'s own default: run from `mongosh` inside the container, it
+        # would advertise `localhost:27017`, which resolves nowhere for the `app`/cron containers
+        # that reach this one over the compose network by service name.
         healthcheck:
-            test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+            test:
+                [
+                    'CMD',
+                    'mongosh',
+                    '--quiet',
+                    '--eval',
+                    "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'database:27017' }] }) }; db.adminCommand('ping').ok"
+                ]
             interval: 5s
             timeout: 5s
             retries: 12

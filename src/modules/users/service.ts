@@ -11,6 +11,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -30,13 +31,15 @@ import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest, User
 import { userRepository } from './repository';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
+import { withTransaction } from '@infrastructure/runtime/database';
+import { personalDataErasers } from './erasure-registry';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
-import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
+import { USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import {
     assignRole,
@@ -402,24 +405,53 @@ export const updateById = (
     });
 
 /**
+ * Runs every registered `personalData.erase` hook (DDD-D6) and then deletes the user document
+ * itself, all inside `session`'s transaction — cart cleanup, address-book erasure and the rest
+ * either all happen or none do, and a crash mid-cascade no longer leaves a half-erased account.
+ *
+ * Sequential, not `Promise.all`: a `ClientSession` runs ONE operation at a time, and two erasers
+ * racing on it fails with a confusing "sharded cluster" error that has nothing to do with
+ * sharding.
+ */
+const runErasureCascade = async (user: UserDocument, session: ClientSession): Promise<void> => {
+    for (const erase of personalDataErasers()) await erase(user.id, session);
+    await userRepository.deleteOne(user, session);
+};
+
+/**
  * Remove a user document (soft or hard delete). Soft delete stamps `deletedAt` once;
  * `restoreById` undoes it. A hard delete first revokes EVERY membership the account holds —
  * `revokeAllOf`, not a single tenant-scoped `revokeRole`: an account can hold a platform seat
  * alongside its tenant one, and either row surviving the user it points at is an erasure gap.
- * Only then does it emit `user.deleted`, awaited before the write, so cart cleanup happens
- * without this module knowing the cart exists — keeping the dependency arrow pointing
- * cart → users. Only the hard path touches either, since a soft delete is a restore waiting to
- * happen.
+ * `revokeAllOf` stays outside the transaction below: membership lives in `access`'s own
+ * collection, and DDD-D6 scoped the cascade to the six modules that hold personal data, not to
+ * every write a hard delete makes. Only the hard path touches either, since a soft delete is a
+ * restore waiting to happen.
+ *
+ * @param auditContext - T6: given only by a caller with no HTTP request behind it (the
+ * inactivity reaper) — records the hard delete under `SYSTEM_USER_ERASED` itself, since nothing
+ * downstream of a cron job otherwise would. Omitted by every HTTP-driven caller, which already
+ * records its own `ADMIN_USER_ERASED`/`ADMIN_USER_SOFT_DELETED` through
+ * `createDeleteController`'s spec — passing it there too would double the row.
  */
 export const remove = (
     user: UserDocument,
-    hardDelete = false
+    hardDelete = false,
+    auditContext?: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     if (hardDelete)
         return revokeAllOf(user.id)
-            .then(() => emitDomainEvent(USER_DELETED, { userId: user.id }))
-            .then(() => userRepository.deleteOne(user))
+            .then(() => withTransaction((session) => runErasureCascade(user, session)))
             .then(() => imageStore.remove(user.imageUrl))
+            .then(() => {
+                if (auditContext)
+                    recordAudit(auditContext, {
+                        action: usersAuditActions.SYSTEM_USER_ERASED,
+                        outcome: 'success',
+                        target_type: 'user',
+                        target_id: user.id
+                    });
+            })
             .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
 
     // Already deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.
@@ -744,10 +776,10 @@ const registerFromOAuth = (data: OAuthSignupFields) => userRepository.create(dat
 
 /**
  * Undo a just-created signup row whose starting-role grant then failed — a hard delete, not
- * `remove()`: that emits `USER_DELETED` and revokes a membership through `access`, both wrong for
- * a row that never finished becoming an account. Left behind, it would keep the email permanently
- * unusable for a retry. Not `remove()`, so not the barrel: this is a compensating step for
- * `account`'s own signup orchestration, not a general-purpose delete.
+ * `remove()`: that runs the full erasure cascade and revokes a membership through `access`, both
+ * wrong for a row that never finished becoming an account. Left behind, it would keep the email
+ * permanently unusable for a retry. Not `remove()`, so not the barrel: this is a compensating step
+ * for `account`'s own signup orchestration, not a general-purpose delete.
  */
 const discardFailedSignup = (user: UserDocument): Promise<void> =>
     userRepository.deleteOne(user).then(() => undefined);

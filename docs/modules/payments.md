@@ -29,7 +29,6 @@ flowchart LR
     payments --> orders
     payments --> users
     orders -. "order.refund_owed" .-> payments
-    users -. "user.deleted" .-> payments
     payments -. "payment.failed" .-> webhooks
     payments -. "payment.succeeded" .-> webhooks
 

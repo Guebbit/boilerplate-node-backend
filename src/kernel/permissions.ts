@@ -20,7 +20,14 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { z } from 'zod';
-import type { AuthContext, AuthorizationScope, Caller, PlatformCaller, TenantCaller } from '@types';
+import type {
+    AuthContext,
+    AuthorizationScope,
+    Caller,
+    CallerContext,
+    PlatformCaller,
+    TenantCaller
+} from '@types';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
@@ -525,6 +532,20 @@ export const SYSTEM_ACTOR: AuthContext = {
  */
 export const isSystemActor = (caller: AuthContext | undefined): boolean =>
     caller?.id === SYSTEM_ACTOR.id;
+
+/**
+ * T6: the {@link CallerContext} a cron job hands `recordAudit` for a write nobody at the keyboard
+ * asked for — a reaper's own hard delete, not an admin's. `caller` is {@link SYSTEM_ACTOR}'s, so
+ * the resulting row's `actor_role` reads the same "unrestricted" way an admin's would; nothing
+ * else on `CallerContext` is filled in, since a cron job has no IP, user agent or request id.
+ *
+ * @param subject - the entity being audited, e.g. `'User'` — picks tenant or platform scope the
+ * same way {@link callerForSubject} does for the write itself
+ */
+export const systemCallerContext = (subject: string): CallerContext => ({
+    caller: callerForSubject(SYSTEM_ACTOR, subject),
+    analyticsConsent: false
+});
 
 /**
  * Is this ROLE unrestricted in its scope — the audit trail's word for "admin"?

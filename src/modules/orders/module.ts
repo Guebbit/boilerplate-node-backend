@@ -6,10 +6,10 @@
  * time, through `productService`, into this module's OWN `orderLineProductSchema` — not
  * `products`' `productSchema`, so the embedded copy has nowhere to carry a live warehouse counter)
  * and inventory (a claim on units, released on cancel or `RESERVATION_EXPIRED`); cart depends on
- * this module in turn, keeping the import graph acyclic. `users` is reached two ways: `USER_DELETED`
- * below, for the detach-on-delete cascade, and `userService.getById` (`services/crud.ts`,
- * `services/cancel.ts`) for a buyer's stored locale — the confirmation and expiry emails this
- * module sends, never a live account's authorization state.
+ * this module in turn, keeping the import graph acyclic. `users` is reached two ways: the
+ * `personalData.erase` hook below, for the detach-on-delete cascade, and `userService.getById`
+ * (`services/crud.ts`, `services/cancel.ts`) for a buyer's stored locale — the confirmation and
+ * expiry emails this module sends, never a live account's authorization state.
  *
  * No queue consumer of its own: the invoice is rendered on demand, on whichever request thread
  * asks for it — see `services/invoice.ts`.
@@ -20,7 +20,6 @@ import type { AppModule } from '@kernel/registry';
 import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { onDomainEvent } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
-import { USER_DELETED } from '@modules/users';
 import { PRODUCT_DELETED, PRODUCT_DEACTIVATED } from '@modules/products';
 import { router } from './routes';
 import { cancelById, cancelPendingOrdersHolding, detachUserId, findOwnOrders } from './services';
@@ -54,7 +53,10 @@ export default {
     personalData: [
         {
             section: 'orders',
-            collect: (subject) => findOwnOrders(subject.userId)
+            collect: (subject) => findOwnOrders(subject.userId),
+            // DDD-D6: detach, never delete — the order survives the account, inside the same
+            // hard-delete transaction. See `detachUserId`.
+            erase: detachUserId
         }
     ],
     /*
@@ -67,8 +69,6 @@ export default {
      */
     subscribe: () => {
         onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) => cancelById(orderId, SYSTEM_ACTOR));
-        // Detach, never delete: the order survives the account.
-        onDomainEvent(USER_DELETED, ({ userId }) => detachUserId(userId));
         // Only the HARD half of a product's removal — a soft delete (or its restore) leaves a
         // pending order's line exactly as it was, the same reasoning `inventory`'s own listener
         // follows for the level row. Deactivation is unconditional: `product.deactivated` never

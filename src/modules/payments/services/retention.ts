@@ -4,6 +4,7 @@
  * sweep that clears out abandoned attempts.
  */
 
+import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
@@ -13,13 +14,14 @@ import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 
 /**
- * `USER_DELETED`'s listener. Unsets `userId` on every payment this account
- * made; the payment row itself is never touched, same as `orders`' detach.
+ * DDD-D6's `personalData.erase` hook. Unsets `userId` on every payment this account made; the
+ * payment row itself is never touched, same as `orders`' detach.
  *
  * @param userId - the erased account's id
+ * @param session - joins the detach to the hard-delete transaction calling this hook
  */
-export const detachUserId = (userId: string): Promise<void> =>
-    paymentRepository.detachUserId(userId).then((detached) => {
+export const detachUserId = (userId: string, session: ClientSession): Promise<void> =>
+    paymentRepository.detachUserId(userId, session).then((detached) => {
         if (detached > 0)
             // Stryker disable all
             logger.info({

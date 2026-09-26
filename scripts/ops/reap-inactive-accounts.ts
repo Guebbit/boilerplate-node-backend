@@ -52,6 +52,7 @@ import { userService, type UserDocument } from '@modules/users';
 import { inactivityWarningEmail } from '@modules/account';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { withLease } from '@infrastructure/persistence/lease';
+import { systemCallerContext } from '@kernel/permissions';
 import { runScript } from '../run-script';
 
 /** Fixed pause between stages — not configurable, to keep this script's one dial to a single day count. */
@@ -112,7 +113,11 @@ const main = async (): Promise<void> => {
         for (const user of toSoftDelete) await userService.remove(user, false);
 
         const toHardDelete = await userService.findReaperSoftDeletedPastGrace(daysAgo(GRACE_DAYS));
-        for (const user of toHardDelete) await userService.remove(user, true);
+        // T6: nobody is at the keyboard for this one, so it is the ONE hard-delete caller that
+        // must hand its own audit context — every HTTP-driven one already records through
+        // `createDeleteController`'s spec.
+        for (const user of toHardDelete)
+            await userService.remove(user, true, systemCallerContext('User'));
 
         logger.info({
             message: 'Inactive-account reaper run complete.',

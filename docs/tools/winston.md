@@ -162,6 +162,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `users`          | `ADMIN_USER_SOFT_DELETED`                   | `admin.user.soft_deleted`                   | `user`                 |
 | `users`          | `ADMIN_USER_UNBANNED`                       | `admin.user.unbanned`                       | —                      |
 | `users`          | `ADMIN_USER_UPDATED`                        | `admin.user.updated`                        | —                      |
+| `users`          | `SYSTEM_USER_ERASED`                        | `system.user.erased`                        | `user`                 |
 | `webhooks`       | `ADMIN_WEBHOOK_DELIVERY_REPLAYED`           | `admin.webhook_delivery.replayed`           | `webhook_delivery`     |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_CREATED`        | `admin.webhook_subscription.created`        | `webhook_subscription` |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_DELETED`        | `admin.webhook_subscription.deleted`        | `webhook_subscription` |

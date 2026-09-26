@@ -7,6 +7,7 @@
  * See: docs/modules/wishlist.md
  */
 
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -129,9 +130,12 @@ const wishlistMoveToCart = (
         });
     });
 
-/** What a hard user deletion owes the wishlists — see `module.ts`'s subscription. */
-export const wishlistDeleteByUserId = (userId: string): Promise<void> =>
-    wishlistRepository.deleteByUserId(userId);
+/**
+ * What a hard user deletion owes the wishlists — DDD-D6's `personalData.erase` hook (see
+ * `module.ts`'s manifest), joining the caller's own hard-delete transaction.
+ */
+export const wishlistDeleteByUserId = (userId: string, session: ClientSession): Promise<void> =>
+    wishlistRepository.deleteByUserId(userId, session);
 
 /** What a product deletion owes the wishlists — see `module.ts`'s subscription. */
 export const productRemoveFromWishlistsById = (productId: string): Promise<unknown> =>
