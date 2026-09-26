@@ -13,8 +13,15 @@ import { createProduct } from '@modules/products/tests/factories';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
 import { localeService } from '@modules/locales/services';
+import { mergedResources } from '@tests/i18n-boot';
 
 setupTestDb();
+
+/** The field-named copy the factory's own extended schema must be the one answering with. */
+const fieldPriceMin = () =>
+    (mergedResources().en.translation as { products: Record<string, string> }).products[
+        'field-price-min'
+    ];
 
 beforeAll(() => {
     localeService.setTranslatables({
@@ -135,6 +142,31 @@ describe('PUT /products/{id}', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
+
+    // The factory now validates PUT against `zodProductReplaceSchema`, not the raw generated one —
+    // otherwise this message never surfaces, refused first by the contract's generic minimum.
+    it('422s a negative price with the field-named message, not a generic one', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed', price: 10 });
+
+        const response = await api()
+            .put(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({
+                price: -5,
+                active: true,
+                requiresShipping: true,
+                categories: [],
+                tags: [],
+                translations: { en: { title: 'Bed, replaced' } }
+            });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors.map((error: { message: string }) => error.message)).toContain(
+            fieldPriceMin()
+        );
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('PATCH /products/{id}', () => {
@@ -170,8 +202,8 @@ describe('PATCH /products/{id}', () => {
         expect(response.body.data.price).toBe(999);
     });
 
-    // FE_PARITY's P1 needs `taxClass: null` to mean "back to the shop's standard rate" — D17c
-    // made every other clearable field on this schema nullable, but missed this one.
+    // `taxClass: null` means "back to the shop's standard rate", the same as every other
+    // clearable field on this schema.
     it('clears taxClass back to the standard rate on an explicit null', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({ title: 'Bed', price: 10, taxClass: 'reduced' });
@@ -183,6 +215,24 @@ describe('PATCH /products/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.taxClass).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // The factory now validates PATCH against `zodProductUpdateSchema` directly, and
+    // `writeUpdate` no longer re-parses — this message has exactly one place left to come from.
+    it('422s a negative price with the field-named message, not a generic one', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed', price: 10 });
+
+        const response = await api()
+            .patch(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ price: -5 });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors.map((error: { message: string }) => error.message)).toContain(
+            fieldPriceMin()
+        );
         expect(response).toSatisfyApiSpec();
     });
 });
