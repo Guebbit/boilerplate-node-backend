@@ -38,6 +38,7 @@ flowchart LR
     users --> access
     users -. "user.setup-requested" .-> account
     users -. "user.deleted" .-> addresses
+    users -. "user.deleted" .-> api_keys
     users -. "user.deleted" .-> cart
     users -. "user.deleted" .-> orders
     users -. "user.deleted" .-> payments

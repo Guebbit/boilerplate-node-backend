@@ -26,6 +26,7 @@ flowchart LR
 
     api_keys --> access
     api_keys --> users
+    users -. "user.deleted" .-> api_keys
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
