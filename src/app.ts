@@ -178,7 +178,7 @@ export const stopServer = () => {
 /*
  * Validate every module's required config, attach its domain-event handlers, then let each pull
  * whatever cross-module lookup it needs (`locales`' `translatables`, `account`'s `personalData`
- * sections) through its own `onRegistered` hook (D15) — before the first route exists. A missing,
+ * sections) through its own `onRegistered` hook — before the first route exists. A missing,
  * too-short or still-placeholder variable stops the boot here, every offending name reported at
  * once, rather than surfacing as a 500 on whichever request needs it first. Here, not inside
  * `startServer()`: every one of these facts must be validatable the moment this file is imported,

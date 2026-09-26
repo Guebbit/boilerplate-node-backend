@@ -131,9 +131,9 @@ export type AuditSink = (entry: AuditEntry) => void;
 let auditSink: AuditSink | undefined;
 
 /**
- * Install the persistence sink. Called once, at import time, from `@modules/audit-logs/module` —
- * module LOAD, not database connect, so the sink must cope with being called while disconnected
- * (see `bufferCommands: false` on the audit-log schema).
+ * Install the persistence sink. Called once, by `@modules/audit-logs/module`'s `onRegistered` —
+ * module registration, not database connect, so the sink must cope with being called while
+ * disconnected (see `bufferCommands: false` on the audit-log schema).
  *
  * Invoked on paths already answering a request, so it MUST be fire-and-forget: no awaiting, no
  * rejecting, no throwing. A failure to store an entry must never fail the request or lose the
