@@ -320,8 +320,8 @@ cases:
       resource: { tenantId: shop_1 }
       expect: allow
 
-    # `delivery.any.start` is narrower than `orders.any.update` on purpose — SH1's whole point is
-    # that the warehouse can begin fulfilment without being handed the run of the order record.
+    # `delivery.any.start` is narrower than `orders.any.update` on purpose: the warehouse can
+    # begin fulfilment without being handed the run of the order record.
     - name: the warehouse may start fulfilling a paid order
       caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [delivery.any.start] }
       action: start

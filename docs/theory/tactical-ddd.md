@@ -129,8 +129,8 @@ actor into a second table would let the two disagree, so it rides on the edge it
 
 `system` is not a privilege level above `admin`. It is **narrower**: the moves an operator may never
 make by hand, because something outside the application has to have happened first. Money landing
-is one; fulfilment starting (`paid → processing`) is the other, since SH1 took that edge off `admin`
-— see "Action endpoints execute" below.
+is one; fulfilment starting (`paid → processing`) is the other, once that edge moves off `admin`
+onto its own `delivery`-owned start action — see "Action endpoints execute" below.
 
 ### What it replaced
 
@@ -194,7 +194,7 @@ kept and the stock held until the sweep.
 
 `shipped`/`delivered` are never a field an admin assigns either — they follow a parcel event
 `delivery` records, through `markShipped`/`markDelivered` (see "Who writes the status" above).
-`paid → processing` joined them with SH1: it now follows a fulfilment-start fact the same way, once
+`paid → processing` follows a fulfilment-start fact the same way, once
 `delivery` grows its own door for it. Until then, the admin override
 (`POST /orders/{id}/status-override`) is the only reachable path onto it — the same door a
 mis-scanned parcel or a manual correction already uses. `items`/`userId` are not in
