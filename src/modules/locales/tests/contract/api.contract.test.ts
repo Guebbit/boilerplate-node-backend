@@ -1073,3 +1073,53 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
         expect(response).toSatisfyApiSpec();
     });
 });
+
+describe('PUT /locales/translations/:entityType/:id', () => {
+    // Every slot, fallback included, is checked against a real `locales` row — `en` needs one
+    // registered here the same way `pt` does, since nothing else in this suite ever upserts it.
+    const FALLBACK = { tag: 'en', name: 'English', nativeName: 'English' };
+
+    it('deletes a locale the body does not name, matching the spec', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer, FALLBACK);
+        await createLanguage(bearer);
+        const product = await createProduct();
+
+        // Seeds both `en` and `pt` first — the PUT below names only `en`.
+        await api()
+            .patch(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({
+                en: { fields: { title: 'Bed' } },
+                pt: { fields: { title: 'Cama' } }
+            });
+
+        const response = await api()
+            .put(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ en: { fields: { title: 'Bed, replaced' } } });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.translations).toHaveLength(1);
+        expect(response.body.data.translations[0]).toMatchObject({
+            locale: 'en',
+            fields: { title: 'Bed, replaced' }
+        });
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('refuses a replace that omits the fallback locale', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer, FALLBACK);
+        await createLanguage(bearer);
+        const product = await createProduct();
+
+        const response = await api()
+            .put(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ pt: { fields: { title: 'Cama' } } });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+});

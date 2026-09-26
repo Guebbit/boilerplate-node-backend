@@ -504,6 +504,49 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        put:
+            tags: [System]
+            summary: Replace every translation an entity has
+            description: |
+                REPLACING semantics: a locale currently stored but absent from the body is deleted
+                — the whole set becomes exactly what the body carries. Paired with `PATCH` on this
+                same resource, which merges instead; "does saving delete the locales I didn't
+                touch" is the question every translation tool gets wrong, so the two behaviours
+                are spelled in the METHOD rather than a flag. Same three signals as `PATCH` for a
+                key that IS in the body — see its own description — plus the implicit fourth: a
+                key that is neither in the body nor already stored never existed either way.
+
+                The fallback locale (`NODE_FALLBACK_LOCALE`) must be present and non-null, same
+                invariant `POST /products` already enforces on create: a caller cannot replace the
+                whole set and leave the entity with nothing to fall back to.
+
+                422 for the same reasons `PATCH` refuses — an unknown or inactive locale, an empty
+                `fields` object, a `fields` key the `translatables` registry does not declare, or a
+                missing/`null` fallback locale.
+            operationId: replaceEntityTranslations
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/TranslatableEntityTypePathParam'
+                - $ref: '#/components/parameters/TranslationEntityIdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpsertTranslationsRequest'
+            responses:
+                '200':
+                    description: Every locale this entity has a row for, after the write
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/EntityTranslationsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
             tags: [System]
             summary: Merge one or more of an entity's translations

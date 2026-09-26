@@ -38,15 +38,20 @@ const ADMIN = [
     'PUT /:locale/entries/:entryId',
     'DELETE /:locale/entries/:entryId',
     'GET /translations/:entityType/:id',
+    'PUT /translations/:entityType/:id',
     'PATCH /translations/:entityType/:id'
 ];
 
 /**
- * The two translator-door routes: uncached like `GET /:locale/entries` (the editing screen), and
+ * The three translator-door routes: uncached like `GET /:locale/entries` (the editing screen), and
  * clearing a registry-declared tag inside the service rather than `['locales']` via route
  * middleware — the tag varies with `entityType`, which the middleware's fixed array cannot say.
  */
-const TRANSLATIONS = ['GET /translations/:entityType/:id', 'PATCH /translations/:entityType/:id'];
+const TRANSLATIONS = [
+    'GET /translations/:entityType/:id',
+    'PUT /translations/:entityType/:id',
+    'PATCH /translations/:entityType/:id'
+];
 
 describe('locale routes — what is mounted', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {

@@ -30,7 +30,10 @@ import {
 } from './controllers/write-locale-entries';
 import { deleteLocaleEntry } from './controllers/delete-locale-entry';
 import { getEntityTranslations } from './controllers/get-entity-translations';
-import { upsertEntityTranslations } from './controllers/upsert-entity-translations';
+import {
+    replaceEntityTranslations,
+    upsertEntityTranslations
+} from './controllers/write-entity-translations';
 
 /**
  * Express router mounted at `/locales` — see the module header for the ordering and guard rules.
@@ -176,6 +179,14 @@ router.get(
     isAuthOrCredential,
     requirePermission('translations.any.read'),
     getEntityTranslations
+);
+// PUT replaces (a stored locale not sent is deleted), PATCH merges.
+router.put(
+    '/translations/:entityType/:id',
+    getAuth,
+    isAuthOrCredential,
+    requirePermission('translations.any.update'),
+    replaceEntityTranslations
 );
 router.patch(
     '/translations/:entityType/:id',
