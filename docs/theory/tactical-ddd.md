@@ -169,12 +169,12 @@ was `succeeded`, so the guard passed.
 
 ### How it is enforced
 
-| Call site                                                                               | Question asked                                                                                                                                                |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `orders/services/cancel.ts` — `cancelById`                                              | `statusesLeadingTo(cancelled, actorOf(caller))`                                                                                                               |
-| `orders/services/status.ts` — `markPaid`/`markProcessing`/`markShipped`/`markDelivered` | a fixed single `from` per function — each already knows the one legal source status for its own move, so there is no table lookup, only the conditional write |
-| `payments/services/intent.ts`/`settlement.ts`                                           | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below)               |
-| `orders/services/override.ts`                                                           | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces                   |
+| Call site                                                                               | Question asked                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orders/services/cancel.ts` — `cancelById`                                              | `statusesLeadingTo(cancelled, actorOf(caller))`                                                                                                                                  |
+| `orders/services/status.ts` — `markPaid`/`markProcessing`/`markShipped`/`markDelivered` | `statusesLeadingTo(to, 'system')` — a single `from`, since the `system` actor has exactly one legal source per destination, read off the table rather than restated as a literal |
+| `payments/services/intent.ts`/`settlement.ts`                                           | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below)                                  |
+| `orders/services/override.ts`                                                           | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces                                      |
 
 `cancelById` asks as the CALLER's actor, because the table answers differently for each: a customer
 may cancel from `pending` and `paid`, an operator also from `processing`.
@@ -220,10 +220,11 @@ flowchart LR
     class T pure;
 ```
 
-A refusal to a move the table does not have answers **409** with `ORDER_TRANSITION_NOT_ALLOWED`,
-carrying `details: { from, to, allowed }` so a client can offer the moves that are still open rather
-than making the operator guess. Every guard runs before any field is assigned, so a refused request
-is never a partial write.
+A refusal to a move the table does not have answers **409**: `ORDER_NOT_CANCELLABLE` from
+`cancelById` with no further detail, `ORDER_OVERRIDE_NOT_ALLOWED` from `overrideStatus` carrying
+`details: { from, to }`. Neither lists which moves ARE still open — a client wanting that reads
+`orderActionsFor`'s own `transitions` field on the order instead. Every guard runs before any field
+is assigned, so a refused request is never a partial write.
 
 ### Compensation is policy, and it travels with the fact
 

@@ -457,7 +457,8 @@ exactly the edge that would have made the import graph a cycle:
 | `product.deleted`               | `products`  | `cart`, `wishlist`            |
 | `user.deleted`                  | `users`     | `cart`, `wishlist`, `account` |
 | `order.status_changed`          | `orders`    | `delivery` (on `shipped`)     |
-| `order.cancelled`               | `orders`    | `payments` (refunds)          |
+| `order.cancelled`               | `orders`    | `webhooks` (fans out)         |
+| `order.refund_owed`             | `orders`    | `payments` (refunds)          |
 | `inventory.reservation_expired` | `inventory` | `orders` (cancels the order)  |
 
 Note who emits: every one comes from a module low in the import graph telling a module above it

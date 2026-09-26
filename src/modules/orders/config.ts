@@ -172,6 +172,16 @@ export const invoiceCacheTtlMinutes = (): number => {
     return environmentNumber('NODE_INVOICE_CACHE_TTL_MINUTES', 5, 0);
 };
 
+/**
+ * How long a cancelled order's refund gets before `scripts/ops/sweep-order-effects.ts` retries it.
+ * A grace window, not a deadline: the refund normally settles milliseconds after the cancel, and
+ * this only has to outlast a slow one. Read per call, like every other getter here, so a change
+ * applies to the next sweep tick and a test can vary it per case.
+ * @returns the grace window in minutes
+ */
+export const orderEffectRetryMinutes = (): number =>
+    environmentNumber('NODE_ORDER_EFFECT_RETRY_MINUTES', 5, 0);
+
 /** This module's env var for its one frontend link — `.env-example` documents the default. */
 const ORDER_LINK_ENV_VAR = 'NODE_FRONTEND_LINK_ORDER';
 

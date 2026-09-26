@@ -42,8 +42,10 @@ router.post('/receipts', requirePermission('inventory.any.create'), postReceipt)
 // POST /inventory/adjustments — a stocktake correction, signed
 router.post('/adjustments', requirePermission('inventory.any.create'), postAdjustment);
 
-// POST /inventory/reservations/sweep — the expiry tick; an operator is the cron, running as
-// `SYSTEM_ACTOR`, which is unrestricted in the shop. `sweep`, not `manage`: no preset role is
-// meant to reach it directly, and CRUD has no verb for "clear expired holds on a schedule" — see
+// POST /inventory/reservations/sweep — the expiry tick's on-demand door. `npm run
+// sweep:reservations` (`docker/crontab`) is the actual schedule, calling `runReservationSweep`
+// in-process and never reaching this route at all; this is for an operator, or a platform
+// scheduler that prefers HTTP over a cron container. `sweep`, not `manage`: no preset role is
+// meant to reach it directly, and CRUD has no verb for "clear expired holds on demand" — see
 // `shared/authorization-keys.yaml`.
 router.post('/reservations/sweep', requirePermission('inventory.any.sweep'), postReservationsSweep);

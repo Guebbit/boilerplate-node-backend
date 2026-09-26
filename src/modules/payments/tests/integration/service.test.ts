@@ -328,10 +328,9 @@ describe('refund on cancel', () => {
     });
 
     /*
-     * B1: `performRefund` used to move `succeeded → refunded` BEFORE asking the provider, so a
-     * rejection left a refund recorded as done with the money never actually returned, and the
-     * retry sweep found nothing left in `succeeded` to act on. The provider is asked FIRST now;
-     * a rejection leaves the payment `succeeded`, the one state the retry can still finish.
+     * The provider is asked FIRST, before the status moves: a rejection leaves the payment
+     * `succeeded`, the one state the retry sweep can still act on, instead of a refund recorded
+     * as done with the money never actually returned.
      */
     it('keeps a failed refund retryable instead of recording it as done', () =>
         withEnvironment('NODE_ORDER_EFFECT_RETRY_MINUTES', '0', async () => {
@@ -395,9 +394,9 @@ describe('refund on cancel', () => {
         }));
 
     /*
-     * B1c: a refund used to go to whichever provider `NODE_PAYMENT_PROVIDER` names TODAY, not the
-     * one that actually took the money — dormant while only `fake` is ever registered, live the
-     * day a deployment switches providers with old payments still outstanding under the old one.
+     * A refund must go to the PAYMENT's own provider, never whichever one `NODE_PAYMENT_PROVIDER`
+     * names today — dormant while only `fake` is ever registered, live the day a deployment
+     * switches providers with old payments still outstanding under the old one.
      */
     it('refuses to refund through a provider this payment was never made with', () => {
         const retiredProvider = 'retired-psp';
@@ -485,8 +484,8 @@ describe('refund on cancel', () => {
 });
 
 /** A real placed order: units held, nothing sold yet. */
-const placedOrder = async (onHand = 10, quantity = 3) => {
-    const user = await createUser();
+const placedOrder = async (onHand = 10, quantity = 3, email?: string) => {
+    const user = await createUser(email ? { email } : undefined);
     const product = await createProduct({ onHand });
     const created = await orderService.create(
         user.id,
@@ -633,7 +632,7 @@ describe('cancelling a paid order restocks its units (B2)', () => {
 });
 
 /**
- * B14: a crash between the `succeeded` write and the stock commit used to lose the commit
+ * A crash between the `succeeded` write and the stock commit would otherwise lose the commit
  * forever — a redelivered webhook stops at the payment's own conditional write (already
  * `succeeded`, so a retry moves nothing) and never reaches the commit again. The `pendingEffects`
  * marker is what survives that crash, and `retryPendingEffects` is what acts on it.
@@ -658,7 +657,7 @@ describe('B14 — a lost stock commit is retried, not lost', () => {
     });
 
     it('finishes the commit and clears the marker on the next sweep', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_GRACE_MINUTES', '0', async () => {
+        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
             const { user, product, order } = await placedOrder(10, 3);
             jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
                 new Error('connection reset')
@@ -685,7 +684,7 @@ describe('B14 — a lost stock commit is retried, not lost', () => {
         await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
         await orderService.cancelById(String(order._id), auth(user));
 
-        await withEnvironment('NODE_PAYMENT_EFFECT_GRACE_MINUTES', '0', async () => {
+        await withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
             expect(await retryPendingEffects()).toBe(1);
         });
 
@@ -695,6 +694,72 @@ describe('B14 — a lost stock commit is retried, not lost', () => {
         // sale for an order nobody can fulfil any more.
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
     });
+
+    it('marks the refund owed when the order moved on before settlement could react to it', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
+            new Error('connection reset')
+        );
+        await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
+        // Simulates the crash itself: the order moved away from `paid` by some other means (a
+        // race settlement's own `orderLost` branch never got to see, since the process died
+        // first) — no cancel ran, so nothing wrote the order's own refund marker yet.
+        await forceOrderStatus(String(order._id), 'cancelled');
+
+        await withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+            expect(await retryPendingEffects()).toBe(1);
+        });
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('succeeded');
+        expect(payment!.pendingEffects).toEqual([]);
+        const stored = await orderService.getById(String(order._id));
+        expect(stored!.pendingEffects).toEqual(['refund']);
+        // The commit never ran: the order can no longer use the stock it would have taken.
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
+    });
+
+    it('a commit that fails during the sweep itself keeps its marker, without losing the rest of the batch', () =>
+        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+            const first = await placedOrder(10, 3);
+            jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
+                new Error('connection reset')
+            );
+            await expect(payFor(String(first.order._id), first.user)).rejects.toThrow(
+                'connection reset'
+            );
+
+            const second = await placedOrder(10, 2, 'second-payment-effect@example.com');
+            jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
+                new Error('connection reset')
+            );
+            await expect(payFor(String(second.order._id), second.user)).rejects.toThrow(
+                'connection reset'
+            );
+
+            // Whichever of the two the sweep reaches first now throws inside `getById`, before it
+            // ever decides whether stock is still owed. A bare `Promise.all` with no per-item
+            // `.catch` around this call would reject wholesale, and NEITHER payment would be
+            // reported swept — the bug this guards.
+            jest.spyOn(orderService, 'getById').mockRejectedValueOnce(new Error('mongo blip'));
+
+            // One settled — the failing one keeps its marker for the next pass instead of
+            // silently losing the whole batch's count.
+            expect(await retryPendingEffects()).toBe(1);
+
+            const payments = await Promise.all([
+                paymentRepository.findByOrderId(String(first.order._id)),
+                paymentRepository.findByOrderId(String(second.order._id))
+            ]);
+            const cleared = payments.filter(
+                (payment) => (payment!.pendingEffects ?? []).length === 0
+            );
+            const stillOwed = payments.filter(
+                (payment) => (payment!.pendingEffects ?? []).length > 0
+            );
+            expect(cleared).toHaveLength(1);
+            expect(stillOwed).toHaveLength(1);
+        }));
 });
 
 /**
@@ -1026,11 +1091,9 @@ describe('refundByOrder', () => {
     });
 
     /*
-     * B1: a failed attempt through THIS endpoint used to move the payment to `refunded` before
-     * asking the provider, so a rejection here answered 500 and left the row saying the money
-     * came back — and a retry then answered 409 "already refunded", with nothing actually
-     * returned. The provider is asked first now, so a rejection leaves `succeeded`, and a retry
-     * really is a retry.
+     * The provider is asked first through THIS endpoint too, so a rejection leaves the payment
+     * `succeeded` rather than answering 500 with the row already saying `refunded` — a retry here
+     * really is a retry, not a 409 "already refunded" over money that never actually came back.
      */
     it('a rejected attempt leaves the payment succeeded, so a retry can still return the money', async () => {
         const { order } = await paidOrder();
@@ -1168,9 +1231,9 @@ describe('recordOfflinePayment — refunding it back', () => {
     });
 
     /*
-     * B1b: cancelling a hand-paid order used to auto-record `refundedByHand: true` — the system
-     * saying money moved that nobody actually moved. Only an operator confirming the cash came
-     * back may say that now; the automatic listener leaves the payment `succeeded`.
+     * Only an operator confirming the cash came back may record `refundedByHand: true` — the
+     * automatic cancel listener leaves a hand-paid order's payment `succeeded` instead, rather
+     * than the system saying money moved that nobody actually moved.
      */
     it('leaves a cancelled offline payment succeeded, for an operator to confirm', async () => {
         const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');

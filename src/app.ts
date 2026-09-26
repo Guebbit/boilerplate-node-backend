@@ -35,7 +35,7 @@ import { markServerListening } from '@infrastructure/runtime/readiness';
 import { bootI18n, refreshLocaleOverrides, startLocaleOverrideRefresh } from '@infrastructure/i18n';
 
 import { registerModules } from '@kernel/registry';
-import { enabledModules } from './modules';
+import { enabledModules, enabledModuleLocales } from './modules';
 import { APP_NON_MODULE_CHECKS } from '@app/required-config';
 
 import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
@@ -91,11 +91,7 @@ export const bootInfrastructure = () => {
                 // sits below every module and cannot go looking for them, so the paths are handed in.
                 // Every dictionary in src/locales is registered, so dropping in a file is the only
                 // step needed to add a language — the middleware negotiates against the same list.
-                bootI18n(
-                    enabledModules
-                        .map((appModule) => appModule.locales)
-                        .filter((directory) => directory !== undefined)
-                )
+                bootI18n(enabledModuleLocales())
             )
             /*
              * Layer whatever has been edited on top of the files just loaded, then keep doing it.

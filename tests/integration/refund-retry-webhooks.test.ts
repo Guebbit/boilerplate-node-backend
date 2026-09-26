@@ -1,11 +1,10 @@
 /**
  * @module
- * B6: retrying a stuck refund must never re-deliver the cancellation webhook. `payments` used to
- * subscribe to the same `ORDER_CANCELLED` event `webhooks` fans out on, so the sweep's retry
- * (re-announcing that event just to nudge the refund) also created a second `order.cancelled`
- * delivery row for every subscriber, every time a provider outage outlasted one pass. Cross-module
- * by nature — orders, payments and webhooks' real `subscribe()` hooks all in play — so it lives
- * here rather than in any one module's own `tests/`.
+ * Retrying a stuck refund must never re-deliver the cancellation webhook: `payments` subscribes
+ * to its own `ORDER_REFUND_OWED` event, never to the `ORDER_CANCELLED` one `webhooks` fans out
+ * on, so the sweep's retry cannot also create a second `order.cancelled` delivery row for every
+ * subscriber. Cross-module by nature — orders, payments and webhooks' real `subscribe()` hooks
+ * all in play — so it lives here rather than in any one module's own `tests/`.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

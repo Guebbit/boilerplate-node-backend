@@ -1,10 +1,11 @@
 /**
  * @module
  * POST /inventory/reservations/sweep
- * The expiry tick, driven from outside since the app ships no scheduler — a cron entry, the
- * platform's scheduled job, or an operator. Audited once per run rather than per order (the
- * orders' own cancel path covers those), so a customer asking why their order vanished has
- * something on record.
+ * The expiry tick's on-demand door — `npm run sweep:reservations` (`docker/crontab`) is the
+ * actual recurring schedule, and never reaches this route. This is for an operator, or a
+ * platform scheduler that prefers HTTP. Audited once per run rather than per order (the orders'
+ * own cancel path covers those), so a customer asking why their order vanished has something on
+ * record.
  */
 
 import type { Request, Response } from 'express';

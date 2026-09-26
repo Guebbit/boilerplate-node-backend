@@ -11,7 +11,8 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
-import { createProduct, saveProduct } from '@modules/products/tests/factories';
+import { createProduct, saveProduct, countersOf } from '@modules/products/tests/factories';
+import { countOrders } from '@modules/orders/tests/factories';
 import {
     getById,
     create,
@@ -244,6 +245,72 @@ describe('create', () => {
                 orderId: String(asSuccess(result).data._id)
             })
         );
+    });
+
+    it('writes no order and burns no invoice number when the hold is refused', async () => {
+        const user = await createUser();
+        const scarce = await createProduct({ onHand: 1 });
+        const createSpy = jest.spyOn(orderRepository, 'create');
+        const counterSpy = jest.spyOn(orderRepository, 'incrementInvoiceCounter');
+
+        const result = await create(
+            user.id,
+            user.email,
+            [{ productId: String(scarce._id), quantity: 5 }],
+            testCallerContext
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(409);
+        expect(!result.success && result.errors[0]?.code).toBe('ORDER_INSUFFICIENT_STOCK');
+        expect(createSpy).not.toHaveBeenCalled();
+        expect(counterSpy).not.toHaveBeenCalled();
+        expect(await countOrders({ userId: user._id })).toBe(0);
+    });
+
+    /*
+     * The hold is taken BEFORE the order is written (`services/place.ts`), so once it IS taken, a
+     * write that fails must give it back rather than leave it standing on a row never created.
+     */
+    it('gives the hold back when the order write itself fails', async () => {
+        const user = await createUser();
+        const product = await createProduct({ onHand: 5 });
+        jest.spyOn(orderRepository, 'create').mockRejectedValueOnce(new Error('mongo is down'));
+
+        await expect(
+            create(
+                user.id,
+                user.email,
+                [{ productId: String(product._id), quantity: 2 }],
+                testCallerContext
+            )
+        ).rejects.toThrow('mongo is down');
+
+        // The write never happened, so the hold it would have belonged to must not linger either.
+        expect(await countersOf(product._id)).toEqual({ onHand: 5, reserved: 0, available: 5 });
+        expect(await countOrders({ userId: user._id })).toBe(0);
+    });
+
+    it('gives the hold back when invoice-number allocation fails, before any order is written', async () => {
+        const user = await createUser();
+        const product = await createProduct({ onHand: 5 });
+        jest.spyOn(orderRepository, 'incrementInvoiceCounter').mockRejectedValueOnce(
+            new Error('mongo is down')
+        );
+        const createSpy = jest.spyOn(orderRepository, 'create');
+
+        await expect(
+            create(
+                user.id,
+                user.email,
+                [{ productId: String(product._id), quantity: 2 }],
+                testCallerContext
+            )
+        ).rejects.toThrow('mongo is down');
+
+        expect(createSpy).not.toHaveBeenCalled();
+        expect(await countersOf(product._id)).toEqual({ onHand: 5, reserved: 0, available: 5 });
+        expect(await countOrders({ userId: user._id })).toBe(0);
     });
 });
 

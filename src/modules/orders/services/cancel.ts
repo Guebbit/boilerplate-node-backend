@@ -9,7 +9,6 @@
 import { callerForSubject, SYSTEM_ACTOR } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentNumber } from '@infrastructure/runtime/environment';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
 import type { AuthContext } from '@types';
@@ -30,6 +29,7 @@ import { ordersAuditActions } from '../audit';
 import { ORDER_CANCELLED, ORDER_REFUND_OWED } from '../events';
 import { orderRepository } from '../repository';
 import { statusesLeadingTo } from '../domain';
+import { orderEffectRetryMinutes } from '../config';
 import { bankTransferExpiredEmail } from '../emails';
 import { getById } from './crud';
 import { mailBuyer } from './notify';
@@ -62,7 +62,7 @@ const afterCancel = async (
      * one moves the counters. Unchecked here: a hold already expired is an ordinary
      * sequence, the units are already back.
      *
-     * A release that claims nothing is not automatically a no-op (B2): a PAID order's hold is
+     * A release that claims nothing is not automatically a no-op: a PAID order's hold is
      * `committed`, not `held`, so `releaseForOrder` never matches it — the units already left
      * `onHand` at payment, not merely `reserved`. `restockForOrder` is what gives those back, and
      * its own claim (`committed → restocked`) is exactly as safe to call speculatively: a hold
@@ -78,7 +78,7 @@ const afterCancel = async (
         refund
     });
 
-    // The refund is a SEPARATE announcement, retried on its own (B6): re-sending `ORDER_CANCELLED`
+    // The refund is a SEPARATE announcement, retried on its own: re-sending `ORDER_CANCELLED`
     // to retry a stuck refund would re-deliver the customer-facing webhook every time the sweep
     // ran. Discharged only once this send actually returns.
     if (refund) {
@@ -190,7 +190,7 @@ export const cancelById = (
 
 /**
  * Mark a refund owed outside a cancel — `payments`' own "the money landed on an order no longer
- * payable" branch (B1) is the one caller: by the time it runs, something else already moved this
+ * payable" branch is the one caller: by the time it runs, something else already moved this
  * order to `cancelled`, so there is no cancel here to carry the marker the way `cancelById` does.
  * Feeds the same `retryPendingEffects` sweep below, and the same `ORDER_REFUND_OWED` retry path.
  *
@@ -210,7 +210,7 @@ export const clearRefundOwed = (orderId: string): Promise<void> =>
 /**
  * `scripts/ops/sweep-order-effects.ts`'s sweep: the retry behind {@link cancelById}'s marker.
  *
- * Re-announces `ORDER_REFUND_OWED` — never `ORDER_CANCELLED` (B6) — for every order still owing a
+ * Re-announces `ORDER_REFUND_OWED` — never `ORDER_CANCELLED` — for every order still owing a
  * refund, and clears the marker only once that send actually returns. Safe to run repeatedly —
  * `payments`' conditional `succeeded → refunded` move means a second announcement for an
  * already-refunded order finds nothing to do, and an order cancelled while never paid finds
@@ -222,11 +222,8 @@ export const clearRefundOwed = (orderId: string): Promise<void> =>
  * @returns how many orders were settled
  */
 export const retryPendingEffects = async (): Promise<number> => {
-    // The grace window, not a deadline: the happy path clears its marker milliseconds after
-    // writing it, so this only has to be long enough that a slow refund is not retried under it.
-    const graceMinutes = environmentNumber('NODE_ORDER_EFFECT_RETRY_MINUTES', 5, 0);
     const due = await orderRepository.findWithPendingEffects(
-        new Date(Date.now() - graceMinutes * 60_000),
+        new Date(Date.now() - orderEffectRetryMinutes() * 60_000),
         SWEEP_BATCH_SIZE
     );
 
@@ -236,7 +233,7 @@ export const retryPendingEffects = async (): Promise<number> => {
         const orderId = String(order._id);
 
         // The marker exists only because the cancel decided to refund, and it is the only effect
-        // this field can carry — `ORDER_REFUND_OWED` alone, never `ORDER_CANCELLED` again (B6).
+        // this field can carry — `ORDER_REFUND_OWED` alone, never `ORDER_CANCELLED` again.
         if (!(await emitDomainEvent(ORDER_REFUND_OWED, { orderId }))) continue;
         if (await orderRepository.clearPendingEffect(orderId, 'refund')) settled += 1;
     }

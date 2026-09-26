@@ -117,9 +117,10 @@ groups:
                 summary: 'Webhook retries are not being swept'
                 description: 'webhook_deliveries_overdue has stayed above zero for 15 minutes — the retry sweep cron may not be running.'
 
-          # Every `docker/crontab` line except `sweep:webhook-retries`: that one runs every
-          # minute, not nightly, and already has its own purpose-built alert above — a shared
-          # 24-hour threshold would fire on it constantly. `job_last_success_timestamp_seconds`
+          # Every NIGHTLY `docker/crontab` line: three jobs run every 5 minutes or every minute
+          # instead, each already covered by its own purpose-built alert (this one and the two
+          # below), so a shared 48-hour threshold would either fire on them constantly or, worse,
+          # let one page 48 hours late. `job_last_success_timestamp_seconds`
           # (`infrastructure/observability/metrics-registry.ts`) is written by every crontab job
           # via `scripts/run-script.ts`, lease-guarded or not. Twice the nightly cadence, not the
           # cadence itself, so a job landing a few minutes late in the 02:00-02:30 stagger never
@@ -128,10 +129,26 @@ groups:
           # counter alone would miss the second.
           - alert: ScheduledJobStale
             expr: |
-                time() - job_last_success_timestamp_seconds{job!="sweep:webhook-retries"} > 2 * 86400
+                time() - job_last_success_timestamp_seconds{job!~"sweep:webhook-retries|sweep:payment-effects|sweep:reservations"} > 2 * 86400
             for: 0m
             labels:
                 severity: warning
             annotations:
                 summary: 'A scheduled job has not succeeded in over 48 hours'
                 description: '{{ $labels.job }} has not recorded a success in more than twice its expected daily interval — see docker/crontab and docs/reference/ops.md#scheduled-jobs.'
+
+          # `sweep:payment-effects` and `sweep:reservations` (`docker/crontab`, every 5 minutes)
+          # are excluded from the rule above for the same reason `sweep:webhook-retries` is: at
+          # that cadence, the 48-hour threshold would page 48 hours after a stuck payment or a
+          # reservation nobody is expiring. 30 minutes is six missed runs — long enough that one
+          # slow pass never pages, short enough to catch a dead cron before it costs a customer a
+          # refund or a stale hold.
+          - alert: FrequentSweepStale
+            expr: |
+                time() - job_last_success_timestamp_seconds{job=~"sweep:payment-effects|sweep:reservations"} > 30 * 60
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A 5-minute sweep has not succeeded in 30 minutes'
+                description: '{{ $labels.job }} has not recorded a success in 30 minutes — see docker/crontab and docs/reference/ops.md#scheduled-jobs.'

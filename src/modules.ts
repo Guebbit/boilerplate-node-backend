@@ -53,6 +53,17 @@ export const enabledModules: AppModule[] = [
 ];
 
 /**
+ * Every enabled module's own locale directory, in registry order — what `bootI18n` needs to load
+ * translations for exactly the modules this build serves. A module carries its own copy or none;
+ * this is the one place that turns the registry into the flat list `bootI18n` takes.
+ * @returns the locale directories to register, one per module that ships one
+ */
+export const enabledModuleLocales = (): string[] =>
+    enabledModules
+        .map((appModule) => appModule.locales)
+        .filter((directory) => directory !== undefined);
+
+/**
  * Every name a module in this build can carry — what a module table may key itself on instead of
  * `string`, so naming one this build does not mount is a compile error rather than a test that has
  * to run first (`scenarios/index.ts`'s `shopModules`).

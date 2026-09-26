@@ -49,9 +49,11 @@ interface Settlement {
     /** The payment as it now stands. */
     payment: PaymentDocument;
     /**
-     * Whether the money arrived at a moment when the order could no longer be paid. It was put
-     * straight back, and the payment reads `refunded` — but the caller owes its client a refusal
-     * rather than a success, which is the one thing the status alone does not say.
+     * Whether the money arrived at a moment when the order could no longer be paid. Putting it
+     * straight back was attempted; the payment reads `refunded` when that landed, still
+     * `succeeded` when the refund itself failed or the process died first (the retry sweep
+     * finishes it either way) — but the caller owes its client a refusal regardless, which is
+     * the one thing the status alone does not say.
      */
     orderLost: boolean;
 }
@@ -87,7 +89,7 @@ export const settlePayment = (
                 /*
                  * `processing` means the PROVIDER still has work to do — a SEPA debit, some bank
                  * redirects — which can take days, so the hold gets the bank-transfer window
-                 * instead of the ordinary 30 minutes (B3, decided 2026-09-26). `requires_action`
+                 * instead of the ordinary 30 minutes. `requires_action`
                  * gets no such grace: that means the BROWSER has work to do, and the ordinary
                  * window already fits it. Only on THIS call's own write, and never allowed to
                  * fail the settlement response it stands beside.
@@ -132,7 +134,7 @@ export const settlePayment = (
     return orderService.markPaid(orderId).then(async () => {
         // `pendingEffects: ['commit']` lands in the SAME write as the status move — the durable
         // note that the stock commit below is still owed, for `effects.ts#retryPendingEffects` to
-        // find if this call dies before either branch below clears it (B14).
+        // find if this call dies before either branch below clears it.
         const succeeded = await paymentRepository.updateStatusIfIn(
             orderId,
             SETTLEABLE_PAYMENT_STATUSES,
@@ -158,15 +160,16 @@ export const settlePayment = (
         if (!orderIsPaid) {
             /*
              * The money moved but the order was gone (cancelled, or a racing tab won). Put it
-             * straight back — the invariant is the module docblock's rule 2. `performRefund`
-             * rather than a bare `provider.refund`, so the payment ends up saying `refunded`
-             * and the at-most-once guard is the same one every other refund goes through.
+             * straight back — the invariant is the module docblock's rule 2.
              *
-             * The marker is written BEFORE the attempt (B1): unlike a cancel, nothing here
-             * retries this call itself, so a throw with no durable note first would lose the
-             * refund exactly like the bug this fixes. A failure is logged, never rethrown — this
-             * settlement must still answer its own caller (a webhook, confirm or sync) — and
-             * `orders`' own `ORDER_REFUND_OWED` sweep is what finishes it if this attempt didn't.
+             * Marker:   written BEFORE the attempt. Unlike a cancel, nothing retries this call
+             *           itself, so a throw with no durable note first would lose the refund.
+             * Refund:   `performRefund`, not a bare `provider.refund` — the payment ends up
+             *           saying `refunded`, through the same at-most-once guard every other
+             *           refund goes through.
+             * Failure:  logged, never rethrown — this settlement must still answer its own
+             *           caller (a webhook, confirm or sync), and `orders`' own `ORDER_REFUND_OWED`
+             *           sweep is what finishes it if this attempt didn't.
              */
             await orderService.markRefundOwed(orderId);
             const refunded = await performRefund(orderId)
@@ -302,7 +305,7 @@ const findConfirmable = (
  * @param allowed - the statuses this action may run from
  * @param providerCall - the provider-specific action (confirm or re-read), given the payment
  *   itself — narrowed to prove `providerRef` is present — so it can reach the provider named on
- *   THIS payment (B1c) rather than the deployment's currently configured one
+ *   THIS payment rather than the deployment's currently configured one
  */
 const settleFound = (
     payment: PaymentDocument,

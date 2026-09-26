@@ -87,11 +87,13 @@ periodically", via `scripts/run-script.ts`.
 | `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing.                          |
 | `npm run sweep:reservations`     | every 5 min    | No     | Expires a stale checkout hold and cancels the order behind it.                                            |
 
-`docker/crontab` and the seven nightly jobs above are staggered five minutes apart so they do not all
+`docker/crontab` and the nightly jobs above are staggered five minutes apart so they do not all
 land on the connection pool at once — each job's own header in `scripts/ops/` has the full reasoning.
-`sweep:webhook-retries` is the one job on a different schedule entirely: it runs every minute,
-because the sweep interval IS the retry granularity — see
-[webhooks](../modules/webhooks.md#the-delivery-path). `tests/cross-cutting/scheduled-jobs.test.ts`
+`sweep:webhook-retries`, `sweep:payment-effects` and `sweep:reservations` run on a different
+schedule entirely, every 5 minutes or faster, because the sweep interval IS the retry/expiry
+granularity for what each covers — see [webhooks](../modules/webhooks.md#the-delivery-path),
+[payments](../modules/payments.md#pending-effects) and
+[inventory](../modules/inventory-reservations.md). `tests/cross-cutting/scheduled-jobs.test.ts`
 asserts `docker/crontab` and `package.json`'s `reap:*`/`sweep:*` scripts agree in both directions —
 a script renamed in one and not the other is either a job that fails every run or cleanup that
 silently stops running — and that every scheduled script still names a file that exists, so
@@ -103,21 +105,25 @@ racing over the same collection — nothing here is meant to scale. `withLease`
 (`src/infrastructure/persistence/lease.ts`) is the backstop if it ever is: an atomic Mongo upsert
 that only one caller can hold at a time, TTL-bounded so a crashed holder's lease still expires.
 `reap:inactive-accounts` wraps its work in it, as the reference implementation — it hard-deletes
-accounts, so it is where "exactly one runner" earns its keep. The other five are correct today
-under `replicas: 1` alone and are not wrapped — `sweep:webhook-retries` included, whose own
-idempotency (`webhookDeliveryRepository.claimPending`'s atomic claim) is a second, independent
-reason a concurrent pass costs nothing. Any future scheduled job that would NOT be safe to run
-twice concurrently should wrap its work in `withLease` too.
+accounts, so it is where "exactly one runner" earns its keep. Every other job is correct today
+under `replicas: 1` alone and is not wrapped — the three frequent sweeps included, each with its
+own independent reason a concurrent pass costs nothing (`webhookDeliveryRepository.claimPending`'s
+atomic claim, `commitForOrder`'s exactly-once hold claim, `reservationRepository.claimStatus`'s
+own). Any future scheduled job that would NOT be safe to run twice concurrently should wrap its
+work in `withLease` too.
 
 **Observability.** `scripts/run-script.ts` records every crontab job's outcome — `lastSuccessAt` on
 success, `lastError` on a throw — onto the same `leases` document `withLease` itself writes when a
-job also takes one; `GET /observability/health`'s `jobs` array reports the whole set, so any of the
-ten silently failing or silently not running at all is visible on the probe an operator already
-looks at. `job_last_success_timestamp_seconds{job="…"}` (`infrastructure/observability/metrics-registry.ts`)
+job also takes one; `GET /observability/health`'s `jobs` array reports the whole set, so any
+crontab job silently failing or silently not running at all is visible on the probe an operator
+already looks at. `job_last_success_timestamp_seconds{job="…"}` (`infrastructure/observability/metrics-registry.ts`)
 exposes the same value to Prometheus; `ScheduledJobStale` (`docker/observability/prometheus.alert-rules.yaml`)
-fires when a nightly job's last success is more than 48 hours old. `sweep:webhook-retries` is excluded from that
-alert — it runs every minute, not nightly, and `WebhookRetriesStalled` already covers it. No
-Pushgateway needed: the value lives in Mongo, and the long-running app exports it at scrape time.
+fires when a nightly job's last success is more than 48 hours old. The three 5-minute-or-faster
+jobs are excluded from that alert, each covered by its own faster-firing one instead:
+`sweep:webhook-retries` by `WebhookRetriesStalled` (15 min), and `sweep:payment-effects` /
+`sweep:reservations` by `FrequentSweepStale` (30 min) — 48 hours at that cadence would page two
+days after a stuck payment or a reservation nobody is expiring. No Pushgateway needed: the value
+lives in Mongo, and the long-running app exports it at scrape time.
 See `docs/tools/observability-layer.md`.
 
 ## Data retention
@@ -170,7 +176,7 @@ hard-deletes an account after `NODE_INACTIVE_ACCOUNT_DAYS` of no login, **disabl
 
 `npm run sweep:order-effects` is a different kind of periodic job: not retention, but the retry
 behind a cancel's consequences. A cancel announces `ORDER_REFUND_OWED` — a separate event from the
-customer-facing `ORDER_CANCELLED`, so retrying the refund never re-delivers that webhook (B6) — and
+customer-facing `ORDER_CANCELLED`, so retrying the refund never re-delivers that webhook — and
 `payments` refunds off that announcement. The domain event bus has no retry, so a provider
 unreachable for the length of one call would leave the order cancelled and the refund lost.
 `cancelById` writes the intent to refund in the same document write that decides the cancel, and
@@ -181,27 +187,29 @@ pass over a settled order refunds nothing.
 The stock half of a cancel is deliberately NOT covered here — a hold keeps its `expiresAt` and
 `npm run sweep:reservations` (below) reclaims it, so it heals on its own.
 
-`npm run sweep:reservations` is what makes that healing actually happen (B3): it expires every hold
+`npm run sweep:reservations` is what makes that healing actually happen: it expires every hold
 past its `expiresAt` and, through `orders`' own `RESERVATION_EXPIRED` listener, cancels the order
 behind it — the same work `POST /inventory/reservations/sweep` does on demand, on a schedule
-instead. Before this ran, an abandoned checkout held its units forever and a bank-transfer hold
-never ended. A card payment gone `processing` (a SEPA debit, some bank redirects, which can settle
-over days) gets its hold extended to the bank-transfer window, `NODE_BANK_TRANSFER_HOLD_HOURS`
+instead. Without it, an abandoned checkout would hold its units forever and a bank-transfer hold
+would never end. A card payment gone `processing` (a SEPA debit, some bank redirects, which can
+settle over days) gets its hold extended to the bank-transfer window, `NODE_BANK_TRANSFER_HOLD_HOURS`
 (168 h by default — no setting of its own), the moment `settlePayment` sees that state; a payment
 still `requires_action` gets no such grace, since that means the BROWSER has work to do and the
 ordinary window already fits it. Money that lands after the hold has expired anyway is refunded
-automatically, the same as it always was — B3 doesn't change that. Runs every 5 minutes, well
-inside both windows. See [Reservations](../modules/inventory-reservations.md).
+automatically regardless. Runs every 5 minutes, well inside both windows. See
+[Reservations](../modules/inventory-reservations.md).
 
 `npm run sweep:payment-effects` is the same kind of job for the OTHER direction: a settlement
 writes `pendingEffects: ['commit']` in the same document write that moves a payment to `succeeded`,
 then commits the held stock and clears the marker — three steps, only the first of which is
 durable on its own. A crash between them leaves a payment marked `succeeded` with nothing set
 aside for its order, and unlike a webhook nothing redelivers a settlement that already answered its
-caller. This sweep finds any payment whose marker is at least a minute old (past the window a
-normal settlement takes to clear it itself), repeats the commit — safe, since claiming a hold is
-exactly-once — and clears the marker either way. Runs every 5 minutes, comfortably inside the
-30-minute reservation hold. See [payments](../modules/payments.md)#pending-effects.
+caller. This sweep finds any payment whose marker is past `NODE_PAYMENT_EFFECT_RETRY_MINUTES`
+(default 1, the window a normal settlement takes to clear it itself): it repeats the commit when
+the order can still use it — safe, since claiming a hold is exactly-once — or, when the order moved
+on before settlement's own `orderLost` branch could react, marks the refund owed instead, for
+`sweep:order-effects` above to pick up. Runs every 5 minutes, comfortably inside the 30-minute
+reservation hold. See [payments](../modules/payments.md#pending-effects).
 
 Log lines are Loki's retention, not Mongo's: `docker/observability/loki.config.yaml` sets
 `retention_period: 168h` (7 days) for the local stack. A production deployment tunes this

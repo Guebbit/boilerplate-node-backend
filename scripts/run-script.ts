@@ -9,8 +9,10 @@
  *     happy path means a throw skips it, and the process hangs on an open socket.
  *   - A READABLE ERROR, logged through the same logger as everything else.
  *   - AN OUTCOME `GET /observability/health` and `job_last_success_timestamp_seconds` can see —
- *     every crontab line (`docker/crontab`) goes through this one function, so recording it here
- *     covers all eight jobs, not only `reap:inactive-accounts`, the one that also takes a lease.
+ *     every crontab line (`docker/crontab`) goes through this one function, and passes its own
+ *     npm script name so this records it. `reap:inactive-accounts` is the one exception: it
+ *     passes `undefined` and records through its own `withLease` document instead, since that is
+ *     where its "exactly one runner" guarantee already lives.
  *
  * `process.exitCode` rather than `process.exit()`: setting the code lets Node drain stdout and
  * finish pending handles, where `exit()` truncates in-flight log writes.

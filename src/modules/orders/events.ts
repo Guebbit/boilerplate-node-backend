@@ -22,9 +22,9 @@ declare module '@kernel/events' {
 
         /**
          * A cancelled order still owes its refund — split from `order.cancelled` so retrying the
-         * one effect `payments` owes never re-announces the whole cancellation (B6): before this,
-         * the retry sweep re-sent `order.cancelled` to EVERY listener just to nudge `payments`,
-         * duplicating the customer-facing webhook every time a provider outage outlasted one pass.
+         * one effect `payments` owes never re-announces the whole cancellation: a retry sweep that
+         * re-sent `order.cancelled` just to nudge `payments` would duplicate the customer-facing
+         * webhook every time a provider outage outlasted one pass.
          *
          * Internal only — no AsyncAPI channel carries this. Nothing outside this application needs
          * to know a refund was retried, only that the money eventually moved.

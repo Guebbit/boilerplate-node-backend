@@ -233,20 +233,21 @@ const clearPendingEffect = (orderId: string, effect: OrderPendingEffect): Promis
 
 /**
  * Add a pending effect outside a status move — settlement's own "the money landed on an order no
- * longer payable" refund (B1) is the one caller: the order's status already moved (to
- * `cancelled`, by whoever raced it there first), so there is no transition here to carry the
- * marker on the way {@link updateStatusIfIn}'s `effects` parameter does for an ordinary cancel.
+ * longer payable" refund is the one caller: the order's status already moved (to `cancelled`, by
+ * whoever raced it there first), so there is no transition here to carry the marker on the way
+ * {@link updateStatusIfIn}'s `effects` parameter does for an ordinary cancel.
+ *
+ * `$addToSet`, not `$set`: a second effect added later must not overwrite the first one still
+ * owed. Timestamps run normally (unlike {@link clearPendingEffect}'s bookkeeping write) — this
+ * marks the order as having just changed, which is what makes the grace window on
+ * {@link findWithPendingEffects}'s `cutoff` mean anything for it.
  *
  * @param orderId - the order to mark
  * @param effect - the effect still owed
  */
 const addPendingEffect = (orderId: string, effect: OrderPendingEffect): Promise<void> =>
     orderModel
-        .updateOne(
-            { _id: toObjectId(orderId) },
-            { $set: { pendingEffects: [effect] } },
-            { timestamps: false }
-        )
+        .updateOne({ _id: toObjectId(orderId) }, { $addToSet: { pendingEffects: effect } })
         .exec()
         .then(() => undefined);
 

@@ -18,6 +18,7 @@ import {
 import { emitDomainEvent } from '@kernel/events';
 import { productService } from '@modules/products';
 import { StockMovementReason, type InventoryLevel, type StockMovement } from '@types';
+import type { ReservationItem } from './model';
 import {
     normalizePagination,
     buildPaginatedMeta,
@@ -165,7 +166,7 @@ const levelFor = async (productId: string): Promise<InventoryLevel | null> => {
  *
  * The hold is narrowed to `taken` FIRST, before a single counter moves: a crash partway through
  * this cleanup then leaves a hold that still names only real reservations, never a line whose
- * counters were never touched — the exact leak B15 fixes (`docs/modules/inventory-reservations.md`).
+ * counters were never touched — the exact leak this fixes (`docs/modules/inventory-reservations.md`).
  * Each release is logged rather than allowed to throw, so one failed give-back doesn't stop the
  * others or hide which line it was.
  *
@@ -217,7 +218,7 @@ const giveBackAndDeleteHold = async (
  *
  * A line that THROWS (a database hiccup, not a refusal) is exception-safe too: the `try` unwinds
  * through {@link giveBackAndDeleteHold} exactly like a refusal, then rethrows — so a hold never
- * survives naming lines this call never actually took (B15).
+ * survives naming lines this call never actually took.
  *
  * @param orderId - the order the hold belongs to
  * @param lines - what it claims
@@ -236,7 +237,7 @@ export const reserveForOrder = async (
     if (!hold) return { held: true };
 
     const taken: StockLine[] = [];
-    // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback (B15): a thrown error partway through must give back only the lines actually taken, then rethrow, so no safe wrapper covers this
+    // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: a thrown error partway through must give back only the lines actually taken, then rethrow, so no safe wrapper covers this
     try {
         for (const line of lines) {
             const held = await applyTransition(
@@ -288,11 +289,39 @@ export const reserveForOrder = async (
 };
 
 /**
+ * Apply one ledger transition per line of an already-claimed hold — the loop
+ * {@link commitForOrder}, {@link releaseForOrder} and {@link restockForOrder} each ran on their
+ * own. A line whose counters refuse is logged, never thrown: the claim already made this call
+ * at-most-once, so failing the request now would misreport that fact, and the refusal itself
+ * means the records need a human.
+ * @param reason - which ledger movement this is
+ * @param verb - the same word, past tense, for the one log line a refusal writes
+ * @param orderId - the order the claimed hold belonged to
+ * @param items - the lines it carried
+ */
+const applyToEveryLine = async (
+    reason: StockMovementReason,
+    verb: string,
+    orderId: string,
+    items: readonly ReservationItem[]
+): Promise<void> => {
+    for (const { productId, quantity } of items) {
+        const applied = await applyTransition(reason, String(productId), quantity, {
+            reference: orderId
+        });
+        if (!applied)
+            // Stryker disable all
+            logger.error(
+                `Inventory: could not ${verb} ${quantity} of product ${String(productId)} for order ${orderId} — the hold was claimed but the counters refused`
+            );
+        // Stryker restore all
+    }
+};
+
+/**
  * Turn an order's hold into a sale — the units leave.
  *
- * Claiming `held → committed` first is what makes it at-most-once. A line whose counters refuse is
- * logged rather than thrown: the money has already moved, so failing the request would misreport
- * the payment, and the refusal itself means the records need a human.
+ * Claiming `held → committed` first is what makes it at-most-once.
  *
  * A missed claim is not automatically a no-op: a redelivered settlement finding the hold already
  * `committed` is a benign replay, but finding it `released`/`expired`, or finding no reservation at
@@ -306,21 +335,7 @@ export const commitForOrder = async (orderId: string): Promise<boolean> => {
     const hold = await reservationRepository.claimStatus(orderId, 'held', 'committed');
 
     if (hold) {
-        for (const { productId, quantity } of hold.items) {
-            const committed = await applyTransition(
-                StockMovementReason.commit,
-                String(productId),
-                quantity,
-                { reference: orderId }
-            );
-            if (!committed)
-                // Stryker disable all
-                logger.error(
-                    `Inventory: could not commit ${quantity} of product ${String(productId)} for order ${orderId} — the hold was claimed but the counters refused`
-                );
-            // Stryker restore all
-        }
-
+        await applyToEveryLine(StockMovementReason.commit, 'commit', orderId, hold.items);
         return true;
     }
 
@@ -374,24 +389,13 @@ export const releaseForOrder = async (
     const hold = await reservationRepository.claimStatus(orderId, 'held', 'released');
     if (!hold) return false;
 
-    for (const { productId, quantity } of hold.items) {
-        const released = await applyTransition(reason, String(productId), quantity, {
-            reference: orderId
-        });
-        if (!released)
-            // Stryker disable all
-            logger.error(
-                `Inventory: could not release ${quantity} of product ${String(productId)} for order ${orderId} — the hold was claimed but the counters refused`
-            );
-        // Stryker restore all
-    }
-
+    await applyToEveryLine(reason, reason, orderId, hold.items);
     return true;
 };
 
 /**
  * Give a PAID order's committed units back to the shelf — the customer cancelled after payment,
- * so `commitForOrder` already took them out of `onHand`, not merely out of a hold (B2).
+ * so `commitForOrder` already took them out of `onHand`, not merely out of a hold.
  *
  * Same claim-then-act shape as {@link releaseForOrder}, but never merged into it: the sweep only
  * ever releases a stale HOLD, and folding restock in there would let it put a just-paid order's
@@ -406,28 +410,14 @@ export const restockForOrder = async (orderId: string): Promise<boolean> => {
     const hold = await reservationRepository.claimStatus(orderId, 'committed', 'restocked');
     if (!hold) return false;
 
-    for (const { productId, quantity } of hold.items) {
-        const restocked = await applyTransition(
-            StockMovementReason.restock,
-            String(productId),
-            quantity,
-            { reference: orderId }
-        );
-        if (!restocked)
-            // Stryker disable all
-            logger.error(
-                `Inventory: could not restock ${quantity} of product ${String(productId)} for order ${orderId} — the hold was claimed but the counters refused`
-            );
-        // Stryker restore all
-    }
-
+    await applyToEveryLine(StockMovementReason.restock, 'restock', orderId, hold.items);
     return true;
 };
 
 /**
  * Extend a still-open hold to `hours` from now — a card payment gone `processing` (a SEPA debit,
  * some bank redirects) can take days to settle, and the standard hold window would let the
- * reservation sweep cancel an order whose money is still genuinely in flight (B3). A hold already
+ * reservation sweep cancel an order whose money is still genuinely in flight. A hold already
  * claimed (committed/released/restocked) or missing matches nothing: there is no deadline left on
  * it to move, and this is silent about that — the caller has no decision to make either way.
  *
@@ -462,7 +452,9 @@ const isStockBoundToOrder = (orderId: string): Promise<boolean> =>
  * the order behind it. `orders`' own cancel calls back into `releaseForOrder` and finds the hold
  * already released, so neither path can double-release.
  *
- * @param context - audit context for `ADMIN_RESERVATIONS_SWEPT`; tests omit it to skip the emit
+ * @param context - audit context for `ADMIN_RESERVATIONS_SWEPT`; the HTTP route always passes
+ *   one, but `scripts/ops/sweep-reservations.ts`'s own scheduled run does not, so the recurring
+ *   cron sweep writes no audit row — only an operator's on-demand call does
  * @returns how many holds were expired
  */
 export const runReservationSweep = async (context?: CallerContext): Promise<number> => {

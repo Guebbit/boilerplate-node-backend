@@ -47,7 +47,7 @@ import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { bootI18n, getDefaultLocale } from '@infrastructure/i18n';
 import { registerModules } from '@kernel/registry';
-import { enabledModules } from '../../src/modules';
+import { enabledModules, enabledModuleLocales } from '../../src/modules';
 import { userService, type UserDocument } from '@modules/users';
 import { inactivityWarningEmail } from '@modules/account';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -72,16 +72,10 @@ const daysAgo = (days: number): Date => new Date(Date.now() - days * 24 * 60 * 6
 
 /**
  * Bring up just enough of the app's own boot sequence (`app.ts`'s `startServer`) to render
- * translated email copy outside the HTTP process: `bootI18n` with the enabled modules' locale
- * directories. Nothing else `startServer` does (cache, queue readiness, route mounting) is this
- * script's concern.
+ * translated email copy outside the HTTP process. Nothing else `startServer` does (cache, queue
+ * readiness, route mounting) is this script's concern.
  */
-const initI18n = (): Promise<unknown> =>
-    bootI18n(
-        enabledModules
-            .map((appModule) => appModule.locales)
-            .filter((directory) => directory !== undefined)
-    );
+const initI18n = (): Promise<unknown> => bootI18n(enabledModuleLocales());
 
 /** Stage one: warn, and stamp so this account is not warned twice. */
 const warn = (user: UserDocument): Promise<void> => {

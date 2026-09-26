@@ -130,9 +130,11 @@ export interface OrderDocument
      */
     invoiceNumber?: string;
     /**
-     * Set alongside `userId` being unset, to `now + NODE_ORDER_PII_RETENTION_DAYS`.
-     * `scripts/ops/reap-orders.ts` scrubs the order's remaining PII (email, shipping name/phone/
-     * street) once this elapses; the order row itself is never deleted.
+     * Set alongside `userId` being unset, to `max(now, createdAt + NODE_ORDER_PII_RETENTION_DAYS)`
+     * — an order already past its own window at erasure time is due almost immediately, not given
+     * a fresh retention period. `scripts/ops/reap-orders.ts` scrubs the order's remaining PII
+     * (email, shipping name/phone/street, notes) once this elapses; the order row itself is never
+     * deleted.
      */
     anonymizeAfter?: Date;
     /**

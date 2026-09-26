@@ -1,22 +1,24 @@
 /**
  * @module
  * Payments — how an order's money moves, behind the provider port. A folder rather than one file
- * because it passed ~700 lines; see `docs/theory/layers.md`. Four rules, followed by every file
- * here: only a `pending` order's owner can start paying; the order's move to `paid` is the gate,
- * not the charge — the provider answers first, and a slipped-away order is refunded on the spot,
- * so money moved iff the order says `paid`; a refund is the `ORDER_REFUND_OWED` listener, made
- * at-most-once by the conditional `succeeded → refunded` move; and the provider's own word,
- * arriving by webhook, is the authority — the browser's is a hint that lets the happy path feel
- * synchronous.
+ * because it passed ~700 lines; see `docs/theory/layers.md`.
  *
- * `intent.ts` starts a payment, `settlement.ts` is {@link settlePayment} — the whole choreography,
- * reached from the webhook AND the browser-driven paths, since two copies would drift and drifted
- * copies commit inventory twice — `refunds.ts` is the one place money moves back out, `effects.ts`
- * retries the stock commit a settlement set out to do but died before finishing (B14), `offline.ts`
- * records money the provider never saw and settles it through the same choreography, `view.ts`
- * reads a payment back with its `actions`, `retention.ts` is erasure/export/the abandoned sweep,
- * `scope.ts` decides who may see what, and `lookup.ts` matches an admin-pasted RF reference back
- * to the order it pays, the step before `recordOfflinePayment` settles it.
+ * Rules: only a `pending` order's owner can start paying; the order's move to `paid` is the
+ *        gate, not the charge — the provider answers first, and a slipped-away order is refunded
+ *        on the spot, so money moved iff the order says `paid`; a refund is the
+ *        `ORDER_REFUND_OWED` listener, made at-most-once by the conditional `succeeded →
+ *        refunded` move; the provider's own word, arriving by webhook, is the authority — the
+ *        browser's is a hint that lets the happy path feel synchronous.
+ *
+ * Files: `intent.ts` starts a payment. `settlement.ts` is {@link settlePayment} — the whole
+ *        choreography, reached from the webhook AND the browser-driven paths, since two copies
+ *        would drift and drifted copies commit inventory twice. `refunds.ts` is the one place
+ *        money moves back out. `effects.ts` retries the stock commit (or the refund) a settlement
+ *        set out to do but died before finishing. `offline.ts` records money the provider never
+ *        saw and settles it through the same choreography. `view.ts` reads a payment back with
+ *        its `actions`. `retention.ts` is erasure/export/the abandoned sweep. `scope.ts` decides
+ *        who may see what. `lookup.ts` matches an admin-pasted RF reference back to the order it
+ *        pays, the step before `recordOfflinePayment` settles it.
  */
 
 import { createIntent } from './intent';

@@ -108,16 +108,17 @@ const resolvePaymentMethod = async (
 /**
  * Which method and address this checkout ships to, resolved before any stock moves: a named
  * method or address entry that does not resolve refuses the checkout while nothing has been
- * written yet. Both are optional HERE — whether the basket needs them is
- * {@link evaluateShippingRequirement}'s call, made later once the joined lines are known, as are
- * shipping cost and whether the method fits. This only resolves WHICH method and address.
+ * written yet. This only resolves WHICH method and address — whether the basket needs them,
+ * shipping cost and whether the method fits are {@link evaluateShippingRequirement}'s call, made
+ * later once the joined lines are known.
  *
- * A method whose `requiresAddress` is false (`pickup`) never resolves an address at all — not
- * even the caller's default. `addressForCheckout(userId, undefined)` would silently hand one
- * back, and the order would freeze a shipping address nobody ships to. An explicit `addressId`
- * sent anyway is refused (409), not quietly dropped — a value that cannot apply here is a state
- * conflict, the same status `CART_SHIPPING_NOT_APPLICABLE` already answers for a method named for
- * an all-digital basket.
+ * pickup:  a method whose `requiresAddress` is false never resolves an address at all, not even
+ *          the caller's default — `addressForCheckout(userId, undefined)` would silently hand
+ *          one back, and the order would freeze a shipping address nobody ships to.
+ * Refused: an explicit `addressId` sent anyway is refused (409), not quietly dropped — a value
+ *          that cannot apply here is a state conflict, the same status
+ *          `CART_SHIPPING_NOT_APPLICABLE` already answers for a method named for an all-digital
+ *          basket.
  *
  * @param userId - the caller's id, whose address book `addressId` is looked up against
  * @param addressId - the shipping address's entry id, or `undefined` for the default/no address
@@ -406,7 +407,7 @@ const runCheckout = async (
 
     // Lost the race: hand the units back and retract the order this request
     // wrote, so the cart's contents end up on exactly one of the two.
-    await retractOrder(order, true);
+    await retractOrder(order);
     return generateReject(409, [{ code: 'CART_CHANGED', message: t('cart.changed') }]);
 };
 

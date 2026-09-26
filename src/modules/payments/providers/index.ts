@@ -152,7 +152,7 @@ export const resolvePaymentProvider = (): PaymentProvider => {
 /**
  * The implementation a PAYMENT'S OWN `provider` field names — for confirming, syncing or
  * refunding a payment already made, which must go back to whichever provider actually took the
- * money (B1c). `resolvePaymentProvider` answers a different question — which provider a NEW
+ * money. `resolvePaymentProvider` answers a different question — which provider a NEW
  * intent opens under — and the two must not be conflated: a deployment that switches
  * `NODE_PAYMENT_PROVIDER` must not silently redirect an old payment's refund to the new one.
  *
