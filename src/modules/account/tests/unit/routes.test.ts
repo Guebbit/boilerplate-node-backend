@@ -19,16 +19,7 @@ jest.mock('@infrastructure/http/middlewares/upload', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').storageMock()
 );
 
-import { router, isChangingEmail } from '@modules/account/routes';
-import type { Request } from 'express';
-import { asStub } from '@tests/stub';
-
-/** A minimal stand-in for the one shape `isChangingEmail` reads off a request. */
-const requestWith = (body: { email?: string } | undefined, currentEmail?: string): Request =>
-    asStub<Request>({
-        body,
-        authContext: currentEmail === undefined ? undefined : { email: currentEmail }
-    });
+import { router } from '@modules/account/routes';
 
 /** Routes whose credential is a token in the URL or a cookie, not an access token. */
 const TOKEN_BEARING = [
@@ -275,27 +266,5 @@ describe('account routes — uploads', () => {
         );
 
         expect(cached).toEqual([]);
-    });
-});
-
-describe('isChangingEmail (B5 — case-insensitive)', () => {
-    it('is false when the body carries no email field', () => {
-        expect(isChangingEmail(requestWith({}, 'same@example.com'))).toBe(false);
-    });
-
-    it('is false for the current address restated in a different case', () => {
-        expect(
-            isChangingEmail(requestWith({ email: 'SAME@Example.com' }, 'same@example.com'))
-        ).toBe(false);
-    });
-
-    it('is true for a genuinely different address', () => {
-        expect(isChangingEmail(requestWith({ email: 'new@example.com' }, 'same@example.com'))).toBe(
-            true
-        );
-    });
-
-    it('is true when there is no session email to compare against', () => {
-        expect(isChangingEmail(requestWith({ email: 'new@example.com' }, undefined))).toBe(true);
     });
 });

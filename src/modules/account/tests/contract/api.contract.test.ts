@@ -26,6 +26,8 @@ import { getExpiryTime, RefreshTokenExpiryTime } from '@modules/account/session/
 import { createIntent } from '@modules/payments';
 import { asCustomer } from '@tests/callers';
 import { MISSING_ID } from '@tests/ids';
+import { freezeDate, advanceDate } from '@tests/clock';
+import { REAUTH_TIME_SENSITIVE } from '@kernel/middlewares/authorizations';
 import type { ResponseSuccess } from '@infrastructure/http/response';
 import type { Payment } from '@types';
 
@@ -177,6 +179,64 @@ describe('PUT /account', () => {
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
+    });
+});
+
+/**
+ * `remember: 'short'` so the refresh cookie outlives the clock advance {@link staleButRefreshedBearer}
+ * makes — an unqualified login's refresh token shares the ACCESS token's short TTL (a separate
+ * gap; `session/session.ts` `issueSession`'s `remember` falls through to `getExpiryTime`'s
+ * 'default' case, `NODE_TOKEN_ACCESS_TIME`), which would expire before that advance and mask the
+ * freshness gate behind a plain "token expired" 401.
+ */
+const loginRemembered = async () => {
+    const user = await createUser();
+    const response = await api()
+        .post('/account/login')
+        .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'short' });
+    const jwtCookie = setCookie(response, 'jwt');
+    if (!jwtCookie) throw new Error('login set no jwt cookie');
+    return { user, jwtCookie };
+};
+
+/**
+ * Beyond `REAUTH_TIME_SENSITIVE`, but still holding a USABLE access token: `auth_time` is
+ * copied forward on every refresh, never re-stamped (`session/jwt.ts`), so a refreshed token
+ * is exactly what a long-lived-but-stale session looks like.
+ */
+const staleButRefreshedBearer = async (jwtCookie: string): Promise<`Bearer ${string}`> => {
+    advanceDate((REAUTH_TIME_SENSITIVE + 1) * 1000);
+    const refreshed = await api().get('/account/refresh').set('Cookie', jwtCookie);
+    return `Bearer ${refreshed.body.data.token as string}`;
+};
+
+describe("PUT /account's step-up depends on whether the email actually changes (PL-30)", () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('does not demand a fresh session for a re-cased resend of the current address', async () => {
+        freezeDate();
+        const { user, jwtCookie } = await loginRemembered();
+        const bearer = await staleButRefreshedBearer(jwtCookie);
+
+        const response = await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: user.email.toUpperCase(), username: user.username });
+
+        expect(response.status).toBe(200);
+    });
+
+    it('demands a fresh session for a genuine email change', async () => {
+        freezeDate();
+        const { user, jwtCookie } = await loginRemembered();
+        const bearer = await staleButRefreshedBearer(jwtCookie);
+
+        const response = await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: 'brand-new@example.com', username: user.username });
+
+        expect(response.status).toBe(401);
     });
 });
 
