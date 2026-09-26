@@ -6,12 +6,28 @@
  * docs/modules/delivery.md
  */
 
+import type { Request } from 'express';
 import { Router } from 'express';
-import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import {
+    getAuth,
+    isAuth,
+    requirePermission,
+    requireFreshAuthWhen,
+    REAUTH_TIME_CRITICAL
+} from '@kernel/middlewares/authorizations';
 import { getShippingMethods } from './controllers/get-shipping-methods';
 import { getShipmentByOrder } from './controllers/get-shipment-by-order';
 import { postShipOrder } from './controllers/post-ship-order';
 import { postDeliverOrder } from './controllers/post-deliver-order';
+
+/**
+ * Whether this request is asking to skip the normal gate — the same flag `service.ts`'s
+ * `refuseUnearnedForce` reads for its own `orders.any.override` permission check, so a caller who
+ * reaches this far without `forced: true` never pays for a step-up prompt a plain ship/deliver
+ * never needed.
+ */
+const isForcedRequest = (request: Request): boolean =>
+    (request.body as { forced?: boolean } | undefined)?.forced === true;
 
 /** Express router for delivery operations (methods, shipments, recording a parcel's progress). */
 export const router = Router();
@@ -22,20 +38,26 @@ router.get('/methods', getShippingMethods);
 // GET /delivery/order/:orderId — the parcel behind one of the caller's orders
 router.get('/order/:orderId', getAuth, isAuth, getShipmentByOrder);
 
-// POST /delivery/order/:orderId/ship — records a handover; moves the order processing -> shipped
+// POST /delivery/order/:orderId/ship — records a handover; moves the order processing -> shipped.
+// `requireFreshAuthWhen` at `orders.any.override`'s own declared tier: a `forced` write reaches
+// past the ordinary `processing`-only gate, and `service.ts`'s own permission check has no way to
+// demand a step-up on its own — only a route-mounted guard can challenge before the controller runs.
 router.post(
     '/order/:orderId/ship',
     getAuth,
     isAuth,
     requirePermission('delivery.any.update'),
+    requireFreshAuthWhen(isForcedRequest, REAUTH_TIME_CRITICAL),
     postShipOrder
 );
 
-// POST /delivery/order/:orderId/deliver — records an arrival; moves the order shipped -> delivered
+// POST /delivery/order/:orderId/deliver — records an arrival; moves the order shipped -> delivered.
+// Same `forced` step-up as the ship door above.
 router.post(
     '/order/:orderId/deliver',
     getAuth,
     isAuth,
     requirePermission('delivery.any.update'),
+    requireFreshAuthWhen(isForcedRequest, REAUTH_TIME_CRITICAL),
     postDeliverOrder
 );
