@@ -45,12 +45,27 @@ const touchLastUsed = (id: string): Promise<void> =>
         .exec()
         .then(() => undefined);
 
+/**
+ * Delete every credential this user minted — what a hard account deletion owes this collection.
+ * `createdByUserId` is stored as a plain string (never `toObjectId`d — see `./model`), so it's
+ * matched as-is.
+ */
+const deleteByUserId = (userId: string): Promise<void> =>
+    apiKeyModel
+        .deleteMany({ createdByUserId: userId })
+        .exec()
+        .then(() => {
+            // explicit void return
+        });
+
 /** Explicit annotation: same TS7056 reason as every other module's repository — see `webhooks/repository.ts`. */
 export const apiKeyRepository: Repository<ApiKeyDocument, ApiKey> & {
     findActiveByPrefix: typeof findActiveByPrefix;
     touchLastUsed: typeof touchLastUsed;
+    deleteByUserId: typeof deleteByUserId;
 } = {
     ...base,
     findActiveByPrefix,
-    touchLastUsed
+    touchLastUsed,
+    deleteByUserId
 };

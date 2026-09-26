@@ -265,23 +265,53 @@ const existingIds = (ids: readonly string[]): Promise<Set<string>> =>
         .then((documents) => new Set(documents.map((document) => String(document._id))));
 
 /**
- * Unset `userId` on every order this account placed, and mark them for `scripts/ops/reap-orders.ts`
- * to scrub later — `users`' `USER_DELETED` listener. The order row is never touched otherwise:
- * it is the invoice, kept whole until `anonymizeAfter`.
+ * Unset `userId` on every order this account placed, and mark each for
+ * `scripts/ops/reap-orders.ts` to scrub later — `users`' `USER_DELETED` listener. The order row is
+ * never touched otherwise: it is the invoice, kept whole until its own `anonymizeAfter`.
+ *
+ * An aggregation-pipeline update, not a flat `$set`, because the clock runs PER ORDER: a decade-old
+ * order is due almost immediately, not ten years from today. `anonymizeAfter = max(now, createdAt +
+ * retentionDays)` — the `$max` is what stops an order already past its own window from getting a
+ * fresh ten years just because the account was erased today.
  *
  * @param userId - the erased account's id
- * @param anonymizeAfter - when the reaper may scrub this order's remaining PII
+ * @param retentionDays - how many days of PII an order gets from ITS OWN `createdAt`
  * @returns how many orders were detached
  */
-const detachUserId = (userId: string, anonymizeAfter: Date): Promise<number> =>
-    orderModel
+const detachUserId = (userId: string, retentionDays: number): Promise<number> => {
+    const now = new Date();
+
+    return orderModel
         .updateMany(
             { userId: toObjectId(userId) },
-            { $unset: { userId: 1 }, $set: { anonymizeAfter } },
-            { timestamps: false }
+            [
+                {
+                    $set: {
+                        userId: '$$REMOVE',
+                        anonymizeAfter: {
+                            $max: [
+                                now,
+                                {
+                                    $dateAdd: {
+                                        startDate: '$createdAt',
+                                        unit: 'day',
+                                        amount: retentionDays
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            ],
+            // `updatePipeline: true` — Mongoose refuses an array update otherwise ("Cannot pass an
+            // array to query updates unless the `updatePipeline` option is set"), since an array
+            // and an update-operator OBJECT are both valid `updateMany` arguments with different
+            // semantics. https://mongoosejs.com/docs/api/query.html#Query.prototype.setUpdate()
+            { timestamps: false, updatePipeline: true }
         )
         .exec()
         .then(({ modifiedCount }) => modifiedCount);
+};
 
 /** The scrubbed-in-place values `scrubDueForAnonymization` replaces required PII with. */
 const ANONYMIZED_EMAIL = 'anonymized@deleted.invalid';
@@ -294,9 +324,10 @@ const ANONYMIZED_TEXT = 'Anonymized';
  * PII scrubbed.
  *
  * Scrub:      `email` and the required `shippingAddress` fields (`fullName`, `street`) are
- *             REPLACED, since the schema requires them; the optional `shippingAddress.phone` is
- *             unset outright. City, country, zip, amounts, line items and dates survive — none of
- *             it is personal data once the name and street are gone.
+ *             REPLACED, since the schema requires them; the optional `shippingAddress.phone` and
+ *             the buyer's free-text `notes` are unset outright. City, country, zip, amounts, line
+ *             items and dates survive — none of it is personal data once the name and street are
+ *             gone.
  * Two writes: an order placed by an account that kept no address book (pickup, or a guest with
  *             none) has no `shippingAddress` at all, and a single `$set` on its sub-fields would
  *             CREATE a partial one — present but missing the required `city`/`zip`/`country`,
@@ -332,7 +363,10 @@ const scrubDueForAnonymization = (cutoff: Date): Promise<number> => {
             orderModel
                 .updateMany(
                     due,
-                    { $set: { email: ANONYMIZED_EMAIL }, $unset: { anonymizeAfter: 1 } },
+                    {
+                        $set: { email: ANONYMIZED_EMAIL },
+                        $unset: { anonymizeAfter: 1, notes: 1 }
+                    },
                     { timestamps: false }
                 )
                 .exec()
@@ -398,7 +432,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
     countOpenBankTransfers: (userId: string) => Promise<number>;
     existingIds: (ids: readonly string[]) => Promise<Set<string>>;
-    detachUserId: (userId: string, anonymizeAfter: Date) => Promise<number>;
+    detachUserId: (userId: string, retentionDays: number) => Promise<number>;
     scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
     incrementInvoiceCounter: (year: number) => Promise<number>;
 } = {

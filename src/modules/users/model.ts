@@ -41,6 +41,15 @@ export const hashToken = (token: string): string =>
     createHash('sha256').update(token).digest('hex');
 
 /**
+ * Compare two addresses the way the `email`/`pendingEmail` schema paths themselves do —
+ * case-insensitively, ignoring surrounding whitespace. The schema's `lowercase`/`trim` casters
+ * cover every database read and write for free (equality, `$or`, `$in`, `$set`); this covers the
+ * two in-memory comparisons that never touch a query: `account/services/profile.ts`'s "is this
+ * the current address" check and `account/routes.ts`'s `isChangingEmail` guard.
+ */
+export const normalizeEmail = (email: string): string => email.trim().toLowerCase();
+
+/**
  * User tokens
  * Token is like an ID, but not really an ID
  */
@@ -326,7 +335,13 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             // loose on the character set, but a second `@` or a whitespace-free comma-joined
             // address (`a@b.com,evil@c.test`) cannot smuggle past a single-`@`, single-match
             // anchor the way `\S+@\S+` would let it.
-            match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+            match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+            // Mongoose applies both casters before validation and on every `$set`/`$or`/`$in`
+            // built against this path, so login, signup, OAuth and admin writes are all covered
+            // with no call-site change — see `./repository`'s lookups and `normalizeEmail` below
+            // for the two comparisons Mongoose itself can't reach.
+            lowercase: true,
+            trim: true
         },
         username: {
             type: String,
@@ -430,7 +445,12 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
          */
         pendingEmail: {
             type: String,
-            select: false
+            select: false,
+            // Same casters as `email` above — a pending change must compare and collide the same
+            // way the live address does, or a case-only re-send of the current address would look
+            // like a real change (see `normalizeEmail` in `./repository`).
+            lowercase: true,
+            trim: true
         },
         // sub documents always have _id
         // `select: false` for the same reason as `password` — live refresh tokens are as good as

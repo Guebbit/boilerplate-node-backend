@@ -11,18 +11,19 @@ import { orderRepository } from '../repository';
 
 /**
  * `USER_DELETED`'s listener. Unsets `userId` on every order this account
- * placed and marks them for `scripts/ops/reap-orders.ts` to scrub after
+ * placed and marks each for `scripts/ops/reap-orders.ts` to scrub after
  * `NODE_ORDER_PII_RETENTION_DAYS` (default 3650, ~10 years — the outer edge of common commercial
- * record-keeping periods). The orders themselves are never touched here: they are invoices,
- * kept under Art. 17(3)(b)/(e) regardless of what happens to the account that placed them.
+ * record-keeping periods) FROM ITS OWN `createdAt`, not from today — see
+ * `orderRepository.detachUserId`'s own per-order clock. The orders themselves are never touched
+ * here: they are invoices, kept under Art. 17(3)(b)/(e) regardless of what happens to the account
+ * that placed them.
  *
  * @param userId - the erased account's id
  */
 export const detachUserId = (userId: string): Promise<void> => {
     const retentionDays = environmentNumber('NODE_ORDER_PII_RETENTION_DAYS', 3650, 1);
-    const anonymizeAfter = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
 
-    return orderRepository.detachUserId(userId, anonymizeAfter).then((detached) => {
+    return orderRepository.detachUserId(userId, retentionDays).then((detached) => {
         if (detached > 0)
             // Stryker disable next-line all
             logger.info({ message: 'Detached orders from an erased account.', userId, detached });

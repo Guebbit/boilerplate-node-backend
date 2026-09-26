@@ -14,6 +14,8 @@ import { resolveTaxRate, type ProductDocument } from '@modules/products';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderRepository } from '../repository';
+import { orderModel } from '../model';
+import { toObjectId } from '@infrastructure/persistence/create-repository';
 import {
     makeOrder as buildOrder,
     type OrderFixture,
@@ -118,12 +120,20 @@ export const forceOrderStatus = (orderId: string, status: string): Promise<Order
     orderRepository.updateStatusIfIn(orderId, Object.values(OrderStatus), status);
 
 /**
- * Detach an account with an explicit retention deadline — `orderService.detachUserId` always
- * computes `NODE_ORDER_PII_RETENTION_DAYS` from now, which a sweep test needs to backdate to
- * exercise `anonymizeDueOrders` without waiting years.
+ * Detach an account with an EXPLICIT retention deadline, bypassing the per-order clock —
+ * `orderService.detachUserId` always derives `anonymizeAfter` from each order's own `createdAt`
+ * (see `orderRepository.detachUserId`), which a sweep test needs to sidestep to put a fixture
+ * exactly at, before or after its due date without waiting years or backdating `createdAt` itself.
  *
  * @param userId - the erased account's id
  * @param anonymizeAfter - when the reaper may scrub this order's remaining PII
  */
 export const detachOrderUserId = (userId: string, anonymizeAfter: Date): Promise<number> =>
-    orderRepository.detachUserId(userId, anonymizeAfter);
+    orderModel
+        .updateMany(
+            { userId: toObjectId(userId) },
+            { $unset: { userId: 1 }, $set: { anonymizeAfter } },
+            { timestamps: false }
+        )
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount);

@@ -11,6 +11,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { TEST_TENANT_ID } from '@tests/callers';
 import type { TenantCallerContext } from '@types';
 import { userRepository } from '@modules/users/tests/factories';
+import { userService } from '@modules/users';
 import { assignRole } from '@modules/access';
 import { permissionsOfRole } from '@kernel/permissions';
 import { resolveCredential } from '@kernel/authentication';
@@ -21,6 +22,9 @@ import { mint, revoke } from '@modules/api-keys/services/api-keys';
 import { apiKeyRepository } from '@modules/api-keys/repository';
 import { mintApiKey } from '@modules/api-keys/credentials';
 import { logger } from '@infrastructure/adapters/logger';
+import { registerModules } from '@kernel/registry';
+import { resetDomainEvents } from '@kernel/events';
+import { enabledModules } from '../../../../modules';
 
 setupTestDb();
 
@@ -169,6 +173,48 @@ describe('an expired credential', () => {
         });
 
         expect(await resolveCredential(plaintext)).toBeUndefined();
+    });
+});
+
+describe('a hard-deleted user takes their credentials with them', () => {
+    // The module's `subscribe()` only runs through `registerModules` — the top-level `import
+    // '@modules/api-keys/module'` above registers the credential resolver but not this listener,
+    // same reasoning as `wishlist/tests/integration/service.test.ts`.
+    beforeEach(() => {
+        resetDomainEvents();
+        registerModules(enabledModules);
+    });
+
+    it('erases every credential the user minted (B25)', async () => {
+        const user = await createRealUser('erased-owner');
+        const context = contextFor(String(user._id), ['apikeys.any.read', 'apikeys.any.create']);
+        const first = await mint({ name: 'first', permissions: ['apikeys.any.read'] }, context);
+        const second = await mint({ name: 'second', permissions: ['apikeys.any.read'] }, context);
+        if (!first.data || !second.data) throw new Error('setup failed: mint was refused');
+
+        await userService.removeById(String(user._id), true);
+
+        expect(await resolveCredential(first.data.secret)).toBeUndefined();
+        expect(await resolveCredential(second.data.secret)).toBeUndefined();
+        expect(await apiKeyRepository.findById(first.data.id)).toBeNull();
+        expect(await apiKeyRepository.findById(second.data.id)).toBeNull();
+    });
+
+    it('leaves another user unaffected', async () => {
+        const doomed = await createRealUser('erased-alice');
+        const kept = await createRealUser('kept-bob');
+        const doomedContext = contextFor(String(doomed._id), ['apikeys.any.read']);
+        const keptContext = contextFor(String(kept._id), ['apikeys.any.read']);
+        await mint({ name: 'about to go', permissions: ['apikeys.any.read'] }, doomedContext);
+        const survivor = await mint(
+            { name: 'stays', permissions: ['apikeys.any.read'] },
+            keptContext
+        );
+        if (!survivor.data) throw new Error('setup failed: mint was refused');
+
+        await userService.removeById(String(doomed._id), true);
+
+        expect(await apiKeyRepository.findById(survivor.data.id)).not.toBeNull();
     });
 });
 
