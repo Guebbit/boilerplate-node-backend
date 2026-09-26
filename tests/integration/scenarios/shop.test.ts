@@ -27,8 +27,6 @@ import { connect, disconnect } from '@tests/database';
 import { app } from '../../../src/app';
 import { buildScenario } from '@scenarios/index';
 import { assertScenarioGuarantees } from '@scenarios/check';
-import { resolveTranslatables } from '@kernel/registry';
-import { localeService } from '@modules/locales';
 import { productModel, toProduct } from '@modules/products/model';
 import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
@@ -39,7 +37,6 @@ import { addressBookModel } from '@modules/addresses/model';
 import { reservationModel, stockMovementModel } from '@modules/inventory/model';
 import { Types } from 'mongoose';
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
-import { enabledModules } from '../../../src/modules';
 import {
     CreateProductResponse,
     CreateOrderResponse,
@@ -79,11 +76,9 @@ const wireShape = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 let subjects: Readonly<Record<string, string>>;
 
 // `products.seed()` writes its rows' `translations` through the same write surface
-// `productService.writeCreate` does — see `scenarios/apply.ts`'s identical call for why the
-// manifest has to be built from `enabledModules` and handed in by hand here too.
-beforeAll(() => localeService.setTranslatables(resolveTranslatables(enabledModules)));
-afterAll(() => localeService.setTranslatables({}));
-
+// `productService.writeCreate` does. The `app` import above already registers every enabled
+// module — including `products`' own `translatables` declaration — at import time, so nothing
+// here builds that lookup by hand.
 beforeAll(async () => {
     subjects = await buildScenario('shop', app);
 }, BUILD_TIMEOUT_MS);

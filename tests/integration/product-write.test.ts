@@ -13,25 +13,16 @@ import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import { translationRepository } from '@modules/locales/repository';
 import { givenLocale } from '@modules/locales/tests/factories';
-import { localeService } from '@modules/locales/services';
 import { registerModules } from '@kernel/registry';
 import localesModule from '@modules/locales/module';
+import productsModule from '@modules/products/module';
 
 setupTestDb();
 
-// `registerModules` runs locales' `onRegistered` (D15), which is the only thing that installs
-// the translation port `products` writes through — importing the module list is no longer enough.
-beforeAll(() => registerModules([localesModule]));
-
-beforeAll(() => {
-    localeService.setTranslatables({
-        product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
-    });
-});
-
-afterAll(() => {
-    localeService.setTranslatables({});
-});
+// `registerModules` runs locales' `onRegistered`, which resolves `translatables` off every
+// registered module's own manifest — `productsModule` declares `product` there, so registering
+// both is what installs the translation port `products` writes through.
+beforeAll(() => registerModules([localesModule, productsModule]));
 
 /** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
