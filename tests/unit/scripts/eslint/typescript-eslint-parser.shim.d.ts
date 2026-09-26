@@ -5,9 +5,9 @@
  * with only this import fails identically), so it's ts-jest's resolver, not this package or this
  * repo's tsconfig. Re-exporting through a relative path sidesteps the broken bare-specifier
  * lookup entirely; Node's own `require` at runtime was never affected; only this file's own static
- * type-check was. See `AUDIT_0924_2_LEFTOVERS.md`'s ts-jest/node16 entry for the same bug class
- * against a different package — reworking that resolution strategy is the real fix, out of scope
- * here.
+ * type-check was. `@casl/ability` hits the identical failure under the same ts-jest/`node16`
+ * combination (`tsconfig.jest.json`), which is why `ts-jest` stays pinned to exactly `29.4.9` —
+ * reworking that resolution strategy is the real fix, out of scope here.
  */
 declare module '@typescript-eslint/parser' {
     export * from '../../../../node_modules/@typescript-eslint/parser/dist/index';
