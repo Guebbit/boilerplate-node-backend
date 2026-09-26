@@ -88,6 +88,12 @@ Both answer **200**, not an error: the browser has a next step, and a 4xx would 
 `POST /payments/{id}/sync` re-reads the provider and settles, which is what makes the happy path
 feel synchronous.
 
+**`processing` also extends the order's stock hold**, to `NODE_BANK_TRANSFER_HOLD_HOURS` from that
+moment (B3) — a SEPA debit or a bank redirect can take days, and the ordinary 30-minute window
+would let [`inventory`](./inventory-reservations.md)'s reservation sweep cancel an order whose
+money is still on its way. `requires_action` gets no such grace: it means the browser has a
+challenge to answer, not the provider a payment to finish.
+
 **`POST /payments/webhook` is the authority**, and the browser never is. It arrives whether or not
 the customer kept the tab open, and it is the one route in the module mounted above the auth wall:
 its caller is a machine with no account, authenticating by signing the raw body — a stronger proof

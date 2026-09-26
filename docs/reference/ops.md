@@ -85,6 +85,7 @@ periodically", via `scripts/run-script.ts`.
 | `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.        |
 | `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.   |
 | `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing.                        |
+| `npm run sweep:reservations`     | every 5 min    | No     | Expires a stale checkout hold and cancels the order behind it.                                          |
 
 `docker/crontab` and the seven nightly jobs above are staggered five minutes apart so they do not all
 land on the connection pool at once — each job's own header in `scripts/ops/` has the full reasoning.
@@ -111,7 +112,7 @@ twice concurrently should wrap its work in `withLease` too.
 **Observability.** `scripts/run-script.ts` records every crontab job's outcome — `lastSuccessAt` on
 success, `lastError` on a throw — onto the same `leases` document `withLease` itself writes when a
 job also takes one; `GET /observability/health`'s `jobs` array reports the whole set, so any of the
-nine silently failing or silently not running at all is visible on the probe an operator already
+ten silently failing or silently not running at all is visible on the probe an operator already
 looks at. `job_last_success_timestamp_seconds{job="…"}` (`infrastructure/observability/metrics-registry.ts`)
 exposes the same value to Prometheus; `ScheduledJobStale` (`docker/observability/prometheus.alert-rules.yaml`)
 fires when a nightly job's last success is more than 48 hours old. `sweep:webhook-retries` is excluded from that
@@ -177,8 +178,20 @@ this sweep re-announces for whatever is still owed past `NODE_ORDER_EFFECT_RETRY
 (default 5). Run it on the same schedule as the `reap:*` jobs; it is safe to repeat, since a second
 pass over a settled order refunds nothing.
 
-The stock half of a cancel is deliberately NOT covered here — a hold keeps its `expiresAt` and the
-reservation sweep reclaims it, so it heals on its own.
+The stock half of a cancel is deliberately NOT covered here — a hold keeps its `expiresAt` and
+`npm run sweep:reservations` (below) reclaims it, so it heals on its own.
+
+`npm run sweep:reservations` is what makes that healing actually happen (B3): it expires every hold
+past its `expiresAt` and, through `orders`' own `RESERVATION_EXPIRED` listener, cancels the order
+behind it — the same work `POST /inventory/reservations/sweep` does on demand, on a schedule
+instead. Before this ran, an abandoned checkout held its units forever and a bank-transfer hold
+never ended. A card payment gone `processing` (a SEPA debit, some bank redirects, which can settle
+over days) gets its hold extended to the bank-transfer window, `NODE_BANK_TRANSFER_HOLD_HOURS`
+(168 h by default — no setting of its own), the moment `settlePayment` sees that state; a payment
+still `requires_action` gets no such grace, since that means the BROWSER has work to do and the
+ordinary window already fits it. Money that lands after the hold has expired anyway is refunded
+automatically, the same as it always was — B3 doesn't change that. Runs every 5 minutes, well
+inside both windows. See [Reservations](../modules/inventory-reservations.md).
 
 `npm run sweep:payment-effects` is the same kind of job for the OTHER direction: a settlement
 writes `pendingEffects: ['commit']` in the same document write that moves a payment to `succeeded`,

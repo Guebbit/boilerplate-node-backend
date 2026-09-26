@@ -425,6 +425,21 @@ export const restockForOrder = async (orderId: string): Promise<boolean> => {
 };
 
 /**
+ * Extend a still-open hold to `hours` from now — a card payment gone `processing` (a SEPA debit,
+ * some bank redirects) can take days to settle, and the standard hold window would let the
+ * reservation sweep cancel an order whose money is still genuinely in flight (B3). A hold already
+ * claimed (committed/released/restocked) or missing matches nothing: there is no deadline left on
+ * it to move, and this is silent about that — the caller has no decision to make either way.
+ *
+ * @param orderId - the order whose hold might still be open
+ * @param hours - how many hours from now the hold should now expire
+ */
+export const extendHoldForOrder = (orderId: string, hours: number): Promise<void> =>
+    reservationRepository
+        .extendExpiry(orderId, new Date(Date.now() + hours * 60 * 60_000))
+        .then(() => undefined);
+
+/**
  * Are this order's units bound to the lines it currently holds?
  *
  * The hold freezes its own copy of the basket; `held`/`committed` means the counters answer to
@@ -715,6 +730,7 @@ export const inventoryService = {
     commitForOrder,
     releaseForOrder,
     restockForOrder,
+    extendHoldForOrder,
     isStockBoundToOrder,
     runReservationSweep,
     ensureLevel,

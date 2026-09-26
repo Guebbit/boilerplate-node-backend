@@ -16,7 +16,7 @@ import {
 import { emitDomainEvent } from '@kernel/events';
 import { OrderStatus } from '@types';
 import type { PaymentStatus, AuthContext } from '@types';
-import { orderService } from '@modules/orders';
+import { orderService, bankTransferHoldHours } from '@modules/orders';
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '../events';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
@@ -83,7 +83,28 @@ export const settlePayment = (
     if (state.status !== 'succeeded' && state.status !== 'declined')
         return paymentRepository
             .updateStatusIfIn(orderId, SETTLEABLE_PAYMENT_STATUSES, state.status, extra)
-            .then((updated) => ({ payment: updated ?? payment, orderLost: false }));
+            .then(async (updated) => {
+                /*
+                 * `processing` means the PROVIDER still has work to do — a SEPA debit, some bank
+                 * redirects — which can take days, so the hold gets the bank-transfer window
+                 * instead of the ordinary 30 minutes (B3, decided 2026-09-26). `requires_action`
+                 * gets no such grace: that means the BROWSER has work to do, and the ordinary
+                 * window already fits it. Only on THIS call's own write, and never allowed to
+                 * fail the settlement response it stands beside.
+                 */
+                if (updated && state.status === 'processing')
+                    await inventoryService
+                        .extendHoldForOrder(orderId, bankTransferHoldHours())
+                        .catch((error: unknown) => {
+                            // Stryker disable all
+                            logger.error({
+                                message: `Payments: could not extend the hold for order ${orderId} while its payment settles`,
+                                error
+                            });
+                            // Stryker restore all
+                        });
+                return { payment: updated ?? payment, orderLost: false };
+            });
 
     if (state.status === 'declined')
         return paymentRepository

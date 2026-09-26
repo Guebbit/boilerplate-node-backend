@@ -299,6 +299,7 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
         orderId: string,
         items: readonly { productId: string; quantity: number }[]
     ) => Promise<void>;
+    extendExpiry: (orderId: string, expiresAt: Date) => Promise<ReservationDocument | null>;
 } = {
     ...createRepository<ReservationDocument, Wire<ReservationDocument>>(reservationModel, {
         transform: applyReservationTransform
@@ -387,5 +388,23 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
                 { $set: { items: toReservationItems(items) } }
             )
             .exec()
-            .then(() => undefined)
+            .then(() => undefined),
+
+    /**
+     * Push a still-`held` hold's deadline out — a card payment gone `processing` can take days to
+     * settle, and the sweep must not cancel an order whose money is still genuinely on its way
+     * (B3). Guarded on `status: 'held'`: a hold already claimed has no deadline left to move.
+     *
+     * @param orderId - the order whose hold is still open
+     * @param expiresAt - the new deadline
+     * @returns the updated hold, or `null` if it is no longer `held`
+     */
+    extendExpiry: (orderId: string, expiresAt: Date) =>
+        reservationModel
+            .findOneAndUpdate(
+                { orderId: toObjectId(orderId), status: 'held' },
+                { $set: { expiresAt } },
+                { returnDocument: 'after' }
+            )
+            .exec()
 };

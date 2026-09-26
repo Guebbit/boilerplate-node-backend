@@ -736,6 +736,58 @@ describe('in-flight settlement', () => {
         expect(stored!.status).toBe('pending');
     });
 
+    /*
+     * B3: a payment that goes `processing` can settle over days (a SEPA debit, some bank
+     * redirects), so the ordinary 30-minute hold gets extended to the bank-transfer window —
+     * otherwise the reservation sweep would cancel an order whose money is still on its way.
+     * The TTL is zeroed so an un-extended hold is already stale by the time the sweep below runs.
+     */
+    it('extends the hold to the bank-transfer window once the payment goes processing', () =>
+        withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', async () => {
+            const { user, product, order } = await placedOrder(10, 3);
+            const intent = await createIntent(String(order._id), auth(user));
+
+            await confirmPayment(
+                String(intent.success && intent.data?.id),
+                'pm_card_processing',
+                auth(user),
+                testCallerContext
+            );
+
+            await inventoryService.runReservationSweep();
+
+            // Still held, not swept: an un-extended hold would already have been stale.
+            expect(await countersOf(product._id)).toEqual({
+                onHand: 10,
+                reserved: 3,
+                available: 7
+            });
+            expect((await orderService.getById(String(order._id)))!.status).toBe('pending');
+        }));
+
+    it('does not extend the hold for a mere challenge — only processing does', () =>
+        withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', async () => {
+            const { user, product, order } = await placedOrder(10, 3);
+            const intent = await createIntent(String(order._id), auth(user));
+
+            await confirmPayment(
+                String(intent.success && intent.data?.id),
+                'pm_card_authentication_required',
+                auth(user),
+                testCallerContext
+            );
+
+            await inventoryService.runReservationSweep();
+
+            // The zeroed TTL hold is stale immediately, and requires_action gets no grace — the
+            // sweep releases it, same as any other abandoned checkout.
+            expect(await countersOf(product._id)).toEqual({
+                onHand: 10,
+                reserved: 0,
+                available: 10
+            });
+        }));
+
     it('does not offer the pay action again while a payment is in flight', async () => {
         // Offering the form back is how a customer pays twice: the browser is mid-challenge at
         // the provider, and a second method attached here would open a second charge.
