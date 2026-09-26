@@ -88,6 +88,15 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
         purpose: 'the shared translation runtime every module’s locale files load into',
         readMore: '[i18n](./i18n.md)',
         match: ['i18next']
+    },
+    {
+        name: 'Declared config',
+        purpose:
+            'parsing the small YAML files read once at boot: the authorization key/role ' +
+            'declarations `kernel/permissions.ts` reads, and each module’s published event ' +
+            'catalogue',
+        readMore: '[Authorization](../theory/authorization.md)',
+        match: ['yaml']
     }
 ];
 
@@ -176,7 +185,6 @@ export const DEV_GROUPS: DependencyGroup[] = [
             '@stoplight/*',
             '@redocly/cli',
             'orval',
-            'yaml',
             '@guebbit/openapi-runnable-collections'
         ]
     },

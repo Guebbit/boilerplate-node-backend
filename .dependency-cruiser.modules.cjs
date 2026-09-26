@@ -39,8 +39,11 @@ module.exports = {
         tsConfig: { fileName: 'tsconfig.json' },
         doNotFollow: { path: 'node_modules' },
         exclude: {
-            // `tests/` per module: see the module docblock above on why together with `src`.
-            path: String.raw`(^|/)(tests|tmp|\.dev|\.prism|dist)/`
+            // `tmp`/`.dev`/`.prism`/`dist` only ever appear at the repo root, so they're anchored
+            // there — same reasoning as the main config: an unanchored `(^|/)` also matches
+            // `node_modules/*/dist/`, dropping packages out of the graph entirely. `tests/` stays
+            // unanchored: it's per-module (`src/modules/*/tests/`), see the docblock above.
+            path: String.raw`^(tmp|\.dev|\.prism|dist)/|(^|/)tests/`
         },
         reporterOptions: {
             text: { highlightFocused: true }

@@ -250,7 +250,10 @@ module.exports = {
          * nothing — the reachability rules read as passing while checking an empty set.
          */
         exclude: {
-            path: String.raw`(^|/)(tmp|\.dev|\.prism|dist)/`
+            // Anchored to the repo root: an unanchored `(^|/)` also matches `node_modules/*/dist/`,
+            // which drops 18 packages (yaml among them) out of the graph entirely — silencing any
+            // rule that names them, `not-to-dev-dep` included.
+            path: String.raw`^(tmp|\.dev|\.prism|dist)/`
         },
 
         reporterOptions: {
