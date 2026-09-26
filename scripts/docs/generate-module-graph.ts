@@ -128,32 +128,61 @@ const eventName = (owner: string, constant: string): string => {
 };
 
 /**
+ * Every tracked `.ts` file a module owns, `module.ts` first — most modules call `onDomainEvent`
+ * there, and checking it first keeps the common case a one-file read. Tests are excluded the same
+ * way `readEdges` excludes them: a spec importing a sibling's event constant to fire a fixture is
+ * not the module subscribing to anything.
+ */
+const moduleSourceFiles = (moduleName: string): string[] => {
+    const manifest = path.join(ROOT, 'src', 'modules', moduleName, 'module.ts');
+    const rest = execFileSync('git', ['ls-files', '--', `src/modules/${moduleName}`], {
+        cwd: ROOT,
+        encoding: 'utf8'
+    })
+        .split('\n')
+        .filter((file) => file.endsWith('.ts') && !file.includes('/tests/'))
+        .map((file) => path.join(ROOT, file))
+        .filter((file) => file !== manifest);
+
+    return existsSync(manifest) ? [manifest, ...rest] : rest;
+};
+
+/** Every `onDomainEvent` subscription one file makes on `subscriber`'s behalf. */
+const readEventEdgesInFile = (source: string, subscriber: string): EventEdge[] => {
+    const edges: EventEdge[] = [];
+
+    // Which sibling each imported symbol came from, so a subscription can name its owner.
+    const owners = new Map<string, string>();
+    for (const line of source.matchAll(/import\s*{([^}]+)}\s*from\s*'@modules\/([^']+)'/g))
+        for (const symbol of line[1].split(',')) owners.set(symbol.trim(), line[2]);
+
+    for (const call of source.matchAll(/onDomainEvent\(\s*([A-Z][\dA-Z_]*)/g)) {
+        const owner = owners.get(call[1]);
+        // A module listening to itself is a local concern, not a cross-module edge.
+        if (!owner || owner === subscriber) continue;
+        edges.push({ owner, subscriber, event: eventName(owner, call[1]) });
+    }
+
+    return edges;
+};
+
+/**
  * Every `onDomainEvent` subscription, as an owner -> subscriber edge carrying the event name.
  *
  * These are the edges `readEdges` reports backwards: a subscriber imports the constant, so the
  * import points at the owner while the message travels the other way. Resolvable because the shape
  * never varies — `onDomainEvent(CONST, …)` with `CONST` imported from a sibling's barrel.
+ *
+ * The subscription itself does not have to sit in `module.ts` — webhooks' five all live in
+ * `services/publish.ts`, reached through `subscribe: subscribeToWebhookEvents` — so every one of
+ * the module's own files is a candidate, not just its manifest.
  */
 const readEventEdges = (): EventEdge[] => {
     const edges: EventEdge[] = [];
 
-    for (const subscriber of Object.keys(SUBDOMAIN)) {
-        const manifest = path.join(ROOT, 'src', 'modules', subscriber, 'module.ts');
-        if (!existsSync(manifest)) continue;
-        const source = readFileSync(manifest, 'utf8');
-
-        // Which sibling each imported symbol came from, so a subscription can name its owner.
-        const owners = new Map<string, string>();
-        for (const line of source.matchAll(/import\s*{([^}]+)}\s*from\s*'@modules\/([^']+)'/g))
-            for (const symbol of line[1].split(',')) owners.set(symbol.trim(), line[2]);
-
-        for (const call of source.matchAll(/onDomainEvent\(\s*([A-Z][\dA-Z_]*)/g)) {
-            const owner = owners.get(call[1]);
-            // A module listening to itself is a local concern, not a cross-module edge.
-            if (!owner || owner === subscriber) continue;
-            edges.push({ owner, subscriber, event: eventName(owner, call[1]) });
-        }
-    }
+    for (const subscriber of Object.keys(SUBDOMAIN))
+        for (const file of moduleSourceFiles(subscriber))
+            edges.push(...readEventEdgesInFile(readFileSync(file, 'utf8'), subscriber));
 
     return edges.toSorted(
         (a, b) =>

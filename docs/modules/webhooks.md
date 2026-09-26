@@ -66,6 +66,11 @@ flowchart LR
     webhooks --> orders
     webhooks --> payments
     webhooks --> users
+    orders -. "order.cancelled" .-> webhooks
+    orders -. "order.created" .-> webhooks
+    orders -. "order.status_changed" .-> webhooks
+    payments -. "payment.failed" .-> webhooks
+    payments -. "payment.succeeded" .-> webhooks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
