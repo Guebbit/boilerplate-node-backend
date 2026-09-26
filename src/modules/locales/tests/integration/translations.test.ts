@@ -8,7 +8,6 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct, readProduct } from '@modules/products/tests/factories';
-import { productRepository } from '@modules/products/repository';
 import {
     deriveSourceDigest,
     localeRepository,
@@ -16,18 +15,17 @@ import {
 } from '@modules/locales/repository';
 import { givenLocale } from '@modules/locales/tests/factories';
 import { localeService } from '@modules/locales/services';
+import { resolveTranslatables } from '@kernel/registry';
+import { enabledModules } from '../../../../modules';
 
 setupTestDb();
 
 beforeAll(() => {
-    localeService.setTranslatables({
-        product: {
-            collection: 'products',
-            fields: ['title', 'description'],
-            cacheTag: 'products',
-            writeDerived: productRepository.writeTranslatedFields
-        }
-    });
+    // The real registered target, not a hand-rolled duplicate — `writeDerived` is products' own
+    // repository method, and a locales test importing that repository directly is exactly the
+    // hidden cross-module coupling SD-09 removed (`tests/cross-cutting/translatable-targets.test.ts`
+    // resolves the same way).
+    localeService.setTranslatables(resolveTranslatables(enabledModules));
 });
 
 afterAll(() => {
