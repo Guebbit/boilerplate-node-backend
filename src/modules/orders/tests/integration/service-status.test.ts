@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { seedOrder, readOrder } from '@modules/orders/tests/factories';
-import { markPaid, markShipped, markDelivered } from '../../services/status';
+import { markPaid, markProcessing, markShipped, markDelivered } from '../../services/status';
 import { ORDER_STATUS_CHANGED } from '../../events';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { OrderStatus } from '@types';
@@ -44,6 +44,29 @@ describe('markPaid', () => {
             expect(events).toEqual([]);
         }
     );
+});
+
+describe('markProcessing', () => {
+    it('moves a paid order to processing and announces it once', async () => {
+        const order = await seedOrder(OrderStatus.paid);
+        const events: unknown[] = [];
+        onDomainEvent(ORDER_STATUS_CHANGED, (payload) => events.push(payload));
+
+        const updated = await markProcessing(String(order._id));
+
+        expect(updated?.status).toBe(OrderStatus.processing);
+        expect(events).toEqual([
+            { orderId: String(order._id), from: OrderStatus.paid, to: OrderStatus.processing }
+        ]);
+    });
+
+    it('refuses from pending — an order must be paid first', async () => {
+        const order = await seedOrder(OrderStatus.pending);
+
+        const updated = await markProcessing(String(order._id));
+
+        expect(updated).toBeNull();
+    });
 });
 
 describe('markShipped', () => {

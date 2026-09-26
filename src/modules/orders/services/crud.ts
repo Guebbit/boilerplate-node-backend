@@ -8,7 +8,6 @@
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { OrderStatus } from '@types';
 import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest, Order } from '@types';
 import type { OrderDocument } from '../model';
 import {
@@ -20,15 +19,12 @@ import {
 import { productService } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
 import { userService } from '@modules/users';
-import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
-import { ORDER_STATUS_CHANGED } from '../events';
 import { orderRepository } from '../repository';
-import { canTransition, statusesLeadingTo, statusesReachableFrom } from '../domain';
 import { resolveCurrentImages } from './current';
 import { placeOrder } from './place';
 import { deleteCachedInvoice } from './invoice';
@@ -249,113 +245,18 @@ export const create = async (
 };
 
 /**
- * Whether an admin's requested status move is refused before anything is written — either the
- * table doesn't allow this move at all, or it does but this endpoint is the wrong door for it
- * (cancellation has its own release/refund sequence, so `POST /orders/{id}/cancel` is where it
- * runs instead). The controller's Zod schema already validated the VALUE against the generated
- * enum; what is decided here is whether the MOVE exists. See `docs/theory/tactical-ddd.md` §1.
- * @param previousStatus - the order's current status
- * @param nextStatus - the requested status, or `undefined` when this update doesn't touch status
- * @returns the rejection to return, or `undefined` when the move (or lack of one) is fine
- */
-const transitionRefused = (
-    previousStatus: OrderStatus,
-    nextStatus: OrderStatus | undefined
-): ResponseReject | undefined => {
-    if (nextStatus === undefined) return undefined;
-
-    if (!canTransition(previousStatus, nextStatus, 'admin'))
-        return generateReject(409, [
-            {
-                code: 'ORDER_TRANSITION_NOT_ALLOWED',
-                message: t('orders.transition.not-allowed'),
-                details: {
-                    from: previousStatus,
-                    to: nextStatus,
-                    allowed: statusesReachableFrom(previousStatus, 'admin')
-                }
-            }
-        ]);
-
-    if (nextStatus === OrderStatus.cancelled)
-        return generateReject(409, [
-            {
-                code: 'ORDER_CANCEL_VIA_CANCEL_ENDPOINT',
-                message: t('orders.transition.cancel-elsewhere'),
-                details: { from: previousStatus, to: nextStatus }
-            }
-        ]);
-
-    return undefined;
-};
-
-/**
- * Applies an admin's already-validated status move: a conditional write, not the blind
- * `order.status = next; save()` this replaces — a customer cancel landing between the read at the
- * top of `update` and this write must not be silently overwritten by a stale `next`.
- * `statusesLeadingTo` is the same "from" set `markSystemMove` (`./status.ts`) uses for a system
- * report, applied here to an admin's request instead. Announces `ORDER_STATUS_CHANGED` only after
- * the write lands: a status is only "changed" once it is on disk, and the listeners (the shipment,
- * one day a notification) compensate for facts, not plans.
- * @param saved - the order as just read back from `orderRepository.save`
- * @param previousStatus - the status this update originally read the order at
- * @param nextStatus - the status being moved to
- */
-const applyStatusMove = (
-    saved: OrderDocument,
-    previousStatus: OrderStatus,
-    nextStatus: OrderStatus
-): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
-    orderRepository
-        .updateStatusIfIn(String(saved._id), statusesLeadingTo(nextStatus, 'admin'), nextStatus)
-        .then((moved) => {
-            if (!moved)
-                return generateReject(409, [
-                    {
-                        code: 'ORDER_TRANSITION_NOT_ALLOWED',
-                        message: t('orders.transition.not-allowed'),
-                        details: {
-                            from: previousStatus,
-                            to: nextStatus,
-                            allowed: statusesReachableFrom(previousStatus, 'admin')
-                        }
-                    }
-                ]);
-
-            return emitDomainEvent(ORDER_STATUS_CHANGED, {
-                orderId: String(moved._id),
-                from: previousStatus,
-                to: nextStatus
-            }).then(() => generateSuccess(moved));
-        });
-
-/**
- * Update an existing order document (admin), only the fields provided. The only pure-status move
- * reachable here is to `processing`; `shipped`/`delivered` are `delivery`'s own doors and
- * cancellation lives in `cancelById` — `transitionRefused` refuses both below.
+ * Update an existing order document (admin) — `email` only. `status` is not a field this
+ * function ever sees: `UpdateOrderByIdRequest` does not declare it, so there is no admin status
+ * move here to refuse or apply, and no partial write between an email save and a status move to
+ * guard against. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
  */
 export const update = (
     order: OrderDocument,
     data: UpdateOrderByIdRequest
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
-    const previousStatus = order.status;
-    const nextStatus = data.status;
-
-    // Asked before anything is assigned, so a refusal is never a partial write.
-    const refusal = transitionRefused(previousStatus, nextStatus);
-    if (refusal) return Promise.resolve(refusal);
-
-    // `order.status` is deliberately NOT assigned here — see below, where the status
-    // half of this write goes through a conditional `findOneAndUpdate` instead of riding along
-    // on this document's blind `save()`.
     if (data.email !== undefined) order.email = data.email;
 
-    return orderRepository.save(order).then((saved) => {
-        if (nextStatus === undefined || nextStatus === previousStatus)
-            return generateSuccess(saved);
-
-        return applyStatusMove(saved, previousStatus, nextStatus);
-    });
+    return orderRepository.save(order).then((saved) => generateSuccess(saved));
 };
 
 /**

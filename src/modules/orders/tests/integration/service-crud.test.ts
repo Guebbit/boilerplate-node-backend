@@ -21,12 +21,10 @@ import {
     removeById,
     restoreById,
     search,
-    callerScope,
-    orderService
+    callerScope
 } from '@modules/orders/services';
 import { orderRepository } from '../../repository';
 import { inventoryService } from '@modules/inventory';
-import type { OrderDocument } from '../../model';
 import { asReject, asSuccess } from '@tests/response';
 import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
 import { MISSING_ID } from '@tests/ids';
@@ -82,9 +80,6 @@ const seedOrder = async () => {
 
     return { user, keyboard, mouse, order: asSuccess(result).data };
 };
-
-/** Re-read an order after something else moved it, so `update` works on current state. */
-const reload = async (order: OrderDocument) => (await orderRepository.findById(String(order._id)))!;
 
 describe('create', () => {
     it('creates an order and answers 201', async () => {
@@ -324,124 +319,36 @@ describe('getById', () => {
 });
 
 describe('update', () => {
-    it('changes the status along a move the lifecycle allows', async () => {
-        const { order } = await seedOrder();
-        // `pending → paid` belongs to `system`, so the operator's first pure-status move starts
-        // from `paid`. Written through the repository for that reason, not through `update`.
-        await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
-
-        const result = await update(await reload(order), { status: 'processing' });
-
-        expect(result.success).toBe(true);
-        expect(asSuccess(result).data.status).toBe('processing');
-    });
-
-    /**
-     * The lifecycle grants an operator this edge, but `update` still refuses to run it: a
-     * cancellation is a sequence, not a field — it releases held units and announces
-     * `ORDER_CANCELLED`, which is what makes `payments` refund. As a bare assignment, a paid
-     * order would end `cancelled` with the money kept and the stock never released.
-     */
-    it('refuses to cancel through the status field, whoever is asking', async () => {
-        const { order } = await seedOrder();
-
-        const result = await update(order, { status: 'cancelled' });
-
-        expect(result.success).toBe(false);
-        expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0].code).toBe('ORDER_CANCEL_VIA_CANCEL_ENDPOINT');
-        const reloaded = await reload(order);
-        expect(reloaded.status).toBe('pending');
-    });
-
-    it('refuses a move the lifecycle does not allow, naming what was open instead', async () => {
-        const { order } = await seedOrder();
-
-        const result = await update(order, { status: 'delivered' });
-
-        expect(result.success).toBe(false);
-        expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0].code).toBe('ORDER_TRANSITION_NOT_ALLOWED');
-        expect(asReject(result).errors[0].details).toEqual({
-            from: 'pending',
-            to: 'delivered',
-            allowed: ['cancelled']
-        });
-    });
-
-    it('leaves the order untouched when the move is refused', async () => {
-        // The guard runs before any assignment, so the email in the same request must not land.
-        const { order } = await seedOrder();
-
-        await update(order, { status: 'delivered', email: 'moved@example.com' });
-
-        const reloaded = await orderRepository.findById(String(order._id));
-        expect(reloaded!.status).toBe('pending');
-        expect(reloaded!.email).toBe('buyer@example.com');
-    });
-
-    it('refuses to mark an order paid by hand', async () => {
-        // `paid` belongs to `system` alone — see docs/theory/tactical-ddd.md §1.
-        const { order } = await seedOrder();
-
-        const result = await update(order, { status: 'paid' });
-
-        expect(result.success).toBe(false);
-        expect(asReject(result).status).toBe(409);
-    });
-
-    it('refuses an admin echo-writing `paid` onto an order already paid', async () => {
-        // What `canTransition`'s identity short-circuit could hide: writing the SAME status back
-        // is normally a no-op, but `paid` belongs to `system` alone, even as an echo.
-        const { order } = await seedOrder();
-        order.status = 'paid';
-        await order.save();
-
-        const result = await update(await reload(order), { status: 'paid' });
-
-        expect(result.success).toBe(false);
-        expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0].code).toBe('ORDER_TRANSITION_NOT_ALLOWED');
-        const reloaded = await reload(order);
-        expect(reloaded.status).toBe('paid');
-    });
-
-    it('refuses to reopen a cancelled order', async () => {
-        // The path that made this worth fixing: a reopened order is cancellable again, and the
-        // refund listener sees a payment that is still `succeeded`.
-        const { order } = await seedOrder();
-        await orderService.cancelById(String(order._id), asAdmin());
-
-        const result = await update(await reload(order), { status: 'pending' });
-
-        expect(result.success).toBe(false);
-        expect(asReject(result).status).toBe(409);
-    });
-
-    it('accepts a write that repeats the status it already has', async () => {
-        const { order } = await seedOrder();
-
-        const result = await update(order, { status: 'pending', email: 'same@example.com' });
-
-        expect(result.success).toBe(true);
-        expect(asSuccess(result).data.email).toBe('same@example.com');
-    });
-
+    // `status` is not a field `UpdateOrderByIdRequest` declares any more — see
+    // `docs/theory/tactical-ddd.md#who-writes-the-status` for where each move goes instead.
+    // `email` is the one field left, so that is the whole of what this suite has to prove.
     it('changes the email', async () => {
+        const { order } = await seedOrder();
+
+        const result = await update(order, { email: 'new@example.com' });
+
+        expect(result.success).toBe(true);
+        expect(asSuccess(result).data.email).toBe('new@example.com');
+        const reloaded = await orderRepository.findById(String(order._id));
+        expect(reloaded!.email).toBe('new@example.com');
+    });
+
+    it('leaves the status untouched — there is nothing left in the body to move it', async () => {
         const { order } = await seedOrder();
 
         await update(order, { email: 'new@example.com' });
 
         const reloaded = await orderRepository.findById(String(order._id));
-        expect(reloaded!.email).toBe('new@example.com');
+        expect(reloaded!.status).toBe('pending');
     });
 
-    it('leaves untouched fields alone', async () => {
-        // Each assignment is guarded by `!== undefined`, so a partial update must be partial.
+    it('leaves untouched fields alone on an empty update', async () => {
+        // Each assignment is guarded by `!== undefined`, so a request that changes nothing must
+        // change nothing.
         const { order } = await seedOrder();
         const originalEmail = order.email;
 
-        await update(order, { status: 'paid' });
+        await update(order, {});
 
         const reloaded = await orderRepository.findById(String(order._id));
         expect(reloaded!.email).toBe(originalEmail);

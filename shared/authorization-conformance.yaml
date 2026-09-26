@@ -52,6 +52,7 @@ admin-permissions: &admin_permissions
     - inventory.any.sweep
     - delivery.any.read
     - delivery.any.update
+    - delivery.any.start
     - feedback.any.read
     - feedback.any.update
     - feedback.any.delete
@@ -318,6 +319,22 @@ cases:
       subject: Shipment
       resource: { tenantId: shop_1 }
       expect: allow
+
+    # `delivery.any.start` is narrower than `orders.any.update` on purpose — SH1's whole point is
+    # that the warehouse can begin fulfilment without being handed the run of the order record.
+    - name: the warehouse may start fulfilling a paid order
+      caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [delivery.any.start] }
+      action: start
+      subject: Shipment
+      resource: { tenantId: shop_1 }
+      expect: allow
+
+    - name: advancing a consignment does not also let the warehouse start fulfilment
+      caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [delivery.any.update] }
+      action: start
+      subject: Shipment
+      resource: { tenantId: shop_1 }
+      expect: deny
 
     # =============================================================================================
     # `read` is not a subset of anything else, and there is no key for an action a family never
