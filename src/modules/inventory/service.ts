@@ -28,6 +28,7 @@ import { counterDeltaFor } from './domain';
 import { reservationTtlMinutes, lowStockThreshold } from './config';
 import { stockLevelRepository, stockMovementRepository, reservationRepository } from './repository';
 import { RESERVATION_EXPIRED } from './events';
+import type { ReservationDocument } from './model';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
@@ -159,6 +160,53 @@ const levelFor = async (productId: string): Promise<InventoryLevel | null> => {
 };
 
 /**
+ * Give back every line already taken for a reserve that will not complete, and delete the hold
+ * that named them — shared by a refused line and a line whose write threw.
+ *
+ * The hold is narrowed to `taken` FIRST, before a single counter moves: a crash partway through
+ * this cleanup then leaves a hold that still names only real reservations, never a line whose
+ * counters were never touched — the exact leak B15 fixes (`docs/modules/inventory-reservations.md`).
+ * Each release is logged rather than allowed to throw, so one failed give-back doesn't stop the
+ * others or hide which line it was.
+ *
+ * @param orderId - the order whose reserve is being unwound
+ * @param taken - the lines actually taken before the refusal or throw
+ * @param hold - the hold document to delete once its lines are given back
+ * @param note - why the ledger shows this release
+ */
+const giveBackAndDeleteHold = async (
+    orderId: string,
+    taken: readonly StockLine[],
+    hold: ReservationDocument,
+    note: string
+): Promise<void> => {
+    await reservationRepository.narrowToTaken(orderId, taken);
+    await Promise.all(
+        taken.map((line) =>
+            applyTransition(StockMovementReason.release, line.productId, line.quantity, {
+                reference: orderId,
+                note
+            }).catch((error: unknown) => {
+                // Stryker disable all
+                logger.error({
+                    message: `Inventory: could not release ${line.quantity} of product ${line.productId} while rolling back a failed reserve for order ${orderId}`,
+                    error
+                });
+                // Stryker restore all
+            })
+        )
+    );
+    await reservationRepository.deleteOne(hold).catch((error: unknown) => {
+        // Stryker disable all
+        logger.error({
+            message: `Inventory: could not delete the hold for order ${orderId} after rolling back its reserve`,
+            error
+        });
+        // Stryker restore all
+    });
+};
+
+/**
  * Hold every line for an order, or hold none of it.
  *
  * Exactly-once: the hold is written first, and its unique `orderId` means a retried checkout
@@ -166,6 +214,10 @@ const levelFor = async (productId: string): Promise<InventoryLevel | null> => {
  * so two checkouts racing the last unit resolve inside mongod. A failed line rolls back through
  * `applyTransition` — same as every other change — so the ledger shows the take and give-back
  * rather than netting them to silence.
+ *
+ * A line that THROWS (a database hiccup, not a refusal) is exception-safe too: the `try` unwinds
+ * through {@link giveBackAndDeleteHold} exactly like a refusal, then rethrows — so a hold never
+ * survives naming lines this call never actually took (B15).
  *
  * @param orderId - the order the hold belongs to
  * @param lines - what it claims
@@ -184,41 +236,52 @@ export const reserveForOrder = async (
     if (!hold) return { held: true };
 
     const taken: StockLine[] = [];
-    for (const line of lines) {
-        const held = await applyTransition(
-            StockMovementReason.reserve,
-            line.productId,
-            line.quantity,
-            { reference: orderId }
-        );
-        if (!held) {
-            /*
-             * Read the blocker back before unwinding, so the reported number is the one that
-             * actually refused this line, not what a pre-flight saw earlier. Read from this
-             * module's own level, the source of truth — never the product's synced copy, which
-             * can lag by one transition. A deleted product or a level that never existed reads as
-             * nothing available, which is true either way.
-             */
-            const [blockerLevel, blockerProduct] = await Promise.all([
-                stockLevelRepository.findByProductId(line.productId),
-                productService.findByIdRaw(line.productId)
-            ]);
-            const shortfall: StockShortfall = {
-                productId: line.productId,
-                title: blockerProduct?.title ?? '',
-                requested: line.quantity,
-                available: blockerLevel?.available ?? 0
-            };
+    // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback (B15): a thrown error partway through must give back only the lines actually taken, then rethrow, so no safe wrapper covers this
+    try {
+        for (const line of lines) {
+            const held = await applyTransition(
+                StockMovementReason.reserve,
+                line.productId,
+                line.quantity,
+                { reference: orderId }
+            );
+            if (!held) {
+                /*
+                 * Read the blocker back before unwinding, so the reported number is the one that
+                 * actually refused this line, not what a pre-flight saw earlier. Read from this
+                 * module's own level, the source of truth — never the product's synced copy, which
+                 * can lag by one transition. A deleted product or a level that never existed reads
+                 * as nothing available, which is true either way.
+                 */
+                const [blockerLevel, blockerProduct] = await Promise.all([
+                    stockLevelRepository.findByProductId(line.productId),
+                    productService.findByIdRaw(line.productId)
+                ]);
+                const shortfall: StockShortfall = {
+                    productId: line.productId,
+                    title: blockerProduct?.title ?? '',
+                    requested: line.quantity,
+                    available: blockerLevel?.available ?? 0
+                };
 
-            for (const undo of taken)
-                await applyTransition(StockMovementReason.release, undo.productId, undo.quantity, {
-                    reference: orderId,
-                    note: 'rolled back — another line could not be held'
-                });
-            await reservationRepository.deleteOne(hold);
-            return { held: false, shortfalls: [shortfall] };
+                await giveBackAndDeleteHold(
+                    orderId,
+                    taken,
+                    hold,
+                    'rolled back — another line could not be held'
+                );
+                return { held: false, shortfalls: [shortfall] };
+            }
+            taken.push(line);
         }
-        taken.push(line);
+    } catch (error) {
+        await giveBackAndDeleteHold(
+            orderId,
+            taken,
+            hold,
+            'rolled back — reserve failed partway through'
+        );
+        throw error;
     }
 
     return { held: true };

@@ -294,6 +294,10 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
         to: ReservationStatus
     ) => Promise<ReservationDocument | null>;
     findExpired: (now: Date, limit: number) => Promise<ReservationDocument[]>;
+    narrowToTaken: (
+        orderId: string,
+        items: readonly { productId: string; quantity: number }[]
+    ) => Promise<void>;
 } = {
     ...createRepository<ReservationDocument, Wire<ReservationDocument>>(reservationModel, {
         transform: applyReservationTransform
@@ -363,5 +367,24 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
             .find({ status: 'held', expiresAt: { $lte: now } })
             .sort({ expiresAt: 1 })
             .limit(limit)
+            .exec(),
+
+    /**
+     * Rewrite a still-held hold's item list to only what a partial reserve actually took, before
+     * the caller releases those and deletes the hold — so a crash between this write and the
+     * delete leaves a hold naming real reservations, never lines whose counters were never moved.
+     * Guarded on `status: 'held'`: if another caller already claimed the hold, its items are
+     * mid-use and this leaves them alone rather than racing that claim.
+     *
+     * @param orderId - the order whose hold is being narrowed
+     * @param items - the lines actually taken before the failure
+     */
+    narrowToTaken: (orderId: string, items: readonly { productId: string; quantity: number }[]) =>
+        reservationModel
+            .updateOne(
+                { orderId: toObjectId(orderId), status: 'held' },
+                { $set: { items: toReservationItems(items) } }
+            )
             .exec()
+            .then(() => undefined)
 };
