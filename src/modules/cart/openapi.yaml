@@ -210,9 +210,12 @@ paths:
                 # (`CART_BANK_TRANSFER_LIMIT`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 # A basket holding any `requiresShipping: true` line with no `shippingMethodId`
-                # chosen (`CART_SHIPPING_METHOD_REQUIRED`), or a chosen method whose
+                # chosen (`CART_SHIPPING_METHOD_REQUIRED`), a chosen method whose
                 # `requiresAddress` is true with no `addressId` and no default address on file
-                # (`CART_ADDRESS_REQUIRED`) — nobody would know how or where to send the order.
+                # (`CART_ADDRESS_REQUIRED`) — nobody would know how or where to send the order —
+                # or an `addressId` sent for a chosen method whose `requiresAddress` is false
+                # (`CART_ADDRESS_NOT_APPLICABLE`): that method ships to no address at all, so
+                # naming one is a client error, not a lookup that might resolve.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 

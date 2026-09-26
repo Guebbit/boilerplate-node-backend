@@ -18,6 +18,7 @@
         "shipping-method-weight": "Il metodo di spedizione scelto non gestisce un carrello così pesante.",
         "shipping-method-required": "Il tuo carrello contiene prodotti fisici — scegli un metodo di spedizione per continuare.",
         "address-required": "Il metodo di spedizione scelto richiede un indirizzo di consegna — scegline o aggiungine uno per continuare.",
+        "address-not-applicable": "Il metodo di spedizione scelto non prevede la consegna a un indirizzo — rimuovi l'indirizzo e riprova.",
         "payment-method-not-available": "Il metodo di pagamento scelto non è offerto da questo negozio.",
         "bank-transfer-limit": "Hai già troppi ordini in attesa di un bonifico. Completane o annullane uno prima di piazzarne un altro."
     }

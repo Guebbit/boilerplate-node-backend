@@ -280,6 +280,29 @@ describe('POST /cart/checkout', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    // `pickup.requiresAddress` is false — it ships to nobody, so naming an address for it is a
+    // client error, not a lookup that might resolve.
+    it('matches the error contract for an addressId sent with a method that needs none', async () => {
+        const { bearer } = await authenticateWithCart();
+        const address = await api().post('/account/addresses').set('Authorization', bearer).send({
+            fullName: 'Ada Lovelace',
+            street: 'Via Roma 1',
+            city: 'Modena',
+            zip: '41121',
+            country: 'IT'
+        });
+        const addressId = address.body.data.addresses[0].id as string;
+
+        const response = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .send({ addressId, shippingMethodId: 'pickup' });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('empties the cart on success', async () => {
         const { bearer } = await authenticateWithCart();
         await api()
