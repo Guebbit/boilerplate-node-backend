@@ -12,7 +12,9 @@
 import { sumLineItems } from '@modules/orders';
 import type { ProductDocument } from '@modules/products';
 import type { CartItem } from '@types';
+import { findShippingMethod, methodFitsWeight, priceShipping } from '@modules/delivery';
 import type { CartDocument } from '../model';
+import { basketWeight, needsShipping } from '../domain';
 
 /**
  * A cart line joined with the product it references.
@@ -36,7 +38,15 @@ export type JoinedCartLine = CartLine & { product: ProductDocument };
  */
 export interface CartView {
     items: CartItem[];
-    summary: { itemsCount: number; totalQuantity: number; total: number };
+    summary: {
+        itemsCount: number;
+        totalQuantity: number;
+        itemsTotal: number;
+        shippingCost: number;
+        totalPrice: number;
+    };
+    /** The cart's chosen shipping method (`PUT /cart/shipping-method`), or `undefined` for none. */
+    shippingMethodId?: string;
 }
 
 /**
@@ -75,6 +85,23 @@ export const readCartLines = (cart: CartDocument | null): Promise<CartLine[]> =>
 };
 
 /**
+ * What shipping would cost the cart's basket right now, at the method it has chosen — `0` for no
+ * method chosen, a digital-only basket (shipping never applies), or a method that no longer fits
+ * the basket's weight (the choice stands until checkout re-validates it; the view only prices
+ * what still applies, it does not refuse). {@link cartShippingMethodSet} in `./items.ts` is what
+ * refuses these same cases at the point of choosing.
+ */
+const shippingCostOf = (
+    method: ReturnType<typeof findShippingMethod>,
+    lines: CartLine[]
+): number => {
+    if (!method) return 0;
+    const joined = lines.filter((line) => isJoined(line));
+    if (!needsShipping(joined) || !methodFitsWeight(method, basketWeight(joined))) return 0;
+    return priceShipping(method, sumLineItems(joined).price);
+};
+
+/**
  * Turn a cart document into the response the contract declares.
  * The joined `product` prices the cart, then is dropped: `CartItem` in `openapi.yaml` is
  * `additionalProperties: false` over `{ productId, quantity }`. Use `cartGet` where the joined
@@ -83,6 +110,12 @@ export const readCartLines = (cart: CartDocument | null): Promise<CartLine[]> =>
 export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
     readCartLines(cart).then((lines) => {
         const { count, quantity, price } = sumLineItems(lines);
+        const shippingCost = shippingCostOf(
+            cart?.shippingMethodId === undefined
+                ? undefined
+                : findShippingMethod(cart.shippingMethodId),
+            lines
+        );
         return {
             items: lines.map(({ productId, quantity: lineQuantity }) => ({
                 productId,
@@ -91,7 +124,12 @@ export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
             summary: {
                 itemsCount: count,
                 totalQuantity: quantity,
-                total: price
-            }
+                itemsTotal: price,
+                shippingCost,
+                totalPrice: price + shippingCost
+            },
+            ...(cart?.shippingMethodId === undefined
+                ? {}
+                : { shippingMethodId: cart.shippingMethodId })
         };
     });

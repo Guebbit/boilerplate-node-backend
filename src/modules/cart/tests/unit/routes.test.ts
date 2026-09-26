@@ -3,8 +3,9 @@
  * The cart route table. Every route is authenticated at the router level, and only `/checkout` is
  * keyed — `cart.self.checkout`, an unproven address must not be able to spend, see
  * `shared/authorization-keys.yaml`. Mostly guards ORDER: `/summary`, `/checkout`,
- * `/reorder/:orderId` and `/all` compete with `/:productId`, and Express takes the first match —
- * declared the other way round, `DELETE /cart/all` becomes a product lookup for id "all".
+ * `/reorder/:orderId`, `/all` and `/shipping-method` compete with `/:productId`, and Express takes
+ * the first match — declared the other way round, `DELETE /cart/all` becomes a product lookup for
+ * id "all".
  */
 
 import { routeTable, routeSignatures, guardsOn, chainOf } from '@tests/routes';
@@ -23,6 +24,7 @@ const ALL = [
     'POST /',
     'DELETE /all',
     'DELETE /',
+    'PUT /shipping-method',
     'PUT /:productId',
     'DELETE /:productId'
 ];
@@ -38,6 +40,7 @@ describe('cart routes — what is mounted', () => {
         expect(paths.indexOf('/summary')).toBeLessThan(paths.indexOf('/:productId'));
         expect(paths.indexOf('/checkout')).toBeLessThan(paths.indexOf('/:productId'));
         expect(paths.indexOf('/all')).toBeLessThan(paths.indexOf('/:productId'));
+        expect(paths.indexOf('/shipping-method')).toBeLessThan(paths.indexOf('/:productId'));
     });
 });
 

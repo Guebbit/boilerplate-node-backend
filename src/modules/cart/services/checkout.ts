@@ -122,7 +122,8 @@ const resolvePaymentMethod = async (
  *
  * @param userId - the caller's id, whose address book `addressId` is looked up against
  * @param addressId - the shipping address's entry id, or `undefined` for the default/no address
- * @param shippingMethodId - the chosen shipping method's id, or `undefined` for none
+ * @param shippingMethodId - the cart's chosen shipping method id (`PUT /cart/shipping-method`),
+ * or `undefined` for none
  */
 const resolveShipping = async (
     userId: string,
@@ -226,14 +227,12 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
  *
  * @param userId - the caller's id
  * @param addressId - the shipping address's entry id, or `undefined` for the default/no address
- * @param shippingMethodId - the chosen shipping method's id, or `undefined` for none
  * @param paymentMethod - the chosen payment method's id, or `undefined` for `card`
  * @param notes - free-text notes the buyer left at checkout, or `undefined` for none
  */
 const runCheckout = async (
     userId: string,
     addressId: string | undefined,
-    shippingMethodId: string | undefined,
     paymentMethod: string | undefined,
     notes: string | undefined
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
@@ -251,15 +250,17 @@ const runCheckout = async (
     if (!paymentResolution.ok) return paymentResolution.reject;
     const { requestedMethod, methodInfo } = paymentResolution;
 
-    const shippingResolution = await resolveShipping(userId, addressId, shippingMethodId);
-    if (!shippingResolution.ok) return shippingResolution.reject;
-    const { shippingMethod, address } = shippingResolution;
-
     const cart = await cartRepository.findByUserId(userId);
     // The version the lines below are read at, and the condition the cart is emptied
     // under. Captured before the join, so anything that touches the cart while the
     // products are being resolved invalidates this checkout rather than being missed.
     const version = cart?.__v ?? 0;
+
+    // The cart's own choice (`PUT /cart/shipping-method`), read here rather than from the
+    // request — see this module's `openapi.yaml` `CheckoutRequest` description.
+    const shippingResolution = await resolveShipping(userId, addressId, cart?.shippingMethodId);
+    if (!shippingResolution.ok) return shippingResolution.reject;
+    const { shippingMethod, address } = shippingResolution;
 
     const lines = await readCartLines(cart);
 
@@ -420,11 +421,10 @@ export const orderConfirm = (
     userId: string,
     context: CallerContext,
     addressId?: string,
-    shippingMethodId?: string,
     paymentMethod?: string,
     notes?: string
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
-    runCheckout(userId, addressId, shippingMethodId, paymentMethod, notes)
+    runCheckout(userId, addressId, paymentMethod, notes)
         .catch((error: unknown) => rejectDatabaseEnvelope('cart', error))
         .then((result) => {
             /*

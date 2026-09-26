@@ -1566,6 +1566,8 @@ paths:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1all'
     /cart/{productId}:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1{productId}'
+    /cart/shipping-method:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1shipping-method'
     /cart/summary:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1summary'
     /cart/checkout:

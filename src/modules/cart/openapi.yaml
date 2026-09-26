@@ -144,6 +144,37 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /cart/shipping-method:
+        put:
+            tags: [Cart]
+            summary: Choose (or clear) the cart's shipping method
+            description: Sets which shipping method (see `GET /delivery/methods`) the cart plans to ship by, ahead of checkout — priced and validated against the basket as it stands right now. `null` clears the choice. Checkout re-validates from scratch regardless of what this endpoint accepted, since the basket may change afterward. Returns the updated cart, including the priced `summary.shippingCost`/`summary.totalPrice`.
+            operationId: setCartShippingMethod
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SetCartShippingMethodRequest'
+            responses:
+                '200':
+                    description: Updated cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # A named method that matches none of `GET /delivery/methods`'.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # A basket made entirely of `requiresShipping: false` products
+                # (`CART_SHIPPING_NOT_APPLICABLE`), or one whose weight falls outside the chosen
+                # method's `minWeight`/`maxWeight` range (`CART_SHIPPING_METHOD_WEIGHT`).
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /cart/summary:
         get:
             tags: [Cart]
@@ -199,23 +230,25 @@ paths:
                 # refuses rather than shipping nowhere. `errors[].code` is `CART_ADDRESS_NOT_FOUND`.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Checking out an empty cart (`CART_EMPTY`), insufficient stock
-                # (`CART_INSUFFICIENT_STOCK`), a race with another checkout (`CART_CHANGED`), a
-                # `shippingMethodId` sent for a cart made entirely of `requiresShipping: false`
-                # products (`CART_SHIPPING_NOT_APPLICABLE`) — shipping does not apply, so naming a
-                # method is a client error, not a lookup that might resolve — an `addressId` sent
-                # for a chosen method whose `requiresAddress` is false (`CART_ADDRESS_NOT_APPLICABLE`,
-                # the same treatment as the shipping-method case above: that method ships to no
-                # address at all, so naming one is a client error, not a lookup that might
-                # resolve), the basket's weight falling outside the chosen method's
-                # `minWeight`/`maxWeight` range (`CART_SHIPPING_METHOD_WEIGHT`), a `paymentMethod`
-                # this deployment does not offer (`CART_PAYMENT_METHOD_NOT_AVAILABLE`), or the
-                # caller already has `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT` transfer orders
-                # awaiting payment (`CART_BANK_TRANSFER_LIMIT`).
+                # (`CART_INSUFFICIENT_STOCK`), a race with another checkout (`CART_CHANGED`), the
+                # cart's chosen shipping method no longer applying to a basket that has since gone
+                # all-digital (`CART_SHIPPING_NOT_APPLICABLE`) — re-checked here even though
+                # `PUT /cart/shipping-method` already checked it once, since the basket can change
+                # afterward — an `addressId` sent for a chosen method whose `requiresAddress` is
+                # false (`CART_ADDRESS_NOT_APPLICABLE`, the same treatment as the shipping-method
+                # case above: that method ships to no address at all, so naming one is a client
+                # error, not a lookup that might resolve), the basket's weight no longer fitting
+                # the cart's chosen method (`CART_SHIPPING_METHOD_WEIGHT`, re-checked for the same
+                # reason), a `paymentMethod` this deployment does not offer
+                # (`CART_PAYMENT_METHOD_NOT_AVAILABLE`), or the caller already has
+                # `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT` transfer orders awaiting payment
+                # (`CART_BANK_TRANSFER_LIMIT`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                # A basket holding any `requiresShipping: true` line with no `shippingMethodId`
-                # chosen (`CART_SHIPPING_METHOD_REQUIRED`), or a chosen method whose
-                # `requiresAddress` is true with no `addressId` and no default address on file
-                # (`CART_ADDRESS_REQUIRED`) — nobody would know how or where to send the order.
+                # A basket holding any `requiresShipping: true` line with no shipping method chosen
+                # on the cart (`CART_SHIPPING_METHOD_REQUIRED` — see `PUT /cart/shipping-method`),
+                # or a chosen method whose `requiresAddress` is true with no `addressId` and no
+                # default address on file (`CART_ADDRESS_REQUIRED`) — nobody would know how or
+                # where to send the order.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -338,6 +371,21 @@ components:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
 
+        SetCartShippingMethodRequest:
+            type: object
+            additionalProperties: false
+            required: [shippingMethodId]
+            properties:
+                shippingMethodId:
+                    type: string
+                    nullable: true
+                    description: >-
+                        Which shipping method (see `GET /delivery/methods`) the cart plans to ship
+                        by. `null` clears the choice. An id that matches no method refuses with
+                        404, `errors[].code` `CART_SHIPPING_METHOD_NOT_FOUND`; one that does not
+                        apply to the basket refuses with 409 (`CART_SHIPPING_NOT_APPLICABLE`,
+                        `CART_SHIPPING_METHOD_WEIGHT`).
+
         CheckoutRequest:
             type: object
             additionalProperties: false
@@ -352,17 +400,9 @@ components:
                         address is used when one exists; an id that matches none of the caller's
                         addresses refuses the checkout with 404 rather than shipping nowhere. A
                         method with `requiresAddress: true` and no address resolved refuses with
-                        422, `errors[].code` `CART_ADDRESS_REQUIRED`.
-                shippingMethodId:
-                    type: string
-                    description: >-
-                        Which shipping method (see `GET /delivery/methods`) the order travels by.
-                        Its cost is priced against the lines being bought (free-above thresholds
-                        included) and frozen onto the order. Omitted is only legal for a
-                        digital-only basket — one with any `requiresShipping` line refuses with 422,
-                        `errors[].code` `CART_SHIPPING_METHOD_REQUIRED`; an id that matches no
-                        method refuses the checkout with 404, `errors[].code`
-                        `CART_SHIPPING_METHOD_NOT_FOUND`.
+                        422, `errors[].code` `CART_ADDRESS_REQUIRED`. The shipping method itself is
+                        not part of this request — it is the cart's own choice, set ahead of time
+                        via `PUT /cart/shipping-method`.
                 paymentMethod:
                     allOf:
                         [
@@ -381,7 +421,7 @@ components:
         CartSummaryResponse:
             type: object
             additionalProperties: false
-            required: [itemsCount, totalQuantity, total]
+            required: [itemsCount, totalQuantity, itemsTotal, shippingCost, totalPrice]
             properties:
                 itemsCount:
                     type: integer
@@ -391,11 +431,27 @@ components:
                     type: integer
                     minimum: 0
                     description: Sum of quantities across all items
-                total:
+                itemsTotal:
                     type: number
                     format: double
                     minimum: 0
                     description: Sum of item prices * quantity (before tax/shipping/discounts)
+                shippingCost:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: >-
+                        What the cart's chosen shipping method (`PUT /cart/shipping-method`) costs
+                        against `itemsTotal` right now (free-above thresholds included). `0` with
+                        no method chosen, a digital-only basket, or a method that no longer fits
+                        the basket's weight — the same real-time pricing `POST /cart/checkout`
+                        freezes onto the order, priced early so a shopper sees the true total
+                        before paying.
+                totalPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: itemsTotal + shippingCost
                 currency:
                     type: string
                     description: ISO-4217 currency code (e.g. USD)
@@ -411,6 +467,11 @@ components:
                         $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
                 summary:
                     $ref: '#/components/schemas/CartSummaryResponse'
+                shippingMethodId:
+                    type: string
+                    description: >-
+                        The cart's chosen shipping method (`PUT /cart/shipping-method`), so a
+                        client can pre-select it on load. Absent when none is chosen.
 
         CheckoutResponse:
             type: object

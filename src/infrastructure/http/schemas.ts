@@ -96,17 +96,6 @@ export const pageSizeSchema = z.preprocess(
 export const paginationSchema = z.object({ page: pageSchema, pageSize: pageSizeSchema });
 
 /**
- * A basket weight in grams, as a caller sends it in a query string: coerced for the same reason
- * {@link pageSchema} is, and blank-to-undefined for the same reason too — `?weight=` is what an
- * untouched field submits, and `Number('')` coerces to `0`, not "omitted", which would silently
- * turn a caller who sent nothing into one asking for a weightless basket.
- */
-export const weightSchema = z.preprocess(
-    blankToUndefined,
-    z.coerce.number().int().min(0).optional()
-);
-
-/**
  * A boolean as any transport may carry it: a JSON body sends a real one, but a query string or a
  * multipart body types every value as text, and `'false'` is truthy, the same trap
  * {@link hardDeleteSchema} guards against. Decodes the recognised spellings via `parseFormBoolean`;

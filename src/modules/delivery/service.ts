@@ -23,21 +23,19 @@ import { deliveryAuditActions } from './audit';
 import { orderService, canTransition, canOverrideTo, mailBuyer } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { holdsKey } from '@kernel/ability';
-import { findShippingMethod, methodsForWeight } from './domain';
+import { findShippingMethod, SHIPPING_METHODS } from './domain';
 import { shipmentShippedEmail } from './emails';
 import { shipmentRepository } from './repository';
 import type { ShipmentDocument } from './model';
 
 /**
- * The methods list, for the checkout page's selector. Static, so always a success.
- * @param weight - the caller's current basket weight in grams, or `undefined` for every method
- *   regardless of range — this is advisory filtering only; `cart`'s checkout re-checks the chosen
- *   method against the real basket server-side, so a stale or omitted value here cannot buy a
- *   method this list would have hidden.
+ * The full methods list, for the checkout page's selector. Static, so always a success.
+ * Unfiltered — `cart`'s `PUT /cart/shipping-method` and checkout are what check a method against
+ * the caller's real basket, server-side.
  */
-const listMethods = (weight?: number): ResponseSuccess<ShippingMethodsResponse> =>
-    // `methodsForWeight` already returns a fresh array — `SHIPPING_METHODS` itself is `readonly`.
-    generateSuccess({ methods: [...methodsForWeight(weight)] });
+const listMethods = (): ResponseSuccess<ShippingMethodsResponse> =>
+    // Spread: `SHIPPING_METHODS` itself is `readonly`, and the response type isn't.
+    generateSuccess({ methods: [...SHIPPING_METHODS] });
 
 /** The shipment as `openapi.yaml` declares it: `Shipment`, built rather than serialized. */
 const toShipmentResponse = (shipment: ShipmentDocument): Shipment => ({

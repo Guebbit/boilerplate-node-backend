@@ -194,6 +194,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "removing one item from the caller's own cart, productId in the body"
     },
+    'cart PUT /shipping-method': {
+        requiresAuth: true,
+        reason: "choosing a shipping method for the caller's own cart"
+    },
     'cart PUT /:productId': {
         requiresAuth: true,
         reason: "setting a quantity in the caller's own cart"

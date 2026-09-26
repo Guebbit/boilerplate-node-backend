@@ -156,6 +156,10 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
     removeLine: (userId: string, productId: string) => Promise<CartDocument | null>;
     clearLines: (userId: string) => Promise<CartDocument | null>;
     clearLinesIfUnchanged: (userId: string, version: number) => Promise<CartDocument | null>;
+    setShippingMethod: (
+        userId: string,
+        shippingMethodId: string | null
+    ) => Promise<CartDocument | null>;
     deleteByUserId: (userId: string) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
 } = {
@@ -232,6 +236,24 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
                  * an untouched cart read as "recently edited".
                  */
                 { returnDocument: 'after', timestamps: false }
+            )
+            .exec(),
+
+    /**
+     * Choose or clear the cart's shipping method — `null` clears it, `upsert: true` since a
+     * shipping method may be set before the cart holds its first line.
+     *
+     * Bumps `__v` — same reasoning as `pushNewLine`: a checkout in flight reads the version once,
+     * and a write that skips this `$inc` would be invisible to that guard.
+     */
+    setShippingMethod: (userId: string, shippingMethodId: string | null) =>
+        cartModel
+            .findOneAndUpdate(
+                { userId: toObjectId(userId) },
+                shippingMethodId === null
+                    ? { $unset: { shippingMethodId: '' }, $inc: { __v: 1 } }
+                    : { $set: { shippingMethodId }, $inc: { __v: 1 } },
+                { upsert: true, returnDocument: 'after' }
             )
             .exec(),
 

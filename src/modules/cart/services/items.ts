@@ -16,13 +16,15 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { productService } from '@modules/products';
+import { findShippingMethod, methodFitsWeight } from '@modules/delivery';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
+import { basketWeight, needsShipping } from '../domain';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
-import { readCartLines, toCartView, type CartLine, type CartView } from './view';
+import { readCartLines, toCartView, isJoined, type CartLine, type CartView } from './view';
 
 /**
  * Get user cart, each line joined with its product.
@@ -193,3 +195,65 @@ export const cartRemove = (userId: string, context: CallerContext): Promise<Cart
             return view;
         })
     );
+
+/**
+ * Choose, or clear, the cart's shipping method ahead of checkout — `PUT /cart/shipping-method`.
+ *
+ * Priced and validated against the basket as it stands right now, the same way
+ * `services/checkout.ts`'s `resolveShipping` validates at the point of no return: an unknown
+ * method 404s, a digital-only basket or a basket outside the method's weight range 409s, so a
+ * caller learns about a mismatch here instead of only once checkout has already resolved a
+ * payment method and an address. Checkout re-validates from scratch regardless — this is a UX
+ * courtesy, not the enforcement point.
+ *
+ * `null` clears the choice (this module's own "null clears" convention, D17c) and always
+ * succeeds — an empty choice can never mismatch the basket.
+ */
+export const cartShippingMethodSet = (
+    userId: string,
+    shippingMethodId: string | null
+): Promise<ResponseSuccess<CartView> | ResponseReject> => {
+    if (shippingMethodId === null)
+        return cartRepository
+            .setShippingMethod(userId, null)
+            .then((cart) => toCartView(cart))
+            .then((view) => generateSuccess(view));
+
+    const method = findShippingMethod(shippingMethodId);
+    if (!method)
+        return Promise.resolve(
+            generateReject(404, [
+                {
+                    code: 'CART_SHIPPING_METHOD_NOT_FOUND',
+                    message: t('cart.shipping-method-not-found')
+                }
+            ])
+        );
+
+    return cartRepository.findByUserId(userId).then((cart) =>
+        readCartLines(cart).then((lines) => {
+            const joined = lines.filter((line) => isJoined(line));
+
+            if (!needsShipping(joined))
+                return generateReject(409, [
+                    {
+                        code: 'CART_SHIPPING_NOT_APPLICABLE',
+                        message: t('cart.shipping-not-applicable')
+                    }
+                ]);
+
+            if (!methodFitsWeight(method, basketWeight(joined)))
+                return generateReject(409, [
+                    {
+                        code: 'CART_SHIPPING_METHOD_WEIGHT',
+                        message: t('cart.shipping-method-weight')
+                    }
+                ]);
+
+            return cartRepository
+                .setShippingMethod(userId, shippingMethodId)
+                .then((updated) => toCartView(updated))
+                .then((view) => generateSuccess(view));
+        })
+    );
+};

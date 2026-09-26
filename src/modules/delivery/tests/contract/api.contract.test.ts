@@ -36,14 +36,15 @@ describe('GET /delivery/methods', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('filters out a method the given weight does not fit', async () => {
-        // Over express's 5000g ceiling, under standard's 30000g one.
+    it('lists every method regardless of a query string trying to filter it', async () => {
+        // `?weight=` was dropped: the list is a catalogue now, unfiltered. A query param a
+        // caller still sends must not silently change the response shape.
         const response = await api().get('/delivery/methods').query({ weight: 10_000 });
 
         expect(response.status).toBe(200);
         const ids = (response.body.data.methods as { id: string }[]).map(({ id }) => id);
         expect(ids).toContain('standard');
-        expect(ids).not.toContain('express');
+        expect(ids).toContain('express');
         expect(response).toSatisfyApiSpec();
     });
 });

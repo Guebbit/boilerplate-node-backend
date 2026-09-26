@@ -7,21 +7,19 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { weightSchema } from '@infrastructure/http/schemas';
 import { deliveryService } from '../service';
 import type { ShippingMethodsResponse } from '@types';
 
-/** Handles `GET /delivery/methods`. */
-export const getShippingMethods = (
-    request: Request<unknown, unknown, unknown, { weight?: string }>,
-    response: Response
-) => {
-    // `weightSchema` already answers `undefined` for a missing/blank value — no 422 branch
-    // needed, unlike a required scalar: an unparseable `weight` (non-numeric, negative) falls
-    // back to "no filter" rather than refusing the whole request, since this list is advisory
-    // only (see the endpoint's own contract description).
-    const weight = weightSchema.safeParse(request.query.weight).data;
-    const result = deliveryService.listMethods(weight);
+/**
+ * Handles `GET /delivery/methods`.
+ *
+ * No `?weight=` filter: the query string was client-supplied and advisory only, and
+ * `PUT /cart/shipping-method` (plus `POST /cart/checkout`) already run the real weight-fit check
+ * server-side, against the basket that actually exists. A caller reads the full list here and
+ * lets the write endpoints say which of them the basket can actually use.
+ */
+export const getShippingMethods = (request: Request, response: Response) => {
+    const result = deliveryService.listMethods();
     // Always a success (see `listMethods`' own docblock); `data` is always set.
     successResponse<ShippingMethodsResponse>(response, result.data);
 };

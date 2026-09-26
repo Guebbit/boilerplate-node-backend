@@ -29,6 +29,7 @@ import { clearCart } from './controllers/delete-cart-all';
 import { deleteCartItem } from './controllers/delete-cart-item';
 import { postCheckout } from './controllers/post-checkout';
 import { postReorder } from './controllers/post-reorder';
+import { putCartShippingMethod } from './controllers/put-cart-shipping-method';
 import { invalidateCache } from '@infrastructure/http/middlewares/cache';
 
 /** Express router for cart operations (add, update, remove items; checkout). */
@@ -64,6 +65,10 @@ router.delete('/all', clearCart);
 
 // DELETE /cart — remove single item, productId in the body. x-alias-of removeCartItem.
 router.delete('/', deleteCartItem);
+
+// PUT /cart/shipping-method — mounted ABOVE /:productId, same reasoning as /all: a /:productId
+// route registered first would swallow the literal string "shipping-method" as a product id.
+router.put('/shipping-method', putCartShippingMethod);
 
 // PUT /cart/:productId — set quantity
 router.put('/:productId', putCartItem);

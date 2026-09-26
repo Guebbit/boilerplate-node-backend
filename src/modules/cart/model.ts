@@ -34,6 +34,13 @@ export interface CartItem {
 export interface CartDocument extends Document {
     userId: Types.ObjectId;
     items: CartItem[];
+    /**
+     * The shipping method chosen ahead of checkout, via `PUT /cart/shipping-method` — a plain id
+     * string, not a lookup key into `delivery`: the rate table it names is a static, in-code
+     * list (`@modules/delivery`'s `SHIPPING_METHODS`), not a collection this module could
+     * reference. `undefined` until chosen, or after `null` clears it.
+     */
+    shippingMethodId?: string;
     createdAt?: Date;
     updatedAt?: Date;
     /**
@@ -102,6 +109,9 @@ export const cartSchema = new Schema<CartDocument>(
         items: {
             type: [cartItemSchema],
             default: []
+        },
+        shippingMethodId: {
+            type: String
         }
     },
     {
