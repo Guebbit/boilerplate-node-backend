@@ -4,14 +4,13 @@
  * compensation (`refundForOrder`), both through the one conditional write (`performRefund`) that
  * makes a refund at-most-once. Nothing else in this module may move money out.
  *
- * `performRefund` asks the provider FIRST and moves the status only once it confirms (B1): a
- * rejection then leaves the payment `succeeded`, the one state the retry sweep (`ORDER_REFUND_OWED`,
- * see `../module.ts`) can still act on — instead of a refund being recorded as done before anyone
- * asked, with no way back once the provider says no.
- *
- * It dispatches on the PAYMENT's own `provider`, never on the deployment's configured one (B1c): a
- * `manual` payment has no provider to ask, and a real PSP refund must go back to whichever provider
- * actually took the money, even if the deployment has since switched to another.
+ * Order:    the provider is asked FIRST, and the status moves only once it confirms. A rejection
+ *           leaves the payment `succeeded` — the one state the retry sweep (`ORDER_REFUND_OWED`,
+ *           see `../module.ts`) can still act on — instead of recording a refund as done before
+ *           anyone asked, with no way back once the provider says no.
+ * Provider: dispatched on the PAYMENT's own `provider`, never the deployment's configured one — a
+ *           `manual` payment has no provider to ask, and a real PSP refund must go back to
+ *           whichever provider actually took the money, even if the deployment has since switched.
  */
 
 import { logger } from '@infrastructure/adapters/logger';
@@ -36,7 +35,7 @@ import { callerScope } from './scope';
 export const REFUNDABLE_PAYMENT_STATUS: PaymentStatus = 'succeeded';
 
 /**
- * Record, unattended, that a hand-paid order's refund is left for an operator (B1b) — the
+ * Record, unattended, that a hand-paid order's refund is left for an operator — the
  * automatic listener path only; `refundByOrder`'s own admin call never reaches this.
  * @param orderId - the order whose payment stays `succeeded` until an operator confirms it
  * @param payment - the payment left untouched
@@ -68,11 +67,14 @@ const leaveForOperator = (orderId: string, payment: PaymentDocument): Promise<Pa
  * @param orderId - the order whose payment is moving
  * @param context - present only for the admin request; audited only then
  * @param extra - `{ refundedByHand: true }` for the admin confirming a hand-paid refund
+ * @param auditOutcome - `failure` for the corrupted-row case below, where the status moves but no
+ *   money actually went back — an unconditional `success` there would misrepresent the audit trail
  */
 const markRefunded = (
     orderId: string,
     context: CallerContext | undefined,
-    extra?: Partial<PaymentDocument>
+    extra?: Partial<PaymentDocument>,
+    auditOutcome: 'success' | 'failure' = 'success'
 ): Promise<PaymentDocument | null> =>
     paymentRepository
         .updateStatusIfIn(orderId, [REFUNDABLE_PAYMENT_STATUS], 'refunded', extra)
@@ -80,12 +82,14 @@ const markRefunded = (
             if (!updated) return null;
             // Stryker disable all
             logger.info(
-                `Payment for order ${orderId} refunded (${updated.amount} ${updated.currency})`
+                auditOutcome === 'success'
+                    ? `Payment for order ${orderId} refunded (${updated.amount} ${updated.currency})`
+                    : `Payment for order ${orderId} marked refunded with no money actually returned — see the error logged just before this`
             );
             // Stryker restore all
             recordAudit(context, {
                 action: paymentsAuditActions.ADMIN_PAYMENT_REFUNDED,
-                outcome: 'success',
+                outcome: auditOutcome,
                 target_type: 'order',
                 target_id: orderId
             });
@@ -96,10 +100,10 @@ const markRefunded = (
  * Refund an order's payment — the operator action, and the listener's compensation.
  *
  * @param orderId - the order whose payment is being returned
- * @param context - present only for the admin request (`refundByOrder`); the cancel listener
- *  (`refundForOrder`) has none, and audits nothing, same as the token-cleanup job. Also what tells
- *  a hand-paid refund apart from the two callers (B1b): present means the operator asked, absent
- *  means the automatic listener did.
+ * @param context - present only for the admin request (`refundByOrder`); the `ORDER_REFUND_OWED`
+ *  listener (`refundForOrder`) has none. Also what tells a hand-paid refund apart from the two
+ *  callers: present means the operator asked (audited `success`), absent means the automatic
+ *  listener did (left for an operator, audited `PAYMENT_REFUND_OWED_BY_HAND` instead).
  * @returns the payment as it now stands — `refunded` on success, still `succeeded` when a hand-paid
  *   refund is left for an operator — or `null` when there was nothing to return
  */
@@ -111,7 +115,7 @@ export const performRefund = (
         if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) return null;
 
         // Money recorded by hand has no provider to ask. Only the operator's own call (`context`
-        // present) may say the cash went back; the automatic listener leaves it standing (B1b).
+        // present) may say the cash went back; the automatic listener leaves it standing.
         if (payment.provider === 'manual')
             return context
                 ? markRefunded(orderId, context, { refundedByHand: true })
@@ -129,10 +133,10 @@ export const performRefund = (
                 orderId
             });
             // Stryker restore all
-            return markRefunded(orderId, context);
+            return markRefunded(orderId, context, undefined, 'failure');
         }
 
-        // The idempotency key is what makes a RETRY safe at the provider itself (B1): two calls
+        // The idempotency key is what makes a RETRY safe at the provider itself: two calls
         // for this payment — a redelivered retry, an operator's double-click — carry the same key,
         // so the provider returns the same refund instead of returning the money twice. A rejection
         // here propagates: the payment stays `succeeded`, exactly what the retry sweep needs.
@@ -180,8 +184,9 @@ export const refundByOrder = (
  * `ORDER_REFUND_OWED`'s listener: give the money back if any was taken.
  *
  * The conditional `succeeded → refunded` move is the idempotence — a second event, or a cancel
- * of a never-paid order, finds nothing in `succeeded` and does nothing. Unattended, so the
- * outcome is logged rather than audited, same as the token-cleanup job's.
+ * of a never-paid order, finds nothing in `succeeded` and does nothing. Unattended, so a real
+ * PSP refund's outcome is only logged — but a hand-paid order still gets its own audit row
+ * (`leaveForOperator`), since that one needs a human to act on it.
  *
  * @param orderId - the order that was cancelled
  */
