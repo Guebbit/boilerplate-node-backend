@@ -512,6 +512,21 @@ export const SYSTEM_ACTOR: AuthContext = {
 };
 
 /**
+ * Is this caller the application acting on nobody's behalf, rather than a real account that
+ * happens to hold the admin role?
+ *
+ * `SYSTEM_ACTOR` carries `roles.tenant: 'admin'` so its reads and writes pass every ordinary
+ * permission check unrestricted — but a caller asking "is this a REQUEST a human made" (a
+ * lifecycle rule narrower for a background job than for an admin, an audit trail distinguishing
+ * "an operator did this" from "a sweep did") needs the identity question, not the scope one.
+ * `id` alone: nothing else on `SYSTEM_ACTOR` is unique to it, and a real account's id never
+ * collides with the literal `'system'`.
+ * @param caller - the caller to ask about, or `undefined` for an unauthenticated request
+ */
+export const isSystemActor = (caller: AuthContext | undefined): boolean =>
+    caller?.id === SYSTEM_ACTOR.id;
+
+/**
  * Is this ROLE unrestricted in its scope — the audit trail's word for "admin"?
  *
  * Roles are data a deployment may rename or add to; the trail's vocabulary is closed and its

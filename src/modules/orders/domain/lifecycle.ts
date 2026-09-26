@@ -24,7 +24,11 @@ export const ORDER_LIFECYCLE: Readonly<
 > = {
     [OrderStatus.pending]: {
         [OrderStatus.paid]: ['system'],
-        [OrderStatus.cancelled]: ['customer', 'admin']
+        // `system` here is the reservation-sweep expiry — an unpaid hold whose window ran out.
+        // Deliberately absent from `paid`/`processing` below: the sweep must never cancel an
+        // order that landed a payment in the same race, which `admin` and `customer` legitimately
+        // still may (an operator's or buyer's own choice, not a stale deadline).
+        [OrderStatus.cancelled]: ['customer', 'admin', 'system']
     },
     [OrderStatus.paid]: {
         // `system`, not `admin`: this follows fulfilment starting being recorded through

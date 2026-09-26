@@ -138,6 +138,12 @@ describe('who may cancel', () => {
         for (const actor of EVERY_ACTOR)
             expect(canTransition(OrderStatus.shipped, OrderStatus.cancelled, actor)).toBe(false);
     });
+
+    it("stops the system actor at `pending` — B21's race", () => {
+        // The reservation-sweep expiry must never cancel an order a payment already reached,
+        // unlike `admin`'s own wider set two tests up.
+        expect(statusesLeadingTo(OrderStatus.cancelled, 'system')).toEqual([OrderStatus.pending]);
+    });
 });
 
 describe('terminal states', () => {
@@ -211,7 +217,13 @@ describe('canTransition', () => {
         expect(statusesReachableFrom(OrderStatus.pending, 'admin')).toEqual([
             OrderStatus.cancelled
         ]);
-        expect(statusesReachableFrom(OrderStatus.pending, 'system')).toEqual([OrderStatus.paid]);
+        // B21: the system actor also reaches `cancelled` from `pending` — the reservation-sweep
+        // expiry, narrower than `admin`'s own reach since it stops there (see the `who may cancel`
+        // describe block below).
+        expect(statusesReachableFrom(OrderStatus.pending, 'system')).toEqual([
+            OrderStatus.paid,
+            OrderStatus.cancelled
+        ]);
         // `processing` left `admin`'s reach with SH1 — a paid order's only admin-reachable move
         // through the ordinary lifecycle is now `cancelled`, same as a customer's.
         expect(statusesReachableFrom(OrderStatus.paid, 'admin')).toEqual([OrderStatus.cancelled]);

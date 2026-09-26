@@ -23,6 +23,7 @@ import { ordersAuditActions } from '../../audit';
 import { ordersAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
 import { asCustomer, asAdmin, asModerator, testCallerContext } from '@tests/callers';
+import { SYSTEM_ACTOR } from '@kernel/permissions';
 
 // The queue, not the copy: `mail-copy.test.ts` pins what the email says.
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -153,6 +154,24 @@ describe('cancelById', () => {
         expect(allowed.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
         expect(stored?.status).toBe('cancelled');
+    });
+
+    /**
+     * B21: the reservation-sweep expiry (the system actor) must never cancel an order that has
+     * already been paid, even when its own deadline check runs just after payment landed —
+     * `pending.cancelled` is the ONLY edge the system actor holds, unlike `admin`'s wider one.
+     */
+    it("the system actor cannot cancel an order that is already paid — closes B21's race", async () => {
+        const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
+        const order = await seedOrder(owner);
+        await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
+
+        const refused = await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+
+        expect(refused.success).toBe(false);
+        expect(refused.status).toBe(409);
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored?.status).toBe('paid');
     });
 
     it('a soft-deleted order is a 404 for its owner — hidden means hidden', async () => {
@@ -300,8 +319,8 @@ describe('cancelById — the bank-transfer-expired email', () => {
             paymentMethod: 'bank_transfer'
         });
 
-        // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext.
-        await orderService.cancelById(String(order._id), asAdmin());
+        // Mirrors module.ts's RESERVATION_EXPIRED handler: the real system actor, no CallerContext.
+        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
@@ -315,7 +334,7 @@ describe('cancelById — the bank-transfer-expired email', () => {
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], { paymentMethod: 'card' });
 
-        await orderService.cancelById(String(order._id), asAdmin());
+        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
