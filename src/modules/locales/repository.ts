@@ -8,7 +8,6 @@
  */
 
 import { createHash } from 'node:crypto';
-import mongoose from 'mongoose';
 import {
     localeModel,
     localeEntryModel,
@@ -415,35 +414,6 @@ const removeEntityTranslations = (entityType: string, entityId: string): Promise
         .exec()
         .then(({ deletedCount }) => deletedCount);
 
-/**
- * The Mongoose model registered for a `translatables` target's collection, found by name rather
- * than imported — `locales` cannot import `src/modules/products` any more than
- * `kernel/translation.ts`'s translation port can. Undefined only if the registry names a collection
- * no module has actually registered a model for, which `translatable-targets.test.ts` refuses.
- */
-const modelForCollection = (collection: string) =>
-    mongoose
-        .modelNames()
-        .map((name) => mongoose.model(name))
-        .find((registeredModel) => registeredModel.collection.name === collection);
-
-/**
- * Copy the fallback-locale row's fields onto the entity's own document — the derived index column
- * a translated product's `title`/`description` become. Only the given keys are set, so a
- * fallback-locale row that only names `title` cannot blank out a `description` written earlier by
- * a different path (there is none today, but the write stays narrow on purpose).
- */
-const updateDerivedColumn = (
-    collection: string,
-    entityId: string,
-    fields: TranslationFields
-): Promise<unknown> => {
-    const targetModel = modelForCollection(collection);
-    if (!targetModel) return Promise.resolve(undefined);
-
-    return targetModel.updateOne({ _id: entityId }, { $set: fields }).exec();
-};
-
 /*
  * Both contracts are written out rather than inferred. Mongoose's `Query` generics are large
  * enough that TypeScript refuses to serialize the inferred shape at an export boundary (TS7056)
@@ -532,11 +502,6 @@ export const translationRepository: Repository<TranslationDocument, Translation>
     ) => Promise<TranslationDocument>;
     removeEntityLocale: (entityType: string, entityId: string, locale: string) => Promise<void>;
     removeEntityTranslations: (entityType: string, entityId: string) => Promise<number>;
-    updateDerivedColumn: (
-        collection: string,
-        entityId: string,
-        fields: TranslationFields
-    ) => Promise<unknown>;
 } = {
     ...translationBase,
     findEntityTranslations,
@@ -545,6 +510,5 @@ export const translationRepository: Repository<TranslationDocument, Translation>
     findEntityIdsByFieldMatch,
     upsertEntityLocale,
     removeEntityLocale,
-    removeEntityTranslations,
-    updateDerivedColumn
+    removeEntityTranslations
 };

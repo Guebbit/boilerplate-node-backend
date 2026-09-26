@@ -45,5 +45,9 @@
     },
     "email": {
         "footer": "Sent by our team."
+    },
+    "translation": {
+        "error-locale-unavailable": "Only {{locale}} can be set today (translation is unavailable).",
+        "error-fallback-required": "The default language ({{locale}}) needs its own text."
     }
 }

@@ -28,4 +28,41 @@ describe('start', () => {
         expect(connect).toHaveBeenCalledTimes(1);
         connect.mockRestore();
     });
+
+    describe('autoIndex (B22)', () => {
+        const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+
+        afterEach(() => {
+            process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+        });
+
+        it('turns autoIndex off before connecting, in production', async () => {
+            process.env.NODE_ENV = 'production';
+            const setSpy = jest.spyOn(mongoose, 'set');
+            const connect = jest.spyOn(mongoose, 'connect').mockImplementation(() => {
+                // Every cron process (a reaper, a sweep) shares this same guard, not only the
+                // ones that boot through `bootInfrastructure` — asserted at connect time, since
+                // that's the moment an index would otherwise build.
+                expect(setSpy).toHaveBeenCalledWith('autoIndex', false);
+                return Promise.resolve(mongoose);
+            });
+
+            await start();
+
+            connect.mockRestore();
+            setSpy.mockRestore();
+        });
+
+        it('leaves the development default untouched', async () => {
+            process.env.NODE_ENV = 'development';
+            const setSpy = jest.spyOn(mongoose, 'set');
+            const connect = jest.spyOn(mongoose, 'connect').mockResolvedValue(mongoose);
+
+            await start();
+
+            expect(setSpy).not.toHaveBeenCalledWith('autoIndex', expect.anything());
+            connect.mockRestore();
+            setSpy.mockRestore();
+        });
+    });
 });

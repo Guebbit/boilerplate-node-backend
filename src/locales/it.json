@@ -45,5 +45,9 @@
     },
     "email": {
         "footer": "Inviata dal nostro team."
+    },
+    "translation": {
+        "error-locale-unavailable": "Oggi si può impostare solo {{locale}} (la traduzione non è disponibile).",
+        "error-fallback-required": "La lingua predefinita ({{locale}}) richiede un proprio testo."
     }
 }

@@ -49,26 +49,48 @@ it('skips a module with no subscribe, rather than treating it as a mistake', () 
  */
 describe('resolveTranslatables', () => {
     it('flattens every module into one lookup keyed by entityType', () => {
+        const writeProduct = jest.fn();
+        const writePage = jest.fn();
         const modules: AppModule[] = [
             {
                 name: 'products',
                 translatables: {
-                    product: { collection: 'products', fields: ['title'], cacheTag: 'products' }
+                    product: {
+                        collection: 'products',
+                        fields: ['title'],
+                        cacheTag: 'products',
+                        writeDerived: writeProduct
+                    }
                 },
                 personalData: 'none'
             },
             {
                 name: 'pages',
                 translatables: {
-                    page: { collection: 'pages', fields: ['body'], cacheTag: 'pages' }
+                    page: {
+                        collection: 'pages',
+                        fields: ['body'],
+                        cacheTag: 'pages',
+                        writeDerived: writePage
+                    }
                 },
                 personalData: 'none'
             }
         ];
 
         expect(resolveTranslatables(modules)).toEqual({
-            product: { collection: 'products', fields: ['title'], cacheTag: 'products' },
-            page: { collection: 'pages', fields: ['body'], cacheTag: 'pages' }
+            product: {
+                collection: 'products',
+                fields: ['title'],
+                cacheTag: 'products',
+                writeDerived: writeProduct
+            },
+            page: {
+                collection: 'pages',
+                fields: ['body'],
+                cacheTag: 'pages',
+                writeDerived: writePage
+            }
         });
     });
 
@@ -77,7 +99,12 @@ describe('resolveTranslatables', () => {
     });
 
     it('refuses to boot when two modules declare the same entityType, instead of keeping one', () => {
-        const target = { collection: 'products', fields: ['title'], cacheTag: 'products' };
+        const target = {
+            collection: 'products',
+            fields: ['title'],
+            cacheTag: 'products',
+            writeDerived: jest.fn()
+        };
         const modules: AppModule[] = [
             { name: 'products', translatables: { product: target }, personalData: 'none' },
             { name: 'catalogue', translatables: { product: target }, personalData: 'none' }

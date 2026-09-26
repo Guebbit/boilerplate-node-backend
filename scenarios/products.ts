@@ -31,8 +31,14 @@ import { makeProduct, type ProductOverrides } from '@modules/products/factories'
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { productRepository } from '@modules/products/repository';
 import { getFallbackLocale } from '@infrastructure/i18n';
-import { isTranslationPlan, planTranslations, writeTranslations } from '@kernel/translation';
-import type { ProductTranslationFields, UpsertTranslationsRequest } from '@types';
+import {
+    isTranslationAvailable,
+    isTranslationPlan,
+    planTranslations,
+    writeTranslations,
+    type TranslationBatch
+} from '@kernel/translation';
+import type { ProductTranslationFields } from '@types';
 
 /**
  * One product's copy, per locale.
@@ -305,7 +311,7 @@ const localeFields = (entry: ProductTranslationFields): Record<string, string> =
  * fallback locale keyed by {@link getFallbackLocale} rather than a hardcoded `'en'`, and every
  * other locale included only when the fixture states one.
  */
-const toUpsertTranslationsRequest = (copy: ProductCopy): UpsertTranslationsRequest => ({
+const toUpsertTranslationsRequest = (copy: ProductCopy): TranslationBatch => ({
     [getFallbackLocale()]: { fields: localeFields(copy.en) },
     ...(copy.it ? { it: { fields: localeFields(copy.it) } } : {})
 });
@@ -317,9 +323,14 @@ const toUpsertTranslationsRequest = (copy: ProductCopy): UpsertTranslationsReque
  * `insertIfAbsent` above, from the same `title`/`description` this batch also carries), this call adds
  * the `translations` rows a real editor's write would have produced alongside it.
  *
+ * A no-op, writing nothing, when no translation provider is registered (D-LO1): `locales`
+ * deleted makes the shop monolingual, not the seed step a failure.
+ *
  * @throws {Error} if the batch fails to validate — a bug in the fixture data, never a caller input
  */
 const writeSeedTranslations = (productId: string): Promise<void> => {
+    if (!isTranslationAvailable()) return Promise.resolve();
+
     const copy = PRODUCT_COPY_BY_ID.get(productId);
     if (!copy) throw new Error(`seed fixtures: no translation copy for product ${productId}`);
 

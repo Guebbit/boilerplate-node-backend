@@ -195,19 +195,19 @@ interface CacheOptions {
     browserRevalidate?: boolean;
 
     /**
-     * Whether THIS caller's answer is safe to share with every other cacheable caller, and under
-     * what key. Required, same reasoning as `keyParameters`: a correctness question.
+     * Whether THIS caller's answer is safe to share with every other cacheable caller — a
+     * correctness question, same reasoning as `keyParameters`.
      *
-     * A string:  the scope cacheable callers share — `'guest'` on every route today, since
-     *            RFC 9111 §3.5 rules out caching an answer that depends on WHO is asking.
-     * undefined: a caller who sees more than a guest (an admin viewing inactive rows) — BYPASSES
-     *            Redis for this request, rather than serve or store a wider answer.
-     * Safe by:   `kernel/access/query.ts#hasAnonymousReadScope`, which compares compiled read
-     *            filters, so a role that widens visibility fails it with no cache change.
+     * true:  the caller reads the same guest-visible scope every cacheable caller shares, since
+     *        RFC 9111 §3.5 rules out caching an answer that depends on WHO is asking.
+     * false: a caller who sees more than a guest (an admin viewing inactive rows) — BYPASSES
+     *        Redis for this request, rather than serve or store a wider answer.
+     * Safe by: `kernel/access/query.ts#hasAnonymousReadScope`, which compares compiled read
+     *          filters, so a role that widens visibility fails it with no cache change.
      *
      * See: docs/tools/redis-cache.md#no-caching-depends-on-who-is-asking
      */
-    scopeKey: (request: Request) => string | undefined;
+    scopeKey: (request: Request) => boolean;
 }
 
 /**
@@ -219,15 +219,11 @@ interface CacheOptions {
  * the key: query-string order is not stable across clients, and only `keyParameters` —
  * pre-sorted, JSON-serialized — can reach the key, so `?anything=else` cannot mint its own entry.
  *
- * @param scope - `options.scopeKey`'s answer for this request — never `undefined` here, since
- *   `serveOrArm` bypasses Redis entirely before a key is ever built for that case
+ * The scope segment is always the literal `guest` — `options.scopeKey` only ever gates whether
+ * a key is built at all (see {@link CacheOptions.scopeKey}), never which one; `serveOrArm`
+ * bypasses Redis entirely, with no key built, when it answers `false`.
  */
-const getCacheKey = (
-    request: Request,
-    sortedKeyParameters: readonly string[],
-    scope: string,
-    keyAs?: string
-) => {
+const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], keyAs?: string) => {
     // Path only. `originalUrl` is the sole place the mounted prefix and the route path are
     // already joined, so it is split rather than reassembled from `baseUrl` + `path`.
     const [path] = request.originalUrl.split('?');
@@ -260,7 +256,7 @@ const getCacheKey = (
         })
         .join('&');
 
-    return `${identity}?${values}:${scope}:${request.locale ?? '-'}`;
+    return `${identity}?${values}:guest:${request.locale ?? '-'}`;
 };
 
 /**
@@ -317,7 +313,7 @@ const armCacheWrite = (
  * @param response - headers are set on this response; `noStore` is read from it too
  * @param options - the route's declared cache identity — see {@link CacheOptions}
  * @param ttl - the resolved (possibly dev-clamped) TTL used to build `max-age`
- * @param cacheScope - `options.scopeKey(request)`'s answer — see {@link CacheOptions.scopeKey}
+ * @param cacheable - `options.scopeKey(request)`'s answer — see {@link CacheOptions.scopeKey}
  * @returns whether this request is a GET — reused by {@link serveOrArm}
  * @throws {Error} on either mounting mistake described above
  */
@@ -326,7 +322,7 @@ const applyCacheHeaders = (
     response: Response,
     options: CacheOptions,
     ttl: number,
-    cacheScope: string | undefined
+    cacheable: boolean
 ): boolean => {
     if (response.locals.noStore)
         throw new Error(
@@ -345,11 +341,11 @@ const applyCacheHeaders = (
     response.set(
         'Cache-Control',
         cacheableRead
-            ? cacheScope === undefined
-                ? 'private, no-cache'
-                : options.browserRevalidate
-                  ? 'public, no-cache'
-                  : `public, max-age=${ttl}, stale-while-revalidate=${STALE_WHILE_REVALIDATE_SECONDS}, stale-if-error=${STALE_IF_ERROR_SECONDS}`
+            ? cacheable
+                ? options.browserRevalidate
+                    ? 'public, no-cache'
+                    : `public, max-age=${ttl}, stale-while-revalidate=${STALE_WHILE_REVALIDATE_SECONDS}, stale-if-error=${STALE_IF_ERROR_SECONDS}`
+                : 'private, no-cache'
             : 'no-store'
     );
     response.vary('Authorization');
@@ -374,8 +370,8 @@ const applyCacheHeaders = (
  * @param ttl - the resolved TTL; `<= 0` skips Redis entirely
  * @param sortedKeyParameters - `options.keyParameters`, pre-sorted once at route-registration time
  * @param options - the route's key parameters, tags and cache identity — see {@link CacheOptions}
- * @param cacheScope - `options.scopeKey(request)`'s answer; `undefined` skips Redis entirely,
- *   same as `ttl <= 0` — see {@link CacheOptions.scopeKey}
+ * @param cacheable - `options.scopeKey(request)`'s answer; `false` skips Redis entirely, same as
+ *   `ttl <= 0` — see {@link CacheOptions.scopeKey}
  * @returns the pending Redis lookup, so a caller (a test, chiefly) can await the whole decision;
  *   `undefined` on the synchronous not-cacheable / ttl<=0 / no-scope exit
  */
@@ -387,10 +383,10 @@ const serveOrArm = (
     ttl: number,
     sortedKeyParameters: readonly string[],
     options: CacheOptions,
-    cacheScope: string | undefined
+    cacheable: boolean
 ): Promise<void> | undefined => {
     const servedFromCache = cacheableRead || options.keyAs !== undefined;
-    if (!servedFromCache || ttl <= 0 || cacheScope === undefined) {
+    if (!servedFromCache || ttl <= 0 || !cacheable) {
         next();
         return undefined;
     }
@@ -401,7 +397,7 @@ const serveOrArm = (
     // nearly a minute after it landed.
     const graceSeconds = Math.min(STALE_WHILE_REVALIDATE_SECONDS, ttl);
 
-    const cacheKey = getCacheKey(request, sortedKeyParameters, cacheScope, options.keyAs);
+    const cacheKey = getCacheKey(request, sortedKeyParameters, options.keyAs);
     return (
         getCacheValue(cacheKey)
             .then((raw) => {
@@ -473,8 +469,8 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
         const ttl = resolveCacheTtl(seconds);
         // Resolved once, up front: both the headers and the Redis decision below must agree on
         // whether THIS caller may share the cached answer — see CacheOptions.scopeKey.
-        const cacheScope = options.scopeKey(request);
-        const cacheableRead = applyCacheHeaders(request, response, options, ttl, cacheScope);
+        const cacheable = options.scopeKey(request);
+        const cacheableRead = applyCacheHeaders(request, response, options, ttl, cacheable);
         return serveOrArm(
             request,
             response,
@@ -483,7 +479,7 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
             ttl,
             sortedKeyParameters,
             options,
-            cacheScope
+            cacheable
         );
     };
 };

@@ -20,9 +20,9 @@ import type {
     Product,
     ProductAdmin,
     ProductTranslationFields,
-    TaxClass,
-    UpsertTranslationsRequest
+    TaxClass
 } from '@types';
+import type { TranslationBatch } from '@kernel/translation';
 import {
     generateSuccess,
     generateReject,
@@ -407,13 +407,13 @@ export const updateById = (
 /**
  * `ProductTranslationsWrite` (this module's own flat write shape, `{ title, description? } | null`
  * per locale) wrapped for the `kernel/translation.ts` port, which speaks the generic door's
- * `UpsertTranslationsRequest` — one locale's `{ fields, origin? }` rather than the flat shape this
+ * `TranslationBatch` — one locale's `{ fields, origin? }` rather than the flat shape this
  * module's own contract uses. `origin` is left to the port's own default (`human`): an editor's
  * write through `/products/{id}` is never a machine import.
  */
 const toUpsertTranslationsRequest = (
     translations: Record<string, ProductTranslationFields | null>
-): UpsertTranslationsRequest =>
+): TranslationBatch =>
     Object.fromEntries(
         Object.entries(translations).map(([locale, entry]) => [
             locale,

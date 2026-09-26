@@ -9,6 +9,8 @@
  */
 import {
     applyTranslations,
+    isTranslationAvailable,
+    isTranslationPlan,
     planTranslations,
     readAllTranslations,
     registerTranslationPort,
@@ -118,10 +120,47 @@ describe('searchTranslatedEntityIds', () => {
 });
 
 describe('planTranslations', () => {
-    it('fails rather than pretending to validate when no port is registered', async () => {
-        const result = await planTranslations('product', {});
+    beforeEach(() => {
+        process.env.NODE_FALLBACK_LOCALE = 'en';
+    });
+
+    it('plans a single fallback-locale upsert when no port is registered', async () => {
+        const result = await planTranslations('product', { en: { fields: { title: 'Kennel' } } });
+
+        expect(isTranslationPlan(result) && result).toEqual({
+            fallbackLocale: 'en',
+            planned: [{ locale: 'en', kind: 'upsert', fields: { title: 'Kennel' } }]
+        });
+    });
+
+    it('422s a non-fallback locale when no port is registered', async () => {
+        const result = await planTranslations('product', {
+            en: { fields: { title: 'Kennel' } },
+            it: { fields: { title: 'Cuccia' } }
+        });
 
         expect('success' in result && !result.success).toBe(true);
+        expect(!isTranslationPlan(result) && result.errors[0]?.details).toEqual({ field: 'it' });
+    });
+
+    it('422s a deleted (null) fallback slot when no port is registered', async () => {
+        const result = await planTranslations('product', { en: null });
+
+        expect('success' in result && !result.success).toBe(true);
+        expect(!isTranslationPlan(result) && result.errors[0]?.details).toEqual({ field: 'en' });
+    });
+
+    it('422s an empty fallback slot when no port is registered', async () => {
+        const result = await planTranslations('product', { en: { fields: {} } });
+
+        expect('success' in result && !result.success).toBe(true);
+        expect(!isTranslationPlan(result) && result.errors[0]?.details).toEqual({ field: 'en' });
+    });
+
+    it('reports translation unavailable only when no port is registered', () => {
+        expect(isTranslationAvailable()).toBe(false);
+        registerTranslationPort(fakePort());
+        expect(isTranslationAvailable()).toBe(true);
     });
 
     it('delegates to the registered port with exactly what it was given', async () => {

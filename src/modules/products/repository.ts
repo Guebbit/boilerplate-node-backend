@@ -41,6 +41,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
         productId: string,
         counters: { onHand: number; reserved: number }
     ) => Promise<void>;
+    writeTranslatedFields: (productId: string, fields: Record<string, string>) => Promise<void>;
     writebackImage: ImageWriteback;
 } = {
     ...createRepository<ProductDocument, Product>(productModel, {
@@ -137,6 +138,19 @@ export const productRepository: Repository<ProductDocument, Product> & {
     syncStockCache: (productId: string, counters: { onHand: number; reserved: number }) =>
         productModel
             .updateOne({ _id: toObjectId(productId) }, { $set: counters }, { timestamps: false })
+            .exec()
+            .then(() => undefined),
+
+    /**
+     * The `locales` translation port's writeback — the `writeDerived` half of `TranslatableTarget`
+     * in `kernel/registry.ts`. Copies the fallback-locale row's fields onto this document's own
+     * columns, so a search or a listing never has to resolve a translation for the language the
+     * product's own row is already in. Same shape as {@link syncStockCache}: another module's
+     * derived write, narrowed to the fields it names, never an edit an admin made.
+     */
+    writeTranslatedFields: (productId: string, fields: Record<string, string>) =>
+        productModel
+            .updateOne({ _id: toObjectId(productId) }, { $set: fields }, { timestamps: false })
             .exec()
             .then(() => undefined),
 

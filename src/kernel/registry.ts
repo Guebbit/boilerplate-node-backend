@@ -125,6 +125,14 @@ export interface TranslatableTarget {
      * outside the module that owns it.
      */
     cacheTag: string;
+
+    /**
+     * Copies the fallback-locale row's fields onto this entity's own document — the derived,
+     * sortable/indexable column a translated write also updates. Supplied by the OWNING module
+     * (see {@link ImageTarget.writeback} for the same shape), so `locales` never has to find the
+     * target's Mongoose model by collection name to reach it (SD-09).
+     */
+    writeDerived: (entityId: string, fields: Record<string, string>) => Promise<void>;
 }
 
 /**
