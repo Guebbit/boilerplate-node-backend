@@ -9,7 +9,7 @@
  * three rather than `run-server.ts` keeping its own small one.
  */
 
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 // Relative, not the `@infrastructure` alias: loaded transitively from `tests/support/
 // global-setup.ts`, which jest loads outside its normal module resolution — `moduleNameMapper`
 // does not apply there, so the alias would resolve at `tsc`/`eslint` time and fail at runtime.
@@ -17,7 +17,7 @@ import { logger } from '../../src/infrastructure/adapters/logger';
 import type { EphemeralMongo } from './ephemeral-mongo';
 
 /**
- * How long `MongoMemoryServer.create()` gets before its stall is treated as a hang rather than a
+ * How long `MongoMemoryReplSet.create()` gets before its stall is treated as a hang rather than a
  * slow first-time download.
  *
  * `mongodb-memory-server`'s own lock around `~/.cache/mongodb-binaries` (shared machine-wide, not
@@ -28,26 +28,22 @@ import type { EphemeralMongo } from './ephemeral-mongo';
  */
 const CREATE_SERVER_TIMEOUT_MS = 120_000;
 
-/** Adapts a real `MongoMemoryServer` to the shape every caller here depends on instead. */
-const toEphemeralMongo = (server: MongoMemoryServer): EphemeralMongo => ({
+/** Adapts a real `MongoMemoryReplSet` to the shape every caller here depends on instead. */
+const toEphemeralMongo = (server: MongoMemoryReplSet): EphemeralMongo => ({
     uri: server.getUri(),
     stop: () => server.stop().then(() => undefined)
 });
 
 /**
- * Starts an in-process `mongod`, giving up after {@link CREATE_SERVER_TIMEOUT_MS} rather than
- * stalling silently.
+ * Starts an in-process, single-member replica set rather than a standalone `mongod`.
  *
- * The loser of the race is CANCELLED, not abandoned: a bare `setTimeout` inside a `Promise.race`
- * keeps running after the race settles, and a pending timer holds the event loop open. `clearTimeout`
- * in `finally` is what keeps the guard from costing more than the hang it guards against.
+ * DDD-D2: multi-document transactions need a replica set even for a lone member — a standalone
+ * `mongod` refuses `startTransaction()` outright. `count: 1` keeps the cost of that at nearly
+ * nothing (no real replication, no extra network hops); `storageEngine: 'wiredTiger'` is explicit
+ * because transactions require it and this library's own default only follows the mongod version.
  *
- * Exits rather than rejects on failure, timeout included: `mongodb-memory-server`'s own lock-poll
- * `setInterval` keeps running past a timeout's rejection regardless — reporting the error and then
- * hanging on that interval is not better than hanging outright.
- *
- * @param databasePath - where the server keeps its data; a temp directory of the library's own choosing
- * when omitted.
+ * @param databasePath - where the sole member keeps its data; a temp directory of the library's
+ * own choosing when omitted.
  */
 export const startInProcessMongod = (databasePath: string | undefined): Promise<EphemeralMongo> => {
     let timer: NodeJS.Timeout | undefined;
@@ -66,11 +62,14 @@ export const startInProcessMongod = (databasePath: string | undefined): Promise<
         );
     });
 
-    // `mongodb-memory-server`: starts a real `mongod` against `databasePath` (or a temp directory of its
-    // own choosing when omitted) and returns a handle exposing its connection string and `stop()`.
-    // https://typegoose.github.io/mongodb-memory-server/
+    // `mongodb-memory-server`: starts a real, one-member `mongod` replica set against
+    // `databasePath` (or a temp directory of its own choosing when omitted) and returns a handle
+    // exposing its connection string and `stop()`. https://typegoose.github.io/mongodb-memory-server/
     return Promise.race([
-        MongoMemoryServer.create(databasePath ? { instance: { dbPath: databasePath } } : undefined),
+        MongoMemoryReplSet.create({
+            replSet: { count: 1, storageEngine: 'wiredTiger' },
+            instanceOpts: databasePath ? [{ dbPath: databasePath }] : undefined
+        }),
         timeout
     ])
         .then(toEphemeralMongo)

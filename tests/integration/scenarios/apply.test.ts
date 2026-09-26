@@ -78,9 +78,19 @@ interface ApplyResult {
     stderr: string;
 }
 
-/** A fresh, never-before-used database on the shared test Mongo server. */
-const freshDbUri = (): string =>
-    `${process.env.NODE_TEST_MONGO_URI}apply-${randomUUID().slice(0, 8)}`;
+/**
+ * A fresh, never-before-used database on the shared test Mongo server.
+ *
+ * Through `URL`, not string concatenation: DDD-D2 made the shared server a replica set, so its
+ * uri now carries a `?replicaSet=` query string, and appending a db name onto the end of that
+ * (rather than into the path, before it) used to silently fold into the query value instead of
+ * naming a database — replaced by garbage, not by anything spec-walk or a type could catch.
+ */
+const freshDbUri = (): string => {
+    const uri = new URL(process.env.NODE_TEST_MONGO_URI ?? '');
+    uri.pathname = `/apply-${randomUUID().slice(0, 8)}`;
+    return uri.toString();
+};
 
 describe('scenarios/apply.ts', () => {
     it(

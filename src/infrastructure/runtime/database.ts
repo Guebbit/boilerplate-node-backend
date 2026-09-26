@@ -10,6 +10,7 @@
 // *singleton* — `mongoose.connect()` mutates global state, so any file that
 // `import`s `mongoose` finds the same live connection.
 import mongoose from 'mongoose';
+import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 
 /** Give up after this many attempts so a misconfigured URI fails the deploy instead of retrying forever. */
@@ -167,3 +168,20 @@ export const stopDatabase = () =>
  * time and is populated by `connect()`, so grabbing the reference before `start()` runs is safe.
  */
 export const { connection } = mongoose;
+
+/**
+ * Runs `fn` inside a MongoDB multi-document transaction, retrying it on a transient error the
+ * driver itself flags as safe to retry (a stepdown, a network blip) per MongoDB's own recommended
+ * transaction pattern. `fn` must only touch the database through calls that take `{ session }` —
+ * a write made without it is not part of the transaction and will not roll back with the rest.
+ * https://mongoosejs.com/docs/transactions.html
+ *
+ * Requires a replica set (DDD-D2): a standalone `mongod` refuses `startTransaction()` outright.
+ * Every entry point that reaches this — the server, every cron script, `mongodb-memory-server`'s
+ * test double — runs one; see `scenarios/support/ephemeral-mongod.ts` and `docker-compose.yml`.
+ *
+ * @param work - the work to run inside the transaction, given the session to pass to every write
+ * @returns whatever `work` resolved with, once the transaction has committed
+ */
+export const withTransaction = <T>(work: (session: ClientSession) => Promise<T>): Promise<T> =>
+    connection.transaction(work);

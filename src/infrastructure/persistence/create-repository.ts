@@ -11,7 +11,7 @@
  */
 
 import { Types } from 'mongoose';
-import type { Model, Document, QueryFilter } from 'mongoose';
+import type { ClientSession, Model, Document, QueryFilter } from 'mongoose';
 import {
     normalizePagination,
     buildPaginatedMeta,
@@ -238,8 +238,13 @@ export interface Repository<TDocument extends Document, TWire> {
      * without ever writing to the collection.
      */
     build: (data: Partial<TDocument>) => TDocument;
-    /** Remove a single document. */
-    deleteOne: (document: TDocument) => Promise<void>;
+    /**
+     * Remove a single document.
+     *
+     * @param session - DDD-D6: joins the delete to the caller's own transaction. Omitted by
+     * every pre-existing caller, which stays exactly as fast and as non-transactional as before.
+     */
+    deleteOne: (document: TDocument, session?: ClientSession) => Promise<void>;
     /** Filter → count → page → normalize, per the declared search spec. Answers wire rows, not documents. */
     search: (
         filters?: object,
@@ -356,10 +361,12 @@ export function createRepository<TDocument extends Document, TWire>(
      */
     const build = (data: Partial<TDocument>): TDocument => new mongooseModel(data);
 
-    /** Remove a single document. */
-    const deleteOne = (document: TDocument): Promise<void> =>
+    /** Remove a single document, optionally as part of the caller's own transaction. */
+    const deleteOne = (document: TDocument, session?: ClientSession): Promise<void> =>
         // mongoose types `Document#deleteOne` as `any`; the cast restores the promise it returns
-        (document.deleteOne() as Promise<unknown>).then(() => undefined);
+        (document.deleteOne(session ? { session } : undefined) as Promise<unknown>).then(
+            () => undefined
+        );
 
     /**
      * Filter → count → page → normalize, in one call.
