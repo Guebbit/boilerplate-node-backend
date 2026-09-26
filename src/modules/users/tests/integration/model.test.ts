@@ -10,7 +10,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { userRepository } from '../../repository';
 import * as userService from '@modules/users/service';
-import { TokenType } from '../../model';
+import { userService as userServiceObject } from '../../service';
+import { TokenType, normalizeEmail } from '../../model';
 
 setupTestDb();
 
@@ -33,6 +34,33 @@ const withTokens = () =>
             }
         ]
     });
+
+describe('email is case-insensitive (B5)', () => {
+    it('stores a mixed-case address lowercased', async () => {
+        const user = await createUser({ email: 'Ada@Example.com' });
+
+        expect(user.email).toBe('ada@example.com');
+    });
+
+    it('finds an authenticatable account by a differently-cased login attempt', async () => {
+        await createUser({ email: 'ada@example.com' });
+
+        const found = await userServiceObject.findForLogin('ADA@example.COM');
+
+        expect(found).not.toBeNull();
+        expect(found!.email).toBe('ada@example.com');
+    });
+
+    it('the unique index refuses a second account differing only by case', async () => {
+        await createUser({ email: 'ada@example.com' });
+
+        await expect(createUser({ email: 'ADA@EXAMPLE.COM' })).rejects.toThrow();
+    });
+
+    it('normalizeEmail trims and lowercases the same way the schema casts', () => {
+        expect(normalizeEmail('  Ada@Example.com  ')).toBe('ada@example.com');
+    });
+});
 
 describe('user credential exposure', () => {
     describe('select: false (the safety net)', () => {

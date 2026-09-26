@@ -67,20 +67,24 @@ import { getOAuthStart } from './controllers/get-oauth-start';
 import { getOAuthCallback } from './controllers/get-oauth-callback';
 import { noStore } from '@infrastructure/http/middlewares/cache';
 import { getMyAbilities } from './controllers/get-my-abilities';
+import { normalizeEmail } from '@modules/users';
 
 /**
  * Whether THIS request is changing the caller's email — the one field `requireFreshAuthWhen`
- * gates on `PUT /` and `PATCH /`. Mirrors the exact comparison `accountService.updateProfile`
- * itself makes (`email !== undefined && email !== currentEmail`), so the guard and the service
- * can never disagree about what counts as an email change.
+ * gates on `PUT /` and `PATCH /`. Case-insensitive, the same way `accountService.updateProfile`'s
+ * own `applyEmailChangeRequest` compares (`normalizeEmail`), so the guard and the service can
+ * never disagree about what counts as an email change — a mixed-case resend of the current
+ * address must not demand a step-up the service itself treats as a no-op.
  *
  * MUST run after `upload.image()`: both verbs accept `multipart/form-data`, so `request.body`
  * does not exist until multer has parsed it — a predicate mounted earlier reads an empty object,
  * concludes "no email change", and gates nothing.
  */
-const isChangingEmail = (request: Request): boolean => {
+export const isChangingEmail = (request: Request): boolean => {
     const email = (request.body as { email?: string } | undefined)?.email;
-    return email !== undefined && email !== request.authContext?.email;
+    if (email === undefined) return false;
+    const currentEmail = request.authContext?.email;
+    return currentEmail === undefined || normalizeEmail(email) !== normalizeEmail(currentEmail);
 };
 
 /** Express router for account/auth endpoints (login, signup, password reset, token refresh). */

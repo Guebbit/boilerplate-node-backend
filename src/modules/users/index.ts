@@ -20,6 +20,7 @@ export {
     zodUserSchema,
     hashToken,
     isLiveRefreshSession,
+    normalizeEmail,
     DEFAULT_USER_IMAGE_URL
 } from './model';
 
