@@ -22,5 +22,7 @@ export const { replace: replaceWebhookSubscription, update: updateWebhookSubscri
         patchSchema: UpdateWebhookSubscriptionBody,
         update: (id, changes, request) =>
             webhooksService.updateSubscription(id, changes, tenantCallerContextOf(request)),
+        // `.toJSON()` applies the model's `_id` → `id` transform; the document is typed as stored,
+        // not as the wire shape `WebhookSubscription` promises.
         present: (subscription) => subscription.toJSON() as WebhookSubscription
     });
