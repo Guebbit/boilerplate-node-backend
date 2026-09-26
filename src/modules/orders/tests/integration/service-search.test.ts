@@ -127,6 +127,16 @@ describe('orderService.search', () => {
         expect(result.items).toHaveLength(1);
     });
 
+    it('filters by email regardless of the query casing (PL-29)', async () => {
+        const user = await createUser({ email: 'alice@example.com', username: 'alice' });
+        const product = await createProduct({ price: 10 });
+        await createOrder(user, [toOrderItem(product, 1)]);
+
+        const result = await orderService.search({ email: 'ALICE@Example.com' });
+
+        expect(result.items).toHaveLength(1);
+    });
+
     it('filters by paymentMethod — the admin "awaiting transfer" view', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 10 });

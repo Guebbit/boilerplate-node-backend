@@ -39,6 +39,7 @@ import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from './audit';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
+import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
 /** Every value the generated `FeedbackRequestStatus` enum declares, for the membership check below. */
 const FEEDBACK_STATUS_VALUES = Object.values(FeedbackRequestStatus) as string[];
@@ -83,7 +84,7 @@ const notifyMailbox = (): string =>
  *             tell a spam script exactly which signal caught it.
  */
 export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestDocument> => {
-    const email = payload.email.trim().toLowerCase();
+    const email = normalizeEmail(payload.email);
     const honeypotFilled = Boolean(payload.website?.trim());
 
     return checkEmailPolicy(email).then((verdict) => {

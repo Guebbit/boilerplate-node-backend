@@ -22,6 +22,7 @@ import {
     DEFAULT_SORT,
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
+import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
 /** Plain CRUD from the repository factory; `search` below overrides its aggregation-free default. */
 const base = createRepository<OrderDocument, Order>(orderModel, {
@@ -48,6 +49,16 @@ const aggregate = <T = OrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =
     orderModel.aggregate<T>(pipeline);
 
 /**
+ * The `email` filter, normalised the same way the schema casts the stored field (PL-29) — `$match`
+ * does not cast the way `find()` does (see `search` below), so a differently-cased search would
+ * otherwise silently match nothing.
+ */
+const withNormalizedEmailFilter = (filters: object): object => {
+    const bag = filters as Record<string, unknown>;
+    return typeof bag.email === 'string' ? { ...bag, email: normalizeEmail(bag.email) } : filters;
+};
+
+/**
  * Filter → count → page → normalize, over the aggregation framework. `$match` is built from the
  * same declared spec the other repositories use, so id coercion happens before the pipeline is
  * assembled — unlike `find()`, `$match` doesn't cast. `async` so `buildWhere`'s synchronous
@@ -60,7 +71,7 @@ const search = async (
 ): Promise<{ items: Order[]; meta: PaginatedMeta }> => {
     const pagination = normalizePagination(filters);
     // Scope merged last: it is the authorization boundary, and no client filter may widen it.
-    const match = { ...base.buildWhere(filters), ...scope };
+    const match = { ...base.buildWhere(withNormalizedEmailFilter(filters)), ...scope };
 
     // `DEFAULT_SORT`, not a bare `createdAt` — the count and the page below are two separate
     // `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips

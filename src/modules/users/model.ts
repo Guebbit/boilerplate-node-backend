@@ -42,12 +42,14 @@ export const hashToken = (token: string): string =>
 
 /**
  * Compare two addresses the way the `email`/`pendingEmail` schema paths themselves do —
- * case-insensitively, ignoring surrounding whitespace. The schema's `lowercase`/`trim` casters
- * cover every database read and write for free (equality, `$or`, `$in`, `$set`); this covers the
- * two in-memory comparisons that never touch a query: `account/services/profile.ts`'s "is this
- * the current address" check and `account/routes.ts`'s `isChangingEmail` guard.
+ * case-insensitively, ignoring surrounding whitespace (`@infrastructure/persistence/normalize-email`).
+ * The schema's `lowercase`/`trim` casters cover every database read and write for free (equality,
+ * `$or`, `$in`, `$set`); this covers the two in-memory comparisons that never touch a query:
+ * `account/services/profile.ts`'s "is this the current address" check and `account/routes.ts`'s
+ * `isChangingEmail` guard. Re-exported here so every existing caller of `@modules/users`'s barrel
+ * keeps working unchanged.
  */
-export const normalizeEmail = (email: string): string => email.trim().toLowerCase();
+export { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
 /**
  * User tokens
@@ -325,21 +327,21 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             type: String,
             required: true,
             // A backstop, not the real check — `zodUserSchema.email` above (and the generated
-            // `CreateUserBody`/`SignupBody`) already validate against Zod's own email format for
-            // every path that parses a body. This exists for the one path that does not: OAuth
-            // signup writes a provider's own `email` straight through `userService.create`
-            // (`account/services/oauth.ts`) with no Zod parse in between. Loose on purpose — one
-            // "@", one "." after it, no whitespace — so it can only ever reject something that
-            // could never be a real address, not narrow a valid shape a provider or a caller
-            // legitimately sends. `[^\s@]` rather than `\S` in the local/domain parts — still
-            // loose on the character set, but a second `@` or a whitespace-free comma-joined
-            // address (`a@b.com,evil@c.test`) cannot smuggle past a single-`@`, single-match
-            // anchor the way `\S+@\S+` would let it.
+            // `CreateUserBody`/`SignupBody`) already validate every parsed body. This covers the
+            // one path that skips Zod: `userService.registerFromOAuth` (`account/services/oauth.ts`)
+            // writes a provider's own `email` straight through.
+            //
+            // Loose on purpose — one "@", one "." after it, no whitespace:
+            // - rejects only what could never be a real address, never narrows a valid shape;
+            // - `[^\s@]` over `\S` in the local/domain parts blocks a second `@` or a
+            //   whitespace-free comma-joined address (`a@b.com,evil@c.test`) that `\S+@\S+` would
+            //   let through.
             match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
             // Mongoose applies both casters before validation and on every `$set`/`$or`/`$in`
             // built against this path, so login, signup, OAuth and admin writes are all covered
-            // with no call-site change — see `./repository`'s lookups and `normalizeEmail` below
-            // for the two comparisons Mongoose itself can't reach.
+            // with no call-site change — `normalizeEmail` (re-exported below, from
+            // `@infrastructure/persistence/normalize-email`) covers the in-memory comparisons
+            // Mongoose itself can't reach.
             lowercase: true,
             trim: true
         },
@@ -448,7 +450,7 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             select: false,
             // Same casters as `email` above — a pending change must compare and collide the same
             // way the live address does, or a case-only re-send of the current address would look
-            // like a real change (see `normalizeEmail` in `./repository`).
+            // like a real change (see `normalizeEmail`, re-exported below).
             lowercase: true,
             trim: true
         },
