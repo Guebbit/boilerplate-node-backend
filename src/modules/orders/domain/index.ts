@@ -18,6 +18,7 @@ export { checkOrderLines } from './rules';
 export {
     canTransition,
     isPayable,
+    stockCommitted,
     statusesReachableFrom,
     statusesLeadingTo,
     orderActionsFor,

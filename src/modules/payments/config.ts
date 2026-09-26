@@ -8,9 +8,9 @@
  * are `@modules/orders`' own config — `orders` renders `transferInstructions` and enforces the
  * open-transfer cap, so it owns the bank-transfer business rule, and it already owns the shop's
  * one currency for the invoice this module's payments settle; this module already depends on
- * `orders` for `markPaid`. This file owns the one thing that IS this module's alone: validating
- * the configured values with `ibantools` at boot, and listing the methods `GET /payments/methods`
- * answers.
+ * `orders` for `markPaid`. This file owns what IS this module's alone: validating the configured
+ * bank-transfer values with `ibantools` at boot, listing the methods `GET /payments/methods`
+ * answers, the payment-effect sweep's own grace window, and the Stripe test-key boot gate.
  */
 
 import { electronicFormatIBAN, isValidBIC, isValidIBAN } from 'ibantools';
@@ -72,14 +72,14 @@ export const validateBankTransferConfig = (): string[] => {
  * it. A settlement still between setting the marker and clearing it must never be raced by the
  * sweep that exists only for the crash case — this is that buffer. Read per call, like
  * `@modules/inventory`'s own config, so a change applies to the next sweep tick and a test can
- * vary it per case.
+ * vary it per case. Same naming pattern as `orders`' own `orderEffectRetryMinutes`.
  * @returns the grace window in minutes
  */
-export const paymentEffectGraceMinutes = (): number =>
-    environmentNumber('NODE_PAYMENT_EFFECT_GRACE_MINUTES', 1, 0);
+export const paymentEffectRetryMinutes = (): number =>
+    environmentNumber('NODE_PAYMENT_EFFECT_RETRY_MINUTES', 1, 0);
 
 /**
- * ST-1: refuse to boot in production on a Stripe TEST-mode key. `sk_test_` is Stripe's own prefix
+ * Refuse to boot in production on a Stripe TEST-mode key. `sk_test_` is Stripe's own prefix
  * for one — https://docs.stripe.com/keys#test-live-modes — and a deployment that pastes one into
  * production would silently run every "real" payment through Stripe's test ledger: orders marked
  * paid, and no money ever actually moving. Checked only under `NODE_ENV=production`; a test key is

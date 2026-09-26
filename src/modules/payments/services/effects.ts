@@ -1,70 +1,87 @@
 /**
  * @module
- * Retry the one effect a `succeeded` write can leave owing — the stock commit — when the process
- * died between setting `pendingEffects` and clearing it (B14). `scripts/ops/sweep-payment-effects.ts`
- * is the only caller; `settlement.ts` sets and clears the marker itself on the normal path, so this
- * is purely the crash-recovery half.
+ * Retry the one effect a `succeeded` write can leave owing — the stock commit, or, when the order
+ * moved away before settlement's own `orderLost` branch could react, the refund it owes instead.
+ * `scripts/ops/sweep-payment-effects.ts` is the only caller; `settlement.ts` sets and clears the
+ * marker itself on the normal path, so this is purely the crash-recovery half. Shaped like
+ * `orders/services/cancel.ts`'s own sweep: sequential, warns on a full batch, and returns how many
+ * actually settled.
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import { orderService } from '@modules/orders';
+import { orderService, stockCommitted } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
-import { OrderStatus } from '@types';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
-import { paymentEffectGraceMinutes } from '../config';
+import { paymentEffectRetryMinutes } from '../config';
 
 /** How many payments one sweep pass retries before asking to be run again. */
 const SWEEP_BATCH_SIZE = 200;
 
 /**
- * Order statuses whose payment has (or should have) already taken the held stock — the commit is
- * safe to repeat (B15's exactly-once claim on the hold), so a payment the settlement itself
- * already committed just has its marker cleared here for free.
- */
-const STOCK_TAKEN_STATUSES: ReadonlySet<OrderStatus> = new Set([
-    OrderStatus.paid,
-    OrderStatus.processing,
-    OrderStatus.shipped,
-    OrderStatus.delivered
-]);
-
-/**
- * Finish one payment's owed effect, or drop the marker if its order can no longer use it.
- *
- * A cancelled (or otherwise gone) order means the settlement's order-lost branch already ran, or
- * ran and died before clearing the marker — either way there is nothing left to commit, only the
- * note to clear.
+ * Finish one payment's owed effect: commit the stock if the order can still use it, mark a refund
+ * owed if the order moved on before settlement's own `orderLost` branch could react, or just drop
+ * the marker if there is nothing left to do either way.
  *
  * @param payment - a payment whose `pendingEffects` names `commit`
+ * @returns whether this payment's effect was discharged
  */
-const retryOne = (payment: PaymentDocument): Promise<void> => {
+const retryOne = (payment: PaymentDocument): Promise<boolean> => {
     const orderId = String(payment.orderId);
-    return orderService.getById(orderId).then((order) => {
-        const stockStillOwed = order !== undefined && STOCK_TAKEN_STATUSES.has(order.status);
-        return (stockStillOwed ? inventoryService.commitForOrder(orderId) : Promise.resolve(false))
-            .then(() => paymentRepository.clearPendingEffects(orderId))
-            .catch((error: unknown) => {
-                // Stryker disable all
-                logger.error({
-                    message: `Payments: could not retry the pending effect for order ${orderId} — it stays marked, and the next sweep tries again`,
-                    error
-                });
-                // Stryker restore all
+    // Flattened into one chain, so a rejection anywhere along it — including `getById` itself —
+    // reaches the single `.catch` below instead of escaping the loop this feeds.
+    return orderService
+        .getById(orderId)
+        .then((order): Promise<void> => {
+            if (order !== undefined && stockCommitted(order.status))
+                return inventoryService.commitForOrder(orderId).then(() => undefined);
+
+            // The order moved away before settlement's own `orderLost` branch could react — a
+            // crash between writing `succeeded` and checking the order there. Nothing has marked
+            // the refund owed yet, so do it here, before the marker below clears.
+            return payment.status === 'succeeded'
+                ? orderService.markRefundOwed(orderId)
+                : Promise.resolve();
+        })
+        .then(() => paymentRepository.clearPendingEffects(orderId))
+        .then(() => true)
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not retry the pending effect for order ${orderId} — it stays marked, and the next sweep tries again`,
+                error
             });
-    });
+            // Stryker restore all
+            return false;
+        });
 };
 
 /**
- * Sweep every payment whose settlement died before it could commit stock or clear its marker.
+ * Sweep every payment whose settlement died before it could commit stock, mark a refund owed, or
+ * clear its marker.
  *
- * @returns how many payments were swept
+ * @returns how many payments were settled
  */
-export const retryPendingEffects = (): Promise<number> => {
-    const cutoff = new Date(Date.now() - paymentEffectGraceMinutes() * 60_000);
-    return paymentRepository
-        .findWithPendingEffects(cutoff, SWEEP_BATCH_SIZE)
-        .then((payments) =>
-            Promise.all(payments.map((payment) => retryOne(payment))).then(() => payments.length)
+export const retryPendingEffects = async (): Promise<number> => {
+    const cutoff = new Date(Date.now() - paymentEffectRetryMinutes() * 60_000);
+    const due = await paymentRepository.findWithPendingEffects(cutoff, SWEEP_BATCH_SIZE);
+
+    let settled = 0;
+    for (const payment of due) {
+        if (await retryOne(payment)) settled += 1;
+    }
+
+    // A full batch means more is waiting. Said out loud, so a truncated run is not read as done.
+    if (due.length === SWEEP_BATCH_SIZE)
+        // Stryker disable all
+        logger.warn(
+            `Payment effect sweep: hit the ${SWEEP_BATCH_SIZE}-payment batch cap — run it again to continue`
         );
+    // Stryker restore all
+
+    if (due.length > 0)
+        // Stryker disable next-line all
+        logger.info(`Payment effect sweep: ${settled} of ${due.length} owed effects settled`);
+
+    return settled;
 };

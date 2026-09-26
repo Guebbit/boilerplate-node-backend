@@ -1,23 +1,24 @@
 #!/usr/bin/env tsx
 /**
  * @module
- * Retry a stock commit a settlement started but never finished — `npm run sweep:payment-effects`.
+ * Retry the stock commit or refund a settlement started but never finished — `npm run
+ * sweep:payment-effects`.
  *
  * `settlePayment` sets `pendingEffects: ['commit']` in the same write that moves a payment to
- * `succeeded`, then commits the held stock and clears it. A crash between those two steps (the
- * order read, the commit itself) leaves the marker standing with nothing to redeliver it — unlike
- * a webhook, nobody retries a settlement that already answered its caller. This sweep is the only
- * thing that ever will (B14).
+ * `succeeded`, then commits the held stock (or, if the order has moved on, marks the refund owed
+ * instead) and clears the marker. A crash between those steps leaves the marker standing with
+ * nothing to redeliver it — unlike a webhook, nobody retries a settlement that already answered
+ * its caller. This sweep is the only thing that ever will.
  *
  * No module registration needed: unlike `sweep-order-effects.ts`, this sweep calls
- * `inventoryService.commitForOrder` directly rather than emitting an event, so there is no
- * listener it depends on.
+ * `inventoryService.commitForOrder` and `orderService.markRefundOwed` directly rather than
+ * emitting an event, so there is no listener it depends on.
  *
  * Meant to run every 5 minutes, well inside the 30-minute reservation hold — see
  * docs/reference/ops.md#scheduled-jobs.
  *
- * Removal: owned by `stock-pay` — deletes with B14, along with the `sweep:payment-effects` npm
- * script and its `docker/crontab` line.
+ * Removal: owned by the payments module — delete it when removing the module, along with the
+ * `sweep:payment-effects` npm script and its `docker/crontab` line.
  *
  * See: docs/reference/ops.md
  */

@@ -143,14 +143,17 @@ the order's held stock (`inventoryService.commitForOrder`) and clears the marker
 happy path and the "order lost" refund path.
 
 A crash between the status write and the clear (a dead process, a database hiccup on the order
-read or the commit itself) leaves a payment reading `succeeded` with nothing set aside for its
-order. Unlike a webhook, nothing redelivers a settlement that already answered its caller — so
-`npm run sweep:payment-effects` (`payments/services/effects.ts#retryPendingEffects`, every 5
-minutes, see `docs/reference/ops.md#scheduled-jobs`) is the only thing that ever retries it. It
-repeats the commit for any order still expecting one — safe, since claiming a hold is
-exactly-once — clears the marker for one that isn't (the order-lost path already refunded it), and
-leaves the marker standing on anything younger than a minute, so it never races a settlement still
-mid-flight.
+read, the commit itself, or the order-lost branch's own refund) leaves a payment reading
+`succeeded` with nothing set aside for its order. Unlike a webhook, nothing redelivers a settlement
+that already answered its caller — so `npm run sweep:payment-effects`
+(`payments/services/effects.ts#retryPendingEffects`, every 5 minutes, see
+`docs/reference/ops.md#scheduled-jobs`) is the only thing that ever retries it. For any order still
+expecting one, it repeats the commit — safe, since claiming a hold is exactly-once; for one that
+has moved on instead (cancelled before the crash could even decide that), it marks the refund owed
+— `orders`' own `NODE_ORDER_EFFECT_RETRY_MINUTES` sweep is what actually returns the money — and
+either way clears this marker once its own decision is made. It leaves the marker standing on
+anything younger than `NODE_PAYMENT_EFFECT_RETRY_MINUTES` (default 1 minute), so it never races a
+settlement still mid-flight.
 
 `pendingEffects` is internal bookkeeping, omitted from the wire the same way `providerRef` is.
 
@@ -387,6 +390,8 @@ flowchart LR
 | `NODE_BANK_TRANSFER_BIC`                  | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                           |
 | `NODE_BANK_TRANSFER_HOLD_HOURS`           | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s thirty minutes                                                               |
 | `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT` | `2`     | How many `pending` transfer orders one account may have at once, before checkout refuses a new one                                                                                    |
+| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`       | `1`     | How old a `pendingEffects` marker must be before `sweep:payment-effects` retries it. See [Pending effects](#pending-effects)                                                          |
+| `NODE_STRIPE_SECRET_KEY`                  | —       | Only checked at boot, under `NODE_ENV=production`: refuses to start on a `sk_test_` key, since a real deployment silently running test-mode payments is worse than failing to boot    |
 
 The currency is stamped rather than looked up, so changing it affects new payments and leaves
 existing ones reading in the currency they were actually taken in. There is no conversion
