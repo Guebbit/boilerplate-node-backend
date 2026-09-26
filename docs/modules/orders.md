@@ -94,9 +94,11 @@ Each account reads back only its own orders; writing and soft-deleting is admin-
 `userId: 1, deletedAt: 1` index is what makes both of those cheap at once.
 
 Three scheduled jobs, all nightly via `docker/crontab`: `npm run reap:orders` replaces an order's
-remaining PII with placeholders once its post-account-deletion retention window has passed —
-amounts, line items and dates survive, only the person is gone (an order is an invoice, never
-deleted outright, unlike `payments`' abandoned attempts). `npm run sweep:order-effects` re-announces
+remaining PII (email, shipping name/phone/street, notes) with placeholders once
+`NODE_ORDER_PII_RETENTION_DAYS` has passed from the order's OWN `createdAt`, counted from account
+erasure or that date, whichever is later — amounts, line items and dates survive, only the person
+is gone (an order is an invoice, never deleted outright, unlike `payments`' abandoned attempts).
+`npm run sweep:order-effects` re-announces
 `order.refund_owed` for a refund the event bus's one delivery attempt did not carry through. `npm run
 reap:invoices` sweeps the invoice CACHE — an orphaned file with no order left to name it (the
 hard-delete path cleans up its own file; this is the backstop for a row removed any other way),
