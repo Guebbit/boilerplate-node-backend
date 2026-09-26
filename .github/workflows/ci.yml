@@ -155,9 +155,10 @@ jobs:
         #
         # Both are ASSEMBLED HERE from per-module fragments and copied to the frontend, so this
         # job asks whether the copies over there are still the bundles built here.
-        # `contracts-bundle-freshness` asks the other half of the question — whether the bundle
-        # here still matches the fragments it is built from — by diffing the committed bundle
-        # against what `Setup`'s own `npm ci` just rebuilt.
+        # `contracts-bundle-freshness` asks the other half of the question — whether the two
+        # committed bundles (`asyncapi.yaml`, `asyncapi.public.yaml`) still match the fragments
+        # they're built from — by diffing them against what `Setup`'s own `npm ci` just rebuilt.
+        # `openapi.yaml` is gitignored, so it has no committed copy for that job to diff.
         #
         # Until this job existed they were checked by nothing. `lint-openapi` and `lint-asyncapi`
         # lint THIS repo's copy and pass, because a forked spec is still a valid spec. What nobody

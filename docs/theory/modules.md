@@ -601,7 +601,7 @@ Some of these rules are relational — what a file may import depends on which m
 | Every controller handles its own rejections                                           | ESLint `controller-chain-must-catch` |
 | A module's `subscribe` hook registering nothing, or one event twice                   | `module-subscriptions.test.ts`       |
 | A controller reading the caller on a route that does not guarantee one                | `authenticated-controllers.test.ts`  |
-| Every committed bundle still equals a fresh run of the bundler                        | `contract-bundles.test.ts`           |
+| Every committed bundle is structurally correct — no dangling path, channel or gap     | `contract-bundles.test.ts`           |
 | Every mounted route is in the spec, and every spec operation is mounted               | `request-sources.test.ts`            |
 | `scenarios/index.ts` names no module `enabledModules` does not also enable            | `scenario-fixtures.test.ts`          |
 

@@ -1,13 +1,7 @@
 /**
- * Ambient re-export for `@typescript-eslint/parser`, whose types this file's own package
- * resolves fine (`npx tsc --traceResolution` succeeds), but ts-jest's language service cannot
- * under `module`/`moduleResolution: node16` — reproduced in total isolation (a one-line test file
- * with only this import fails identically), so it's ts-jest's resolver, not this package or this
- * repo's tsconfig. Re-exporting through a relative path sidesteps the broken bare-specifier
- * lookup entirely; Node's own `require` at runtime was never affected; only this file's own static
- * type-check was. `@casl/ability` hits the identical failure under the same ts-jest/`node16`
- * combination (`tsconfig.jest.json`), which is why `ts-jest` stays pinned to exactly `29.4.9` —
- * reworking that resolution strategy is the real fix, out of scope here.
+ * Ambient re-export for `@typescript-eslint/parser`, working around ts-jest's `node16`
+ * resolver — full reasoning and the `ts-jest` pin it shares with `@casl/ability`:
+ * `docs/reference/tests.md#why-ts-jest-stays-pinned-at-29-4-9`.
  */
 declare module '@typescript-eslint/parser' {
     export * from '../../../../node_modules/@typescript-eslint/parser/dist/index';
