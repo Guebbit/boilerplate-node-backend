@@ -4,9 +4,9 @@
  * `sk_...` bearer token authenticate a request the way a JWT does.
  *
  * Owns:        the `apikeys` collection, outright — no other module reads or writes it.
- * Reaches far: registers `kernel/authentication.ts`'s `CredentialResolver` port at import time,
- *              the same "module fills a kernel port" shape `account/module.ts`'s
- *              `registerAuthResolver` already establishes.
+ * Reaches far: registers `kernel/authentication.ts`'s `CredentialResolver` port from its own
+ *              `onRegistered` hook, the same "module fills a kernel port" shape
+ *              `account/module.ts`'s `registerAuthResolver` already establishes.
  *
  * See: docs/modules/api-keys.md
  */
@@ -18,13 +18,21 @@ import { router } from './routes';
 import { fromBearerToken } from './services/resolver';
 import { findOwnApiKeys } from './services/api-keys';
 
-registerCredentialResolver({ fromBearerToken });
+/**
+ * Installs the credential resolver once this module is known to be enabled (D15) — registering it
+ * at import time would let anything that merely imports this file (a type, a test) enable
+ * `sk_...` authentication for the whole app.
+ */
+const onRegistered = (): void => {
+    registerCredentialResolver({ fromBearerToken });
+};
 
 /** This module's manifest entry. */
 export default {
     name: 'api-keys',
     basePath: '/api-keys',
     routes: router,
+    onRegistered,
     locales: path.join(__dirname, 'locales'),
     /**
      * The permission keys this module introduces. Deleting the module deletes them:

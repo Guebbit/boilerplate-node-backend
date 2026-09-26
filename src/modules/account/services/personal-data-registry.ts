@@ -2,9 +2,9 @@
  * @module
  * The `personalData` registry, as this module sees it: supplied once at boot, never assembled
  * here. `account` cannot import `src/modules/*` to collect every module's manifest entry itself —
- * the same wall `@modules/locales/services/translatables.ts` is built around — so `src/app.ts`
- * builds the list with `resolvePersonalDataSections(enabledModules)` and hands it in, the one
- * direction data may cross this boundary.
+ * the same wall `@modules/locales/services/translatables.ts` is built around — so `../module.ts`'s
+ * `onRegistered` hook builds the list with `resolvePersonalDataSections(modules)`, once every
+ * enabled module is known, and hands it in here.
  */
 
 import type { PersonalDataSection } from '@kernel/registry';

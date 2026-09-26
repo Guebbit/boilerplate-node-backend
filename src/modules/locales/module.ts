@@ -12,7 +12,7 @@
  */
 
 import path from 'node:path';
-import type { AppModule } from '@kernel/registry';
+import { type AppModule, resolveTranslatables } from '@kernel/registry';
 import { registerLocaleOverrideProvider } from '@infrastructure/i18n';
 import { registerTranslationPort } from '@kernel/translation';
 import { router } from './routes';
@@ -21,43 +21,42 @@ import { translationRepository } from './repository';
 import { planForPort, writeForPort } from './services/translations';
 
 /**
- * Hands the app tier the one function it needs from this module: `resolveTranslatables`'s result,
- * for a caller that cannot reach `services/index.ts` directly — this file, alongside a possible
- * `index.ts`, is the only path `depcruise`'s `module-internals-are-private` rule lets anything
- * outside a module reach into.
- */
-export const { setTranslatables } = localeService;
-
-/*
- * The backend tenant's share of this module's collection, handed to `@infrastructure/i18n` so an
- * override typed into the admin screens reaches `t()`.
+ * Everything this module installs once every enabled module is known (D15): the two kernel ports
+ * it owns, plus its own `translatables` lookup — the app tier used to build that lookup and hand
+ * it in by name, which meant deleting this module also meant editing `app.ts`.
  *
- * Registered HERE, at import time, rather than declared as a manifest field — the same way
- * `audit-logs` installs its sink. A field only one module can fill is one `app.ts` would have to
- * go looking for. Touches no database: `readApiOverrides` only runs on the refresh.
+ * Ports are registered HERE rather than at import time, so importing this file (a type, a test)
+ * no longer installs them — only a module `registerModules` actually runs `onRegistered` for does.
+ *
+ * @param modules - every enabled module, this module's own included
  */
-registerLocaleOverrideProvider(() => localeService.readApiOverrides());
+const onRegistered = (modules: readonly AppModule[]): void => {
+    // The backend tenant's share of this module's collection, handed to `@infrastructure/i18n` so
+    // an override typed into the admin screens reaches `t()`. Touches no database:
+    // `readApiOverrides` only runs on the refresh.
+    registerLocaleOverrideProvider(() => localeService.readApiOverrides());
 
-/*
- * This module's implementation of the translation port, registered at import time the same way —
- * `resolve` is what a read-path decorator batches a page against, `removeAll` is what a product's
- * HARD delete calls to take its translations with it in the same operation, `search` is what a
- * free-text search unions with an entity's own (fallback-language) match, `plan`/`write` are what
- * a caller with its own entity to write (`productService.write`) validates and applies the
- * translations half of its request through, and `readAll` is what that same caller's admin read
- * populates its language tabs from.
- */
-registerTranslationPort({
-    resolve: translationRepository.resolveEntityFields,
-    removeAll: translationRepository.removeEntityTranslations,
-    search: translationRepository.findEntityIdsByFieldMatch,
-    plan: planForPort,
-    write: writeForPort,
-    readAll: (entityType, entityId) =>
-        translationRepository
-            .findEntityTranslations(entityType, entityId)
-            .then((rows) => new Map(rows.map((row) => [row.locale, row.fields])))
-});
+    // This module's implementation of the translation port — `resolve` is what a read-path
+    // decorator batches a page against, `removeAll` is what a product's HARD delete calls to take
+    // its translations with it in the same operation, `search` is what a free-text search unions
+    // with an entity's own (fallback-language) match, `plan`/`write` are what a caller with its
+    // own entity to write (`productService.write`) validates and applies the translations half of
+    // its request through, and `readAll` is what that same caller's admin read populates its
+    // language tabs from.
+    registerTranslationPort({
+        resolve: translationRepository.resolveEntityFields,
+        removeAll: translationRepository.removeEntityTranslations,
+        search: translationRepository.findEntityIdsByFieldMatch,
+        plan: planForPort,
+        write: writeForPort,
+        readAll: (entityType, entityId) =>
+            translationRepository
+                .findEntityTranslations(entityType, entityId)
+                .then((rows) => new Map(rows.map((row) => [row.locale, row.fields])))
+    });
+
+    localeService.setTranslatables(resolveTranslatables([...modules]));
+};
 
 /** This module's manifest entry: routes and its own locales. */
 export default {
@@ -78,6 +77,7 @@ export default {
         'translations.any.update'
     ],
     routes: router,
+    onRegistered,
     /*
      * Its own copy, for its own error messages: without it, the module that owns the translation
      * feature is the one place in the repo where a 409 on a key collision reaches admins in

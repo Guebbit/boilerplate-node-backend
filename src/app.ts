@@ -34,14 +34,8 @@ import {
 import { markServerListening } from '@infrastructure/runtime/readiness';
 import { bootI18n, refreshLocaleOverrides, startLocaleOverrideRefresh } from '@infrastructure/i18n';
 
-import {
-    registerModules,
-    resolveTranslatables,
-    resolvePersonalDataSections
-} from '@kernel/registry';
+import { registerModules } from '@kernel/registry';
 import { enabledModules } from './modules';
-import { setTranslatables } from '@modules/locales/module';
-import { setPersonalDataSections } from '@modules/account/module';
 import { APP_NON_MODULE_CHECKS } from '@app/required-config';
 
 import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
@@ -182,29 +176,15 @@ export const stopServer = () => {
 };
 
 /*
- * Validate every module's required config and attach its domain-event handlers before the first
- * route exists. A missing, too-short or still-placeholder variable stops the boot here, every
- * offending name reported at once, rather than surfacing as a 500 on whichever request needs it
- * first.
+ * Validate every module's required config, attach its domain-event handlers, then let each pull
+ * whatever cross-module lookup it needs (`locales`' `translatables`, `account`'s `personalData`
+ * sections) through its own `onRegistered` hook (D15) — before the first route exists. A missing,
+ * too-short or still-placeholder variable stops the boot here, every offending name reported at
+ * once, rather than surfacing as a 500 on whichever request needs it first. Here, not inside
+ * `startServer()`: every one of these facts must be validatable the moment this file is imported,
+ * not only once the process actually starts listening.
  */
 registerModules(enabledModules, APP_NON_MODULE_CHECKS);
-
-/*
- * `locales` cannot collect every module's `translatables` entry itself — the same wall that keeps
- * `kernel/translation.ts`'s translation port free of any `src/modules/*` import — so the app tier
- * builds the lookup and hands it in, the one direction data may cross that boundary. Alongside
- * `registerModules` above, not inside `startServer()`: a translation write must be validatable the
- * moment this file is imported, the same as every other module-registry fact, not only once the
- * process actually starts listening.
- */
-setTranslatables(resolveTranslatables(enabledModules));
-
-/*
- * Same reasoning, same shape, for `account`'s data export: it cannot import every sibling to
- * collect a `POST /account/export` section, so the app tier resolves the list once here and hands
- * it in.
- */
-setPersonalDataSections(resolvePersonalDataSections(enabledModules));
 
 /*
  * The middleware stack, in the order a request travels it.

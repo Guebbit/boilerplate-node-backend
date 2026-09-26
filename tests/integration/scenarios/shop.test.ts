@@ -28,7 +28,7 @@ import { app } from '../../../src/app';
 import { buildScenario } from '@scenarios/index';
 import { assertScenarioGuarantees } from '@scenarios/check';
 import { resolveTranslatables } from '@kernel/registry';
-import { setTranslatables } from '@modules/locales/module';
+import { localeService } from '@modules/locales';
 import { productModel, toProduct } from '@modules/products/model';
 import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
@@ -81,8 +81,8 @@ let subjects: Readonly<Record<string, string>>;
 // `products.seed()` writes its rows' `translations` through the same write surface
 // `productService.writeCreate` does — see `scenarios/apply.ts`'s identical call for why the
 // manifest has to be built from `enabledModules` and handed in by hand here too.
-beforeAll(() => setTranslatables(resolveTranslatables(enabledModules)));
-afterAll(() => setTranslatables({}));
+beforeAll(() => localeService.setTranslatables(resolveTranslatables(enabledModules)));
+afterAll(() => localeService.setTranslatables({}));
 
 beforeAll(async () => {
     subjects = await buildScenario('shop', app);
