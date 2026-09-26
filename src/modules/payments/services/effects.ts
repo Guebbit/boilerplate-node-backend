@@ -12,16 +12,10 @@ import { inventoryService } from '@modules/inventory';
 import { OrderStatus } from '@types';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
+import { paymentEffectGraceMinutes } from '../config';
 
 /** How many payments one sweep pass retries before asking to be run again. */
 const SWEEP_BATCH_SIZE = 200;
-
-/**
- * A marker at least this old is safe to act on — younger than that, it may belong to a settlement
- * still between its two writes, and the sweep exists for the crash case, not to race the normal
- * one. Generous next to the 5-minute schedule: even a slow settlement finishes in seconds.
- */
-const MIN_MARKER_AGE_MINUTES = 1;
 
 /**
  * Order statuses whose payment has (or should have) already taken the held stock — the commit is
@@ -67,7 +61,7 @@ const retryOne = (payment: PaymentDocument): Promise<void> => {
  * @returns how many payments were swept
  */
 export const retryPendingEffects = (): Promise<number> => {
-    const cutoff = new Date(Date.now() - MIN_MARKER_AGE_MINUTES * 60_000);
+    const cutoff = new Date(Date.now() - paymentEffectGraceMinutes() * 60_000);
     return paymentRepository
         .findWithPendingEffects(cutoff, SWEEP_BATCH_SIZE)
         .then((payments) =>
