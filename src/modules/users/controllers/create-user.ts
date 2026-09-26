@@ -7,7 +7,6 @@
 
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
-import { t } from '@infrastructure/i18n';
 import { userService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -49,8 +48,8 @@ export const createUser = (
 
     /**
      * `false`: password is never required at this schema layer. A create may satisfy it via
-     * `sendSetupEmail` instead — checked separately just below, since the schema can't express
-     * that either/or on its own.
+     * `sendSetupEmail` instead — the either/or the schema can't express, enforced by
+     * `userService.create` itself instead of here.
      */
     const errors = userService.validateData(
         {
@@ -77,15 +76,6 @@ export const createUser = (
         User,
         'imageUrl' | 'role' | 'active' | 'thumbnailUrl'
     > & { pendingImageKey?: string };
-
-    // Neither a password nor a way to get one to the user: `userService.create` would fill
-    // the field with a value nobody is ever told and leave the account permanently unusable.
-    // No cast: `password` is already on every branch of `request.body`'s own generated type.
-    const { password } = request.body ?? {};
-    if (!password && !sendSetupEmail) {
-        rejectResponse(response, 422, [t('users.field-password-or-setup-required')]);
-        return deleteUpload().catch(() => undefined);
-    }
 
     return userService
         .create(

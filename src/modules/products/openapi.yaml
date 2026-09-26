@@ -162,7 +162,47 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-        # Merges, unlike a replacing PUT — see `UpdateProductRequest.translations`.
+        put:
+            tags: [Products]
+            summary: Replace product
+            description: |
+                Replaces the product identified by `{id}` in the path (RFC 9110 §9.3.4) — every
+                writable scalar field is required, since none of them but `taxClass`/`weight`/
+                `imageUrl` has a legal "cleared" state, and an omitted one of those three is
+                cleared, not left alone. `translations` keeps the same per-locale upsert/delete
+                semantics `PATCH` uses (see its own description): a translations table is keyed
+                sub-resources, not a single field a "whole-body replace" can meaningfully null out
+                — a caller cannot be expected to enumerate every locale that currently exists just
+                to keep it.
+            operationId: replaceProductById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceProductRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceProductRequestMultipart'
+            responses:
+                '200':
+                    description: Replaced product
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `uploadLimiter` sits in front of this route — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        # Merges, unlike the replacing PUT above — see `UpdateProductRequest.translations`.
         patch:
             tags: [Products]
             summary: Edit product
@@ -698,6 +738,90 @@ components:
                     items:
                         type: string
 
+        # PUT /products/{id} — RFC 9110 §9.3.4: every scalar field the resource has is required,
+        # since none of them but taxClass/weight/imageUrl has a legal "cleared" state; those three
+        # stay optional-nullable, same as PATCH. `translations` keeps PATCH's own per-locale
+        # upsert/delete semantics — see the PUT operation's own description for why.
+        ReplaceProductRequest:
+            type: object
+            additionalProperties: false
+            required: [price, translations, active, requiresShipping, categories, tags]
+            properties:
+                translations:
+                    $ref: '#/components/schemas/ProductTranslationsWrite'
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Gross — VAT included. Same convention as `Product.price`.
+                # `null` clears the class back to the shop's standard rate. Omitted on a PUT is
+                # the same as `null` — see the operation description.
+                taxClass:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                active:
+                    type: boolean
+                requiresShipping:
+                    type: boolean
+                weight:
+                    type: integer
+                    minimum: 0
+                    nullable: true
+                    description: Grams. Absent counts as 0 for shipping-method filtering.
+                imageUrl:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
+        ReplaceProductRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [price, translations, active, requiresShipping, categories, tags]
+            properties:
+                translations:
+                    type: string
+                    description: JSON-encoded `ProductTranslationsWrite`.
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Gross — VAT included. Same convention as `Product.price`.
+                taxClass:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                active:
+                    type: boolean
+                requiresShipping:
+                    type: boolean
+                weight:
+                    type: integer
+                    minimum: 0
+                    nullable: true
+                    description: Grams. Absent counts as 0 for shipping-method filtering.
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional product image
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
         # PATCH /products/{id} — every field optional, since a merge may touch just one of them.
         # No `id`: it travels in the path.
         UpdateProductRequest:
@@ -711,8 +835,12 @@ components:
                     format: double
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
+                # `null` clears the class back to the shop's standard rate. Omitted leaves the
+                # stored value alone.
                 taxClass:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 active:
                     type: boolean
                 requiresShipping:
@@ -754,7 +882,9 @@ components:
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 active:
                     type: boolean
                 requiresShipping:

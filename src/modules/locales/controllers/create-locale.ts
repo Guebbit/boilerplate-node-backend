@@ -1,16 +1,18 @@
 /**
  * @module
- * POST /locales and PUT /locales/:locale (admin) controllers — register a language in the
- * dynamic tier, and edit the one thing about it that changes. Neither teaches the API to
- * answer in a language: `listSupportedLocales()` is read once per worker and i18next
- * registers its resources from it at boot, not per-request, so the negotiated locale and
- * the resolvable one can't disagree.
+ * Controller for `POST /locales` (admin) — register a language in the dynamic tier. The edit half
+ * lives in `./update-locale.ts`, built on the shared PUT/PATCH factory; removal lives in
+ * `./delete-locale.ts`.
+ *
+ * Registering a language does not teach the API to answer in it: `listSupportedLocales()` is read
+ * once per worker and i18next registers its resources from it at boot, not per-request, so the
+ * negotiated locale and the resolvable one can't disagree.
  */
 
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { CreateLocaleBody, UpdateLocaleBody } from '@api/schemas.zod';
-import type { CreateLocaleRequest, Language, UpdateLocaleRequest } from '@types';
+import { CreateLocaleBody } from '@api/schemas.zod';
+import type { CreateLocaleRequest, Language } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
@@ -48,30 +50,4 @@ export const createLocale = (
             return successResponse<Language>(response, result.data.toJSON() as Language, 201);
         })
         .catch(catchAs(response, 'createLocale'));
-};
-
-/**
- * PUT /locales/:locale (admin)
- * Edit a language's display names, direction or visibility. The tag is not editable —
- * every entry references it, so changing it would rename a whole dictionary.
- */
-export const updateLocale = (
-    request: Request<{ locale: string }, unknown, UpdateLocaleRequest>,
-    response: Response
-) => {
-    const parseResult = UpdateLocaleBody.extend({
-        name: displayName.optional(),
-        nativeName: displayName.optional()
-    }).safeParse(request.body);
-    if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
-
-    return localeService
-        .updateLanguage(request.params.locale, parseResult.data, callerContextOf(request))
-        .then((result) => {
-            if (refused(response, result)) return;
-
-            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
-            return successResponse<Language>(response, result.data.toJSON() as Language);
-        })
-        .catch(catchAs(response, 'updateLocale'));
 };

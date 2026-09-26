@@ -74,18 +74,18 @@ survives a move off compose unchanged (a `CronJob` on Kubernetes, a systemd time
 the same `scripts/ops/reap-*`/`sweep:*` entry points every one of them already documents as "meant to run
 periodically", via `scripts/run-script.ts`.
 
-| Job                              | Schedule (UTC) | Leased | What it does                                                                                            |
-| -------------------------------- | -------------- | ------ | ------------------------------------------------------------------------------------------------------- |
-| `npm run reap:quarantine`        | 02:00 nightly  | No     | Deletes quarantined upload files past their retention window.                                           |
-| `npm run reap:inactive-accounts` | 02:05 nightly  | Yes    | Warns, then soft-, then hard-deletes an account inactive past the threshold. Disabled by default.       |
-| `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed.                               |
-| `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                         |
+| Job                              | Schedule (UTC) | Leased | What it does                                                                                              |
+| -------------------------------- | -------------- | ------ | --------------------------------------------------------------------------------------------------------- |
+| `npm run reap:quarantine`        | 02:00 nightly  | No     | Deletes quarantined upload files past their retention window.                                             |
+| `npm run reap:inactive-accounts` | 02:05 nightly  | Yes    | Warns, then soft-, then hard-deletes an account inactive past the threshold. Disabled by default.         |
+| `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed.                                 |
+| `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                           |
 | `npm run sweep:order-effects`    | 02:20 nightly  | No     | Re-announces `ORDER_REFUND_OWED` for a refund the event bus's one delivery attempt did not carry through. |
-| `npm run reap:invoices`          | 02:25 nightly  | No     | Sweeps the invoice cache: an orphaned file with no order left to name it, and any file past its TTL.    |
-| `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.        |
-| `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.   |
-| `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing.                        |
-| `npm run sweep:reservations`     | every 5 min    | No     | Expires a stale checkout hold and cancels the order behind it.                                          |
+| `npm run reap:invoices`          | 02:25 nightly  | No     | Sweeps the invoice cache: an orphaned file with no order left to name it, and any file past its TTL.      |
+| `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.          |
+| `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.     |
+| `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing.                          |
+| `npm run sweep:reservations`     | every 5 min    | No     | Expires a stale checkout hold and cancels the order behind it.                                            |
 
 `docker/crontab` and the seven nightly jobs above are staggered five minutes apart so they do not all
 land on the connection pool at once — each job's own header in `scripts/ops/` has the full reasoning.

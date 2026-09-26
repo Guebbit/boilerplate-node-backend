@@ -79,6 +79,8 @@ describe('Replace/Update schema parity', () => {
             'Account',
             'Address',
             'FeedbackRequestStatus',
+            'Locale',
+            'Product',
             'UserById'
         ]);
     });

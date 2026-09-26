@@ -307,7 +307,9 @@ const findConfirmable = (
 const settleFound = (
     payment: PaymentDocument,
     allowed: readonly PaymentStatus[],
-    providerCall: (payment: PaymentDocument & { providerRef: string }) => Promise<ProviderPaymentState>
+    providerCall: (
+        payment: PaymentDocument & { providerRef: string }
+    ) => Promise<ProviderPaymentState>
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> => {
     const found = findConfirmable(payment, allowed);
     if ('success' in found) return Promise.resolve(found);
@@ -331,7 +333,9 @@ const settleVia = (
     authContext: AuthContext | undefined,
     context: CallerContext,
     allowed: readonly PaymentStatus[],
-    providerCall: (payment: PaymentDocument & { providerRef: string }) => Promise<ProviderPaymentState>
+    providerCall: (
+        payment: PaymentDocument & { providerRef: string }
+    ) => Promise<ProviderPaymentState>
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository
         .findByIdScoped(paymentId, callerScope(authContext))

@@ -19,6 +19,7 @@ import type {
     Product,
     ProductAdmin,
     ProductTranslationFields,
+    TaxClass,
     UpsertTranslationsRequest
 } from '@types';
 import {
@@ -306,15 +307,17 @@ export const create = (
  */
 export const update = (
     product: ProductDocument,
-    // `imageUrl`/`weight` widened to accept `null`, since the domain type
-    // `Product` states them as always a real value (`imageUrl`) or absent-means-zero (`weight`),
-    // never explicitly cleared. `imageUrl: null` resolves to {@link DEFAULT_PRODUCT_IMAGE_URL}
-    // below rather than ever reaching the document as a null; `weight: null` genuinely unsets it.
-    data: Partial<Omit<Product, 'id' | 'imageUrl' | 'weight'>> & {
+    // `imageUrl`/`weight`/`taxClass` widened to accept `null`, since the domain type
+    // `Product` states them as always a real value (`imageUrl`) or absent-means-zero/standard
+    // (`weight`, `taxClass`), never explicitly cleared. `imageUrl: null` resolves to
+    // {@link DEFAULT_PRODUCT_IMAGE_URL} below rather than ever reaching the document as a null;
+    // `weight`/`taxClass: null` genuinely unset them.
+    data: Partial<Omit<Product, 'id' | 'imageUrl' | 'weight' | 'taxClass'>> & {
         /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
         pendingImageKey?: string;
         imageUrl?: string | null;
         weight?: number | null;
+        taxClass?: TaxClass | null;
     }
 ): Promise<ProductDocument> => {
     // Apply incoming field changes
@@ -336,7 +339,8 @@ export const update = (
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
     // `null` clears a recorded weight back to unset — $unset on save.
     if (data.weight !== undefined) product.weight = clearedOrValue(data.weight);
-    if (data.taxClass !== undefined) product.taxClass = data.taxClass;
+    // `null` clears the class back to the shop's standard rate — $unset on save, same as weight.
+    if (data.taxClass !== undefined) product.taxClass = clearedOrValue(data.taxClass);
     if (data.requiresShipping !== undefined) product.requiresShipping = data.requiresShipping;
 
     // If a new image was uploaded, update the url, thumbnail and pending key together — see
@@ -364,11 +368,12 @@ export const update = (
  */
 export const updateById = (
     id: string,
-    // `imageUrl`/`weight` widened to accept `null` — see `update`'s own docblock.
-    data: Partial<Omit<Product, 'id' | 'imageUrl' | 'weight'>> & {
+    // `imageUrl`/`weight`/`taxClass` widened to accept `null` — see `update`'s own docblock.
+    data: Partial<Omit<Product, 'id' | 'imageUrl' | 'weight' | 'taxClass'>> & {
         pendingImageKey?: string;
         imageUrl?: string | null;
         weight?: number | null;
+        taxClass?: TaxClass | null;
     },
     context: CallerContext
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>

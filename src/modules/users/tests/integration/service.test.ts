@@ -430,8 +430,14 @@ describe('userService.create', () => {
         it('fills the field with something the caller was never told, rather than leaving it empty', async () => {
             // `password` is `required: true` at the Mongoose layer (see `./model`) regardless of
             // what the contract allows, so a create with no password still has to write SOMETHING.
+            // `sendSetupEmail: true` is what makes an absent password valid input at all — see the
+            // rejection case below (T13).
             const user = await expectCreated(
-                { email: 'no-password@example.com', username: 'nopassworduser' },
+                {
+                    email: 'no-password@example.com',
+                    username: 'nopassworduser',
+                    sendSetupEmail: true
+                },
                 callerContextAs('admin')
             );
 
@@ -440,17 +446,23 @@ describe('userService.create', () => {
             expect(stored?.password).not.toBe('');
         });
 
-        it('does not emit USER_SETUP_REQUESTED when sendSetupEmail is not set', async () => {
+        it('is refused with 422 when there is neither a password nor a way to set one (T13)', async () => {
+            // Previously enforced only in the controller (`create-user.ts`) — a caller reaching
+            // `userService.create` directly could still produce an account nobody can ever log
+            // into. The invariant now lives where every caller has to cross it.
             const seen: string[] = [];
             onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
                 seen.push(userId);
             });
 
-            await expectCreated(
+            const result = await userService.create(
                 { email: 'no-setup@example.com', username: 'nosetupuser' },
                 callerContextAs('admin')
             );
 
+            expect(result.success).toBe(false);
+            expect((result as ResponseReject).status).toBe(422);
+            expect(await userRepository.findOne({ email: 'no-setup@example.com' })).toBeNull();
             expect(seen).toEqual([]);
         });
 

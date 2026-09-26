@@ -308,31 +308,10 @@ const armCacheWrite = (
 
 /**
  * Set every cache-control header this middleware owns, and decide whether the request is even a
- * candidate for the Redis lookup {@link serveOrArm} does next.
- *
- * Two throws guard against a mounting mistake, not a runtime condition:
- *   `noStore` already forbade caching. Left unchecked, the `Cache-Control` set below would
- *     REPLACE that header rather than merge — exactly how `GET /account` once cached a caller's
- *     profile for an hour behind a router-wide no-store mount.
- *   `browserRevalidate` on a POST. RFC 9110 makes a POST response browser-cacheable only under
- *     conditions nothing here meets, so there would be nothing for the browser to revalidate.
- *
- * `Cache-Control` itself: a cached POST (`POST /x/search`, keyed same as its GET twin) is a
- * SERVER-side arrangement only — the wire always says `no-store` for it, since a shared cache
- * holding a POST response could answer a later POST from it, including a real write on some
- * other route. A cacheable GET gets `max-age`/`stale-*` (fixed constants — see their
- * declarations above; a shared cache in front of this server is what absorbs a guest-scope
- * stampede) or `no-cache` when the route asked for `browserRevalidate` instead.
- *
- * The two `Vary` headers: `Authorization`, because `getAuth` derives `authContext` from it alone
- * — without this, a shared cache could serve one anonymous response back to an admin (same class
- * of bug `GET /account` had). `Accept-Language`, because `attachLocale` already sets it and a
- * route reaching this by another path should still declare it.
- *
- * `cacheScope === undefined` (this caller sees more than the shared answer, per `options.scopeKey`)
- * answers `private, no-cache` regardless of `browserRevalidate` — {@link serveOrArm} is about to
- * bypass Redis for this same request, and a shared/browser cache must not store this ONE
- * caller's wider answer as if it were the generic one.
+ * candidate for the Redis lookup {@link serveOrArm} does next. The two throws guard a mounting
+ * mistake (`noStore` already set, or `browserRevalidate` on a POST), not a runtime condition —
+ * see `docs/tools/redis-cache.md#response-headers` for the full reasoning behind every header set
+ * here and the two throws.
  *
  * @param request - decides GET vs POST framing
  * @param response - headers are set on this response; `noStore` is read from it too

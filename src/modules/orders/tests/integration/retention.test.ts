@@ -9,7 +9,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, toOrderItem, detachOrderUserId } from '@modules/orders/tests/factories';
 import { orderRepository } from '../../repository';
 import { orderService } from '@modules/orders/services';
 import { userService } from '@modules/users';
@@ -46,6 +46,42 @@ describe('orders — detach on account erasure', () => {
             (reloaded!.anonymizeAfter!.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
         expect(daysAhead).toBeGreaterThan(6.9);
         expect(daysAhead).toBeLessThan(7.1);
+    });
+
+    it('runs the clock from the ORDER, not from today (B17)', async () => {
+        process.env.NODE_ORDER_PII_RETENTION_DAYS = '7';
+        const user = await createUser();
+        const product = await createProduct();
+        // Placed 5 days ago: due in ~2 more days, not a fresh 7 counted from the erasure.
+        const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            createdAt: fiveDaysAgo
+        });
+
+        await userService.remove(user, true);
+
+        const reloaded = await orderRepository.findById(String(order._id));
+        const daysAhead =
+            (reloaded!.anonymizeAfter!.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
+        expect(daysAhead).toBeGreaterThan(1.9);
+        expect(daysAhead).toBeLessThan(2.1);
+    });
+
+    it('an order already past its own window is due immediately, not re-extended (B17)', async () => {
+        process.env.NODE_ORDER_PII_RETENTION_DAYS = '7';
+        const user = await createUser();
+        const product = await createProduct();
+        const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            createdAt: twentyDaysAgo
+        });
+
+        await userService.remove(user, true);
+
+        const reloaded = await orderRepository.findById(String(order._id));
+        // `$max(now, createdAt + days)` — an order already past its window lands at "now", never
+        // a fresh window measured from the erasure.
+        expect(reloaded!.anonymizeAfter!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
     });
 
     it('the order itself survives — it is the invoice, not the account', async () => {
@@ -95,9 +131,10 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
                 zip: 'SW1A',
                 country: 'GB',
                 phone: '+44 20 0000 0000'
-            }
+            },
+            notes: 'Leave with the concierge, 2nd floor'
         });
-        await orderRepository.detachUserId(String(user._id), new Date(Date.now() - 1000));
+        await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
 
         const scrubbed = await orderService.anonymizeDueOrders();
 
@@ -111,13 +148,15 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         expect(reloaded!.shippingAddress!.city).toBe('London');
         expect(reloaded!.shippingAddress!.country).toBe('GB');
         expect(reloaded!.anonymizeAfter).toBeUndefined();
+        // B17: the buyer's free-text notes are personal data too, and must not survive the scrub.
+        expect(reloaded!.notes).toBeUndefined();
     });
 
     it('leaves an order with no shippingAddress at all working, scrubbing only email', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        await orderRepository.detachUserId(String(user._id), new Date(Date.now() - 1000));
+        await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
 
         await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
 
@@ -130,7 +169,7 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        await orderRepository.detachUserId(String(user._id), new Date(Date.now() + 100_000));
+        await detachOrderUserId(String(user._id), new Date(Date.now() + 100_000));
 
         await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
 
@@ -142,7 +181,7 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         const user = await createUser();
         const product = await createProduct();
         await createOrder(user, [toOrderItem(product, 1)]);
-        await orderRepository.detachUserId(String(user._id), new Date(Date.now() - 1000));
+        await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
         await orderService.anonymizeDueOrders();
 
         // `anonymizeAfter` is unset by the first sweep, so a second run finds nothing due.

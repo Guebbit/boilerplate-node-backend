@@ -18,7 +18,8 @@ import { localeService } from './services';
 import { getLocales, getLocaleDictionary } from './controllers/get-locales';
 import { getLocaleMessages } from './controllers/get-locale-messages';
 import { getLocaleTenants } from './controllers/get-locale-tenants';
-import { createLocale, updateLocale } from './controllers/write-locales';
+import { createLocale } from './controllers/create-locale';
+import { replaceLocale, updateLocale } from './controllers/update-locale';
 import { deleteLocale } from './controllers/delete-locale';
 import { getLocaleEntries } from './controllers/get-locale-entries';
 import {
@@ -29,7 +30,10 @@ import {
 } from './controllers/write-locale-entries';
 import { deleteLocaleEntry } from './controllers/delete-locale-entry';
 import { getEntityTranslations } from './controllers/get-entity-translations';
-import { upsertEntityTranslations } from './controllers/upsert-entity-translations';
+import {
+    replaceEntityTranslations,
+    upsertEntityTranslations
+} from './controllers/write-entity-translations';
 
 /**
  * Express router mounted at `/locales` — see the module header for the ordering and guard rules.
@@ -82,7 +86,16 @@ router.post(
     invalidateCache(['locales']),
     createLocale
 );
+// PUT /locales/:locale (replace) and PATCH /locales/:locale (merge).
 router.put(
+    '/:locale',
+    getAuth,
+    isAuthOrCredential,
+    requirePermission('locales.any.update'),
+    invalidateCache(['locales']),
+    replaceLocale
+);
+router.patch(
     '/:locale',
     getAuth,
     isAuthOrCredential,
@@ -166,6 +179,14 @@ router.get(
     isAuthOrCredential,
     requirePermission('translations.any.read'),
     getEntityTranslations
+);
+// PUT replaces (a stored locale not sent is deleted), PATCH merges.
+router.put(
+    '/translations/:entityType/:id',
+    getAuth,
+    isAuthOrCredential,
+    requirePermission('translations.any.update'),
+    replaceEntityTranslations
 );
 router.patch(
     '/translations/:entityType/:id',

@@ -59,6 +59,10 @@ export const findOwnApiKeys = (userId: string): Promise<ApiKey[]> =>
         MAX_CONFIGURED_PAGE_SIZE
     );
 
+/** What a hard account deletion owes this collection — see `module.ts`'s subscription. */
+export const apiKeysDeleteByUserId = (userId: string): Promise<void> =>
+    apiKeyRepository.deleteByUserId(userId);
+
 /** List this tenant's credentials, newest first. Never returns a secret — see `model.ts`'s transform. */
 export const list = (
     context: TenantCallerContext,

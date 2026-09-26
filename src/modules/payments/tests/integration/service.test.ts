@@ -409,9 +409,14 @@ describe('refund on cancel', () => {
             );
             await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
             // Simulate a payment made under a provider this build no longer registers.
-            await paymentRepository.updateStatusIfIn(String(order._id), ['succeeded'], 'succeeded', {
-                provider: retiredProvider
-            });
+            await paymentRepository.updateStatusIfIn(
+                String(order._id),
+                ['succeeded'],
+                'succeeded',
+                {
+                    provider: retiredProvider
+                }
+            );
 
             const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
             await orderService.cancelById(String(order._id), auth(user));
@@ -1043,9 +1048,7 @@ describe('refundByOrder', () => {
         const retried = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
 
         expect(retried.success).toBe(true);
-        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
-            'refunded'
-        );
+        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe('refunded');
         refundSpy.mockRestore();
     });
 });

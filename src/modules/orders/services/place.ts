@@ -136,7 +136,8 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
         input.lines.map(({ item }) => ({ productId: item.productId, quantity: item.quantity })),
         input.shipping?.holdMinutes
     );
-    if (!outcome.held) return { ok: false, reason: 'insufficient-stock', shortfalls: outcome.shortfalls };
+    if (!outcome.held)
+        return { ok: false, reason: 'insufficient-stock', shortfalls: outcome.shortfalls };
 
     // Only spent once the hold is secured — a refused reserve above returns before this ever runs,
     // so a stock refusal no longer burns a sequential invoice number.
@@ -178,14 +179,16 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
 
         return { ok: true, order };
     } catch (error) {
-        await inventoryService.releaseForOrder(orderId.toHexString()).catch((releaseError: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Orders: could not release the hold for order ${orderId.toHexString()} after its write failed — left for the reservation sweep`,
-                error: releaseError
+        await inventoryService
+            .releaseForOrder(orderId.toHexString())
+            .catch((releaseError: unknown) => {
+                // Stryker disable all
+                logger.error({
+                    message: `Orders: could not release the hold for order ${orderId.toHexString()} after its write failed — left for the reservation sweep`,
+                    error: releaseError
+                });
+                // Stryker restore all
             });
-            // Stryker restore all
-        });
         throw error;
     }
 };

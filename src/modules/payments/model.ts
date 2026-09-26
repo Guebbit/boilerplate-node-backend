@@ -147,7 +147,10 @@ export const paymentSchema = new Schema<PaymentDocument>(
 // Backs `effects.ts#retryPendingEffects`'s own scan: which payments still owe an effect, oldest
 // first. `updatedAt` in the key (not just a query filter) is what lets the sweep skip a payment
 // this same second's settlement is still in the middle of, without a second index for that alone.
-paymentSchema.index({ pendingEffects: 1, updatedAt: 1 }, { name: 'payments_pendingEffects_updatedAt' });
+paymentSchema.index(
+    { pendingEffects: 1, updatedAt: 1 },
+    { name: 'payments_pendingEffects_updatedAt' }
+);
 
 /**
  * Normalizes a serialized payment: `_id` → `id`, drops `__v`, and strips `providerRef`. Owed to the

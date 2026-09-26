@@ -36,12 +36,12 @@ flowchart LR
 is otherwise terminal too, except for the one door `restockForOrder` opens onto `restocked` (B2).
 
 | Transition        | Called by                                                                | Counters                   | Ledger `reason` |
-| ----------------- | ------------------------------------------------------------------------- | --------------------------- | --------------- |
-| `reserveForOrder` | [checkout](./cart-checkout.md), admin order create                      | `reserved` +n              | `reserve`       |
+| ----------------- | ------------------------------------------------------------------------ | -------------------------- | --------------- |
+| `reserveForOrder` | [checkout](./cart-checkout.md), admin order create                       | `reserved` +n              | `reserve`       |
 | `commitForOrder`  | [`payments`](./payments.md) on confirm                                   | `onHand` −n, `reserved` −n | `commit`        |
 | `releaseForOrder` | [`orders`](./orders.md) on cancel                                        | `reserved` −n              | `release`       |
 | `releaseForOrder` | the sweep                                                                | `reserved` −n              | `expire`        |
-| `restockForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing | `onHand` +n                 | `restock`       |
+| `restockForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing | `onHand` +n                | `restock`       |
 
 **`restockForOrder` is never merged into `releaseForOrder`**, on purpose: the sweep only ever
 releases a stale HOLD, and folding restock into that same function would let it put a just-paid

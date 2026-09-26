@@ -279,7 +279,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      */
     findWithPendingEffects: (updatedBefore: Date, limit: number) =>
         paymentModel
-            .find({ pendingEffects: { $exists: true, $ne: [] }, updatedAt: { $lte: updatedBefore } })
+            .find({
+                pendingEffects: { $exists: true, $ne: [] },
+                updatedAt: { $lte: updatedBefore }
+            })
             .sort({ updatedAt: 1 })
             .limit(limit)
             .exec()
