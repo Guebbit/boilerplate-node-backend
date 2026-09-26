@@ -143,4 +143,17 @@ Per-suite numbers, so a doubling reads as a regression rather than as a mood:
 
 ## License
 
-AGPL-3.0. See [LICENSE](./LICENSE).
+AGPL-3.0-or-later. See [LICENSE](./LICENSE).
+
+Every site built on this backend is a network service, so AGPL §13 applies: if you modify it, you
+must offer everyone who interacts with it remotely a way to get the Corresponding Source of your
+modified version — not just to someone you hand a copy to. The paired frontend is shipped straight
+to browsers, so the same obligation covers it and the AGPL toolkits it bundles
+(`@guebbit/vue-toolkit`, `@guebbit/js-toolkit`).
+
+This binds _you_, the operator, not your users. It is not legal advice — some organisations forbid
+AGPL dependencies outright; check before adopting.
+
+The dev/production containers this repo composes carry their own licences, independent of the
+above: `mongo` (SSPL), `redis` (RSAL/SSPL), and Grafana Labs' own images — Grafana, Loki, Tempo,
+Alloy (AGPL). Prometheus and Alertmanager are unrelated CNCF projects, Apache-2.0.

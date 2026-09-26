@@ -2,7 +2,7 @@
     "name": "boilerplate-node-api-mongodb-mongoose",
     "version": "2.0.0",
     "main": "src/cluster.ts",
-    "license": "AGPLv3.0",
+    "license": "AGPL-3.0-or-later",
     "scripts": {
         "dev": "tsx watch src/cluster.ts",
         "dev:docker": "nodemon --legacy-watch --watch src --ext ts --exec 'tsx src/app.ts'",
