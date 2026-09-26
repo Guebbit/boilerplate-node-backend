@@ -126,6 +126,26 @@ put it straight back" on the order's status as read _after_ its own payment writ
 copy `markPaid` answered. Either the cancel's refund sees `succeeded`, or this re-read sees
 `cancelled`; the conditional `succeeded → refunded` write makes sure only one of them refunds.
 
+## Pending effects
+
+The `succeeded` write, the stock commit and clearing the marker that says which is still owed are
+three separate steps, and only the first is durable on its own. `settlePayment` sets
+`pendingEffects: ['commit']` in the SAME write that moves the payment to `succeeded`, then commits
+the order's held stock (`inventoryService.commitForOrder`) and clears the marker — on both the
+happy path and the "order lost" refund path.
+
+A crash between the status write and the clear (a dead process, a database hiccup on the order
+read or the commit itself) leaves a payment reading `succeeded` with nothing set aside for its
+order. Unlike a webhook, nothing redelivers a settlement that already answered its caller — so
+`npm run sweep:payment-effects` (`payments/services/effects.ts#retryPendingEffects`, every 5
+minutes, see `docs/reference/ops.md#scheduled-jobs`) is the only thing that ever retries it. It
+repeats the commit for any order still expecting one — safe, since claiming a hold is
+exactly-once — clears the marker for one that isn't (the order-lost path already refunded it), and
+leaves the marker standing on anything younger than a minute, so it never races a settlement still
+mid-flight.
+
+`pendingEffects` is internal bookkeeping, omitted from the wire the same way `providerRef` is.
+
 ## Status transitions
 
 `requires_confirmation` is entered once, by `POST /payments/intent`, and never again — nothing a

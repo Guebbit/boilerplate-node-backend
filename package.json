@@ -75,6 +75,7 @@
         "reap:payments": "tsx scripts/ops/reap-payments.ts",
         "sweep:order-effects": "tsx scripts/ops/sweep-order-effects.ts",
         "sweep:webhook-retries": "tsx scripts/ops/sweep-webhook-retries.ts",
+        "sweep:payment-effects": "tsx scripts/ops/sweep-payment-effects.ts",
         "refresh:breached-passwords": "tsx scripts/ops/refresh-breached-passwords.ts",
         "compose": "${CONTAINER_ENGINE:-podman} compose",
         "compose:restart": "npm run compose -- down && npm run compose -- up -d",

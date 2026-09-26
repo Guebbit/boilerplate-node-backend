@@ -13,6 +13,7 @@ import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService } from '@modules/orders';
+import { inventoryService } from '@modules/inventory';
 import {
     createIntent,
     confirmPayment,
@@ -21,9 +22,11 @@ import {
     applyWebhookSettlement,
     getForOrder,
     refundByOrder,
-    recordOfflinePayment
+    recordOfflinePayment,
+    retryPendingEffects
 } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
+import { withEnvironment } from '@tests/environment';
 import { FAKE_DECLINE_METHOD, fakePaymentProvider } from '@modules/payments/providers/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -493,6 +496,71 @@ describe('the confirm commits the order’s held units', () => {
         expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
+    });
+});
+
+/**
+ * B14: a crash between the `succeeded` write and the stock commit used to lose the commit
+ * forever — a redelivered webhook stops at the payment's own conditional write (already
+ * `succeeded`, so a retry moves nothing) and never reaches the commit again. The `pendingEffects`
+ * marker is what survives that crash, and `retryPendingEffects` is what acts on it.
+ */
+describe('B14 — a lost stock commit is retried, not lost', () => {
+    it('marks the commit still owed when it throws, and leaves the hold untouched', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
+            new Error('connection reset')
+        );
+
+        // The write to `succeeded` already landed by the time the commit throws — same as the
+        // real crash this guards against, this call reports the failure to its own caller.
+        await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('succeeded');
+        expect(payment!.pendingEffects).toEqual(['commit']);
+        // Nothing committed: the mocked failure stood in for the commit itself, before any
+        // counter moved.
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
+    });
+
+    it('finishes the commit and clears the marker on the next sweep', () =>
+        withEnvironment('NODE_PAYMENT_EFFECT_GRACE_MINUTES', '0', async () => {
+            const { user, product, order } = await placedOrder(10, 3);
+            jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
+                new Error('connection reset')
+            );
+            await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
+
+            expect(await retryPendingEffects()).toBe(1);
+
+            expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+            const payment = await paymentRepository.findByOrderId(String(order._id));
+            // `[]`, not `undefined`: Mongoose defaults an array path back to empty once `$unset`
+            // has removed it from storage — this is the cleared state, not a leftover value.
+            expect(payment!.pendingEffects).toEqual([]);
+
+            // A second pass finds nothing left to do — the marker is gone.
+            expect(await retryPendingEffects()).toBe(0);
+        }));
+
+    it('drops the marker without committing when the order is no longer payable', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
+            new Error('connection reset')
+        );
+        await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
+        await orderService.cancelById(String(order._id), auth(user));
+
+        await withEnvironment('NODE_PAYMENT_EFFECT_GRACE_MINUTES', '0', async () => {
+            expect(await retryPendingEffects()).toBe(1);
+        });
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.pendingEffects).toEqual([]);
+        // Cancelling already released what a commit never took — the sweep must not commit a
+        // sale for an order nobody can fulfil any more.
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
     });
 });
 

@@ -14,6 +14,7 @@
  */
 
 import { electronicFormatIBAN, isValidBIC, isValidIBAN } from 'ibantools';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 import {
     bankTransferBeneficiary,
     bankTransferBic,
@@ -65,3 +66,14 @@ export const validateBankTransferConfig = (): string[] => {
     if (bic && !isValidBIC(bic)) problems.push('NODE_BANK_TRANSFER_BIC');
     return problems;
 };
+
+/**
+ * How old a `pendingEffects` marker must be before `effects.ts#retryPendingEffects` will act on
+ * it. A settlement still between setting the marker and clearing it must never be raced by the
+ * sweep that exists only for the crash case — this is that buffer. Read per call, like
+ * `@modules/inventory`'s own config, so a change applies to the next sweep tick and a test can
+ * vary it per case.
+ * @returns the grace window in minutes
+ */
+export const paymentEffectGraceMinutes = (): number =>
+    environmentNumber('NODE_PAYMENT_EFFECT_GRACE_MINUTES', 1, 0);

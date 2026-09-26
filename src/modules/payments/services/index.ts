@@ -11,7 +11,8 @@
  *
  * `intent.ts` starts a payment, `settlement.ts` is {@link settlePayment} — the whole choreography,
  * reached from the webhook AND the browser-driven paths, since two copies would drift and drifted
- * copies commit inventory twice — `refunds.ts` is the one place money moves back out, `offline.ts`
+ * copies commit inventory twice — `refunds.ts` is the one place money moves back out, `effects.ts`
+ * retries the stock commit a settlement set out to do but died before finishing (B14), `offline.ts`
  * records money the provider never saw and settles it through the same choreography, `view.ts`
  * reads a payment back with its `actions`, `retention.ts` is erasure/export/the abandoned sweep,
  * `scope.ts` decides who may see what, and `lookup.ts` matches an admin-pasted RF reference back
@@ -26,6 +27,7 @@ import {
     applyWebhookSettlement
 } from './settlement';
 import { refundByOrder, refundForOrder } from './refunds';
+import { retryPendingEffects } from './effects';
 import { recordOfflinePayment } from './offline';
 import { getForOrder } from './view';
 import {
@@ -51,6 +53,7 @@ export {
     applyWebhookSettlement
 } from './settlement';
 export { performRefund, refundByOrder, refundForOrder, REFUNDABLE_PAYMENT_STATUS } from './refunds';
+export { retryPendingEffects } from './effects';
 export { recordOfflinePayment, type OfflinePaymentInput } from './offline';
 export { getForOrder, withActions } from './view';
 export {
@@ -73,6 +76,7 @@ export const paymentService = {
     getForOrder,
     refundForOrder,
     refundByOrder,
+    retryPendingEffects,
     recordOfflinePayment,
     getOrderByReference,
     detachUserId,

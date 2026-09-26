@@ -84,6 +84,7 @@ periodically", via `scripts/run-script.ts`.
 | `npm run reap:invoices`          | 02:25 nightly  | No     | Sweeps the invoice cache: an orphaned file with no order left to name it, and any file past its TTL.    |
 | `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.        |
 | `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.   |
+| `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing.                        |
 
 `docker/crontab` and the seven nightly jobs above are staggered five minutes apart so they do not all
 land on the connection pool at once — each job's own header in `scripts/ops/` has the full reasoning.
@@ -110,7 +111,7 @@ twice concurrently should wrap its work in `withLease` too.
 **Observability.** `scripts/run-script.ts` records every crontab job's outcome — `lastSuccessAt` on
 success, `lastError` on a throw — onto the same `leases` document `withLease` itself writes when a
 job also takes one; `GET /observability/health`'s `jobs` array reports the whole set, so any of the
-eight silently failing or silently not running at all is visible on the probe an operator already
+nine silently failing or silently not running at all is visible on the probe an operator already
 looks at. `job_last_success_timestamp_seconds{job="…"}` (`infrastructure/observability/metrics-registry.ts`)
 exposes the same value to Prometheus; `ScheduledJobStale` (`docker/observability/prometheus.alert-rules.yaml`)
 fires when a nightly job's last success is more than 48 hours old. `sweep:webhook-retries` is excluded from that
@@ -176,6 +177,16 @@ is still owed past `NODE_ORDER_EFFECT_RETRY_MINUTES` (default 5). Run it on the 
 
 The stock half of a cancel is deliberately NOT covered here — a hold keeps its `expiresAt` and the
 reservation sweep reclaims it, so it heals on its own.
+
+`npm run sweep:payment-effects` is the same kind of job for the OTHER direction: a settlement
+writes `pendingEffects: ['commit']` in the same document write that moves a payment to `succeeded`,
+then commits the held stock and clears the marker — three steps, only the first of which is
+durable on its own. A crash between them leaves a payment marked `succeeded` with nothing set
+aside for its order, and unlike a webhook nothing redelivers a settlement that already answered its
+caller. This sweep finds any payment whose marker is at least a minute old (past the window a
+normal settlement takes to clear it itself), repeats the commit — safe, since claiming a hold is
+exactly-once — and clears the marker either way. Runs every 5 minutes, comfortably inside the
+30-minute reservation hold. See [payments](../modules/payments.md)#pending-effects.
 
 Log lines are Loki's retention, not Mongo's: `docker/observability/loki.config.yaml` sets
 `retention_period: 168h` (7 days) for the local stack. A production deployment tunes this

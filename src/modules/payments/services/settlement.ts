@@ -113,11 +113,14 @@ export const settlePayment = (
     // in this application listens. Reorder the two (commit, then report) if a future listener
     // ever needs to read committed stock in reaction to this event.
     return orderService.markPaid(orderId).then(async () => {
+        // `pendingEffects: ['commit']` lands in the SAME write as the status move — the durable
+        // note that the stock commit below is still owed, for `effects.ts#retryPendingEffects` to
+        // find if this call dies before either branch below clears it (B14).
         const succeeded = await paymentRepository.updateStatusIfIn(
             orderId,
             SETTLEABLE_PAYMENT_STATUSES,
             'succeeded',
-            extra
+            { ...extra, pendingEffects: ['commit'] }
         );
 
         // Neither write moved anything: an earlier call already settled this payment (both
@@ -143,6 +146,7 @@ export const settlePayment = (
              * and the at-most-once guard is the same one every other refund goes through.
              */
             const refunded = await performRefund(orderId);
+            await paymentRepository.clearPendingEffects(orderId);
             return { payment: refunded ?? succeeded, orderLost: true };
         }
 
@@ -158,6 +162,9 @@ export const settlePayment = (
          * way, and `inventory` tells the two apart and alarms only the second.
          */
         await inventoryService.commitForOrder(orderId);
+        // The commit landed (or was already a harmless replay) — the effect this marker tracked
+        // is done either way, so it stops being anyone's job to retry.
+        await paymentRepository.clearPendingEffects(orderId);
 
         // Fire-and-forget, like `PAYMENT_FAILED` above: `webhooks` reacts to this from its own
         // `subscribe()` hook, and a slow or failing listener there must not delay the response

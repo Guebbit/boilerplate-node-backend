@@ -34,6 +34,10 @@
 20 2 * * * cd /app && npm run sweep:order-effects
 # WARNING: owned by the webhooks module — delete it when removing the module (docs/modules/webhooks.md)
 *  * * * * cd /app && npm run sweep:webhook-retries
+# Every 5 minutes, well inside the 30-minute reservation hold a stuck `commit` would otherwise
+# outlive — see docs/modules/payments.md#pending-effects.
+# WARNING: owned by the payments module — delete it when removing the module (docs/modules/payments.md)
+*/5 * * * * cd /app && npm run sweep:payment-effects
 # WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
 25 2 * * * cd /app && npm run reap:invoices
 30 2 * * * cd /app && npm run reap:mail-spool
