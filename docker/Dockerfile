@@ -6,14 +6,11 @@
 # `mongodb-memory-server-core`'s `getDebianVersionString()` maps any release >= 12 to the same
 # `debian12` binary, so both resolve — took trixie since it's newer and it resolves.
 #
-# Node 24, not 25 (unlike `docker/Dockerfile.production`, still on `node:25-alpine`): `node --
-# version` here has to satisfy every devDependency this image actually runs, and
+# Node 24: `node --version` here has to satisfy every devDependency this image actually runs, and
 # `dependency-cruiser` (`npm run check:dependencies`, part of `npm run complete`) hard-exits on
 # Node 25 — its `engines` field is `^22||^24||>=26`, deliberately skipping Current/non-LTS lines.
-# 24 is Active LTS. Worth a look: this repo's CI runs Node 22 (`NODE_VERSION` in
-# `.github/workflows/ci.yml`) and `docker/Dockerfile.production` runs Node 25 — three different
-# majors across CI/dev-image/prod-image, predating this change and wider than this change's scope
-# to reconcile.
+# 24 is Active LTS, and CI (`NODE_VERSION` in `.github/workflows/ci.yml`) and
+# `docker/Dockerfile.production` both match it now.
 FROM docker.io/library/node:24-trixie-slim
 
 # Sets the working directory inside the image to /app in the container
