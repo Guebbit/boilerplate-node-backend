@@ -185,6 +185,21 @@ export interface AppModule {
     subscribe?: () => void;
 
     /**
+     * Runs once, right after {@link subscribe} — every enabled module is known by then, so a
+     * module that needs a cross-module lookup (`locales`' `translatables`, `account`'s
+     * `personalData` sections) can resolve it itself here instead of `app.ts` collecting it and
+     * handing it in by name (D15: `app.ts` stops importing `locales`/`account` for this).
+     *
+     * Also where a module installs its own kernel port (an auth resolver, a translation port, a
+     * locale override provider, an audit sink) — moving that call here from module-file import
+     * time means importing this file no longer enables the port: only a module `registerModules`
+     * is actually given runs its `onRegistered`.
+     *
+     * @param modules - every enabled module, in registration order
+     */
+    onRegistered?: (modules: readonly AppModule[]) => void;
+
+    /**
      * Absolute path to this module's `locales/` directory, holding one `<locale>.json` per language
      * it contributes.
      *
@@ -360,7 +375,8 @@ export const resolveConsumers = (appModules: AppModule[]): readonly ModuleConsum
  * Built from the passed-in list for the same reason {@link resolveImageTargets} is: this file
  * must stay free of any `src/modules/*` import, so the translation resolver — which needs exactly
  * this lookup and may not import a module directly — can depend on `kernel/registry` without a
- * cycle. The `app` tier builds the lookup once, the way `app/workers.ts` builds `imageTargets`.
+ * cycle. `locales/module.ts`'s own `onRegistered` hook builds the lookup once every module is
+ * known, the same way `app/workers.ts` builds `imageTargets`.
  *
  * @param appModules - the enabled module list
  * @throws {Error} when two modules declare the same entity type
@@ -380,9 +396,9 @@ export const resolveTranslatables = (
  * `'none'` contributes nothing.
  *
  * Built from the passed-in list for the same reason {@link resolveImageTargets} is: this file must
- * stay free of any `src/modules/*` import. `src/app.ts` builds this once and hands it to `account`
- * the same way it hands `locales` its `translatables` lookup — see
- * `modules/account/services/personal-data-registry.ts`.
+ * stay free of any `src/modules/*` import. `account/module.ts`'s own `onRegistered` hook builds
+ * this once every module is known, the same way `locales/module.ts` builds its `translatables`
+ * lookup — see `modules/account/services/personal-data-registry.ts`.
  *
  * @param appModules - the enabled module list
  */
@@ -407,11 +423,14 @@ export const resolveRateLimits = (appModules: AppModule[]): readonly RateLimitBu
     appModules.flatMap((appModule) => appModule.rateLimits ?? []);
 
 /**
- * Let every module attach its domain-event handlers.
+ * Let every module attach its domain-event handlers, then let every module run its
+ * {@link AppModule.onRegistered} hook.
  *
  * Subscription is separated from mounting because a handler may fire for an event another module
  * emits while serving a request, so every subscription has to exist before the first route does.
- * Config is asserted first, for the same "before the first route" reason.
+ * `onRegistered` runs after every `subscribe`, for the same reason, plus one more: a module's own
+ * `onRegistered` may itself rely on a sibling's event handler already being attached. Config is
+ * asserted first, for the same "before the first route" reason.
  *
  * @param appModules - the enabled module list
  * @param nonModuleChecks - passed straight through to {@link assertRequiredConfig} — this file
@@ -424,4 +443,5 @@ export const registerModules = (
 ): void => {
     assertRequiredConfig(appModules, nonModuleChecks);
     for (const appModule of appModules) appModule.subscribe?.();
+    for (const appModule of appModules) appModule.onRegistered?.(appModules);
 };

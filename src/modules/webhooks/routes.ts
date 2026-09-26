@@ -10,7 +10,12 @@ import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { listWebhookSubscriptions } from './controllers/list-subscriptions';
 import { createWebhookSubscription } from './controllers/create-subscription';
-import { updateWebhookSubscription } from './controllers/update-subscription';
+import {
+    replaceWebhookSubscription,
+    updateWebhookSubscription
+} from './controllers/update-subscription';
+import { rotateWebhookSubscriptionSecret } from './controllers/rotate-subscription-secret';
+import { removeWebhookSubscriptionSecret } from './controllers/remove-subscription-secret';
 import { deleteWebhookSubscription } from './controllers/delete-subscription';
 import { listWebhookDeliveries } from './controllers/list-deliveries';
 import { replayWebhookDelivery } from './controllers/replay-delivery';
@@ -26,6 +31,11 @@ router.use(getAuth, isAuthOrCredential);
 
 router.get('/subscriptions', requirePermission('webhooks.any.read'), listWebhookSubscriptions);
 router.post('/subscriptions', requirePermission('webhooks.any.create'), createWebhookSubscription);
+router.put(
+    '/subscriptions/:id',
+    requirePermission('webhooks.any.update'),
+    replaceWebhookSubscription
+);
 router.patch(
     '/subscriptions/:id',
     requirePermission('webhooks.any.update'),
@@ -35,6 +45,16 @@ router.delete(
     '/subscriptions/:id',
     requirePermission('webhooks.any.delete'),
     deleteWebhookSubscription
+);
+router.post(
+    '/subscriptions/:id/rotate-secret',
+    requirePermission('webhooks.any.update'),
+    rotateWebhookSubscriptionSecret
+);
+router.delete(
+    '/subscriptions/:id/secrets/:secretId',
+    requirePermission('webhooks.any.update'),
+    removeWebhookSubscriptionSecret
 );
 
 router.get('/deliveries', requirePermission('webhooks.any.read'), listWebhookDeliveries);

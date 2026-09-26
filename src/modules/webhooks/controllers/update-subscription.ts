@@ -1,41 +1,26 @@
 /**
  * @module
- * Controller for `PATCH /webhooks/subscriptions/:id`.
+ * Controllers for `PUT /webhooks/subscriptions/:id` (replace) and `PATCH .../:id` (merge), built
+ * on the shared `createUpdateController` factory. Neither verb touches the secret ring — that
+ * lives on its own action routes, `rotate-subscription-secret.ts`/`remove-subscription-secret.ts`.
  */
 
-import type { Request, Response } from 'express';
-import { UpdateWebhookSubscriptionBody } from '@api/schemas.zod';
-import type { UpdateWebhookSubscriptionRequest, WebhookSubscriptionCreated } from '@types';
-import { successResponse } from '@infrastructure/http/response';
-import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/http/request';
-import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
+import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
+import { ReplaceWebhookSubscriptionBody, UpdateWebhookSubscriptionBody } from '@api/schemas.zod';
+import type { WebhookSubscription } from '@types';
+import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { webhooksService } from '../services';
 
 /**
- * PATCH /webhooks/subscriptions/:id
- * Partial update, plus the two secret-ring actions (`rotateSecret`, `removeSecretId`) — see
- * `openapi.yaml`'s description for how a rotation's overlap works. Same `https://` scheme
- * restriction as `create-subscription.ts`, enforced by the generated schema's own `pattern`,
- * only when `url` is actually sent.
+ * `PUT` and `PATCH /webhooks/subscriptions/:id` — one handler pair over
+ * `webhooksService.updateSubscription`, tenant-scoped throughout.
  */
-export const updateWebhookSubscription = (
-    request: Request<{ id: string }, unknown, UpdateWebhookSubscriptionRequest>,
-    response: Response
-) => {
-    const id = extractAndValidateId(request, response);
-    if (!id) return;
-
-    const body = parseBody(UpdateWebhookSubscriptionBody, request.body, response);
-    if (!body) return;
-
-    return webhooksService
-        .updateSubscription(id, body, tenantCallerContextOf(request))
-        .then((result) => {
-            if (refused(response, result)) return;
-            return successResponse<WebhookSubscriptionCreated>(response, {
-                ...(result.data.subscription.toJSON() as WebhookSubscriptionCreated),
-                newSecret: result.data.newSecret
-            });
-        })
-        .catch(catchAs(response, 'updateWebhookSubscription'));
-};
+export const { replace: replaceWebhookSubscription, update: updateWebhookSubscription } =
+    createUpdateController({
+        entity: 'webhookSubscription',
+        replaceSchema: ReplaceWebhookSubscriptionBody,
+        patchSchema: UpdateWebhookSubscriptionBody,
+        update: (id, changes, request) =>
+            webhooksService.updateSubscription(id, changes, tenantCallerContextOf(request)),
+        present: (subscription) => subscription.toJSON() as WebhookSubscription
+    });

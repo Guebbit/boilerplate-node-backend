@@ -1,10 +1,10 @@
 /**
  * @module
- * Subscription CRUD: list, create (mints the ring's first secret), update (fields plus the two
- * secret-ring actions), remove. Tenant-scoped throughout — every read and write narrows to
- * `context.caller.tenantId`, which any `webhooks.*` caller always carries (every key in the family
- * is `scope: tenant` in `shared/authorization-keys.yaml`, and `Caller.tenantId` is null only in
- * platform scope — see its own doc comment).
+ * Subscription CRUD: list, create (mints the ring's first secret), update (state fields only),
+ * the two secret-ring actions (`rotateSecret`/`removeSecret`), remove. Tenant-scoped throughout —
+ * every read and write narrows to `context.caller.tenantId`, which any `webhooks.*` caller always
+ * carries (every key in the family is `scope: tenant` in `shared/authorization-keys.yaml`, and
+ * `Caller.tenantId` is null only in platform scope — see its own doc comment).
  */
 
 import { t } from '@infrastructure/i18n';
@@ -34,7 +34,7 @@ export interface SubscriptionWithMintedSecrets {
     subscription: WebhookSubscriptionDocument;
     /** Set only by `create` — the ring's first secret. */
     secret?: string;
-    /** Set only by `update` when `rotateSecret: true` — a newly added secret. */
+    /** Set only by `rotateSecret` — a newly added secret. */
     newSecret?: string;
 }
 
@@ -144,16 +144,16 @@ export const create = (
 };
 
 /**
- * Update a subscription: any of url/description/eventTypes/enabled, plus the two secret-ring
- * actions (`rotateSecret`, `removeSecretId`) in the same request.
+ * Update a subscription's state: any of url/description/eventTypes/enabled. The secret ring is
+ * never touched here — see {@link rotateSecret}/{@link removeSecret}.
  *
- * @returns a 404 outside this tenant's subscriptions, a 422 if `removeSecretId` would empty the ring
+ * @returns a 404 outside this tenant's subscriptions
  */
 export const update = (
     id: string,
     body: UpdateWebhookSubscriptionRequest,
     context: TenantCallerContext
-): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> =>
+): Promise<ResponseSuccess<WebhookSubscriptionDocument> | ResponseReject> =>
     webhookSubscriptionRepository
         .findByIdInTenant(id, context.caller.tenantId)
         .then((subscription) => {
@@ -175,22 +175,6 @@ export const update = (
                 }
             }
 
-            let newSecret: string | undefined;
-            if (body.rotateSecret) {
-                const minted = mintRingSecret();
-                subscription.secrets.push(minted.entry);
-                newSecret = minted.plaintext;
-            }
-            if (body.removeSecretId) {
-                const remaining = removeRingSecret(subscription.secrets, body.removeSecretId);
-                // Never let a rotation empty the ring — a subscription with no secret can never
-                // sign a delivery. The schema's own `validate` (`../model.ts`) is the second guard;
-                // this is the one that answers 422 instead of a save-time throw.
-                if (remaining.length === 0)
-                    return generateReject(422, [t('webhooks.ring-cannot-be-empty')]);
-                subscription.secrets = remaining;
-            }
-
             return webhookSubscriptionRepository.save(subscription).then((saved) => {
                 recordAudit(context, {
                     action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED,
@@ -198,7 +182,72 @@ export const update = (
                     target_type: 'webhook_subscription',
                     target_id: id
                 });
-                return generateSuccess({ subscription: saved, newSecret });
+                return generateSuccess(saved);
+            });
+        });
+
+/**
+ * Add a new secret to the ring, alongside whatever is already active — the ring then carries both
+ * until {@link removeSecret} drops the old one.
+ *
+ * @returns a 404 outside this tenant's subscriptions
+ */
+export const rotateSecret = (
+    id: string,
+    context: TenantCallerContext
+): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> =>
+    webhookSubscriptionRepository
+        .findByIdInTenant(id, context.caller.tenantId)
+        .then((subscription) => {
+            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+
+            const minted = mintRingSecret();
+            subscription.secrets.push(minted.entry);
+
+            return webhookSubscriptionRepository.save(subscription).then((saved) => {
+                recordAudit(context, {
+                    action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_ROTATED,
+                    outcome: 'success',
+                    target_type: 'webhook_subscription',
+                    target_id: id
+                });
+                return generateSuccess({ subscription: saved, newSecret: minted.plaintext });
+            });
+        });
+
+/**
+ * Drop one entry from the ring by id — the other half of a rotation, once every consumer has
+ * switched. A `secretId` the ring doesn't carry is a silent no-op, same as before this action had
+ * its own route.
+ *
+ * @returns a 404 outside this tenant's subscriptions, a 422 if this would empty the ring
+ */
+export const removeSecret = (
+    id: string,
+    secretId: string,
+    context: TenantCallerContext
+): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> =>
+    webhookSubscriptionRepository
+        .findByIdInTenant(id, context.caller.tenantId)
+        .then((subscription) => {
+            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+
+            const remaining = removeRingSecret(subscription.secrets, secretId);
+            // Never let this empty the ring — a subscription with no secret can never sign a
+            // delivery. The schema's own `validate` (`../model.ts`) is the second guard; this is
+            // the one that answers 422 instead of a save-time throw.
+            if (remaining.length === 0)
+                return generateReject(422, [t('webhooks.ring-cannot-be-empty')]);
+            subscription.secrets = remaining;
+
+            return webhookSubscriptionRepository.save(subscription).then((saved) => {
+                recordAudit(context, {
+                    action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_REMOVED,
+                    outcome: 'success',
+                    target_type: 'webhook_subscription',
+                    target_id: id
+                });
+                return generateSuccess({ subscription: saved });
             });
         });
 

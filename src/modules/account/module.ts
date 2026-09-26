@@ -9,16 +9,16 @@
  * Shares:      the User document with `users` — the repo's one shared kernel, invisible to the
  *              import graph. Both read and write it, so a schema change there is agreed twice.
  * Reaches far: `POST /account/export`, without an import graph to show for it — every module
- *              declares its own `personalData` section (`@kernel/registry.ts`), `src/app.ts`
- *              resolves the list at boot and hands it in through
- *              `./services/personal-data-registry.ts`, and this module only assembles what it is
- *              given. See `services/export.ts`.
+ *              declares its own `personalData` section (`@kernel/registry.ts`), this module's own
+ *              `onRegistered` hook resolves the list once every module is known and hands it in
+ *              through `./services/personal-data-registry.ts`, and this module only assembles
+ *              what it is given. See `services/export.ts`.
  *
  * See: docs/modules/account.md
  */
 
 import path from 'node:path';
-import type { AppModule } from '@kernel/registry';
+import { type AppModule, resolvePersonalDataSections } from '@kernel/registry';
 import { registerAuthResolver } from '@kernel/authentication';
 import { onDomainEvent } from '@kernel/events';
 import { userService, USER_SETUP_REQUESTED } from '@modules/users';
@@ -27,19 +27,27 @@ import { invalidTokenWindows } from './session/config';
 import { requestAccountSetup } from './services/authentication';
 import { router } from './routes';
 import { accountRateLimits } from './rate-limits';
+import { setPersonalDataSections } from './services/personal-data-registry';
 
-/** Published for `src/app.ts` alone — see `./services/personal-data-registry.ts`'s own docblock. */
-export { setPersonalDataSections } from './services/personal-data-registry';
-
-/*
- * This module answers the kernel's "who is making this request". Registered at import time
- * (installs a function, touches no connection) since every guard in the app depends on it being
- * there before the first request. The resolver rejects a bad token and resolves `undefined` for
- * a token whose user is gone — the distinction `requirePermissionViaCookie` turns into 401 versus 403.
- * The resolution logic itself lives in `./session/resolver.ts`, alongside the rest of the session
- * machinery; this file only installs it.
+/**
+ * Everything this module installs once every enabled module is known (D15): the auth resolver the
+ * whole app's guards depend on, plus its own `personalData` export list — the app tier used to
+ * resolve that list and hand it in by name, which meant deleting this module also meant editing
+ * `app.ts`.
+ *
+ * The resolver is registered HERE rather than at import time, so importing this file (a type, a
+ * test) no longer installs it — only a module `registerModules` actually runs `onRegistered` for
+ * does. The resolver itself rejects a bad token and resolves `undefined` for a token whose user is
+ * gone — the distinction `requirePermissionViaCookie` turns into 401 versus 403. The resolution
+ * logic lives in `./session/resolver.ts`, alongside the rest of the session machinery; this file
+ * only installs it.
+ *
+ * @param modules - every enabled module, for `POST /account/export`'s section list
  */
-registerAuthResolver(accountAuthResolver);
+const onRegistered = (modules: readonly AppModule[]): void => {
+    registerAuthResolver(accountAuthResolver);
+    setPersonalDataSections(resolvePersonalDataSections([...modules]));
+};
 
 /** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
@@ -84,6 +92,7 @@ export default {
      * disables reuse detection without failing anything.
      */
     customCheck: invalidTokenWindows,
+    onRegistered,
     subscribe: () => {
         /*
          * `users` creates a passwordless account and asks for a way in; this module owns the

@@ -51,8 +51,9 @@ const PUBLISHABLE: { model: string; key: string; because: string }[] = [
         key: 'secretIds',
         because:
             'Opaque ring ids only — never the ciphertext or a decrypted secret. This is what ' +
-            'lets an admin name a specific entry for `removeSecretId` after `rotateSecret` ' +
-            'without the response ever carrying anything that could sign a delivery.'
+            'lets an admin name a specific entry for `DELETE .../secrets/:secretId` after ' +
+            '`POST .../rotate-secret` without the response ever carrying anything that could ' +
+            'sign a delivery.'
     }
 ];
 

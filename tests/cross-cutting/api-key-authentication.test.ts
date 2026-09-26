@@ -29,9 +29,6 @@ import { MODULES_ROOT } from '@tests/paths';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { TenantCallerContext } from '@types';
 import { createUser } from '@modules/users/tests/factories';
-// `module.ts`'s side effect (`registerCredentialResolver`) is what makes a credential resolve at
-// all — importing the module is what a real boot does.
-import '@modules/api-keys/module';
 import { mint } from '@modules/api-keys/services/api-keys';
 
 setupTestDb();

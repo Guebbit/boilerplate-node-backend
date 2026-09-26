@@ -17,7 +17,7 @@ import { installRequestContext } from '@app/request-context';
 import { installRoutes } from '@app/routes';
 import { installErrorHandling } from '@app/error-handling';
 import { resolveTranslatables } from '@kernel/registry';
-import { setTranslatables } from '@modules/locales/module';
+import { localeService } from '@modules/locales';
 import { productModel } from '@modules/products/model';
 import { orderModel } from '@modules/orders/model';
 import { enabledModules } from '../../../src/modules';
@@ -49,8 +49,8 @@ setupTestDb();
 // The default (no `scenario` in the body) reseeds `shop`, whose products write translations
 // through the same manifest a real write validates against — see `scenarios/apply.ts`'s
 // identical call for why this has to be built from `enabledModules` and handed in by hand.
-beforeAll(() => setTranslatables(resolveTranslatables(enabledModules)));
-afterAll(() => setTranslatables({}));
+beforeAll(() => localeService.setTranslatables(resolveTranslatables(enabledModules)));
+afterAll(() => localeService.setTranslatables({}));
 
 /**
  * A throwaway app carrying the demo surface and nothing else — enough for every case whose
