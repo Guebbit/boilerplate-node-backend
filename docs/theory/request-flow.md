@@ -184,10 +184,23 @@ Heavy tasks (email, PDF generation) are pushed to [RabbitMQ](../tools/rabbitmq.m
 
 ## PUT replaces, PATCH merges
 
-Every resource with an update answers both verbs, through one shared controller —
+Most resources with an update answer both verbs through one shared controller —
 `createUpdateController` in `@infrastructure/surfaces/create-update-controller`. The verb only
 changes the front of the pipeline; the module's own `update(id, changes)` never learns which one
 produced the change-set.
+
+**Exceptions:**
+
+- **Entity translations** (`PUT`/`PATCH /locales/translations/{entityType}/{id}`) and the locale
+  entries bulk import (`PUT`/`PATCH /locales/{locale}/entries`) are hand-written, not
+  factory-backed — both share one body schema across the two verbs instead of a `Replace*`/`Update*`
+  pair, since replace/merge only changes what an untouched key means, never which fields a caller
+  may send.
+- **`PUT /locales/{locale}/entries/{entryId}`** and **`PUT /cart/{productId}`** are PUT-only —
+  neither resource has a PATCH.
+- **Products' `PUT /products/{id}` merges `translations`** rather than replacing the set — a
+  caller shouldn't have to list every locale it already has just to keep them. Every other field
+  follows the table below as usual.
 
 ```mermaid
 flowchart LR
@@ -222,14 +235,14 @@ which driver failures describe the **request** rather than the server. One funct
 is the same on every model — a call-site `try`/`catch` is invisible to every endpoint that
 did not think to write one.
 
-| Raised by                          | Status | Why it is the caller's problem                                                                            |
-| ---------------------------------- | ------ | --------------------------------------------------------------------------------------------------------- |
-| `CastError` (Mongoose)             | 422    | A value failed a schema path's cast — nearly always an ObjectId in a URL or a filter.                     |
-| `BSONError` (driver)               | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters.         |
-| `E11000` duplicate key             | 409    | A unique index refused the write: something with that value already exists.                               |
-| `ValidationError` (Mongoose)       | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`. |
-| any module's `ConflictError` (D14) | 409    | The write was refused for what it would make true — `access`'s `AccessInvariantError` today.              |
-| anything else                      | 500    | Genuinely unrecognised.                                                                                   |
+| Raised by                    | Status | Why it is the caller's problem                                                                            |
+| ---------------------------- | ------ | --------------------------------------------------------------------------------------------------------- |
+| `CastError` (Mongoose)       | 422    | A value failed a schema path's cast — nearly always an ObjectId in a URL or a filter.                     |
+| `BSONError` (driver)         | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters.         |
+| `E11000` duplicate key       | 409    | A unique index refused the write: something with that value already exists.                               |
+| `ValidationError` (Mongoose) | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`. |
+| any module's `ConflictError` | 409    | The write was refused for what it would make true — `access`'s `AccessInvariantError` today.              |
+| anything else                | 500    | Genuinely unrecognised.                                                                                   |
 
 Every branch above exists because something describing the CALLER was reaching the 500 and being
 reported as a server fault. `POST /products/search` is public and takes an `id` filter, so
