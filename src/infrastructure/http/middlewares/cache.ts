@@ -345,11 +345,11 @@ const applyCacheHeaders = (
     response.set(
         'Cache-Control',
         cacheableRead
-            ? !cacheable
-                ? 'private, no-cache'
-                : options.browserRevalidate
-                  ? 'public, no-cache'
-                  : `public, max-age=${ttl}, stale-while-revalidate=${STALE_WHILE_REVALIDATE_SECONDS}, stale-if-error=${STALE_IF_ERROR_SECONDS}`
+            ? cacheable
+                ? options.browserRevalidate
+                    ? 'public, no-cache'
+                    : `public, max-age=${ttl}, stale-while-revalidate=${STALE_WHILE_REVALIDATE_SECONDS}, stale-if-error=${STALE_IF_ERROR_SECONDS}`
+                : 'private, no-cache'
             : 'no-store'
     );
     response.vary('Authorization');
