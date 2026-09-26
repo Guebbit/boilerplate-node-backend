@@ -17,7 +17,6 @@ startTracing();
 import 'dotenv/config';
 import express from 'express';
 import type { Server } from 'node:http';
-import mongoose from 'mongoose';
 import { start } from '@infrastructure/runtime/database';
 import { startCache } from '@infrastructure/adapters/cache';
 import { startQueue } from '@infrastructure/adapters/queue';
@@ -70,16 +69,6 @@ let shutdownPromise: Promise<void> | undefined;
  * also the honest split: nothing below this line is about listening.
  */
 export const bootInfrastructure = () => {
-    /*
-     * Off in production only, and set before `start()` connects: an index built at connect time is
-     * what makes a TTL-window change fail the boot outright, since Mongo refuses to rebuild an
-     * index over conflicting options. `docker-compose.production.yml`'s `setup` service runs
-     * `db:sync` before this process ever starts, which is what reconciles the index set instead.
-     * Dev and test keep Mongoose's own default (on), which is what gives the test suites their
-     * constraints for free. https://mongoosejs.com/docs/guide.html#autoIndex
-     */
-    mongoose.set('autoIndex', process.env.NODE_ENV !== 'production');
-
     return (
         Promise.resolve()
             .then(() => start())

@@ -78,11 +78,15 @@ export const getDatabaseUri = () => {
  * Exists for orchestrated environments: when the API container starts alongside the database
  * container, the first few connects legitimately fail while Mongo is still initialising.
  *
- * Does not touch `autoIndex` — a caller with its own requirement (`scripts/db/sync-indexes.ts` turns it
- * off before calling this; `src/app.ts`'s `startServer` turns it off in production) sets it before
- * calling `start()`, and this shared connection helper has no opinion of its own to override that.
+ * Turns `autoIndex` off in production, before connecting — every entry point that calls this
+ * (the server, every cron script) shares the guard, not only the ones that go through
+ * `bootInfrastructure`. Never turns it on: `scripts/db/sync-indexes.ts` already ran `false` in
+ * production, and dev/test keep Mongoose's own default (on), which is what gives the test suites
+ * their constraints for free. https://mongoosejs.com/docs/guide.html#autoIndex
  */
 export const start = () => {
+    if (process.env.NODE_ENV === 'production') mongoose.set('autoIndex', false);
+
     // Recursive rather than a `for` loop so each retry chains onto the previous promise
     // without `async`/`await` — this codebase stays on explicit promise chains throughout.
     const attemptConnect = (attempt: number): Promise<void> =>
