@@ -332,10 +332,11 @@ describe.each(
     )
 )('%s (urlencoded)', (_label, operation) => {
     it('never answers 5xx, and always answers something the spec documents', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { user, bearer } = await authenticateAs('admin');
+        const world = await seedWorld(user);
         // Every MULTIPART_FUZZABLE operation has a bodySchema by construction (the filter above).
         const bodyArbitrary = bodyArbitraryFor(operation.bodySchema)!;
-        const url = buildUrl(operation);
+        const url = buildUrl(operation, world);
 
         await fc.assert(
             fc.asyncProperty(bodyArbitrary, async (body) => {
