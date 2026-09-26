@@ -41,9 +41,10 @@ module.exports = {
         exclude: {
             // `tmp`/`.dev`/`.prism`/`dist` only ever appear at the repo root, so they're anchored
             // there — same reasoning as the main config: an unanchored `(^|/)` also matches
-            // `node_modules/*/dist/`, dropping packages out of the graph entirely. `tests/` stays
-            // unanchored: it's per-module (`src/modules/*/tests/`), see the docblock above.
-            path: String.raw`^(tmp|\.dev|\.prism|dist)/|(^|/)tests/`
+            // `node_modules/*/dist/`, dropping packages out of the graph entirely. `tests/` is
+            // anchored the same way, per-module (`src/modules/*/tests/`, see the docblock above),
+            // so it cannot match a vendor package's own `tests/` folder either.
+            path: String.raw`^(tmp|\.dev|\.prism|dist)/|^src/modules/[^/]+/tests/`
         },
         reporterOptions: {
             text: { highlightFocused: true }
