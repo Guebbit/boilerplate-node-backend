@@ -279,8 +279,9 @@ export const stockMovementRepository: AppendOnlyLedger<StockMovementDocument, St
     });
 
 /**
- * The hold. The generic CRUD surface plus the four lifecycle primitives the service drives every
- * transition through — each documented at its own definition below.
+ * The hold. The generic CRUD surface plus the lifecycle primitives the service drives every
+ * transition through (`insertHold`, `claimStatus`, `findExpired`) and the two refinements
+ * (`narrowToTaken`, `extendExpiry`) — each documented at its own definition below.
  */
 export const reservationRepository: Repository<ReservationDocument, Wire<ReservationDocument>> & {
     insertHold: (

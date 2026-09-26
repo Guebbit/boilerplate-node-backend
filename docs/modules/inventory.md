@@ -49,14 +49,12 @@ synced copy of `onHand`/`reserved` on its own document purely so a catalogue rea
 join; that copy is never the source of truth and this module never reads it back. **Every change
 to a stock count is a transition here.**
 
-There are four, and each has one caller:
-
-| Transition        | Fired by                     | What it does                        |
-| ----------------- | ---------------------------- | ----------------------------------- |
-| `reserveForOrder` | checkout, admin order create | units held, not sold                |
-| `commitForOrder`  | payment confirmed            | units leave                         |
-| `releaseForOrder` | order cancelled              | units come back                     |
-| `releaseForOrder` | the sweep                    | the hold timed out, units come back |
+| Transition        | Fired by                                               | What it does                                          |
+| ----------------- | ------------------------------------------------------ | ----------------------------------------------------- |
+| `reserveForOrder` | checkout, admin order create                           | units held, not sold                                  |
+| `commitForOrder`  | payment confirmed                                      | units leave                                           |
+| `releaseForOrder` | order cancelled, or the sweep (a stale hold timed out) | units come back                                       |
+| `restockForOrder` | a PAID order cancelled                                 | the units `commitForOrder` already sold come back too |
 
 ::: warning Exactly-once, by construction
 Each transition claims the reservation's status **conditionally**, so a cancel racing the sweep — or
