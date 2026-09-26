@@ -17,7 +17,7 @@ import { ORDER_REFUND_OWED } from '@modules/orders';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
 import { refundForOrder, detachUserId, findOwnPaymentsForExport } from './services';
-import { validateBankTransferConfig } from './config';
+import { validateBankTransferConfig, validateStripeSecretKey } from './config';
 import { paymentsRateLimits } from './rate-limits';
 import { checkSelector } from '@kernel/required-config';
 import { resolvePaymentProvider } from './providers';
@@ -55,14 +55,16 @@ export default {
             productionOnly: true
         }
     ],
-    // Two checks `requiredConfig` cannot express: `NODE_BANK_TRANSFER_IBAN`/`_BIC` need
+    // Three checks `requiredConfig` cannot express: `NODE_BANK_TRANSFER_IBAN`/`_BIC` need
     // `ibantools` to validate, and `NODE_BANK_TRANSFER_IBAN` set with no `_BENEFICIARY` is a
-    // cross-field rule. Plus `NODE_PAYMENT_PROVIDER` itself — `resolvePaymentProvider` already
-    // throws a good message on an unknown name; this is what makes that throw happen at boot
-    // instead of on the first payment.
+    // cross-field rule. `NODE_PAYMENT_PROVIDER` itself — `resolvePaymentProvider` already throws a
+    // good message on an unknown name; this is what makes that throw happen at boot instead of on
+    // the first payment. And `NODE_STRIPE_SECRET_KEY` (ST-1) — a test-mode key is a value problem,
+    // not a missing/short one, so it needs a check of its own too.
     customCheck: () => [
         ...validateBankTransferConfig(),
-        ...checkSelector('NODE_PAYMENT_PROVIDER', resolvePaymentProvider)
+        ...checkSelector('NODE_PAYMENT_PROVIDER', resolvePaymentProvider),
+        ...validateStripeSecretKey()
     ],
     personalData: [
         {

@@ -1,10 +1,15 @@
 /**
  * `payments/config.ts` — `listPaymentMethods` (what `GET /payments/methods` and checkout both
- * defer to) and `validateBankTransferConfig` (this module's boot-time `customCheck`, run through
- * `ibantools`). Both are pure reads over the environment, so no database is needed.
+ * defer to), `validateBankTransferConfig` (this module's boot-time `customCheck`, run through
+ * `ibantools`), and `validateStripeSecretKey` (ST-1, the same `customCheck`). All three are pure
+ * reads over the environment, so no database is needed.
  */
-import { listPaymentMethods, validateBankTransferConfig } from '../../config';
-import { withoutEnvironmentInThisFile } from '@tests/environment';
+import {
+    listPaymentMethods,
+    validateBankTransferConfig,
+    validateStripeSecretKey
+} from '../../config';
+import { withoutEnvironmentInThisFile, withEnvironment } from '@tests/environment';
 
 /** Sets both variables `bankTransferEnabled()` requires. */
 const configureBankTransfer = () => {
@@ -24,7 +29,8 @@ const TOUCHED = [
     'NODE_BANK_TRANSFER_IBAN',
     'NODE_BANK_TRANSFER_BIC',
     'NODE_BANK_TRANSFER_HOLD_HOURS',
-    'NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT'
+    'NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT',
+    'NODE_STRIPE_SECRET_KEY'
 ] as const;
 
 withoutEnvironmentInThisFile(TOUCHED);
@@ -90,4 +96,29 @@ describe('validateBankTransferConfig', () => {
         process.env.NODE_BANK_TRANSFER_BIC = 'COBADEFFXXX';
         expect(validateBankTransferConfig()).toEqual([]);
     });
+});
+
+describe('validateStripeSecretKey', () => {
+    it('reports nothing when no key is configured', () => {
+        expect(validateStripeSecretKey()).toEqual([]);
+    });
+
+    it('reports nothing for a test-mode key outside production', () => {
+        process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
+        expect(validateStripeSecretKey()).toEqual([]);
+    });
+
+    it('reports nothing for a live key in production', () =>
+        withEnvironment('NODE_ENV', 'production', () => {
+            process.env.NODE_STRIPE_SECRET_KEY = 'sk_live_abc123';
+            expect(validateStripeSecretKey()).toEqual([]);
+            return Promise.resolve();
+        }));
+
+    it('refuses a test-mode key in production', () =>
+        withEnvironment('NODE_ENV', 'production', () => {
+            process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
+            expect(validateStripeSecretKey()).toEqual(['NODE_STRIPE_SECRET_KEY']);
+            return Promise.resolve();
+        }));
 });
