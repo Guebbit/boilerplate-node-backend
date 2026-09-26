@@ -41,6 +41,7 @@ describe('product routes — what is mounted', () => {
             'DELETE /',
             'GET /categories',
             'GET /:id',
+            'PUT /:id',
             'PATCH /:id',
             'GET /:id/admin',
             'DELETE /:id',
@@ -69,6 +70,7 @@ describe('product routes — authorization', () => {
     const GUARDED = [
         'POST /',
         'DELETE /',
+        'PUT /:id',
         'PATCH /:id',
         'GET /:id/admin',
         'DELETE /:id',
@@ -89,7 +91,7 @@ describe('product routes — authorization', () => {
         expect(identity).toBeLessThan(row!.chain.indexOf('requirePermissionGuard'));
     });
 
-    it.each(['POST /', 'PATCH /:id'])(
+    it.each(['POST /', 'PUT /:id', 'PATCH /:id'])(
         '%s stacks both products AND translations keys, since the same write carries every language',
         (signature) => {
             const row = routeTable(router).find(
@@ -149,7 +151,7 @@ describe('product routes — caching', () => {
         }
     );
 
-    it.each(['POST /', 'DELETE /', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
+    it.each(['POST /', 'DELETE /', 'PUT /:id', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
         '%s invalidates the catalogue tag it just changed',
         (signature) => {
             // The tag has to be the one the readers above set. Asserting the literal rather than
@@ -160,7 +162,7 @@ describe('product routes — caching', () => {
 });
 
 describe('product routes — uploads and flags', () => {
-    it.each(['POST /', 'PATCH /:id'])(
+    it.each(['POST /', 'PUT /:id', 'PATCH /:id'])(
         '%s accepts the imageUpload field and validates what arrives',
         (signature) => {
             const chain = chainOf(router, signature);

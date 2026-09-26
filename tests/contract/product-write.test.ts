@@ -98,6 +98,45 @@ describe('POST /products', () => {
     });
 });
 
+describe('PUT /products/{id}', () => {
+    it('matches the contract when replacing every writable field', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed', price: 10 });
+
+        const response = await api()
+            .put(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({
+                price: 15,
+                active: true,
+                requiresShipping: true,
+                categories: [],
+                tags: [],
+                translations: { en: { title: 'Bed, replaced' } }
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.price).toBe(15);
+        expect(response.body.data.title).toBe('Bed, replaced');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // A PUT body IS the new resource (RFC 9110 §9.3.4) — `active`/`requiresShipping`/`categories`/
+    // `tags` have no legal "cleared" state, so all of them are required alongside price/translations.
+    it('refuses a PUT body missing a required field', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed', price: 10 });
+
+        const response = await api()
+            .put(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ price: 15, translations: { en: { title: 'Bed, replaced' } } });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
 describe('PATCH /products/{id}', () => {
     it('matches the contract, merging a price change and a translation edit', async () => {
         const { bearer } = await authenticateAsRole('editor');
@@ -129,6 +168,22 @@ describe('PATCH /products/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.price).toBe(999);
+    });
+
+    // FE_PARITY's P1 needs `taxClass: null` to mean "back to the shop's standard rate" — D17c
+    // made every other clearable field on this schema nullable, but missed this one.
+    it('clears taxClass back to the standard rate on an explicit null', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed', price: 10, taxClass: 'reduced' });
+
+        const response = await api()
+            .patch(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ taxClass: null });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.taxClass).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
     });
 });
 

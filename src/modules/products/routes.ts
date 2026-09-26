@@ -12,7 +12,7 @@ import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getProducts, searchProductsKeyParameters } from './controllers/get-products';
 import { createProduct } from './controllers/create-product';
-import { updateProduct } from './controllers/update-product';
+import { replaceProduct, updateProduct } from './controllers/update-product';
 import { deleteProducts } from './controllers/delete-products';
 import { restoreProducts } from './controllers/restore-products';
 import { getProductItem } from './controllers/get-product-item';
@@ -98,7 +98,18 @@ router.get(
     getProductItem
 );
 
-// PATCH /products/:id — admin only (update, merging). Same two keys as the create door.
+// PUT /products/:id (replace) and PATCH /products/:id (merge) — admin only. Same two keys as
+// the create door, on both: neither key alone completes either write.
+router.put(
+    '/:id',
+    uploadLimiter,
+    isAuthOrCredential,
+    requirePermission('products.any.update'),
+    requirePermission('translations.any.update'),
+    invalidateCache(['products']),
+    upload.image(),
+    replaceProduct
+);
 router.patch(
     '/:id',
     uploadLimiter,

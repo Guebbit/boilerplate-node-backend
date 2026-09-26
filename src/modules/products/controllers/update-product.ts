@@ -1,87 +1,46 @@
 /**
  * @module
- * Admin update controller for the catalogue — decodes the upload and the body, then hands both to
- * `productService.writeUpdate`, which validates and MERGES the product's fields and its
- * translation rows in one operation. See the `PATCH /products/{id}` operation description for the
- * merge semantics.
+ * Controllers for `PUT /products/:id` (replace) and `PATCH /products/:id` (merge), built on the
+ * shared `createUpdateController` factory. Both verbs delegate the product write and the
+ * translation-row merge to `productService.writeUpdate`, which already owns the 404 check and the
+ * audit emit — the verb difference is entirely in which schema validates the body and whether an
+ * omitted clearable field (`taxClass`/`weight`/`imageUrl`) is cleared or left alone; `translations`
+ * keeps the same per-locale upsert/delete semantics either way (see `PUT`'s own operation
+ * description for why a translations table isn't a "whole-body replace" field).
  */
 
-import type { Request, Response } from 'express';
-import type { ParamsDictionary } from 'express-serve-static-core';
-import { t } from '@infrastructure/i18n';
+import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
+import { ReplaceProductByIdBody, UpdateProductByIdBody } from '@api/schemas.zod';
+import { callerContextOf } from '@infrastructure/http/request';
+import { writeWithUploadedImage } from '@infrastructure/http/uploads';
 import { productService } from '../service';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { readInput, callerContextOf } from '@infrastructure/http/request';
-import { readUploadedImage } from '@infrastructure/http/uploads';
-import type { UpdateProductRequest, UpdateProductRequestMultipart, Product } from '@types';
 
-/**
- * PATCH /products/:id — admin update. A multipart `translations` field carries a JSON-encoded
- * `ProductTranslationsWrite` string rather than a nested object — a multipart part has no way to
- * send an object except as a string — so `jsonFields` decodes it before validation.
- */
-export const updateProduct = (
-    request: Request<
-        ParamsDictionary,
-        unknown,
-        UpdateProductRequest | UpdateProductRequestMultipart
-    >,
-    response: Response
-) => {
-    const { id, price, active, requiresShipping, weight, categories, tags, translations } =
-        readInput(request, {
-            surface: 'write',
-            ids: ['id'],
-            booleans: ['active', 'requiresShipping'],
-            numbers: ['price', 'weight'],
-            stringArrays: ['categories', 'tags'],
-            jsonFields: ['translations']
-        });
-
-    // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`) — `undefined`
-    // means "leave the image alone", `null` clears it (see `service.ts#update`), and both must
-    // reach the schema as what they actually are.
-    const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
-
-    if (!id) {
-        rejectResponse(response, 422, [t('generic.error-missing-data')]);
-        // The response is already sent — a rejected cleanup must not become an unhandled
-        // promise rejection on top of it.
-        return deleteUpload().catch(() => undefined);
-    }
-
-    return productService
-        .writeUpdate(
-            id,
-            {
-                ...request.body,
-                price,
-                active,
-                requiresShipping,
-                weight,
-                categories,
-                tags,
-                translations,
-                imageUrl
-            },
-            callerContextOf(request),
-            { thumbnailUrl, pendingImageKey }
-        )
-        .then((result) => {
-            if (!result.success)
-                return deleteUpload()
-                    .catch(() => undefined)
-                    .then(() => {
-                        rejectResponse(response, result.status, result.errors);
-                    });
-            successResponse<Product>(response, productService.toProduct(result.data));
-        })
-        .catch((error: unknown) =>
-            deleteUpload()
-                .catch(() => undefined)
-                .then(() => {
-                    rejectDatabaseError(response, 'updateProduct', error);
+export const { replace: replaceProduct, update: updateProduct } = createUpdateController({
+    entity: 'productById',
+    replaceSchema: ReplaceProductByIdBody,
+    patchSchema: UpdateProductByIdBody,
+    // A multipart body carries these as strings; `readInput` decodes them before validation runs,
+    // so one JSON-shaped schema above validates both content types (`imageUpload` itself is
+    // outside the schema — `readUploadedImage`, inside `writeWithUploadedImage`, reads it).
+    input: {
+        booleans: ['active', 'requiresShipping'],
+        numbers: ['price', 'weight'],
+        stringArrays: ['categories', 'tags'],
+        jsonFields: ['translations']
+    },
+    update: (id, changes, request) =>
+        // `thumbnailUrl`/`pendingImageKey` are server-derived, never on the contract —
+        // `writeUpdate`'s own `imageExtras` parameter carries them PAST its internal Zod parse
+        // (a `strictObject`, which would refuse them as unknown fields if merged into `changes`
+        // instead). Only `imageUrl` is a real contract field, so only it joins `changes`.
+        writeWithUploadedImage(
+            request,
+            changes.imageUrl,
+            ({ imageUrl, thumbnailUrl, pendingImageKey }) =>
+                productService.writeUpdate(id, { ...changes, imageUrl }, callerContextOf(request), {
+                    thumbnailUrl,
+                    pendingImageKey
                 })
-        );
-};
+        ),
+    present: (product) => productService.toProduct(product)
+});

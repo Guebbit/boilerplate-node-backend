@@ -80,6 +80,7 @@ describe('Replace/Update schema parity', () => {
             'Address',
             'FeedbackRequestStatus',
             'Locale',
+            'Product',
             'UserById'
         ]);
     });
