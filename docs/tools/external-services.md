@@ -78,11 +78,10 @@ answer, not a placeholder.
 
 Honest entries. Each is a decision someone has to make before a vendor can help.
 
-| Concern                     | What is missing                                                                      | Where it is tracked                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| **Object storage**          | uploads land on a local disk; no S3-shaped port exists                               | [a recipe in Deployment Hardening](./deployment-hardening.md#object-storage-for-uploads) |
-| **Fraud / risk scoring**    | nothing consumes a risk verdict; the app's own velocity limits are the whole defence | the payment-velocity plan                                                                |
-| **Breached-password check** | a password is checked for shape, never against a corpus                              | the breached-password plan                                                               |
+| Concern                  | What is missing                                                                                                                        | Where it is tracked                                                                      |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Object storage**       | uploads land on a local disk; no S3-shaped port exists                                                                                 | [a recipe in Deployment Hardening](./deployment-hardening.md#object-storage-for-uploads) |
+| **Fraud / risk scoring** | nothing consumes a third-party risk verdict; per-account velocity and decline limits (`payments/rate-limits.ts`) are the whole defence | —                                                                                        |
 
 ## 3 · What you actually give up by choosing nothing
 
