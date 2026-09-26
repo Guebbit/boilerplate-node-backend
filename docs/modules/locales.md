@@ -150,6 +150,15 @@ is a 422 too — deleting it would leave the entity with nothing to fall back to
 | A language is only deactivated | Nothing — deactivating hides a language, it doesn't retire it.                                                                                                                                              |
 | The FALLBACK locale itself     | Cannot be deleted or deactivated (`src/modules/locales/services/languages.ts`'s `rejectFallbackLocale`) — every entity's source row lives in it.                                                            |
 
+## Removing it
+
+Deleting this module does not break the shop — it becomes monolingual. `@kernel/translation`
+ships its own fallback: a write naming only `VITE_APP_FALLBACK_LOCALE`'s locale plans a single
+upsert straight through, and one naming any other locale, or leaving the fallback slot empty or
+deleted, is a 422 — never the 500 an unregistered port used to answer. Admin overrides, other
+languages and `/locales*` are simply absent. A product's own row still carries its `title`/
+`description`, since the read path treats no provider as "nothing to overlay," not an error.
+
 ## Related pages
 
 - [Internationalisation](../tools/i18n.md) — the mechanism both tiers, and the translations collection, run on
