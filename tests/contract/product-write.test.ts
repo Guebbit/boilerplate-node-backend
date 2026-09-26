@@ -26,7 +26,8 @@ const fieldPriceMin = () =>
 
 beforeAll(() => {
     localeService.setTranslatables({
-        product: { collection: 'products',
+        product: {
+            collection: 'products',
             fields: ['title', 'description'],
             cacheTag: 'products',
             writeDerived: productRepository.writeTranslatedFields

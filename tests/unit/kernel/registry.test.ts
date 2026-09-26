@@ -85,7 +85,12 @@ describe('resolveTranslatables', () => {
                 cacheTag: 'products',
                 writeDerived: writeProduct
             },
-            page: { collection: 'pages', fields: ['body'], cacheTag: 'pages', writeDerived: writePage }
+            page: {
+                collection: 'pages',
+                fields: ['body'],
+                cacheTag: 'pages',
+                writeDerived: writePage
+            }
         });
     });
 
@@ -94,7 +99,12 @@ describe('resolveTranslatables', () => {
     });
 
     it('refuses to boot when two modules declare the same entityType, instead of keeping one', () => {
-        const target = { collection: 'products', fields: ['title'], cacheTag: 'products', writeDerived: jest.fn() };
+        const target = {
+            collection: 'products',
+            fields: ['title'],
+            cacheTag: 'products',
+            writeDerived: jest.fn()
+        };
         const modules: AppModule[] = [
             { name: 'products', translatables: { product: target }, personalData: 'none' },
             { name: 'catalogue', translatables: { product: target }, personalData: 'none' }
