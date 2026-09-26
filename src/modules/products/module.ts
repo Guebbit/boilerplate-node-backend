@@ -54,7 +54,12 @@ export default {
      * translation write updates and the cache tag it must clear.
      */
     translatables: {
-        product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
+        product: {
+            collection: 'products',
+            fields: ['title', 'description'],
+            cacheTag: 'products',
+            writeDerived: productRepository.writeTranslatedFields
+        }
     },
     /**
      * The catalogue states the storefront and the repositories actually branch on.

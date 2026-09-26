@@ -8,7 +8,12 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct, readProduct } from '@modules/products/tests/factories';
-import { deriveSourceDigest, translationRepository } from '@modules/locales/repository';
+import { productRepository } from '@modules/products/repository';
+import {
+    deriveSourceDigest,
+    localeRepository,
+    translationRepository
+} from '@modules/locales/repository';
 import { givenLocale } from '@modules/locales/tests/factories';
 import { localeService } from '@modules/locales/services';
 
@@ -16,7 +21,12 @@ setupTestDb();
 
 beforeAll(() => {
     localeService.setTranslatables({
-        product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
+        product: {
+            collection: 'products',
+            fields: ['title', 'description'],
+            cacheTag: 'products',
+            writeDerived: productRepository.writeTranslatedFields
+        }
     });
 });
 
@@ -100,6 +110,25 @@ describe('upsertEntityTranslations', () => {
         );
 
         expect(result.status).toBe(422);
+    });
+
+    it('writes the fallback locale even with no locale row for it (D-LO5)', async () => {
+        const product = await createProduct();
+
+        // The fallback can't be deleted or deactivated, so writing it needs no `locales` row at
+        // all — remove the one `beforeEach` seeded to prove the write path doesn't look it up.
+        const fallbackRow = await localeRepository.findOne({ tag: FALLBACK });
+        if (fallbackRow) await localeRepository.deleteOne(fallbackRow);
+
+        const result = await localeService.upsertEntityTranslations(
+            'product',
+            String(product._id),
+            {
+                [FALLBACK]: { fields: { title: 'Kennel' } }
+            }
+        );
+
+        expect(result.success).toBe(true);
     });
 
     it('refuses a field the registry does not declare for this entityType', async () => {

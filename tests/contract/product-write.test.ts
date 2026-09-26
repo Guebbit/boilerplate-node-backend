@@ -13,6 +13,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
 import { localeService } from '@modules/locales/services';
+import { productRepository } from '@modules/products/repository';
 import { mergedResources } from '@tests/i18n-boot';
 
 setupTestDb();
@@ -25,7 +26,11 @@ const fieldPriceMin = () =>
 
 beforeAll(() => {
     localeService.setTranslatables({
-        product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
+        product: { collection: 'products',
+            fields: ['title', 'description'],
+            cacheTag: 'products',
+            writeDerived: productRepository.writeTranslatedFields
+        }
     });
 });
 

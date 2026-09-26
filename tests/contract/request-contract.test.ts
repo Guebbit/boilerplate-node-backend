@@ -55,12 +55,17 @@ import {
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
 import { localeService } from '@modules/locales/services';
+import { productRepository } from '@modules/products/repository';
 
 setupTestDb();
 
 beforeAll(() => {
     localeService.setTranslatables({
-        product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
+        product: { collection: 'products',
+            fields: ['title', 'description'],
+            cacheTag: 'products',
+            writeDerived: productRepository.writeTranslatedFields
+        }
     });
 });
 

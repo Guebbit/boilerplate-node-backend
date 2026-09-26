@@ -7,6 +7,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
 import { localeService } from '@modules/locales/services';
+import { productRepository } from '@modules/products/repository';
 
 /**
  * Writing a product through the MULTIPART body, which is the only way to send one with an image.
@@ -60,7 +61,11 @@ const FALLBACK = 'en';
 
 beforeAll(() => {
     localeService.setTranslatables({
-        product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
+        product: { collection: 'products',
+            fields: ['title', 'description'],
+            cacheTag: 'products',
+            writeDerived: productRepository.writeTranslatedFields
+        }
     });
 });
 
