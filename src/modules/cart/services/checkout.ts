@@ -115,9 +115,9 @@ const resolvePaymentMethod = async (
  * A method whose `requiresAddress` is false (`pickup`) never resolves an address at all — not
  * even the caller's default. `addressForCheckout(userId, undefined)` would silently hand one
  * back, and the order would freeze a shipping address nobody ships to. An explicit `addressId`
- * sent anyway is refused (422), not quietly dropped — a value that cannot apply here is a client
- * error, the same rule `CART_SHIPPING_NOT_APPLICABLE` already applies to a method named for an
- * all-digital basket.
+ * sent anyway is refused (409), not quietly dropped — a value that cannot apply here is a state
+ * conflict, the same status `CART_SHIPPING_NOT_APPLICABLE` already answers for a method named for
+ * an all-digital basket.
  *
  * @param userId - the caller's id, whose address book `addressId` is looked up against
  * @param addressId - the shipping address's entry id, or `undefined` for the default/no address
@@ -150,7 +150,7 @@ const resolveShipping = async (
         if (addressId !== undefined)
             return {
                 ok: false,
-                reject: generateReject(422, [
+                reject: generateReject(409, [
                     {
                         code: 'CART_ADDRESS_NOT_APPLICABLE',
                         message: t('cart.address-not-applicable')

@@ -298,7 +298,7 @@ describe('POST /cart/checkout', () => {
             .set('Authorization', bearer)
             .send({ addressId, shippingMethodId: 'pickup' });
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
         expect(response).toSatisfyApiSpec();
     });

@@ -839,7 +839,7 @@ describe('orderConfirm', () => {
 
         const result = await orderConfirm(user.id, testCallerContext, addressId, 'pickup');
 
-        expect(asReject(result).status).toBe(422);
+        expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
