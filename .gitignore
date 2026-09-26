@@ -39,8 +39,9 @@ src/modules/*/__factories-import-probe.ts
 
 # Claude Code's local state: session settings, and the worktrees it creates under
 # `.claude/worktrees/` — which `jest.config.js` already excludes from every test run. None of it
-# describes the project, so none of it is shared. `commands/` is the one exception: those slash
-# commands are checked in deliberately.
+# describes the project, so none of it is shared. `commands/` is un-ignored as a place a project
+# slash command COULD be checked in — nothing is right now, since the only thing that would live
+# there today (the `audit` symlink, below) is excluded on purpose.
 /.claude/*
 !/.claude/commands/
 

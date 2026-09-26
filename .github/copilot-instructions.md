@@ -15,7 +15,7 @@ Single package. REST API. Express. MongoDB. Mongoose.
 - Keep code DRY.
 - Keep code KISS.
 - Future proof beats clever.
-- Four tiers, dependencies one way, enforced per tier by `no-restricted-imports`:
+- Four tiers, dependencies one way, enforced per tier by `eslint-plugin-boundaries`:
   `infrastructure` (substrate, never knows modules exist) → `kernel` (the module system only) →
   `modules` (one domain each) → `app` (assembles this application).
 - Small layers: route -> middleware -> controller -> service -> repository -> model.
