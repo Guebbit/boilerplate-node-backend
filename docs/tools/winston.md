@@ -148,6 +148,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `payments`       | `PAYMENT_CONFIRMED`                         | `payment.confirmed`                         | —                      |
 | `payments`       | `PAYMENT_FAILED`                            | `payment.failed`                            | —                      |
 | `payments`       | `PAYMENT_RECORDED_OFFLINE`                  | `payment.recorded_offline`                  | `order`                |
+| `payments`       | `PAYMENT_REFUND_OWED_BY_HAND`               | `payment.refund_owed_by_hand`               | `order`                |
 | `products`       | `ADMIN_PRODUCT_CREATED`                     | `admin.product.created`                     | `product`              |
 | `products`       | `ADMIN_PRODUCT_DELETED`                     | `admin.product.deleted`                     | `product`              |
 | `products`       | `ADMIN_PRODUCT_RESTORED`                    | `admin.product.restored`                    | `product`              |
