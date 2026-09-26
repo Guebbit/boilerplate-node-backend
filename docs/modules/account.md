@@ -113,20 +113,21 @@ proven address — until the new one is confirmed.
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
 flowchart TB
     P["PUT/PATCH /account<br/><i>email: new@…</i>"] --> C{"which address?"}
-    C -->|"the current one"| X["cancels any pending change<br/><i>no mail, no token</i>"]
+    C -->|"the current one"| O["no-op<br/><i>a pending change, if any, is untouched</i>"]
     C -->|"taken by another account"| R["409<br/><i>email or pendingEmail</i>"]
     C -->|"any other"| W["pendingEmail set"]
     W --> N["notice → OLD address<br/><i>no token, no link that acts</i>"]
     W --> V["verification link → NEW address<br/><i>email-change token · 24h</i>"]
     V --> F["POST /account/email-change-confirm"]
     F --> S["pendingEmail → email<br/>verified = true<br/>refresh tokens revoked"]
+    D["DELETE /account/pending-email"] --> X["pendingEmail cleared<br/><i>no mail, no token</i>"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef warn fill:#fee2e2,stroke:#dc2626,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
-    class P,F entry;
+    class P,F,D entry;
     class R,N warn;
-    class X,W,V,S done;
+    class O,W,V,S,X done;
 ```
 
 Three things in that diagram are decisions rather than mechanics:
@@ -135,8 +136,11 @@ Three things in that diagram are decisions rather than mechanics:
   warning that arrives before a takeover is a warning; one that arrives after is a receipt. It
   carries no token and no link that acts — "this wasn't me" is a password change and a
   logout-everywhere, both of which already exist.
-- **Re-typing the current address cancels a pending change.** Cheaper than a dedicated endpoint,
-  and it is what a user who changed their mind would naturally do.
+- **Cancelling is its own explicit action, not a side effect of re-typing the current address.**
+  `PUT /account`'s `email` is required — every replace, including a phone-only edit, names it — so
+  treating "same address" as "cancel" meant a routine save could silently drop a pending change
+  the caller never asked to drop. `DELETE /account/pending-email` is the only thing that cancels
+  one now.
 - **Confirming revokes every refresh token.** An email change is the stronger takeover primitive
   of the two, and this is the same treatment a changed password already gets.
 

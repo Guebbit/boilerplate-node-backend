@@ -62,7 +62,8 @@
         },
         "email-change": {
             "token-not-found": "Invalid or expired token, please try again.",
-            "success": "Email address changed."
+            "success": "Email address changed.",
+            "cancelled": "The pending email change was cancelled."
         },
         "email": {
             "verify-request": {

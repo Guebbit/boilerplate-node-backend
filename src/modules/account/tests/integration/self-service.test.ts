@@ -182,7 +182,7 @@ describe('updateProfile', () => {
         expect(response.data.pendingEmail).toBeUndefined();
     });
 
-    it('cancels a pending change when the CURRENT address is restated', async () => {
+    it('restating the CURRENT address is a no-op — a pending change survives it', async () => {
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
         await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
 
@@ -190,9 +190,9 @@ describe('updateProfile', () => {
             await updateProfile(user.id, { email: 'before@example.com' }, testCallerContext)
         );
 
-        expect(response.data.pendingEmail).toBeUndefined();
+        expect(response.data.pendingEmail).toBe('after@example.com');
         const stored = await userRepository.findByIdWithCredentials(user.id);
-        expect(stored?.pendingEmail).toBeUndefined();
+        expect(stored?.pendingEmail).toBe('after@example.com');
     });
 
     it('answers the request-time collision check with 409 when the address belongs to someone else', async () => {
@@ -216,6 +216,32 @@ describe('updateProfile', () => {
         );
 
         expect(response.status).toBe(409);
+    });
+});
+
+describe('cancelPendingEmailChange', () => {
+    it('clears a pending change explicitly', async () => {
+        const user = await createUser({ email: 'before@example.com' });
+        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+
+        const response = asSuccess(
+            await accountService.cancelPendingEmailChange(user.id, testCallerContext)
+        );
+
+        expect(response.data.pendingEmail).toBeUndefined();
+        const stored = await userRepository.findByIdWithCredentials(user.id);
+        expect(stored?.pendingEmail).toBeUndefined();
+        expect(stored?.email).toBe('before@example.com');
+    });
+
+    it('is a no-op when nothing is pending', async () => {
+        const user = await createUser({ email: 'before@example.com' });
+
+        const response = asSuccess(
+            await accountService.cancelPendingEmailChange(user.id, testCallerContext)
+        );
+
+        expect(response.data.pendingEmail).toBeUndefined();
     });
 });
 

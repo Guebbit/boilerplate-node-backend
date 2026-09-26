@@ -61,7 +61,7 @@ paths:
         put:
             tags: [Account]
             summary: Replace own profile
-            description: Replaces every writable field of the authenticated user's own profile — email, username, locale, image (RFC 9110 §9.3.4, an omitted optional field is cleared). `analyticsConsent` is the one exception — it cannot be cleared, so leaving it out keeps it unchanged. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change-confirm` proves the new address, and a notice is sent to the OLD address the moment the change is requested. Sending the CURRENT address cancels a pending change.
+            description: Replaces every writable field of the authenticated user's own profile — email, username, locale, image (RFC 9110 §9.3.4, an omitted optional field is cleared). `analyticsConsent` is the one exception — it cannot be cleared, so leaving it out keeps it unchanged. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change-confirm` proves the new address, and a notice is sent to the OLD address the moment the change is requested. Sending the CURRENT address (or any other value that resolves to no change) is a no-op — it neither starts nor cancels anything; cancel an already-pending change with `DELETE /account/pending-email`.
             operationId: replaceAccount
             security:
                 - bearerAuth: []
@@ -91,7 +91,7 @@ paths:
         patch:
             tags: [Account]
             summary: Update own profile
-            description: Merges the given fields into the authenticated user's own profile — email, username, locale, image (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change-confirm` proves the new address, and a notice is sent to the OLD address the moment the change is requested. Sending the CURRENT address cancels a pending change.
+            description: Merges the given fields into the authenticated user's own profile — email, username, locale, image (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change-confirm` proves the new address, and a notice is sent to the OLD address the moment the change is requested. Sending the CURRENT address is a no-op — it neither starts nor cancels anything; cancel an already-pending change with `DELETE /account/pending-email`.
             operationId: updateAccount
             security:
                 - bearerAuth: []
@@ -123,6 +123,19 @@ paths:
             summary: Request account deletion
             description: Initiates the account-deletion flow for the authenticated user. A one-time confirmation token is sent to the user's email address. The token must then be submitted to `/account/delete-confirm` to complete the deletion.
             operationId: requestAccountDelete
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/pending-email:
+        delete:
+            tags: [Account]
+            summary: Cancel a pending email change
+            description: Discards a pending `pendingEmail` change started by `PUT`/`PATCH /account`, without proving it. A no-op when nothing is pending — a client does not need to check `GET /account` first.
+            operationId: cancelPendingEmailChange
             security:
                 - bearerAuth: []
             responses:

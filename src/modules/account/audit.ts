@@ -23,6 +23,8 @@ export const accountAuditActions = {
     AUTH_EMAIL_CHANGE_REQUESTED: 'auth.email_change.requested',
     /** `pendingEmail` swapped into `email` and every refresh token revoked. */
     AUTH_EMAIL_CHANGE_COMPLETED: 'auth.email_change.completed',
+    /** `DELETE /account/pending-email` discarded a pending change without proving it. */
+    AUTH_EMAIL_CHANGE_CANCELLED: 'auth.email_change.cancelled',
     AUTH_TOKEN_REFRESHED: 'auth.token.refreshed',
     /*
      * A refresh token was presented AFTER it was already rotated away, and outside the grace

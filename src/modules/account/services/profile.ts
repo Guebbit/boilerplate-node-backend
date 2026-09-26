@@ -297,9 +297,10 @@ interface EmailChangeOutcome {
  * The account keeps its current, PROVEN address until the new one is confirmed through
  * `POST /account/email-change-confirm` — docs/modules/account.md#proving-an-address.
  *
- * Three outcomes: an absent field leaves everything alone; the CURRENT address cancels whatever
- * change was pending — cheaper than a dedicated endpoint, and what a user retyping their real
- * address would naturally do; any OTHER address is checked against every account's `email` AND
+ * Three outcomes: an absent field leaves everything alone; the CURRENT address is a no-op — a
+ * `PUT` (`email` required) or a save that merely didn't change it must not silently cancel a
+ * pending change the caller never asked to cancel, see {@link cancelPendingEmailChange} for the
+ * explicit action that does; any OTHER address is checked against every account's `email` AND
  * `pendingEmail` before being accepted. That check is the REQUEST-TIME half of the collision
  * rule — `users_pending_email` and `users_email` (both unique) are the swap-time half, since the
  * two are up to 24 hours apart and only the indexes are still there for both.
@@ -312,12 +313,8 @@ const applyEmailChangeRequest = (
     user: UserDocument,
     requestedEmail: string | undefined
 ): Promise<EmailChangeOutcome> => {
-    if (requestedEmail === undefined) return Promise.resolve({ conflict: false, requested: false });
-
-    if (requestedEmail === user.email) {
-        user.pendingEmail = undefined;
+    if (requestedEmail === undefined || requestedEmail === user.email)
         return Promise.resolve({ conflict: false, requested: false });
-    }
 
     return userService.emailOrPendingEmailTaken(requestedEmail, user.id).then((taken) => {
         if (taken) return { conflict: true, requested: false };
@@ -325,6 +322,29 @@ const applyEmailChangeRequest = (
         return { conflict: false, requested: true };
     });
 };
+
+/**
+ * `DELETE /account/pending-email` — the explicit cancel {@link applyEmailChangeRequest} no longer
+ * performs as a side effect of resending the current address. A no-op when nothing is pending, so
+ * a client can call it without checking `GET /account` first.
+ */
+export const cancelPendingEmailChange = (
+    userId: string,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    userService
+        .findByIdWithPendingEmail(userId)
+        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
+            if (!user) return generateReject(401, []);
+            return userService.cancelPendingEmail(user).then((saved) => {
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELLED,
+                    outcome: 'success'
+                });
+                return generateSuccess(saved, 200, t('account.email-change.cancelled'));
+            });
+        })
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
 /**
  * The two mails a genuine `pendingEmail` request sends: a notice to the OLD address — no token,

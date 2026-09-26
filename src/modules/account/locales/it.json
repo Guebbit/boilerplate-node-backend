@@ -62,7 +62,8 @@
         },
         "email-change": {
             "token-not-found": "Token non valido o scaduto, riprova.",
-            "success": "Indirizzo email modificato."
+            "success": "Indirizzo email modificato.",
+            "cancelled": "La modifica dell'indirizzo email in sospeso è stata annullata."
         },
         "email": {
             "verify-request": {

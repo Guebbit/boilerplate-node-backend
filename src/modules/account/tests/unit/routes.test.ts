@@ -78,6 +78,7 @@ describe('account routes — what is mounted', () => {
             'GET /',
             'PUT /',
             'PATCH /',
+            'DELETE /pending-email',
             'DELETE /',
             'DELETE /delete-confirm',
             'POST /login',

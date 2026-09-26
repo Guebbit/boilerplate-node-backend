@@ -641,6 +641,16 @@ const applyEmailChange = (user: UserDocument, newEmail: string): Promise<UserDoc
 };
 
 /**
+ * Discard a pending email change without proving the new address — its own explicit action
+ * (`DELETE /account/pending-email`), distinct from {@link applyEmailChange}'s swap-on-proof. A
+ * no-op when nothing is pending, so the caller does not need to check first.
+ */
+const cancelPendingEmail = (user: UserDocument): Promise<UserDocument> => {
+    user.pendingEmail = undefined;
+    return userRepository.save(user);
+};
+
+/**
  * Stamp that an inactive account has been warned, so the reaper (`scripts/ops/reap-inactive-accounts.ts`)
  * does not warn it twice. The one field this operation may touch.
  */
@@ -803,6 +813,7 @@ export const userService = {
     setPassword,
     markEmailVerified,
     applyEmailChange,
+    cancelPendingEmail,
     markInactivityWarned,
     persistTwoFactorMethods,
     tokenAdd,

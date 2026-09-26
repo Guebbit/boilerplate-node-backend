@@ -52,6 +52,9 @@ x-app-level-responses:
     '429':
         response: TooManyRequests
         appliesTo: all
+    '503':
+        response: ServiceUnavailable
+        appliesTo: all
 
 tags:
     - name: Auth
@@ -289,6 +292,18 @@ components:
                         $ref: '#/components/schemas/ErrorResponse'
         TooManyRequests:
             description: The caller has spent a rate-limit budget and must wait. The wait is in the standard `RateLimit`/`Retry-After` headers, and — where the endpoint has a budget of its own to report, like a resend cooldown — in the error `details` too.
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        ServiceUnavailable:
+            description: >-
+                A dependency the request needed (Mongo, Redis) is unreachable right now — the
+                SERVER is temporarily unable, not the request refused (RFC 9110 §15.6.4). Every
+                route can answer this: `getAuth` for any bearer request, or a controller's own
+                database call. The `Retry-After` header carries a rough wait hint, a few seconds,
+                not a promise — there is no queue depth or circuit-breaker state to compute a
+                real one from.
             content:
                 application/json:
                     schema:
@@ -656,13 +671,13 @@ components:
                     type: string
                     format: date-time
                     nullable: true
-                # Set only by `PUT /account` requesting a new address, cleared once
-                # `POST /account/email-change-confirm` proves it (or a second `PUT /account`
-                # naming the CURRENT address cancels it). Inlined rather than `$ref`ing `Email`:
-                # that schema is shared with WRITABLE request bodies, and `readOnly` belongs to
-                # this field's use here, not to every one of them. A client shows it as a banner,
-                # never writes it — the request body's own `email` is what starts a change (see
-                # docs/modules/account.md#proving-an-address).
+                # Set only by `PUT`/`PATCH /account` requesting a new address, cleared once
+                # `POST /account/email-change-confirm` proves it or `DELETE /account/pending-email`
+                # cancels it explicitly — resending the CURRENT address is a no-op, not a cancel.
+                # Inlined rather than `$ref`ing `Email`: that schema is shared with WRITABLE
+                # request bodies, and `readOnly` belongs to this field's use here, not to every one
+                # of them. A client shows it as a banner, never writes it — the request body's own
+                # `email` is what starts a change (see docs/modules/account.md#proving-an-address).
                 pendingEmail:
                     type: string
                     format: email
@@ -1420,6 +1435,8 @@ paths:
     # ---------- account ----------
     /account:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account'
+    /account/pending-email:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1pending-email'
     /account/abilities:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1abilities'
     /account/password:

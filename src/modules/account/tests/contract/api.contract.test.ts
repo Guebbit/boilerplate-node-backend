@@ -212,7 +212,7 @@ describe('PATCH /account', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('cancels a pending change when the CURRENT address is restated', async () => {
+    it('restating the CURRENT address is a no-op — a pending change survives it', async () => {
         const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
             .patch('/account')
@@ -225,7 +225,7 @@ describe('PATCH /account', () => {
             .send({ email: user.email });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.pendingEmail).toBeUndefined();
+        expect(response.body.data.pendingEmail).toBe('someone-else-typed-this@example.com');
         expect(response).toSatisfyApiSpec();
     });
 
@@ -254,6 +254,33 @@ describe('PATCH /account', () => {
             .send({ email: 'not-an-email' });
 
         expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('DELETE /account/pending-email', () => {
+    it('cancels a pending change explicitly', async () => {
+        const { bearer } = await authenticateAs('user');
+        await api()
+            .patch('/account')
+            .set('Authorization', bearer)
+            .send({ email: 'someone-else-typed-this@example.com' });
+
+        const response = await api().delete('/account/pending-email').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+
+        const after = await api().get('/account').set('Authorization', bearer);
+        expect(after.body.data.pendingEmail).toBeUndefined();
+    });
+
+    it('is a no-op when nothing is pending', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().delete('/account/pending-email').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
     });
 });

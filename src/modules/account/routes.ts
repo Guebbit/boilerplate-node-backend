@@ -34,6 +34,7 @@ import {
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getAccount } from './controllers/get-account';
 import { replaceAccount, updateAccount } from './controllers/update-account';
+import { cancelPendingEmail } from './controllers/cancel-pending-email';
 import { postLogin } from './controllers/post-login';
 import { postSignup } from './controllers/post-signup';
 import { postResetRequest } from './controllers/post-reset-request';
@@ -122,6 +123,10 @@ router.patch(
     requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
     updateAccount
 );
+
+// DELETE /account/pending-email — cancel a pending email change (requires auth). No fresh-auth
+// gate: it only discards a change, the same trust level as reading the profile that shows it.
+router.delete('/pending-email', isAuth, cancelPendingEmail);
 
 // DELETE /account — request account deletion (requires auth). Critical: destruction.
 router.delete('/', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), deleteAccountRequest);
