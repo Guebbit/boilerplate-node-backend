@@ -36,7 +36,7 @@ flowchart LR
     products -. "product.deactivated" .-> orders
     products -. "product.deleted" .-> orders
     users -. "user.deleted" .-> orders
-    orders -. "order.cancelled" .-> payments
+    orders -. "order.refund_owed" .-> payments
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -85,8 +85,9 @@ a reason — see [Who writes the status](#who-writes-the-status) below.
 
 ::: warning Two modules reach back, and both do it through events
 [`inventory`](./inventory.md) cancels an order when its hold times out (`inventory.reservation_expired`), and
-this module announces `order.cancelled` so [`payments`](./payments.md) can refund. Neither is an
-import, which is what keeps a mutually-aware pair acyclic.
+this module announces `order.refund_owed` (split from `order.cancelled` itself, so retrying the
+refund never re-delivers the customer-facing cancellation webhook — B6) so [`payments`](./payments.md)
+can refund. Neither is an import, which is what keeps a mutually-aware pair acyclic.
 :::
 
 Each account reads back only its own orders; writing and soft-deleting is admin-only. The
@@ -96,7 +97,7 @@ Three scheduled jobs, all nightly via `docker/crontab`: `npm run reap:orders` re
 remaining PII with placeholders once its post-account-deletion retention window has passed —
 amounts, line items and dates survive, only the person is gone (an order is an invoice, never
 deleted outright, unlike `payments`' abandoned attempts). `npm run sweep:order-effects` re-announces
-`order.cancelled` for a refund the event bus's one delivery attempt did not carry through. `npm run
+`order.refund_owed` for a refund the event bus's one delivery attempt did not carry through. `npm run
 reap:invoices` sweeps the invoice CACHE — an orphaned file with no order left to name it (the
 hard-delete path cleans up its own file; this is the backstop for a row removed any other way),
 and any file past its TTL. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full
@@ -105,13 +106,15 @@ mechanism.
 ## Creating an order
 
 Every order, whoever makes it, is written through exactly one function — `placeOrder`
-(`services/place.ts`): freeze the lines against the catalogue, allocate the invoice number, mint a
-`bank_transfer` reference when that's the payment method (minted from the same id the write is
-about to land on, so a retried place cannot mint a second one for the same order), hold the stock,
-write the row. Everything caller-specific — payment-method validation, the open-transfer cap,
-resolving a shipping address or method, cart pre-flight and clearing — stays with the caller;
-`placeOrder` only takes what it needs to write and hold. See [Checkout](./cart-checkout.md#the-sequence)
-for the storefront path in full.
+(`services/place.ts`): freeze the lines against the catalogue, hold the stock, allocate the invoice
+number, mint a `bank_transfer` reference when that's the payment method (minted from the same id
+the write is about to land on, so a retried place cannot mint a second one for the same order),
+write the row. **The hold comes before the write, deliberately**: a refused hold then writes
+nothing at all — no order to roll back and no invoice number burned on a sale that never happened.
+Everything caller-specific — payment-method validation, the open-transfer cap, resolving a shipping
+address or method, cart pre-flight and clearing — stays with the caller; `placeOrder` only takes
+what it needs to hold and write. See [Checkout](./cart-checkout.md#the-sequence) for the storefront
+path in full.
 
 `POST /orders` is the OTHER caller — the admin path — and it is deliberately minimal, because it
 exists for manual corrections, not as a second sales channel:
@@ -138,7 +141,7 @@ flowchart LR
     SH -->|"system, via<br/>delivery's deliver door"| DE["delivered"]
     P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
     PA -.->|"admin · refund due"| CA
-    CA -. "order.cancelled" .-> PM["payments<br/><i>refunds if one was due</i>"]
+    CA -. "order.refund_owed" .-> PM["payments<br/><i>refunds if one was due</i>"]
 
     classDef open fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;

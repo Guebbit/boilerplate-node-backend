@@ -21,6 +21,17 @@ declare module '@kernel/events' {
         'order.cancelled': { orderId: string; refund: boolean };
 
         /**
+         * A cancelled order still owes its refund — split from `order.cancelled` so retrying the
+         * one effect `payments` owes never re-announces the whole cancellation (B6): before this,
+         * the retry sweep re-sent `order.cancelled` to EVERY listener just to nudge `payments`,
+         * duplicating the customer-facing webhook every time a provider outage outlasted one pass.
+         *
+         * Internal only — no AsyncAPI channel carries this. Nothing outside this application needs
+         * to know a refund was retried, only that the money eventually moved.
+         */
+        'order.refund_owed': { orderId: string };
+
+        /**
          * An order's status moved, whoever moved it — a status-only admin override
          * (`services/override.ts`) included, indistinguishable here from an ordinary system move.
          * Listeners filter on `to`; the event doesn't know or care who moved it or through which
@@ -45,6 +56,9 @@ declare module '@kernel/events' {
 
 /** Exported so an emitter and its listeners share one spelling instead of duplicated literals. */
 export const ORDER_CANCELLED = 'order.cancelled';
+
+/** See `DomainEventMap['order.refund_owed']` above. */
+export const ORDER_REFUND_OWED = 'order.refund_owed';
 
 /** See `DomainEventMap['order.status_changed']` above. */
 export const ORDER_STATUS_CHANGED = 'order.status_changed';

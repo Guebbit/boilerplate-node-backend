@@ -57,14 +57,14 @@ flowchart TD
     class X future;
 ```
 
-| Member                             | Contract                                                                                                                                                                                                                                                |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                             | Persisted on every payment document, so a row says who handled it.                                                                                                                                                                                      |
-| `prepare(charge, metadata)`        | Opens an intent for an amount this application already froze. Returns `providerRef` (persisted) and `clientSecret` (handed to the browser, never stored). **Idempotent on `metadata.paymentId`** — the double-click case must not open a second intent. |
-| `confirm(providerRef, methodRef)`  | Attaches the browser's tokenised method and asks for the money. Returns one of four states; **a decline is an answer, not an error** — only transport failures throw.                                                                                   |
-| `retrieve(providerRef)`            | Reads the authoritative state back. The reconciliation path, and what a finished challenge settles against.                                                                                                                                             |
-| `refund(providerRef, charge)`      | Idempotent provider-side; the caller guards its own side by only refunding a `succeeded` payment.                                                                                                                                                       |
-| `parseWebhook(rawBody, signature)` | Verifies the delivery and translates the provider's own event shape into this module's. Takes the **unparsed** body — a signature covers exact bytes.                                                                                                   |
+| Member                                            | Contract                                                                                                                                                                                                                                                |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                                            | Persisted on every payment document, so a row says who handled it.                                                                                                                                                                                      |
+| `prepare(charge, metadata)`                       | Opens an intent for an amount this application already froze. Returns `providerRef` (persisted) and `clientSecret` (handed to the browser, never stored). **Idempotent on `metadata.paymentId`** — the double-click case must not open a second intent. |
+| `confirm(providerRef, methodRef)`                 | Attaches the browser's tokenised method and asks for the money. Returns one of four states; **a decline is an answer, not an error** — only transport failures throw.                                                                                   |
+| `retrieve(providerRef)`                           | Reads the authoritative state back. The reconciliation path, and what a finished challenge settles against.                                                                                                                                             |
+| `refund(providerRef, charge, { idempotencyKey })` | Idempotent on the key (`refund:{paymentId}`) — a real PSP refunds once per key, so a retry cannot return the money twice. The caller guards its own side by only calling this on a `succeeded` payment, and only once it has confirmed.                 |
+| `parseWebhook(rawBody, signature)`                | Verifies the delivery and translates the provider's own event shape into this module's. Takes the **unparsed** body — a signature covers exact bytes.                                                                                                   |
 
 ::: warning A typo'd env value fails loudly
 `resolvePaymentProvider` throws when the environment names a provider this build does not carry.
@@ -114,9 +114,16 @@ and never more, the same rule the payment document follows.
    vendor's own verifier (`stripe.webhooks.constructEvent`) and maps `payment_intent.succeeded` /
    `.payment_failed` onto this module's state shape.
 2. Add one line to the `PROVIDERS` registry.
-3. Set `NODE_PAYMENT_PROVIDER`, the vendor's secret key, and `NODE_PAYMENT_WEBHOOK_SECRET` to the
-   vendor's webhook signing secret.
+3. Set `NODE_PAYMENT_PROVIDER`, `NODE_STRIPE_SECRET_KEY` to the vendor's own secret key, and
+   `NODE_PAYMENT_WEBHOOK_SECRET` to the vendor's webhook signing secret.
 4. Point the vendor's dashboard at `POST /payments/webhook`, which needs a public HTTPS endpoint.
+
+::: warning A test-mode key never boots in production
+`NODE_STRIPE_SECRET_KEY` is checked regardless of whether `stripe.ts` exists yet <!-- doc-paths:ignore -->
+(ST-1): a value starting `sk_test_` — Stripe's own test-mode prefix — refuses to boot under
+`NODE_ENV=production`, rather than silently running every "real" payment through Stripe's test
+ledger.
+:::
 
 The frontend swaps its method widget for the vendor's, which is the point of the exercise — the app
 stops touching card data. The service, the settlement and the contract's shape stay as they are.

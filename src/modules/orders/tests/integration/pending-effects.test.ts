@@ -1,6 +1,6 @@
 /**
  * @module
- * The durability of a cancel's consequences. `cancelById` announces `ORDER_CANCELLED` and
+ * The durability of a cancel's consequences. `cancelById` announces `ORDER_REFUND_OWED` and
  * `payments` refunds off that announcement — but `@kernel/events` has no retry, so a refund that
  * throws is logged and lost, and nothing reconciles it. The marker written in the same document
  * write as the status is what survives that, and `retryPendingEffects` is what discharges it.
@@ -13,7 +13,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
-import { ORDER_CANCELLED } from '../../events';
+import { ORDER_REFUND_OWED } from '../../events';
 import { orderRepository } from '../../repository';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { asAdmin } from '@tests/callers';
@@ -56,7 +56,7 @@ describe('cancelById — writing the intent down', () => {
     it('leaves the marker standing when the refund throws', async () => {
         // The bug this whole mechanism exists for: the provider is unreachable for the length of
         // one call. No crash, no rollback — the order cancels and the money silently never moves.
-        onDomainEvent(ORDER_CANCELLED, () => {
+        onDomainEvent(ORDER_REFUND_OWED, () => {
             throw new Error('payment provider unreachable');
         });
         const order = await seedOrder();
@@ -70,7 +70,7 @@ describe('cancelById — writing the intent down', () => {
     });
 
     it('drains the marker once the refund actually returns', async () => {
-        onDomainEvent(ORDER_CANCELLED, () => undefined);
+        onDomainEvent(ORDER_REFUND_OWED, () => undefined);
         const order = await seedOrder();
 
         await orderService.cancelById(String(order._id), asAdmin());
@@ -83,7 +83,7 @@ describe('cancelById — writing the intent down', () => {
     it('writes no marker at all when an operator cancels without refunding', async () => {
         // Nothing was promised, so there is nothing to make durable. A marker here would have the
         // sweep announcing a refund the operator deliberately withheld.
-        onDomainEvent(ORDER_CANCELLED, () => undefined);
+        onDomainEvent(ORDER_REFUND_OWED, () => undefined);
         const order = await seedOrder();
 
         await orderService.cancelById(String(order._id), asAdmin(), { refund: false });
@@ -94,7 +94,7 @@ describe('cancelById — writing the intent down', () => {
     it('keeps the marker off the wire', async () => {
         // Internal bookkeeping, like `anonymizeAfter`. The contract has no such field, and a
         // serialized order that grew one would be an undeclared property on every response.
-        onDomainEvent(ORDER_CANCELLED, () => {
+        onDomainEvent(ORDER_REFUND_OWED, () => {
             throw new Error('payment provider unreachable');
         });
         const order = await seedOrder();
@@ -111,7 +111,7 @@ describe('retryPendingEffects', () => {
     it('re-announces for a stuck order, and the second attempt settles it', async () => {
         let attempts = 0;
         // Fails once, then works — the provider outage that ends.
-        onDomainEvent(ORDER_CANCELLED, () => {
+        onDomainEvent(ORDER_REFUND_OWED, () => {
             attempts += 1;
             if (attempts === 1) throw new Error('payment provider unreachable');
             return undefined;
@@ -129,7 +129,7 @@ describe('retryPendingEffects', () => {
 
     it('is a no-op on a second pass — liveness is not the same as idempotence', async () => {
         let attempts = 0;
-        onDomainEvent(ORDER_CANCELLED, () => {
+        onDomainEvent(ORDER_REFUND_OWED, () => {
             attempts += 1;
             if (attempts === 1) throw new Error('payment provider unreachable');
             return undefined;
@@ -148,7 +148,7 @@ describe('retryPendingEffects', () => {
     it('keeps the marker when the retry throws too', async () => {
         // A sweep that cleared on failure would be worse than no sweep — it would erase the only
         // record that the money is still owed.
-        onDomainEvent(ORDER_CANCELLED, () => {
+        onDomainEvent(ORDER_REFUND_OWED, () => {
             throw new Error('payment provider unreachable');
         });
         const order = await seedOrder();
@@ -162,7 +162,7 @@ describe('retryPendingEffects', () => {
 
     it('ignores orders that owe nothing', async () => {
         const announcements: string[] = [];
-        onDomainEvent(ORDER_CANCELLED, ({ orderId }) => {
+        onDomainEvent(ORDER_REFUND_OWED, ({ orderId }) => {
             announcements.push(orderId);
             return undefined;
         });
@@ -179,7 +179,7 @@ describe('retryPendingEffects', () => {
     it('waits out the grace window rather than racing the cancel it just ran', async () => {
         // The default window exists so a slow-but-working refund is not retried underneath itself.
         process.env.NODE_ORDER_EFFECT_RETRY_MINUTES = '5';
-        onDomainEvent(ORDER_CANCELLED, () => {
+        onDomainEvent(ORDER_REFUND_OWED, () => {
             throw new Error('payment provider unreachable');
         });
         const order = await seedOrder();

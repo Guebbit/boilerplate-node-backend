@@ -183,8 +183,11 @@ export interface ReservationItem {
     quantity: number;
 }
 
-/** The three states a hold can be in. Terminal states are terminal — nothing leaves them. */
-export type ReservationStatus = 'held' | 'committed' | 'released';
+/**
+ * The four states a hold can be in. `released` and `restocked` are terminal; `committed` can
+ * still move to `restocked` if the paid order behind it is later cancelled (B2).
+ */
+export type ReservationStatus = 'held' | 'committed' | 'released' | 'restocked';
 
 /**
  * Deliberately not derived from a contract type, because there is none: a reservation is never
@@ -250,7 +253,7 @@ export const reservationSchema = new Schema<ReservationDocument>(
          */
         status: {
             type: String,
-            enum: ['held', 'committed', 'released'] satisfies ReservationStatus[],
+            enum: ['held', 'committed', 'released', 'restocked'] satisfies ReservationStatus[],
             default: 'held',
             required: true
         },

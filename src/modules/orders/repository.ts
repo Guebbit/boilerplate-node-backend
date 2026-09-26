@@ -232,6 +232,25 @@ const clearPendingEffect = (orderId: string, effect: OrderPendingEffect): Promis
         .then(({ modifiedCount }) => modifiedCount > 0);
 
 /**
+ * Add a pending effect outside a status move — settlement's own "the money landed on an order no
+ * longer payable" refund (B1) is the one caller: the order's status already moved (to
+ * `cancelled`, by whoever raced it there first), so there is no transition here to carry the
+ * marker on the way {@link updateStatusIfIn}'s `effects` parameter does for an ordinary cancel.
+ *
+ * @param orderId - the order to mark
+ * @param effect - the effect still owed
+ */
+const addPendingEffect = (orderId: string, effect: OrderPendingEffect): Promise<void> =>
+    orderModel
+        .updateOne(
+            { _id: toObjectId(orderId) },
+            { $set: { pendingEffects: [effect] } },
+            { timestamps: false }
+        )
+        .exec()
+        .then(() => undefined);
+
+/**
  * How many of this account's orders are still `pending` on a `bank_transfer` — checkout's
  * open-transfer cap. A week-long hold is otherwise free to take; this is what a third one refuses
  * before it is even written.
@@ -430,6 +449,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
     findPendingByProductId: (productId: string) => Promise<OrderDocument[]>;
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
+    addPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<void>;
     countOpenBankTransfers: (userId: string) => Promise<number>;
     existingIds: (ids: readonly string[]) => Promise<Set<string>>;
     detachUserId: (userId: string, retentionDays: number) => Promise<number>;
@@ -446,6 +466,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     findWithPendingEffects,
     findPendingByProductId,
     clearPendingEffect,
+    addPendingEffect,
     countOpenBankTransfers,
     existingIds,
     detachUserId,

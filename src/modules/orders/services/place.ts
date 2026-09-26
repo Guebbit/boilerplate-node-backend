@@ -1,11 +1,13 @@
 /**
  * @module
  * The one function that writes a new order — the aggregate `crud.ts`'s admin `create` and
- * `@modules/cart`'s checkout both funnel through, so the write itself (freeze the lines, allocate
- * the invoice number, mint a `bank_transfer` reference, hold the stock) exists in exactly one
- * place. Everything caller-specific — payment-method validation, the open-transfer cap, resolving
- * a shipping address/method, cart pre-flight and clearing — stays with the caller; this function
- * only takes what it needs to write the row and hold the stock.
+ * `@modules/cart`'s checkout both funnel through, so the write itself (freeze the lines, hold the
+ * stock, allocate the invoice number, mint a `bank_transfer` reference) exists in exactly one
+ * place, in that order (B20): the stock hold is taken BEFORE the order is written, so a refused
+ * hold burns neither a row nor an invoice number. Everything caller-specific — payment-method
+ * validation, the open-transfer cap, resolving a shipping address/method, cart pre-flight and
+ * clearing — stays with the caller; this function only takes what it needs to hold the stock and
+ * write the row.
  *
  * `PlaceOrderOutcome` is a plain verdict, not an HTTP envelope: `create` and checkout map it to
  * their own wire shapes, which differ (`ORDER_INSUFFICIENT_STOCK` vs `CART_INSUFFICIENT_STOCK`) —
@@ -18,6 +20,7 @@
 
 import { Types } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
+import { logger } from '@infrastructure/adapters/logger';
 import { inventoryService, type StockShortfall } from '@modules/inventory';
 import { emitDomainEvent } from '@kernel/events';
 import type { OrderDocument, OrderDocumentItem } from '../model';
@@ -25,7 +28,6 @@ import { checkOrderLines } from '../domain/rules';
 import { buildReference } from '../domain/transfer-reference';
 import { freezeOrderLines } from './snapshot';
 import { allocateInvoiceNumber } from './invoice-numbering';
-import { retractOrder } from './retract';
 import { orderRepository } from '../repository';
 import { ORDER_CREATED } from '../events';
 // `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
@@ -88,10 +90,15 @@ export type PlaceOrderOutcome =
     | { ok: false; reason: 'insufficient-stock'; shortfalls: StockShortfall[] };
 
 /**
- * Write a new order: freeze the lines, allocate the invoice number, mint a `bank_transfer`
- * reference when the payment method calls for one, hold the stock, and roll the order back if the
- * hold cannot be taken. Never rejects on a refusal — `checkOrderLines`/the stock hold answer
- * through the returned verdict, the same convention `checkOrderLines` itself already uses.
+ * Write a new order: freeze the lines, hold the stock, allocate the invoice number, then write the
+ * row. Never rejects on a refusal — `checkOrderLines`/the stock hold answer through the returned
+ * verdict, the same convention `checkOrderLines` itself already uses.
+ *
+ * Hold BEFORE write, deliberately (B20): the id is generated up front and `reserveForOrder` only
+ * ever needs it, so a refused hold writes nothing at all — no order to roll back, no invoice
+ * number burned on a sale that never happened. A hold taken and then lost to a failed write is the
+ * one case this still has to unwind by hand; a genuine crash between the two leaves only a hold,
+ * which expires through the reservation sweep like any other abandoned checkout.
  *
  * @param input - everything the write needs; see {@link PlaceOrderInput}
  * @returns the written order, or the specific reason nothing was written
@@ -102,47 +109,21 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
     );
     if (!verdict.ok) return { ok: false, reason: verdict.reason };
 
-    const [orderItems, invoiceNumber] = await Promise.all([
-        freezeOrderLines(
-            input.locale,
-            // `checkOrderLines` above already refused a missing product; every entry is defined here.
-            input.lines.map(({ product }) => product!),
-            input.lines.map(({ item }) => item.quantity)
-        ),
-        allocateInvoiceNumber()
-    ]);
+    const orderItems = await freezeOrderLines(
+        input.locale,
+        // `checkOrderLines` above already refused a missing product; every entry is defined here.
+        input.lines.map(({ product }) => product!),
+        input.lines.map(({ item }) => item.quantity)
+    );
 
     /*
-     * Pre-generated so a `bank_transfer` order's reference can be minted from the SAME id the
-     * write below is about to create — the reference must name the row it will end up on, not a
-     * second id nobody else ever sees.
+     * Pre-generated so `reserveForOrder` and a `bank_transfer` order's reference can both use the
+     * SAME id the write below will eventually create — reserving needs no row to exist yet, and
+     * the reference must name the row it will end up on, not a second id nobody else ever sees.
      */
     const orderId = new Types.ObjectId();
     const transferReference =
         input.paymentMethod === 'bank_transfer' ? buildReference(orderId.toHexString()) : undefined;
-
-    const order = await orderRepository.create({
-        _id: orderId,
-        userId: toObjectId(input.userId),
-        email: input.email,
-        items: orderItems,
-        invoiceNumber,
-        ...(input.notes ? { notes: input.notes } : {}),
-        ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
-        ...(input.payBy ? { payBy: input.payBy } : {}),
-        ...(transferReference ? { transferReference } : {}),
-        ...(input.shipping?.address ? { shippingAddress: input.shipping.address } : {}),
-        // Priced off THESE frozen lines' total — the free-above rule prices the basket being
-        // bought, not a later edit of it. See `PlaceOrderShipping.priceFor`'s own docblock.
-        ...(input.shipping?.method
-            ? {
-                  shippingMethod: input.shipping.method.id,
-                  shippingCost: input.shipping.method.priceFor(orderItems)
-              }
-            : {})
-        // The conditional spreads above widen to a plain index signature, which `create`'s typed
-        // input cannot narrow back on its own; every field it can carry is optional or spread in.
-    } as Partial<OrderDocument>);
 
     /*
      * The units are not SOLD here. They stay on the shelf until the payment lands or the hold
@@ -151,22 +132,63 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
      * absorbed both.
      */
     const outcome = await inventoryService.reserveForOrder(
-        String(order._id),
+        orderId.toHexString(),
         input.lines.map(({ item }) => ({ productId: item.productId, quantity: item.quantity })),
         input.shipping?.holdMinutes
     );
-    if (!outcome.held) {
-        await retractOrder(order, false);
+    if (!outcome.held)
         return { ok: false, reason: 'insufficient-stock', shortfalls: outcome.shortfalls };
+
+    // Only spent once the hold is secured — a refused reserve above returns before this ever runs,
+    // so a stock refusal no longer burns a sequential invoice number.
+    const invoiceNumber = await allocateInvoiceNumber();
+
+    // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback (B20): the hold is already taken by this point, so a failed order write must give it back rather than leave it standing on a row that was never created
+    try {
+        const order = await orderRepository.create({
+            _id: orderId,
+            userId: toObjectId(input.userId),
+            email: input.email,
+            items: orderItems,
+            invoiceNumber,
+            ...(input.notes ? { notes: input.notes } : {}),
+            ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
+            ...(input.payBy ? { payBy: input.payBy } : {}),
+            ...(transferReference ? { transferReference } : {}),
+            ...(input.shipping?.address ? { shippingAddress: input.shipping.address } : {}),
+            // Priced off THESE frozen lines' total — the free-above rule prices the basket being
+            // bought, not a later edit of it. See `PlaceOrderShipping.priceFor`'s own docblock.
+            ...(input.shipping?.method
+                ? {
+                      shippingMethod: input.shipping.method.id,
+                      shippingCost: input.shipping.method.priceFor(orderItems)
+                  }
+                : {})
+            // The conditional spreads above widen to a plain index signature, which `create`'s
+            // typed input cannot narrow back on its own; every field it can carry is optional or
+            // spread in.
+        } as Partial<OrderDocument>);
+
+        // Emitted here rather than left to `recordCreated`: this is the one function that writes a
+        // new order, so a future caller of it cannot forget to announce one the way a caller of
+        // `recordCreated` could — `webhooks` needs this fact regardless of which door placed the
+        // order. Fire-and-forget, like `recordCreated`'s other
+        // emits: a slow or failing listener must not delay the response this function's callers are
+        // already sending.
+        void emitDomainEvent(ORDER_CREATED, { orderId: String(order._id) });
+
+        return { ok: true, order };
+    } catch (error) {
+        await inventoryService
+            .releaseForOrder(orderId.toHexString())
+            .catch((releaseError: unknown) => {
+                // Stryker disable all
+                logger.error({
+                    message: `Orders: could not release the hold for order ${orderId.toHexString()} after its write failed — left for the reservation sweep`,
+                    error: releaseError
+                });
+                // Stryker restore all
+            });
+        throw error;
     }
-
-    // Emitted here rather than left to `recordCreated`: this is the one function that writes a
-    // new order, so a future caller of it cannot forget to announce one the way a caller of
-    // `recordCreated` could — `webhooks` needs this fact regardless of which door placed the
-    // order. Fire-and-forget, like `recordCreated`'s other
-    // emits: a slow or failing listener must not delay the response this function's callers are
-    // already sending.
-    void emitDomainEvent(ORDER_CREATED, { orderId: String(order._id) });
-
-    return { ok: true, order };
 };

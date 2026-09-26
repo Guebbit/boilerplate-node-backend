@@ -1,9 +1,10 @@
 /**
  * @module
- * Undoing an order that cannot stand — split out on its own so both `crud.ts` and `place.ts` can
- * call it without importing each other: `place.ts` uses it to roll back a write whose stock hold
- * failed. `crud.ts`'s admin `create` never writes an order directly, composing around `placeOrder`
- * instead, so it needs no compensation of its own — `placeOrder` already owns it.
+ * Undoing an order that cannot stand — `@modules/cart`'s checkout is the one caller, retracting the
+ * order and its hold together when a race it lost (`CART_CHANGED`) leaves a written order this
+ * request must not keep. `place.ts` holds stock BEFORE writing the order (B20), so a refused
+ * reserve there writes nothing to retract in the first place, and a write that fails after the hold
+ * succeeded only has a hold to give back — never a row to delete.
  */
 
 import { logger } from '@infrastructure/adapters/logger';

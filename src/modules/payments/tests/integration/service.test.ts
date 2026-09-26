@@ -3,7 +3,7 @@
  * Payments service (`src/modules/payments/services/`) — pins the invariants: the intent freezes
  * the ORDER's total (shipping included), a confirm moves the order `pending → paid` conditionally
  * so the payment row only says `succeeded` when the order does, a decline is retryable, and a
- * refund (the `ORDER_CANCELLED` listener) is at-most-once. Real Mongo throughout, because the
+ * refund (the `ORDER_REFUND_OWED` listener) is at-most-once. Real Mongo throughout, because the
  * guarantees are the conditional writes; the provider is the real `fake` one.
  */
 
@@ -13,6 +13,7 @@ import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService } from '@modules/orders';
+import { inventoryService } from '@modules/inventory';
 import {
     createIntent,
     confirmPayment,
@@ -21,9 +22,11 @@ import {
     applyWebhookSettlement,
     getForOrder,
     refundByOrder,
-    recordOfflinePayment
+    recordOfflinePayment,
+    retryPendingEffects
 } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
+import { withEnvironment } from '@tests/environment';
 import { FAKE_DECLINE_METHOD, fakePaymentProvider } from '@modules/payments/providers/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -233,10 +236,16 @@ describe('confirmPayment', () => {
         // The reference comes off the ROW, not the answer: it is deliberately not published, so a
         // test reading it from the response would be asserting a leak.
         const prepared = await paymentRepository.findByOrderId(String(order._id));
-        expect(refundSpy).toHaveBeenCalledWith(prepared!.providerRef, {
-            amount: (intent as { data?: { amount?: number } }).data?.amount,
-            currency: (intent as { data?: { currency?: string } }).data?.currency
-        });
+        expect(refundSpy).toHaveBeenCalledWith(
+            prepared!.providerRef,
+            {
+                amount: (intent as { data?: { amount?: number } }).data?.amount,
+                currency: (intent as { data?: { currency?: string } }).data?.currency
+            },
+            // Keyed on the payment's own id, not the order's or the call's — a redelivered
+            // retry of THIS same payment must reuse it, so the provider refunds once (B1).
+            { idempotencyKey: `refund:${String(prepared!._id)}` }
+        );
         refundSpy.mockRestore();
 
         // `refunded`, not back to `requires_confirmation`: the money DID move at the provider, and
@@ -279,7 +288,7 @@ describe('getForOrder', () => {
 });
 
 /*
- * The refund rides the ORDER_CANCELLED event, and the subscription only exists once the
+ * The refund rides the ORDER_REFUND_OWED event, and the subscription only exists once the
  * registry has run — a test that skipped `registerCheckoutModules` would assert the refund never
  * happens and pass for the wrong reason (same shape as the cart's USER_DELETED suite).
  */
@@ -316,6 +325,108 @@ describe('refund on cancel', () => {
         const payment = await paymentRepository.findByOrderId(String(order._id));
         // The intent survives untouched — no money moved, so there is nothing to move back.
         expect(payment!.status).toBe('requires_confirmation');
+    });
+
+    /*
+     * B1: `performRefund` used to move `succeeded → refunded` BEFORE asking the provider, so a
+     * rejection left a refund recorded as done with the money never actually returned, and the
+     * retry sweep found nothing left in `succeeded` to act on. The provider is asked FIRST now;
+     * a rejection leaves the payment `succeeded`, the one state the retry can still finish.
+     */
+    it('keeps a failed refund retryable instead of recording it as done', () =>
+        withEnvironment('NODE_ORDER_EFFECT_RETRY_MINUTES', '0', async () => {
+            const { user, order } = await orderFor();
+            await createIntent(String(order._id), auth(user));
+            const paymentId = String(
+                (await paymentRepository.findByOrderId(String(order._id)))!._id
+            );
+            await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+
+            const refundSpy = jest
+                .spyOn(fakePaymentProvider, 'refund')
+                .mockRejectedValueOnce(new Error('payment provider unreachable'));
+
+            await orderService.cancelById(String(order._id), auth(user));
+
+            expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
+                'succeeded'
+            );
+
+            expect(await orderService.retryPendingEffects()).toBe(1);
+            expect(refundSpy).toHaveBeenCalledTimes(2);
+            expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
+                'refunded'
+            );
+            refundSpy.mockRestore();
+        }));
+
+    it('leaves an owed refund on an order lost mid-payment for the sweep to finish (B1)', () =>
+        withEnvironment('NODE_ORDER_EFFECT_RETRY_MINUTES', '0', async () => {
+            const { user, order } = await orderFor();
+            const intent = await createIntent(String(order._id), auth(user));
+            const paymentId = String((intent as { data?: { id?: string } }).data?.id);
+            // Cancelled before the confirm lands — settlement's own "order lost" branch, not a
+            // cancel's own refund.
+            await orderService.cancelById(String(order._id), auth(user));
+
+            const refundSpy = jest
+                .spyOn(fakePaymentProvider, 'refund')
+                .mockRejectedValueOnce(new Error('payment provider unreachable'));
+
+            const result = await confirmPayment(
+                paymentId,
+                GOOD_METHOD,
+                auth(user),
+                testCallerContext
+            );
+
+            // settlePayment answers its own caller regardless — a rejected refund attempt is
+            // logged, never rethrown.
+            expect(asReject(result).status).toBe(409);
+            expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
+                'succeeded'
+            );
+
+            expect(await orderService.retryPendingEffects()).toBe(1);
+            expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
+                'refunded'
+            );
+            refundSpy.mockRestore();
+        }));
+
+    /*
+     * B1c: a refund used to go to whichever provider `NODE_PAYMENT_PROVIDER` names TODAY, not the
+     * one that actually took the money — dormant while only `fake` is ever registered, live the
+     * day a deployment switches providers with old payments still outstanding under the old one.
+     */
+    it('refuses to refund through a provider this payment was never made with', () => {
+        const retiredProvider = 'retired-psp';
+        return withEnvironment('NODE_ORDER_EFFECT_RETRY_MINUTES', '0', async () => {
+            const { user, order } = await orderFor();
+            await createIntent(String(order._id), auth(user));
+            const paymentId = String(
+                (await paymentRepository.findByOrderId(String(order._id)))!._id
+            );
+            await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+            // Simulate a payment made under a provider this build no longer registers.
+            await paymentRepository.updateStatusIfIn(
+                String(order._id),
+                ['succeeded'],
+                'succeeded',
+                {
+                    provider: retiredProvider
+                }
+            );
+
+            const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
+            await orderService.cancelById(String(order._id), auth(user));
+
+            expect(refundSpy).not.toHaveBeenCalled();
+            expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
+                'succeeded'
+            );
+            refundSpy.mockRestore();
+        });
     });
 
     it('pins refunded as terminal against a webhook that arrives after the cancel refund', async () => {
@@ -497,6 +608,96 @@ describe('the confirm commits the order’s held units', () => {
 });
 
 /**
+ * B2: cancelling a PAID order only ever released a hold that payment had already turned into a
+ * sale — `releaseForOrder` claims `held → released`, but a paid hold is `committed`, so it matched
+ * nothing and the units were lost from the shelf for good. `restockForOrder` is what gives them
+ * back once the release itself finds nothing to do.
+ */
+describe('cancelling a paid order restocks its units (B2)', () => {
+    it('gives on-hand back, records a restock movement, and refuses a second cancel', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        await payFor(String(order._id), user);
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+
+        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+
+        expect(cancelled.success).toBe(true);
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
+        const movements = await inventoryService.listMovements({ productId: String(product._id) });
+        expect(movements.items.filter((row) => row.reason === 'restock')).toHaveLength(1);
+
+        const second = await orderService.cancelById(String(order._id), auth(user));
+        expect(second.success).toBe(false);
+        expect(asReject(second).status).toBe(409);
+    });
+});
+
+/**
+ * B14: a crash between the `succeeded` write and the stock commit used to lose the commit
+ * forever — a redelivered webhook stops at the payment's own conditional write (already
+ * `succeeded`, so a retry moves nothing) and never reaches the commit again. The `pendingEffects`
+ * marker is what survives that crash, and `retryPendingEffects` is what acts on it.
+ */
+describe('B14 — a lost stock commit is retried, not lost', () => {
+    it('marks the commit still owed when it throws, and leaves the hold untouched', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
+            new Error('connection reset')
+        );
+
+        // The write to `succeeded` already landed by the time the commit throws — same as the
+        // real crash this guards against, this call reports the failure to its own caller.
+        await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('succeeded');
+        expect(payment!.pendingEffects).toEqual(['commit']);
+        // Nothing committed: the mocked failure stood in for the commit itself, before any
+        // counter moved.
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
+    });
+
+    it('finishes the commit and clears the marker on the next sweep', () =>
+        withEnvironment('NODE_PAYMENT_EFFECT_GRACE_MINUTES', '0', async () => {
+            const { user, product, order } = await placedOrder(10, 3);
+            jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
+                new Error('connection reset')
+            );
+            await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
+
+            expect(await retryPendingEffects()).toBe(1);
+
+            expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+            const payment = await paymentRepository.findByOrderId(String(order._id));
+            // `[]`, not `undefined`: Mongoose defaults an array path back to empty once `$unset`
+            // has removed it from storage — this is the cleared state, not a leftover value.
+            expect(payment!.pendingEffects).toEqual([]);
+
+            // A second pass finds nothing left to do — the marker is gone.
+            expect(await retryPendingEffects()).toBe(0);
+        }));
+
+    it('drops the marker without committing when the order is no longer payable', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
+            new Error('connection reset')
+        );
+        await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
+        await orderService.cancelById(String(order._id), auth(user));
+
+        await withEnvironment('NODE_PAYMENT_EFFECT_GRACE_MINUTES', '0', async () => {
+            expect(await retryPendingEffects()).toBe(1);
+        });
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.pendingEffects).toEqual([]);
+        // Cancelling already released what a commit never took — the sweep must not commit a
+        // sale for an order nobody can fulfil any more.
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
+    });
+});
+
+/**
  * The two states a payment can sit in while the customer is still working — a bank challenge, or
  * a method that settles over days. Neither may touch the order, and both are successes on the
  * wire: a 4xx would tell the browser to stop, and the browser is the only thing that can finish.
@@ -539,6 +740,58 @@ describe('in-flight settlement', () => {
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('pending');
     });
+
+    /*
+     * B3: a payment that goes `processing` can settle over days (a SEPA debit, some bank
+     * redirects), so the ordinary 30-minute hold gets extended to the bank-transfer window —
+     * otherwise the reservation sweep would cancel an order whose money is still on its way.
+     * The TTL is zeroed so an un-extended hold is already stale by the time the sweep below runs.
+     */
+    it('extends the hold to the bank-transfer window once the payment goes processing', () =>
+        withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', async () => {
+            const { user, product, order } = await placedOrder(10, 3);
+            const intent = await createIntent(String(order._id), auth(user));
+
+            await confirmPayment(
+                String(intent.success && intent.data?.id),
+                'pm_card_processing',
+                auth(user),
+                testCallerContext
+            );
+
+            await inventoryService.runReservationSweep();
+
+            // Still held, not swept: an un-extended hold would already have been stale.
+            expect(await countersOf(product._id)).toEqual({
+                onHand: 10,
+                reserved: 3,
+                available: 7
+            });
+            expect((await orderService.getById(String(order._id)))!.status).toBe('pending');
+        }));
+
+    it('does not extend the hold for a mere challenge — only processing does', () =>
+        withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', async () => {
+            const { user, product, order } = await placedOrder(10, 3);
+            const intent = await createIntent(String(order._id), auth(user));
+
+            await confirmPayment(
+                String(intent.success && intent.data?.id),
+                'pm_card_authentication_required',
+                auth(user),
+                testCallerContext
+            );
+
+            await inventoryService.runReservationSweep();
+
+            // The zeroed TTL hold is stale immediately, and requires_action gets no grace — the
+            // sweep releases it, same as any other abandoned checkout.
+            expect(await countersOf(product._id)).toEqual({
+                onHand: 10,
+                reserved: 0,
+                available: 10
+            });
+        }));
 
     it('does not offer the pay action again while a payment is in flight', async () => {
         // Offering the form back is how a customer pays twice: the browser is mid-challenge at
@@ -771,6 +1024,33 @@ describe('refundByOrder', () => {
         expect(refundSpy).toHaveBeenCalledTimes(1);
         refundSpy.mockRestore();
     });
+
+    /*
+     * B1: a failed attempt through THIS endpoint used to move the payment to `refunded` before
+     * asking the provider, so a rejection here answered 500 and left the row saying the money
+     * came back — and a retry then answered 409 "already refunded", with nothing actually
+     * returned. The provider is asked first now, so a rejection leaves `succeeded`, and a retry
+     * really is a retry.
+     */
+    it('a rejected attempt leaves the payment succeeded, so a retry can still return the money', async () => {
+        const { order } = await paidOrder();
+        const refundSpy = jest
+            .spyOn(fakePaymentProvider, 'refund')
+            .mockRejectedValueOnce(new Error('payment provider unreachable'));
+
+        await expect(
+            refundByOrder(String(order._id), asAdmin(), testCallerContext)
+        ).rejects.toThrow('payment provider unreachable');
+        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
+            'succeeded'
+        );
+
+        const retried = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+
+        expect(retried.success).toBe(true);
+        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe('refunded');
+        refundSpy.mockRestore();
+    });
 });
 
 describe('recordOfflinePayment', () => {
@@ -887,7 +1167,12 @@ describe('recordOfflinePayment — refunding it back', () => {
         resetDomainEvents();
     });
 
-    it('cancelling an offline-paid order marks it refunded by hand, with no provider call', async () => {
+    /*
+     * B1b: cancelling a hand-paid order used to auto-record `refundedByHand: true` — the system
+     * saying money moved that nobody actually moved. Only an operator confirming the cash came
+     * back may say that now; the automatic listener leaves the payment `succeeded`.
+     */
+    it('leaves a cancelled offline payment succeeded, for an operator to confirm', async () => {
         const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
         const { user, order } = await orderFor();
         await recordOfflinePayment(String(order._id), { method: 'cash' }, testCallerContext);
@@ -896,9 +1181,21 @@ describe('recordOfflinePayment — refunding it back', () => {
 
         expect(cancelled.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment).toMatchObject({ status: 'refunded', refundedByHand: true });
+        expect(payment).toMatchObject({ status: 'succeeded', refundedByHand: undefined });
         expect(refundSpy).not.toHaveBeenCalled();
         refundSpy.mockRestore();
+    });
+
+    it('only the admin refund endpoint can set refundedByHand, after that', async () => {
+        const { user, order } = await orderFor();
+        await recordOfflinePayment(String(order._id), { method: 'cash' }, testCallerContext);
+        await orderService.cancelById(String(order._id), auth(user));
+
+        const refunded = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+
+        expect(refunded.success).toBe(true);
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment).toMatchObject({ status: 'refunded', refundedByHand: true });
     });
 });
 

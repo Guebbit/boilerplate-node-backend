@@ -37,7 +37,7 @@ describe('stockMovementSchema — the ledger', () => {
         expect(enumOf(stockMovementSchema, 'reason')).toEqual(Object.values(StockMovementReason));
     });
 
-    it('carries the six reasons the contract states, in order', () => {
+    it('carries the seven reasons the contract states, in order', () => {
         /*
          * The literal list from `StockMovementReason` in `src/modules/inventory/openapi.yaml`.
          * `MOVEMENT_REASONS` is defined as `Object.values(StockMovementReason)`, so comparing the
@@ -50,7 +50,8 @@ describe('stockMovementSchema — the ledger', () => {
             'release',
             'expire',
             'receive',
-            'adjust'
+            'adjust',
+            'restock'
         ]);
     });
 
@@ -98,10 +99,15 @@ describe('reservationSchema — the hold', () => {
         ]);
     });
 
-    it('restricts status to the three states and starts every hold held', () => {
-        // Terminal states are terminal — nothing leaves `committed` or `released` — so the enum
-        // is the whole state machine. A fourth value would be a state no operation handles.
-        expect(enumOf(reservationSchema, 'status')).toEqual(['held', 'committed', 'released']);
+    it('restricts status to the four states and starts every hold held', () => {
+        // `released` and `restocked` are terminal; `committed` can still move to `restocked`
+        // (B2) — a fifth value would be a state no operation handles.
+        expect(enumOf(reservationSchema, 'status')).toEqual([
+            'held',
+            'committed',
+            'released',
+            'restocked'
+        ]);
         expect(defaultOf(reservationSchema, 'status')).toBe('held');
     });
 

@@ -162,7 +162,7 @@ components:
         # `domain/transitions.ts`, which is the one place that mapping is written.
         StockMovementReason:
             type: string
-            enum: [reserve, commit, release, expire, receive, adjust]
+            enum: [reserve, commit, release, expire, receive, adjust, restock]
             description: |
                 * `reserve` — an order claimed units. `reserved` up, `onHand` unchanged.
                 * `commit` — the order was paid for and the units left. Both down.
@@ -170,6 +170,7 @@ components:
                 * `expire` — the hold timed out unpaid. Same counters as `release`, different story.
                 * `receive` — a supplier delivery. `onHand` up.
                 * `adjust` — a stocktake correction, signed. `onHand` moves either way.
+                * `restock` — a paid order's committed units came back (the order was cancelled after payment). `onHand` up.
 
         # One row of the ledger. Append-only: there is no update path, and a wrong row is
         # corrected by the next movement, the way accountants do it.
