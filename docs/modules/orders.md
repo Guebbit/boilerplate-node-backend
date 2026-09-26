@@ -106,13 +106,15 @@ mechanism.
 ## Creating an order
 
 Every order, whoever makes it, is written through exactly one function — `placeOrder`
-(`services/place.ts`): freeze the lines against the catalogue, allocate the invoice number, mint a
-`bank_transfer` reference when that's the payment method (minted from the same id the write is
-about to land on, so a retried place cannot mint a second one for the same order), hold the stock,
-write the row. Everything caller-specific — payment-method validation, the open-transfer cap,
-resolving a shipping address or method, cart pre-flight and clearing — stays with the caller;
-`placeOrder` only takes what it needs to write and hold. See [Checkout](./cart-checkout.md#the-sequence)
-for the storefront path in full.
+(`services/place.ts`): freeze the lines against the catalogue, hold the stock, allocate the invoice
+number, mint a `bank_transfer` reference when that's the payment method (minted from the same id
+the write is about to land on, so a retried place cannot mint a second one for the same order),
+write the row. **The hold comes before the write, deliberately**: a refused hold then writes
+nothing at all — no order to roll back and no invoice number burned on a sale that never happened.
+Everything caller-specific — payment-method validation, the open-transfer cap, resolving a shipping
+address or method, cart pre-flight and clearing — stays with the caller; `placeOrder` only takes
+what it needs to hold and write. See [Checkout](./cart-checkout.md#the-sequence) for the storefront
+path in full.
 
 `POST /orders` is the OTHER caller — the admin path — and it is deliberately minimal, because it
 exists for manual corrections, not as a second sales channel:
