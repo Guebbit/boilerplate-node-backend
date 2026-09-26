@@ -39,6 +39,7 @@ import {
     upsertEntityTranslations,
     replaceEntityTranslations
 } from './translations';
+import { localeDisplayName } from '../model';
 
 /** The one name anything outside `services/` imports — every function the module exposes. */
 export const localeService = {
@@ -69,5 +70,8 @@ export const localeService = {
     setTranslatables,
     getEntityTranslations,
     upsertEntityTranslations,
-    replaceEntityTranslations
+    replaceEntityTranslations,
+    // A controller may not reach `../model` directly (the persistence wall), so the two
+    // controllers validating a display name ride through the service instead.
+    localeDisplayName
 };

@@ -1,8 +1,8 @@
 /**
  * @module
- * The translator's door: reading every locale an entity has, and merging a PATCH into it. Generic
- * across whatever `translatables` declares — `product` in V1 — and never reaches the entity's own
- * collection except through the derived-index-column write the registry names.
+ * The translator's door: reading every locale an entity has, and writing a PATCH or PUT into it.
+ * Generic across whatever `translatables` declares — `product` in V1 — and never reaches the
+ * entity's own collection except through the derived-index-column write the registry names.
  */
 
 import type {
@@ -28,7 +28,7 @@ import { deriveSourceDigest, localeRepository, translationRepository } from '../
 import { translatableTarget } from './translatables';
 
 /**
- * The GET/PATCH admin shape: `translations` is already wire-shaped, `translationRepository`'s
+ * The GET/PUT/PATCH admin shape: `translations` is already wire-shaped, `translationRepository`'s
  * `TWire` — `normalize`'s own transform, not a document, so no controller calls `.toJSON()` on it.
  */
 export interface EntityTranslationsResult {
@@ -114,11 +114,12 @@ const isRejection = (value: unknown): value is ResponseReject =>
     typeof value === 'object' && value !== null && 'success' in value && !value.success;
 
 /**
- * Validate a whole PATCH-shaped batch against the `locales` collection, the registry's declared
- * fields, and the fallback-locale delete guard — the pre-flight half of a write, with no entity id
- * at all: every check here is about the LOCALE and the FIELD NAMES, never about a specific row, so
- * this runs the same whether the entity already exists or is still being created in the same
- * request (`productService.write`'s `POST /products`, notably).
+ * Validate a whole batch — the same `UpsertTranslationsRequest` shape PUT and PATCH both send —
+ * against the `locales` collection, the registry's declared fields, and the fallback-locale delete
+ * guard: the pre-flight half of a write, with no entity id at all. Every check here is about the
+ * LOCALE and the FIELD NAMES, never about a specific row, so this runs the same whether the entity
+ * already exists or is still being created in the same request (`productService.writeCreate`'s
+ * `POST /products`, notably).
  *
  * Returns the resolved `target` alongside the plan, so a caller that needs it afterwards — its
  * cache tag, its collection — looks it up here once rather than repeating the same

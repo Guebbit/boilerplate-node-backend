@@ -29,7 +29,7 @@ import { t, getCurrentLocale, localeCandidatesFor } from '@infrastructure/i18n';
 export type TranslatedFields = Record<string, string>;
 
 /**
- * What `modules/locales` supplies once, at import time.
+ * What `modules/locales` supplies once, from its own `onRegistered`.
  */
 export interface TranslationPort {
     /**

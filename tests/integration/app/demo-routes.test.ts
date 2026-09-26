@@ -16,11 +16,8 @@ import { installRequestParsing, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
 import { installRoutes } from '@app/routes';
 import { installErrorHandling } from '@app/error-handling';
-import { resolveTranslatables } from '@kernel/registry';
-import { localeService } from '@modules/locales';
 import { productModel } from '@modules/products/model';
 import { orderModel } from '@modules/orders/model';
-import { enabledModules } from '../../../src/modules';
 
 /**
  * A one-shot switch: the next `emptyDatabase()` call rejects instead of doing its real work, then
@@ -47,10 +44,10 @@ jest.mock('@infrastructure/runtime/database-snapshot', () => {
 setupTestDb();
 
 // The default (no `scenario` in the body) reseeds `shop`, whose products write translations
-// through the same manifest a real write validates against — see `scenarios/apply.ts`'s
-// identical call for why this has to be built from `enabledModules` and handed in by hand.
-beforeAll(() => localeService.setTranslatables(resolveTranslatables(enabledModules)));
-afterAll(() => localeService.setTranslatables({}));
+// through the same manifest a real write validates against. `@tests/http`'s `api` import (above)
+// already pulls in the real `src/app.ts`, which registers every enabled module — including
+// `products`' own `translatables` declaration — at import time, so nothing here builds that
+// lookup by hand.
 
 /**
  * A throwaway app carrying the demo surface and nothing else — enough for every case whose

@@ -43,7 +43,7 @@ export interface CredentialResolver {
 let credentialResolver: CredentialResolver | undefined;
 
 /**
- * Install the resolver. Called once, at import time, by the module that owns authentication.
+ * Install the resolver. Called once, by the owning module's `onRegistered`.
  *
  * @param implementation - the module's resolver
  */
@@ -52,7 +52,7 @@ export const registerAuthResolver = (implementation: AuthResolver): void => {
 };
 
 /**
- * Install the credential resolver. Called once, at import time, by `api-keys/module.ts` — mirrors
+ * Install the credential resolver. Called once, by `api-keys/module.ts`'s `onRegistered` — mirrors
  * {@link registerAuthResolver}.
  *
  * @param implementation - the module's resolver

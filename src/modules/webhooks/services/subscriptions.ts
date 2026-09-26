@@ -165,11 +165,12 @@ export const update = (
                 subscription.description = clearedOrValue(body.description);
             if (body.eventTypes !== undefined) subscription.eventTypes = body.eventTypes;
             if (body.enabled !== undefined) {
+                // Only a disabled → enabled transition re-arms. `enabled: true` on an already
+                // enabled subscription (editing its description, say) must not zero a streak that
+                // is still building toward the auto-disable threshold.
+                const reArming = !subscription.enabled && body.enabled;
                 subscription.enabled = body.enabled;
-                // Re-arming clears the auto-disable marker and the streak that triggered it — an
-                // operator who just re-enabled a subscription should not watch it auto-disable
-                // again on the very next failure because of a count from before they looked at it.
-                if (body.enabled) {
+                if (reArming) {
                     subscription.disabledAt = undefined;
                     subscription.consecutiveFailures = 0;
                 }
@@ -217,22 +218,26 @@ export const rotateSecret = (
 
 /**
  * Drop one entry from the ring by id — the other half of a rotation, once every consumer has
- * switched. A `secretId` the ring doesn't carry is a silent no-op, same as before this action had
- * its own route.
+ * switched.
  *
- * @returns a 404 outside this tenant's subscriptions, a 422 if this would empty the ring
+ * @returns a 404 outside this tenant's subscriptions, or when `secretId` isn't in this ring; a
+ *   422 if removing it would empty the ring
  */
 export const removeSecret = (
     id: string,
     secretId: string,
     context: TenantCallerContext
-): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> =>
+): Promise<ResponseSuccess<WebhookSubscriptionDocument> | ResponseReject> =>
     webhookSubscriptionRepository
         .findByIdInTenant(id, context.caller.tenantId)
         .then((subscription) => {
             if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
 
             const remaining = removeRingSecret(subscription.secrets, secretId);
+            // An id the ring doesn't carry filters out nothing — same length back. Nothing was
+            // removed, so this is a 404, not a silent success.
+            if (remaining.length === subscription.secrets.length)
+                return generateReject(404, [t('generic.error-not-found')]);
             // Never let this empty the ring — a subscription with no secret can never sign a
             // delivery. The schema's own `validate` (`../model.ts`) is the second guard; this is
             // the one that answers 422 instead of a save-time throw.
@@ -247,7 +252,7 @@ export const removeSecret = (
                     target_type: 'webhook_subscription',
                     target_id: id
                 });
-                return generateSuccess({ subscription: saved });
+                return generateSuccess(saved);
             });
         });
 

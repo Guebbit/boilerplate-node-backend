@@ -4,6 +4,7 @@
  * the repository and stays the one place a controller may call into.
  */
 
+import type { z } from 'zod';
 import { getCurrentLocale, getFallbackLocale, localeCandidatesFor, t } from '@infrastructure/i18n';
 import {
     applyTranslations,
@@ -43,6 +44,7 @@ import { productsAuditActions } from './audit';
 import { PRODUCT_DELETED, PRODUCT_CREATED, PRODUCT_DEACTIVATED } from './events';
 import {
     zodProductCreateSchema,
+    zodProductReplaceSchema,
     zodProductUpdateSchema,
     toProduct,
     DEFAULT_PRODUCT_IMAGE_URL
@@ -494,23 +496,23 @@ export const writeCreate = async (
 };
 
 /**
- * Update a product and merge its translation rows in one operation — the PATCH door of the
+ * Update a product and merge its translation rows in one operation — the PUT/PATCH door of the
  * multilingual product write surface. Delegates the product write itself to {@link updateById},
  * which already owns the 404 check and the audit emit; this only adds the translations half
  * around it, so there is exactly one path deciding what "the product was updated" means.
  *
+ * `data` arrives already validated: `update-product.ts` hands `createUpdateController` the same
+ * `zodProductUpdateSchema`, so a bad price 422s with its field-named message at the factory —
+ * there is exactly one place this body is checked, not a second, redundant one here.
  * `imageExtras` — see {@link writeCreate}.
  */
 export const writeUpdate = async (
     id: string,
-    data: Record<string, unknown>,
+    data: z.infer<typeof zodProductUpdateSchema>,
     context: CallerContext,
     imageExtras: { thumbnailUrl?: string; pendingImageKey?: string } = {}
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> => {
-    const parsed = zodProductUpdateSchema.safeParse(data);
-    if (!parsed.success) return generateReject(422, validationErrors(parsed.error));
-
-    const { translations, ...productFields } = parsed.data;
+    const { translations, ...productFields } = data;
 
     const plan = translations
         ? await planTranslations('product', toUpsertTranslationsRequest(translations))
@@ -731,5 +733,10 @@ export const productService = {
     findPublicById,
     findManyByIds,
     countPublic,
-    syncStockCache
+    syncStockCache,
+    // Same reason as `toProduct` just above: the update controller's factory needs these to
+    // validate PUT/PATCH bodies with the field-named price message, and may not reach `./model`
+    // directly.
+    zodProductReplaceSchema,
+    zodProductUpdateSchema
 };

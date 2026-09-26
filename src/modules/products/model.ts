@@ -11,7 +11,7 @@ import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import { z } from 'zod';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
-import { CreateProductBody, UpdateProductByIdBody } from '@api/schemas.zod';
+import { CreateProductBody, ReplaceProductByIdBody, UpdateProductByIdBody } from '@api/schemas.zod';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { availableStock } from './domain/stock';
 import type { Product } from '@types';
@@ -128,6 +128,20 @@ export const zodProductCreateSchema = CreateProductBody.extend({
         .min(0, { error: () => t('products.field-price-min') }),
     translations: zodProductTranslations
 }).superRefine((data, context) => refineFallbackLocale(data.translations, context, true));
+
+/**
+ * Zod schema for a product PUT, built on the generated `ReplaceProductByIdBody` — every writable
+ * field stays genuinely required there; this only swaps in the custom-message price and the
+ * fallback-locale guard. `mustBePresent: false`: the contract's own text ("MUST NOT be null on
+ * update") applies to PUT the same as PATCH — a PUT replaces the whole product, not just its
+ * translation map, and a key this map omits still just "leaves that locale untouched".
+ */
+export const zodProductReplaceSchema = ReplaceProductByIdBody.extend({
+    price: z
+        .number({ error: () => t('products.field-price-invalid') })
+        .min(0, { error: () => t('products.field-price-min') }),
+    translations: zodProductTranslations
+}).superRefine((data, context) => refineFallbackLocale(data.translations, context, false));
 
 /**
  * Zod schema for a product PATCH, built on the generated `UpdateProductByIdBody` — every field is

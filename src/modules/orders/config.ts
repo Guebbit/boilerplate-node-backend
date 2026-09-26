@@ -14,8 +14,9 @@
  * events/emails/model, never a bare `config` — see `local/barrel-allowed-sources`); the VAT RATES
  * are a different thing with a different owner — `products` resolves those
  * (`@modules/products`'s `config.ts`), and this module only freezes the number it is handed. The
- * order link is owned here for the D14 reason: `infrastructure/http/frontend-link.ts` only turns a
- * resolved template into a URL, and does not know `orders` exists.
+ * order link is owned here because `infrastructure/http/frontend-link.ts` only turns a resolved
+ * template into a URL, and does not know `orders` exists — see `docs/theory/layers.md` for why
+ * infrastructure may not know a module by name.
  */
 
 import path from 'node:path';

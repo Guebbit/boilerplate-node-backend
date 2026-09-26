@@ -4,7 +4,7 @@
  * email can carry (verify, reset, delete, email-change), each with its own default template and
  * `NODE_FRONTEND_LINK_*` override. `infrastructure/http/frontend-link.ts` only turns a resolved
  * template into a URL; it does not know these kinds exist, or that `account` does — see
- * `docs/theory/layers.md` for why infrastructure may not know a module by name (D14).
+ * `docs/theory/layers.md` for why infrastructure may not know a module by name.
  */
 
 import { frontendLink } from '@infrastructure/http/frontend-link';

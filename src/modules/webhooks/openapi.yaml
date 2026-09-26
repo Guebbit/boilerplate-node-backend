@@ -87,7 +87,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionCreatedEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -116,7 +116,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionCreatedEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -147,9 +147,9 @@ paths:
                 Adds a new secret to the ring and returns its plaintext once, in `newSecret` — the
                 ring then carries two active secrets, and deliveries sign with both (two
                 space-separated `v1,` values in `webhook-signature`) until the old one is dropped
-                through `DELETE .../secrets/{secretId}`. Split out from the old `PATCH` body's
-                `rotateSecret` flag: a command, not state, so it gets its own route instead of
-                sharing one with url/description/eventTypes/enabled.
+                through `DELETE .../secrets/{secretId}`. Its own route rather than a flag on
+                `PATCH`'s body: a command, not state, so it does not share a route with
+                url/description/eventTypes/enabled.
             operationId: rotateWebhookSubscriptionSecret
             security:
                 - bearerAuth: []
@@ -192,7 +192,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/WebhookSubscriptionCreatedEnvelope'
+                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -437,6 +437,7 @@ components:
                     description: Must be `https://`. Validated again, against the resolved IP, on every delivery.
                 description:
                     type: string
+                    minLength: 1
                 eventTypes:
                     type: array
                     items: { type: string }
@@ -519,6 +520,19 @@ components:
                 status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
                 message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
                 data: { $ref: '#/components/schemas/WebhookSubscriptionCreated' }
+
+        # For every response that never carries a one-time secret (replace, update, drop-secret).
+        # `WebhookSubscriptionCreatedEnvelope`'s `data` schema advertises `secret`/`newSecret` on
+        # every response that uses it; those three don't send either field.
+        WebhookSubscriptionEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
+                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
+                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
+                data: { $ref: '#/components/schemas/WebhookSubscription' }
 
         WebhookSubscriptionsResponseEnvelope:
             type: object

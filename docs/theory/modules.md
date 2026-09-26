@@ -362,8 +362,10 @@ export default {
 ```
 
 Every field is read by something: the router is mounted at `basePath`, `locales` is handed to
-i18next, `subscribe` attaches the module's event handlers. That is the bar for a field being here
-at all — the manifest used to also carry a `subdomain` string and a labelled `dependsOn` graph,
+i18next, `subscribe` attaches the module's event handlers, `onRegistered` runs once every module is
+known — installing a kernel port, or resolving a cross-module lookup like `locales`'
+`translatables`. That is the bar for a field being here at all — the manifest used to also carry a
+`subdomain` string and a labelled `dependsOn` graph,
 which nothing read and three tests checked; it does not carry either any more. Both questions live
 next to the manifest instead, in the module's own `module.yaml` — one plain file, read by
 `.dependency-cruiser.cjs` as the enforced allow-list behind `check:dependencies`, not by the app at
@@ -522,7 +524,7 @@ flowchart TD
     CQ --> L["registerLocaleDirectories&lpar;&rpar;<br/><i>from each manifest</i>"]
     L --> I["i18next.init&lpar;&rpar;<br/><i>reads the merged result</i>"]
     I --> S["listen"]
-    RM["registerModules&lpar;&rpar;<br/><i>validate DAG · subscribe</i>"] --> MNT["mount routers by basePath"]
+    RM["registerModules&lpar;&rpar;<br/><i>validate DAG · subscribe · onRegistered</i>"] --> MNT["mount routers by basePath"]
     MNT --> H404["404 catch-all"]
 
     classDef boot fill:#fef3c7,stroke:#d97706,color:#111827;

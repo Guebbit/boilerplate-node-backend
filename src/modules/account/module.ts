@@ -30,10 +30,9 @@ import { accountRateLimits } from './rate-limits';
 import { setPersonalDataSections } from './services/personal-data-registry';
 
 /**
- * Everything this module installs once every enabled module is known (D15): the auth resolver the
- * whole app's guards depend on, plus its own `personalData` export list — the app tier used to
- * resolve that list and hand it in by name, which meant deleting this module also meant editing
- * `app.ts`.
+ * Everything this module installs once every enabled module is known: the auth resolver the whole
+ * app's guards depend on, plus its own `personalData` export list — resolved here, by this module,
+ * rather than by the app tier collecting it and handing it in by name.
  *
  * The resolver is registered HERE rather than at import time, so importing this file (a type, a
  * test) no longer installs it — only a module `registerModules` actually runs `onRegistered` for
@@ -46,7 +45,7 @@ import { setPersonalDataSections } from './services/personal-data-registry';
  */
 const onRegistered = (modules: readonly AppModule[]): void => {
     registerAuthResolver(accountAuthResolver);
-    setPersonalDataSections(resolvePersonalDataSections([...modules]));
+    setPersonalDataSections(resolvePersonalDataSections(modules));
 };
 
 /** This module's manifest entry: routes, event subscriptions, and locales. */

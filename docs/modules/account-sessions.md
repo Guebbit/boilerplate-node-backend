@@ -8,11 +8,12 @@ How this application decides who is making a request — and why none of it is p
 **Breaks if you change** — the cookie flags or the lifetimes. Every guard in the app resolves through here.
 :::
 
-## The resolver, installed at import time
+## The resolver, installed by `onRegistered`
 
-[`account`](./account.md) fills the kernel's authentication port the moment its manifest is
-imported — not in a boot step. Installing a function touches no connection, and every guard in the
-application depends on it existing before the first request arrives.
+[`account`](./account.md) fills the kernel's authentication port from its own `onRegistered` hook,
+called once when `app.ts` registers every enabled module — not in a boot step, and not merely by
+being imported. Installing a function touches no connection, and every guard in the application
+depends on it existing before the first request arrives.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 32, 'rankSpacing': 50}}}%%
