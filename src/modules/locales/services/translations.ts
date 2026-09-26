@@ -88,12 +88,7 @@ const planSlot = (
         return Promise.resolve({ locale, kind: 'delete' });
     }
 
-    return localeRepository.findByTag(locale).then((language) => {
-        if (!language)
-            return slotRejection('locales.error-translation-locale-unknown', { locale }, locale);
-        if (!language.active)
-            return slotRejection('locales.error-translation-locale-inactive', { locale }, locale);
-
+    const planFields = (): PlannedWrite | ResponseReject => {
         if (Object.keys(value.fields).length === 0)
             return slotRejection('locales.error-translation-fields-empty', undefined, locale);
 
@@ -106,6 +101,20 @@ const planSlot = (
             );
 
         return { locale, kind: 'upsert', fields: value.fields, origin: value.origin ?? 'human' };
+    };
+
+    // D-LO5: the fallback locale can't be deleted or deactivated, so writing it never needs the
+    // `locales` collection lookup — this is what still stores fallback-language content once
+    // `locales` is uninstalled entirely (`kernel/translation.ts`'s own fallback path).
+    if (locale === fallbackLocale) return Promise.resolve(planFields());
+
+    return localeRepository.findByTag(locale).then((language) => {
+        if (!language)
+            return slotRejection('locales.error-translation-locale-unknown', { locale }, locale);
+        if (!language.active)
+            return slotRejection('locales.error-translation-locale-inactive', { locale }, locale);
+
+        return planFields();
     });
 };
 
@@ -198,12 +207,7 @@ const writePlannedTranslations = async (
             slot.kind === 'upsert' && slot.locale === fallbackLocale
     );
     const target = translatableTarget(entityType);
-    if (fallbackWrite && target)
-        await translationRepository.updateDerivedColumn(
-            target.collection,
-            entityId,
-            fallbackWrite.fields
-        );
+    if (fallbackWrite && target) await target.writeDerived(entityId, fallbackWrite.fields);
 };
 
 /**
