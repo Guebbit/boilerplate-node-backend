@@ -220,6 +220,53 @@ describe('PATCH /webhooks/subscriptions/:id', () => {
         expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
     });
+
+    it('re-enabling clears the auto-disable marker and the failure streak', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const created = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
+        const id = String(created.body.data.id);
+        const stored = await webhookSubscriptionRepository.findById(id);
+        if (!stored) throw new Error('fixture subscription vanished');
+        stored.enabled = false;
+        stored.consecutiveFailures = 4;
+        stored.disabledAt = new Date();
+        await webhookSubscriptionRepository.save(stored);
+
+        const response = await api()
+            .patch(`/webhooks/subscriptions/${id}`)
+            .set('Authorization', bearer)
+            .send({ enabled: true });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.consecutiveFailures).toBe(0);
+        expect(response.body.data.disabledAt).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('editing an already-enabled subscription does not reset its failure streak', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const created = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
+        const id = String(created.body.data.id);
+        const stored = await webhookSubscriptionRepository.findById(id);
+        if (!stored) throw new Error('fixture subscription vanished');
+        stored.consecutiveFailures = 2;
+        await webhookSubscriptionRepository.save(stored);
+
+        const response = await api()
+            .patch(`/webhooks/subscriptions/${id}`)
+            .set('Authorization', bearer)
+            .send({ enabled: true, description: 'renamed' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.consecutiveFailures).toBe(2);
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('POST /webhooks/subscriptions/:id/rotate-secret', () => {
@@ -253,6 +300,24 @@ describe('POST /webhooks/subscriptions/:id/rotate-secret', () => {
 });
 
 describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId', () => {
+    it('404s a secretId the ring does not carry, without touching the ring', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const created = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
+
+        const response = await api()
+            .delete(`/webhooks/subscriptions/${String(created.body.data.id)}/secrets/not-a-real-id`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+
+        const stored = await webhookSubscriptionRepository.findById(String(created.body.data.id));
+        expect(stored?.secrets).toHaveLength(1);
+    });
+
     it('422s a removal that would empty the ring', async () => {
         const { bearer } = await authenticateAsRole('manager');
         const created = await api()
