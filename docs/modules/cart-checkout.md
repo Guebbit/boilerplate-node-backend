@@ -28,7 +28,7 @@ flowchart TD
     A["1 · load the account<br/><i>users</i>"] --> P["2 · validate the payment method<br/><i>payments — listPaymentMethods</i>"]
     P --> Q["3 · the open-transfer cap<br/><i>orders — countOpenBankTransfers</i>"]
     Q --> B["4 · resolve the shipping method<br/><i>delivery — pure function</i>"]
-    B --> C["5 · resolve the address<br/><i>account — addressForCheckout</i>"]
+    B --> C["5 · resolve the address,<br/>only when the method needs one<br/><i>account — addressForCheckout</i>"]
     C --> D["6 · join the lines against the catalogue<br/><i>products</i>"]
     D --> E["7 · evaluate the rules,<br/>the method/address requirement,<br/>and the method's weight range<br/><i>cart/domain — evaluateShippingRequirement, basketWeight</i>"]
     E --> F["8 · placeOrder<br/><i>orders — freeze lines, invoice number,<br/>mint transfer reference, hold stock, write</i>"]
@@ -40,7 +40,7 @@ flowchart TD
     P -.->|"method not offered"| R
     Q -.->|"cap reached"| R
     B -.->|"unknown method"| R
-    C -.->|"not the caller's address"| R
+    C -.->|"not the caller's address;<br/>or an addressId sent for a<br/>method that needs none"| R
     D -.->|"product gone"| R
     E -.->|"rule says no; a physical basket<br/>with no method, or an address-requiring<br/>method with none; or the basket<br/>doesn't fit the chosen method's<br/>weight range"| R
     F -.->|"stock gone"| R
@@ -58,7 +58,11 @@ flowchart TD
 ```
 
 Steps 1–7 are reads and refusals — genuinely checkout's own job: deciding whether this basket, this
-account and this address are allowed to become an order at all. Step 7 also carries the shipping
+account and this address are allowed to become an order at all. Step 5 resolves an address only
+when the chosen method's `requiresAddress` is true — `pickup` ships to nobody, so it never even
+asks the address book for the caller's default; an explicit `addressId` sent alongside a method
+that needs none is refused (`CART_ADDRESS_NOT_APPLICABLE`) rather than silently dropped, so an
+order never freezes an address that means nothing. Step 7 also carries the shipping
 requirement: any `requiresShipping: true` line needs a method (`CART_SHIPPING_METHOD_REQUIRED`
 otherwise), and once a method is chosen, `ShippingMethod.requiresAddress` says whether it also needs
 an address (`CART_ADDRESS_REQUIRED` otherwise) — a digital-only basket needs neither. The weight

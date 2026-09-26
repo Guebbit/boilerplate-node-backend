@@ -162,11 +162,44 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [System]
+            summary: Replace a language
+            description: |
+                Replaces a language's display names, writing direction and visibility (RFC 9110
+                §9.3.4 — every writable field is required, none of them has a legal "cleared"
+                state). The tag itself is immutable — it is what every entry references, so
+                changing it would be a rename of the whole dictionary rather than an edit of this
+                record.
+            operationId: replaceLocale
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceLocaleRequest'
+            responses:
+                '200':
+                    description: The updated language
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LanguageEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        patch:
+            tags: [System]
             summary: Edit a language
             description: |
-                Updates a language's display names, writing direction or visibility. The tag itself
-                is immutable — it is what every entry references, so changing it would be a rename
-                of the whole dictionary rather than an edit of this record.
+                Merges a language's display names, writing direction or visibility (RFC 7396, an
+                omitted field is left unchanged). The tag itself is immutable — it is what every
+                entry references, so changing it would be a rename of the whole dictionary rather
+                than an edit of this record.
             operationId: updateLocale
             security:
                 - bearerAuth: []
@@ -462,6 +495,49 @@ paths:
             responses:
                 '200':
                     description: Every locale this entity has a row for
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/EntityTranslationsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        put:
+            tags: [System]
+            summary: Replace every translation an entity has
+            description: |
+                REPLACING semantics: a locale currently stored but absent from the body is deleted
+                — the whole set becomes exactly what the body carries. Paired with `PATCH` on this
+                same resource, which merges instead; "does saving delete the locales I didn't
+                touch" is the question every translation tool gets wrong, so the two behaviours
+                are spelled in the METHOD rather than a flag. Same three signals as `PATCH` for a
+                key that IS in the body — see its own description — plus the implicit fourth: a
+                key that is neither in the body nor already stored never existed either way.
+
+                The fallback locale (`NODE_FALLBACK_LOCALE`) must be present and non-null, same
+                invariant `POST /products` already enforces on create: a caller cannot replace the
+                whole set and leave the entity with nothing to fall back to.
+
+                422 for the same reasons `PATCH` refuses — an unknown or inactive locale, an empty
+                `fields` object, a `fields` key the `translatables` registry does not declare, or a
+                missing/`null` fallback locale.
+            operationId: replaceEntityTranslations
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/TranslatableEntityTypePathParam'
+                - $ref: '#/components/parameters/TranslationEntityIdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpsertTranslationsRequest'
+            responses:
+                '200':
+                    description: Every locale this entity has a row for, after the write
                     content:
                         application/json:
                             schema:
@@ -1009,6 +1085,26 @@ components:
                 active:
                     type: boolean
                     default: true
+
+        # PUT /locales/{locale} — RFC 9110 §9.3.4: the body IS the new resource. Every field is
+        # required because none of the four has a legal "cleared" state — `name`/`nativeName` are
+        # always set, and `direction`/`active` always hold a concrete value (a Mongoose schema
+        # default, never an absence).
+        ReplaceLocaleRequest:
+            type: object
+            additionalProperties: false
+            required: [name, nativeName, direction, active]
+            properties:
+                name:
+                    type: string
+                    minLength: 1
+                nativeName:
+                    type: string
+                    minLength: 1
+                direction:
+                    $ref: '#/components/schemas/LocaleDirection'
+                active:
+                    type: boolean
 
         UpdateLocaleRequest:
             type: object

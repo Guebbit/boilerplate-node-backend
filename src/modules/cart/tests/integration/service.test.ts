@@ -808,6 +808,42 @@ describe('orderConfirm', () => {
         expect(order!.shippingAddress).toBeUndefined();
     });
 
+    it('never freezes the caller default address onto a pickup order', async () => {
+        // The real-world bug this guards: a caller WITH a default on file, checking out under a
+        // method that ships to nobody, must not have that default silently attached anyway.
+        const user = await createUser();
+        await giveUserAnAddress(user.id);
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
+
+        expect(result.success).toBe(true);
+        const order = await findOrder({ userId: user._id });
+        expect(order!.shippingMethod).toBe('pickup');
+        expect(order!.shippingAddress).toBeUndefined();
+    });
+
+    it('refuses an explicit addressId for a method that ships to nobody', async () => {
+        const user = await createUser();
+        const added = await addressAdd(user.id, {
+            fullName: 'Ada Lovelace',
+            street: 'Via Roma 1',
+            city: 'Modena',
+            zip: '41121',
+            country: 'IT'
+        });
+        const addressId = added.success ? added.data.addresses[0]?.id : undefined;
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        const result = await orderConfirm(user.id, testCallerContext, addressId, 'pickup');
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+    });
+
     it('refuses a shipping method the basket is too heavy for', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `express` requires one

@@ -61,6 +61,37 @@ caller's compiled CASL read filter to an anonymous caller's, byte for byte, rath
 on a role name — safe BY CONSTRUCTION, since a role change that widens visibility makes the two
 filters unequal on its own, with nobody needing to remember to touch the cache key too.
 
+## Response headers
+
+`applyCacheHeaders` (`infrastructure/http/middlewares/cache.ts`) sets every `Cache-Control` header
+this middleware owns, and decides whether the request is even a candidate for the Redis lookup
+`serveOrArm` does next.
+
+**`Cache-Control` itself:**
+
+- A cached POST (`POST /x/search`, keyed the same as its GET twin) is a SERVER-side arrangement
+  only — the wire always says `no-store`, since a shared cache holding a POST response could
+  answer a later POST from it, including a real write on some other route.
+- A cacheable GET gets `max-age`/`stale-*` (a shared cache in front of this server is what absorbs
+  a guest-scope stampede), or `no-cache` when the route asked for `browserRevalidate` instead.
+- `cacheScope === undefined` — this caller sees more than the shared answer, per
+  [the scope-key rule above](#no-caching-depends-on-who-is-asking) — answers `private, no-cache`
+  regardless of `browserRevalidate`: `serveOrArm` is about to bypass Redis for this same request,
+  and a shared/browser cache must not store this ONE caller's wider answer as if it were generic.
+
+**The two `Vary` headers:** `Authorization`, because `getAuth` derives `authContext` from it alone
+— without this, a shared cache could serve one anonymous response back to an admin, the same class
+of bug `GET /account` once had. `Accept-Language`, because `attachLocale` already sets it and a
+route reaching this by another path should still declare it.
+
+**Two throws guard a mounting mistake, not a runtime condition:**
+
+- `noStore` already forbade caching. Left unchecked, the `Cache-Control` set here would REPLACE
+  that header rather than merge — exactly how `GET /account` once cached a caller's profile for an
+  hour behind a router-wide no-store mount.
+- `browserRevalidate` on a POST. RFC 9110 makes a POST response browser-cacheable only under
+  conditions nothing here meets, so there would be nothing for the browser to revalidate.
+
 ## The key is what the request asked for, not how it was written
 
 Every route declares which query parameters change its answer, and the key is built from those

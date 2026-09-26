@@ -18,6 +18,7 @@
         "shipping-method-weight": "The chosen shipping method does not carry a basket this heavy.",
         "shipping-method-required": "Your cart contains physical products — choose a shipping method to continue.",
         "address-required": "The chosen shipping method needs a delivery address — choose or add one to continue.",
+        "address-not-applicable": "The chosen shipping method does not ship to an address — remove the address and try again.",
         "payment-method-not-available": "The chosen payment method is not offered by this shop.",
         "bank-transfer-limit": "You already have too many orders awaiting a bank transfer. Complete or cancel one before placing another."
     }

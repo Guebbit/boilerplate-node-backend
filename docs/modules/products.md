@@ -153,9 +153,11 @@ always goes through the resolver above.
 
 ### Writing translated content
 
-`POST /products` and `PATCH /products/{id}` take a `translations` map keyed by locale instead of a
-flat `title`/`description` — the fallback locale's entry is required on create, every other locale
-is optional, and `null` on an existing locale deletes its row (never on the fallback one).
+`POST /products`, `PUT /products/{id}` and `PATCH /products/{id}` all take a `translations` map
+keyed by locale instead of a flat `title`/`description` — the fallback locale's entry is required
+on every one of the three (PUT included: a translations table is keyed sub-resources, not a field
+a whole-body replace can null out), every other locale is optional, and `null` on an existing
+locale deletes its row (never on the fallback one).
 `src/modules/products/service.ts`'s `writeCreate`/`writeUpdate` validate the whole batch
 (`planTranslations`, the `@kernel/translation` port) before writing anything, then write the
 product and its rows in the same operation; `getAdmin` backs `GET /products/{id}/admin`, the one

@@ -254,13 +254,15 @@ export const writeForPort = (
     );
 
 /**
- * Merge a PATCH into an entity's translations: upsert what is an object, delete what is `null`,
- * leave alone what is absent.
+ * Validate and apply a batch — shared by `upsertEntityTranslations` (PATCH) and
+ * `replaceEntityTranslations` (PUT), which differ only in what `payload` already contains by the
+ * time it gets here: PATCH's payload is the caller's body verbatim, PUT's has an explicit `null`
+ * added for every stored locale the caller's body left out.
  *
  * @param context - caller context for the `ADMIN_TRANSLATION_UPDATED` audit emit and
  *   `translatedBy`; omitted by tests that call this as a plain helper — no context means no emit
  */
-export const upsertEntityTranslations = async (
+const applyTranslationBatch = async (
     entityType: string,
     entityId: string,
     payload: UpsertTranslationsRequest,
@@ -288,6 +290,51 @@ export const upsertEntityTranslations = async (
     });
 
     return getEntityTranslations(entityType, entityId);
+};
+
+/**
+ * Merge a PATCH into an entity's translations: upsert what is an object, delete what is `null`,
+ * leave alone what is absent.
+ */
+export const upsertEntityTranslations = (
+    entityType: string,
+    entityId: string,
+    payload: UpsertTranslationsRequest,
+    context?: CallerContext
+): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> =>
+    applyTranslationBatch(entityType, entityId, payload, context);
+
+/**
+ * Replace the whole set for a PUT: every locale currently stored but absent from the body is
+ * deleted, by turning "absent" into an explicit `null` before handing the batch to
+ * {@link applyTranslationBatch} — the same validation `upsertEntityTranslations` already runs
+ * (including the fallback-locale delete guard, so a body that omits it is refused the same way
+ * an explicit `null` on it already is) then treats a planned `null` as a delete.
+ *
+ * The fallback locale is checked whether or not a row for it exists yet: a brand-new entity with
+ * no translations at all must still name it in a PUT, the same way `POST /products` already
+ * requires it on create — otherwise a caller could replace-in only non-fallback locales and leave
+ * the entity with nothing to fall back to, with no existing row for {@link planSlot}'s guard to
+ * turn into a deletion.
+ */
+export const replaceEntityTranslations = async (
+    entityType: string,
+    entityId: string,
+    payload: UpsertTranslationsRequest,
+    context?: CallerContext
+): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> => {
+    const target = translatableTarget(entityType);
+    if (!target) return entityTypeUnknown(entityType);
+
+    const existing = await translationRepository.findEntityTranslations(entityType, entityId);
+    const checkedLocales = new Set(existing.map((row) => row.locale));
+    checkedLocales.add(getFallbackLocale());
+
+    const deletions = Object.fromEntries(
+        [...checkedLocales].filter((locale) => !(locale in payload)).map((locale) => [locale, null])
+    );
+
+    return applyTranslationBatch(entityType, entityId, { ...payload, ...deletions }, context);
 };
 
 /** Every locale row an entity has, in the admin shape. */

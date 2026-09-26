@@ -34,7 +34,11 @@ import { createLanguage, updateLanguage, deleteLanguage } from './languages';
 import { searchEntries, createEntry, updateEntry, deleteEntry, importEntries } from './entries';
 import { readMessages, readApiOverrides } from './messages';
 import { setTranslatables } from './translatables';
-import { getEntityTranslations, upsertEntityTranslations } from './translations';
+import {
+    getEntityTranslations,
+    upsertEntityTranslations,
+    replaceEntityTranslations
+} from './translations';
 
 /** The one name anything outside `services/` imports — every function the module exposes. */
 export const localeService = {
@@ -64,5 +68,6 @@ export const localeService = {
     importEntries,
     setTranslatables,
     getEntityTranslations,
-    upsertEntityTranslations
+    upsertEntityTranslations,
+    replaceEntityTranslations
 };

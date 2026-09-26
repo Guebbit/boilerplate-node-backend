@@ -126,7 +126,7 @@ describe('GET /locales', () => {
     it('hides an inactive language entirely', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
-        await api().put('/locales/pt').set('Authorization', bearer).send({ active: false });
+        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
 
         const response = await api().get('/locales');
 
@@ -253,7 +253,7 @@ describe('GET /locales/:locale/messages', () => {
     it('404s for an inactive language, exactly as for an unknown one', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
-        await api().put('/locales/pt').set('Authorization', bearer).send({ active: false });
+        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
 
         const hidden = await api().get('/locales/pt/messages');
         const unknown = await api().get('/locales/zz/messages');
@@ -356,7 +356,26 @@ describe('POST /locales', () => {
 });
 
 describe('PUT /locales/:locale', () => {
-    it('matches the contract', async () => {
+    it('matches the contract when replacing every writable field', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api().put('/locales/pt').set('Authorization', bearer).send({
+            name: 'Portuguese',
+            nativeName: 'Português (Brasil)',
+            direction: 'ltr',
+            active: false
+        });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.nativeName).toBe('Português (Brasil)');
+        expect(response.body.data.active).toBe(false);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // A PUT body IS the new resource (RFC 9110 §9.3.4) — none of this resource's four fields has
+    // a legal "cleared" state, so all four are required.
+    it('refuses a PUT body missing a required field', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
@@ -365,9 +384,7 @@ describe('PUT /locales/:locale', () => {
             .set('Authorization', bearer)
             .send({ nativeName: 'Português (Brasil)', active: false });
 
-        expect(response.status).toBe(200);
-        expect(response.body.data.nativeName).toBe('Português (Brasil)');
-        expect(response.body.data.active).toBe(false);
+        expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
 
@@ -377,7 +394,7 @@ describe('PUT /locales/:locale', () => {
         const response = await api()
             .put('/locales/zz')
             .set('Authorization', bearer)
-            .send({ active: false });
+            .send({ name: 'X', nativeName: 'X', direction: 'ltr', active: false });
 
         expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
@@ -392,7 +409,7 @@ describe('PUT /locales/:locale', () => {
         const response = await api()
             .put('/locales/pt')
             .set('Authorization', bearer)
-            .send({ name: '   ' });
+            .send({ name: '   ', nativeName: 'Português', direction: 'ltr', active: true });
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
@@ -403,6 +420,60 @@ describe('PUT /locales/:locale', () => {
 
         const response = await api()
             .put('/locales/pt')
+            .set('Authorization', bearer)
+            .send({ name: 'X', nativeName: 'X', direction: 'ltr', active: false });
+
+        expect(response.status).toBe(403);
+    });
+});
+
+describe('PATCH /locales/:locale', () => {
+    it('matches the contract, leaving omitted fields unchanged', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api()
+            .patch('/locales/pt')
+            .set('Authorization', bearer)
+            .send({ nativeName: 'Português (Brasil)', active: false });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.nativeName).toBe('Português (Brasil)');
+        expect(response.body.data.active).toBe(false);
+        expect(response.body.data.name).toBe('Portuguese');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('404s for a language that does not exist', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .patch('/locales/zz')
+            .set('Authorization', bearer)
+            .send({ active: false });
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('422s on a whitespace-only name, the same as the create route', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api()
+            .patch('/locales/pt')
+            .set('Authorization', bearer)
+            .send({ name: '   ' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('403s for a non-admin caller', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .patch('/locales/pt')
             .set('Authorization', bearer)
             .send({ active: false });
 
@@ -425,7 +496,7 @@ describe('DELETE /locales/:locale', () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
-        await api().put('/locales/pt').set('Authorization', bearer).send({ active: false });
+        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
 
         const response = await api().delete('/locales/pt').set('Authorization', bearer);
 
@@ -999,6 +1070,56 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
             });
 
         expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('PUT /locales/translations/:entityType/:id', () => {
+    // Every slot, fallback included, is checked against a real `locales` row — `en` needs one
+    // registered here the same way `pt` does, since nothing else in this suite ever upserts it.
+    const FALLBACK = { tag: 'en', name: 'English', nativeName: 'English' };
+
+    it('deletes a locale the body does not name, matching the spec', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer, FALLBACK);
+        await createLanguage(bearer);
+        const product = await createProduct();
+
+        // Seeds both `en` and `pt` first — the PUT below names only `en`.
+        await api()
+            .patch(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({
+                en: { fields: { title: 'Bed' } },
+                pt: { fields: { title: 'Cama' } }
+            });
+
+        const response = await api()
+            .put(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ en: { fields: { title: 'Bed, replaced' } } });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.translations).toHaveLength(1);
+        expect(response.body.data.translations[0]).toMatchObject({
+            locale: 'en',
+            fields: { title: 'Bed, replaced' }
+        });
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('refuses a replace that omits the fallback locale', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer, FALLBACK);
+        await createLanguage(bearer);
+        const product = await createProduct();
+
+        const response = await api()
+            .put(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ pt: { fields: { title: 'Cama' } } });
+
+        expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
 });
