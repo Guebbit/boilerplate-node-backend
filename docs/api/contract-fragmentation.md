@@ -9,13 +9,15 @@ repositories and is easy to get wrong from either side.
 > This repository **owns** the shared, domain-shaped documents. The frontend **holds
 > byte-identical copies** of the two it consumes and never edits them.
 
-**One backend, one frontend, lockstep.** There is exactly one paired frontend and one shared
-contract; nothing here is versioned or published for a second consumer to pin an older copy of.
-That is a deliberate choice, not a gap: a versioned, publishable contract artefact is worth building
-once a second real consumer exists (a second frontend, a mobile client, a partner integration), not
-before. Until then, `sync:frontend` copying two files on every change is the cheapest correct thing,
-and `spec-identity` (both repos), `contracts-bundle-freshness` and the nightly Schemathesis run are
-what make "lockstep" a checked claim rather than a hope.
+**One backend, one paired frontend, lockstep.** `asyncapi.public.yaml` does reach a second
+consumer — any webhook subscriber, guarded by the `asyncapi-breaking` job — but nothing here is
+versioned or published for a second consumer to pin an *older* copy of. That is a deliberate
+choice, not a gap: a versioned, publishable contract artefact is worth building once a second real
+API consumer exists (a second frontend, a mobile client, a partner integration), not before. Until
+then, `sync:frontend` copying two files on every change is the cheapest correct thing, and
+`spec-identity` (both repos) and `contracts-bundle-freshness` are what make "lockstep" a checked
+claim rather than a hope. The nightly Schemathesis run fuzzes this repo against its own spec — it
+compares nothing across repos, so it isn't part of that lockstep guarantee.
 
 ## The seven bundles
 
@@ -57,10 +59,13 @@ npm run contracts:bundle -- bruno     # one collection, from the committed contr
 npm run check:contracts-bundle        # fail if any committed bundle is stale
 ```
 
-`check:contracts-bundle` asserts every bundle equals its committed file, so a fragment edited
-without re-bundling fails it locally. In CI, `npm ci`'s `postinstall` rebuilds every bundle before
-that check gets a turn, so it is the `contracts-bundle-freshness` job's `git diff` against the
-checkout — not this check — that actually catches a missed re-bundle on a push.
+`check:contracts-bundle` asserts every **committed** bundle equals a fresh build, so a fragment
+edited without re-bundling fails it locally. `openapi.yaml` is gitignored and rebuilt by
+`postinstall` on every install, so it carries no such check — only `asyncapi.yaml` and
+`asyncapi.public.yaml` are committed and can go stale. In CI, `npm ci`'s `postinstall` rebuilds
+every bundle before that check gets a turn, so it is the `contracts-bundle-freshness` job's
+`git diff` of those two committed bundles against the checkout — not this check — that actually
+catches a missed re-bundle on a push.
 
 Nothing else is shared. `shared/contracts/spectral.yaml`, `check-baseline.ts`, `report-results.ts` and
 `generate-asyncapi-types.ts` were on the list once, hand-maintained on both sides and compared but never
@@ -247,10 +252,8 @@ ordering lives inside `scripts/contracts/build-bundles.ts` rather than as an `&&
 which is what makes that flag narrow the run instead of silently doing everything else. See
 [Regenerating After a Change](./regenerating.md#regenerate-one-bundle-only).
 
-`check:contracts-bundle` asserts every bundle equals its committed file, so a fragment edited
-without re-bundling fails it locally. In CI, `npm ci`'s `postinstall` rebuilds every bundle before
-that check gets a turn, so it is the `contracts-bundle-freshness` job's `git diff` against the
-checkout — not this check — that actually catches a missed re-bundle on a push.
+What `check:contracts-bundle` catches locally versus what `contracts-bundle-freshness` catches in
+CI: see [The seven bundles](#the-seven-bundles) above.
 
 ### Why the REST contract stopped concatenating, and the rest did not
 

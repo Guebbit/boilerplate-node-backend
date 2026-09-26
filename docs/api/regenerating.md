@@ -152,15 +152,17 @@ npm run test:contract             # do real responses match the contract?
 | Failure                                                            | What happened                                                                            | Fix                                                     |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | `[contracts] STALE — these do not match the fragments`             | a fragment was edited without re-bundling, or a bundle was hand-edited                    | `npm run contracts:bundle`                              |
-| `contract-bundles.test.ts` fails                                    | the same thing, caught by the test suite instead                                          | `npm run contracts:bundle`                              |
+| `contract-bundles.test.ts` fails                                    | a committed bundle is structurally wrong (a dangling path, an unresolved channel, a collection missing an operation) — not staleness | fix the fragment the failure points at, then re-bundle |
 | `check:spec-identity` fails                                         | this repo and the frontend hold different bytes of a shared document                       | copy the bundle over; never re-bundle on both sides     |
 | spectral reports a dangling `$ref`                                   | a schema moved into a module document while another module still references it              | move it to `shared/contracts/openapi.root.yaml`         |
 
-One guard runs without you asking: `tests/cross-cutting/contract-bundles.test.ts` asserts every
-bundle equals a fresh assembly on **every** test run, so the pre-commit `complete` covers it. There
-used to be a second — CI re-running `gen:api`/`gen:asyncapi` to prove a *committed* `api/`/
-`asyncapi.generated.ts` was fresh — but `postinstall` regenerates both before anything else runs, so
-there is no longer a committed copy for that comparison to be about.
+Freshness itself is not `contract-bundles.test.ts`'s job — its own docblock says so. `npm run
+check:contracts-bundle` is the one guard that asks "does the committed file equal a fresh build",
+and `contracts-bundle-freshness` is CI's `git diff` re-check of the same question after
+`postinstall` has already rebuilt everything. What `contract-bundles.test.ts` asserts instead,
+on **every** test run: that whatever is currently committed is *structurally* correct — every path
+files under exactly one module, every AsyncAPI channel resolves, the public bundle is a strict
+subset, and the generated client collections cover the contract.
 
 ## The generated output and what is committed
 
