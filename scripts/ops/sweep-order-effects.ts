@@ -5,7 +5,7 @@
  *
  * A cancel moves the status, releases the hold and announces `ORDER_REFUND_OWED` so `payments`
  * refunds — a separate event from the customer-facing `ORDER_CANCELLED`, so this sweep's retry
- * never re-delivers that webhook (B6). The stock half heals on its own: the hold keeps its
+ * never re-delivers that webhook. The stock half heals on its own: the hold keeps its
  * `expiresAt` and the reservation sweep releases it. The money half does not — the domain event
  * bus has no retry, so a provider
  * unreachable for the length of one call leaves the order cancelled and the refund never made.

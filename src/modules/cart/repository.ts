@@ -31,7 +31,7 @@ export const QUANTITY_LIMIT = 'quantity-limit';
 /**
  * Pushes a brand-new line onto the cart, creating the cart document itself if none exists yet.
  *
- * Bumps `__v` (B4): checkout reads the cart's version once and later empties it conditionally on
+ * Bumps `__v`: checkout reads the cart's version once and later empties it conditionally on
  * that read — see `clearLinesIfUnchanged` below. A write that skips this `$inc` is invisible to
  * that guard, so a line added here while a checkout is in flight would be silently dropped
  * instead of invalidating the race.
@@ -95,7 +95,7 @@ const upsertLine = (
 
     return (
         cartModel
-            // B4: `$inc.__v` rides along with the quantity write itself, not a separate update —
+            // `$inc.__v` rides along with the quantity write itself, not a separate update —
             // same reasoning as `pushNewLine`.
             .findOneAndUpdate(
                 matchExistingLine,
@@ -178,7 +178,7 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
      * Resolves `null` when the cart does not exist or does not hold the product — the filter asks
      * for both — which is what lets the service answer 404 without a separate read.
      *
-     * Bumps `__v` (B4) — same reasoning as `pushNewLine`.
+     * Bumps `__v` — same reasoning as `pushNewLine`.
      */
     removeLine: (userId: string, productId: string) =>
         cartModel
@@ -193,7 +193,7 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
      * Empty a user's cart. Deliberately does NOT upsert: a user with no cart is already in the
      * state this asks for, and `null` reads as exactly that.
      *
-     * Bumps `__v` (B4) — same reasoning as `pushNewLine`.
+     * Bumps `__v` — same reasoning as `pushNewLine`.
      */
     clearLines: (userId: string) =>
         cartModel
@@ -253,7 +253,7 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
     /**
      * Drop one product from every cart that holds it — what a product deletion owes the carts.
      *
-     * Bumps `__v` (B4) — same reasoning as `pushNewLine`.
+     * Bumps `__v` — same reasoning as `pushNewLine`.
      */
     removeProductFromAll: (productId: string) =>
         cartModel

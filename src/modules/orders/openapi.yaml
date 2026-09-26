@@ -496,10 +496,10 @@ components:
                         $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
             description: Create a new order.
 
-        # `status` is deliberately not a field here — see the route's own description. Moving it
-        # through this body let an admin write `paid → shipped` directly, skipping `processing`
-        # entirely, and saved `email` before a refused status move could 409, a half-applied
-        # write; both are now impossible by construction.
+        # `status` is deliberately not a field here — see the route's own description. Writing it
+        # through this body would let an admin skip `processing` by writing `paid → shipped`
+        # directly, and could save `email` before a refused status move answers 409 — a
+        # half-applied write. Neither is possible with `status` excluded by construction.
         UpdateOrderByIdRequest:
             type: object
             additionalProperties: false
