@@ -447,7 +447,7 @@ describe('PUT /orders/{id}', () => {
     // already-invoiced lines has no safe meaning (see `services/crud.ts`'s `update`), and
     // reassigning the owner belongs to a support tool, not this endpoint. `status` left this body
     // entirely with SH1 — it moves only through an action endpoint now (see the route's own
-    // description). `additionalProperties: false` on `UpdateOrderByIdRequest` is what actually
+    // description). `additionalProperties: false` on `ReplaceOrderByIdRequest` is what actually
     // enforces all three; this pins that a real HTTP request hits that refusal, not just the
     // generated Zod schema in isolation.
     it.each(['items', 'userId', 'status'])('rejects a body carrying `%s`', async (field) => {
@@ -462,6 +462,85 @@ describe('PUT /orders/{id}', () => {
 
         const response = await api()
             .put(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer)
+            .send({ email: 'billing@example.com', ...extra });
+
+        expect(response.status).toBe(422);
+        expect(response.body.success).toBe(false);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // PUT names the whole resource: `email` is not clearable (an order always has one), so
+    // `ReplaceOrderByIdRequest` requires it rather than leaving it optional the way PATCH does.
+    it('requires `email` — a replace names the whole resource', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .put(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer)
+            .send({});
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('PATCH /orders/{id}', () => {
+    it('matches the contract with the id in the path', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .patch(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer)
+            .send({ email: 'billing@example.com' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.email).toBe('billing@example.com');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // Merges: an empty body changes nothing, unlike PUT's whole-resource replace above.
+    it('leaves the stored email untouched when the body omits it', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .patch(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer)
+            .send({});
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.email).toBe(order.email);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a customer', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .patch(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer)
+            .send({ email: 'billing@example.com' });
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it.each(['items', 'userId', 'status'])('rejects a body carrying `%s`', async (field) => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+        const extra =
+            field === 'items'
+                ? { items: [{ productId: String(user._id), quantity: 1 }] }
+                : field === 'userId'
+                  ? { userId: String(user._id) }
+                  : { status: 'processing' };
+
+        const response = await api()
+            .patch(`/orders/${String(order._id)}`)
             .set('Authorization', bearer)
             .send({ email: 'billing@example.com', ...extra });
 

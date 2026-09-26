@@ -17,6 +17,7 @@ import {
 } from '@kernel/middlewares/authorizations';
 import { getShippingMethods } from './controllers/get-shipping-methods';
 import { getShipmentByOrder } from './controllers/get-shipment-by-order';
+import { postStartOrder } from './controllers/post-start-order';
 import { postShipOrder } from './controllers/post-ship-order';
 import { postDeliverOrder } from './controllers/post-deliver-order';
 
@@ -37,6 +38,16 @@ router.get('/methods', getShippingMethods);
 
 // GET /delivery/order/:orderId — the parcel behind one of the caller's orders
 router.get('/order/:orderId', getAuth, isAuth, getShipmentByOrder);
+
+// POST /delivery/order/:orderId/start — begins fulfilment; moves the order paid -> processing.
+// No `forced` variant, so no step-up guard: the admin override is the other reachable path here.
+router.post(
+    '/order/:orderId/start',
+    getAuth,
+    isAuth,
+    requirePermission('delivery.any.start'),
+    postStartOrder
+);
 
 // POST /delivery/order/:orderId/ship — records a handover; moves the order processing -> shipped.
 // `requireFreshAuthWhen` at `orders.any.override`'s own declared tier: a `forced` write reaches

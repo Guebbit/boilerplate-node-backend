@@ -23,7 +23,8 @@ export {
     statusesLeadingTo,
     orderActionsFor,
     canOverrideTo,
-    statusesOverridableInto
+    statusesOverridableInto,
+    overridableTargetsFrom
 } from './lifecycle';
 export type { OrderActor } from './lifecycle';
 

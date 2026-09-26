@@ -91,8 +91,7 @@ roles:
           - payments.self.read
           - inventory.any.read
           - delivery.any.read
-          # A manager still needs to start fulfilment on a paid order — granted ahead of its own
-          # route: no route checks this key yet, so it does nothing until one exists.
+          # A manager may start fulfilment on a paid order — POST /delivery/order/{id}/start.
           - delivery.any.start
           - feedback.any.read
           - users.any.read
@@ -119,8 +118,7 @@ roles:
           - inventory.any.create
           - delivery.any.read
           - delivery.any.update
-          # The warehouse's own door for starting work on a paid order — granted ahead of its own
-          # route: no route checks this key yet, so it does nothing until one exists.
+          # The warehouse's own door for starting work on a paid order.
           - delivery.any.start
           - cart.self.checkout
 

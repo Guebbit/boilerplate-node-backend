@@ -22,7 +22,7 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { ordersAuditActions } from '../../audit';
 import { ordersAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
-import { asCustomer, asAdmin, asModerator, testCallerContext } from '@tests/callers';
+import { asCustomer, asAdmin, asModerator, asWarehouse, testCallerContext } from '@tests/callers';
 import { SYSTEM_ACTOR } from '@kernel/permissions';
 
 // The queue, not the copy: `mail-copy.test.ts` pins what the email says.
@@ -390,7 +390,15 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(order, asUser(user));
 
-        expect(body.actions).toEqual({ transitions: ['cancelled'], cancel: true, pay: true });
+        expect(body.actions).toEqual({
+            transitions: ['cancelled'],
+            cancel: true,
+            pay: true,
+            start: false,
+            ship: false,
+            deliver: false,
+            override: []
+        });
     });
 
     it('offers an operator nothing on a terminal order', async () => {
@@ -401,7 +409,15 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(cancelled!, asAdmin());
 
-        expect(body.actions).toEqual({ transitions: [], cancel: false, pay: false });
+        expect(body.actions).toEqual({
+            transitions: [],
+            cancel: false,
+            pay: false,
+            start: false,
+            ship: false,
+            deliver: false,
+            override: []
+        });
     });
 
     it('never offers `paid` to anyone, because no request may claim `system`', async () => {
@@ -412,6 +428,64 @@ describe('withActions', () => {
             const body = await orderService.withActions(order, caller);
             expect((body.actions as { transitions: string[] }).transitions).not.toContain('paid');
         }
+    });
+
+    it("gives the warehouse `start` on a paid order, without `orders.any.update`'s admin column", async () => {
+        // Holds `delivery.any.start` but not `orders.any.update` — `actorOf` alone would read
+        // this caller as a plain customer, which must not decide `start`/`ship`/`deliver`.
+        const user = await createUser();
+        const order = await seedOrder(user);
+        const paid = await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
+
+        const body = await orderService.withActions(paid!, asWarehouse());
+
+        expect(body.actions!.start).toBe(true);
+        expect(body.actions!.ship).toBe(false);
+        expect(body.actions!.deliver).toBe(false);
+        expect(body.actions!.override).toEqual([]);
+    });
+
+    it('gives the warehouse `ship` once processing, and `deliver` once shipped', async () => {
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        const processing = await orderRepository.updateStatusIfIn(
+            String(order._id),
+            ['pending'],
+            'processing'
+        );
+        const whileProcessing = await orderService.withActions(processing!, asWarehouse());
+        expect(whileProcessing.actions!.ship).toBe(true);
+
+        const shipped = await orderRepository.updateStatusIfIn(
+            String(order._id),
+            ['processing'],
+            'shipped'
+        );
+        const whileShipped = await orderService.withActions(shipped!, asWarehouse());
+        expect(whileShipped.actions!.deliver).toBe(true);
+    });
+
+    it('offers an override holder every forward destination, on a customer-only status too', async () => {
+        // `admin` holds `orders.any.override`, which `overridableTargetsFrom` answers from the
+        // index-based rule alone — a `paid` order can be overridden straight to any later status.
+        const user = await createUser();
+        const order = await seedOrder(user);
+        const paid = await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
+
+        const body = await orderService.withActions(paid!, asAdmin());
+
+        expect(body.actions!.override).toEqual(['processing', 'shipped', 'delivered']);
+    });
+
+    it("never offers the warehouse `orders.any.override`'s destinations", async () => {
+        const user = await createUser();
+        const order = await seedOrder(user);
+        const paid = await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
+
+        const body = await orderService.withActions(paid!, asWarehouse());
+
+        expect(body.actions!.override).toEqual([]);
     });
 
     it('carries the serialized order, not the document', async () => {

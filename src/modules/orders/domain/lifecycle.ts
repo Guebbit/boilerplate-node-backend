@@ -32,9 +32,9 @@ export const ORDER_LIFECYCLE: Readonly<
     },
     [OrderStatus.paid]: {
         // `system`, not `admin`: this follows fulfilment starting being recorded through
-        // `delivery`'s own door, never a direct admin write — see
-        // `src/modules/orders/services/status.ts`'s `markProcessing`. Reachable by `admin` only
-        // through the override door (`canOverrideTo`) until that door exists.
+        // `delivery`'s own door (`POST /delivery/order/{id}/start`, `delivery.any.start`), never
+        // a direct admin write — see `src/modules/orders/services/status.ts`'s `markProcessing`.
+        // Reachable by `admin` too, only through the override door (`canOverrideTo`).
         [OrderStatus.processing]: ['system'],
         [OrderStatus.cancelled]: ['customer', 'admin']
     },
@@ -126,6 +126,16 @@ export const canOverrideTo = (from: OrderStatus, to: OrderStatus): boolean => {
 };
 
 /**
+ * Every status an override starting FROM `from` could legally land on — the reverse of
+ * {@link statusesOverridableInto}, for a caller building "what could I move this order to"
+ * rather than "what could have led here".
+ * @param from - the order's current status
+ * @returns every status later than `from` in the overridable sequence, in contract order
+ */
+export const overridableTargetsFrom = (from: OrderStatus): readonly OrderStatus[] =>
+    OVERRIDABLE_SEQUENCE.filter((to) => canOverrideTo(from, to));
+
+/**
  * Every status a forced or status-only override starting from `to` could have legally come FROM —
  * the conditional write's own `from` set, the same shape `services/status.ts`'s private
  * `markSystemMove` needs for one fixed status, but computed dynamically here since an override's
@@ -158,12 +168,21 @@ export const statusesLeadingTo = (to: OrderStatus, actor: OrderActor): readonly 
     Object.values(OrderStatus).filter((from) => from !== to && canTransition(from, to, actor));
 
 /**
- * What `actor` may do to an order in `status` — the shape a client renders its controls from.
+ * The part of `OrderActions` this status/actor pairing alone can answer — `start`/`ship`/
+ * `deliver`/`override` need the caller's actual permission keys (a warehouse operator holds
+ * `delivery.any.start` without `orders.any.update`, and `actor` alone cannot tell them apart from
+ * a customer), so `services/scope.ts`'s `withActions` computes those and merges them in.
+ */
+type StatusDerivedActions = Pick<OrderActions, 'transitions' | 'cancel' | 'pay'>;
+
+/**
+ * What `actor` may do to an order in `status`, as far as the status/actor pairing alone answers —
+ * the shape a client renders its controls from, once `withActions` merges in the rest.
  * @param status - current status
  * @param actor - who is asking
  * @returns the caller's options for this order
  */
-export const orderActionsFor = (status: OrderStatus, actor: OrderActor): OrderActions => {
+export const orderActionsFor = (status: OrderStatus, actor: OrderActor): StatusDerivedActions => {
     // Both fields off ONE reading, so they cannot describe different orders. `canTransition` is
     // the wrong question here: it allows a write that changes nothing, which is right for an edit
     // that repeats the current status and wrong for "may I cancel this" on an order already

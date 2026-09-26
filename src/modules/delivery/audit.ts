@@ -4,8 +4,9 @@
  * augmentation rather than in a shared enum.
  */
 
-/** The two doors staff writes through: recording a handover, and recording an arrival. */
+/** The three doors staff writes through: starting fulfilment, recording a handover, and recording an arrival. */
 export const deliveryAuditActions = {
+    ADMIN_ORDER_FULFILMENT_STARTED: 'admin.order.fulfilment_started',
     ADMIN_ORDER_SHIPPED: 'admin.order.shipped',
     ADMIN_ORDER_DELIVERED: 'admin.order.delivered'
 } as const;

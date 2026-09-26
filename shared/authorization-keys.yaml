@@ -294,8 +294,8 @@ keys:
       description: Advance a consignment through the courier's steps.
     # Narrower than `orders.any.update` on purpose: the warehouse may begin work on a paid order
     # without being handed the run of the order record. `paid → processing` is `system`-only in
-    # `orders/domain/lifecycle.ts` until a door here calls `orders/services/status.ts`'s
-    # `markProcessing` — until then this key is declared but unused by any route.
+    # `orders/domain/lifecycle.ts` — this key gates `POST /delivery/order/{id}/start`, the door
+    # that calls `orders/services/status.ts`'s `markProcessing`.
     - key: delivery.any.start
       module: delivery
       subject: Shipment

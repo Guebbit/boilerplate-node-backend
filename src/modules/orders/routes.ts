@@ -8,7 +8,8 @@
 import { Router } from 'express';
 import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { getOrders } from './controllers/get-orders';
-import { writeOrders } from './controllers/write-orders';
+import { createOrder } from './controllers/create-order';
+import { replaceOrderById, updateOrderById } from './controllers/update-order';
 import { deleteOrders } from './controllers/delete-orders';
 import { restoreOrders } from './controllers/restore-orders';
 import { getOrderItem } from './controllers/get-order-item';
@@ -52,7 +53,7 @@ router.post(
     requirePermission('orders.any.create'),
     idempotencyKey,
     invalidateCache(['products']),
-    writeOrders
+    createOrder
 );
 
 // DELETE /orders — admin, id in body
@@ -78,8 +79,11 @@ router.get('/:id/invoice', invoiceLimiter, getOrderInvoice);
 // caller's OWN order.
 router.get('/:id', privateNoCache, getOrderItem);
 
-// PUT /orders/:id — admin only (update)
-router.put('/:id', requirePermission('orders.any.update'), writeOrders);
+// PUT /orders/:id — admin only (replace)
+router.put('/:id', requirePermission('orders.any.update'), replaceOrderById);
+
+// PATCH /orders/:id — admin only (merge)
+router.patch('/:id', requirePermission('orders.any.update'), updateOrderById);
 
 // DELETE /orders/:id — admin only (soft delete unless ?hardDelete=true)
 router.delete('/:id', requirePermission('orders.any.delete'), deleteOrders);

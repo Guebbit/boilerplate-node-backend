@@ -1,7 +1,7 @@
 /**
  * @module
- * Contract tests for /delivery. Four routes, three audiences: the methods list is public, the
- * shipment read is the owner's, the two write doors are staff's. These pin that each contract
+ * Contract tests for /delivery. Five routes, three audiences: the methods list is public, the
+ * shipment read is the owner's, the three write doors are staff's. These pin that each contract
  * branch is reached over HTTP; the moves' own rules live in the unit and integration suites.
  */
 
@@ -75,6 +75,51 @@ describe('GET /delivery/order/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /delivery/order/{orderId}/start', () => {
+    it('matches the contract and moves a paid order to processing', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/start`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('processing');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for an order that is not paid', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/start`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a customer, who holds no delivery.any.start', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const order = await createOrder(user, [toOrderItem(await createProduct(), 1)], {
+            status: OrderStatus.paid
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/start`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
         expect(response).toSatisfyApiSpec();
     });
 });

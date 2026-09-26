@@ -165,13 +165,13 @@ override all ASK for a move, never assign the field themselves. See
 
 ## Who writes the status
 
-| Move                                        | Who asks                                                                         | Through                                                                                                              |
-| ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                   |
-| `paid` → `processing`                       | `system`                                                                         | `delivery`'s own start door (not yet built) — until then, `POST /orders/{id}/status-override`, `orders.any.override` |
-| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/order/{id}/ship`                                                                                     |
-| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/order/{id}/deliver`                                                                                  |
-| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel`                                                                                           |
+| Move                                        | Who asks                                                                         | Through                                                                                                                 |
+| ------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                      |
+| `paid` → `processing`                       | `system`                                                                         | `POST /delivery/order/{id}/start`, `delivery.any.start` — or `POST /orders/{id}/status-override`, `orders.any.override` |
+| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/order/{id}/ship`                                                                                        |
+| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/order/{id}/deliver`                                                                                     |
+| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel`                                                                                              |
 
 ### The admin override
 

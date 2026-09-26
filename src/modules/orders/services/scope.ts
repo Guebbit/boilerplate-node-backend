@@ -7,11 +7,12 @@
 
 import { callerForSubject, isSystemActor } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
-import type { AuthContext, Order } from '@types';
+import type { AuthContext, Order, OrderActions } from '@types';
 import type { OrderDocument } from '../model';
 import { accessibleFilter } from '@kernel/access/query';
 import { orderRepository } from '../repository';
-import { orderActionsFor } from '../domain';
+import { OrderStatus } from '@types';
+import { orderActionsFor, canTransition, overridableTargetsFrom } from '../domain';
 import type { OrderActor } from '../domain';
 import { resolveCurrentImages } from './current';
 
@@ -59,6 +60,37 @@ export const actorOf = (authContext?: AuthContext): OrderActor => {
 };
 
 /**
+ * `delivery`'s three action doors, plus `orders`' own override — none of them decided by
+ * `actorOf`'s customer/admin split, since a warehouse operator holds `delivery.any.start` without
+ * `orders.any.update` and would otherwise read as a plain customer. Each is asked of the caller's
+ * OWN key, at the same tenant scope `actorOf` already resolves — `delivery.any.start`/`.update`
+ * and `orders.any.override` are all tenant-scoped keys, so one `callerForSubject(...,'Order')`
+ * caller answers all four regardless of which subject each key is declared under.
+ * @param status - the order's current status
+ * @param authContext - the caller, or `undefined` for no request behind this read
+ */
+const deliveryAndOverrideActions = (
+    status: OrderStatus,
+    authContext: AuthContext | undefined
+): Pick<OrderActions, 'start' | 'ship' | 'deliver' | 'override'> => {
+    if (!authContext) return { start: false, ship: false, deliver: false, override: [] };
+
+    const caller = callerForSubject(authContext, 'Order');
+    return {
+        start:
+            holdsKey(caller, 'delivery.any.start') &&
+            canTransition(status, OrderStatus.processing, 'system'),
+        ship:
+            holdsKey(caller, 'delivery.any.update') &&
+            canTransition(status, OrderStatus.shipped, 'system'),
+        deliver:
+            holdsKey(caller, 'delivery.any.update') &&
+            canTransition(status, OrderStatus.delivered, 'system'),
+        override: holdsKey(caller, 'orders.any.override') ? [...overridableTargetsFrom(status)] : []
+    };
+};
+
+/**
  * The single-order response body: the order as it serializes, plus what this caller may do to
  * it — `actions` must ride on the wire shape or the schema's transform drops it. `async` for
  * `resolveCurrentImages`'s `$in` lookup — the one thing here that isn't a synchronous transform.
@@ -72,6 +104,9 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
 
     return resolveCurrentImages([serialized]).then(([resolved]) => ({
         ...resolved,
-        actions: orderActionsFor(order.status, actorOf(authContext))
+        actions: {
+            ...orderActionsFor(order.status, actorOf(authContext)),
+            ...deliveryAndOverrideActions(order.status, authContext)
+        }
     }));
 };
