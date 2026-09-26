@@ -254,6 +254,38 @@ describe('cancelPendingEmailChange', () => {
 
         expect(response.data.pendingEmail).toBeUndefined();
     });
+
+    it('revokes the live email-change token, so the old link can no longer swap the address in (PL-26)', async () => {
+        const user = await createUser({ email: 'before@example.com' });
+        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        const beforeCancel = await readTokens(user.id);
+        expect(beforeCancel.some((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)).toBe(true);
+
+        await accountService.cancelPendingEmailChange(user.id, testCallerContext);
+
+        const afterCancel = await readTokens(user.id);
+        expect(afterCancel.some((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)).toBe(false);
+    });
+
+    it('audits AUTH_EMAIL_CHANGE_CANCELLED only when a change was actually pending (PL-26)', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ email: 'before@example.com' });
+
+        await accountService.cancelPendingEmailChange(user.id, testCallerContext);
+        expect(auditSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELLED })
+        );
+
+        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.cancelPendingEmailChange(user.id, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELLED,
+                outcome: 'success'
+            })
+        );
+    });
 });
 
 describe('completeEmailChange', () => {

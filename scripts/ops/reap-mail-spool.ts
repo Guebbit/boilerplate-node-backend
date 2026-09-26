@@ -26,12 +26,15 @@ import { runScript } from '../run-script';
 const retentionMs = (): number =>
     environmentNumber('NODE_MAIL_SPOOL_RETENTION_HOURS', 1, 1) * 60 * 60 * 1000;
 
-/** Connect (for `runScript`'s own outcome record — the sweep itself never touches Mongo), sweep, log. */
+/**
+ * Sweep first, connect after: the sweep itself never touches Mongo, only `runScript`'s outcome
+ * record does, so a Mongo outage must not block a cleanup that never needed it (PL-28).
+ */
 const main = (): Promise<void> =>
-    start()
-        .then(() => reapSpooled(retentionMs()))
+    reapSpooled(retentionMs())
         .then((reaped) => {
             if (reaped > 0) logger.info({ message: 'Spooled mail attachments reaped.', reaped });
-        });
+        })
+        .then(() => start());
 
 void runScript('reap:mail-spool', main, stopDatabase);

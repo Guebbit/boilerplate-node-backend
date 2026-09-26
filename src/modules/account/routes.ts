@@ -79,8 +79,11 @@ import { normalizeEmail } from '@modules/users';
  * MUST run after `upload.image()`: both verbs accept `multipart/form-data`, so `request.body`
  * does not exist until multer has parsed it — a predicate mounted earlier reads an empty object,
  * concludes "no email change", and gates nothing.
+ *
+ * Not exported: a wiring file's own predicate is asserted through `PUT /account` itself — whether
+ * a stale session is challenged or not — never by calling this directly (PL-30).
  */
-export const isChangingEmail = (request: Request): boolean => {
+const isChangingEmail = (request: Request): boolean => {
     const email = (request.body as { email?: string } | undefined)?.email;
     if (email === undefined) return false;
     const currentEmail = request.authContext?.email;

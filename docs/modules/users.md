@@ -79,32 +79,14 @@ would collapse two URL surfaces into one module for no gain — and the cost of 
 visible on the map as a `shared-kernel` arrow rather than hidden inside a barrel.
 :::
 
-Five modules depend on this one and it depends on none, so it sits at the bottom of the graph.
-Deleting an account has to empty that user's cart and wishlist, and that travels as `user.deleted`
-for the same reason products uses an event: it keeps this module a leaf.
+Several modules depend on this one and it depends on none, so it sits at the bottom of the graph —
+see the generated diagram above for exactly which ones, and which cascade on `user.deleted`; that
+list is checked on every regenerate, so it is never repeated by hand here.
 
 ## The pipeline
 
-One collection, two services over it — and a deletion that has to reach three modules this one may
-not import.
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
-flowchart LR
-    A["admin<br/><i>/users</i>"] --> R["the user record<br/><i>email · hash · role name · tokens</i>"]
-    AC["account<br/><i>/account — signup · login · reset</i>"] --> R
-    R -. "user.deleted" .-> C["cart emptied"]
-    R -. "user.deleted" .-> W["wishlist emptied"]
-    R -. "user.deleted" .-> AB["address book emptied<br/><i>account</i>"]
-    R -. "user.setup-requested" .-> SU["account sends a setup link"]
-
-    classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
-    classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
-    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
-    class R own;
-    class A,AC peer;
-    class C,W,AB,SU done;
-```
+One collection, two services over it: `/users` (admin) and `/account` (signup, login, reset) both
+write through `userService`, never the collection directly.
 
 `phone` is stored AES-256-GCM under `NODE_PII_ENCRYPTION_KEY`
 (`@infrastructure/security/pii-encryption`) — `service.ts`'s `update` encrypts it on the one write

@@ -51,15 +51,18 @@ flowchart LR
    `GET /observability/audit` answering `{ items: [] }` otherwise looks exactly like "nothing
    happened".
 
-4. **Liveness and readiness are different endpoints, on purpose.** `GET /` answers "is the process
-   alive" and is what the container HEALTHCHECK probes; `GET /observability/health` answers "can this
-   instance serve, and what is missing". Conflating them means an orchestrator restarting a healthy
-   container because Redis blinked — and restarting it does not bring Redis back. The dependency half
-   of the readiness payload performs no I/O: every backing service is read from the connection state
-   its adapter already maintains, so that part cannot become an amplifier pointed at the
-   infrastructure it reports on. The job half (`job-health.ts`) is the one exception — it runs a
-   single `leases` query, because there is no in-memory copy anywhere of when a scheduled job last
-   finished.
+4. **Liveness, readiness and the detailed snapshot are three different endpoints, on purpose.**
+
+    | Endpoint                    | Answers                                                                                                         | Cost                                                                                                       | Who probes it                                                                                      |
+    | --------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+    | `GET /`                     | Is the process alive at all?                                                                                    | Nothing — no I/O                                                                                           | The container HEALTHCHECK (Docker/Swarm treat HEALTHCHECK as liveness)                             |
+    | `GET /readyz`               | Should this instance receive traffic RIGHT NOW? (`runtime/readiness.ts`: booted, not draining, Mongo connected) | One in-memory phase read + one Mongoose `readyState` read — no I/O                                         | A load balancer, on a fixed interval — exempt from the global rate limiter for exactly that reason |
+    | `GET /observability/health` | Can this instance serve, and what specifically is missing?                                                      | The job half (`job-health.ts`) runs one `leases` query; the rest reads each adapter's own connection state | An operator, a dashboard, or anything that wants the WHY behind a `/readyz` failure                |
+
+    Conflating liveness with either readiness check means an orchestrator restarting a healthy
+    container because Redis blinked — restarting it does not bring Redis back. Conflating `/readyz`
+    with `/observability/health` means either a load balancer paying the detailed snapshot's cost on
+    every poll, or an operator losing the detail a bare boolean can't carry.
 
 ## What this layer does NOT have, and probably should not
 

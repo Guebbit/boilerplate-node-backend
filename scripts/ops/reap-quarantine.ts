@@ -31,16 +31,19 @@ import { runScript } from '../run-script';
 const retentionMs = (): number =>
     environmentNumber('NODE_QUARANTINE_RETENTION_HOURS', 24, 1) * 60 * 60 * 1000;
 
-/** Connect (for `runScript`'s own outcome record — the sweep itself never touches Mongo), sweep, log. */
+/**
+ * Sweep first, connect after: the sweep itself never touches Mongo, only `runScript`'s outcome
+ * record does, so a Mongo outage must not block a cleanup that never needed it (PL-28).
+ */
 const main = (): Promise<void> => {
     const root = quarantineRoot();
 
-    return start()
-        .then(() => reapDirectory(root, Date.now() - retentionMs(), 'Quarantine'))
+    return reapDirectory(root, Date.now() - retentionMs(), 'Quarantine')
         .then(
             ({ checked, reaped }) =>
                 void logger.info({ message: 'Quarantine reaped.', root, checked, reaped })
-        );
+        )
+        .then(() => start());
 };
 
 void runScript('reap:quarantine', main, stopDatabase);

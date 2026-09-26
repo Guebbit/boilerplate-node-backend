@@ -111,15 +111,19 @@ const nonBlankPassword = (password?: string): boolean =>
     Boolean(password && password.trim().length > 0);
 
 /**
- * Create a new user document, with no email confirmation step — the self-service path is
- * `accountService.signup`. `verifiedAt` is hardcoded `now` — an operator typing the address in is
- * the vouching (`shared/authorization-roles.yaml`'s "no unverified manager" rule). `password` is
- * optional: left out, a random value nobody is told fills the `required` field, and
- * `sendSetupEmail: true` queues a setup mail (`USER_SETUP_REQUESTED`) until a real one is set.
- * Typed off `CreateUserRequest` rather than a hand-picked `Pick`, since a hand-copied list is what
- * silently dropped `active` from `update()` below. Returns a result envelope, same protocol
- * `update` follows — a breached password fails the whole create, and the controller reads
- * `result.success` rather than a thrown error.
+ * Create a new user document — no email confirmation step; that self-service path is
+ * `accountService.signup`.
+ *
+ * - `verifiedAt`: hardcoded `now` — an operator typing the address in IS the vouching
+ *   (`shared/authorization-roles.yaml`'s "no unverified manager" rule).
+ * - `password`: optional. Left out, a random value nobody is told fills the `required` field.
+ *   Neither a password nor `sendSetupEmail: true` (which queues `USER_SETUP_REQUESTED` until a
+ *   real one is set) is a 422 (`users.field-password-or-setup-required`), enforced HERE — not
+ *   just in one controller, so every caller of this service trips the same rule.
+ * - Typed off `CreateUserRequest`, not a hand-picked `Pick`: a hand-copied list is what silently
+ *   dropped `active` from `update()` below.
+ * - Returns a result envelope, same protocol `update` follows — a breached password fails the
+ *   whole create, and the controller reads `result.success` rather than a thrown error.
  */
 export const create = (
     data: CreateUserRequest & {
@@ -132,8 +136,8 @@ export const create = (
 
     // Neither a password nor a way to get one to the user: `userRepository.create` below would
     // fill the field with a value nobody is ever told, and the account would be permanently
-    // unusable. Enforced HERE, not only in the controller that used to be the one caller — any
-    // other caller of this service must trip the same rule.
+    // unusable. Enforced HERE, not just in one controller — every caller of this service must
+    // trip the same rule.
     if (!passwordProvided && !data.sendSetupEmail)
         return Promise.resolve(generateReject(422, [t('users.field-password-or-setup-required')]));
 

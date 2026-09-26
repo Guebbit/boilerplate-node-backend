@@ -42,15 +42,16 @@ These endpoints return **the same underlying numbers you see in Grafana, but as 
 The **readiness** answer: can this instance serve what it promises, and which backing service is
 missing when it cannot.
 
-This is not the liveness probe. `GET /` is, and it is what the container HEALTHCHECK calls — see
-[The Observability Layer](../tools/observability-layer.md) for why the two must stay separate.
+This is neither the liveness probe (`GET /`) nor the load-balancer readiness check (`GET /readyz`)
+— see [The Observability Layer](../tools/observability-layer.md#the-four-properties-any-change-has-to-preserve)
+for how the three divide up.
 
 ```json
 {
   "status": "ok",
   "environment": "production",
   "service": "boilerplate-node-backend",
-  "runtimeVersion": "v22.x.x",
+  "runtimeVersion": "v24.x.x",
   "uptimeSeconds": 3600,
   "dependencies": {
     "database": { "status": "ready" },

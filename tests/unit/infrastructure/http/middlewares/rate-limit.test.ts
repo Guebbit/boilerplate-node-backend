@@ -16,7 +16,8 @@ import {
     DEFAULT_RATE_LIMIT_MAX,
     DEFAULT_RATE_LIMIT_WINDOW_MS,
     DEFAULT_API_KEY_RATE_LIMIT_MAX,
-    DEFAULT_UPLOAD_RATE_LIMIT_MAX
+    DEFAULT_UPLOAD_RATE_LIMIT_MAX,
+    INFRASTRUCTURE_RATE_LIMITS
 } from '@infrastructure/http/middlewares/rate-limit';
 
 describe('rate limit defaults', () => {
@@ -47,6 +48,31 @@ describe('rate limit defaults', () => {
 
 /** A request as a limiter sees it: `body` is whatever the parsers left, `ip` the caller. */
 const requestWith = (body: unknown, ip: string) => asStub<Request>({ body, ip });
+
+/** A request as the global budget's `skip` sees it: only `method` and `path` matter. */
+const requestFor = (method: string, path: string) => asStub<Request>({ method, path });
+
+/**
+ * The global browsing budget's own `skip` — an orchestrator's `/readyz` probe, on a fixed
+ * interval, must never trip the budget every other caller shares (PL-27).
+ */
+describe("the global budget's skip", () => {
+    const globalBudget = INFRASTRUCTURE_RATE_LIMITS.find(
+        (budget) => budget.name === 'Browsing (global)'
+    );
+
+    it('exempts GET /readyz', () => {
+        expect(globalBudget?.skip?.(requestFor('GET', '/readyz'))).toBe(true);
+    });
+
+    it('does not exempt other methods on /readyz', () => {
+        expect(globalBudget?.skip?.(requestFor('POST', '/readyz'))).toBe(false);
+    });
+
+    it('does not exempt GET on any other path', () => {
+        expect(globalBudget?.skip?.(requestFor('GET', '/products'))).toBe(false);
+    });
+});
 
 describe('identityOf', () => {
     it('buckets one account the same however its email is cased', () => {

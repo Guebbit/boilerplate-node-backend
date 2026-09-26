@@ -24,6 +24,7 @@ import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-stor
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { callerContextOf } from '@infrastructure/http/request';
 import { refuseAntibot } from '@infrastructure/http/middlewares/antibot-log';
+import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import type { RateLimitBudget } from '@types';
 
 /**
@@ -179,7 +180,7 @@ export const readBodyField = (request: Request, field: string): string | undefin
  */
 export const identityOf = (request: Request): string => {
     const named = readBodyField(request, 'email') ?? readBodyField(request, 'username');
-    const identity = named?.trim().toLowerCase();
+    const identity = named ? normalizeEmail(named) : undefined;
     if (!identity) return `anon:${addressBlockOf(request)}`;
 
     return createHash('sha256').update(identity).digest('hex');
