@@ -61,13 +61,16 @@ const applies = ({ productionOnly }: RequiredConfig): boolean =>
  * exactly that one member; a key ring (`account/session/config.ts`'s `NODE_TOKEN_ACCESS`/
  * `NODE_TOKEN_REFRESH`) is checked member-by-member, so a placeholder or a truncated value
  * anywhere in the ring — not just its first entry — still refuses to boot.
+ *
+ * `minLength: 0` means "may stay unset" — an empty value passes, but the placeholder itself is
+ * still refused if the variable is set to it (`NODE_METRICS_TOKEN`'s dev default, for instance).
  */
 const fails = ({ key, minLength, placeholder }: RequiredConfig): boolean => {
     // Blank members dropped, the way every reader of a list value drops them (`app/security.ts`'s
-    // CORS origins): a trailing comma is a typo, not a missing value. An empty list still fails.
+    // CORS origins): a trailing comma is a typo, not a missing value.
     const members = (process.env[key] ?? '').split(',').filter((member) => member.trim() !== '');
     return (
-        members.length === 0 ||
+        (members.length === 0 && minLength > 0) ||
         members.some((member) => member.length < minLength || member === placeholder)
     );
 };

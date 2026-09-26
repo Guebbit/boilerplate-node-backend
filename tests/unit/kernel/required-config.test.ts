@@ -116,6 +116,34 @@ describe('module-declared variables', () => {
 
         expect(() => assertRequiredConfig(SECRET_MODULE)).toThrow(/SECRET/);
     });
+
+    it('a minLength-0 variable may stay unset', () => {
+        configure();
+        delete process.env.SECRET;
+        const modules: AppModule[] = [
+            {
+                name: 'demo',
+                requiredConfig: [{ key: 'SECRET', minLength: 0, placeholder: 'change-me' }],
+                personalData: 'none'
+            }
+        ];
+
+        expect(() => assertRequiredConfig(modules)).not.toThrow();
+    });
+
+    it('a minLength-0 variable is still refused if set to the placeholder', () => {
+        configure();
+        process.env.SECRET = 'change-me';
+        const modules: AppModule[] = [
+            {
+                name: 'demo',
+                requiredConfig: [{ key: 'SECRET', minLength: 0, placeholder: 'change-me' }],
+                personalData: 'none'
+            }
+        ];
+
+        expect(() => assertRequiredConfig(modules)).toThrow(/SECRET/);
+    });
 });
 
 describe('the environments that skip the gate', () => {
