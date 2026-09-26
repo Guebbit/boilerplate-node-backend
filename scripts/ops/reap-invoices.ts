@@ -26,4 +26,4 @@ const main = (): Promise<void> =>
             if (expired > 0) logger.info({ message: 'Expired invoice PDFs reaped.', expired });
         });
 
-void runScript(main, stopDatabase);
+void runScript('reap:invoices', main, stopDatabase);

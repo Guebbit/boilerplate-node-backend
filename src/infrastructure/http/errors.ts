@@ -18,6 +18,17 @@ import { generateReject, rejectResponse } from './response';
 import type { Response } from 'express';
 
 /**
+ * Base for a domain error that deserves 409 Conflict — the write was refused for what it would
+ * make TRUE (an undeclared role, a privilege escalation, a duplicate slug), not because the
+ * request was malformed. A module throws its OWN subclass (`access`'s `AccessInvariantError`
+ * below) rather than this class directly, so a caller catching a specific failure still can —
+ * `instanceof` on the base is only how {@link databaseErrorInterpreter} recognises the FAMILY.
+ * `infrastructure` names no module (`docs/theory/layers.md:8`): it exports the shape, a module
+ * subclasses it, and the mapping below never spells out which module that was.
+ */
+export class ConflictError extends Error {}
+
+/**
  * Whether a failure means an infrastructure dependency (Mongo, Redis) was unreachable, rather
  * than a request the server understood and refused. RFC 9110 §15.6.4: 503 says the SERVER is
  * temporarily broken; every other branch below is about the REQUEST.
@@ -58,14 +69,14 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
         // twelve models. Detected by `name`, same reason as BSONError above.
         if ((error as { name?: string }).name === 'ValidationError')
             return [422, 'Invalid request'];
-        // `@modules/access`'s `AccessInvariantError` — an undeclared role, or a privilege
-        // escalation. Named rather than imported: `infrastructure`
-        // may not reach up into a module, same reason `AuditSink` is a port instead
-        // of a direct call — but the STATUS this deserves is a request-shape/state-conflict question
-        // exactly like the other four branches above, not the server's fault, so it belongs here and
-        // not as a one-off `.catch()` at each of `users`' three write paths.
-        if ((error as { name?: string }).name === 'AccessInvariantError')
-            return [409, (error as { message?: string }).message ?? 'Unknown error'];
+        // Any module's {@link ConflictError} subclass — `access`'s `AccessInvariantError` is the
+        // one that exists today, for an undeclared role or a privilege escalation. `instanceof`,
+        // not a `name` string: this class is defined once, here, so there is no second copy of it
+        // anywhere for `instanceof` to disagree with (the caveat that rules it out for `BSONError`
+        // above does not apply). The STATUS this deserves is a request-shape/state-conflict
+        // question exactly like the other four branches above, not the server's fault, so it
+        // belongs here and not as a one-off `.catch()` at each of `users`' three write paths.
+        if (error instanceof ConflictError) return [409, error.message || 'Unknown error'];
         // Mongo/Redis unreachable — the server is temporarily broken, not the request. Checked
         // before the generic fallback below, which would otherwise answer 500 and imply a bug.
         if (isInfrastructureError(error)) return [503, 'Service unavailable'];

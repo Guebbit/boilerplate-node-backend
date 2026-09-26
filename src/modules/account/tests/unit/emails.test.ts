@@ -14,14 +14,14 @@ import {
     deleteRequestEmail,
     deleteConfirmEmail
 } from '@modules/account/emails';
-import { frontendLink } from '@infrastructure/http/frontend-link';
+import { accountFrontendLink } from '@modules/account/config';
 
 const NAME = 'Ada Lovelace';
 const TOKEN = 'a1b2c3d4e5f6';
 
 /**
- * The four that exist to deliver a link, paired with the `frontendLink` kind each must delegate
- * to. `setupRequestEmail` shares `resetRequestEmail`'s kind deliberately — both spend a
+ * The four that exist to deliver a link, paired with the `accountFrontendLink` kind each must
+ * delegate to. `setupRequestEmail` shares `resetRequestEmail`'s kind deliberately — both spend a
  * `password`-type token at `POST /account/reset-confirm` (see `authentication.ts`'s
  * `requestAccountSetup`) — so it's excluded from the "each token to its own kind" case below.
  */
@@ -67,15 +67,19 @@ describe('account emails — the template each one names', () => {
 });
 
 describe('account emails — the action links', () => {
-    it.each(LINK_EMAILS)('%s delegates to frontendLink(%s, …)', (_name, build, _template, kind) => {
-        const { data } = build('en', NAME, TOKEN);
+    it.each(LINK_EMAILS)(
+        '%s delegates to accountFrontendLink(%s, …)',
+        (_name, build, _template, kind) => {
+            const { data } = build('en', NAME, TOKEN);
 
-        // The whole link, not just the token: `frontendLink` itself is covered by its own unit
-        // suite (`tests/unit/infrastructure/http/frontend-link.test.ts`) — what this builder owns
-        // is picking the right KIND and passing the recipient's own locale and token through
-        // unchanged, never a swapped or hard-coded one.
-        expect(data.linkUrl).toBe(frontendLink(kind, { locale: 'en', token: TOKEN }));
-    });
+            // The whole link, not just the token: `accountFrontendLink`/`frontendLink` are covered
+            // by their own unit suites (`src/modules/account/tests/unit/config.test.ts`,
+            // `tests/unit/infrastructure/http/frontend-link.test.ts`) — what this builder owns is
+            // picking the right KIND and passing the recipient's own locale and token through
+            // unchanged, never a swapped or hard-coded one.
+            expect(data.linkUrl).toBe(accountFrontendLink(kind, { locale: 'en', token: TOKEN }));
+        }
+    );
 
     it('sends each token to its own kind, never another flow"s', () => {
         // The consequence worth naming: a reset token delivered on the delete page, or the other

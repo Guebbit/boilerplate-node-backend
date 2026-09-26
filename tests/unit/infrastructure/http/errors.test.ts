@@ -11,6 +11,7 @@
 
 import { asStub } from '@tests/stub';
 import {
+    ConflictError,
     databaseErrorInterpreter,
     isInfrastructureError,
     rejectDatabaseEnvelope,
@@ -206,6 +207,42 @@ describe('ValidationError branch', () => {
         expect(databaseErrorInterpreter(new Error('connection reset'))).toEqual([
             500,
             'connection reset'
+        ]);
+    });
+});
+
+describe('ConflictError branch (D14)', () => {
+    it('answers 409 with the subclass message — a module raises its OWN subclass', () => {
+        // `access`'s `AccessInvariantError` is today's one caller; a bare `ConflictError` fixture
+        // here is the honest unit — `infrastructure` never imports `access` to build one.
+        class ModuleOwnedConflict extends ConflictError {}
+
+        expect(databaseErrorInterpreter(new ModuleOwnedConflict('role not declared'))).toEqual([
+            409,
+            'role not declared'
+        ]);
+    });
+
+    it('matches on instanceof, never on a `name` string a module happens to have chosen', () => {
+        // The opposite contract from BSONError/ValidationError above, and deliberately so: this
+        // class has exactly one copy (defined here, in infrastructure), so `instanceof` is safe —
+        // a same-shaped error that never extended it must NOT be mistaken for one.
+        const sameShapeButNotASubclass = Object.assign(new Error('role not declared'), {
+            name: 'AccessInvariantError'
+        });
+
+        expect(databaseErrorInterpreter(sameShapeButNotASubclass)).toEqual([
+            500,
+            'role not declared'
+        ]);
+    });
+
+    it('falls back to a generic message on an empty message, same as the catch-all', () => {
+        class EmptyMessageConflict extends ConflictError {}
+
+        expect(databaseErrorInterpreter(new EmptyMessageConflict(''))).toEqual([
+            409,
+            'Unknown error'
         ]);
     });
 });

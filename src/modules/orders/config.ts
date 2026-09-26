@@ -1,9 +1,9 @@
 /**
  * @module
  * The shop's own identity as it appears on an invoice, the bank-transfer payment method's
- * deployment config, and the invoice render cache's own two knobs — all read per call rather than
- * captured at import, the pattern `inventory/config.ts` sets, so a deployment can correct any of
- * them without a restart.
+ * deployment config, the invoice render cache's own two knobs, and this module's one link into the
+ * paired frontend (its own order page) — all read per call rather than captured at import, the
+ * pattern `inventory/config.ts` sets, so a deployment can correct any of them without a restart.
  *
  * Owned by `orders` because `./emails`' invoice payload is the only reader of the shop identity.
  * The bank-transfer values are owned here for a different reason: `orders` renders
@@ -13,12 +13,15 @@
  * `services/index.ts`'s re-export (a module's public barrel may only publish services/domain/
  * events/emails/model, never a bare `config` — see `local/barrel-allowed-sources`); the VAT RATES
  * are a different thing with a different owner — `products` resolves those
- * (`@modules/products`'s `config.ts`), and this module only freezes the number it is handed.
+ * (`@modules/products`'s `config.ts`), and this module only freezes the number it is handed. The
+ * order link is owned here for the D14 reason: `infrastructure/http/frontend-link.ts` only turns a
+ * resolved template into a URL, and does not know `orders` exists.
  */
 
 import path from 'node:path';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { isDemoMode } from '@infrastructure/runtime/demo-profile';
+import { frontendLink } from '@infrastructure/http/frontend-link';
 import type { OrderTransferInstructions } from '@types';
 
 /**
@@ -167,3 +170,26 @@ export const invoiceCacheTtlMinutes = (): number => {
     if (isDemoMode() || process.env.NODE_ENV === 'test') return 0;
     return environmentNumber('NODE_INVOICE_CACHE_TTL_MINUTES', 5, 0);
 };
+
+/** This module's env var for its one frontend link — `.env-example` documents the default. */
+const ORDER_LINK_ENV_VAR = 'NODE_FRONTEND_LINK_ORDER';
+
+/**
+ * Default template — the paired frontend's own order page
+ * (`<paired-frontend>/src/modules/orders/routes.ts`). `{id}` is filled in by
+ * `frontendLink`, never left for the frontend to parse out of the path itself.
+ */
+const ORDER_LINK_DEFAULT_TEMPLATE = 'orders/{id}';
+
+/**
+ * A link into the paired frontend's own order page.
+ * @param parameters - `locale` the email is written in; `id` the order to link to
+ */
+export const orderFrontendLink = (parameters: { locale: string; id: string }): string =>
+    frontendLink(
+        process.env[ORDER_LINK_ENV_VAR] ?? ORDER_LINK_DEFAULT_TEMPLATE,
+        parameters.locale,
+        {
+            id: parameters.id
+        }
+    );

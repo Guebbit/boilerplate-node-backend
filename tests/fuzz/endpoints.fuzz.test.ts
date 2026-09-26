@@ -56,6 +56,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import type { UserDocument } from '@modules/users';
+import { markServerListening } from '@infrastructure/runtime/readiness';
 
 // No real Chromium here, and a missing browser is not what this suite hunts: the invoice route
 // with a REAL order renders, and the stub would answer every request 500. Same stand-in the
@@ -65,6 +66,12 @@ jest.mock('@infrastructure/adapters/pdf', () => ({
 }));
 
 setupTestDb();
+
+// `GET /readyz` answers 503 until `src/app.ts`'s real boot marks the process listening, which
+// never runs under `NODE_ENV=test` (`tests/support/http.ts`). Marked ready once, here, so the
+// sweep below fuzzes it the way every other operation is fuzzed — as a route actually serving
+// traffic — rather than tripping `neverCrashesOffContract`'s "no 5xx" invariant on every run.
+markServerListening();
 
 /**
  * One seed for the file, so a failure is reproducible rather than a story about last Tuesday.

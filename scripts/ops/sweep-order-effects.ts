@@ -41,4 +41,4 @@ const main = (): Promise<void> =>
         .then(() => orderService.retryPendingEffects())
         .then(() => undefined);
 
-void runScript(main, stopDatabase);
+void runScript('sweep:order-effects', main, stopDatabase);

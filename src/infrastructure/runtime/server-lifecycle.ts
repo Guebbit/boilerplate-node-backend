@@ -18,6 +18,7 @@ import { stopQueue } from '@infrastructure/adapters/queue';
 import { stopLocaleOverrideRefresh } from '@infrastructure/i18n';
 import { settleRenders } from '@infrastructure/adapters/pdf';
 import { environmentNumber } from '@infrastructure/runtime/environment';
+import { markServerDraining } from '@infrastructure/runtime/readiness';
 
 /** Upper bound on graceful shutdown before we stop being polite and kill the process. */
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
@@ -161,6 +162,10 @@ export const registerSignalHandlers = (stopFunction: () => Promise<void>) => {
     const onProcessSignal = (signal: NodeJS.Signals) => {
         // Stryker disable next-line all
         logger.info(`Received ${signal}, starting graceful shutdown.`);
+
+        // Before anything else: `GET /readyz` must start answering 503 the moment a shutdown
+        // signal arrives, so a load balancer stops routing here before connections are cut.
+        markServerDraining();
 
         // Deadline: if teardown hangs (a socket that never drains, a broker that never
         // answers) exit anyway with a failure code, so the orchestrator restarts us

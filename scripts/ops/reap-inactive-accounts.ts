@@ -29,7 +29,11 @@
  *
  * Meant to run periodically (the same cron container that runs `reap:quarantine` and
  * `reap:orders`), never on every boot. Guarded by `withLease` — the one job wired to the
- * primitive today, since a double-run here is the most expensive of the nightly jobs.
+ * primitive today, since a double-run here is the most expensive of the nightly jobs. Its own
+ * `releaseLease` already records this job's outcome under the SAME name `withLease` takes, so
+ * `runScript` below is passed no name of its own: recording again at that outer layer would
+ * overwrite a genuine success with a false one whenever this process finds the lease already held
+ * and skips the run entirely — `main` still resolves normally in that case.
  *
  * Removal: owned by `account` — deletes with the module, along with the `reap:inactive-accounts`
  * npm script and its `docker/crontab` line.
@@ -100,7 +104,7 @@ const main = async (): Promise<void> => {
         return;
     }
 
-    const ran = await withLease('reap-inactive-accounts', LEASE_TTL_MS, async () => {
+    const ran = await withLease('reap:inactive-accounts', LEASE_TTL_MS, async () => {
         await start();
         registerModules(enabledModules);
         await initI18n();
@@ -131,4 +135,4 @@ const main = async (): Promise<void> => {
     }
 };
 
-void runScript(main, () => Promise.all([stopDatabase(), stopQueue()]));
+void runScript(undefined, main, () => Promise.all([stopDatabase(), stopQueue()]));

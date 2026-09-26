@@ -198,6 +198,7 @@ async function seed() {
  * truncated. Every other `runScript` caller (`scripts/db/`, `scripts/ops/`) never imports `src/app.ts` and so
  * never hits this hook, which is why `run-script.ts` itself stays on `process.exitCode`.
  */
-void runScript(seed, () => application?.stopServer() ?? Promise.resolve()).then(() =>
+// `undefined`: the demo seeder, not a `docker/crontab` job — see `run-script.ts`.
+void runScript(undefined, seed, () => application?.stopServer() ?? Promise.resolve()).then(() =>
     process.exit(process.exitCode ?? 0)
 );

@@ -10,8 +10,13 @@
 import type { TFunction } from 'i18next';
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-import { frontendLink } from '@infrastructure/http/frontend-link';
-import { shopCurrency, shopCountry, shopLegalName, shopVatNumber } from './config';
+import {
+    shopCurrency,
+    shopCountry,
+    shopLegalName,
+    shopVatNumber,
+    orderFrontendLink
+} from './config';
 import { orderTotal, orderTaxBreakdown, type TaxRateSummary } from './domain';
 import type { OrderTransferInstructions } from '@types';
 
@@ -66,7 +71,7 @@ export const orderConfirmEmail = (
             ),
             total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             linkLabel: t('orders.email-confirm.link-label'),
-            linkUrl: frontendLink('order', { locale, id: orderId }),
+            linkUrl: orderFrontendLink({ locale, id: orderId }),
             footer: t('email.footer')
         }
     };
@@ -114,7 +119,7 @@ export const bankTransferInstructionsEmail = (
             // Invoice number allocation doesn't wait on payment (see `invoice-numbering.ts`), so
             // the same link, rendering the same invoice on demand, applies here as on the paid path.
             linkLabel: t('orders.email-transfer.link-label'),
-            linkUrl: frontendLink('order', { locale, id: orderId }),
+            linkUrl: orderFrontendLink({ locale, id: orderId }),
             footer: t('email.footer')
         }
     };

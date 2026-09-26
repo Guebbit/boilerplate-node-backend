@@ -9,7 +9,7 @@
 // to every log record) with *transports* (where the record is written). Everything below is
 // built out of those two concepts.
 import winston from 'winston';
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 // Relative, not the `@infrastructure` alias: this file sits on `global-setup.ts`'s own import
 // chain (via `scenarios/support/ephemeral-mongo.ts`), which is loaded outside jest's normal
 // module resolution — see that file's own comment. An alias resolves at `tsc`/`eslint` time but
@@ -112,19 +112,32 @@ export const resolvePersonalFieldMode = (): PersonalFieldMode =>
     environmentChoice('NODE_LOG_PERSONAL_FIELDS', PERSONAL_FIELD_MODES, 'hash');
 
 /**
+ * Non-secret fallback key outside production, where `NODE_LOG_HASH_KEY` is not required
+ * (`required-config.ts`, `productionOnly: true`) — a dev/test log still needs a STABLE digest to
+ * stay correlatable, and there is no secret worth protecting on a machine that already has this
+ * source tree.
+ */
+const DEV_LOG_HASH_KEY = 'dev-log-hash-key';
+
+/**
  * Applies the resolved {@link PersonalFieldMode} to one personal-data value.
  *
- * The `hash` mode's digest is truncated to 12 hex characters (48 bits): a LOG CORRELATION aid,
- * not a security boundary the way a password hash is — nobody needs 256 bits of collision
- * resistance to notice "this is the same user across three log lines", and a shorter digest keeps
- * log lines scannable. `sha256:` prefixed so a reader (or a downstream parser) can tell a digest
- * from a value that merely happens to look like one.
+ * `hash` is a keyed hash — HMAC-SHA256 under `NODE_LOG_HASH_KEY` — not a bare `sha256(value)`.
+ * A bare hash of an IPv4 or a common email is brute-forced in seconds (2³² addresses, or a
+ * breach list); a keyed hash is reversible only by whoever holds the key. GDPR pseudonymisation:
+ * Art. 4(5), EDPB Guidelines 01/2025.
+ *
+ * Truncated to 12 hex characters (48 bits): a LOG CORRELATION aid, not a security boundary the
+ * way a password hash is — nobody needs 256 bits of collision resistance to notice "same user,
+ * three log lines". `sha256:` prefixed so a reader (or downstream parser) can tell a digest from
+ * a value that merely looks like one.
  */
 const applyPersonalFieldMode = (value: string): string => {
     const mode = resolvePersonalFieldMode();
     if (mode === 'plain') return value;
     if (mode === 'redact') return REDACTED;
-    return `sha256:${createHash('sha256').update(value).digest('hex').slice(0, 12)}`;
+    const key = process.env.NODE_LOG_HASH_KEY || DEV_LOG_HASH_KEY;
+    return `sha256:${createHmac('sha256', key).update(value).digest('hex').slice(0, 12)}`;
 };
 
 /**

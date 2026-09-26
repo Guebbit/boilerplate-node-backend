@@ -9,7 +9,7 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale, translator } from '@infrastructure/i18n';
-import { frontendLink, type TokenLinkKind } from '@infrastructure/http/frontend-link';
+import { accountFrontendLink, type AccountLinkKind } from './config';
 import type { CallerContext } from '@types';
 
 /**
@@ -23,7 +23,7 @@ export const verifyRequestEmail = (
     locale: string,
     name: string,
     token: string,
-    kind: Extract<TokenLinkKind, 'verify' | 'email-change'> = 'verify'
+    kind: Extract<AccountLinkKind, 'verify' | 'email-change'> = 'verify'
 ): EmailContent => {
     const t = translator(locale);
     return {
@@ -36,7 +36,7 @@ export const verifyRequestEmail = (
             greeting: t('account.email.verify-request.greeting', { name }),
             intro: t('account.email.verify-request.intro'),
             linkLabel: t('account.email.verify-request.link-label'),
-            linkUrl: frontendLink(kind, { locale, token }),
+            linkUrl: accountFrontendLink(kind, { locale, token }),
             ignore: t('account.email.verify-request.ignore'),
             footer: t('email.footer')
         }
@@ -82,7 +82,7 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
             greeting: t('account.email.reset-request.greeting', { name }),
             intro: t('account.email.reset-request.intro'),
             linkLabel: t('account.email.reset-request.link-label'),
-            linkUrl: frontendLink('reset', { locale, token }),
+            linkUrl: accountFrontendLink('reset', { locale, token }),
             ignore: t('account.email.reset-request.ignore'),
             footer: t('email.footer')
         }
@@ -107,7 +107,7 @@ export const setupRequestEmail = (locale: string, name: string, token: string): 
             greeting: t('account.email.setup-request.greeting', { name }),
             intro: t('account.email.setup-request.intro'),
             linkLabel: t('account.email.setup-request.link-label'),
-            linkUrl: frontendLink('reset', { locale, token }),
+            linkUrl: accountFrontendLink('reset', { locale, token }),
             ignore: t('account.email.setup-request.ignore'),
             footer: t('email.footer')
         }
@@ -180,7 +180,7 @@ export const deleteRequestEmail = (locale: string, name: string, token: string):
             greeting: t('account.email.delete-request.greeting', { name }),
             intro: t('account.email.delete-request.intro'),
             linkLabel: t('account.email.delete-request.link-label'),
-            linkUrl: frontendLink('delete', { locale, token }),
+            linkUrl: accountFrontendLink('delete', { locale, token }),
             ignore: t('account.email.delete-request.ignore'),
             footer: t('email.footer')
         }

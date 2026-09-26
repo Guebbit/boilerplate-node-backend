@@ -1,15 +1,14 @@
 /**
- * `src/infrastructure/http/frontend-link.ts` — links into the paired frontend.
- *
- * Every account email and the orders confirmation share this one builder, so a bug here breaks
- * every confirmation link the app sends, not just one flow's.
+ * `src/infrastructure/http/frontend-link.ts` — one job: a template plus parameters becomes a link
+ * into the paired frontend. `account` and `orders` own which KINDS exist, their own env vars and
+ * default templates (D14) — this only covers what infrastructure itself is responsible for: the
+ * origin, the locale segment, and placeholder substitution.
  */
 
 import { frontendLink } from '@infrastructure/http/frontend-link';
 import { resetSupportedLocales } from '@infrastructure/i18n';
 
 const TOKEN = 'a1b2c3d4e5f6';
-const ORDER_ID = 'order-1';
 
 /** Restores whichever env vars a test overrode, and drops the locale-list cache they may affect. */
 const withEnv = (overrides: Record<string, string | undefined>, run: () => void): void => {
@@ -33,89 +32,69 @@ const withEnv = (overrides: Record<string, string | undefined>, run: () => void)
     }
 };
 
-describe('frontendLink — the default template per kind', () => {
-    it("builds the verify link: locale, then the frontend's verify-email page, token as a query param", () => {
-        expect(frontendLink('verify', { locale: 'en', token: TOKEN })).toBe(
+describe('frontendLink — placeholder substitution', () => {
+    it('fills a named placeholder and URL-encodes the value', () => {
+        expect(frontendLink('verify-email/confirm?token={token}', 'en', { token: TOKEN })).toBe(
             `http://localhost:8080/en/verify-email/confirm?token=${TOKEN}`
         );
     });
 
-    it('builds the reset link', () => {
-        expect(frontendLink('reset', { locale: 'en', token: TOKEN })).toBe(
-            `http://localhost:8080/en/password-reset/confirm?token=${TOKEN}`
+    it('fills more than one placeholder in the same template', () => {
+        expect(frontendLink('orders/{id}/track/{code}', 'en', { id: 'order-1', code: 'abc' })).toBe(
+            'http://localhost:8080/en/orders/order-1/track/abc'
         );
     });
 
-    it('builds the delete link', () => {
-        expect(frontendLink('delete', { locale: 'en', token: TOKEN })).toBe(
-            `http://localhost:8080/en/account-delete/confirm?token=${TOKEN}`
+    it('leaves a template with no placeholders untouched', () => {
+        expect(frontendLink('orders/order-1', 'en')).toBe(
+            'http://localhost:8080/en/orders/order-1'
         );
     });
 
-    it('builds the email-change link', () => {
-        expect(frontendLink('email-change', { locale: 'en', token: TOKEN })).toBe(
-            `http://localhost:8080/en/email-change/confirm?token=${TOKEN}`
+    it('URL-encodes a value that would otherwise change the path shape', () => {
+        expect(frontendLink('orders/{id}', 'en', { id: 'order 1/2' })).toBe(
+            'http://localhost:8080/en/orders/order%201%2F2'
         );
     });
 
-    it('builds the order link off `id`, not `token`, with no query string', () => {
-        expect(frontendLink('order', { locale: 'en', id: ORDER_ID })).toBe(
-            `http://localhost:8080/en/orders/${ORDER_ID}`
+    it('ignores a param name the template never uses', () => {
+        expect(frontendLink('orders/{id}', 'en', { id: 'order-1', unused: 'x' })).toBe(
+            'http://localhost:8080/en/orders/order-1'
         );
-    });
-
-    it('gives every kind a distinct path, so one token can never be mistaken for another flow', () => {
-        const urls = [
-            frontendLink('verify', { locale: 'en', token: TOKEN }),
-            frontendLink('reset', { locale: 'en', token: TOKEN }),
-            frontendLink('delete', { locale: 'en', token: TOKEN }),
-            frontendLink('email-change', { locale: 'en', token: TOKEN })
-        ];
-
-        expect(new Set(urls).size).toBe(urls.length);
     });
 });
 
 describe('frontendLink — the locale segment', () => {
     it('puts the locale first, right after the origin', () => {
-        const url = frontendLink('verify', { locale: 'it', token: TOKEN });
+        const url = frontendLink('verify-email/confirm?token={token}', 'it', { token: TOKEN });
 
         expect(new URL(url).pathname).toBe(`/it/verify-email/confirm`);
     });
 
     it('clamps an unsupported locale to the deployment default, rather than 404ing the link', () => {
         withEnv({ NODE_SUPPORTED_LOCALES: 'en,it', NODE_DEFAULT_LOCALE: 'en' }, () => {
-            const url = frontendLink('verify', { locale: 'kl', token: TOKEN });
+            const url = frontendLink('verify-email/confirm?token={token}', 'kl', {
+                token: TOKEN
+            });
 
             expect(new URL(url).pathname.startsWith('/en/')).toBe(true);
         });
     });
 });
 
-describe('frontendLink — configuration', () => {
+describe('frontendLink — the origin', () => {
     it("falls back to the frontend's own local dev origin when NODE_FRONTEND_URL is unset", () => {
         withEnv({ NODE_FRONTEND_URL: undefined }, () => {
-            expect(frontendLink('verify', { locale: 'en', token: TOKEN })).toBe(
-                `http://localhost:8080/en/verify-email/confirm?token=${TOKEN}`
+            expect(frontendLink('orders/{id}', 'en', { id: 'order-1' })).toBe(
+                'http://localhost:8080/en/orders/order-1'
             );
         });
     });
 
     it('reads NODE_FRONTEND_URL when a deployment sets one', () => {
         withEnv({ NODE_FRONTEND_URL: 'https://shop.example.com' }, () => {
-            expect(frontendLink('verify', { locale: 'en', token: TOKEN })).toBe(
-                `https://shop.example.com/en/verify-email/confirm?token=${TOKEN}`
-            );
-        });
-    });
-
-    it("lets a deployment override one kind's template without touching the others", () => {
-        withEnv({ NODE_FRONTEND_LINK_RESET: 'change-password?t={token}' }, () => {
-            expect(frontendLink('reset', { locale: 'en', token: TOKEN })).toBe(
-                `http://localhost:8080/en/change-password?t=${TOKEN}`
-            );
-            expect(frontendLink('verify', { locale: 'en', token: TOKEN })).toBe(
-                `http://localhost:8080/en/verify-email/confirm?token=${TOKEN}`
+            expect(frontendLink('orders/{id}', 'en', { id: 'order-1' })).toBe(
+                'https://shop.example.com/en/orders/order-1'
             );
         });
     });

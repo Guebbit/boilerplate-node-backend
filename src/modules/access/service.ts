@@ -15,6 +15,7 @@ import { findRole } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
+import { ConflictError } from '@infrastructure/http/errors';
 import { membershipRepository, tenantRepository } from './repository';
 import type { MembershipDocument, TenantDocument } from './model';
 import { accessAuditActions } from './audit';
@@ -35,8 +36,13 @@ export const VERIFIED_CUSTOMER_ROLE = 'customer';
  */
 const CREATE_USER_KEY = 'users.any.create';
 
-/** Raised when a write would assign a role nothing declares, or grant more than the granter holds. */
-export class AccessInvariantError extends Error {
+/**
+ * Raised when a write would assign a role nothing declares, or grant more than the granter holds.
+ * Extends the infrastructure-owned {@link ConflictError}: this module's own name, `infrastructure`'s
+ * own recognised shape — `databaseErrorInterpreter` (`infrastructure/http/errors.ts`) maps any
+ * `ConflictError` to 409 by `instanceof`, never by knowing `access` exists.
+ */
+export class AccessInvariantError extends ConflictError {
     constructor(message: string) {
         super(message);
         this.name = 'AccessInvariantError';

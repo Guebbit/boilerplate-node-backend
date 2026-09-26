@@ -30,4 +30,4 @@ const main = (): Promise<void> =>
         .then(() => orderService.anonymizeDueOrders())
         .then(() => undefined);
 
-void runScript(main, stopDatabase);
+void runScript('reap:orders', main, stopDatabase);

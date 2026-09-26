@@ -31,6 +31,7 @@ import {
     registerSignalHandlers,
     shutdownInfra
 } from '@infrastructure/runtime/server-lifecycle';
+import { markServerListening } from '@infrastructure/runtime/readiness';
 import { bootI18n, refreshLocaleOverrides, startLocaleOverrideRefresh } from '@infrastructure/i18n';
 
 import {
@@ -157,6 +158,8 @@ export const startServer = () => {
                     // Stryker disable next-line all
                     logger.info(`Server listening on port ${String(port)}`);
                     activeServer = server;
+                    // `GET /readyz` starts answering 200 only from here — see `readiness.ts`.
+                    markServerListening();
                     return server;
                 });
             })

@@ -1,5 +1,5 @@
 import { setupTestDb } from '@tests/setup-test-db';
-import { leaseModel, withLease } from '@infrastructure/persistence/lease';
+import { leaseModel, withLease, recordJobOutcome } from '@infrastructure/persistence/lease';
 
 /**
  * `withLease` against a real database — see docs/reference/ops.md#scheduled-jobs for why this is a
@@ -177,5 +177,62 @@ describe('withLease', () => {
         // document on its way to answering "someone else has it".
         const stored = await leaseModel.findById('scheduled-jobs-test.held').lean().exec();
         expect(stored?.owner).toBe('holder-a');
+    });
+});
+
+/**
+ * `recordJobOutcome` — the D9 path every `docker/crontab` job now goes through via
+ * `scripts/run-script.ts`, not only the one job ({@link withLease}'s own single caller) that also
+ * takes a mutual-exclusion lease.
+ */
+describe('recordJobOutcome', () => {
+    it('creates a row for a job that has never taken a lease, already-expired', async () => {
+        await recordJobOutcome('scheduled-jobs-test.outcome-only', { failed: false });
+
+        const stored = await leaseModel.findById('scheduled-jobs-test.outcome-only').lean().exec();
+        expect(stored?.lastSuccessAt).toBeInstanceOf(Date);
+        // Immediately acquirable: `withLease`'s own query matches `expiresAt < now`, so a fresh
+        // outcome-only row must never block a real lease acquisition for the same name.
+        expect(stored?.expiresAt.getTime()).toBeLessThan(Date.now());
+    });
+
+    it('records lastError on a failure, without disturbing a later success', async () => {
+        await recordJobOutcome('scheduled-jobs-test.outcome-failure', {
+            failed: true,
+            error: new Error('disk full')
+        });
+
+        const afterFailure = await leaseModel
+            .findById('scheduled-jobs-test.outcome-failure')
+            .lean()
+            .exec();
+        expect(afterFailure?.lastError).toBe('disk full');
+
+        await recordJobOutcome('scheduled-jobs-test.outcome-failure', { failed: false });
+
+        const afterSuccess = await leaseModel
+            .findById('scheduled-jobs-test.outcome-failure')
+            .lean()
+            .exec();
+        expect(afterSuccess?.lastSuccessAt).toBeInstanceOf(Date);
+        expect(afterSuccess?.lastError).toBeUndefined();
+    });
+
+    it('does not overwrite an existing owner — $setOnInsert only applies to a brand-new row', async () => {
+        const now = new Date();
+        await leaseModel.create({
+            _id: 'scheduled-jobs-test.outcome-preserves-owner',
+            owner: 'a-real-holder',
+            expiresAt: new Date(now.getTime() + 60_000)
+        });
+
+        await recordJobOutcome('scheduled-jobs-test.outcome-preserves-owner', { failed: false });
+
+        const stored = await leaseModel
+            .findById('scheduled-jobs-test.outcome-preserves-owner')
+            .lean()
+            .exec();
+        expect(stored?.owner).toBe('a-real-holder');
+        expect(stored?.lastSuccessAt).toBeInstanceOf(Date);
     });
 });

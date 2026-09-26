@@ -107,12 +107,15 @@ idempotency (`webhookDeliveryRepository.claimPending`'s atomic claim) is a secon
 reason a concurrent pass costs nothing. Any future scheduled job that would NOT be safe to run
 twice concurrently should wrap its work in `withLease` too.
 
-**Observability.** Every `withLease` call stamps its lease document's `lastSuccessAt` on success and
-`lastError` on a throw, and `GET /observability/health`'s `jobs` array is built to report that set —
-so a job wrapped in `withLease` that silently stopped running would be visible on the probe an
-operator already looks at, without a Pushgateway or a second UI. `jobs` reports the leased jobs,
-and only those — the **Leased** column above is the current list, not every job in the crontab. A
-job absent from `jobs` is not wrapped in `withLease` yet; that is not the same as unhealthy.
+**Observability.** `scripts/run-script.ts` records every crontab job's outcome — `lastSuccessAt` on
+success, `lastError` on a throw — onto the same `leases` document `withLease` itself writes when a
+job also takes one; `GET /observability/health`'s `jobs` array reports the whole set, so any of the
+eight silently failing or silently not running at all is visible on the probe an operator already
+looks at. `job_last_success_timestamp_seconds{job="…"}` (`infrastructure/observability/metrics-registry.ts`)
+exposes the same value to Prometheus; `ScheduledJobStale` (`docker/observability/prometheus.alert-rules.yaml`)
+fires when a nightly job's last success is more than 48 hours old. `sweep:webhook-retries` is excluded from that
+alert — it runs every minute, not nightly, and `WebhookRetriesStalled` already covers it. No
+Pushgateway needed: the value lives in Mongo, and the long-running app exports it at scrape time.
 See `docs/tools/observability-layer.md`.
 
 ## Data retention

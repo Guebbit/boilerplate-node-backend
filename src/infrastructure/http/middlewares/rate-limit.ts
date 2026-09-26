@@ -115,7 +115,8 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
         ...(budget.requestWasSuccessful
             ? { requestWasSuccessful: budget.requestWasSuccessful }
             : {}),
-        ...(budget.requestPropertyName ? { requestPropertyName: budget.requestPropertyName } : {})
+        ...(budget.requestPropertyName ? { requestPropertyName: budget.requestPropertyName } : {}),
+        ...(budget.skip ? { skip: budget.skip } : {})
     });
 
 /**
@@ -226,7 +227,9 @@ const GLOBAL_RATE_LIMIT_BUDGET: RateLimitBudget = {
     bounds:
         'Every request across the whole surface — a scanner sweeping for paths that do not exist ' +
         'is the traffic most worth braking, same as a browsing session.',
-    audited: false
+    audited: false,
+    // `GET /readyz` is an orchestrator's own probe, on a fixed interval — see `RateLimitBudget.skip`.
+    skip: (request) => request.method === 'GET' && request.path === '/readyz'
 };
 
 /**

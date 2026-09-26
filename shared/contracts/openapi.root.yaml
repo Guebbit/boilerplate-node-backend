@@ -1394,6 +1394,25 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/HealthPingEnvelope'
 
+    /readyz:
+        get:
+            tags: [System]
+            summary: Readiness check
+            description: |
+                Public readiness probe for an orchestrator (Kubernetes' own `/livez` + `/readyz`
+                convention). Empty body either way: 200 once this instance has finished booting,
+                has not started draining for shutdown, and can reach the database; 503 otherwise.
+
+                NOT the liveness probe — `GET /` is that, and answers regardless of readiness.
+                Point a load balancer or a container HEALTHCHECK here instead of at `/`, so a
+                draining instance stops receiving new traffic before its connections are cut.
+            operationId: getReadyz
+            responses:
+                '200':
+                    description: Ready to receive traffic.
+                '503':
+                    description: Booting, draining, or the database is unreachable.
+
     # ---------- locales ----------
     /locales:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales'

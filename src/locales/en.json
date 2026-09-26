@@ -40,7 +40,8 @@
         "too-big-items": "Must have at most {{maximum}} items.",
         "not-multiple-of": "Must be a multiple of {{divisor}}.",
         "unrecognized-keys": "Unknown field: {{keys}}.",
-        "invalid-value": "Must be one of: {{values}}."
+        "invalid-value": "Must be one of: {{values}}.",
+        "password-breached": "This password has appeared in a data breach and can't be used. Please choose another one."
     },
     "email": {
         "footer": "Sent by the Ecommerce Demo team."

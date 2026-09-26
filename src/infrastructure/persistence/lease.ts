@@ -208,6 +208,49 @@ const releaseLease = (
         });
 
 /**
+ * Records one crontab job's outcome without taking part in the mutual-exclusion the rest of this
+ * file provides — called by `scripts/run-script.ts` for EVERY job, lease-guarded or not, so
+ * `GET /observability/health` and `job_last_success_timestamp_seconds` (`metrics-registry.ts`)
+ * see every job in `docker/crontab`, not only the one that also calls {@link withLease}.
+ *
+ * Upserts by `_id` alone. `owner`/`expiresAt` are set only `$setOnInsert`, already-expired
+ * (`RELEASED`): a job that never takes a lease gets a row that is always immediately acquirable,
+ * so this never blocks a later `withLease` call for the same name from working normally.
+ * A lease-guarded job's own {@link withLease} call still races this one harmlessly — both record
+ * the same outcome, moments apart, onto the same document.
+ */
+export const recordJobOutcome = (
+    name: string,
+    outcome: { failed: false } | { failed: true; error: unknown }
+): Promise<unknown> =>
+    leaseModel
+        .updateOne(
+            { _id: name },
+            {
+                $setOnInsert: { owner: 'none', expiresAt: RELEASED },
+                ...(outcome.failed
+                    ? {
+                          $set: {
+                              lastError: extractErrorMessage(outcome.error, String(outcome.error))
+                          }
+                      }
+                    : { $set: { lastSuccessAt: new Date() }, $unset: { lastError: '' } })
+            },
+            { upsert: true }
+        )
+        .exec()
+        .catch((error: unknown) => {
+            // Same reasoning as `releaseLease`'s own catch: a failed record is not a failed job,
+            // and must not turn a successful run red.
+            // Stryker disable all
+            logger.warn('recordJobOutcome - could not record, job health will show stale', {
+                name,
+                error
+            });
+            // Stryker restore all
+        });
+
+/**
  * Run `run` only if this process is the one holder of the named lease right now, and release it
  * immediately after — on success or on a throw — rather than waiting out `ttlMs`.
  *

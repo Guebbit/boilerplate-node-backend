@@ -54,6 +54,7 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`:
 | `QueueJobsParked`                    | any job parked in `<queue>.dead` in the last 15 min                       | warning  |
 | `WebhookDeliveriesFailingEverywhere` | zero successful webhook deliveries in 30 min while attempts keep arriving | critical |
 | `WebhookRetriesStalled`              | webhook deliveries stay overdue for 15 min straight                       | warning  |
+| `ScheduledJobStale`                  | a nightly `docker/crontab` job has not recorded a success in > 48 h       | warning  |
 
 ## Alertmanager
 

@@ -16,10 +16,10 @@ import { buildObservabilityHealth } from '../services/health';
 /**
  * GET /observability/health
  *
- * The READINESS answer: can this instance serve what it promises, and if not, which part is
- * missing. Liveness — is the process alive at all — is `GET /`, and it is what the container
- * HEALTHCHECK probes; the two are deliberately different endpoints, because an orchestrator
- * restarts on liveness and restarting this process would not bring a downed Redis back.
+ * The DETAILED, authenticated readiness view — every backing service, telemetry wiring, process
+ * resources, per-job outcomes. `GET /readyz` is the binary, unauthenticated probe an orchestrator
+ * actually calls, and `GET /` is liveness — three different endpoints on purpose, because an
+ * orchestrator restarts on liveness and restarting this process would not bring a downed Redis back.
  */
 export const getObservabilityHealth = (_request: Request, response: Response) =>
     buildObservabilityHealth()

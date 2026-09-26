@@ -7,6 +7,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
+import { markServerListening } from '@infrastructure/runtime/readiness';
 
 setupTestDb();
 
@@ -16,6 +17,27 @@ describe('GET /', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('ok');
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('GET /readyz', () => {
+    it('matches the contract while booting (503, empty body)', async () => {
+        // Runs before `markServerListening` below — `src/app.ts`'s auto-start never fires under
+        // `NODE_ENV=test`, so this file's process starts, and stays, in the 'booting' phase until
+        // a test says otherwise.
+        const response = await api().get('/readyz');
+
+        expect(response.status).toBe(503);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the contract once ready (200, empty body)', async () => {
+        markServerListening();
+
+        const response = await api().get('/readyz');
+
+        expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
     });
 });

@@ -72,4 +72,6 @@ const sync = async (): Promise<void> => {
     report(await applyIndexSync(), 'Indexes synced:');
 };
 
-void runScript(sync, () => connection.close());
+// `undefined`: a deploy-time setup script, not a `docker/crontab` job — no expected interval to
+// alert on, so it takes no part in D9's job-health/metric tracking (`docs/reference/ops.md`).
+void runScript(undefined, sync, () => connection.close());

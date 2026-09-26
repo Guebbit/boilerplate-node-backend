@@ -55,6 +55,14 @@ export interface RateLimitBudget {
     skipSuccessfulRequests?: boolean;
 
     /**
+     * Requests this budget never applies to at all — distinct from `skipSuccessfulRequests`,
+     * which still counts the request, just not against the budget. Only the global brake uses
+     * this, to exempt `GET /readyz`: an orchestrator's health probe must never see a 429, and a
+     * probe interval is fixed and cheap, so there is no abuse case to bound.
+     */
+    skip?: (request: Request) => boolean;
+
+    /**
      * Reads a custom outcome instead of the response status — see the payments module's decline
      * budget, which must count a genuine decline and not the confirm route's other 409.
      */
