@@ -83,7 +83,7 @@ const DATA: Data = {
     linkLabel: 'Reset my password',
     linkUrl: 'https://example.com/en/password-reset/confirm?token=reset-token-value',
     ignore: 'If you did not request this, you can safely ignore this email.',
-    footer: 'Sent by the Ecommerce Demo team.'
+    footer: 'Sent by our team.'
 };
 
 let spoolRoot: string;
