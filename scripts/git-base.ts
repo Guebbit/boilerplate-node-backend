@@ -6,28 +6,58 @@ import path from 'node:path';
  */
 export const REPO_ROOT = path.join(__dirname, '..');
 
-/**
- * Resolves the merge-base between HEAD and a given ref, ensuring a stale local branch
- * does not widen the comparison to commits never shipped.
- *
- * @param base — the ref to compare against (e.g. 'origin/main', 'HEAD~3')
- * @param scriptName — the calling script's name, for error messages
- * @returns the SHA of the merge-base
- * @throws process.exit(2) when the ref cannot be resolved
- */
-export const mergeBase = (base: string, scriptName: string): string => {
+/** `git merge-base HEAD <ref>`, or `undefined` when git refuses to resolve `ref`. */
+const resolveRef = (ref: string): string | undefined => {
     try {
         // Finds the common ancestor of HEAD and the target ref, so diffs compare what would actually ship.
-        // HEAD is the current branch, base is the ref to compare against (e.g. 'origin/main').
-        return execFileSync('git', ['merge-base', 'HEAD', base], {
+        return execFileSync('git', ['merge-base', 'HEAD', ref], {
             cwd: REPO_ROOT,
             encoding: 'utf8'
         }).trim();
     } catch {
+        return undefined;
+    }
+};
+
+/**
+ * Resolves the merge-base between HEAD and `base`, ensuring a stale local branch does not widen
+ * the comparison to commits never shipped.
+ *
+ * An unresolvable DEFAULT `origin/main` (a fresh clone whose remote tracks a different default
+ * branch name, or one that has not fetched it yet) falls back to `origin/HEAD` — the symbolic ref
+ * that follows whatever the remote's actual default branch is — before giving up. An explicit
+ * `--base=<ref>` a caller passed is never silently swapped for something else: it still fails hard,
+ * since the caller asked for something specific.
+ *
+ * @param base - the ref to compare against (e.g. 'origin/main', 'HEAD~3')
+ * @param scriptName - the calling script's name, for messages
+ * @param resolve - the ref resolver; overridden in tests, `resolveRef` (real git) otherwise
+ * @returns the merge-base SHA, or `undefined` when nothing origin-shaped resolves at all — the
+ *   caller's cue to skip the check rather than fail a clone with no usable `origin` remote
+ * @throws process.exit(2) when an explicitly requested `base` cannot be resolved
+ */
+export const mergeBase = (
+    base: string,
+    scriptName: string,
+    resolve: (ref: string) => string | undefined = resolveRef
+): string | undefined => {
+    const direct = resolve(base);
+    if (direct !== undefined) return direct;
+
+    if (base !== 'origin/main') {
         console.error(
             `[${scriptName}] cannot resolve '${base}'. In CI, fetch it first ` +
                 `(actions/checkout with fetch-depth: 0), or pass --base=<ref>.`
         );
         process.exit(2);
     }
+
+    const viaOriginHead = resolve('origin/HEAD');
+    if (viaOriginHead !== undefined) return viaOriginHead;
+
+    console.log(
+        `[${scriptName}] neither 'origin/main' nor 'origin/HEAD' resolve — skipping. Fetch the ` +
+            'remote, or pass --base=<ref>, to run this check for real.'
+    );
+    return undefined;
 };
