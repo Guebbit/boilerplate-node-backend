@@ -8,6 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { seedOrder, readOrder } from '@modules/orders/tests/factories';
 import { markPaid, markProcessing, markShipped, markDelivered } from '../../services/status';
+import { orderService } from '../../services';
 import { ORDER_STATUS_CHANGED } from '../../events';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { OrderStatus } from '@types';
@@ -66,6 +67,14 @@ describe('markProcessing', () => {
         const updated = await markProcessing(String(order._id));
 
         expect(updated).toBeNull();
+    });
+
+    it('is reachable on the service object, like its siblings', async () => {
+        const order = await seedOrder(OrderStatus.paid);
+
+        const updated = await orderService.markProcessing(String(order._id));
+
+        expect(updated?.status).toBe(OrderStatus.processing);
     });
 });
 

@@ -29,7 +29,7 @@ import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { detachUserId, anonymizeDueOrders } from './retention';
 import { callerScope, ownerScope, withActions } from './scope';
 import { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
-import { markPaid, markShipped, markDelivered } from './status';
+import { markPaid, markProcessing, markShipped, markDelivered } from './status';
 import { overrideStatus, forceMove } from './override';
 import { unavailableLines } from './availability';
 import { renderInvoicePdf, reapOrphanedInvoices, reapExpiredInvoices } from './invoice';
@@ -59,7 +59,7 @@ export { retractOrder } from './retract';
 export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
 export { sendOrderPlacedEmail, mailBuyer } from './notify';
 export { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
-export { markPaid, markShipped, markDelivered } from './status';
+export { markPaid, markProcessing, markShipped, markDelivered } from './status';
 export { overrideStatus, forceMove } from './override';
 export { detachUserId, anonymizeDueOrders } from './retention';
 export { callerScope, actorOf, ownerScope, withActions } from './scope';
@@ -99,6 +99,7 @@ export const orderService = {
     removeById,
     restoreById,
     markPaid,
+    markProcessing,
     markShipped,
     markDelivered,
     overrideStatus,
