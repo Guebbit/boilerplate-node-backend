@@ -36,7 +36,7 @@ flowchart LR
     products -. "product.deactivated" .-> orders
     products -. "product.deleted" .-> orders
     users -. "user.deleted" .-> orders
-    orders -. "order.cancelled" .-> payments
+    orders -. "order.refund_owed" .-> payments
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -85,8 +85,9 @@ a reason — see [Who writes the status](#who-writes-the-status) below.
 
 ::: warning Two modules reach back, and both do it through events
 [`inventory`](./inventory.md) cancels an order when its hold times out (`inventory.reservation_expired`), and
-this module announces `order.cancelled` so [`payments`](./payments.md) can refund. Neither is an
-import, which is what keeps a mutually-aware pair acyclic.
+this module announces `order.refund_owed` (split from `order.cancelled` itself, so retrying the
+refund never re-delivers the customer-facing cancellation webhook — B6) so [`payments`](./payments.md)
+can refund. Neither is an import, which is what keeps a mutually-aware pair acyclic.
 :::
 
 Each account reads back only its own orders; writing and soft-deleting is admin-only. The
@@ -96,7 +97,7 @@ Three scheduled jobs, all nightly via `docker/crontab`: `npm run reap:orders` re
 remaining PII with placeholders once its post-account-deletion retention window has passed —
 amounts, line items and dates survive, only the person is gone (an order is an invoice, never
 deleted outright, unlike `payments`' abandoned attempts). `npm run sweep:order-effects` re-announces
-`order.cancelled` for a refund the event bus's one delivery attempt did not carry through. `npm run
+`order.refund_owed` for a refund the event bus's one delivery attempt did not carry through. `npm run
 reap:invoices` sweeps the invoice CACHE — an orphaned file with no order left to name it (the
 hard-delete path cleans up its own file; this is the backstop for a row removed any other way),
 and any file past its TTL. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full
@@ -138,7 +139,7 @@ flowchart LR
     SH -->|"system, via<br/>delivery's deliver door"| DE["delivered"]
     P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
     PA -.->|"admin · refund due"| CA
-    CA -. "order.cancelled" .-> PM["payments<br/><i>refunds if one was due</i>"]
+    CA -. "order.refund_owed" .-> PM["payments<br/><i>refunds if one was due</i>"]
 
     classDef open fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;

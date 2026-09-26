@@ -149,8 +149,9 @@ That third row was a live bug rather than an untidiness:
 flowchart TD
     A["admin writes<br/>delivered → pending"] --> B["order is back in the<br/>customer's cancellable set"]
     B --> C["customer clicks cancel"]
-    C --> D["ORDER_CANCELLED emitted"]
-    D --> E["payments refunds a<br/>succeeded payment"]
+    C --> D["afterCancel runs"]
+    D --> E2["ORDER_REFUND_OWED emitted"]
+    E2 --> E["payments refunds a<br/>succeeded payment"]
     D --> F["inventory release<br/>claims 'held' — no match"]
     E --> G["💸 real money returned on<br/>goods already delivered"]
     F --> H["✅ stock unaffected"]
@@ -186,9 +187,10 @@ window between an email save and a status move to guard against — the shape th
 wrong (see "What it replaced" above) is now impossible by construction rather than guarded.
 
 `POST /orders/{id}/cancel` is the one path that runs a cancellation, for a customer and an operator
-alike: the hold is released and `ORDER_CANCELLED` is announced so `payments` refunds. A plain field
-write could never do that — a paid order set to `cancelled` by assignment would end with the
-customer's money kept and the stock held until the sweep.
+alike: the hold is released, `ORDER_CANCELLED` is announced for the fact, and — separately —
+`ORDER_REFUND_OWED` is announced when one is due, so `payments` refunds. A plain field write could
+never do that — a paid order set to `cancelled` by assignment would end with the customer's money
+kept and the stock held until the sweep.
 
 `shipped`/`delivered` are never a field an admin assigns either — they follow a parcel event
 `delivery` records, through `markShipped`/`markDelivered` (see "Who writes the status" above).
@@ -228,7 +230,11 @@ is never a partial write.
 A cancellation has consequences — the stock comes back, and usually the money does too. Who decides
 which, and where that decision lives, is a separate question from which moves are legal.
 
-`order.cancelled` carries a `refund` flag rather than the listener inferring one:
+`order.cancelled` carries a `refund` flag rather than the listener inferring one — but the flag is
+for the record (and the customer-facing webhook), not for driving the refund itself. That is a
+second, separate event, `order.refund_owed`, emitted only when one is due (B6): re-announcing
+`order.cancelled` to retry a stuck refund would re-deliver that webhook to every subscriber each
+time the sweep ran.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 25, 'rankSpacing': 40}}}%%
@@ -239,9 +245,10 @@ flowchart TD
     F --> W["conditional status write"]
     O --> W
     W --> R["inventory release<br/><i>always</i>"]
-    R --> E["emit order.cancelled<br/>{ orderId, refund }"]
+    R --> E["emit order.cancelled<br/>{ orderId, refund }<br/><i>the fact, once</i>"]
     E --> P{"refund?"}
-    P -->|true| M["payments refunds"]
+    P -->|true| M2["emit order.refund_owed<br/>{ orderId }"]
+    M2 --> M["payments refunds"]
     P -->|false| N["money left alone"]
 
     classDef forced fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -250,10 +257,12 @@ flowchart TD
 
 Three things this shape buys. A customer cannot waive their own refund, because `paid` is
 cancellable precisely on the promise that the money comes back — the flag is overwritten, not
-trusted. An operator can cancel without refunding, which is the replacement-going-out case. And the
-event fires either way, so the record of what happened does not depend on what was compensated;
-suppressing it for the no-refund case would make `order.cancelled` mean "cancelled and refunded",
-which is not what it says.
+trusted. An operator can cancel without refunding, which is the replacement-going-out case. And
+`order.cancelled` fires either way, so the record of what happened does not depend on what was
+compensated; suppressing it for the no-refund case would make `order.cancelled` mean "cancelled and
+refunded", which is not what it says. `order.refund_owed`, by contrast, fires only when there is
+something to retry — its very existence IS the fact, so a stuck refund can be retried by
+re-announcing it alone, without touching anyone else who heard about the cancellation.
 
 Returning money on its own is a separate route, `POST /payments/order/{orderId}/refund`, because it
 is a separate act: a goodwill refund leaves the order where it is. It lives in `payments` rather

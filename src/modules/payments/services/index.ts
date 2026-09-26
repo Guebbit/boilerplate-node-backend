@@ -4,7 +4,7 @@
  * because it passed ~700 lines; see `docs/theory/layers.md`. Four rules, followed by every file
  * here: only a `pending` order's owner can start paying; the order's move to `paid` is the gate,
  * not the charge — the provider answers first, and a slipped-away order is refunded on the spot,
- * so money moved iff the order says `paid`; a refund is the `ORDER_CANCELLED` listener, made
+ * so money moved iff the order says `paid`; a refund is the `ORDER_REFUND_OWED` listener, made
  * at-most-once by the conditional `succeeded → refunded` move; and the provider's own word,
  * arriving by webhook, is the authority — the browser's is a hint that lets the happy path feel
  * synchronous.

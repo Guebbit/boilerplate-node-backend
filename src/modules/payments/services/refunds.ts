@@ -1,6 +1,6 @@
 /**
  * @module
- * Giving money back — the operator action (`refundByOrder`) and the `ORDER_CANCELLED` listener's
+ * Giving money back — the operator action (`refundByOrder`) and the `ORDER_REFUND_OWED` listener's
  * compensation (`refundForOrder`), both through the one conditional write (`performRefund`) that
  * makes a refund at-most-once. Nothing else in this module may move money out.
  *
@@ -134,7 +134,7 @@ export const refundByOrder = (
     });
 
 /**
- * `ORDER_CANCELLED`'s listener: give the money back if any was taken.
+ * `ORDER_REFUND_OWED`'s listener: give the money back if any was taken.
  *
  * The conditional `succeeded → refunded` move is the idempotence — a second event, or a cancel
  * of a never-paid order, finds nothing in `succeeded` and does nothing. Unattended, so the

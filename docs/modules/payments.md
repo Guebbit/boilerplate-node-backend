@@ -28,7 +28,7 @@ flowchart LR
     payments --> inventory
     payments --> orders
     payments --> users
-    orders -. "order.cancelled" .-> payments
+    orders -. "order.refund_owed" .-> payments
     users -. "user.deleted" .-> payments
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -45,8 +45,10 @@ flowchart LR
 ## The story
 
 A payment is _about_ an order: the intent freezes its total, the confirm moves its status to
-`paid`. The arrow never comes back — [`orders`](./orders.md) announces `order.cancelled` and this
-module answers with the refund.
+`paid`. The arrow never comes back — [`orders`](./orders.md) announces `order.refund_owed` and this
+module answers with the refund. Split from `order.cancelled` itself (B6): retrying the refund must
+never re-deliver the customer-facing cancellation webhook every time a provider outage outlasts one
+sweep pass.
 
 **`settlePayment` is the one place where the money and the goods agree.** It commits the order's
 held units itself rather than announcing and hoping, because that instant is the only moment a hold
@@ -346,7 +348,7 @@ flowchart LR
     ST -.->|declined| E["order stays pending<br/><i>units still held</i>"]
     ST -->|succeeded| F["order → paid<br/><i>orders</i>"]
     F --> G["commit the hold<br/><i>inventory</i>"]
-    OC["orders"] -. "order.cancelled" .-> R["refund<br/><i>if one was due</i>"]
+    OC["orders"] -. "order.refund_owed" .-> R["refund<br/><i>if one was due</i>"]
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef port fill:#ede9fe,stroke:#7c3aed,color:#111827;

@@ -3,7 +3,7 @@
  * Payments service (`src/modules/payments/services/`) — pins the invariants: the intent freezes
  * the ORDER's total (shipping included), a confirm moves the order `pending → paid` conditionally
  * so the payment row only says `succeeded` when the order does, a decline is retryable, and a
- * refund (the `ORDER_CANCELLED` listener) is at-most-once. Real Mongo throughout, because the
+ * refund (the `ORDER_REFUND_OWED` listener) is at-most-once. Real Mongo throughout, because the
  * guarantees are the conditional writes; the provider is the real `fake` one.
  */
 
@@ -282,7 +282,7 @@ describe('getForOrder', () => {
 });
 
 /*
- * The refund rides the ORDER_CANCELLED event, and the subscription only exists once the
+ * The refund rides the ORDER_REFUND_OWED event, and the subscription only exists once the
  * registry has run — a test that skipped `registerCheckoutModules` would assert the refund never
  * happens and pass for the wrong reason (same shape as the cart's USER_DELETED suite).
  */

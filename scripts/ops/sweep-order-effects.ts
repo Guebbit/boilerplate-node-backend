@@ -3,9 +3,11 @@
  * @module
  * Retry the consequences a cancel could not guarantee — `npm run sweep:order-effects`.
  *
- * A cancel moves the status, releases the hold and announces `ORDER_CANCELLED` so `payments`
- * refunds. The stock half heals on its own: the hold keeps its `expiresAt` and the reservation
- * sweep releases it. The money half does not — the domain event bus has no retry, so a provider
+ * A cancel moves the status, releases the hold and announces `ORDER_REFUND_OWED` so `payments`
+ * refunds — a separate event from the customer-facing `ORDER_CANCELLED`, so this sweep's retry
+ * never re-delivers that webhook (B6). The stock half heals on its own: the hold keeps its
+ * `expiresAt` and the reservation sweep releases it. The money half does not — the domain event
+ * bus has no retry, so a provider
  * unreachable for the length of one call leaves the order cancelled and the refund never made.
  * `cancelById` writes that intent into the order in the same write that cancels it; this script
  * is the other half, re-announcing for whatever is still standing.
@@ -30,7 +32,7 @@ import { runScript } from '../run-script';
  * Connect, install the event subscriptions, retry every owed effect, and resolve nothing.
  *
  * `registerModules` is what the other `reap:*` scripts can skip: this sweep works by emitting
- * `ORDER_CANCELLED`, and without the modules registered there is no `payments` listener to hear
+ * `ORDER_REFUND_OWED`, and without the modules registered there is no `payments` listener to hear
  * it — the sweep would clear every marker having refunded nothing.
  */
 const main = (): Promise<void> =>

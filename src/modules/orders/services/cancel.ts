@@ -27,7 +27,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
-import { ORDER_CANCELLED } from '../events';
+import { ORDER_CANCELLED, ORDER_REFUND_OWED } from '../events';
 import { orderRepository } from '../repository';
 import { statusesLeadingTo } from '../domain';
 import { bankTransferExpiredEmail } from '../emails';
@@ -64,16 +64,20 @@ const afterCancel = async (
      */
     await inventoryService.releaseForOrder(String(order._id));
 
-    // Whoever has to compensate hears it from here; `refund` says whether the money
-    // is part of that. The fact is announced either way.
-    const settled = await emitDomainEvent(ORDER_CANCELLED, {
+    // The fact is announced once, unconditionally — whatever a listener does with it (webhooks'
+    // own delivery has its own retry story) is no longer this function's concern.
+    await emitDomainEvent(ORDER_CANCELLED, {
         orderId: String(order._id),
         refund
     });
 
-    // Discharged only once every listener actually returned. A marker left standing
-    // is the sweep's whole input, so a refund that threw must not clear it here.
-    if (refund && settled) await orderRepository.clearPendingEffect(String(order._id), 'refund');
+    // The refund is a SEPARATE announcement, retried on its own (B6): re-sending `ORDER_CANCELLED`
+    // to retry a stuck refund would re-deliver the customer-facing webhook every time the sweep
+    // ran. Discharged only once this send actually returns.
+    if (refund) {
+        const refunded = await emitDomainEvent(ORDER_REFUND_OWED, { orderId: String(order._id) });
+        if (refunded) await orderRepository.clearPendingEffect(String(order._id), 'refund');
+    }
 
     // No context: the reservation-sweep expiry, not a request. Audited as a system
     // actor rather than skipped — see the docblock above — and reported under its own
@@ -180,10 +184,11 @@ export const cancelById = (
 /**
  * `scripts/ops/sweep-order-effects.ts`'s sweep: the retry behind {@link cancelById}'s marker.
  *
- * Re-announces `ORDER_CANCELLED` for every order still owing a refund, and clears the marker only
- * where every listener returned. Safe to run repeatedly — `payments`' conditional
- * `succeeded → refunded` move means a second announcement for an already-refunded order finds
- * nothing to do, and an order cancelled while never paid finds nothing either.
+ * Re-announces `ORDER_REFUND_OWED` — never `ORDER_CANCELLED` (B6) — for every order still owing a
+ * refund, and clears the marker only once that send actually returns. Safe to run repeatedly —
+ * `payments`' conditional `succeeded → refunded` move means a second announcement for an
+ * already-refunded order finds nothing to do, and an order cancelled while never paid finds
+ * nothing either.
  *
  * Driven from outside, like the reservation sweep and the `reap:*` scripts: the app ships no
  * scheduler.
@@ -204,9 +209,9 @@ export const retryPendingEffects = async (): Promise<number> => {
     for (const order of due) {
         const orderId = String(order._id);
 
-        // `refund: true` is not re-derived: the marker exists only because the cancel decided to
-        // refund, and it is the only effect this field can carry.
-        if (!(await emitDomainEvent(ORDER_CANCELLED, { orderId, refund: true }))) continue;
+        // The marker exists only because the cancel decided to refund, and it is the only effect
+        // this field can carry — `ORDER_REFUND_OWED` alone, never `ORDER_CANCELLED` again (B6).
+        if (!(await emitDomainEvent(ORDER_REFUND_OWED, { orderId }))) continue;
         if (await orderRepository.clearPendingEffect(orderId, 'refund')) settled += 1;
     }
 
