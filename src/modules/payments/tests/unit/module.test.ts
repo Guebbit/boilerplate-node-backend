@@ -43,34 +43,16 @@ describe('the payment provider selector', () => {
 });
 
 /**
- * ST-1's own boot gate. `validateStripeSecretKey`'s pure cases live in `config.test.ts`; this is
- * the one end-to-end check that the module's manifest actually wires it into `assertRequiredConfig`.
+ * The Stripe secret key gate's own boot wiring. `validateStripeSecretKey`'s pure cases (no key,
+ * live key, test key outside production) live in `config.test.ts` — this is only the one case
+ * that proves the module's manifest actually WIRES it into `assertRequiredConfig`: a build that
+ * forgot the wiring would not throw here either, and the other three cases wouldn't tell.
  */
-describe('the Stripe secret key gate (ST-1)', () => {
-    it('boots in production with no Stripe key configured — nothing shipped needs one yet', () => {
-        process.env.NODE_ENV = 'production';
-
-        expect(() => assertRequiredConfig([paymentsModule])).not.toThrow();
-    });
-
-    it('boots in production with a live-mode key', () => {
-        process.env.NODE_ENV = 'production';
-        process.env.NODE_STRIPE_SECRET_KEY = 'sk_live_abc123';
-
-        expect(() => assertRequiredConfig([paymentsModule])).not.toThrow();
-    });
-
+describe('the Stripe secret key gate', () => {
     it('refuses to boot in production with a test-mode key', () => {
         process.env.NODE_ENV = 'production';
         process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
 
         expect(() => assertRequiredConfig([paymentsModule])).toThrow(/NODE_STRIPE_SECRET_KEY/);
-    });
-
-    it('accepts a test-mode key outside production', () => {
-        process.env.NODE_ENV = 'development';
-        process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
-
-        expect(() => assertRequiredConfig([paymentsModule])).not.toThrow();
     });
 });
