@@ -155,9 +155,9 @@ jobs:
         #
         # Both are ASSEMBLED HERE from per-module fragments and copied to the frontend, so this
         # job asks whether the copies over there are still the bundles built here.
-        # `tests/cross-cutting/contract-bundles.test.ts` asks the other half of the question —
-        # whether the bundle here still matches the fragments it is built from — and runs in the
-        # test job, so a fragment edited without re-bundling fails before this job is reached.
+        # `contracts-bundle-freshness` asks the other half of the question — whether the bundle
+        # here still matches the fragments it is built from — by diffing the committed bundle
+        # against what `Setup`'s own `npm ci` just rebuilt.
         #
         # Until this job existed they were checked by nothing. `lint-openapi` and `lint-asyncapi`
         # lint THIS repo's copy and pass, because a forked spec is still a valid spec. What nobody
@@ -250,8 +250,16 @@ jobs:
               run: npm run lint:asyncapi:modules
 
     contracts-bundle-freshness:
-        # The published bundles are what their fragments say they are. Without this, a merged
-        # fragment edit leaves `openapi.yaml` describing the previous version of the API.
+        # The committed bundles are what their fragments say they are. Without this, a merged
+        # fragment edit leaves `asyncapi.yaml`/`asyncapi.public.yaml` describing the previous
+        # version of the API. `openapi.yaml` carries no such check here — it is gitignored, so
+        # there is nothing committed to diff it against; `lint-openapi` still proves it assembles.
+        #
+        # `Setup`'s `npm ci` already runs `postinstall`, which reassembles every bundle from its
+        # fragments before this job's own step runs. Running `check:contracts-bundle` here after
+        # that would only compare the just-rebuilt file with itself — green on every push, whether
+        # or not anyone remembered to re-bundle before committing. `git diff` against what the
+        # checkout actually has on disk is the real question.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -265,8 +273,12 @@ jobs:
               with:
                   node-version: ${{ env.NODE_VERSION }}
 
-            - name: Check contract bundles are current
-              run: npm run check:contracts-bundle
+            - name: Check the committed bundles are current
+              run: |
+                  if ! git diff --exit-code -- asyncapi.yaml asyncapi.public.yaml; then
+                      echo "asyncapi.yaml / asyncapi.public.yaml are stale. Run 'npm run contracts:bundle' and commit the result."
+                      exit 1
+                  fi
 
     asyncapi-breaking:
         # asyncapi.public.yaml is partner-facing — GET /webhooks/events serves it, and a
