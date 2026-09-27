@@ -4,6 +4,9 @@
 <body>
 <main class="centered">
     <h1><%= title %></h1>
+    <% if (typeof disclaimer !== 'undefined' && disclaimer) { %>
+        <p><em><%= disclaimer %></em></p>
+    <% } %>
 
     <% if (typeof meta !== 'undefined' && meta) { %>
         <p><%= meta.numberLabel %></p>

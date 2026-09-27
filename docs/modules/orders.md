@@ -100,7 +100,8 @@ Three scheduled jobs, all nightly via `docker/crontab`: `npm run reap:orders` re
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
 `NODE_ORDER_PII_RETENTION_DAYS` has passed from the order's OWN `createdAt`, counted from account
 erasure or that date, whichever is later — amounts, line items and dates survive, only the person
-is gone (an order is an invoice, never deleted outright, unlike `payments`' abandoned attempts).
+is gone. An admin CAN still hard-delete an order outright, paid included (`services/crud.ts`'s
+`remove`) — this reap is what protects the far more common case, the order nobody ever deletes.
 `npm run sweep:order-effects` re-announces
 `order.refund_owed` for a refund the event bus's one delivery attempt did not carry through. `npm run
 reap:invoices` sweeps the invoice CACHE — an orphaned file with no order left to name it (the
@@ -111,11 +112,11 @@ mechanism.
 ## Creating an order
 
 Every order, whoever makes it, is written through exactly one function — `placeOrder`
-(`services/place.ts`): freeze the lines against the catalogue, hold the stock, allocate the invoice
+(`services/place.ts`): freeze the lines against the catalogue, hold the stock, allocate the order
 number, mint a `bank_transfer` reference when that's the payment method (minted from the same id
 the write is about to land on, so a retried place cannot mint a second one for the same order),
 write the row. **The hold comes before the write, deliberately**: a refused hold then writes
-nothing at all — no order to roll back and no invoice number burned on a sale that never happened.
+nothing at all — no order to roll back and no order number burned on a sale that never happened.
 Everything caller-specific — payment-method validation, the open-transfer cap, resolving a shipping
 address or method, cart pre-flight and clearing — stays with the caller; `placeOrder` only takes
 what it needs to hold and write. See [Checkout](./cart-checkout.md#the-sequence) for the storefront
@@ -144,6 +145,7 @@ flowchart LR
     PA -->|"system, via<br/>delivery's start door"| PR["processing"]
     PR -->|"system, via<br/>delivery's ship door"| SH["shipped"]
     SH -->|"system, via<br/>delivery's deliver door"| DE["delivered"]
+    PR -->|"system, via<br/>delivery's fulfill door<br/>(digital-only)"| DE
     P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
     PA -.->|"admin · refund due"| CA
     CA -. "order.refund_owed" .-> PM["payments<br/><i>refunds if one was due</i>"]
@@ -171,6 +173,7 @@ override all ASK for a move, never assign the field themselves. See
 | `paid` → `processing`                       | `system`                                                                         | `POST /delivery/order/{id}/start`, `delivery.any.start` — or `POST /orders/{id}/status-override`, `orders.any.override` |
 | `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/order/{id}/ship`                                                                                        |
 | `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/order/{id}/deliver`                                                                                     |
+| `processing` → `delivered` (digital-only)   | `system`                                                                         | `POST /delivery/order/{id}/fulfill` — no parcel; refused if any line still needs shipping                               |
 | `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel`                                                                                              |
 
 ### The admin override
@@ -197,15 +200,21 @@ order out of `pending` — the same commit a normal payment confirmation trigger
 reservation sweep would eventually release units an override already shipped, since the sweep only
 knows the order is still `pending` from its own point of view.
 
-## The invoice
+## The receipt
 
-The invoice is a VIEW of the order, rendered when someone asks for it — never a durable artefact
-with a status of its own. `GET /orders/{id}/invoice` renders synchronously, on the request thread
-(`services/invoice.ts`'s `renderInvoicePdf`), and streams the bytes straight back: `200` every
-time the order exists and the caller may see it, `404` otherwise. No queue, no `pending`/`ready`
-status, no polling.
+`GET /orders/{id}/invoice` is a PDF order confirmation / receipt, not a tax invoice — Italy (the
+demo's default `NODE_SHOP_COUNTRY`) needs no invoice at all for an ordinary online sale unless the
+customer asks for one through the national e-invoicing system, which this application does not
+integrate with. `orderNumber` is Shopify's `#1001`, not a fiscal sequence: gaps are fine (E13), and
+the PDF says as much on its own face. A real `invoicing` module — a frozen document, its own
+numbering, credit notes — is a candidate future module, not this one.
 
-The confirmation email sends immediately, linking to the order's page — it is never held for the
+It is a VIEW of the order, rendered when someone asks for it — never a durable artefact with a
+status of its own. It renders synchronously, on the request thread (`services/invoice.ts`'s
+`renderInvoicePdf`), and streams the bytes straight back: `200` every time the order exists and the
+caller may see it, `404` otherwise. No queue, no `pending`/`ready` status, no polling.
+
+The placed-order email sends immediately, linking to the order's page — it is never held for the
 render, and there is nothing left to wait on there either.
 
 See [RabbitMQ](../tools/rabbitmq.md#invoice-pdf-rendering-not-a-queue).

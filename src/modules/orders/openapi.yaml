@@ -397,8 +397,8 @@ paths:
     /orders/{id}/invoice:
         get:
             tags: [Orders]
-            summary: Download order invoice (PDF)
-            description: Generates and returns the invoice for the order identified by `{id}` as a binary PDF file. The client should save or stream the response with an appropriate `Content-Disposition` header.
+            summary: Download order receipt (PDF)
+            description: Generates and returns an order confirmation / receipt for the order identified by `{id}` as a binary PDF file — not a tax invoice, since no national e-invoicing system is involved. The client should save or stream the response with an appropriate `Content-Disposition` header.
             operationId: getOrderInvoice
             security:
                 - bearerAuth: []
@@ -406,7 +406,7 @@ paths:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
                 '200':
-                    description: Invoice PDF
+                    description: Order receipt PDF
                     content:
                         application/pdf:
                             schema:

@@ -12,10 +12,11 @@
             "not-allowed": "Questa forzatura non può spostare l'ordine a quello stato dalla posizione in cui si trova."
         },
         "invoice": {
-            "meta-title": "Fattura — ordine {{order}}",
-            "title": "L'ordine è stato confermato",
+            "meta-title": "Ricevuta — ordine {{order}}",
+            "title": "Conferma d'ordine / ricevuta",
+            "disclaimer": "Questo documento non è una fattura fiscale.",
             "line": "{{title}} — {{quantity}} × {{price}}",
-            "number": "Fattura n. {{number}}",
+            "number": "Ordine n. {{number}}",
             "date": "Data: {{date}}",
             "vat": {
                 "column-description": "Descrizione",
@@ -37,13 +38,13 @@
             }
         },
         "email-confirm": {
-            "subject": "Ordine confermato",
-            "meta-title": "Ordine confermato",
+            "subject": "Ordine ricevuto — in attesa di pagamento",
+            "meta-title": "Ordine ricevuto",
             "greeting": "Ciao, {{name}}!",
-            "body": "Il tuo ordine è stato confermato.",
+            "body": "Abbiamo ricevuto il tuo ordine. È in attesa di pagamento — non è stato ancora addebitato nulla.",
             "line": "{{title}} — {{quantity}} × {{price}}",
             "total": "Totale: {{total}}",
-            "link-label": "Visualizza il tuo ordine e la fattura"
+            "link-label": "Visualizza il tuo ordine e la ricevuta"
         },
         "email-transfer": {
             "subject": "Completa il tuo ordine con un bonifico",
@@ -51,7 +52,7 @@
             "greeting": "Ciao, {{name}}!",
             "body": "Il tuo ordine è riservato. Invia il bonifico qui sotto per completarlo — includi il riferimento per farci abbinare il tuo pagamento.",
             "deadline": "Terremo il tuo ordine in attesa fino al {{payBy}}.",
-            "link-label": "Visualizza il tuo ordine e la fattura"
+            "link-label": "Visualizza il tuo ordine e la ricevuta"
         },
         "email-transfer-expired": {
             "subject": "Il tuo ordine è stato annullato — bonifico non ricevuto",

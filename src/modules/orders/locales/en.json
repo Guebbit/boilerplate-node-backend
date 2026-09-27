@@ -12,10 +12,11 @@
             "not-allowed": "This override cannot move the order to that status from where it is now."
         },
         "invoice": {
-            "meta-title": "Invoice — order {{order}}",
-            "title": "The order has been confirmed",
+            "meta-title": "Receipt — order {{order}}",
+            "title": "Order confirmation / receipt",
+            "disclaimer": "This is not a tax invoice.",
             "line": "{{title}} — {{quantity}} × {{price}}",
-            "number": "Invoice no. {{number}}",
+            "number": "Order no. {{number}}",
             "date": "Date: {{date}}",
             "vat": {
                 "column-description": "Description",
@@ -37,13 +38,13 @@
             }
         },
         "email-confirm": {
-            "subject": "Order confirmed",
-            "meta-title": "Order confirmed",
+            "subject": "Order received — awaiting payment",
+            "meta-title": "Order received",
             "greeting": "Hello, {{name}}!",
-            "body": "Your order has been confirmed.",
+            "body": "We've received your order. It's awaiting payment — nothing has been charged yet.",
             "line": "{{title}} — {{quantity}} × {{price}}",
             "total": "Total: {{total}}",
-            "link-label": "View your order and invoice"
+            "link-label": "View your order and receipt"
         },
         "email-transfer": {
             "subject": "Complete your order by bank transfer",
@@ -51,7 +52,7 @@
             "greeting": "Hello, {{name}}!",
             "body": "Your order is reserved. Send the transfer below to complete it — include the reference so we can match your payment.",
             "deadline": "We'll hold your order until {{payBy}}.",
-            "link-label": "View your order and invoice"
+            "link-label": "View your order and receipt"
         },
         "email-transfer-expired": {
             "subject": "Your order was cancelled — no transfer received",
