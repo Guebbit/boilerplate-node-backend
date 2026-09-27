@@ -10,7 +10,9 @@
  */
 
 import { sumLineItems, shopCurrency } from '@modules/orders';
+import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
+import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { CartItem } from '@types';
 import { findShippingMethod, methodFitsWeight, priceShipping } from '@modules/delivery';
 import type { CartDocument } from '../model';
@@ -18,17 +20,18 @@ import { basketWeight, needsShipping } from '../domain';
 
 /**
  * A cart line joined with the product it references.
- * `productId` and `product` are separate fields on purpose: `populate()` overwrites the
- * reference in place with `null` when the product is gone, so the id must be captured first
- * (see {@link readCartLines}).
+ * `productId` and `product` are separate fields on purpose: {@link readCartLines} joins by a
+ * separate `productService.findManyByIds` lookup rather than a Mongoose `populate()` — cart
+ * reaches products through its service, not its collection (`docs/theory/strategic-ddd.md` §5) —
+ * so the id it looked the product up by is kept alongside the result rather than overwritten.
  */
 export interface CartLine extends CartItem {
-    /** The joined product, or `null` for a reference that resolves to nothing. */
-    product: ProductDocument | null;
+    /** The joined product, or `null` for an id that resolves to nothing. */
+    product: Lean<ProductDocument> | null;
 }
 
 /** A cart line whose reference resolved — what an order may be built from. */
-export type JoinedCartLine = CartLine & { product: ProductDocument };
+export type JoinedCartLine = CartLine & { product: Lean<ProductDocument> };
 
 /**
  * The cart as `openapi.yaml` declares it: `CartResponse`, built rather than serialized.
@@ -50,39 +53,33 @@ export interface CartView {
     shippingMethodId?: string;
 }
 
-/**
- * A cart after `populate('items.productId')`.
- *
- * Names what Mongoose swaps into the reference field, so the populated read is typed rather than
- * cast. Spelled as the whole `items` key because `populate<T>` merges `T` over the document's
- * top-level properties — a dotted path is not a key it can merge on.
- */
-interface PopulatedCart {
-    items: { productId: ProductDocument | null; quantity: number }[];
-}
-
 /** Narrow a line to one whose product actually exists. */
 export const isJoined = (line: CartLine): line is JoinedCartLine => line.product !== null;
 
 /**
  * Join a cart's lines to their products, in one query.
  *
- * The ids are read before `populate()` runs, because populate replaces the reference field with
- * the fetched document — or with `null` for a product that has since been deleted.
+ * `productService.findManyByIds` is unscoped, the same as the `populate()` it replaces: a
+ * soft-deleted or deactivated product still joins, `active`/`deletedAt` included, which is what
+ * lets checkout tell "gone" (hard-deleted, absent from the lookup) from "here, but not sellable"
+ * apart. One `$in` query for however many lines the cart holds, same shape as
+ * `orders/services/current.ts`'s own catalogue join.
  */
 export const readCartLines = (cart: CartDocument | null): Promise<CartLine[]> => {
     if (!cart) return Promise.resolve([]);
 
+    // No `items = []` fallback: the schema defaults the array, so a hydrated cart always has one.
     const productIds = cart.items.map(({ productId }) => productId.toString());
 
-    // No `items = []` fallback: the schema defaults the array, so a hydrated cart always has one.
-    return cart.populate<PopulatedCart>('items.productId').then(({ items }) =>
-        items.map(({ productId, quantity }, index) => ({
-            productId: productIds[index],
+    return productService.findManyByIds(productIds).then((products) => {
+        const byId = new Map(products.map((product) => [String(product._id), product]));
+
+        return cart.items.map(({ productId, quantity }) => ({
+            productId: productId.toString(),
             quantity,
-            product: productId
-        }))
-    );
+            product: byId.get(productId.toString()) ?? null
+        }));
+    });
 };
 
 /**

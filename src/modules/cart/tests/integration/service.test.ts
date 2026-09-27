@@ -200,7 +200,7 @@ describe('cartGet', () => {
     });
 
     it('keeps the product id on a line whose product has been deleted', async () => {
-        // `populate()` writes `null` over the reference for a product that no longer exists, so a
+        // The catalogue join resolves to `null` for a product that no longer exists, so a
         // caller reading the id off that field would lose it exactly when it matters most.
         const user = await createUser();
         const product = await createProduct({ title: 'Discontinued' });

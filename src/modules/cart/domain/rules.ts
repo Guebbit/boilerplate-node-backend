@@ -5,10 +5,11 @@
  */
 
 /**
- * A cart line as the rules see it. `product: null` is what `populate()` writes for a HARD-deleted
- * product — `populate()` follows the reference with no visibility scope of its own, so a soft-
- * deleted or deactivated product still joins successfully, `active`/`deletedAt` included, which
- * is what lets {@link evaluateCheckout} tell "gone" from "here, but not sellable" apart.
+ * A cart line as the rules see it. `product: null` is what the service-level join
+ * (`services/view.ts`'s `readCartLines`) writes for a HARD-deleted product — the join is
+ * unscoped, so a soft-deleted or deactivated product still resolves successfully,
+ * `active`/`deletedAt` included, which is what lets {@link evaluateCheckout} tell "gone" from
+ * "here, but not sellable" apart.
  */
 export interface CartLineCandidate {
     /** Carried so a refusal can name the product rather than just report that one exists. */
@@ -144,9 +145,9 @@ export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutV
 
     /*
      * "Unavailable" covers two different facts a joined line can carry: gone entirely
-     * (`product` null — a hard delete `populate()` cannot follow), or here but not sellable
-     * (`active: false`, or soft-deleted). Every unavailable line, not just the first, same
-     * reasoning `shortfalls` below already follows.
+     * (`product` null — a hard delete the catalogue join can no longer find), or here but not
+     * sellable (`active: false`, or soft-deleted). Every unavailable line, not just the first,
+     * same reasoning `shortfalls` below already follows.
      */
     const unavailable = lines
         .filter(

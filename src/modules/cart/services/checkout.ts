@@ -15,7 +15,6 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import type { Lean } from '@infrastructure/persistence/create-repository';
 import {
     orderService,
     placeOrder,
@@ -25,7 +24,7 @@ import {
     isShippedItem,
     type OrderDocument
 } from '@modules/orders';
-import { availableStock, type ProductDocument } from '@modules/products';
+import { availableStock } from '@modules/products';
 import { userService } from '@modules/users';
 import { addressForCheckout, type AddressItem } from '@modules/addresses';
 import {
@@ -381,11 +380,6 @@ const runCheckout = async (
      * `bank_transfer` reference and holding the stock — is `placeOrder`'s job; this function keeps
      * only what is genuinely checkout's own: the pre-flight above, and the cart-clearing/lost-race
      * handling below.
-     *
-     * `.toObject()`: `product` here is a hydrated document from `readCartLines`'s `populate()` —
-     * see that function's own docblock. Cast, not inferred: `ProductDocument`'s untyped `DocType`
-     * generic makes Mongoose's own `toObject()` overload resolve to `any`; `Lean<ProductDocument>`
-     * is the plain shape it actually returns at runtime.
      */
     const outcome = await placeOrder({
         userId: user.id,
@@ -394,7 +388,9 @@ const runCheckout = async (
         notes,
         lines: joined.map((line) => ({
             item: { productId: line.productId, quantity: line.quantity },
-            product: line.product.toObject() as Lean<ProductDocument>
+            // Already a plain, lean object — `readCartLines` joins via `productService.findManyByIds`,
+            // not a hydrated `populate()`, so no `.toObject()` cast is needed here any more.
+            product: line.product
         })),
         paymentMethod: requestedMethod,
         shipping: {
