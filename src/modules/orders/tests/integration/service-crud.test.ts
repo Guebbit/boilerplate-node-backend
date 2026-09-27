@@ -125,8 +125,8 @@ describe('create', () => {
         ).data;
 
         // Both minted in the frozen year and one apart — not merely "different".
-        const [firstYear, firstSeq] = first.invoiceNumber!.split('-').map(Number);
-        const [secondYear, secondSeq] = second.invoiceNumber!.split('-').map(Number);
+        const [firstYear, firstSeq] = first.orderNumber!.split('-').map(Number);
+        const [secondYear, secondSeq] = second.orderNumber!.split('-').map(Number);
         expect(firstYear).toBe(2026);
         expect(secondYear).toBe(2026);
         expect(secondSeq).toBe(firstSeq + 1);
@@ -247,11 +247,11 @@ describe('create', () => {
         );
     });
 
-    it('writes no order and burns no invoice number when the hold is refused', async () => {
+    it('writes no order and burns no order number when the hold is refused', async () => {
         const user = await createUser();
         const scarce = await createProduct({ onHand: 1 });
         const createSpy = jest.spyOn(orderRepository, 'create');
-        const counterSpy = jest.spyOn(orderRepository, 'incrementInvoiceCounter');
+        const counterSpy = jest.spyOn(orderRepository, 'incrementOrderNumberCounter');
 
         const result = await create(
             user.id,
@@ -291,10 +291,10 @@ describe('create', () => {
         expect(await countOrders({ userId: user._id })).toBe(0);
     });
 
-    it('gives the hold back when invoice-number allocation fails, before any order is written', async () => {
+    it('gives the hold back when order-number allocation fails, before any order is written', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5 });
-        jest.spyOn(orderRepository, 'incrementInvoiceCounter').mockRejectedValueOnce(
+        jest.spyOn(orderRepository, 'incrementOrderNumberCounter').mockRejectedValueOnce(
             new Error('mongo is down')
         );
         const createSpy = jest.spyOn(orderRepository, 'create');

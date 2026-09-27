@@ -71,7 +71,7 @@ const renderFresh = (orderId: string): Promise<Buffer | undefined> =>
             id: orderId,
             items: order.items,
             shippingCost: order.shippingCost,
-            invoiceNumber: order.invoiceNumber,
+            orderNumber: order.orderNumber,
             createdAt: order.createdAt
         };
         const locale = order.items[0]?.locale ?? getDefaultLocale();

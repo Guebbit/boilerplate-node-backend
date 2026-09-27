@@ -123,7 +123,7 @@ export const makeOrder = ({
     payBy,
     notes,
     deletedAt,
-    invoiceNumber,
+    orderNumber,
     transferReference
 }: OrderOverrides = {}): OrderFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
@@ -155,7 +155,7 @@ export const makeOrder = ({
         payBy: toDate(payBy),
         notes,
         deletedAt: toDate(deletedAt),
-        invoiceNumber,
+        orderNumber,
         transferReference
     })
 });

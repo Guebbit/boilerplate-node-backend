@@ -1227,7 +1227,7 @@ components:
                 # `createdAt` below IS this invoice's date of supply, which is why there is no
                 # separate invoice-date field. Absent on an order created before this field
                 # existed; it is never assigned retroactively.
-                invoiceNumber:
+                orderNumber:
                     type: string
                     readOnly: true
                     example: '2026-000041'

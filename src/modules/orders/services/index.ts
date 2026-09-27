@@ -65,7 +65,7 @@ export { detachUserId, anonymizeDueOrders } from './retention';
 export { callerScope, actorOf, ownerScope, withActions } from './scope';
 export { unavailableLines, cancelPendingOrdersHolding, type UnavailableLine } from './availability';
 export { freezeOrderLines } from './snapshot';
-export { allocateInvoiceNumber } from './invoice-numbering';
+export { allocateOrderNumber } from './order-numbering';
 export { renderInvoicePdf, reapOrphanedInvoices, reapExpiredInvoices } from './invoice';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.

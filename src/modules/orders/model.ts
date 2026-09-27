@@ -107,7 +107,7 @@ export interface OrderDocument
             | 'updatedAt'
             | 'deletedAt'
             | 'payBy'
-            | 'invoiceNumber'
+            | 'orderNumber'
             | 'transferInstructions'
         >,
         Document {
@@ -125,12 +125,13 @@ export interface OrderDocument
     /** When this order's stock hold ends — see the schema field's own comment. */
     payBy?: Date;
     /**
-     * `{year}-{sequence}`, assigned once by `allocateInvoiceNumber` at order-creation time —
-     * never recomputed, unlike the VAT figures. Absent on an order that predates this field; it
+     * `{year}-{sequence}`, assigned once by `allocateOrderNumber` at order-creation time — never
+     * recomputed, unlike the VAT figures. Not a tax invoice number: this order is a receipt, not
+     * an invoice — see `docs/modules/orders.md`. Absent on an order that predates this field; it
      * never gets one retroactively, since a number minted later could not honestly claim the
      * order's actual place in the sequence.
      */
-    invoiceNumber?: string;
+    orderNumber?: string;
     /**
      * Set alongside `userId` being unset, to `max(now, createdAt + NODE_ORDER_PII_RETENTION_DAYS)`
      * — an order already past its own window at erasure time is due almost immediately, not given
@@ -327,12 +328,12 @@ export const orderSchema = new Schema<OrderDocument>(
             type: Date
         },
         /*
-         * `{year}-{sequence}`, minted once by `allocateInvoiceNumber` (`./services/invoice-
-         * numbering`) at order-creation time — the order's `createdAt` IS the date of supply this
-         * number belongs to, so no separate invoice-date field exists. Absent on an order that
-         * predates this feature; never assigned retroactively.
+         * `{year}-{sequence}`, minted once by `allocateOrderNumber` (`./services/order-numbering`)
+         * at order-creation time. Not a tax invoice number — this order is a receipt, not an
+         * invoice, see `docs/modules/orders.md`. Absent on an order that predates this feature;
+         * never assigned retroactively.
          */
-        invoiceNumber: {
+        orderNumber: {
             type: String
         },
         /*
@@ -560,26 +561,26 @@ export const applyOrderTransform = applySerialization(orderSchema, {
 export const orderModel = model<OrderDocument, OrderModel>('Order', orderSchema);
 
 /**
- * One document per calendar year, holding the running invoice sequence — `_id` IS the year, so
- * `repository.ts`'s atomic upsert addresses it directly, with no lookup first. Same convention as
- * `LeaseDocument` (`@infrastructure/persistence/lease`). Lives here, not in `services/`: this
+ * One document per calendar year, holding the running order-number sequence — `_id` IS the year,
+ * so `repository.ts`'s atomic upsert addresses it directly, with no lookup first. Same convention
+ * as `LeaseDocument` (`@infrastructure/persistence/lease`). Lives here, not in `services/`: this
  * module's one door for a persistence handle is `model.ts`/`repository.ts`, same as `orderModel`.
  */
-export interface InvoiceCounterDocument extends Document<number> {
+export interface OrderNumberCounterDocument extends Document<number> {
     seq: number;
 }
 
-/** Mongoose model type for {@link InvoiceCounterDocument}. */
-export type InvoiceCounterModel = Model<InvoiceCounterDocument>;
+/** Mongoose model type for {@link OrderNumberCounterDocument}. */
+export type OrderNumberCounterModel = Model<OrderNumberCounterDocument>;
 
-/** Invoice counter schema — incremented atomically by `repository.ts`'s `incrementInvoiceCounter`. */
-const invoiceCounterSchema = new Schema<InvoiceCounterDocument, InvoiceCounterModel>({
+/** Order-number counter schema — incremented atomically by `repository.ts`'s `incrementOrderNumberCounter`. */
+const orderNumberCounterSchema = new Schema<OrderNumberCounterDocument, OrderNumberCounterModel>({
     _id: { type: Number },
     seq: { type: Number, required: true, default: 0 }
 });
 
-/** Invoice counter model. Collection name `invoicecounters`, Mongoose's default pluralization. */
-export const invoiceCounterModel = model<InvoiceCounterDocument, InvoiceCounterModel>(
-    'InvoiceCounter',
-    invoiceCounterSchema
+/** Order-number counter model. Collection name `ordernumbercounters`, Mongoose's default pluralization. */
+export const orderNumberCounterModel = model<OrderNumberCounterDocument, OrderNumberCounterModel>(
+    'OrderNumberCounter',
+    orderNumberCounterSchema
 );

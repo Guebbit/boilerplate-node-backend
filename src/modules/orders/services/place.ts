@@ -3,7 +3,7 @@
  * The one function that writes a new order — `crud.ts`'s admin `create` and `@modules/cart`'s
  * checkout both funnel through it, so the write itself exists in exactly one place.
  *
- * Order:     freeze the lines, hold the stock, allocate the invoice number, write the row. The
+ * Order:     freeze the lines, hold the stock, allocate the order number, write the row. The
  *            hold comes BEFORE the write, so a refused hold burns neither a row nor a number.
  * Verdict:   `PlaceOrderOutcome` is a plain verdict, not an HTTP envelope — `create` and checkout
  *            map it to their own wire shapes (`ORDER_INSUFFICIENT_STOCK` vs
@@ -23,7 +23,7 @@ import type { OrderDocument, OrderDocumentItem } from '../model';
 import { checkOrderLines } from '../domain/rules';
 import { buildReference } from '../domain/transfer-reference';
 import { freezeOrderLines } from './snapshot';
-import { allocateInvoiceNumber } from './invoice-numbering';
+import { allocateOrderNumber } from './order-numbering';
 import { orderRepository } from '../repository';
 import { ORDER_CREATED } from '../events';
 // `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
@@ -86,12 +86,12 @@ export type PlaceOrderOutcome =
     | { ok: false; reason: 'insufficient-stock'; shortfalls: StockShortfall[] };
 
 /**
- * Write a new order: freeze the lines, hold the stock, allocate the invoice number, then write the
+ * Write a new order: freeze the lines, hold the stock, allocate the order number, then write the
  * row. Never rejects on a refusal — `checkOrderLines`/the stock hold answer through the returned
  * verdict, the same convention `checkOrderLines` itself already uses.
  *
  * Hold BEFORE write, deliberately: the id is generated up front and `reserveForOrder` only
- * ever needs it, so a refused hold writes nothing at all — no order to roll back, no invoice
+ * ever needs it, so a refused hold writes nothing at all — no order to roll back, no order
  * number burned on a sale that never happened. A hold taken and then lost to a failed write is the
  * one case this still has to unwind by hand; a genuine crash between the two leaves only a hold,
  * which expires through the reservation sweep like any other abandoned checkout.
@@ -135,19 +135,19 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
     if (!outcome.held)
         return { ok: false, reason: 'insufficient-stock', shortfalls: outcome.shortfalls };
 
-    // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: the hold is already taken by this point, so a failed invoice allocation or order write must give it back rather than leave it standing on a row that was never created
+    // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: the hold is already taken by this point, so a failed order-number allocation or order write must give it back rather than leave it standing on a row that was never created
     try {
         // Only spent once the hold is secured — a refused reserve above returns before this ever
         // runs. Allocated INSIDE this try, not before it, so a throw here still releases the hold
         // instead of leaving it standing with no order and no number spent on it.
-        const invoiceNumber = await allocateInvoiceNumber();
+        const orderNumber = await allocateOrderNumber();
 
         const order = await orderRepository.create({
             _id: orderId,
             userId: toObjectId(input.userId),
             email: input.email,
             items: orderItems,
-            invoiceNumber,
+            orderNumber,
             ...(input.notes ? { notes: input.notes } : {}),
             ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
             ...(input.payBy ? { payBy: input.payBy } : {}),

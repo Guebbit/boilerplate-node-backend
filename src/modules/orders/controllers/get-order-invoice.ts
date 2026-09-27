@@ -51,7 +51,7 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
                         // decides what to do with it — download, or a same-tab preview.
                         .setHeader(
                             'Content-Disposition',
-                            `inline; filename="invoice-${order.invoiceNumber ?? orderId}.pdf"`
+                            `inline; filename="invoice-${order.orderNumber ?? orderId}.pdf"`
                         )
                         // Personal and financial data — never a shared/CDN cache, and never the
                         // browser's own disk cache either.

@@ -211,15 +211,15 @@ describe('a rollback that itself fails', () => {
 
     /*
      * The hold is taken BEFORE the order is written, so a refused reserve has no order to roll
-     * back at all — `orderRepository.create`/`deleteOne` and the invoice counter are never
+     * back at all — `orderRepository.create`/`deleteOne` and the order-number counter are never
      * reached.
      */
-    it('writes no order and burns no invoice number when the hold is refused', async () => {
+    it('writes no order and burns no order number when the hold is refused', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 1 });
         await cartService.cartItemAddById(user.id, String(product._id), 2);
         const createSpy = jest.spyOn(orderRepository, 'create');
-        const counterSpy = jest.spyOn(orderRepository, 'incrementInvoiceCounter');
+        const counterSpy = jest.spyOn(orderRepository, 'incrementOrderNumberCounter');
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
