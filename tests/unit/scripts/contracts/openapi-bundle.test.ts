@@ -9,7 +9,10 @@
  */
 
 import { stringify as stringifyYaml, parse as parseYaml } from 'yaml';
-import { withAppLevelResponses } from '../../../../scripts/contracts/openapi-bundle';
+import {
+    withAppLevelResponses,
+    withModuleStamps
+} from '../../../../scripts/contracts/openapi-bundle';
 
 /** A bundled document small enough to read in one glance, shaped exactly like `compile()` feeds in. */
 const bundle = (extra: Record<string, unknown>) =>
@@ -97,6 +100,64 @@ describe('withAppLevelResponses', () => {
     it('throws when the root declares no x-app-level-responses at all', () => {
         expect(() => withAppLevelResponses(stringifyYaml({ openapi: '3.0.3', paths: {} }))).toThrow(
             /x-app-level-responses/
+        );
+    });
+});
+
+/** A bundled document small enough to read in one glance, for `withModuleStamps`' own tests. */
+const stampBundle = (paths: Record<string, unknown>) => stringifyYaml({ openapi: '3.0.3', paths });
+
+/** Parsed-back result of stamping `stampBundle`'s output against a small map. */
+const stampedResult = (yaml: string, moduleByPath: Record<string, string>) =>
+    parseYaml(withModuleStamps(yaml, moduleByPath)) as {
+        paths: Record<string, Record<string, { 'x-module'?: string }>>;
+    };
+
+/**
+ * `withModuleStamps` — tags every operation with the `x-module` the map assigns its path to
+ * (FA59). Driven with a small map rather than the real contract, the same split
+ * `withAppLevelResponses`'s own tests keep: the property under test is the STAMPING rule, not any
+ * particular path's real owner.
+ */
+describe('withModuleStamps', () => {
+    it('stamps every operation a path maps to a module', () => {
+        const result = stampedResult(
+            stampBundle({
+                '/products': {
+                    get: { responses: {} },
+                    post: { responses: {} }
+                }
+            }),
+            { '/products': 'products' }
+        );
+
+        expect(result.paths['/products']?.get?.['x-module']).toBe('products');
+        expect(result.paths['/products']?.post?.['x-module']).toBe('products');
+    });
+
+    it('leaves a path the map does not mention unstamped — a `system` path, owned by no module', () => {
+        const result = stampedResult(stampBundle({ '/': { get: { responses: {} } } }), {});
+
+        expect(result.paths['/']?.get).not.toHaveProperty('x-module');
+    });
+
+    it('leaves a non-operation path-item field untouched', () => {
+        const result = stampedResult(
+            stampBundle({
+                '/products/{id}': {
+                    parameters: [{ name: 'id', in: 'path' }],
+                    get: { responses: {} }
+                }
+            }),
+            { '/products/{id}': 'products' }
+        );
+
+        expect(result.paths['/products/{id}']?.parameters).toEqual([{ name: 'id', in: 'path' }]);
+    });
+
+    it('throws when the bundled document does not parse to an object', () => {
+        expect(() => withModuleStamps(stringifyYaml('not an object'), {})).toThrow(
+            /did not parse to an object/
         );
     });
 });
