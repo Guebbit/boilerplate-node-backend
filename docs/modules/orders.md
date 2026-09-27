@@ -35,6 +35,7 @@ flowchart LR
     inventory -. "inventory.reservation_expired" .-> orders
     products -. "product.deactivated" .-> orders
     products -. "product.deleted" .-> orders
+    orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
     orders -. "order.cancelled" .-> webhooks
     orders -. "order.created" .-> webhooks

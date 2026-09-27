@@ -21,7 +21,8 @@ import {
     shopCurrency
 } from '@modules/orders';
 import { userService } from '@modules/users';
-import { resolvePaymentProvider } from '../providers';
+import { resolvePaymentProvider, providerNamed } from '../providers';
+import type { PaymentDocument } from '../model';
 import { paymentRepository } from '../repository';
 import { notPayable } from './errors';
 
@@ -126,3 +127,46 @@ export const createIntent = async (
 
     return generateSuccess(prepared, 201);
 };
+
+/**
+ * Ask the provider to close a payment's own intent, if it has one open there — the counterpart to
+ * {@link createIntent}. Nothing to close (no reference yet, or paid by hand — `manual` has no
+ * provider to ask) answers success outright, the same as the provider's own "already cancelled".
+ *
+ * @param payment - the payment whose intent may need closing
+ * @param reason - recorded at the provider, for support and reconciliation
+ * @throws {PaymentInFlightError} when the provider says the intent already succeeded or is still
+ *   mid-flight — there is money to refund instead, not an intent left to cancel
+ */
+export const cancelOpenIntent = (payment: PaymentDocument, reason: string): Promise<void> => {
+    if (!payment.providerRef || payment.provider === 'manual') return Promise.resolve();
+    return providerNamed(payment.provider).cancel(payment.providerRef, { reason });
+};
+
+/**
+ * `order.cancelled`'s listener (see `../module.ts`): close a still-open, never-settled intent at
+ * the provider once its order is gone, so an abandoned one cannot resolve on its own later with no
+ * local row left to catch it (E17). A `succeeded`/`refunded` payment is skipped outright — that
+ * money is `payments`' own `order.refund_owed` listener to give back, not this one's to cancel.
+ *
+ * Best-effort, unlike {@link cancelOpenIntent}'s other caller (`recordOfflinePayment`): the order
+ * is already cancelled by the time this runs, so there is no request left here to refuse — a
+ * provider failure is only logged, never rethrown, so it cannot stop the cancel that already
+ * happened.
+ *
+ * @param orderId - the order that was cancelled
+ */
+export const cancelOpenIntentForOrder = (orderId: string): Promise<void> =>
+    paymentRepository.findByOrderId(orderId).then((payment) => {
+        if (!payment || payment.status === 'succeeded' || payment.status === 'refunded')
+            return undefined;
+
+        return cancelOpenIntent(payment, 'Order cancelled').catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not cancel order ${orderId}'s open intent at the provider — left open there; the abandoned-payment sweep will eventually delete this row without ever telling it`,
+                error
+            });
+            // Stryker restore all
+        });
+    });

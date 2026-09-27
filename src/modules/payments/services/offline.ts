@@ -23,12 +23,10 @@ import { paymentRepository } from '../repository';
 import { paymentsAuditActions } from '../audit';
 import { paymentsAnalyticsEvents } from '../analytics';
 import type { PaymentDocument } from '../model';
-import { resolvePayerId } from './intent';
+import { PaymentInFlightError } from '../providers';
+import { resolvePayerId, cancelOpenIntent } from './intent';
 import { settlePayment, settlementResponse } from './settlement';
 import { notPayable } from './errors';
-
-/** The payment statuses a card charge may be sitting in while still reachable by the provider. */
-const IN_FLIGHT_CARD_STATUSES = new Set(['requires_action', 'processing']);
 
 /** What the admin sent, once the request body has been parsed against the contract. */
 export interface OfflinePaymentInput {
@@ -66,12 +64,21 @@ export const recordOfflinePayment = async (
     if (!isPayable(order.status)) return notPayable();
 
     const existing = await paymentRepository.findByOrderId(orderId);
-    // A card charge already at the provider: recording money by hand too could charge the
-    // customer twice once that charge resolves on its own.
-    if (existing && IN_FLIGHT_CARD_STATUSES.has(existing.status))
-        return generateReject(409, [
-            { code: 'PAYMENT_IN_FLIGHT', message: t('payments.in-flight') }
-        ]);
+    // A card intent still open at the provider: tell IT the customer is paying another way now,
+    // rather than overwriting this row out from under it (E17) — an intent nobody closes can
+    // still resolve there days later, with no local row left to catch the charge it makes.
+    if (existing) {
+        const refusal = await cancelOpenIntent(existing, 'Recorded as an offline payment')
+            .then(() => undefined)
+            .catch((error: unknown) => {
+                if (error instanceof PaymentInFlightError)
+                    return generateReject(409, [
+                        { code: 'PAYMENT_IN_FLIGHT', message: t('payments.in-flight') }
+                    ]);
+                throw error;
+            });
+        if (refusal) return refusal;
+    }
 
     const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
     const payment = await paymentRepository.upsertOffline(orderId, payerId, {

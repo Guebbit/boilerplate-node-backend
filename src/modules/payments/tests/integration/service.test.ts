@@ -1167,7 +1167,7 @@ describe('recordOfflinePayment', () => {
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
     });
 
-    it('refuses while a card charge is still reachable at the provider', async () => {
+    it('refuses while a card charge is still reachable at the provider (B)', async () => {
         const { user, order } = await orderFor();
         const intent = await createIntent(String(order._id), auth(user));
         await confirmPayment(
@@ -1176,7 +1176,9 @@ describe('recordOfflinePayment', () => {
             auth(user),
             testCallerContext
         );
+        const prepared = await paymentRepository.findByOrderId(String(order._id));
 
+        const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
         const result = await recordOfflinePayment(
             String(order._id),
             { method: 'cash' },
@@ -1185,6 +1187,14 @@ describe('recordOfflinePayment', () => {
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_IN_FLIGHT');
+        // The refusal comes from asking the PROVIDER, not a locally cached guess — the row stays
+        // untouched rather than being silently overwritten out from under an open intent.
+        expect(cancelSpy).toHaveBeenCalledWith(prepared!.providerRef, {
+            reason: 'Recorded as an offline payment'
+        });
+        cancelSpy.mockRestore();
+        // Never overwritten: the provider's refusal stopped the write before it happened.
+        expect((await paymentRepository.findByOrderId(String(order._id)))!.provider).toBe('fake');
     });
 
     it('allows recording over a card attempt nobody completed — declined, or never confirmed', async () => {
@@ -1206,6 +1216,49 @@ describe('recordOfflinePayment', () => {
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment).toMatchObject({ status: 'succeeded', provider: 'manual' });
+    });
+
+    /**
+     * E17's actual bug: an intent nobody ever confirmed was previously overwritten by hand with
+     * the provider never told, so an abandoned card could still resolve there later with no row
+     * left to catch the charge. `cancel` closes it first now.
+     */
+    it('cancels a never-confirmed intent at the provider before recording the money by hand (E17)', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+        const prepared = await paymentRepository.findByOrderId(String(order._id));
+        expect(prepared!.status).toBe('requires_confirmation');
+
+        const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
+        const result = await recordOfflinePayment(
+            String(order._id),
+            { method: 'cash', reference: 'till-1' },
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        expect(cancelSpy).toHaveBeenCalledWith(prepared!.providerRef, {
+            reason: 'Recorded as an offline payment'
+        });
+        cancelSpy.mockRestore();
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment).toMatchObject({ status: 'succeeded', provider: 'manual' });
+    });
+
+    it('never asks the provider anything when there was no existing payment to cancel', async () => {
+        const { product, order } = await placedOrder(10, 3);
+
+        const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
+        const result = await recordOfflinePayment(
+            String(order._id),
+            { method: 'cash', reference: 'till-2' },
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        expect(cancelSpy).not.toHaveBeenCalled();
+        cancelSpy.mockRestore();
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
     });
 
     it('refuses a `receivedAt` in the future', async () => {
@@ -1259,6 +1312,63 @@ describe('recordOfflinePayment — refunding it back', () => {
         expect(refunded.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment).toMatchObject({ status: 'refunded', refundedByHand: true });
+    });
+});
+
+describe('order.cancelled — closing a still-open intent at the provider (E17)', () => {
+    beforeEach(() => {
+        registerCheckoutModules([paymentsModule]);
+    });
+
+    afterEach(() => {
+        resetDomainEvents();
+    });
+
+    it('cancels the open intent at the provider once its order is cancelled', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+        const prepared = await paymentRepository.findByOrderId(String(order._id));
+
+        const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
+        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+
+        expect(cancelled.success).toBe(true);
+        expect(cancelSpy).toHaveBeenCalledWith(prepared!.providerRef, {
+            reason: 'Order cancelled'
+        });
+        cancelSpy.mockRestore();
+    });
+
+    it('still cancels the order when the provider refuses or fails to close the intent', async () => {
+        // Best-effort: unlike `recordOfflinePayment`'s own synchronous guard, the order is already
+        // gone by the time this listener runs — there is no request left here to refuse.
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+
+        const cancelSpy = jest
+            .spyOn(fakePaymentProvider, 'cancel')
+            .mockRejectedValueOnce(new Error('provider unreachable'));
+        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+
+        expect(cancelled.success).toBe(true);
+        expect(cancelSpy).toHaveBeenCalled();
+        cancelSpy.mockRestore();
+        await expect(
+            orderService.getById(String(order._id)).then((stored) => stored!.status)
+        ).resolves.toBe('cancelled');
+    });
+
+    it('does not ask the provider anything for a payment that already succeeded', async () => {
+        // `succeeded` is `order.refund_owed`'s to give back, not this listener's to cancel.
+        const { user, order } = await orderFor();
+        await payFor(String(order._id), user);
+
+        const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
+        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+
+        expect(cancelled.success).toBe(true);
+        expect(cancelSpy).not.toHaveBeenCalled();
+        cancelSpy.mockRestore();
     });
 });
 
