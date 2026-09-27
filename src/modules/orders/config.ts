@@ -44,7 +44,11 @@ export const shopCountry = (): string | undefined => process.env.NODE_SHOP_COUNT
  */
 export const shipToCountries = (): string[] => {
     const raw = process.env.NODE_SHIP_TO_COUNTRIES;
-    if (raw) return raw.split(',').map((code) => code.trim().toUpperCase()).filter(Boolean);
+    if (raw)
+        return raw
+            .split(',')
+            .map((code) => code.trim().toUpperCase())
+            .filter(Boolean);
     const shop = shopCountry();
     return shop ? [shop] : [];
 };

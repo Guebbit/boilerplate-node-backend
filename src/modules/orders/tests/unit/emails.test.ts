@@ -323,7 +323,7 @@ describe('invoiceDocument — the VAT block', () => {
 
     // FA37/E6: the invoice is the ORDER's own record — it must print what the shop actually
     // charged, not whatever `NODE_DEFAULT_CURRENCY` happens to say by the time someone opens it.
-    it('formats every amount in the order\'s own frozen currency, not the live shop default', () => {
+    it("formats every amount in the order's own frozen currency, not the live shop default", () => {
         const gbp = new Intl.NumberFormat('en', { style: 'currency', currency: 'GBP' });
         const order = { ...VAT_ORDER, currency: 'GBP' };
 

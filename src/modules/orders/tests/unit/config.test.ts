@@ -95,7 +95,7 @@ describe('reading the identity', () => {
 });
 
 describe('shipToCountries', () => {
-    it('defaults to the shop\'s own country alone', () => {
+    it("defaults to the shop's own country alone", () => {
         process.env.NODE_SHOP_COUNTRY = 'IT';
 
         expect(shipToCountries()).toEqual(['IT']);
