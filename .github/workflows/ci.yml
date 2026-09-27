@@ -34,6 +34,9 @@ on:
         branches:
             - main
 
+permissions:
+    contents: read
+
 concurrency:
     # Cancel stale runs for the same branch/PR when newer commits arrive.
     group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -53,7 +56,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
               with:
                   # Need full history to walk the commit range.
                   fetch-depth: 0
@@ -80,7 +83,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -99,7 +102,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -118,7 +121,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -136,7 +139,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -181,12 +184,12 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Checkout paired frontend
               id: sibling
               continue-on-error: true
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
               with:
                   # Override with a repository variable when the pair lives elsewhere.
                   repository: ${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}
@@ -222,7 +225,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -240,7 +243,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -267,7 +270,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -296,7 +299,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
               with:
                   # `merge-base` needs both sides; a shallow clone has neither.
                   fetch-depth: 0
@@ -329,7 +332,7 @@ jobs:
                     --health-retries 10
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -353,7 +356,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -391,7 +394,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -422,7 +425,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -445,7 +448,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -469,7 +472,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -497,7 +500,7 @@ jobs:
 
             - name: Upload test report
               if: always()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
                   name: test-report-unit
                   path: tmp/reports/test-report.json
@@ -506,7 +509,7 @@ jobs:
 
             - name: Upload coverage report
               if: always()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
                   name: coverage-report
                   path: tmp/coverage/
@@ -522,7 +525,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -551,7 +554,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -580,7 +583,7 @@ jobs:
             FRONTEND_PATH: .frontend
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             # Installs this backend's dependencies and a system `mongod` for the demo profile's
             # in-memory database — the same preamble the test jobs use.
@@ -591,7 +594,7 @@ jobs:
                   setup-mongod: 'true'
 
             - name: Checkout paired frontend
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
               with:
                   # Override with a repository variable when the pair lives elsewhere.
                   repository: ${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}
@@ -600,7 +603,7 @@ jobs:
                   token: ${{ secrets.SPEC_SIBLING_TOKEN || github.token }}
 
             - name: Cache Cypress binary
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
               with:
                   path: ~/.cache/Cypress
                   key: cypress-${{ runner.os }}-${{ hashFiles('.frontend/package-lock.json') }}
@@ -623,7 +626,7 @@ jobs:
 
             - name: Upload failing-shard logs
               if: failure()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
                   name: frontend-e2e-shard-logs
                   path: .frontend/reports/e2e/
@@ -632,7 +635,7 @@ jobs:
 
             - name: Upload Cypress screenshots
               if: failure()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
                   name: frontend-e2e-screenshots
                   path: .frontend/tests/e2e/screenshots
@@ -660,7 +663,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Build the dev/test image
               run: docker build -f docker/Dockerfile -t boilerplate-api-gate:${{ github.sha }} .
@@ -687,7 +690,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Setup
               uses: ./.github/actions/setup
