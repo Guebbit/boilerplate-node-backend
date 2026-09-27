@@ -7,12 +7,14 @@ _Canonical 2brain context source for AI editors._
 - `.2brain/EXECUTION.md` — runnable build/test/CI/migration knowledge
 - `.2brain/llm-wiki/` — per-file machine-oriented pages, one per source file (page path = source path + `.md`)
 - `.2brain/modules/` — human-oriented module notes, mirrored into Obsidian
+- `.2brain/arch/` — component/topic pages with Mermaid diagrams
 - `.2brain/repo-index.json` — semantic retrieval index backing `2brain query` (a query backend, not a document to open directly)
 
 ## Where to look
 
 - **First contact with an unfamiliar codebase** → `.2brain/llm-wiki/OVERVIEW.md` for orientation, then `.2brain/modules/boilerplate-node-backend_INDEX.md` for the module map.
 - **Editing or reading a source file** → read `.2brain/llm-wiki/<path>.md` first (page path = source path + `.md`). It carries the file's purpose, key elements, graph neighbours, and gotchas not in the source.
+- **"How is this structured?" / "where does X live?"** → `.2brain/arch/overview.md`, then the component page it points to.
 - **"How do I run / build / test / deploy this?"** → `.2brain/EXECUTION.md`.
 - **Anything else, or you don't know which file** → `2brain query <repo-path> "question"`.
 
@@ -79,8 +81,8 @@ Change these with care — widely depended on:
 ## Index Metadata
 - Provider: `ollama`
 - Model: `qwen3.8:27b`
-- Index revision: `7acaabb1d870f2bcf31ce2ad33b835136e908ad2dc2a853453ee272c9e95dbb0`
-- Indexed chunks: `5832`
+- Index revision: `e20785f8719ce1d17a19582a9358d2c54050558c76a7850bfa38fd76416e049d`
+- Indexed chunks: `6935`
 - Memory entries: `0`
 
 ## Query
