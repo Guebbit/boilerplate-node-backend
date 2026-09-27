@@ -14,6 +14,34 @@ rules:
         then:
             function: truthy
 
+    # --- operationId naming matches the HTTP verb (FA62) ---
+    #
+    # `replace*` means a full, idempotent replace; `update*` means a partial change — but nothing
+    # checked that the METHOD agreed, so D17d could (and did) change a verb behind an unchanged
+    # operationId with nothing to catch it. Each rule's `given` selects exactly the offenders: an
+    # operationId matching the prefix, under any method but the right one, name not on the
+    # allowlist — so a match here always means a real drift, not a rule bug.
+    #
+    # Allowlisted, both idempotent single-field PUTs whose one editable property is set outright
+    # rather than merged, so PUT is the correct verb even though the name reads as "update":
+    #   - updateCartItemById: aliased to the upsert endpoint, setting a cart line's quantity.
+    #   - updateLocaleEntry: the entry's key is not editable, so `value` is its whole surface.
+    verb-replace-is-put:
+        description: 'operationId matching ^replace must be a PUT operation — see the allowlist above this rule if a genuine exception is needed.'
+        severity: error
+        given: "$.paths[*][?(@property != 'put' && @.operationId && @.operationId.match(/^replace/))]"
+        then:
+            field: operationId
+            function: falsy
+
+    verb-update-is-patch:
+        description: 'operationId matching ^update must be a PATCH operation — see the allowlist above this rule if a genuine exception is needed.'
+        severity: error
+        given: "$.paths[*][?(@property != 'patch' && @.operationId && @.operationId.match(/^update/) && @.operationId != 'updateCartItemById' && @.operationId != 'updateLocaleEntry')]"
+        then:
+            field: operationId
+            function: falsy
+
     # --- operationId naming: camelCase, no HTTP verb prefix ---
     operation-id-no-http-verb-prefix:
         description: 'operationId must not start with an HTTP verb (post, put, get). Use semantic verbs: list, create, update, delete, search, get, login, signup, etc (delete is allowed).'
