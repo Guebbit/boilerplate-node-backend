@@ -59,25 +59,15 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     webhooks["webhooks<br/><i>this module</i>"]
-    orders["orders"]
-    payments["payments"]
     users["users"]
 
-    webhooks --> orders
-    webhooks --> payments
     webhooks --> users
-    orders -. "order.cancelled" .-> webhooks
-    orders -. "order.created" .-> webhooks
-    orders -. "order.status_changed" .-> webhooks
-    payments -. "payment.failed" .-> webhooks
-    payments -. "payment.succeeded" .-> webhooks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class orders core;
-    class payments,users supporting;
+    class users supporting;
     class webhooks centre;
 ```
 
@@ -86,13 +76,13 @@ flowchart LR
 ## The story
 
 `orders` and `payments` can tell this module that something happened; this module cannot ask them
-anything back. `webhooks/module.ts` subscribes to `order.created`, `order.status_changed` (filtered
-to `to: 'paid'`/`to: 'shipped'`), `order.cancelled`, `payment.succeeded` and `payment.failed` on the
-kernel's domain-event bus — the same shape [`delivery`](./delivery.md) uses for
-`order.status_changed`. The only imports are the event name constants themselves
-(`ORDER_CREATED` and siblings from `orders`, `PAYMENT_SUCCEEDED`/`PAYMENT_FAILED` from `payments`)
-and `users` for the email a disable notice is sent to — never a call back into either module's
-business logic.
+anything back, and (DDD-D4) it does not even import their event name constants to listen for it.
+Each of the two declares its own `publicEvents` on its `module.ts` manifest — a domain event name
+mapped to a projection of that event's payload — and `webhooks/module.ts`'s `onRegistered` hook
+collects every registered module's declarations (`kernel/registry.ts`'s `resolvePublicEvents`) and
+subscribes to each one generically on the kernel's domain-event bus, the same shape
+[`delivery`](./delivery.md) uses for `order.status_changed`. The only import left is `users`, for
+the email a disable notice is sent to — never a call back into either module's business logic.
 
 **The public event catalogue is a contract, not an accident.** This module's own `asyncapi.yaml`
 fragment declares the six events this shop's clone is willing to promise, and both
@@ -100,7 +90,10 @@ fragment declares the six events this shop's clone is willing to promise, and bo
 check read that fragment directly — `asyncapi.public.yaml` is a derived sibling output, not the
 source either reads. A module reaching for the internal domain-event bus and calling it "public"
 would publish internal coupling as an external promise; declaring the six here instead is what
-keeps that from happening.
+keeps that from happening. The mapping (which domain event becomes which public name) now lives on
+`orders`'/`payments`' own manifests; this file still owns the channel CATALOGUE itself, because
+every channel shares one server and one header schema declared once here — see this file's own
+header comment for why splitting the catalogue by owning module is a separate, unresolved question.
 
 ### The delivery path
 
@@ -209,8 +202,10 @@ infrastructure and not `domain/`: it does I/O.
 ::: tip What deleting this module actually costs
 Every ingredient it is built from — the domain-event bus, the queue, the cron container, the public
 AsyncAPI bundle — is still there and still used by whatever remains. `orders` and `payments` lose
-nothing: they never knew this module existed. A clone with no orders declares its own six events in
-its own `asyncapi.yaml` fragment and changes nothing else.
+nothing: they never knew this module existed, and deleting them along with it needs no separate
+step here either — `orders`'/`payments`' `publicEvents` declarations go with their own manifests,
+and this module's `asyncapi.yaml` fragment (the six channels, hand-authored, not generated from
+those modules) is deleted with the rest of the folder.
 :::
 
 ## Managing it

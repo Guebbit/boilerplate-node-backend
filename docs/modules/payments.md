@@ -21,24 +21,20 @@ flowchart LR
     inventory["inventory"]
     orders["orders"]
     users["users"]
-    webhooks["webhooks"]
 
     cart --> payments
-    webhooks --> payments
     payments --> inventory
     payments --> orders
     payments --> users
     orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
-    payments -. "payment.failed" .-> webhooks
-    payments -. "payment.succeeded" .-> webhooks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class inventory,users,webhooks supporting;
+    class inventory,users supporting;
     class payments centre;
 ```
 
