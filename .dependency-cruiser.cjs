@@ -126,6 +126,31 @@ const MODULE_GROUP = Object.fromEntries(
 const FOUNDATION_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'foundation');
 const SHOP_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'shop');
 
+/** Every module that carries a `domain/` folder — read from disk, so a new one needs no edit here. */
+const DOMAIN_MODULES = MODULE_NAMES.filter((name) =>
+    fs.existsSync(path.join(MODULES_ROOT, name, 'domain'))
+);
+
+/**
+ * T11: `domain/` as an ALLOW-list, not a deny-list.
+ *
+ * The two rules this replaces (`domain-cannot-reach-persistence`, `domain-cannot-reach-http`)
+ * only named `mongoose`/`mongodb` and `express`/`supertest` — `redis`, `amqplib`, `node:fs`, or
+ * any other framework or IO dependency would have passed uncaught, defeating the point of a
+ * "pure domain logic" boundary. One rule per module instead, stating what `domain/` MAY reach:
+ * its own module's domain siblings (so `tax.ts` can still import `money.ts`), and `@types` — the
+ * only two things any `domain/` file in this repo actually imports today. A genuinely new, pure
+ * utility a future domain file needs is a line added here, deliberately, rather than a dependency
+ * that arrives silently because nothing was checking.
+ */
+const domainPurityRules = DOMAIN_MODULES.map((name) => ({
+    name: `domain-purity-${name}`,
+    comment: `${name}/domain/ may reach its own domain siblings and @types, nothing else — no framework, no database driver, no queue client, no filesystem. Add the specific pure package here if a domain rule genuinely needs one; don't widen this to a deny-list again.`,
+    severity: 'error',
+    from: { path: `^src/modules/${name}/domain/` },
+    to: { pathNot: `^src/modules/${name}/domain/|^src/types` }
+}));
+
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
     forbidden: [
@@ -146,23 +171,7 @@ module.exports = {
             to: { circular: true }
         },
 
-        {
-            name: 'domain-cannot-reach-persistence',
-            comment:
-                'The domain layer may not know how anything is stored, and that has to hold through every hop: a domain file importing a helper that imports mongoose knows about storage just as surely as if it had imported it itself. Take the data as a plain argument and let the repository do the reading.',
-            severity: 'error',
-            from: { path: '^src/modules/[^/]+/domain/' },
-            to: { path: 'node_modules/(mongoose|mongodb)', reachable: true }
-        },
-
-        {
-            name: 'domain-cannot-reach-http',
-            comment:
-                'The domain layer may not know it is being called over HTTP, transitively included. Return a verdict; the controller turns it into a status code.',
-            severity: 'error',
-            from: { path: '^src/modules/[^/]+/domain/' },
-            to: { path: 'node_modules/(express|supertest)', reachable: true }
-        },
+        ...domainPurityRules,
 
         {
             name: 'infrastructure-cannot-reach-domains',
