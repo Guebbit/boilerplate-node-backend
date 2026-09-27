@@ -24,14 +24,7 @@ import {
     THIS_REPO
 } from './spec-identity';
 
-// Before `resolveFrontendPath()` reads it. Absent or unreadable `.env` is not an error: the
-// variable may come from the real environment, as it does in CI.
-try {
-    process.loadEnvFile();
-} catch {
-    /* no .env in this checkout */
-}
-
+/** The frontend checkout to compare against: the shell's `FRONTEND_PATH`, `.env`'s, or the default. */
 const siblingRoot = resolveFrontendPath();
 
 if (!existsSync(siblingRoot)) {
@@ -52,7 +45,10 @@ if (!existsSync(siblingRoot)) {
     process.exit(0);
 }
 
+/** One verdict per shared file: identical, forked, or missing on a side. */
 const comparisons = compareSharedFiles(siblingRoot);
+
+/** The human-readable report of every non-identical file, or empty when the pair agrees. */
 const problems = formatSharedFileProblems(comparisons, siblingRoot);
 
 if (problems) {

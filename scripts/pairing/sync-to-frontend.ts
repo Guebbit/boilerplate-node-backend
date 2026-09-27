@@ -18,15 +18,26 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { SHARED_FILES, hashFile, THIS_REPO } from './spec-identity';
 import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './paired-frontend-path';
+import { writesIntoMainFromWorktree } from './linked-worktree';
 
+/** `--dry`: report what would be copied, and write nothing on either side. */
 const dryRun = process.argv.includes('--dry');
+
+/** `--forced`: copy every shared file, even one that already hashes identical over there. */
 const forcedRun = process.argv.includes('--forced');
+
 /*
  * Always on, except under `--dry`, which promises to write nothing — over there least of all.
  * See the regeneration step below for why this is not a flag and not conditional on a copy.
  */
 const regenerate = !dryRun;
 
+/**
+ * Stops the run with a message on stderr and exit code 1.
+ *
+ * @param message - what went wrong, and what to do about it
+ * @returns never — the process exits
+ */
 const fail = (message: string): never => {
     console.error(message);
     process.exit(1);
@@ -34,12 +45,31 @@ const fail = (message: string): never => {
 
 /* ── The sibling checkout ─────────────────────────────────────────────────────────────────────── */
 
+/** Where the copy lands: the shell's `FRONTEND_PATH`, then `.env`'s, then the sibling default. */
 const frontendRoot = resolveFrontendPath();
 
 if (!existsSync(frontendRoot))
     fail(
         `[sync] No checkout found at ${frontendRoot}.\n` +
             `  Expected the frontend beside this repo (${DEFAULT_FRONTEND_PATH}), or FRONTEND_PATH set in .env.`
+    );
+
+/*
+ * A linked worktree never writes into the frontend's MAIN checkout.
+ *
+ * Frontend main takes a contract only from backend main, right after the merge it mirrors.
+ * A branch's contract landing there first leaves the two mains disagreeing, and other sessions
+ * syncing on top of it. A lane syncs into its own paired frontend worktree instead.
+ * `--dry` writes nothing, so it may still look.
+ *
+ * See: docs/tools/pairing-and-ports.md#worktrees-sync-into-their-own-pair
+ */
+if (!dryRun && writesIntoMainFromWorktree(process.cwd(), frontendRoot))
+    fail(
+        `[sync] Refusing to write into ${frontendRoot}: it is the frontend's main checkout, and this\n` +
+            `  is a linked worktree. Frontend main takes a contract only from backend main.\n` +
+            `  Either point FRONTEND_PATH (in this worktree's .env, or the shell) at the paired\n` +
+            `  frontend worktree, or sync from backend main once this branch has merged.`
     );
 
 /* ── Never copy something this repo has not rebuilt ───────────────────────────────────────────── */
@@ -57,9 +87,15 @@ const STALENESS_GATES = [
 
 for (const gate of STALENESS_GATES) {
     try {
+        /*
+         * Runs the gate as a child process; it throws on a non-zero exit.
+         * stdio [stdin, stdout, stderr]: only stderr is kept, since it carries the gate's reason.
+         * https://nodejs.org/api/child_process.html#child_processexecfilesyncfile-args-options
+         */
         execFileSync('npx', ['tsx', ...gate.argv], { stdio: ['ignore', 'ignore', 'pipe'] });
     } catch (error) {
-        const details = (error as { stderr?: Buffer; stdout?: Buffer }).stderr?.toString() ?? '';
+        // Node types a caught value as `unknown`; execFileSync's own error carries the piped stderr.
+        const details = (error as { stderr?: Buffer }).stderr?.toString() ?? '';
         fail(
             `[sync] Refusing to copy: ${gate.label} do not match their sources.\n` +
                 details.trimEnd() +
@@ -70,12 +106,17 @@ for (const gate of STALENESS_GATES) {
 
 /* ── The copy ─────────────────────────────────────────────────────────────────────────────────── */
 
+/** What happened to one shared file. */
 interface Outcome {
+    /** Its path on this side, as `SHARED_FILES` spells it. */
     from: string;
+    /** Its path on the frontend side, as `SHARED_FILES` spells it. */
     to: string;
+    /** `missing-here` is fatal below; the other three are reported. */
     state: 'copied' | 'already-identical' | 'would-copy' | 'missing-here';
 }
 
+/** Every shared file, copied unless it already matches (or `--dry` holds the write back). */
 const outcomes: Outcome[] = SHARED_FILES.map((shared) => {
     const from = path.resolve(process.cwd(), shared[THIS_REPO]);
     const to = path.join(frontendRoot, shared.frontend);
@@ -88,6 +129,7 @@ const outcomes: Outcome[] = SHARED_FILES.map((shared) => {
 
     if (dryRun) return { from: shared.backend, to: shared.frontend, state: 'would-copy' };
 
+    // A shared file may live in a directory the frontend has not created yet.
     mkdirSync(path.dirname(to), { recursive: true });
     copyFileSync(from, to);
     return { from: shared.backend, to: shared.frontend, state: 'copied' };
@@ -95,18 +137,33 @@ const outcomes: Outcome[] = SHARED_FILES.map((shared) => {
 
 /* ── The report ───────────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * The outcomes in one state.
+ *
+ * @param state - the state to keep
+ * @returns the matching outcomes, in `SHARED_FILES` order
+ */
 const of = (state: Outcome['state']): Outcome[] => outcomes.filter((item) => item.state === state);
 
+/**
+ * Formats outcomes as indented `from -> to` pairs for the console.
+ *
+ * @param items - the outcomes to list
+ * @returns one two-line entry per outcome
+ */
 const list = (items: Outcome[]): string =>
     items.map(({ from, to }) => `    ${from}\n      -> ${to}`).join('\n');
 
+/** Declared shared, absent here: a broken build or a stale list, and fatal either way. */
 const missing = of('missing-here');
+
 if (missing.length > 0)
     fail(
         `[sync] These are declared shared but do not exist here:\n${list(missing)}\n` +
             `  Either build them or remove them from SHARED_FILES.`
     );
 
+/** What this run changed over there, or would have without `--dry`. */
 const moved = [...of('copied'), ...of('would-copy')];
 
 console.info(
