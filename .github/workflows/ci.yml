@@ -22,6 +22,7 @@ name: CI
 #                     `docker/Dockerfile` actually ships, with no services and no network
 #   - pair            frontend-e2e — the paired frontend's Cypress suite against this backend
 #   - supply chain    audit
+#   - adoption        demo-strip-measure — report-only, like audit (G-D2)
 #
 # The slow and hunting suites live elsewhere on a schedule: mutation.yml, fuzz.yml (the deep pass —
 # the shallow one is in `complete`), schemathesis.yml and order-random.yml.
@@ -700,6 +701,33 @@ jobs:
             - name: Audit dependencies
               run: npm audit --omit=dev --audit-level=moderate
 
+    demo-strip-measure:
+        # G-D2 step 1: how far "the demo shop is removable" actually is, measured rather than
+        # walked by hand. Deletes every `group: shop` module folder (DDD-D1) from a scratch copy
+        # and runs ts-check, the cross-cutting suite and docs:build against what is left.
+        #
+        # Deliberately NOT in the `ci` gate's `needs:` below, the same reasoning as `audit`: this
+        # is not expected to be green yet — CT-D3, CT-D4 and DDD-D5 still have to move the shop's
+        # out-of-folder assets into its modules before the strip stays small — and turning it red
+        # would block every PR on work this step only measures. It still runs on every push/PR and
+        # still shows red on its own square, which is the point: a punch list, not a gate.
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  setup-mongod: 'true'
+
+            - name: Measure the demo-shop strip
+              run: npm run measure:demo-strip
+
     ci:
         # Single status check to require in branch protection, so adding/renaming
         # jobs above doesn't require updating the required-checks list every time.
@@ -725,7 +753,7 @@ jobs:
             - test-contract
             - container-gate
             - frontend-e2e
-            # `audit` is deliberately excluded — see its own comment above.
+            # `audit` and `demo-strip-measure` are deliberately excluded — see their own comments above.
         runs-on: ubuntu-latest
         timeout-minutes: 5
         permissions:
