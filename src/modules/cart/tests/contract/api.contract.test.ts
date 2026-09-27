@@ -344,6 +344,51 @@ describe('POST /cart/checkout', () => {
     });
 
     /*
+     * B19: before the checkout route carried `idempotencyKey`, a retry after a lost response saw
+     * the (by-then-empty) cart and answered `CART_EMPTY` instead of the order the first attempt
+     * actually placed — the buyer's own cart write cost them the order. The stock read pins the
+     * other half: a replayed request must not reserve the basket a second time.
+     */
+    it('replays the same order for a checkout retried with the same Idempotency-Key', async () => {
+        const { bearer, product } = await authenticateWithCart(2);
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
+
+        const before = await api().get(`/products/${String(product._id)}`);
+        const requestBody = {};
+
+        const first = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', 'checkout-replay-key-1')
+            .send(requestBody);
+        expect(first.status).toBe(201);
+        expect(first).toSatisfyApiSpec();
+
+        // Without `idempotencyKey`, this second call would hit the now-empty cart and answer
+        // `CART_EMPTY` instead of replaying — see this test's own docblock.
+        const second = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', 'checkout-replay-key-1')
+            .send(requestBody);
+
+        expect(second.status).toBe(201);
+        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.body).toEqual(first.body);
+
+        // One order, not two.
+        const orders = await api().get('/orders').set('Authorization', bearer);
+        expect(orders.body.data.items).toHaveLength(1);
+
+        // The basket's stock was reserved once, not twice, by the replay.
+        const after = await api().get(`/products/${String(product._id)}`);
+        expect(after.body.data.available).toBe(before.body.data.available - 2);
+    });
+
+    /*
      * B3: the controller cast `request.body` instead of parsing it against the contract, so
      * `notes` — a field the contract has always declared — never reached the order.
      */

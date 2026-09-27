@@ -31,6 +31,7 @@ import { postCheckout } from './controllers/post-checkout';
 import { postReorder } from './controllers/post-reorder';
 import { putCartShippingMethod } from './controllers/put-cart-shipping-method';
 import { invalidateCache } from '@infrastructure/http/middlewares/cache';
+import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 
 /** Express router for cart operations (add, update, remove items; checkout). */
 export const router = Router();
@@ -43,10 +44,13 @@ router.get('/summary', getCartSummary);
 
 // POST /cart/checkout — money out. `cart.self.checkout`: an unproven address must not be able to
 // place an order and start receiving order mail at an inbox nobody has confirmed it owns.
+// `idempotencyKey` in the same position as `POST /orders`' own (`orders/routes.ts`): a retried
+// checkout after a lost response must replay the order it already placed, never mint a second one.
 router.post(
     '/checkout',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
     requirePermission('cart.self.checkout'),
+    idempotencyKey,
     invalidateCache(['products']),
     postCheckout
 );

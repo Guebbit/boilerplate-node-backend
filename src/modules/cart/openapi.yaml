@@ -201,6 +201,8 @@ paths:
             operationId: checkout
             security:
                 - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: false
                 content:
