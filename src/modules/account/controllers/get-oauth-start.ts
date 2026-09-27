@@ -14,14 +14,19 @@ import {
     createStateCookie,
     generateCodeVerifier,
     codeChallengeOf,
-    createVerifierCookie
+    createVerifierCookie,
+    createContinueCookie,
+    isSameOriginPath
 } from '../oauth/state';
 import { oauthRedirectUri } from '../oauth/config';
 
 /**
  * GET /account/oauth/:provider
  * Starts an OAuth login: mints the CSRF `state` and the PKCE verifier, sets both as cookies, and
- * redirects to the provider's consent screen with the state and the verifier's challenge.
+ * redirects to the provider's consent screen with the state and the verifier's challenge. Also
+ * saves `?continue=` as a cookie of its own, same idiom, when it is a same-origin relative path —
+ * an invalid or absent one is dropped silently rather than refused, since this route only ever
+ * answers a browser navigation with nowhere to show a JSON error.
  */
 export const getOAuthStart = (request: Request, response: Response) => {
     const provider = resolveOAuthProvider(String(request.params.provider).toLowerCase());
@@ -37,6 +42,10 @@ export const getOAuthStart = (request: Request, response: Response) => {
 
     const verifier = generateCodeVerifier();
     createVerifierCookie(response, verifier);
+
+    if (isSameOriginPath(request.query.continue)) {
+        createContinueCookie(response, request.query.continue);
+    }
 
     const authorizeUrl = provider.authorizeUrl(
         state,

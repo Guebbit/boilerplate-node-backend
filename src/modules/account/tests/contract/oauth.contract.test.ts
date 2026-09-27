@@ -57,6 +57,23 @@ describe('GET /account/oauth/:provider', () => {
         expect(setCookie(response, 'oauth_state')).toBeTruthy();
         expect(setCookie(response, 'oauth_verifier')).toBeTruthy();
     });
+
+    it('saves a same-origin `continue` as a cookie of its own', async () => {
+        const response = await api().get('/account/oauth/fake?continue=%2Fcheckout');
+
+        expect(setCookie(response, 'oauth_continue')).toMatch(/oauth_continue=%2Fcheckout;/);
+    });
+
+    it.each([
+        ['a protocol-relative address', '%2F%2Fevil.example'],
+        ['an absolute URL', encodeURIComponent('https://evil.example/phish')],
+        ['a path with no leading slash', 'checkout']
+    ])('drops an invalid `continue` (%s) rather than saving it', async (_label, continueTo) => {
+        const response = await api().get(`/account/oauth/fake?continue=${continueTo}`);
+
+        expect(response.status).toBe(302);
+        expect(setCookie(response, 'oauth_continue')).toBeUndefined();
+    });
 });
 
 describe('GET /account/oauth/:provider/callback', () => {
@@ -120,6 +137,46 @@ describe('GET /account/oauth/:provider/callback', () => {
         expect(created?.verifiedAt).toBeInstanceOf(Date);
     });
 
+    it('carries a saved `continue` through to the frontend redirect, and clears the cookie', async () => {
+        const start = await api().get('/account/oauth/fake?continue=%2Fcheckout');
+        const callbackUrl = new URL(start.headers.location);
+
+        const response = await api()
+            .get(callbackUrl.pathname + callbackUrl.search)
+            .set('Cookie', cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_continue'));
+
+        expect(response.status).toBe(302);
+        const location = new URL(response.headers.location);
+        expect(location.searchParams.get('continue')).toBe('/checkout');
+        expect(setCookie(response, 'oauth_continue')).toMatch(/oauth_continue=;/);
+    });
+
+    it('falls back to the plain landing page when no `continue` was saved', async () => {
+        const response = await fakeLogin();
+
+        const location = new URL(response.headers.location);
+        expect(location.searchParams.has('continue')).toBe(false);
+    });
+
+    it('never honors a forged `continue` cookie the start controller never validated', async () => {
+        const start = await api().get('/account/oauth/fake');
+        const callbackUrl = new URL(start.headers.location);
+
+        // A raw HTTP client can set any cookie it likes on the callback request directly —
+        // `httpOnly` only keeps a BROWSER's own script off it, not a client that skips the
+        // browser. The callback must re-validate, not trust the cookie on its name alone.
+        const response = await api()
+            .get(callbackUrl.pathname + callbackUrl.search)
+            .set(
+                'Cookie',
+                `${cookieHeader(start, 'oauth_state', 'oauth_verifier')}; oauth_continue=//evil.example`
+            );
+
+        expect(response.status).toBe(302);
+        const location = new URL(response.headers.location);
+        expect(location.searchParams.has('continue')).toBe(false);
+    });
+
     it('logs the SAME account in on a second attempt rather than creating another one', async () => {
         for (let attempt = 0; attempt < 2; attempt += 1) {
             const start = await api().get('/account/oauth/fake');
@@ -139,13 +196,20 @@ describe('GET /account/oauth/:provider/callback', () => {
     // user): table-driven across every login path now, in `login-paths.contract.test.ts`.
 });
 
-/** One full start → callback round trip through the fake provider. */
-const fakeLogin = async () => {
-    const start = await api().get('/account/oauth/fake');
+/**
+ * One full start → callback round trip through the fake provider.
+ * @param continueTo - a same-origin path to request at the start, carried the whole way through.
+ */
+const fakeLogin = async (continueTo?: string) => {
+    const query = continueTo ? `?continue=${encodeURIComponent(continueTo)}` : '';
+    const start = await api().get(`/account/oauth/fake${query}`);
     const callbackUrl = new URL(start.headers.location);
+    const cookies = continueTo
+        ? cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_continue')
+        : attemptCookies(start);
     return api()
         .get(callbackUrl.pathname + callbackUrl.search)
-        .set('Cookie', attemptCookies(start));
+        .set('Cookie', cookies);
 };
 
 // A deactivated or soft-deleted account's already-linked identity refusing the login, with no
@@ -170,13 +234,15 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 0) });
 
-        // Second login: the same linked identity, now with 2FA armed.
-        const challenged = await fakeLogin();
+        // Second login: the same linked identity, now with 2FA armed. `continue` must survive
+        // the MFA detour too — the frontend's 2FA step forwards it on once the code is answered.
+        const challenged = await fakeLogin('/checkout');
 
         expect(challenged.status).toBe(302);
         const location = new URL(challenged.headers.location);
         expect(location.origin + location.pathname).toBe('http://localhost:8080/oauth/callback');
         expect(location.searchParams.get('mfaRequired')).toBe('1');
+        expect(location.searchParams.get('continue')).toBe('/checkout');
         expect(location.searchParams.get('expiresAt')).toEqual(expect.any(String));
         const methods = JSON.parse(location.searchParams.get('methods')!) as { method: string }[];
         expect(methods.map((m) => m.method)).toEqual(['totp']);
