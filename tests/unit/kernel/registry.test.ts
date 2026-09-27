@@ -11,6 +11,7 @@ import {
     registerModules,
     resolveTranslatables,
     resolvePersonalDataSections,
+    resolvePublicEvents,
     type AppModule
 } from '@kernel/registry';
 
@@ -169,5 +170,49 @@ describe('resolvePersonalDataSections', () => {
             { section: 'profile', collect: profile },
             { section: 'sessions', collect: sessions }
         ]);
+    });
+});
+
+/**
+ * `resolvePublicEvents` (DDD-D4) — the same flattening `resolveTranslatables` does, one lookup
+ * keyed by domain event name instead of `entityType`. Whether an entry's projection actually
+ * matches a real, currently-firing domain event is
+ * `tests/cross-cutting/webhook-event-producers.test.ts`'s job, not this one's.
+ */
+describe('resolvePublicEvents', () => {
+    it('flattens every module into one lookup keyed by domain event name', () => {
+        const toOrderCreated = jest.fn();
+        const toPaymentSucceeded = jest.fn();
+        const modules: AppModule[] = [
+            {
+                name: 'orders',
+                publicEvents: { 'order.created': { toPublicEvent: toOrderCreated } },
+                personalData: 'none'
+            },
+            {
+                name: 'payments',
+                publicEvents: { 'payment.succeeded': { toPublicEvent: toPaymentSucceeded } },
+                personalData: 'none'
+            }
+        ];
+
+        expect(resolvePublicEvents(modules)).toEqual({
+            'order.created': { toPublicEvent: toOrderCreated },
+            'payment.succeeded': { toPublicEvent: toPaymentSucceeded }
+        });
+    });
+
+    it('is an empty lookup when no module declares one', () => {
+        expect(resolvePublicEvents([{ name: 'headless', personalData: 'none' }])).toEqual({});
+    });
+
+    it('refuses to boot when two modules declare the same domain event, instead of keeping one', () => {
+        const target = { toPublicEvent: jest.fn() };
+        const modules: AppModule[] = [
+            { name: 'orders', publicEvents: { 'order.created': target }, personalData: 'none' },
+            { name: 'catalogue', publicEvents: { 'order.created': target }, personalData: 'none' }
+        ];
+
+        expect(() => resolvePublicEvents(modules)).toThrow(/"order\.created"/);
     });
 });
