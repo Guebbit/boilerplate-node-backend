@@ -11,6 +11,7 @@ import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { RecordOfflinePaymentBody } from '@api/schemas.zod';
 import { paymentService } from '../services';
+import { presentPayment } from '../presenter';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
@@ -23,13 +24,7 @@ export const postPaymentOffline = (request: Request<{ orderId?: string }>, respo
         .recordOfflinePayment(String(request.params.orderId), body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
-            successResponse<Payment>(
-                response,
-                result.data.toJSON() as Payment,
-                201,
-                result.message
-            );
+            successResponse<Payment>(response, presentPayment(result.data), 201, result.message);
         })
         .catch(catchAs(response, 'postPaymentOffline'));
 };

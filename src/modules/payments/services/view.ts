@@ -19,6 +19,7 @@ import type { OrderDocument } from '@modules/orders';
 import { paymentRepository } from '../repository';
 import { CONFIRMABLE_PAYMENT_STATUSES } from '../model';
 import type { PaymentDocument } from '../model';
+import { presentPayment } from '../presenter';
 import { callerScope } from './scope';
 import { REFUNDABLE_PAYMENT_STATUS } from './refunds';
 
@@ -52,9 +53,7 @@ export const withActions = (
     order: OrderDocument | undefined,
     authContext?: AuthContext
 ): Payment => ({
-    // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document
-    // itself is typed as stored, not as the wire shape `Payment` promises.
-    ...(payment.toJSON() as Payment),
+    ...presentPayment(payment),
     actions: {
         // Confirmable, and the order can still get to `paid`. Both halves, because a retryable
         // decline on an order that has since been cancelled is not a payment anyone may complete.

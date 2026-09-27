@@ -23,6 +23,7 @@ import {
 import { userService } from '@modules/users';
 import { resolvePaymentProvider, providerNamed } from '../providers';
 import type { PaymentDocument } from '../model';
+import { presentPayment } from '../presenter';
 import { paymentRepository } from '../repository';
 import { notPayable } from './errors';
 import { ERROR_CODES } from '@api/error-codes';
@@ -121,8 +122,7 @@ export const createIntent = async (
     );
     const stored = await paymentRepository.attachProviderRef(String(payment._id), providerRef);
     const prepared = {
-        // `.toJSON()` applies the model's `_id` → `id` / date transform.
-        ...((stored ?? payment).toJSON() as Payment),
+        ...presentPayment(stored ?? payment),
         clientSecret
     };
 

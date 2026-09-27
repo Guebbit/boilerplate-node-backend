@@ -14,6 +14,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { ConfirmPaymentBody } from '@api/schemas.zod';
 import { paymentConfirmTotal } from '../metrics';
 import { paymentService } from '../services';
+import { presentPayment } from '../presenter';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
@@ -46,13 +47,7 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
             else if (declined) paymentConfirmTotal.inc({ outcome: 'declined' });
 
             if (refused(response, result)) return;
-            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
-            successResponse<Payment>(
-                response,
-                result.data.toJSON() as Payment,
-                200,
-                result.message
-            );
+            successResponse<Payment>(response, presentPayment(result.data), 200, result.message);
         })
         .catch(catchAs(response, 'postPaymentConfirm'));
 };

@@ -11,6 +11,7 @@ import type { Request, Response } from 'express';
 import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { paymentService } from '../services';
+import { presentPayment } from '../presenter';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
@@ -22,13 +23,7 @@ export const postPaymentSync = (request: Request<{ id?: string }>, response: Res
         .then((result) => {
             if (refused(response, result)) return;
 
-            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
-            successResponse<Payment>(
-                response,
-                result.data.toJSON() as Payment,
-                200,
-                result.message
-            );
+            successResponse<Payment>(response, presentPayment(result.data), 200, result.message);
         })
         .catch(catchAs(response, 'postPaymentSync'));
 };
