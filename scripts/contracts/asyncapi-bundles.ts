@@ -32,13 +32,50 @@ import { REPO_ROOT, type ContractBundle } from './bundle-kinds';
 type AsyncScope = 'shared' | 'backend';
 
 /** A section this file always has, independent of which modules exist. */
-type FixedSection = 'observability' | 'webhooks' | 'workers';
+type FixedSection = 'workers';
 
-/** A fixed section, or `<module>-internal` for a module owning a queue nothing else may reach. */
-type AsyncSectionName = FixedSection | `${string}-internal`;
+/**
+ * The narrative order for modules that own a top-level `asyncapi.yaml` — a PUBLIC event catalogue
+ * an API client can reach, as opposed to `asyncapi.internal.yaml`'s backend-only queue. This is the
+ * one hand-kept line for this half of the bundle: which modules qualify is discovered from disk by
+ * {@link resolveModuleAsyncSections}, which throws if a module ships an `asyncapi.yaml` this array
+ * hasn't placed yet — the same shape `openapi-bundle.ts`'s `MODULE_ORDER` uses.
+ */
+const MODULE_ASYNC_ORDER = ['observability', 'webhooks'] as const;
+
+type ModuleAsyncSection = (typeof MODULE_ASYNC_ORDER)[number];
+
+/** A fixed section, a module owning a public `asyncapi.yaml`, or `<module>-internal` for a module owning a queue nothing else may reach. */
+type AsyncSectionName = FixedSection | ModuleAsyncSection | `${string}-internal`;
 
 /** The suffix an internal-queue section's name carries — see {@link internalSections}. */
 const INTERNAL_SUFFIX = '-internal';
+
+/** Every module folder with a top-level `asyncapi.yaml` (never `.internal.yaml`), discovered from disk. */
+const modulesWithAsyncapi = (): string[] =>
+    readdirSync(path.join(REPO_ROOT, 'src', 'modules'), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .filter((name) =>
+            existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'asyncapi.yaml'))
+        );
+
+/**
+ * Which modules contribute a public section, in {@link MODULE_ASYNC_ORDER}'s order — membership is
+ * discovery, so a new module's public `asyncapi.yaml` needs exactly the one line above to say where
+ * it sits in the merge order.
+ * @throws Error if a module ships an `asyncapi.yaml` that MODULE_ASYNC_ORDER does not know about
+ */
+const resolveModuleAsyncSections = (): readonly ModuleAsyncSection[] => {
+    const forgotten = modulesWithAsyncapi().filter(
+        (name) => !(MODULE_ASYNC_ORDER as readonly string[]).includes(name)
+    );
+    if (forgotten.length > 0)
+        throw new Error(
+            `[asyncapi] add to MODULE_ASYNC_ORDER in asyncapi-bundles.ts: ${forgotten.join(', ')}`
+        );
+    return MODULE_ASYNC_ORDER;
+};
 
 /**
  * Every module with its own `asyncapi.internal.yaml` — a queue that module owns, discovered
@@ -57,8 +94,7 @@ const internalSections = (): AsyncSectionName[] =>
 
 /** The order sections are merged in, and therefore the order they appear in the output. */
 export const ASYNC_SECTION_ORDER: readonly AsyncSectionName[] = [
-    'observability',
-    'webhooks',
+    ...resolveModuleAsyncSections(),
     ...internalSections(),
     'workers'
 ];
@@ -66,14 +102,14 @@ export const ASYNC_SECTION_ORDER: readonly AsyncSectionName[] = [
 /**
  * Which sections an API client shares. Everything absent from here is backend-only.
  *
- * `webhooks` belongs here for the reason `observability` does: its channels ARE the public event
- * catalogue (`GET /webhooks/events` reads the module's own fragment, not this bundle), so a
- * consumer needs the generated payload types the same way the SSE dashboard does. Every
- * `-internal` section and `workers` never join this set — a queue is internal plumbing, not a
- * promise to anyone outside this service, whether it happens to be owned by a module or by no
- * domain at all.
+ * Derived, not hand-listed: a module's top-level `asyncapi.yaml` (as opposed to its
+ * `asyncapi.internal.yaml`) is BY CONVENTION its public event catalogue — `GET /webhooks/events`
+ * reads the module's own fragment, not this bundle, so a consumer needs the generated payload
+ * types the same way the SSE dashboard does. Every `-internal` section and `workers` never join
+ * this set — a queue is internal plumbing, not a promise to anyone outside this service, whether
+ * it happens to be owned by a module or by no domain at all.
  */
-const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(['observability', 'webhooks']);
+const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(resolveModuleAsyncSections());
 
 /** The sections one bundle is built from, in merge order. */
 const sectionsInScope = (scope: AsyncScope): readonly AsyncSectionName[] =>
