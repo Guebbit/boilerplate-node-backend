@@ -12,6 +12,9 @@
 import { environmentChoice } from '@infrastructure/runtime/environment';
 import { fakePaymentProvider } from './fake';
 
+/** Re-exported from `./errors` — see there for why it isn't declared in this file. */
+export { PaymentInFlightError } from './errors';
+
 export {
     signWebhookPayload,
     verifyWebhookSignature,
@@ -113,6 +116,22 @@ export interface PaymentProvider {
         charge: { amount: number; currency: string },
         idempotency: { idempotencyKey: string }
     ): Promise<void>;
+
+    /**
+     * Close an intent that has not succeeded yet — the customer abandoned it, or this application
+     * is recording the money another way instead. The counterpart to `prepare`.
+     *
+     * Idempotent: a provider that already considers the intent cancelled answers success, since
+     * the caller's own goal — nothing left open — already holds. Every reference platform allows
+     * this from any pre-success state; Stripe's own `PaymentIntent`s never expire on their own,
+     * which is why this exists at all.
+     *
+     * @param providerRef - what {@link prepare} returned
+     * @param reason - recorded at the provider, for support and reconciliation
+     * @throws {PaymentInFlightError} when the intent already succeeded or is still mid-flight —
+     *   there is money to refund instead, not an intent left to cancel
+     */
+    cancel(providerRef: string, { reason }: { reason: string }): Promise<void>;
 
     /**
      * Turn a raw webhook delivery into an event this module can act on.

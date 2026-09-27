@@ -2,10 +2,12 @@
  * @module
  * Payments: an order's money, behind a provider port (`./providers`), so the generic part of
  * taking money can be bought rather than built. Depends on orders (a payment freezes an order's
- * total and refunds answer `ORDER_REFUND_OWED`, not the customer-facing `ORDER_CANCELLED` — see
- * `docs/modules/payments.md`) and on inventory (the confirm commits an order's held stock
- * into a sale). Depends on users to resolve the payer, and to detach one through its own
- * `personalData.erase` hook — the payment survives account erasure, same as the order it paid for.
+ * total, refunds answer `ORDER_REFUND_OWED` rather than the customer-facing `ORDER_CANCELLED` —
+ * see `docs/modules/payments.md` — and `ORDER_CANCELLED` itself is only a best-effort trigger to
+ * close a still-open intent at the provider, never a refund) and on inventory (the confirm commits
+ * an order's held stock into a sale). Depends on users to resolve the payer, and to detach one
+ * through its own `personalData.erase` hook — the payment survives account erasure, same as the
+ * order it paid for.
  *
  * See: docs/modules/payments.md
  */
@@ -13,9 +15,14 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
-import { ORDER_REFUND_OWED } from '@modules/orders';
+import { ORDER_REFUND_OWED, ORDER_CANCELLED } from '@modules/orders';
 import { router } from './routes';
-import { refundForOrder, detachUserId, findOwnPaymentsForExport } from './services';
+import {
+    refundForOrder,
+    cancelOpenIntentForOrder,
+    detachUserId,
+    findOwnPaymentsForExport
+} from './services';
 import { validateBankTransferConfig, validateStripeSecretKey } from './config';
 import { paymentsRateLimits } from './rate-limits';
 import { checkSelector } from '@kernel/required-config';
@@ -79,6 +86,10 @@ export default {
         // `ORDER_REFUND_OWED`, not `ORDER_CANCELLED` — the event exists only when a refund is
         // owed, so there is no boolean left to branch on.
         onDomainEvent(ORDER_REFUND_OWED, ({ orderId }) => refundForOrder(orderId));
+        // `ORDER_CANCELLED` itself, for the OTHER thing a cancel can leave behind: a card intent
+        // nobody ever finished, still open at the provider (E17). Best-effort — the cancel already
+        // happened by the time this runs, so a provider failure here is logged, never rethrown.
+        onDomainEvent(ORDER_CANCELLED, ({ orderId }) => cancelOpenIntentForOrder(orderId));
     },
     locales: path.join(__dirname, 'locales'),
     /**

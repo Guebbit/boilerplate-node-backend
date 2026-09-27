@@ -21,7 +21,7 @@
  *        pays, the step before `recordOfflinePayment` settles it.
  */
 
-import { createIntent } from './intent';
+import { createIntent, cancelOpenIntentForOrder } from './intent';
 import {
     confirmPayment,
     syncPayment,
@@ -46,7 +46,7 @@ import { listPaymentMethods } from '../config';
  * `refundForOrder` and `detachUserId` into the events that trigger them, and the suites drive the
  * operations directly. Publishing only the object would break both call sites.
  */
-export { createIntent } from './intent';
+export { createIntent, cancelOpenIntentForOrder } from './intent';
 export {
     settlePayment,
     confirmPayment,
@@ -71,6 +71,7 @@ export { listPaymentMethods, type PaymentMethodInfo } from '../config';
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 export const paymentService = {
     createIntent,
+    cancelOpenIntentForOrder,
     confirmPayment,
     syncPayment,
     applyWebhookDelivery,

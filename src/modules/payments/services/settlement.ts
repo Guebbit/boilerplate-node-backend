@@ -16,7 +16,7 @@ import {
 import { emitDomainEvent } from '@kernel/events';
 import { OrderStatus } from '@types';
 import type { PaymentStatus, AuthContext } from '@types';
-import { orderService, bankTransferHoldHours } from '@modules/orders';
+import { orderService, bankTransferHoldHours, isPayable } from '@modules/orders';
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '../events';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
@@ -296,6 +296,20 @@ const findConfirmable = (
 };
 
 /**
+ * Whether an order can still be charged into — the gate {@link confirmPayment} checks before
+ * reaching the provider, so a cancelled order is refused up front instead of charged then
+ * refunded, which loses the provider's fee on the refund (A1). `syncPayment` has no need for this:
+ * `retrieve` only re-reads what the provider already decided, it never asks it to take money.
+ *
+ * @param orderId - the order the payment being confirmed belongs to
+ * @returns the refusal when the order can no longer be paid, `null` to let the confirm proceed
+ */
+const confirmableOrder = (orderId: string): Promise<ResponseReject | null> =>
+    orderService
+        .getById(orderId)
+        .then((order) => (order && isPayable(order.status) ? null : notPayable()));
+
+/**
  * Settle an already-fetched, already-scoped payment via the provider, gated on it currently
  * sitting in one of `allowed` — the part {@link confirmPayment} and {@link syncPayment} do
  * identically once each has decided the call may proceed at all. Split from {@link settleVia} so
@@ -306,19 +320,28 @@ const findConfirmable = (
  * @param providerCall - the provider-specific action (confirm or re-read), given the payment
  *   itself — narrowed to prove `providerRef` is present — so it can reach the provider named on
  *   THIS payment rather than the deployment's currently configured one
+ * @param precheck - an extra async gate run before `providerCall`, for a refusal that needs a
+ *   read `findConfirmable`'s own synchronous check cannot make — {@link confirmPayment}'s only,
+ *   today. Absent for `syncPayment`, which never needs one.
  */
 const settleFound = (
     payment: PaymentDocument,
     allowed: readonly PaymentStatus[],
     providerCall: (
         payment: PaymentDocument & { providerRef: string }
-    ) => Promise<ProviderPaymentState>
+    ) => Promise<ProviderPaymentState>,
+    precheck?: (
+        payment: PaymentDocument & { providerRef: string }
+    ) => Promise<ResponseReject | null>
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> => {
     const found = findConfirmable(payment, allowed);
     if ('success' in found) return Promise.resolve(found);
-    return providerCall(found)
-        .then((state) => settlePayment(found, state))
-        .then(settlementResponse);
+    return (precheck ? precheck(found) : Promise.resolve(null)).then((refusal) => {
+        if (refusal) return refusal;
+        return providerCall(found)
+            .then((state) => settlePayment(found, state))
+            .then(settlementResponse);
+    });
 };
 
 /**
@@ -330,6 +353,7 @@ const settleFound = (
  * @param context - the caller context to audit/analyse the attempt against
  * @param allowed - the statuses this action may run from
  * @param providerCall - the provider-specific action (confirm or re-read) — see {@link settleFound}
+ * @param precheck - see {@link settleFound}
  */
 const settleVia = (
     paymentId: string,
@@ -338,13 +362,16 @@ const settleVia = (
     allowed: readonly PaymentStatus[],
     providerCall: (
         payment: PaymentDocument & { providerRef: string }
-    ) => Promise<ProviderPaymentState>
+    ) => Promise<ProviderPaymentState>,
+    precheck?: (
+        payment: PaymentDocument & { providerRef: string }
+    ) => Promise<ResponseReject | null>
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository
         .findByIdScoped(paymentId, callerScope(authContext))
         .then((payment) => {
             if (!payment) return generateReject(404, [t('payments.not-found')]);
-            return settleFound(payment, allowed, providerCall);
+            return settleFound(payment, allowed, providerCall, precheck);
         })
         .then((result) => reportAttempt(result, paymentId, context));
 
@@ -354,6 +381,10 @@ const settleVia = (
  * The answer is not always final. A card the bank wants a challenge for comes back
  * `requires_action` and one that settles over days `processing`; both are successes on the wire,
  * and {@link syncPayment} is what resolves them once the browser is done.
+ *
+ * Refuses before ever reaching the provider (A1) when the order can no longer be paid into — a
+ * cancel that raced the confirm otherwise still takes the card's money, only to refund it right
+ * back and lose the provider's own fee on that refund.
  *
  * @param paymentId - the intent being confirmed
  * @param paymentMethodRef - the provider's opaque handle for the method. NOT a card number
@@ -365,8 +396,13 @@ export const confirmPayment = (
     authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    settleVia(paymentId, authContext, context, CONFIRMABLE_PAYMENT_STATUSES, (payment) =>
-        providerNamed(payment.provider).confirm(payment.providerRef, paymentMethodRef)
+    settleVia(
+        paymentId,
+        authContext,
+        context,
+        CONFIRMABLE_PAYMENT_STATUSES,
+        (payment) => providerNamed(payment.provider).confirm(payment.providerRef, paymentMethodRef),
+        (payment) => confirmableOrder(String(payment.orderId))
     );
 
 /**

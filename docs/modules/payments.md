@@ -28,6 +28,7 @@ flowchart LR
     payments --> inventory
     payments --> orders
     payments --> users
+    orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
     payments -. "payment.failed" .-> webhooks
     payments -. "payment.succeeded" .-> webhooks
@@ -50,6 +51,11 @@ A payment is _about_ an order: the intent freezes its total, the confirm moves i
 module answers with the refund. Split from `order.cancelled` itself (B6): retrying the refund must
 never re-deliver the customer-facing cancellation webhook every time a provider outage outlasts one
 sweep pass.
+
+This module also listens to `order.cancelled` itself, but for a different reason: closing a card
+intent nobody ever finished (E17), so an abandoned one cannot resolve at the provider days later
+with no local row left to catch the charge it makes. Best-effort, and unrelated to the refund —
+a payment already `succeeded` is `order.refund_owed`'s to give back, never this listener's to close.
 
 **`settlePayment` is the one place where the money and the goods agree.** It commits the order's
 held units itself rather than announcing and hoping, because that instant is the only moment a hold
