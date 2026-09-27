@@ -123,11 +123,10 @@ verify.
 
 **Storage is a sha256 digest, not encryption.** A credential is verified, never re-signed with, so
 there is no plaintext to recover later — `hashToken` (`@modules/users`), the same one-way primitive
-`account/two-factor/backup-codes.ts` already uses: `randomBytes(32)` has no search space for
-bcrypt/argon2 to make expensive, so the ~100ms they would cost on every authenticated request buys
-nothing. Comparison is constant-time (`constantTimeEqual`,
-`infrastructure/security/constant-time.ts` — the same helper `isMetricsScraper` uses, see below),
-never `===`.
+refresh/reset tokens use: `randomBytes(32)` has no search space for bcrypt/argon2 to make expensive,
+so the ~100ms they would cost on every authenticated request buys nothing. Comparison is
+constant-time (`constantTimeEqual`, `infrastructure/security/constant-time.ts` — the same helper
+`isMetricsScraper` uses, see below), never `===`.
 
 **A key holds a subset of the minter's permissions, floored TWICE.** Once at MINT time
 (`api-keys/services/api-keys.ts`), against what the requesting caller holds right then; again on
@@ -273,7 +272,7 @@ delivered method armed, because a mailed code has an SMTP queue and an app switc
 | ---------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | a device secret  | AES-256-GCM, key from `NODE_TOTP_ENCRYPTION_KEY`, version-prefixed | must be recoverable to recompute a code against; the prefix lets a future key rotation decrypt old rows with their own key     |
 | a delivered code | HMAC-SHA256 under the same key                                     | six digits is a space of one million — a bare digest falls to anyone holding a database dump, an HMAC does not without the key |
-| backup codes     | sha256                                                             | one-time and high-entropy, so there is no low-entropy secret to stretch                                                        |
+| backup codes     | scrypt, one salt per account                                       | 40 bits per code needs stretching — NIST 800-63B's "look-up secret" rule below 112 bits                                        |
 
 ### The controls, and which attack each one answers
 

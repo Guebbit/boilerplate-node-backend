@@ -46,11 +46,11 @@ answer: a revocable credential, scoped to a caller-chosen subset of whoever mint
 
 **The credential is verified, never decrypted.** `sk_<8-char prefix>_<32 bytes>`, both halves
 `base64url`. Only a sha256 digest is ever stored — `credentials.ts` reuses `hashToken`
-(`@modules/users`), the same one-way primitive `account/two-factor/backup-codes.ts` already uses
-for the same reason: a high-entropy, one-time secret has no search space for bcrypt/argon2 to make
-expensive, so the ~100ms they would cost on every authenticated request buys nothing. The prefix is
-the only part ever stored in the clear — it is what turns verification into one indexed lookup
-instead of a collection scan, and it is not secret.
+(`@modules/users`), the same one-way primitive refresh/reset tokens use: a high-entropy, one-time
+secret has no search space for bcrypt/argon2 to make expensive, so the ~100ms they would cost on
+every authenticated request buys nothing. The prefix is the only part ever stored in the clear —
+it is what turns verification into one indexed lookup instead of a collection scan, and it is not
+secret.
 
 **A key holds a subset of the minter's permissions, floored TWICE.** Once at mint time
 (`services/api-keys.ts#isMintable`, against what the requesting caller holds right now), and again

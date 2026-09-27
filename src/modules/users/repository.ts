@@ -23,7 +23,7 @@ import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
  * `.select('+password')` calls.
  */
 const CREDENTIAL_FIELDS =
-    '+password +tokens +twoFactorMethods +twoFactorBackupCodes +oauthAccounts +pendingEmail';
+    '+password +tokens +twoFactorMethods +twoFactorBackupCodes +twoFactorBackupCodeSalt +oauthAccounts +pendingEmail';
 
 /**
  * The clause every login-adjacent lookup filters on. `{ $ne: false }` rather than `true`: a
