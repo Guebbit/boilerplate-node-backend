@@ -104,6 +104,19 @@ stale, and the frontend's copy will look like it belongs to the _other_ backend.
 So pull both sides before concluding anything about pairing. A genuine fork is rare; a stale
 checkout is the ordinary explanation, and the two are indistinguishable from the message alone.
 
+### Which frontend a script means
+
+Every pairing script (`sync:frontend`, `check:spec-identity`, `regenerate`, the docs reference
+check) asks one resolver, `scripts/pairing/paired-frontend-path.ts`. The first non-empty value
+wins:
+
+1. `FRONTEND_PATH` in the shell — a one-off run, or CI;
+2. `FRONTEND_PATH` in `.env`;
+3. `../boilerplate-vue-frontend`, the sibling checkout.
+
+The resolver reads `.env` itself, because `npm run` does not. That way no script can quietly skip
+the file and aim at a different frontend than the others.
+
 ### Seed credentials are published, not copied
 
 `NODE_SEED_ADMIN_PASSWORD` / `NODE_SEED_USER_PASSWORD` / `NODE_SEED_EDITOR_PASSWORD` /
