@@ -218,41 +218,31 @@ describe('confirmPayment', () => {
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
     });
 
-    it('refunds a charge whose order slipped away between opening the intent and confirming', async () => {
-        // The order is cancelled in the window between opening the intent and confirming — module
-        // docblock rule 2: the provider takes the money, the conditional `paid` move loses to the
-        // order no longer being payable-into, and it is handed straight back.
+    it('refuses to confirm once the order it was for is cancelled, before ever charging the card (A1)', async () => {
+        // The order is cancelled in the window between opening the intent and confirming.
+        // Charging the card and then refunding it would still work, but it loses the provider's
+        // own fee on that refund — A1 refuses up front instead, before the provider is ever asked.
         const { user, order } = await orderFor();
         const intent = await createIntent(String(order._id), auth(user));
         const paymentId = String((intent as { data?: { id?: string } }).data?.id);
         await orderService.cancelById(String(order._id), auth(user));
 
+        const confirmSpy = jest.spyOn(fakePaymentProvider, 'confirm');
         const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
         const result = await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
-        expect(refundSpy).toHaveBeenCalledTimes(1);
-        // The reference comes off the ROW, not the answer: it is deliberately not published, so a
-        // test reading it from the response would be asserting a leak.
-        const prepared = await paymentRepository.findByOrderId(String(order._id));
-        expect(refundSpy).toHaveBeenCalledWith(
-            prepared!.providerRef,
-            {
-                amount: (intent as { data?: { amount?: number } }).data?.amount,
-                currency: (intent as { data?: { currency?: string } }).data?.currency
-            },
-            // Keyed on the payment's own id, not the order's or the call's — a redelivered
-            // retry of THIS same payment must reuse it, so the provider refunds once (B1).
-            { idempotencyKey: `refund:${String(prepared!._id)}` }
-        );
+        // Neither the card nor a refund of it was ever reached — the whole point of refusing first.
+        expect(confirmSpy).not.toHaveBeenCalled();
+        expect(refundSpy).not.toHaveBeenCalled();
+        confirmSpy.mockRestore();
         refundSpy.mockRestore();
 
-        // `refunded`, not back to `requires_confirmation`: the money DID move at the provider, and
-        // a row that says it never did is a row nobody can reconcile against a statement. It is
-        // also terminal, which is what stops the customer paying a cancelled order twice.
+        // Nothing moved: the payment sits exactly where the intent left it, not `refunded` — there
+        // was never any money to give back.
         const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment!.status).toBe('refunded');
+        expect(payment!.status).toBe('requires_confirmation');
     });
 });
 
@@ -364,13 +354,21 @@ describe('refund on cancel', () => {
             const { user, order } = await orderFor();
             const intent = await createIntent(String(order._id), auth(user));
             const paymentId = String((intent as { data?: { id?: string } }).data?.id);
-            // Cancelled before the confirm lands — settlement's own "order lost" branch, not a
-            // cancel's own refund.
-            await orderService.cancelById(String(order._id), auth(user));
 
             const refundSpy = jest
                 .spyOn(fakePaymentProvider, 'refund')
                 .mockRejectedValueOnce(new Error('payment provider unreachable'));
+            // The order is cancelled DURING the provider round trip — after A1's own payable check
+            // already read it as still pending, before `settlePayment`'s own re-read sees it gone.
+            // That is settlement's own "order lost" branch, not a cancel's own refund (module
+            // docblock rule 2), and A1 only closes the window BEFORE the provider is asked.
+            const originalConfirm = fakePaymentProvider.confirm;
+            const confirmSpy = jest
+                .spyOn(fakePaymentProvider, 'confirm')
+                .mockImplementationOnce(async (providerRef, methodRef) => {
+                    await orderService.cancelById(String(order._id), auth(user));
+                    return originalConfirm(providerRef, methodRef);
+                });
 
             const result = await confirmPayment(
                 paymentId,
@@ -391,6 +389,7 @@ describe('refund on cancel', () => {
                 'refunded'
             );
             refundSpy.mockRestore();
+            confirmSpy.mockRestore();
         }));
 
     /*
