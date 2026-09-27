@@ -18,6 +18,7 @@
 import i18next from 'i18next';
 import {
     getOverrideRefreshMs,
+    isLocaleOverrideAvailable,
     listSupportedLocales,
     loadLocaleResources,
     refreshLocaleOverrides,
@@ -222,5 +223,19 @@ describe('the override refresh interval', () => {
         expect(() => {
             stopLocaleOverrideRefresh();
         }).not.toThrow();
+    });
+});
+
+describe('isLocaleOverrideAvailable', () => {
+    afterEach(() => registerLocaleOverrideProvider(undefined));
+
+    // `app.ts` asks this before starting the refresh timer at all (LOCALES_OPTIONAL_0925 step
+    // 3f) — a timer polling a provider that will never exist is a leak of intent.
+    it('is false with no provider registered, true once one is', () => {
+        expect(isLocaleOverrideAvailable()).toBe(false);
+
+        registerLocaleOverrideProvider(() => Promise.resolve({}));
+
+        expect(isLocaleOverrideAvailable()).toBe(true);
     });
 });

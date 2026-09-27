@@ -17,6 +17,23 @@ import type { Caller } from '@types';
 import { resetDomainEvents } from '@kernel/events';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
+import { registerTranslationPort, type TranslationPort } from '@kernel/translation';
+
+/**
+ * A port double whose methods are jest mocks by default, overridable per test — stands in for
+ * `@modules/locales` so `remove`'s hard-delete cascade can be proven as a WIRING fact (this
+ * module calls the port) without a real translations collection behind it. Same shape
+ * `orders/tests/unit/snapshot.test.ts` uses for the same reason.
+ */
+const fakeTranslationPort = (overrides: Partial<TranslationPort> = {}): TranslationPort => ({
+    resolve: jest.fn().mockResolvedValue(new Map()),
+    removeAll: jest.fn().mockResolvedValue(0),
+    search: jest.fn().mockResolvedValue([]),
+    plan: jest.fn().mockResolvedValue({ fallbackLocale: 'en', planned: [] }),
+    write: jest.fn().mockResolvedValue(undefined),
+    readAll: jest.fn().mockResolvedValue(new Map()),
+    ...overrides
+});
 
 /**
  * Mock the image store, not the filesystem underneath it.
@@ -686,6 +703,37 @@ describe('productService.remove', () => {
 
         expect(result.success).toBe(true);
         expect(await productRepository.findById(pid)).toBeNull();
+    });
+
+    describe('the translation cascade', () => {
+        afterEach(() => registerTranslationPort(undefined));
+
+        // A hard delete destroys the row nothing else can point `_id` at again, so its
+        // translations must go with it IN THIS OPERATION — see `../../service.ts`'s own comment
+        // on `remove`. `locales/tests/integration/repository.test.ts` proves the STORAGE side of
+        // this cascade (a real `removeEntityTranslations` call actually deletes rows); this proves
+        // the WIRING side — that a hard delete makes the call at all, a soft delete does not —
+        // without needing a real translations collection to do it.
+        it('calls the port to remove translations on a hard delete', async () => {
+            const removeAll = jest.fn().mockResolvedValue(0);
+            registerTranslationPort(fakeTranslationPort({ removeAll }));
+            const product = await createProduct({ active: true });
+            const pid = product._id.toString();
+
+            await productService.remove(product, true);
+
+            expect(removeAll).toHaveBeenCalledWith('product', pid);
+        });
+
+        it('does not call the port on a soft delete', async () => {
+            const removeAll = jest.fn().mockResolvedValue(0);
+            registerTranslationPort(fakeTranslationPort({ removeAll }));
+            const product = await createProduct({ active: true });
+
+            await productService.remove(product, false);
+
+            expect(removeAll).not.toHaveBeenCalled();
+        });
     });
 });
 

@@ -36,6 +36,12 @@ export const registerLocaleOverrideProvider = (provider?: LocaleOverrideProvider
 };
 
 /**
+ * Whether a provider is registered — what {@link startLocaleOverrideRefresh}'s only caller asks
+ * before starting a timer that would otherwise tick forever calling a no-op.
+ */
+export const isLocaleOverrideAvailable = (): boolean => overrideProvider !== undefined;
+
+/**
  * Restore every supported language to its deployed files, dropping any applied override.
  *
  * The path a failed refresh does NOT take — a provider that throws leaves the last good overlay in

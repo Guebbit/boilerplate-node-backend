@@ -5,16 +5,19 @@
  * a client does — through routing, middleware, auth, serialization and the error handler — which
  * is the only layer where a response can be compared to `openapi.yaml`.
  *
- * `src/app.ts` exports the fully mounted express app and skips its auto-start when
- * `NODE_ENV === 'test'` (see the guard at the bottom of that file), so importing it here starts
- * no server, no Mongo connection, no Redis and no queue. The database comes from
- * `setupTestDb()` (in-memory Mongo); Redis is genuinely optional, because `getCacheValue`
- * resolves `undefined` on any failure and the request is treated as a cache miss.
+ * `src/app.ts`'s `createApp()` (SK-D2) builds the fully mounted express app synchronously and
+ * starts no server, no Mongo connection, no Redis and no queue — only calling its own `boot`/
+ * `start` would. The database comes from `setupTestDb()` (in-memory Mongo); Redis is genuinely
+ * optional, because `getCacheValue` resolves `undefined` on any failure and the request is
+ * treated as a cache miss.
  */
 import request from 'supertest';
-import { app } from '../../src/app';
+import { createApp } from '../../src/app';
 import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
+
+/** The one instance every test in this process shares — see this file's own docblock. */
+const { app } = createApp();
 
 /** A fresh supertest agent against the app, for one request. */
 export const api = () => request(app);

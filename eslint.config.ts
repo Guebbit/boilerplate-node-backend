@@ -741,7 +741,7 @@ export default tseslint.config(
             ],
 
             /*
-             * The file layer, for the four files that are a tier each on their own — an element
+             * The file layer, for the five files that are a tier each on their own — an element
              * descriptor matches folders, and these have no folder.
              *
              * Named one by one rather than as `src/*.ts`, deliberately: the whole point of
@@ -751,6 +751,7 @@ export default tseslint.config(
             'boundaries/files': [
                 { pattern: 'src/app.ts', category: 'composition-root' },
                 { pattern: 'src/cluster.ts', category: 'process-supervisor' },
+                { pattern: 'src/serve.ts', category: 'server-entry' },
                 { pattern: 'src/modules.ts', category: 'registry' },
                 { pattern: 'src/globals.d.ts', category: 'ambient' },
                 { pattern: 'src/modules/*/tests/**/*.ts', category: 'spec' }
@@ -824,17 +825,20 @@ export default tseslint.config(
                         },
                         {
                             /*
-                             * The three files that are a tier each — `app.ts` composes,
-                             * `cluster.ts` supervises, `modules.ts` IS the registry and is the one
-                             * caller allowed to import `@modules/<name>/module`. They have no
-                             * element (an element descriptor matches folders), so they are named
-                             * by the file categories declared above.
+                             * The four files that are a tier each — `app.ts` composes,
+                             * `cluster.ts` supervises, `serve.ts` starts what `app.ts` composed
+                             * and wires it to the process signals (SK-D2), `modules.ts` IS the
+                             * registry and is the one caller allowed to import
+                             * `@modules/<name>/module`. They have no element (an element
+                             * descriptor matches folders), so they are named by the file
+                             * categories declared above.
                              */
                             from: {
                                 file: {
                                     categories: [
                                         'composition-root',
                                         'process-supervisor',
+                                        'server-entry',
                                         'registry'
                                     ]
                                 }
@@ -842,13 +846,15 @@ export default tseslint.config(
                             allow: { to: { element: { type: '*' } } }
                         },
                         {
-                            // …including each other: `cluster.ts` imports `app.ts`, and neither
-                            // belongs to an element, so the edge is named by category on both ends.
+                            // …including each other: `cluster.ts` imports `serve.ts`, `serve.ts`
+                            // imports `app.ts`, and none of them belongs to an element, so each
+                            // edge is named by category on both ends.
                             from: {
                                 file: {
                                     categories: [
                                         'composition-root',
                                         'process-supervisor',
+                                        'server-entry',
                                         'registry'
                                     ]
                                 }
@@ -859,6 +865,7 @@ export default tseslint.config(
                                         categories: [
                                             'composition-root',
                                             'process-supervisor',
+                                            'server-entry',
                                             'registry'
                                         ]
                                     }

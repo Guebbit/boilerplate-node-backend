@@ -1,9 +1,8 @@
 /**
  * The multilingual product write surface, over real HTTP: `POST /products`, `PATCH /products/{id}`
  * and `GET /products/{id}/admin`. Cross-module by nature, sitting at the top level rather than
- * under `src/modules/products/tests/` for the same reason `translation-cascades.test.ts` does:
- * driving these routes needs a real `locales` collection row, which `products` may only reach
- * through the `kernel/translation.ts` port.
+ * under `src/modules/products/tests/`: driving these routes needs a real `locales` collection
+ * row, which `products` may only reach through the `kernel/translation.ts` port.
  */
 
 import '@tests/contract';
@@ -240,6 +239,55 @@ describe('PATCH /products/{id}', () => {
         expect(response.body.errors.map((error: { message: string }) => error.message)).toContain(
             fieldPriceMin()
         );
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('SKU (SH4)', () => {
+    it('creates a product carrying a sku', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({
+                price: 24.9,
+                sku: 'DOG-BED-15KG',
+                translations: { en: { title: 'Dog Bed' } }
+            });
+
+        expect(response.status).toBe(201);
+        expect(response.body.data.sku).toBe('DOG-BED-15KG');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // Unique across the catalogue, not per request — the sparse unique index
+    // (`products/model.ts`'s `products_sku`) is what a second product colliding with an
+    // ALREADY-STORED sku refuses against, same 409 shape `users`' duplicate email answers with.
+    it('409s a sku that collides with another product', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        await createProduct({ title: 'Existing', sku: 'DUP-1' });
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({ price: 10, sku: 'DUP-1', translations: { en: { title: 'Collides' } } });
+
+        expect(response.status).toBe(409);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('clears a sku back to unset on an explicit null', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed', price: 10, sku: 'BED-1' });
+
+        const response = await api()
+            .patch(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ sku: null });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.sku).toBeUndefined();
         expect(response).toSatisfyApiSpec();
     });
 });

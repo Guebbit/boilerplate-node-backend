@@ -191,6 +191,15 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             enum: ['reduced', 'zero']
         },
         /*
+         * SH4: an optional, deployment-chosen stock-keeping unit. Uniqueness is `products_sku`
+         * below (`unique: true, sparse: true`), not enforced here — the schema declares the
+         * shape, the index is what makes a collision a database fact rather than a race two
+         * concurrent writes could both slip past.
+         */
+        sku: {
+            type: String
+        },
+        /*
          * `onHand` (units that exist) and `reserved` (units an open order has claimed) — not a
          * single `stock` column, which would have to be decremented at order time and so remove
          * unpaid units from the world rather than merely reserve them. `available` derives from
@@ -288,6 +297,12 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
 productSchema.index({ createdAt: -1 }, { name: 'products_createdAt' });
 /* Storefront filters: active + not soft-deleted (`publicScope` in `./repository`). */
 productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_deletedAt' });
+/*
+ * SH4: unique when set. Sparse, same reasoning as `orders`' `orders_transferReference` — most
+ * products never carry a `sku` at all, and an unfiltered unique index would index every absent
+ * value as an equal `null`, colliding on the second such product.
+ */
+productSchema.index({ sku: 1 }, { name: 'products_sku', unique: true, sparse: true });
 
 /**
  * Derives `available` and stamps the live `currency`, at the single serialization point every
@@ -332,6 +347,7 @@ export const toProduct = (document: ProductDocument): Product => {
         available: availableStock(onHand, reserved),
         currency: productCurrency(),
         ...(document.taxClass === undefined ? {} : { taxClass: document.taxClass }),
+        ...(document.sku === undefined ? {} : { sku: document.sku }),
         ...(document.onHand === undefined ? {} : { onHand: document.onHand }),
         ...(document.reserved === undefined ? {} : { reserved: document.reserved }),
         ...(document.description === undefined ? {} : { description: document.description }),

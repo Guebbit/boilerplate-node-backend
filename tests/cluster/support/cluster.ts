@@ -77,8 +77,9 @@ const waitForListening = (port: number, timeoutMs: number): Promise<void> => {
 
 /**
  * `src/app.ts`'s own boot line, once per worker — the signal {@link waitForWorkers} counts.
- * `startServer` logs it after the worker's `.listen()` call is acknowledged by the primary, which
- * is the only per-worker "ready" event this black-box harness can observe from outside the process.
+ * `createApp()`'s `start` logs it after the worker's `.listen()` call is acknowledged by the
+ * primary, which is the only per-worker "ready" event this black-box harness can observe from
+ * outside the process.
  */
 const WORKER_READY_MARKER = 'Server listening on port';
 
@@ -153,8 +154,9 @@ const startCluster = ({
                 env: {
                     ...process.env,
                     /*
-                     * NOT `test`: `src/app.ts` skips its own `startServer()` under `NODE_ENV=test`,
-                     * so a cluster booted that way forks workers that mount the app and never listen.
+                     * NOT `test`: `assertRequiredConfig` (`kernel/required-config.ts`) skips its
+                     * own checks under `NODE_ENV=test`, and this suite wants them run for real
+                     * against the secrets set below.
                      */
                     NODE_ENV: 'development',
                     NODE_PORT: String(port),

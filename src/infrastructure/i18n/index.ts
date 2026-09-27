@@ -31,6 +31,7 @@ export { bootI18n } from './boot';
 export {
     applyLocaleOverrides,
     getOverrideRefreshMs,
+    isLocaleOverrideAvailable,
     refreshLocaleOverrides,
     registerLocaleOverrideProvider,
     resetLocaleOverrides,

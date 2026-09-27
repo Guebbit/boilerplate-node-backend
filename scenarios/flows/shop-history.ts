@@ -22,6 +22,7 @@ import {
 import { SEED_PRODUCT_IDS } from '../subjects';
 import { fillerProductId, openingStockFor, productFixtures } from '../products';
 import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from '../users';
+import { shopModules } from '../shop-modules';
 import { PLAIN_PASSWORD } from '@modules/users/factories';
 import { signIn, type Caller } from './client';
 import {
@@ -277,10 +278,10 @@ const driveCatalogueEdits = async (owner: Caller): Promise<void> => {
         price: 71
     });
 
-    // `scenarios/locales.ts`'s Italian override of a key that really exists for `it`.
-    await owner.call('PUT', '/locales/it/entries/65e0200a9a7d4b2e1c0f3101', {
-        value: 'Sessione scaduta. Effettua di nuovo l’accesso.'
-    });
+    // `locales` owns this edit — `shop-modules.ts`'s `driveHistoryEdit` — so deleting that module
+    // removes the step along with everything else it owns, instead of leaving a `/locales` call
+    // here for the flow to 404 on.
+    await shopModules.locales.driveHistoryEdit(owner);
 };
 
 /**

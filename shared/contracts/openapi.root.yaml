@@ -745,6 +745,20 @@ components:
                 medicine and similar, depending on the deployment's own jurisdiction. Absent means
                 the standard rate.
 
+        # SH4: a stock-keeping unit, deliberately just a string — this deployment's own numbering
+        # scheme, unvalidated beyond "not empty". Product VARIANTS (one SKU per size/colour) are
+        # a separate, larger feature, on the roadmap and not built here; today's SKU is one per
+        # product, same cardinality as `Product` itself.
+        Sku:
+            type: string
+            minLength: 1
+            description: >-
+                An optional, deployment-chosen stock-keeping unit — unique across the catalogue
+                when set. `''` is invalid, same reasoning as `ImageUrl`'s own `minLength: 1`:
+                never a second spelling of "absent". Frozen onto an order line at checkout
+                (`OrderLineProduct.sku`), same as every other field a purchase must remember
+                regardless of what the catalogue does with the product afterwards.
+
         Product:
             type: object
             additionalProperties: false
@@ -772,6 +786,8 @@ components:
                         reports the shop's CURRENT setting.
                 taxClass:
                     $ref: '#/components/schemas/TaxClass'
+                sku:
+                    $ref: '#/components/schemas/Sku'
                 # ── The two counters and the number derived from them ──────────────────────
                 #
                 # `onHand` is how many units exist; `reserved` is how many of those an open
@@ -925,6 +941,8 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                sku:
+                    $ref: '#/components/schemas/Sku'
                 # Grams, frozen at order-creation time — same convention as `Product.weight`,
                 # same "absent counts as 0" rule the shipping-method filter/refusal already apply.
                 weight:

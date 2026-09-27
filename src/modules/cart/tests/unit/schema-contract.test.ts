@@ -74,7 +74,9 @@ describe('cartSchema — a line', () => {
 
         expect(requiredPaths(item)).toEqual(['productId', 'quantity']);
         expect(optionsOf(item)._id).toBe(false);
-        expect(refOf(item, 'productId')).toBe('Product');
+        // No `ref` into `Product`: `services/view.ts` joins through `productService`, never a
+        // Mongoose `populate()` on this field — see `docs/theory/strategic-ddd.md` §5.
+        expect(refOf(item, 'productId')).toBeUndefined();
     });
 
     it('refuses a quantity below one', () => {

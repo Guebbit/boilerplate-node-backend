@@ -47,8 +47,10 @@ flowchart TD
 
 ### 1 · `src/app.ts` — how the server starts
 
-The only file that knows the boot order. Read the bottom half first: the six
-`install*` calls **are** the middleware stack, in the order a request travels it.
+`createApp()` is the only function that knows the boot order (SK-D2). Read the bottom half of its
+body first: the six `install*` calls **are** the middleware stack, in the order a request travels
+it. Calling `createApp()` is the side effect, not importing the file — `src/serve.ts` is what
+actually starts one listening.
 
 **Take away:** security → request context → telemetry → static → routes → error handling. That
 order is behaviour, not documentation.

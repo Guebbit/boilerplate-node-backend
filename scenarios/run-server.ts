@@ -71,7 +71,7 @@ const FORCED_ABSENT = [
 /**
  * Poll `GET /` until the server answers, the same signal the paired frontend's shard runner waits
  * on (`start-server-and-test http-get://…`). Accurate as a "ready" check specifically because
- * `startServer()` seeds BEFORE it starts listening — see `src/app.ts` — so a successful
+ * `createApp().start()` seeds BEFORE it starts listening — see `src/app.ts` — so a successful
  * response here means the database holds the scenario already, not just that a socket is open.
  */
 const waitUntilListening = (port: string): Promise<void> => {
@@ -129,10 +129,12 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
         // control surface on a host that isn't this one.
         enableDemoProfile();
 
-        // Import AFTER the environment is shaped — `src/app.ts` boots itself on import, seeding
-        // `shop` before it starts listening.
+        // Import AFTER the environment is shaped. `createApp()` (SK-D2) builds the app; its own
+        // `start()` seeds `shop` (via `restoreScenario`, since `enableDemoProfile()` above turned
+        // the demo profile on) before it starts listening.
         const port = process.env.NODE_PORT ?? '3000';
         return import('../src/app')
+            .then(({ createApp }) => createApp().start())
             .then(() => waitUntilListening(port))
             .then(() => {
                 console.log(`[demo] API listening on :${port} — seeded, cache/queue disabled.`);

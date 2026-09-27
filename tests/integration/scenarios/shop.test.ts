@@ -24,7 +24,7 @@
  */
 
 import { connect, disconnect } from '@tests/database';
-import { app } from '../../../src/app';
+import { createApp } from '../../../src/app';
 import { buildScenario } from '@scenarios/index';
 import { assertScenarioGuarantees } from '@scenarios/check';
 import { productModel, toProduct } from '@modules/products/model';
@@ -77,9 +77,11 @@ const wireShape = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 let subjects: Readonly<Record<string, string>>;
 
 // `products.seed()` writes its rows' `translations` through the same write surface
-// `productService.writeCreate` does. The `app` import above already registers every enabled
-// module — including `products`' own `translatables` declaration — at import time, so nothing
-// here builds that lookup by hand.
+// `productService.writeCreate` does. `createApp()` below already registers every enabled
+// module — including `products`' own `translatables` declaration — so nothing here builds that
+// lookup by hand.
+const { app } = createApp();
+
 beforeAll(async () => {
     subjects = await buildScenario('shop', app);
 }, BUILD_TIMEOUT_MS);

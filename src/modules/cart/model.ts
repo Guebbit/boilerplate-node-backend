@@ -16,9 +16,10 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
 /**
  * A stored cart line.
  *
- * `productId` is an `ObjectId` and stays one. `populate('items.productId')` overwrites the field in
- * place at runtime, so the id has to be read BEFORE populating — `./services/view`'s `readCartLines`
- * is the one place that does it, and it returns the id and the joined product as separate fields.
+ * `productId` is an `ObjectId` and stays one — no `ref` into `Product`, and no `populate()`
+ * anywhere in this module: `./services/view`'s `readCartLines` joins the referenced product
+ * through `@modules/products`' own service (`findManyByIds`), never this collection's Mongoose
+ * reference, so cart reaches products through its public door rather than its storage.
  */
 export interface CartItem {
     productId: Types.ObjectId;
@@ -78,7 +79,6 @@ const cartItemSchema = new Schema(
     {
         productId: {
             type: Schema.Types.ObjectId,
-            ref: 'Product',
             required: true
         },
         quantity: {

@@ -231,6 +231,9 @@ const orderLineProductSchema = new Schema(
         tags: { type: [String] },
         active: { type: Boolean },
         requiresShipping: { type: Boolean },
+        /** SH4, frozen the same as every other line field — see `Product.sku`. No uniqueness
+         * constraint here: the constraint is on the CATALOGUE, and a frozen copy is history. */
+        sku: { type: String },
         /** Grams, frozen the same as every other line field — see `Product.weight`. */
         weight: { type: Number, min: 0 },
         deletedAt: { type: Date },

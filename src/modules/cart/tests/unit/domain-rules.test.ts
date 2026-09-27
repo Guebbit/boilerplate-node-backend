@@ -31,7 +31,7 @@ describe('evaluateCheckout', () => {
         expect(evaluateCheckout([line(1, 10), line(2, 10)])).toEqual({ ok: true });
     });
 
-    // `null` is the real case: `populate()` writes it when the product was hard-deleted.
+    // `null` is the real case: the catalogue join resolves it when the product was hard-deleted.
     it.each([
         ['a deleted product (null)', null],
         ['an absent product (undefined)', undefined]
@@ -46,9 +46,9 @@ describe('evaluateCheckout', () => {
     });
 
     /*
-     * `populate()` follows the reference regardless of visibility — an inactive or soft-deleted
-     * product still joins, `active`/`deletedAt` and all, unlike a hard-deleted one. This is what
-     * lets a refusal here still NAME the product: the row is right there to read a title off.
+     * The catalogue join is unscoped — an inactive or soft-deleted product still joins,
+     * `active`/`deletedAt` and all, unlike a hard-deleted one. This is what lets a refusal here
+     * still NAME the product: the row is right there to read a title off.
      */
     it.each([
         ['deactivated', { title: 'Old Favourite', active: false }],

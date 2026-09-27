@@ -11,6 +11,7 @@ import { makeLocale, makeLocaleEntry } from '@modules/locales/factories';
 import { localeRepository, localeEntryRepository } from '@modules/locales/repository';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { getFallbackLocale } from '@infrastructure/i18n';
+import type { Caller } from './flows/client';
 
 /** The seeded languages, named by what each one is here to demonstrate. */
 const SEED_LOCALE_TAGS = {
@@ -230,3 +231,22 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
 
     return [...languages, ...entries];
 };
+
+/**
+ * The one demo-history step this module contributes: an operator overriding a dictionary entry
+ * that already has a deployed translation, so the audit trail shows a wording edit alongside the
+ * price edit `flows/shop-history.ts`'s own `driveCatalogueEdits` makes. Declared here, wired into
+ * `shopModules.locales.driveHistoryEdit` (`./shop-modules`), and CALLED from there rather than
+ * hardcoded into the flow — deleting this module removes the step along with everything else it
+ * owns, instead of leaving a dangling `/locales` call for the flow to 404 on.
+ *
+ * Overrides `SEED_LOCALE_TAGS.answerable`'s entry — the one seeded language with both a stored row
+ * and a deployed dictionary file, so this write is a real override rather than a stray one.
+ * @param owner - the signed-in operator driving the demo history
+ */
+export const driveLocaleEntryEdit = (owner: Caller): Promise<void> =>
+    owner
+        .call('PUT', `/locales/${SEED_LOCALE_TAGS.answerable}/entries/65e0200a9a7d4b2e1c0f3101`, {
+            value: 'Sessione scaduta. Effettua di nuovo l’accesso.'
+        })
+        .then(() => undefined);

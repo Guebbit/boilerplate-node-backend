@@ -6,9 +6,10 @@
  *
  * Boots the app in-process:  `shop` LIVES its history by driving the real checkout, payment,
  *                            shipping and refund endpoints (`scenarios/flows/`), which exist only
- *                            behind the real middleware stack. `NODE_APP_NO_LISTEN` keeps
- *                            `src/app.ts` off `NODE_PORT` — a container boot runs this BEFORE the
- *                            server it seeds for, so the flows get a loopback listener instead.
+ *                            behind the real middleware stack. `src/app.ts`'s `createApp()`
+ *                            (SK-D2) is called for its `boot()` alone, never `start()` — a
+ *                            container boot runs this BEFORE the server it seeds for, so the
+ *                            flows get a loopback listener instead of a bound `NODE_PORT`.
  * Refuses production:        a boot-time seeder that can drop or overwrite one is a footgun.
  * Refuses a public password: outside development/test, where a fixed demo login is the point.
  * Refuses a non-empty one:   unless `--reset`. Driving a checkout twice makes two orders.
@@ -29,13 +30,6 @@ import { runScript } from '../scripts/run-script';
 import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/index';
 import { hasFallbackSeedPassword, seedCredentials } from '@scenarios/accounts';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from '@scenarios/rate-limits';
-
-/*
- * Read at IMPORT time by `src/app.ts`'s auto-start, so it has to be set before the dynamic import
- * below ever runs — and at the top level, so the cleanup path cannot import the app without it.
- * This script wants the Express instance, never a bound `NODE_PORT`.
- */
-process.env.NODE_APP_NO_LISTEN = '1';
 
 /*
  * OVERRIDES `.env`, which is the whole point: a deployment's budgets are sized for a person, and
@@ -86,14 +80,15 @@ const describeTo = process.argv
     .find((argument) => argument.startsWith('--describe-to='))
     ?.slice('--describe-to='.length);
 
-/** The application, once {@link seed} has booted it — what the cleanup below has to shut down. */
-let application: typeof import('../src/app') | undefined;
+/** The instance {@link seed} has booted — what the cleanup below has to shut down. */
+let application: { stop: () => Promise<void> } | undefined;
 
 /** Import the app, connect everything a request needs, and hand back its Express instance. */
 const bootAppInProcess = () =>
-    import('../src/app').then((imported) => {
-        application = imported;
-        return imported.bootInfrastructure().then(() => imported.app);
+    import('../src/app').then(({ createApp }) => {
+        const instance = createApp();
+        application = instance;
+        return instance.boot().then(() => instance.app);
     });
 
 /** Boots the app, refuses the unsafe cases, then builds and applies the named scenario. */
@@ -185,20 +180,20 @@ async function seed() {
 /*
  * Cleanup lives in the runner's `finally`, not at the end of `seed()`: a throw partway through
  * would otherwise skip it and leave the Mongo and Redis sockets open, hanging the process.
- * `stopServer` closes everything `bootInfrastructure` opened, the locale-refresh interval
- * included. Nothing to do when a gate returned before the app was ever imported.
+ * `stop()` closes everything `boot()` opened, the locale-refresh interval included. Nothing to
+ * do when a gate returned before the app was ever imported.
  *
  * `process.exit()`, not the bare promise `runScript` usually resolves into: importing `../src/app`
  * pulls in `@opentelemetry/instrumentation`'s ESM patching (`otel-sdk.ts`), which registers a
  * `module.register()` loader hook backed by its own worker thread. That hook is process-lifetime
- * by design — nothing this file or `stopServer()` calls can unregister it — so without a forced
- * exit the event loop never drains and the process hangs forever after logging completion. Safe
- * here specifically: by this point `stopServer()` has already awaited `shutdownAnalytics()` and
+ * by design — nothing this file or `stop()` calls can unregister it — so without a forced exit
+ * the event loop never drains and the process hangs forever after logging completion. Safe here
+ * specifically: by this point `stop()` has already awaited `shutdownAnalytics()` and
  * `shutdownTracing()`, the two steps with async transport writes in flight, so nothing is
  * truncated. Every other `runScript` caller (`scripts/db/`, `scripts/ops/`) never imports `src/app.ts` and so
  * never hits this hook, which is why `run-script.ts` itself stays on `process.exitCode`.
  */
 // `undefined`: the demo seeder, not a `docker/crontab` job — see `run-script.ts`.
-void runScript(undefined, seed, () => application?.stopServer() ?? Promise.resolve()).then(() =>
+void runScript(undefined, seed, () => application?.stop() ?? Promise.resolve()).then(() =>
     process.exit(process.exitCode ?? 0)
 );

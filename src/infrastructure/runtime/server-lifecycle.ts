@@ -65,7 +65,7 @@ export const listenOn = (app: Express, port: number, host?: string): Promise<Ser
  * socket, and a restart policy only acts on a process that exited.
  *
  * @param error - why the boot failed
- * @param stopFunction - the teardown to run first (normally `stopServer`)
+ * @param stopFunction - the teardown to run first (normally `createApp()`'s own `stop`)
  */
 export const failBoot = (error: unknown, stopFunction: () => Promise<void>): Promise<void> => {
     // Stryker disable next-line all

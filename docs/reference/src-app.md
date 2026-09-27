@@ -13,7 +13,8 @@ one way — `infrastructure` → `kernel` → `modules` → `app` — and `eslin
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
 flowchart TD
-    Cluster["src/cluster.ts<br/><i>the entry point</i>"] --> App["src/app.ts<br/><i>the boot sequence</i>"]
+    Cluster["src/cluster.ts<br/><i>the entry point</i>"] --> Serve["src/serve.ts<br/><i>start + wire signals</i>"]
+    Serve --> App["src/app.ts<br/><i>createApp(): builds the app</i>"]
     App --> Install["src/app/*<br/><i>six install steps</i>"]
     App --> Mods["src/modules.ts<br/><i>what is enabled</i>"]
     Mods --> Kernel["src/kernel/*<br/><i>what a module IS</i>"]
@@ -21,19 +22,20 @@ flowchart TD
     classDef boot fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef asm fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef ker fill:#ddd6fe,stroke:#7c3aed,color:#111827;
-    class Cluster,App boot;
+    class Cluster,Serve,App boot;
     class Install,Mods asm;
     class Kernel ker;
 ```
 
 ## The top of `src/`
 
-| File               | What it is                                                                                                                                                                                                                                                    | Read next                                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `src/cluster.ts`   | The process entry point named by `package.json`, and what `npm start` runs. Forks one worker per core and restarts a worker that dies. Point `main` at `src/app.ts` instead to run single-process.                                                            | [Clustering & Shutdown](../theory/clustering.md)                                              |
-| `src/app.ts`       | The boot sequence, and the only file that knows the order. Tracing starts before anything instrumented is imported, then environment validation, database, cache and queue, then the six `install*` calls that **are** the middleware stack in request order. | [Reading Path](../theory/reading-path.md) · [Request Flow](../theory/request-flow.md)         |
-| `src/modules.ts`   | The list of domains this build serves: one import and one array entry each, kept alphabetical. Enabling or disabling a domain is one line here — there is no filesystem discovery and no auto-registration.                                                   | [Modules](../theory/modules.md) · [Adding & Removing a Module](../theory/module-lifecycle.md) |
-| `src/globals.d.ts` | The ambient declarations that widen Express's `Request` — the per-request additions (uploaded image URLs, locale, translator, observability handle) that middlewares attach and controllers read. Without it those reads are type errors.                     | [Request Input](../theory/request-input.md)                                                   |
+| File               | What it is                                                                                                                                                                                                                                                                                               | Read next                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `src/cluster.ts`   | The process entry point named by `package.json`, and what `npm start` runs. Forks one worker per core (each running `src/serve.ts`) and restarts a worker that dies. Point `main` at `src/serve.ts` instead to run single-process.                                                                       | [Clustering & Shutdown](../theory/clustering.md)                                              |
+| `src/app.ts`       | `createApp()` (SK-D2): builds one Express app and hands back `{ app, boot, start, stop }`. Tracing starts before anything instrumented is imported; `boot` brings up database/cache/queue/i18n, `start` adds the demo profile's own data and listens. Calling it is the side effect, not importing it.   | [Reading Path](../theory/reading-path.md) · [Request Flow](../theory/request-flow.md)         |
+| `src/serve.ts`     | The only file that calls `createApp().start()` — wires `stop()` to the process signals. What a worker, or `dev:docker`, actually runs; `tests/support/http.ts`, `scenarios/apply.ts` and `scenarios/run-server.ts` call `createApp()` themselves instead, for the parts of the lifecycle each one needs. | [Clustering & Shutdown](../theory/clustering.md)                                              |
+| `src/modules.ts`   | The list of domains this build serves: one import and one array entry each, kept alphabetical. Enabling or disabling a domain is one line here — there is no filesystem discovery and no auto-registration.                                                                                              | [Modules](../theory/modules.md) · [Adding & Removing a Module](../theory/module-lifecycle.md) |
+| `src/globals.d.ts` | The ambient declarations that widen Express's `Request` — the per-request additions (uploaded image URLs, locale, translator, observability handle) that middlewares attach and controllers read. Without it those reads are type errors.                                                                | [Request Input](../theory/request-input.md)                                                   |
 
 ## `src/app/` — assembly
 
