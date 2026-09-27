@@ -8,25 +8,7 @@
 
 import { findOwnOrders } from '@modules/orders';
 import { invoicingRepository } from '../repository';
-import type { InvoiceDocument, CreditNoteDocument } from '../model';
-
-/** One issued document, in export-wire shape — never the full internal document. */
-export interface ExportedDocument {
-    orderId: string;
-    number: string;
-    issuedAt: Date;
-    currency: string;
-    grandTotal: number;
-}
-
-/** Formats a frozen document for the export envelope. */
-const toExported = (document: InvoiceDocument | CreditNoteDocument): ExportedDocument => ({
-    orderId: String(document.orderId),
-    number: document.number,
-    issuedAt: document.issuedAt,
-    currency: document.currency,
-    grandTotal: document.grandTotal
-});
+import { presentExportedDocument, type ExportedDocument } from '../presenter';
 
 /**
  * Every invoice and credit note issued for one account's own orders — collected by first reading
@@ -46,9 +28,11 @@ export const collectPersonalData = (
                 ])
             )
         ).then((pairs) => ({
-            invoices: pairs.flatMap(([invoice]) => (invoice ? [toExported(invoice)] : [])),
+            invoices: pairs.flatMap(([invoice]) =>
+                invoice ? [presentExportedDocument(invoice)] : []
+            ),
             creditNotes: pairs.flatMap(([, creditNote]) =>
-                creditNote ? [toExported(creditNote)] : []
+                creditNote ? [presentExportedDocument(creditNote)] : []
             )
         }))
     );
