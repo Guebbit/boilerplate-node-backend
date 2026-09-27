@@ -1,9 +1,10 @@
 /**
  * @module
  * Outbound webhooks: subscriptions, the delivery log, and the admin surface over both. Reacts to
- * `order.created`, `order.status_changed` (filtered to `paid`/`shipped`), `order.cancelled`,
- * `payment.succeeded` and `payment.failed` via the domain-event bus — the reverse edge described in
- * `docs/modules/webhooks.md`, so `orders`/`payments` never import this module.
+ * every domain event a registered module's manifest names a `publicEvents` entry for
+ * (`kernel/registry.ts`'s `PublicEventTarget`, DDD-D4) via the domain-event bus — the reverse edge
+ * described in `docs/modules/webhooks.md`, so this module never imports `orders`/`payments`, nor
+ * they it.
  *
  * Declares its own queue consumer below, rather than `app/workers.ts` naming
  * `WORKER_CHANNELS.WEBHOOK_DELIVER` directly — see `ModuleConsumer` (`@kernel/registry.ts`).
@@ -14,10 +15,22 @@
  */
 
 import path from 'node:path';
-import type { AppModule } from '@kernel/registry';
+import { resolvePublicEvents, type AppModule } from '@kernel/registry';
 import { WORKER_CHANNELS, WebhookDeliverJobPayloadSchema } from '@types';
 import { router } from './routes';
 import { subscribeToWebhookEvents, processDeliveryJob } from './services';
+
+/**
+ * Once every enabled module is known, collect their `publicEvents` declarations and subscribe —
+ * `subscribe()` itself runs too early for this: the full module list DDD-D4's registry lookup
+ * needs only exists by `onRegistered`, the same reason `locales`' `translatables` lookup is built
+ * here rather than at `subscribe()` time.
+ *
+ * @param modules - every enabled module, in registration order
+ */
+const onRegistered = (modules: readonly AppModule[]): void => {
+    subscribeToWebhookEvents(resolvePublicEvents(modules));
+};
 
 /** This module's manifest entry. */
 export default {
@@ -36,7 +49,7 @@ export default {
         'webhooks.any.update',
         'webhooks.any.delete'
     ],
-    subscribe: subscribeToWebhookEvents,
+    onRegistered,
     /*
      * `handler: processDeliveryJob` directly, no separate guard in front of it: `schema` below
      * already refuses a job missing any required field before `consumeFromQueue` ever calls the
