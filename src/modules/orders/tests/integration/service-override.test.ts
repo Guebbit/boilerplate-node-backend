@@ -120,4 +120,19 @@ describe('forceMove', () => {
 
         expect(updated).toBeNull();
     });
+
+    it('refuses on its own when the caller lacks orders.any.override, even called directly', async () => {
+        // `warehouse` holds `delivery.any.update` but not `orders.any.override` — exactly the
+        // caller `delivery/service.ts`'s own gate already stops; this proves `forceMove` does not
+        // depend on that gate having run.
+        const order = await seedOrder(OrderStatus.paid);
+        const context = callerContextAs('warehouse', 'warehouse-1');
+
+        const result = await forceMove(String(order._id), 'shipped', 'trying anyway', context);
+
+        expect(result).toMatchObject({ success: false, status: 403 });
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.paid);
+        expect(stored?.statusOverrides ?? []).toHaveLength(0);
+    });
 });

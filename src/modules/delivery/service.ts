@@ -20,7 +20,13 @@ import { OrderStatus } from '@types';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { deliveryAuditActions } from './audit';
-import { orderService, canTransition, canOverrideTo, mailBuyer } from '@modules/orders';
+import {
+    orderService,
+    canTransition,
+    canOverrideTo,
+    mailBuyer,
+    isForceMoveRefusal
+} from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { holdsKey } from '@kernel/ability';
 import { findShippingMethod, SHIPPING_METHODS } from './domain';
@@ -194,6 +200,8 @@ const afterShipmentRecorded = (
         : orderService.markShipped(orderId);
 
     return moveOrder.then((moved) => {
+        // Checked FIRST: a refusal object is truthy, so `!moved` alone would treat it as a move.
+        if (isForceMoveRefusal(moved)) return moved;
         if (!moved) return notProcessing();
 
         return notifyShipped(orderId, order, shipment).then(() => {
@@ -278,6 +286,8 @@ const moveAndStampDelivered = (
         : orderService.markDelivered(orderId);
 
     return moveOrder.then((moved) => {
+        // Checked FIRST: a refusal object is truthy, so `!moved` alone would treat it as a move.
+        if (isForceMoveRefusal(moved)) return moved;
         if (!moved) return notShipped();
 
         return shipmentRepository

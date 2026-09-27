@@ -24,6 +24,7 @@ import {
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { holdsKey } from '@kernel/ability';
 import type { OrderDocument, OrderStatusOverride } from '../model';
 import { orderRepository } from '../repository';
 import { ORDER_STATUS_CHANGED } from '../events';
@@ -122,6 +123,25 @@ const notAllowed = (from: OrderStatus, to: OrderStatus): ResponseReject =>
     ]);
 
 /**
+ * The 403 {@link forceMove} answers with on its own, same shape as `delivery/service.ts`'s
+ * `refuseUnearnedForce` — the two checks refuse the same missing permission, from two different
+ * doors, and must read identically to a client either way.
+ */
+const notEarned = (): ResponseReject =>
+    generateReject(403, [{ code: 'FORBIDDEN', message: t('generic.error-forbidden') }]);
+
+/**
+ * `true` only for {@link forceMove}'s own 403 — never for `null`, which stays the ordinary
+ * "no longer legal" outcome `markShipped`/`markDelivered` already use. Callers must check this
+ * FIRST: a `ResponseReject` object is truthy, so an unguarded `if (!moved)` would treat a refused
+ * caller as a successful move.
+ */
+export const isForceMoveRefusal = (value: unknown): value is ResponseReject =>
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { success?: unknown }).success === false;
+
+/**
  * `POST /orders/{id}/status-override` — an override holder moves an order forward with no parcel
  * and no shipped email, for the cases those consequences would be wrong (a manual correction, a
  * parcel that was never going to be tracked through the normal doors). Webhooks still fire — a
@@ -152,24 +172,31 @@ export const overrideStatus = (
     });
 
 /**
- * What `delivery`'s ship/deliver doors call when their own caller passed `forced: true` — they
- * have already confirmed the caller holds `orders.any.override` and that `reason` is non-empty;
- * this only enforces that `to` is itself a legal override destination from wherever the order
- * happens to stand right now; `delivery` still writes the parcel record around this call.
+ * What `delivery`'s ship/deliver doors call when their own caller passed `forced: true` — `delivery`
+ * already checks `reason` is non-empty and still writes the parcel record around this call, but
+ * `orders.any.override` itself is checked HERE too, not only at `delivery`'s own gate
+ * (`refuseUnearnedForce`): a second caller reaching this function directly, forgetting that check,
+ * must not be able to force a move a stranger could never have earned. Past that gate, this only
+ * enforces that `to` is itself a legal override destination from wherever the order happens to
+ * stand right now.
  * @param orderId - the order to move
  * @param to - `shipped` or `delivered` — `delivery`'s two doors are the only callers
  * @param reason - required, already validated non-empty by the caller
- * @param context - the override holder
- * @returns the order as it now stands, or `null` if the move was no longer legal (lost a race, or
- *   the order had already moved past `to`)
+ * @param context - the caller, checked here for `orders.any.override`
+ * @returns a 403 {@link ResponseReject} if `context.caller` lacks `orders.any.override`; otherwise
+ *   the order as it now stands, or `null` if the move was no longer legal (lost a race, or the
+ *   order had already moved past `to`) — see {@link isForceMoveRefusal} for telling the two apart
  */
 export const forceMove = (
     orderId: string,
     to: Extract<OrderStatus, 'shipped' | 'delivered'>,
     reason: string,
     context: CallerContext
-): Promise<OrderDocument | null> =>
-    orderRepository.findByIdScoped(orderId).then((order) => {
+): Promise<OrderDocument | null | ResponseReject> => {
+    if (!holdsKey(context.caller, 'orders.any.override')) return Promise.resolve(notEarned());
+
+    return orderRepository.findByIdScoped(orderId).then((order) => {
         if (!order || !canOverrideTo(order.status, to)) return null;
         return applyOverride(orderId, order.status, to, 'forced', reason, context);
     });
+};

@@ -60,7 +60,7 @@ export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './plac
 export { sendOrderPlacedEmail, mailBuyer } from './notify';
 export { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
 export { markPaid, markProcessing, markShipped, markDelivered } from './status';
-export { overrideStatus, forceMove } from './override';
+export { overrideStatus, forceMove, isForceMoveRefusal } from './override';
 export { detachUserId, anonymizeDueOrders } from './retention';
 export { callerScope, actorOf, ownerScope, withActions } from './scope';
 export { unavailableLines, cancelPendingOrdersHolding, type UnavailableLine } from './availability';
