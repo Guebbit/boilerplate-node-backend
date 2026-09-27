@@ -9,6 +9,7 @@ import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/htt
 import { catchAs, refused } from '@infrastructure/http/controller';
 import type { WebhookSubscriptionCreated } from '@types';
 import { webhooksService } from '../services';
+import { presentWebhookSubscription } from '../presenters';
 
 /**
  * POST /webhooks/subscriptions/:id/rotate-secret
@@ -27,9 +28,7 @@ export const rotateWebhookSubscriptionSecret = (
         .then((result) => {
             if (refused(response, result)) return;
             return successResponse<WebhookSubscriptionCreated>(response, {
-                // `.toJSON()` applies the model's `_id` → `id` transform; the document is typed as
-                // stored, not as the wire shape `WebhookSubscriptionCreated` promises.
-                ...(result.data.subscription.toJSON() as WebhookSubscriptionCreated),
+                ...presentWebhookSubscription(result.data.subscription),
                 newSecret: result.data.newSecret
             });
         })

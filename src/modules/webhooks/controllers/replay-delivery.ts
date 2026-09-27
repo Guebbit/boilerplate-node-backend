@@ -10,6 +10,7 @@ import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/htt
 import { catchAs, refused } from '@infrastructure/http/controller';
 import type { WebhookDelivery } from '@types';
 import { webhooksService } from '../services';
+import { presentWebhookDelivery } from '../presenters';
 
 /**
  * POST /webhooks/deliveries/:id/replay
@@ -26,10 +27,7 @@ export const replayWebhookDelivery = (request: Request<{ id: string }>, response
         .replayDelivery(id, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            return successResponse<WebhookDelivery>(
-                response,
-                result.data.toJSON() as WebhookDelivery
-            );
+            return successResponse<WebhookDelivery>(response, presentWebhookDelivery(result.data));
         })
         .catch(catchAs(response, 'replayWebhookDelivery'));
 };
