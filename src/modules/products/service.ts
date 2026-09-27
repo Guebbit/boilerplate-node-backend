@@ -46,10 +46,10 @@ import {
     zodProductCreateSchema,
     zodProductReplaceSchema,
     zodProductUpdateSchema,
-    toProduct,
     DEFAULT_PRODUCT_IMAGE_URL
 } from './model';
 import type { ProductDocument } from './model';
+import { presentProduct } from './presenter';
 import { productRepository } from './repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { toSearchPattern } from '@infrastructure/persistence/search';
@@ -202,11 +202,11 @@ export const searchViewed = (
  * Get a single product by ID, already resolved to the caller's locale.
  * Returns undefined if the id is falsy; null if no matching document is found.
  *
- * The wire shape, not a hydrated document: `.toJSON()` runs here — before translation resolution,
- * never after, since resolution is a plain-object overlay that would otherwise lose whatever the
- * document's own transform computes (`available`, `_id` → `id`, dates to ISO strings). Unlike
+ * The wire shape, not a hydrated document: `presentProduct` runs here — before translation
+ * resolution, never after, since resolution is a plain-object overlay that would otherwise lose
+ * whatever the presenter computes (`available`, `_id` → `id`, dates to ISO strings). Unlike
  * `orders`'/`users`' own `getById`, which hand back the Mongoose document itself — neither of
- * those has a locale-resolution step forcing an earlier `.toJSON()`.
+ * those has a locale-resolution step forcing an earlier presenting.
  *
  * @param scope - which rows this caller may read ({@link callerScope})
  */
@@ -220,9 +220,7 @@ export const getById = (
     return productRepository.findByIdScoped(id, scope).then((product) => {
         if (!product) return product;
 
-        // A single `as` narrows a cast the compiler cannot see through: `toJSON()`'s return type is
-        // the schema's own `Document['toJSON']` overload, not this module's wire type.
-        return applyTranslations('product', [product.toJSON() as Product]).then(
+        return applyTranslations('product', [presentProduct(product)]).then(
             ([resolved]) => resolved
         );
     });
@@ -578,7 +576,7 @@ export const getAdmin = (id: string): Promise<ProductAdmin | null> =>
                     ...(product.description ? { description: product.description } : {})
                 };
 
-            return { ...toProduct(product), translations };
+            return { ...presentProduct(product), translations };
         });
     });
 
@@ -745,9 +743,9 @@ export const productService = {
     remove,
     removeById,
     restoreById,
-    // A controller may not reach `./model` directly (the persistence wall), so the shaping
+    // A controller may not reach `./presenter` directly (the persistence wall), so the shaping
     // helper it needs to build a response rides through the service instead.
-    toProduct,
+    toProduct: presentProduct,
     findByIdRaw,
     findPublicById,
     findManyByIds,
