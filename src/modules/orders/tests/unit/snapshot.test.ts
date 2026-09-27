@@ -150,6 +150,30 @@ describe('freezeOrderLines — the VAT rate', () => {
         });
     });
 
+    it('freezes the product’s sku onto the line, same as every other field (SH4)', () => {
+        registerTranslationPort(fakePort());
+
+        return freezeOrderLines(
+            'en',
+            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: 10, sku: 'DOG-BED-15KG' }],
+            [1]
+        ).then(([item]) => {
+            expect(item.product.sku).toBe('DOG-BED-15KG');
+        });
+    });
+
+    it('leaves sku absent when the product has none, rather than defaulting it (SH4)', () => {
+        registerTranslationPort(fakePort());
+
+        return freezeOrderLines(
+            'en',
+            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: 10 }],
+            [1]
+        ).then(([item]) => {
+            expect(item.product.sku).toBeUndefined();
+        });
+    });
+
     it('never carries `taxClass` on the frozen line — only the resolved rate', () => {
         // The type-level guarantee (`FrozenOrderLineProduct` omits it) restated at runtime: an
         // order line must not even be able to hold the class it came from.

@@ -96,6 +96,8 @@ paths:
                                 $ref: '#/components/schemas/ProductEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # SH4: a `sku` colliding with another product's.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -197,6 +199,8 @@ paths:
                                 $ref: '#/components/schemas/ProductEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # SH4: a `sku` colliding with another product's.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
@@ -245,6 +249,8 @@ paths:
                                 $ref: '#/components/schemas/ProductEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # SH4: a `sku` colliding with another product's.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
@@ -455,6 +461,8 @@ components:
                     description: ISO-4217 currency code (e.g. EUR) — see `Product.currency`.
                 taxClass:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                sku:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 onHand:
                     type: integer
                     minimum: 0
@@ -629,6 +637,8 @@ components:
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                sku:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 # The opening count — the one place an ABSOLUTE stock number is honest, because
                 # a product being created has no prior value to race with and no history to
                 # contradict. Every later change is a signed `/inventory` transition.
@@ -702,6 +712,8 @@ components:
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                sku:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 # The opening count — the one place an ABSOLUTE stock number is honest, because
                 # a product being created has no prior value to race with and no history to
                 # contradict. Every later change is a signed `/inventory` transition.
@@ -764,6 +776,10 @@ components:
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                sku:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 active:
                     type: boolean
                 requiresShipping:
@@ -803,6 +819,10 @@ components:
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                sku:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 active:
                     type: boolean
                 requiresShipping:
@@ -845,6 +865,10 @@ components:
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                sku:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 active:
                     type: boolean
                 requiresShipping:
@@ -889,6 +913,10 @@ components:
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                sku:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 active:
                     type: boolean
                 requiresShipping:

@@ -243,6 +243,55 @@ describe('PATCH /products/{id}', () => {
     });
 });
 
+describe('SKU (SH4)', () => {
+    it('creates a product carrying a sku', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({
+                price: 24.9,
+                sku: 'DOG-BED-15KG',
+                translations: { en: { title: 'Dog Bed' } }
+            });
+
+        expect(response.status).toBe(201);
+        expect(response.body.data.sku).toBe('DOG-BED-15KG');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // Unique across the catalogue, not per request — the sparse unique index
+    // (`products/model.ts`'s `products_sku`) is what a second product colliding with an
+    // ALREADY-STORED sku refuses against, same 409 shape `users`' duplicate email answers with.
+    it('409s a sku that collides with another product', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        await createProduct({ title: 'Existing', sku: 'DUP-1' });
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({ price: 10, sku: 'DUP-1', translations: { en: { title: 'Collides' } } });
+
+        expect(response.status).toBe(409);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('clears a sku back to unset on an explicit null', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed', price: 10, sku: 'BED-1' });
+
+        const response = await api()
+            .patch(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ sku: null });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.sku).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
 describe('GET /products/{id}/admin', () => {
     it('matches the contract, returning every language the product has', async () => {
         const { bearer } = await authenticateAsRole('editor');

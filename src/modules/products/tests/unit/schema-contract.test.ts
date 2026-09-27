@@ -7,7 +7,14 @@
  */
 
 import { productSchema, applyProductTransform } from '@modules/products/model';
-import { defaultOf, indexSpecs, optionsOf, pathOptions, requiredPaths } from '@tests/schema';
+import {
+    defaultOf,
+    indexOptionSpecs,
+    indexSpecs,
+    optionsOf,
+    pathOptions,
+    requiredPaths
+} from '@tests/schema';
 
 /** A serialized product as the transform receives it, before `available` is added. */
 const serialize = (onHand: unknown, reserved: unknown) => {
@@ -68,13 +75,22 @@ describe('productSchema — what a product must carry', () => {
 });
 
 describe('productSchema — indexes', () => {
-    it('declares exactly the two documented indexes, named', () => {
+    it('declares exactly the three documented indexes, named', () => {
         // `products_createdAt` is newest-first for the listing; `products_active_deletedAt` is the
-        // public visibility scope — the pair of conditions every anonymous read applies.
+        // public visibility scope — the pair of conditions every anonymous read applies;
+        // `products_sku` (SH4) is the uniqueness guarantee on an optional field.
         expect(indexSpecs(productSchema)).toEqual([
             'products_active_deletedAt: active+1, deletedAt+1',
-            'products_createdAt: createdAt-1'
+            'products_createdAt: createdAt-1',
+            'products_sku: sku+1'
         ]);
+    });
+
+    it('lets a sku repeat only by being absent — unique when set (SH4)', () => {
+        // Sparse: most products never carry a `sku` at all, and an unfiltered unique index would
+        // index every absent value as an equal `null`, colliding on the second such product —
+        // same reasoning as `orders`' `orders_transferReference`.
+        expect(indexOptionSpecs(productSchema)).toContain('products_sku: sparse=true, unique=true');
     });
 });
 
