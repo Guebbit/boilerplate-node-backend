@@ -117,6 +117,29 @@ wins:
 The resolver reads `.env` itself, because `npm run` does not. That way no script can quietly skip
 the file and aim at a different frontend than the others.
 
+### Worktrees sync into their own pair
+
+A backend branch in a linked `git worktree` pairs with a frontend worktree of its own. Point that
+worktree's `.env` at it:
+
+```sh
+FRONTEND_PATH=../../../../boilerplate-vue-frontend/.claude/worktrees/<lane>
+```
+
+`sync:frontend` refuses to write into the frontend's **main** checkout from a linked worktree.
+Frontend main takes a contract only from backend main, right after the merge it mirrors. Otherwise
+a branch's contract reaches frontend main before the backend code does, and the two mains disagree
+until the merge catches up. `--dry` still runs, since it writes nothing.
+
+```mermaid
+flowchart TD
+    A[npm run sync:frontend] --> B{This checkout is a<br/>linked worktree?}
+    B -- no: backend main --> W[Write into the resolved frontend]
+    B -- yes --> C{Resolved frontend is<br/>a main checkout?}
+    C -- no: its paired worktree --> W
+    C -- yes --> R[Refuse: point FRONTEND_PATH at the<br/>paired worktree, or sync after merging]
+```
+
 ### Seed credentials are published, not copied
 
 `NODE_SEED_ADMIN_PASSWORD` / `NODE_SEED_USER_PASSWORD` / `NODE_SEED_EDITOR_PASSWORD` /
