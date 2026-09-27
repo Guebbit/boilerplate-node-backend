@@ -14,7 +14,7 @@ import {
 } from '@api/schemas.zod';
 import { callerContextOf } from '@infrastructure/http/request';
 import { feedbackRequestService } from '../service';
-import type { FeedbackRequest } from '@types';
+import { presentFeedbackRequest } from '../presenter';
 
 /**
  * `adminNotes` gets a length cap the OpenAPI schema does not express — restated whole
@@ -33,7 +33,5 @@ export const { replace: replaceFeedbackStatus, update: updateFeedbackStatus } =
         patchSchema: UpdateFeedbackRequestStatusBody.extend({ adminNotes: adminNotesWithCap }),
         update: (id, changes, request) =>
             feedbackRequestService.updateStatusById(id, changes, callerContextOf(request)),
-        // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform; Mongoose
-        // types its result `any`, and that transform is what makes it a `FeedbackRequest`.
-        present: (row) => row.toJSON() as FeedbackRequest
+        present: (row) => presentFeedbackRequest(row)
     });
