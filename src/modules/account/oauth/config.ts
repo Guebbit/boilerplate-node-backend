@@ -73,10 +73,22 @@ const oauthFrontendCallbackBase = (): string =>
 
 /**
  * Where `GET /account/oauth/:provider/callback` sends the browser once it is done — the paired
- * frontend's origin, which is the only thing `NODE_FRONTEND_URL` is read for.
+ * frontend's ORIGIN is the only part `NODE_FRONTEND_URL` supplies; `continueTo` is the one
+ * request-derived piece of this URL, so callers must only ever pass a value already checked
+ * against `oauth/state.ts#isSameOriginPath` — never the raw cookie or query param.
+ *
+ * @param continueTo - the saved `?continue=` target, forwarded as-is so the frontend's own
+ *   `usePostLoginRedirect` can send the browser on from its landing page, exactly as it already
+ *   does for a password login's `?continue=`.
  */
-export const oauthFrontendCallbackUrl = (errorCode?: string): string =>
-    `${oauthFrontendCallbackBase()}${errorCode ? `?error=${errorCode}` : ''}`;
+export const oauthFrontendCallbackUrl = (errorCode?: string, continueTo?: string): string => {
+    const parameters = new URLSearchParams();
+    if (errorCode) parameters.set('error', errorCode);
+    if (continueTo) parameters.set('continue', continueTo);
+
+    const query = parameters.toString();
+    return `${oauthFrontendCallbackBase()}${query ? `?${query}` : ''}`;
+};
 
 /**
  * Where the callback sends the browser when the account has 2FA armed. Everything a client needs
@@ -86,9 +98,13 @@ export const oauthFrontendCallbackUrl = (errorCode?: string): string =>
  * @param challenge - `buildLoginChallenge`'s result, minus the token — never pass the whole
  *   `MfaChallenge` through unchecked, or a future refactor could serialize the token into the URL
  *   this function exists to keep it out of.
+ * @param continueTo - the saved `?continue=` target, already validated by the caller — see
+ *   {@link oauthFrontendCallbackUrl}. The frontend's 2FA step forwards it on again once the
+ *   challenge is answered, so the redirect a plain login would have landed on still happens.
  */
 export const oauthFrontendMfaCallbackUrl = (
-    challenge: Omit<MfaChallenge, 'mfaRequired' | 'challenge'>
+    challenge: Omit<MfaChallenge, 'mfaRequired' | 'challenge'>,
+    continueTo?: string
 ): string => {
     const parameters = new URLSearchParams({
         mfaRequired: '1',
@@ -96,6 +112,7 @@ export const oauthFrontendMfaCallbackUrl = (
         methods: JSON.stringify(challenge.methods)
     });
     if (challenge.defaultMethod) parameters.set('defaultMethod', challenge.defaultMethod);
+    if (continueTo) parameters.set('continue', continueTo);
 
     return `${oauthFrontendCallbackBase()}?${parameters.toString()}`;
 };

@@ -1,15 +1,16 @@
 /**
  * @module
- * The OAuth CSRF and PKCE handshakes — `oauth/state.ts`. Pure functions only: cookie plumbing is
- * exercised end to end by the integration/contract suites, this covers the comparison and both
- * token shapes.
+ * The OAuth CSRF and PKCE handshakes, plus the `continue` path guard — `oauth/state.ts`. Pure
+ * functions only: cookie plumbing is exercised end to end by the integration/contract suites,
+ * this covers the comparisons and both token shapes.
  */
 
 import {
     generateOAuthState,
     stateMatches,
     generateCodeVerifier,
-    codeChallengeOf
+    codeChallengeOf,
+    isSameOriginPath
 } from '../../oauth/state';
 
 describe('generateOAuthState', () => {
@@ -77,5 +78,30 @@ describe('codeChallengeOf', () => {
         expect(codeChallengeOf('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk')).toBe(
             'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM'
         );
+    });
+});
+
+describe('isSameOriginPath', () => {
+    it('accepts a single leading slash', () => {
+        expect(isSameOriginPath('/checkout')).toBe(true);
+    });
+
+    it('rejects a protocol-relative address — a browser follows it off-site', () => {
+        expect(isSameOriginPath('//evil.example/phish')).toBe(false);
+    });
+
+    it('rejects an absolute URL', () => {
+        expect(isSameOriginPath('https://evil.example/phish')).toBe(false);
+    });
+
+    it('rejects a path with no leading slash', () => {
+        expect(isSameOriginPath('checkout')).toBe(false);
+    });
+
+    it('rejects anything that is not a single string', () => {
+        expect(isSameOriginPath(undefined)).toBe(false);
+        // A repeated query param — express hands that back as an array, same trap `stateMatches` guards.
+        expect(isSameOriginPath(['/a', '/b'])).toBe(false);
+        expect(isSameOriginPath(42)).toBe(false);
     });
 });

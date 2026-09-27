@@ -1,12 +1,14 @@
 /**
  * @module
- * The two per-attempt cookies an OAuth login needs before it ever leaves for the provider:
+ * The per-attempt cookies an OAuth login needs before it ever leaves for the provider:
  * `state`, the CSRF handshake — a double-submit cookie, not a server-side session: the value is
  * minted and handed to the provider in the SAME response that sets it as a cookie, and the
- * callback trusts a request only when the two agree; and the PKCE `verifier`, which defeats a
+ * callback trusts a request only when the two agree; the PKCE `verifier`, which defeats a
  * stolen authorization CODE the way `state` defeats a forged CALLBACK — see
- * `docs/theory/defences/authentication.md#federated-login` for why both ship. Neither needs a new
- * server secret, unlike a signed token would.
+ * `docs/theory/defences/authentication.md#federated-login` for why both ship; and `continue`, the
+ * frontend path to send the browser back to once the round trip is done, the one piece of this
+ * handshake that is untrusted input and so the one cookie read back out validated, never trusted
+ * blind. Neither `state` nor `verifier` needs a new server secret, unlike a signed token would.
  */
 
 import { randomBytes, createHash } from 'node:crypto';
@@ -18,6 +20,9 @@ export const OAUTH_STATE_COOKIE = 'oauth_state';
 
 /** The PKCE verifier cookie — same lifetime and clearing points as {@link OAUTH_STATE_COOKIE}. */
 export const OAUTH_VERIFIER_COOKIE = 'oauth_verifier';
+
+/** The saved `?continue=` cookie — same lifetime and clearing points as {@link OAUTH_STATE_COOKIE}. */
+export const OAUTH_CONTINUE_COOKIE = 'oauth_continue';
 
 /** Minutes-scale on purpose: long enough to pick a Google account, short enough to bound reuse. */
 const OAUTH_COOKIE_TTL_MS = 5 * 60 * 1000;
@@ -68,6 +73,16 @@ export const destroyVerifierCookie = (response: Response): void => {
     response.clearCookie(OAUTH_VERIFIER_COOKIE, oauthCookieOptions());
 };
 
+/** Set the `continue` cookie for one login attempt — only ever called with an already-validated path. */
+export const createContinueCookie = (response: Response, continueTo: string): void => {
+    response.cookie(OAUTH_CONTINUE_COOKIE, continueTo, oauthCookieOptions());
+};
+
+/** Clear the `continue` cookie — called at every point {@link destroyStateCookie} is. */
+export const destroyContinueCookie = (response: Response): void => {
+    response.clearCookie(OAUTH_CONTINUE_COOKIE, oauthCookieOptions());
+};
+
 /**
  * Whether the callback's `state` query param matches the cookie set at the start of this attempt.
  * Neither side is secret — this defeats a forged callback, not a guessed one — so a plain
@@ -79,3 +94,15 @@ export const stateMatches = (cookieValue: unknown, queryValue: unknown): boolean
     typeof queryValue === 'string' &&
     cookieValue.length > 0 &&
     cookieValue === queryValue;
+
+/**
+ * Whether `value` is a same-origin, relative path — the one shape a `continue` target is ever
+ * allowed to take, matching the password-login flow's own guard
+ * (`usePostLoginRedirect#isSameOriginPath` on the frontend) exactly rather than inventing a
+ * second rule: one leading `/` rules out both an absolute URL and `//evil.example`, a
+ * protocol-relative address a browser follows off-site. Applied twice — once at the start
+ * controller, against the query param, and again at the callback, against the cookie it was
+ * saved into, since a cookie is client-writable and never trusted on its value alone.
+ */
+export const isSameOriginPath = (value: unknown): value is string =>
+    typeof value === 'string' && value.startsWith('/') && !value.startsWith('//');

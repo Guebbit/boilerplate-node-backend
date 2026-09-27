@@ -18,8 +18,11 @@ import {
     stateMatches,
     destroyStateCookie,
     destroyVerifierCookie,
+    destroyContinueCookie,
+    isSameOriginPath,
     OAUTH_STATE_COOKIE,
-    OAUTH_VERIFIER_COOKIE
+    OAUTH_VERIFIER_COOKIE,
+    OAUTH_CONTINUE_COOKIE
 } from '../oauth/state';
 import { createMfaChallengeCookie } from '../oauth/mfa-redirect';
 import {
@@ -40,12 +43,14 @@ import { authOauthTotal } from '../metrics';
 import { isUnrestrictedCaller } from '../roles';
 
 /**
- * Clears both single-attempt OAuth cookies — called at every outcome of one login attempt,
- * success or failure, since neither the state nor the verifier is any use past this callback.
+ * Clears all three single-attempt OAuth cookies — called at every outcome of one login attempt,
+ * success or failure, since none of the state, the verifier or the saved `continue` path is any
+ * use past this callback.
  */
 const clearOAuthCookies = (response: Response): void => {
     destroyStateCookie(response);
     destroyVerifierCookie(response);
+    destroyContinueCookie(response);
 };
 
 /**
@@ -86,6 +91,12 @@ export const getOAuthCallback = (request: Request, response: Response) => {
         rejectResponse(response, 400, [t('account.oauth.invalid-state')]);
         return;
     }
+
+    // Read only once `state` is trusted — a forged callback must not choose where a stranger's
+    // browser lands. Re-validated here too, not just at the start controller: a cookie is
+    // client-writable, so its value is never trusted on the strength of its name alone.
+    const savedContinue = cookieOf(request, OAUTH_CONTINUE_COOKIE);
+    const continueTo = isSameOriginPath(savedContinue) ? savedContinue : undefined;
 
     // A missing verifier must fail closed, not silently redeem the code without PKCE: a provider
     // that received no challenge at the start happily accepts an exchange with no verifier, so
@@ -137,7 +148,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                     ).then(() => {
                         authOauthTotal.inc({ provider: providerName, status: 'success' });
                         clearOAuthCookies(response);
-                        response.redirect(302, oauthFrontendCallbackUrl());
+                        response.redirect(302, oauthFrontendCallbackUrl(undefined, continueTo));
                     });
                 });
             }
@@ -146,7 +157,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                 createMfaChallengeCookie(response, challenge.challenge, challenge.expiresAt);
                 authOauthTotal.inc({ provider: providerName, status: 'mfa_required' });
                 clearOAuthCookies(response);
-                response.redirect(302, oauthFrontendMfaCallbackUrl(challenge));
+                response.redirect(302, oauthFrontendMfaCallbackUrl(challenge, continueTo));
             });
         })
         .catch((error: unknown) => {
