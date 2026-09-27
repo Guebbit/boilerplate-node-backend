@@ -14,24 +14,12 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { gitEnvironment } from '../git-base';
+
+export { gitEnvironment } from '../git-base';
 
 /** The repo root, two levels up from `scripts/docs/`. */
 export const ROOT = path.join(__dirname, '..', '..');
-
-/**
- * `process.env`, minus the three vars git exports into a hook's own process
- * (`GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`). The pre-commit hook runs this very check, so every
- * `execFileSync('git', …)` below must pass this instead of inheriting the ambient env: left in
- * place, a nested `git` call resolves against the HOOK's repo/tree rather than its own `cwd` —
- * silently the wrong repo whenever `cwd` is the paired frontend.
- */
-export const gitEnvironment = (): NodeJS.ProcessEnv => {
-    const environment = { ...process.env };
-    delete environment.GIT_DIR;
-    delete environment.GIT_WORK_TREE;
-    delete environment.GIT_INDEX_FILE;
-    return environment;
-};
 
 /**
  * Paths that legitimately do not exist in a clean checkout, each with the reason it is exempt.

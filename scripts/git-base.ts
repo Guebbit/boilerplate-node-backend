@@ -6,6 +6,23 @@ import path from 'node:path';
  */
 export const REPO_ROOT = path.join(__dirname, '..');
 
+/**
+ * `process.env`, minus the three vars git exports into every hook it runs
+ * (`GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`). A nested `git` call that targets some OTHER
+ * checkout by `cwd`/`-C` must use this: those vars, once set, override that targeting and point
+ * the nested call at the hook's own repo instead — silently, since the command still exits 0.
+ *
+ * Pass this as `env` to every `execFileSync('git', …)` whose `cwd` or `-C` argument is not
+ * `REPO_ROOT` itself.
+ */
+export const gitEnvironment = (): NodeJS.ProcessEnv => {
+    const environment = { ...process.env };
+    delete environment.GIT_DIR;
+    delete environment.GIT_WORK_TREE;
+    delete environment.GIT_INDEX_FILE;
+    return environment;
+};
+
 /** `git merge-base HEAD <ref>`, or `undefined` when git refuses to resolve `ref`. */
 const resolveRef = (ref: string): string | undefined => {
     try {

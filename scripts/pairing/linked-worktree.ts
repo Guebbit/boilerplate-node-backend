@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { gitEnvironment } from '../git-base';
 
 /**
  * Whether a checkout is a linked `git worktree`, rather than its repository's main working tree.
@@ -17,6 +18,9 @@ export const isLinkedWorktree = (directory: string): boolean | undefined => {
          * git rev-parse: `--git-dir` is this checkout's own git dir, `--git-common-dir` the one
          * shared by every worktree. `--path-format=absolute` makes the two comparable as strings.
          * Stderr is dropped: outside a repository, "not a git repository" is the expected answer.
+         * `env: gitEnvironment()` matters when the caller itself runs inside a git hook: git
+         * exports `GIT_DIR`/`GIT_WORK_TREE` into the hook's process, and those override `-C`,
+         * pointing this call at the HOOK's checkout instead of `directory`.
          * https://git-scm.com/docs/git-rev-parse
          */
         output = execFileSync(
@@ -29,7 +33,7 @@ export const isLinkedWorktree = (directory: string): boolean | undefined => {
                 '--git-dir',
                 '--git-common-dir'
             ],
-            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: gitEnvironment() }
         );
     } catch {
         return undefined;

@@ -14,6 +14,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { gitEnvironment } from '../../../../scripts/git-base';
 import {
     isLinkedWorktree,
     writesIntoMainFromWorktree
@@ -44,11 +45,16 @@ const git = (directory: string, ...argv: string[]): void => {
     /*
      * Runs git as a child process; it throws on a non-zero exit, which fails the case.
      * `-c` sets a one-off config value for this command only.
+     * `env: gitEnvironment()` matters under the pre-commit hook: git exports
+     * `GIT_DIR`/`GIT_WORK_TREE` into the hook's own process, and left in place those override
+     * `cwd` — this sandbox's `git init`/`commit`/`worktree add` would run against the REAL
+     * checkout under test instead, committing junk onto whatever branch is checked out.
      * https://git-scm.com/docs/git#Documentation/git.txt--cltnamegtltvaluegt
      */
     execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@example.com', ...argv], {
         cwd: directory,
-        stdio: 'ignore'
+        stdio: 'ignore',
+        env: gitEnvironment()
     });
 };
 
@@ -88,12 +94,16 @@ const runSync = (
      * `npm_config_yes=false` + `npm_config_offline`: the staleness gate calls `npx tsx`, and from a
      * directory with no node_modules npx would otherwise download tsx rather than fail.
      * https://docs.npmjs.com/cli/commands/npm-exec#yes
+     *
+     * `gitEnvironment()`: under the pre-commit hook, `GIT_DIR`/`GIT_WORK_TREE` are set on THIS
+     * process and would otherwise leak into the CLI's own `isLinkedWorktree` calls, pointing them
+     * at the hook's checkout instead of `cwd`/`frontend`.
      */
     const result = spawnSync(TSX, [SYNC, ...flags], {
         cwd,
         encoding: 'utf8',
         env: {
-            ...process.env,
+            ...gitEnvironment(),
             FRONTEND_PATH: frontend,
             npm_config_yes: 'false',
             npm_config_offline: 'true'
