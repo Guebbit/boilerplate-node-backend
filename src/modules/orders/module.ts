@@ -16,18 +16,51 @@
  */
 
 import path from 'node:path';
-import type { AppModule } from '@kernel/registry';
+import type { AppModule, PublicEventTarget } from '@kernel/registry';
 import { SYSTEM_ACTOR } from '@kernel/permissions';
-import { onDomainEvent } from '@kernel/events';
+import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { PRODUCT_DELETED, PRODUCT_DEACTIVATED } from '@modules/products';
 import { router } from './routes';
 import { cancelById, cancelPendingOrdersHolding, detachUserId, findOwnOrders } from './services';
 import { ordersRateLimits } from './rate-limits';
-// Side-effect only: registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
-// ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. `webhooks` is the only outside
-// listener for `order.created`; nothing in this module listens to its own event.
-import './events';
+// Also registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
+// ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
+// module's own barrel — see CLAUDE.md's module-barrel rule.
+import { ORDER_CANCELLED, ORDER_CREATED, ORDER_STATUS_CHANGED } from './events';
+
+/**
+ * DDD-D4: this module's public (webhook-visible) events — `webhooks/services/publish.ts`
+ * subscribes to these generically, through `kernel/registry.ts`'s `resolvePublicEvents`, instead
+ * of importing `ORDER_CREATED` and siblings by name.
+ *
+ * `order.status_changed` is the one that ISN'T a straight rename: it derives two different public
+ * names, `order.paid`/`order.shipped`, filtered on `to` — "listeners filter on `to`; the event
+ * doesn't know who cares" — and produces neither for any other transition.
+ */
+const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
+    [ORDER_CREATED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof ORDER_CREATED]) => ({
+            eventType: 'order.created',
+            data: { orderId: payload.orderId }
+        })
+    },
+    [ORDER_STATUS_CHANGED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof ORDER_STATUS_CHANGED]) => {
+            if (payload.to === 'paid')
+                return { eventType: 'order.paid', data: { orderId: payload.orderId } };
+            if (payload.to === 'shipped')
+                return { eventType: 'order.shipped', data: { orderId: payload.orderId } };
+            return undefined;
+        }
+    },
+    [ORDER_CANCELLED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof ORDER_CANCELLED]) => ({
+            eventType: 'order.cancelled',
+            data: { orderId: payload.orderId, refund: payload.refund }
+        })
+    }
+};
 
 /** This module's manifest entry: routes, the shop-identity config gate, event subscriptions, and locales. */
 export default {
@@ -47,6 +80,7 @@ export default {
         'orders.any.override'
     ],
     routes: router,
+    publicEvents,
     // The invoice prints the shop's own jurisdiction, and an invoice with no country on it is not
     // one. The other two identity fields (`./config`) are genuinely optional, so neither is here.
     requiredConfig: [{ key: 'NODE_SHOP_COUNTRY', minLength: 1 }],
