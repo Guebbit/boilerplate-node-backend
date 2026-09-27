@@ -1,9 +1,9 @@
 /**
  * @module
- * The delivery route table. Four routes, three different audiences — the guards are per route,
- * so each one is its own decision rather than an inherited default. That's the arrangement most
- * likely to drift: a fifth route added here gets no guard at all unless someone remembers, which
- * is what the sweep at the end of this file is for.
+ * The delivery route table. Six routes, three different audiences — the guards are per route, so
+ * each one is its own decision rather than an inherited default. That's the arrangement most
+ * likely to drift: a new route added here gets no guard at all unless someone remembers, which is
+ * what the sweep at the end of this file is for.
  */
 
 import { routeSignatures, guardsOn } from '@tests/routes';
@@ -16,7 +16,8 @@ describe('delivery routes', () => {
             'GET /order/:orderId',
             'POST /order/:orderId/start',
             'POST /order/:orderId/ship',
-            'POST /order/:orderId/deliver'
+            'POST /order/:orderId/deliver',
+            'POST /order/:orderId/fulfill'
         ]);
     });
 
@@ -48,6 +49,12 @@ describe('delivery routes', () => {
 
     it('restricts recording a delivery to an operator', () => {
         expect(guardsOn(router, 'POST /order/:orderId/deliver')).toContain(
+            'requirePermissionGuard'
+        );
+    });
+
+    it('restricts marking a digital-only order fulfilled to an operator', () => {
+        expect(guardsOn(router, 'POST /order/:orderId/fulfill')).toContain(
             'requirePermissionGuard'
         );
     });

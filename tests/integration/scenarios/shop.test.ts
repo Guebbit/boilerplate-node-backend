@@ -136,6 +136,13 @@ describe('each subject names a row that really has the property', () => {
         expect(product?.imageUrl).toBeTruthy();
     });
 
+    it('product.digital needs no shipping method — E16 has something real to check against', async () => {
+        const product = await productModel.findById(subjects['product.digital']).exec();
+        expect(product?.requiresShipping).toBe(false);
+        expect(toProduct(product!).available).toBeGreaterThan(0);
+        expect(product?.active).toBe(true);
+    });
+
     it('order.ownerPending is pending, the admin account owns it, and it holds real stock', async () => {
         const order = await orderModel.findById(subjects['order.ownerPending']).exec();
         expect(order?.status).toBe('pending');

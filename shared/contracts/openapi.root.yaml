@@ -1016,7 +1016,7 @@ components:
         OrderActions:
             type: object
             additionalProperties: false
-            required: [transitions, cancel, pay, start, ship, deliver, override]
+            required: [transitions, cancel, pay, start, ship, deliver, fulfill, override]
             description: >-
                 What the requesting caller may do to this order, decided by the server. A client
                 renders its controls from this rather than re-implementing the lifecycle: the rules
@@ -1053,12 +1053,21 @@ components:
                     type: boolean
                     description: >-
                         Whether `POST /delivery/order/{id}/ship` would be accepted for this
-                        caller. Not in `transitions`, for the same reason `start` is not.
+                        caller. Not in `transitions`, for the same reason `start` is not. `false`
+                        for a digital-only order — nothing on it would ever ride in a parcel;
+                        `fulfill` is that order's door instead.
                 deliver:
                     type: boolean
                     description: >-
                         Whether `POST /delivery/order/{id}/deliver` would be accepted for this
                         caller. Not in `transitions`, for the same reason `start` is not.
+                fulfill:
+                    type: boolean
+                    description: >-
+                        Whether `POST /delivery/order/{id}/fulfill` would be accepted for this
+                        caller — the digital-only alternative to `ship`/`deliver`: `true` only for
+                        an order with no physical lines, once it is `processing`. Not in
+                        `transitions`, for the same reason `start` is not.
                 override:
                     type: array
                     items:
@@ -1224,9 +1233,11 @@ components:
                     type: string
                     format: date-time
                 # `{year}-{sequence}`, assigned once at order-creation time — never recomputed.
-                # `createdAt` below IS this invoice's date of supply, which is why there is no
-                # separate invoice-date field. Absent on an order created before this field
-                # existed; it is never assigned retroactively.
+                # Not a tax invoice number: this order is a receipt, not an invoice (no national
+                # e-invoicing system is involved) — see `docs/modules/orders.md`. Gaps are
+                # acceptable, the same way Shopify's `#1001` skips a number a failed write burned.
+                # Absent on an order created before this field existed; it is never assigned
+                # retroactively.
                 orderNumber:
                     type: string
                     readOnly: true
@@ -1657,6 +1668,8 @@ paths:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1ship'
     /delivery/order/{orderId}/deliver:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1deliver'
+    /delivery/order/{orderId}/fulfill:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1fulfill'
 
     # ---------- inventory ----------
     /inventory/levels:

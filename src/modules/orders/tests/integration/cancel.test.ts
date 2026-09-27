@@ -75,6 +75,12 @@ const seedOrder = async (user: Awaited<ReturnType<typeof createUser>>) => {
     return createOrder(user, [toOrderItem(product, 1)]);
 };
 
+/** A digital-only order — `requiresShipping: false` — for `fulfill`'s own action tests below. */
+const seedDigitalOrder = async (user: Awaited<ReturnType<typeof createUser>>) => {
+    const product = await createProduct({ requiresShipping: false });
+    return createOrder(user, [toOrderItem(product, 1)]);
+};
+
 const asUser = (user: { id: string }) => asCustomer(user.id);
 
 describe('cancelById', () => {
@@ -405,6 +411,7 @@ describe('withActions', () => {
             start: false,
             ship: false,
             deliver: false,
+            fulfill: false,
             override: []
         });
     });
@@ -424,6 +431,7 @@ describe('withActions', () => {
             start: false,
             ship: false,
             deliver: false,
+            fulfill: false,
             override: []
         });
     });
@@ -450,6 +458,7 @@ describe('withActions', () => {
         expect(body.actions!.start).toBe(true);
         expect(body.actions!.ship).toBe(false);
         expect(body.actions!.deliver).toBe(false);
+        expect(body.actions!.fulfill).toBe(false);
         expect(body.actions!.override).toEqual([]);
     });
 
@@ -500,6 +509,49 @@ describe('withActions', () => {
         );
         const whileDelivered = await orderService.withActions(delivered!, asWarehouse());
         expect(whileDelivered.actions!.deliver).toBe(false);
+    });
+
+    /*
+     * E16(3): `fulfill` and `ship` are mutually exclusive doors for the same `processing` status —
+     * which one a client offers depends entirely on whether the order has anything to ship.
+     */
+    it('gives the warehouse `fulfill` instead of `ship` for a digital-only order once processing', async () => {
+        const user = await createUser();
+        const digitalOrder = await seedDigitalOrder(user);
+        const physicalOrder = await seedOrder(user);
+
+        const digitalProcessing = await orderRepository.updateStatusIfIn(
+            String(digitalOrder._id),
+            ['pending'],
+            'processing'
+        );
+        const physicalProcessing = await orderRepository.updateStatusIfIn(
+            String(physicalOrder._id),
+            ['pending'],
+            'processing'
+        );
+
+        const digitalBody = await orderService.withActions(digitalProcessing!, asWarehouse());
+        const physicalBody = await orderService.withActions(physicalProcessing!, asWarehouse());
+
+        expect(digitalBody.actions!.fulfill).toBe(true);
+        expect(digitalBody.actions!.ship).toBe(false);
+        expect(physicalBody.actions!.fulfill).toBe(false);
+        expect(physicalBody.actions!.ship).toBe(true);
+    });
+
+    it('never offers `fulfill` for a digital-only order still `paid` — `start` must run first', async () => {
+        const user = await createUser();
+        const digitalOrder = await seedDigitalOrder(user);
+        const paid = await orderRepository.updateStatusIfIn(
+            String(digitalOrder._id),
+            ['pending'],
+            'paid'
+        );
+
+        const body = await orderService.withActions(paid!, asWarehouse());
+
+        expect(body.actions!.fulfill).toBe(false);
     });
 
     it('offers an override holder every forward destination, on a customer-only status too', async () => {

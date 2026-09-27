@@ -20,6 +20,7 @@ import { getShipmentByOrder } from './controllers/get-shipment-by-order';
 import { postStartOrder } from './controllers/post-start-order';
 import { postShipOrder } from './controllers/post-ship-order';
 import { postDeliverOrder } from './controllers/post-deliver-order';
+import { postFulfillOrder } from './controllers/post-fulfill-order';
 
 /**
  * Whether this request is asking to skip the normal gate — the same flag `service.ts`'s
@@ -71,4 +72,15 @@ router.post(
     requirePermission('delivery.any.update'),
     requireFreshAuthWhen(isForcedRequest, REAUTH_TIME_CRITICAL),
     postDeliverOrder
+);
+
+// POST /delivery/order/:orderId/fulfill — the digital-only door; moves the order
+// processing -> delivered with no parcel. No `forced` variant: there is no gate here for an
+// override to skip past — a physical order simply cannot use this door at all.
+router.post(
+    '/order/:orderId/fulfill',
+    getAuth,
+    isAuth,
+    requirePermission('delivery.any.update'),
+    postFulfillOrder
 );

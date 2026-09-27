@@ -118,6 +118,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `cart`           | `USER_CART_ITEM_REMOVED`                    | `user.cart.item_removed`                    | `product`              |
 | `cart`           | `USER_CART_REORDERED`                       | `user.cart.reordered`                       | —                      |
 | `delivery`       | `ADMIN_ORDER_DELIVERED`                     | `admin.order.delivered`                     | —                      |
+| `delivery`       | `ADMIN_ORDER_FULFILLED`                     | `admin.order.fulfilled`                     | —                      |
 | `delivery`       | `ADMIN_ORDER_FULFILMENT_STARTED`            | `admin.order.fulfilment_started`            | —                      |
 | `delivery`       | `ADMIN_ORDER_SHIPPED`                       | `admin.order.shipped`                       | —                      |
 | `feedback`       | `ADMIN_FEEDBACK_DELETED`                    | `admin.feedback.deleted`                    | `feedback`             |

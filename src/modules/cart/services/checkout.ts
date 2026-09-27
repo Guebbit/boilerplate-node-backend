@@ -22,6 +22,7 @@ import {
     sendOrderPlacedEmail,
     retractOrder,
     sumLineItems,
+    isShippedItem,
     type OrderDocument
 } from '@modules/orders';
 import { availableStock, type ProductDocument } from '@modules/products';
@@ -382,8 +383,15 @@ const runCheckout = async (
                 ? {
                       method: {
                           id: shippingMethod.id,
+                          // The threshold prices only what ships — a digital line's price
+                          // shouldn't count toward "spend enough for free shipping" when it never
+                          // needed shipping to begin with.
                           priceFor: (frozenLines) =>
-                              priceShipping(shippingMethod, sumLineItems(frozenLines).price)
+                              priceShipping(
+                                  shippingMethod,
+                                  sumLineItems(frozenLines.filter((line) => isShippedItem(line)))
+                                      .price
+                              )
                       }
                   }
                 : {}),

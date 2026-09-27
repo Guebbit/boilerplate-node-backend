@@ -12,7 +12,12 @@ import type { OrderDocument } from '../model';
 import { accessibleFilter } from '@kernel/access/query';
 import { orderRepository } from '../repository';
 import { OrderStatus } from '@types';
-import { orderActionsFor, statusesLeadingTo, overridableTargetsFrom } from '../domain';
+import {
+    orderActionsFor,
+    statusesLeadingTo,
+    overridableTargetsFrom,
+    isDigitalOnlyOrder
+} from '../domain';
 import type { OrderActor } from '../domain';
 import { resolveCurrentImages } from './current';
 
@@ -60,20 +65,27 @@ export const actorOf = (authContext?: AuthContext): OrderActor => {
 };
 
 /**
- * `delivery`'s three action doors, plus `orders`' own override — none of them decided by
+ * `delivery`'s four action doors, plus `orders`' own override — none of them decided by
  * `actorOf`'s customer/admin split, since a warehouse operator holds `delivery.any.start` without
  * `orders.any.update` and would otherwise read as a plain customer. Each is asked of the caller's
  * OWN key, at the same tenant scope `actorOf` already resolves — `delivery.any.start`/`.update`
  * and `orders.any.override` are all tenant-scoped keys, so one `callerForSubject(...,'Order')`
  * caller answers all four regardless of which subject each key is declared under.
+ *
+ * `ship`/`fulfill` are mutually exclusive by construction: `digitalOnly` picks which of the two
+ * doors this order could ever go through, `reachesVia(shipped)` picks whether it may go through
+ * either RIGHT NOW.
  * @param status - the order's current status
+ * @param digitalOnly - whether every line on this order is digital — see `isDigitalOnlyOrder`
  * @param authContext - the caller, or `undefined` for no request behind this read
  */
 const deliveryAndOverrideActions = (
     status: OrderStatus,
+    digitalOnly: boolean,
     authContext: AuthContext | undefined
-): Pick<OrderActions, 'start' | 'ship' | 'deliver' | 'override'> => {
-    if (!authContext) return { start: false, ship: false, deliver: false, override: [] };
+): Pick<OrderActions, 'start' | 'ship' | 'deliver' | 'fulfill' | 'override'> => {
+    if (!authContext)
+        return { start: false, ship: false, deliver: false, fulfill: false, override: [] };
 
     const caller = callerForSubject(authContext, 'Order');
     // `statusesLeadingTo`, not a raw `canTransition(status, target, 'system')`: the latter
@@ -82,10 +94,15 @@ const deliveryAndOverrideActions = (
     // `statusesLeadingTo` excludes `from === to` by construction.
     const reachesVia = (target: OrderStatus): boolean =>
         statusesLeadingTo(target, 'system').includes(status);
+    const canRecordFulfilment = holdsKey(caller, 'delivery.any.update');
     return {
         start: holdsKey(caller, 'delivery.any.start') && reachesVia(OrderStatus.processing),
-        ship: holdsKey(caller, 'delivery.any.update') && reachesVia(OrderStatus.shipped),
-        deliver: holdsKey(caller, 'delivery.any.update') && reachesVia(OrderStatus.delivered),
+        ship: canRecordFulfilment && !digitalOnly && reachesVia(OrderStatus.shipped),
+        deliver: canRecordFulfilment && reachesVia(OrderStatus.delivered),
+        // `processing → delivered` for a digital-only order — no lifecycle-table entry to ask
+        // `reachesVia` about, since `delivery/service.ts`'s `fulfillOrder` gates this move
+        // directly rather than through `ORDER_LIFECYCLE` (see `services/status.ts#markFulfilled`).
+        fulfill: canRecordFulfilment && digitalOnly && status === OrderStatus.processing,
         override: holdsKey(caller, 'orders.any.override') ? [...overridableTargetsFrom(status)] : []
     };
 };
@@ -106,7 +123,11 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
         ...resolved,
         actions: {
             ...orderActionsFor(order.status, actorOf(authContext)),
-            ...deliveryAndOverrideActions(order.status, authContext)
+            ...deliveryAndOverrideActions(
+                order.status,
+                isDigitalOnlyOrder(order.items),
+                authContext
+            )
         }
     }));
 };

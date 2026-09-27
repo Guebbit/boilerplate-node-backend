@@ -3,7 +3,8 @@
  * Delivery — shipments, one order at a time. Staff records a parcel's handover through
  * {@link recordShipment} and its arrival through {@link recordDelivery}; each writes the parcel
  * FIRST, then reports the fact to `orders` — `orders` is the only status writer, this module only
- * ever asks it to move. See: docs/modules/delivery.md
+ * ever asks it to move. {@link fulfillOrder} is the digital-only alternative to both: nothing here
+ * ever rides in a parcel, so there is no parcel to write at all. See: docs/modules/delivery.md
  */
 
 import { t } from '@infrastructure/i18n';
@@ -25,7 +26,8 @@ import {
     canTransition,
     canOverrideTo,
     mailBuyer,
-    isForceMoveRefusal
+    isForceMoveRefusal,
+    isDigitalOnlyOrder
 } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { holdsKey } from '@kernel/ability';
@@ -174,6 +176,47 @@ const auditOrderEvent = (
 const notProcessing = (): ResponseReject =>
     generateReject(409, [{ code: 'ORDER_NOT_PROCESSING', message: t('delivery.not-processing') }]);
 
+/** {@link recordShipment}'s refusal for a digital-only order — {@link fulfillOrder} is its door instead. */
+const nothingToShip = (): ResponseReject =>
+    generateReject(409, [
+        { code: 'ORDER_NOTHING_TO_SHIP', message: t('delivery.nothing-to-ship') }
+    ]);
+
+/** {@link fulfillOrder}'s refusal for an order that still has a physical line — `ship` is its door instead. */
+const notDigitalOnly = (): ResponseReject =>
+    generateReject(409, [
+        { code: 'ORDER_NOT_DIGITAL_ONLY', message: t('delivery.not-digital-only') }
+    ]);
+
+/**
+ * Mark a digital-only order fulfilled — the `processing → delivered` door for an order with
+ * nothing to physically hand over, an alternative to {@link recordShipment}/{@link recordDelivery}
+ * rather than a variant of either: no parcel record exists before this call, and none is written
+ * by it. Refuses an order that still carries a physical line with the same 409 shape
+ * `recordShipment` refuses a digital-only order with, so a client reads either failure as "wrong
+ * door" rather than two different problems.
+ * @param orderId - the digital-only order to mark fulfilled
+ * @param authContext - the caller, for the response's own `actions`
+ * @param context - the caller, for the audit entry
+ */
+export const fulfillOrder = (
+    orderId: string,
+    authContext: AuthContext | undefined,
+    context: CallerContext
+): Promise<ResponseSuccess<Order> | ResponseReject> =>
+    orderService.getById(orderId).then((order) => {
+        if (!order) return generateReject(404, [t('delivery.order-not-found')]);
+        if (order.status !== OrderStatus.processing) return notProcessing();
+        if (!isDigitalOnlyOrder(order.items)) return notDigitalOnly();
+
+        return orderService.markFulfilled(orderId).then((moved) => {
+            if (!moved) return notProcessing();
+
+            auditOrderEvent(context, orderId, deliveryAuditActions.ADMIN_ORDER_FULFILLED);
+            return orderService.withActions(moved, authContext).then(generateSuccess);
+        });
+    });
+
 /**
  * Everything a successful parcel write unlocks: move the order to `shipped` — forced past the
  * normal gate when `forced` says so — then, only once that move is confirmed, mail the carrier
@@ -241,6 +284,10 @@ export const recordShipment = (
             ? canOverrideTo(order.status, OrderStatus.shipped)
             : canTransition(order.status, OrderStatus.shipped, 'system');
         if (!eligible) return notProcessing();
+        // Digital-only refuses outright, forced included: there is genuinely nothing to hand a
+        // carrier, so recording one here would just be `fulfillOrder`'s job done through the
+        // wrong door with a fake parcel behind it.
+        if (isDigitalOnlyOrder(order.items)) return nothingToShip();
 
         const method = order.shippingMethod ? findShippingMethod(order.shippingMethod) : undefined;
         if (method?.tracked && !trackingCode)
@@ -353,5 +400,6 @@ export const deliveryService = {
     getForOrder,
     startFulfilment,
     recordShipment,
-    recordDelivery
+    recordDelivery,
+    fulfillOrder
 };

@@ -131,6 +131,20 @@ const NAMED_PRODUCT_COPY: Record<keyof typeof SEED_PRODUCT_IDS, ProductCopy> = {
     barebones: {
         en: { title: 'Universal Small Animal Water Bottle' },
         it: { title: 'Biberon Universale per Piccoli Animali' }
+    },
+    puppyCourseDigital: {
+        en: {
+            title: 'Online Puppy Training Course — Video Access',
+            description:
+                'A self-paced video course covering the first twelve weeks of puppy training. ' +
+                'Digital delivery only — nothing is shipped.'
+        },
+        it: {
+            title: 'Corso Online di Addestramento per Cuccioli — Accesso Video',
+            description:
+                'Un corso video a ritmo libero sulle prime dodici settimane di addestramento del cucciolo. ' +
+                'Consegna esclusivamente digitale — non viene spedito nulla.'
+        }
     }
 };
 
@@ -227,6 +241,20 @@ const namedProducts = [
         id: SEED_PRODUCT_IDS.barebones,
         title: NAMED_PRODUCT_COPY.barebones.en.title,
         price: 9
+    }),
+    /*
+     * The digital one — `requiresShipping: false`, the flag `cart`/`orders`/`delivery`'s
+     * digital-only branches all key off. No `imageUrl` in the fixed pool needs spending on it;
+     * `barebones` above is the precedent for a named row with no image.
+     */
+    makeUnstockedProduct({
+        id: SEED_PRODUCT_IDS.puppyCourseDigital,
+        title: NAMED_PRODUCT_COPY.puppyCourseDigital.en.title,
+        description: NAMED_PRODUCT_COPY.puppyCourseDigital.en.description,
+        price: 29,
+        categories: ['dogs', 'training'],
+        tags: ['digital', 'training'],
+        requiresShipping: false
     })
 ];
 
@@ -266,6 +294,7 @@ const OPENING_STOCK: ReadonlyMap<string, number> = new Map([
     [SEED_PRODUCT_IDS.dogBedPremium, 45],
     [SEED_PRODUCT_IDS.bundleInactive, 18],
     [SEED_PRODUCT_IDS.barebones, 9],
+    [SEED_PRODUCT_IDS.puppyCourseDigital, 50],
     ...FILLER_PRODUCTS.map(
         (product, index) => [fillerProductId(index), product.openingStock] as const
     )

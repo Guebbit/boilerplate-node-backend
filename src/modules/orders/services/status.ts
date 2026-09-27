@@ -78,3 +78,26 @@ export const markShipped = (orderId: string): Promise<OrderDocument | null> =>
  */
 export const markDelivered = (orderId: string): Promise<OrderDocument | null> =>
     markSystemMove(orderId, OrderStatus.delivered);
+
+/**
+ * Report that a digital-only order was marked fulfilled by staff — `delivery`'s own door for this
+ * move (`POST /delivery/order/{id}/fulfill`), the alternative to `markShipped`/`markDelivered` for
+ * an order with nothing to physically hand over. Its own fixed `from`/`to` pair, NOT routed
+ * through `markSystemMove`: that helper derives `from` from `ORDER_LIFECYCLE` under the assumption
+ * of exactly one system edge into each destination status (see its own docblock), and
+ * `shipped → delivered` already owns the one edge into `delivered` — adding a second edge there
+ * for this move would make `markDelivered` itself derive the WRONG `from` for the ordinary
+ * ship/deliver flow. `processing → delivered` is deliberately absent from `ORDER_LIFECYCLE`
+ * for exactly this reason; `delivery/service.ts`'s `fulfillOrder` is what actually gates who may
+ * call this and when.
+ * @param orderId - the order marked fulfilled
+ * @returns the order as it now stands, or `null` if it was not awaiting fulfilment
+ */
+export const markFulfilled = (orderId: string): Promise<OrderDocument | null> => {
+    const from = OrderStatus.processing;
+    const to = OrderStatus.delivered;
+    return orderRepository.updateStatusIfIn(orderId, [from], to).then((updated) => {
+        if (updated) void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from, to });
+        return updated;
+    });
+};

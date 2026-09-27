@@ -11,7 +11,8 @@
 // its property test reaches it. A barrel line would make it look like a rule others may use.
 export { sumLineItems, orderTotal } from './totals';
 
-export { checkOrderLines } from './rules';
+export { checkOrderLines, isShippedItem, isDigitalOnlyOrder } from './rules';
+export type { ShippableLineCandidate } from './rules';
 
 // `ORDER_LIFECYCLE` is deliberately absent: a caller reading the table directly re-derives an
 // answer that already has a name.

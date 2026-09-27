@@ -51,7 +51,7 @@ paths:
         post:
             tags: [Delivery]
             summary: Record a parcel's handover to the carrier
-            description: Creates the parcel record and sends the shipped email, then reports the fact to `orders` — the order moves `processing → shipped`. `trackingCode` is required exactly when the order's shipping method is `tracked` (looked up live, not frozen); refused with a named 422 when a tracked method's code is missing. Refuses an order that is not `processing` with a named 409 — this door is how that move happens now, not `PUT /orders/{id}`.
+            description: Creates the parcel record and sends the shipped email, then reports the fact to `orders` — the order moves `processing → shipped`. `trackingCode` is required exactly when the order's shipping method is `tracked` (looked up live, not frozen); refused with a named 422 when a tracked method's code is missing. Refuses an order that is not `processing` with a named 409 — this door is how that move happens now, not `PUT /orders/{id}`. Refuses a digital-only order outright, also 409 (`ORDER_NOTHING_TO_SHIP`) — nothing on it would ever ride in a parcel; `POST /delivery/order/{orderId}/fulfill` is that order's door instead.
             operationId: shipOrder
             security:
                 - bearerAuth: []
@@ -145,6 +145,41 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ShipmentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/order/{orderId}/fulfill:
+        post:
+            tags: [Delivery]
+            summary: Mark a digital-only order fulfilled, with no shipment
+            description: >-
+                The digital-only alternative to `ship`/`deliver` — reports that a `processing`
+                order with no physical lines is done, moving it straight to `delivered` with no
+                parcel record. Refuses an order that is not `processing` with a named 409
+                (`ORDER_NOT_PROCESSING`), and one that carries any line that still needs shipping
+                with a named 409 (`ORDER_NOT_DIGITAL_ONLY`) — that order ships through the ordinary
+                door instead.
+            operationId: fulfillOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The digital-only order to mark fulfilled
+            responses:
+                '200':
+                    description: The order, now `delivered`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../orders/openapi.yaml#/components/schemas/OrderEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }

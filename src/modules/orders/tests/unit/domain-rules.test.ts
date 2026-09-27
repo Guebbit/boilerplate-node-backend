@@ -4,7 +4,12 @@
  * the rules take arguments and return verdicts.
  */
 
-import { checkOrderLines, type OrderLineCandidate } from '../../domain/rules';
+import {
+    checkOrderLines,
+    isShippedItem,
+    isDigitalOnlyOrder,
+    type OrderLineCandidate
+} from '../../domain/rules';
 
 /** A line whose product resolved. */
 const line = (quantity = 1): OrderLineCandidate => ({ quantity, product: { price: 10 } });
@@ -32,6 +37,49 @@ describe('checkOrderLines', () => {
     it('refuses on an unresolved product even when other lines are fine', () => {
         // An order embeds a snapshot: a missing product cannot be dropped and the rest kept.
         expect(checkOrderLines([line(), line(), { quantity: 9, product: null }]).ok).toBe(false);
+    });
+});
+
+describe('isShippedItem', () => {
+    it('reads a physical line (requiresShipping omitted) as shipped', () => {
+        expect(isShippedItem({ product: {} })).toBe(true);
+    });
+
+    it('reads requiresShipping: true as shipped', () => {
+        expect(isShippedItem({ product: { requiresShipping: true } })).toBe(true);
+    });
+
+    it('reads requiresShipping: false as digital, not shipped', () => {
+        expect(isShippedItem({ product: { requiresShipping: false } })).toBe(false);
+    });
+
+    it('reads a missing product as shipped — the safe direction for an unresolved line', () => {
+        expect(isShippedItem({ product: null })).toBe(true);
+        expect(isShippedItem({})).toBe(true);
+    });
+});
+
+describe('isDigitalOnlyOrder', () => {
+    it('is false for an order with no lines — there is nothing to call digital', () => {
+        expect(isDigitalOnlyOrder([])).toBe(false);
+    });
+
+    it('is true only when every line is digital', () => {
+        expect(
+            isDigitalOnlyOrder([
+                { product: { requiresShipping: false } },
+                { product: { requiresShipping: false } }
+            ])
+        ).toBe(true);
+    });
+
+    it('is false when even one line still needs shipping', () => {
+        expect(
+            isDigitalOnlyOrder([
+                { product: { requiresShipping: false } },
+                { product: { requiresShipping: true } }
+            ])
+        ).toBe(false);
     });
 });
 
