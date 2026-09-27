@@ -1,7 +1,7 @@
 ---
 source: tests/integration/scripts/db/index-sync.test.ts
-sha256: b1fe2355bd05744fd599c5bc8b46ece7615e1480dcf72ade82981001a2beb62e
-generated_at: 2026-09-23T20:07:11.173344+00:00
+sha256: e26b39d0ea7f4f050f07d3f4fe8ee0b3ac7e43c866a8aa61698736df28a55cc5
+generated_at: 2026-09-27T15:58:40.710035+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that prove `db:sync` reconciles a database's stored indexes with what the Mongoose schemas declare—both building missing indexes and dropping undeclared ones. It exists because no other test suite can construct a database whose indexes _disagree_ with the schemas (they all run against a fresh `mongodb-memory-server` where `autoIndex` builds everything unopposed), so this file is the only place that state is exercised.
+Integration test for the `db:sync` script. It constructs database states that no other suite can produce — stored indexes that disagree with schema declarations (orphaned, missing, or both) — and asserts `applyIndexSync` reconciles them. Because every other test suite runs against a fresh `mongodb-memory-server` where `autoIndex` builds indexes unopposed, only this file exercises the drift-and-repair path that real deployments hit.
 
 ## Key elements
 
-- **`nativeDb()`** — returns the raw Mongo driver `db` handle for operations only the driver can perform (creating orphan indexes, inspecting raw index lists).
-- **`dropAllIndexes()`** — removes every index (except the undroppable `_id_`) from every collection to establish a known starting state.
-- **`RegisteredModel`** (interface) — a typed narrow of `mongoose.models` entries (`collection.name`, `collection.indexes()`, `schema.indexes()`) so assertions avoid `any` laundering.
-- **`storedKeys(model)`** / **`declaredKeys(model)`** — normalize stored and schema-declared indexes into `Set<string>` of JSON key specs (excluding `_id_`) for set-based comparison.
-- **`models()`** — narrows `Object.values(mongoose.models)` into `RegisteredModel[]`.
-- **Test suite (`describe('db:sync')`)** — eight cases covering: registry canary (every enabled module that owns a `model.ts` actually registered a model), build-from-empty, exact stored-vs-declared equality, orphan-index drop, idempotent second pass, `--check` dry-run plan, scoped duplicate scan (`findBlockingDuplicates`), and refusal to create a unique index over violating rows.
+- **`nativeDb()`** — returns the raw MongoDB driver handle from `mongoose.connection`; used to construct states (orphan indexes, colliding documents) only the driver can create.
+- **`dropAllIndexes()`** — drops every index on every collection except `_id_`, giving each test a clean starting point.
+- **`RegisteredModel`** (local interface) — a typed projection of a registered Mongoose model (`collection.name`, `collection.indexes()`, `schema.indexes()`) declared locally to avoid laundering `any` from `mongoose.models` into assertions.
+- **`storedKeys(model)`** — collects the set of index key specs actually present on a collection, excluding `_id_`.
+- **`declaredKeys(model)`** — collects the set of index key specs the schema declares.
+- **`models()`** — returns `Object.values(mongoose.models)` narrowed to `RegisteredModel[]`.
+- **Test cases** (in `describe('db:sync')`):
+  - Registry walk covers every enabled module that ships a `model.ts` (counted against disk, not a literal).
+  - Builds every declared index from an empty database.
+  - After sync, each collection holds *exactly* the declared set (no extras, no gaps).
+  - Drops a hand-created orphan index on second sync.
+  - Is a no-op (empty plan) on the second pass.
+  - `planIndexSync()` reports pending work without executing it (`--check` mode).
+  - `findBlockingDuplicates` scans only the collections named in the plan, not all collections.
+  - Refuses to build a unique index when existing rows already violate it (reports the colliding value, throws).
 
 ## Relationships
 
-- **`scripts/db/index-sync.ts`** — the system under test; this file imports `applyIndexSync`, `planIndexSync`, and `findBlockingDuplicates` from it.
-- **`src/modules.ts`** — provides `enabledModules`, used by the registry canary to cross-check that every enabled module directory containing a `model.ts` actually registered a model with Mongoose.
-- **`tests/support/database.ts`** — provides `connect`/`disconnect` lifecycle hooks that spin up and tear down the `mongodb-memory-server` instance for the suite.
+- **`scripts/db/index-sync.ts`** — the module under test; this file imports `applyIndexSync`, `planIndexSync`, and `findBlockingDuplicates` from it.
+- **`src/modules.ts`** — imports `enabledModules` to cross-check that the registry walk registered a model for every enabled module that owns a collection.
+- **`tests/support/database.ts`** — provides `connect` / `disconnect` for the Mongoose connection lifecycle (fresh `mongodb-memory-server`).
+- **`tests/support/paths.ts`** — provides `MODULES_ROOT` so the registry-walk test can count `model.ts` files on disk rather than hardcoding a number.
 
 ## Notes
 
-- The canary test counts model registrations against the **filesystem** (`fs.readdirSync(MODULES_ROOT)`) rather than a hardcoded literal, so adding a new module directory with a `model.ts` automatically raises the expectation.
-- The header comment explicitly scopes out the "two authors" failure mode (hand-written migration vs. schema): by design `syncIndexes` is the sole index author, so no test simulates conflicting sources.
-- The embedded-schema index leak (Mongoose copying a child schema's indexes onto the parent collection) is caught implicitly by the "EXACTLY what its schema declares" test—an embedded index appears as _stored but declared by nobody_.
-- Duplicate-scan and unique-index-rejection cases write documents via the raw driver (bypassing Mongoose validation) to simulate pre-existing data that violates a unique constraint the schema still declares.
-- `findBlockingDuplicates` is tested with an explicit scope (single collection) and without, to verify the scope argument actually limits the aggregation rather than being silently ignored.
+- Index comparison is always by **key spec** (`JSON.stringify` of the key object), never by index name, so the tests are independent of naming conventions.
+- The header comment explicitly states this file does **not** test two-author index agreement; by design `model.ts` is the sole author and `syncIndexes` the sole executor.
+- The `RegisteredModel` interface is deliberately re-declared here (rather than imported) for the same `any`-laundering reason given in `index-sync.ts` itself.
+- The module-ownership canary test reads the filesystem (`fs.readdirSync` + `fs.existsSync`) rather than asserting a fixed integer, so it fails on the commit that *adds* a domain with a missing model, not on some arbitrary future count mismatch.
+- Colliding-document tests insert data through the **driver** (`nativeDb().collection(...).insertMany(...)`) rather than the Mongoose model, because the model's own unique index is exactly what the test proves may be absent.

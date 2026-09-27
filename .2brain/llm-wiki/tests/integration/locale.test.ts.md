@@ -1,7 +1,7 @@
 ---
 source: tests/integration/locale.test.ts
-sha256: 71537cfa2c117a5e50a3bcec95c0a970de81b9e1c2cc8f2e527198177100d7a9
-generated_at: 2026-09-23T20:04:43.497412+00:00
+sha256: 53175600161bcbdf556dfcbc430da69f0aebd8836c7ab5abab1e0b0c294e35b9
+generated_at: 2026-09-27T15:56:21.285487+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify per-request locale negotiation end-to-end through the real middleware stack (`attachLocale` → routes → Zod thunks → `rejectResponse`). They exercise two validation paths—`POST /account/signup` (service-level Zod with per-field `t(...)`) and `POST /feedback/contact` (orval-generated schema with no custom messages)—to confirm that every 422 response speaks the language the client asked for, including under concurrent mixed-language load.
+Integration tests that verify per-request locale negotiation across the full middleware stack (`attachLocale`, routes, Zod thunks, `rejectResponse`) using two endpoints that reject at validation before any repository call — so no database, Redis, or queue is needed. The file guards two specific regression risks: concurrent requests leaking each other's language (the reason `AsyncLocalStorage` exists instead of `i18next.changeLanguage()`), and Zod's built-in English messages leaking through generated-schema validation.
 
 ## Key elements
 
-- **`INVALID_SIGNUP`** – Payload guaranteed to fail validation before any repository call, so tests run without a database.
-- **`signupWith(acceptLanguage?)`** – Returns a pending supertest `POST /account/signup` with an optional `Accept-Language` header.
-- **`contactWith(acceptLanguage?)`** – Same pattern for `POST /feedback/contact`.
-- **`messagesOf(body)`** – Flattens `body.errors[]` into an array of `message` strings for assertions.
-- **`describe('Accept-Language negotiation')`** – Covers: explicit `it`, default `en`, unsupported-language fallback, q-weight ordering, region-tag matching (`it-CH` → `it`), `Vary: Accept-Language` header, multipart-upload locale survival, and the 20-concurrent-requests concurrency guard.
-- **`describe('generated-schema validation answers in the negotiated language')`** – Covers the orval-schema path: Italian/English responses, a language-agnostic "no Zod default leaks" check (Italian ≠ English per index, no raw dictionary keys), and precedence of field-level `t(...)` copy over the global shared map.
+- **`signupWith(acceptLanguage?)`** — builds a `supertest` POST to `/account/signup`, optionally setting the `Accept-Language` header.
+- **`INVALID_SIGNUP`** — a payload that triggers a 422 on every field, ensuring validation (and therefore locale negotiation) is exercised.
+- **`messagesOf(body)`** — extracts the `message` strings from a standard `{ errors: [{ message }] }` response shape.
+- **`contactWith(acceptLanguage?)`** / **`INVALID_CONTACT`** — same pattern for `POST /feedback/contact`, which validates via an orval-generated schema (no per-field messages) rather than `zodUserSchema`.
+- **`describe("Accept-Language negotiation")`** — six tests: explicit `it`, default `en`, unsupported-language fallback, q-weight ordering, region-tag matching (`it-CH` → `it`), `Vary: Accept-Language` header, and multipart-upload locale preservation.
+- **`describe("generated-schema validation answers in the negotiated language")`** — four tests covering Italian/English responses, a "no Zod default on the wire" check (asserts all messages differ between the two languages without naming specific copy), and per-field `t(...)` precedence over the shared validation map.
 
 ## Relationships
 
-- **`tests/support/http.ts`** – Imported as `api` (via the `@tests/http` alias). Provides the supertest-based HTTP client that these tests use to issue requests against the running server; every `signupWith`/`contactWith` call goes through it.
+- **`tests/support/http.ts`** — provides the `api()` factory (a configured `supertest` instance against the running app). Every request in this file goes through it; the file has no other way to reach the HTTP layer.
+- **Locale JSON files** (`@modules/users/locales/{en,it}.json`, `../../src/locales/{en,it}.json`) — imported directly to build expected-message assertions against known dictionary keys, avoiding hard-coded English/Italian strings.
 
 ## Notes
 
-- The concurrency test (20 interleaved `en`/`it` requests via `Promise.all`) is the explicit guard against refactoring `@infrastructure/i18n` down to a single global `i18next.changeLanguage()` call, which would let overlapping requests cross-contaminate.
-- The multipart test specifically guards the case where `multer` consumes the socket stream, breaking the AsyncLocalStorage context; `src/infrastructure/http/middlewares/upload.ts` re-enters the store after multer—this test is the regression net for that.
-- The "no Zod default on the wire" test asserts Italian and English messages differ **by position** without naming any string, so it survives dictionary copy changes while still catching untranslated defaults.
-- All tests are intentionally DB/Redis/queue-free: the chosen endpoints reject at the validation layer, making them cheap to run in CI.
+- The concurrency test (`never answers one request in another request's language`) is the load-bearing case: 20 interleaved requests in flight simultaneously. It exists specifically to prevent a "simplification" that replaces AsyncLocalStorage with a global `changeLanguage()` call.
+- The multipart test documents a concrete past bug: `upload.image()` consumes the request stream, and the subsequent socket-read callback resumes in an async context that predates `attachLocale`, so the ALS store is empty. The fix lives in `src/infrastructure/http/middlewares/upload.ts` (re-entering the store after multer); this test is the regression guard.
+- The "never leaves a Zod default on the wire" test deliberately asserts *structural* differences (messages differ at every index, no raw dot-notation keys) rather than specific translated strings, so it survives dictionary edits without updates.
+- The per-field-precedence test (`still lets a field with its own copy win`) asserts that the shared `validation-messages` map does not overwrite a field-level `t(...)` sentence — the global map is a fallback, not an override.

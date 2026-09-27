@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/routes.ts
-sha256: 4e41e2b9f4af46734bad410e7cd62a2e81a90b6b921babade42d797966c9304d
-generated_at: 2026-09-23T19:34:16.990266+00:00
+sha256: cbc5ccfef2b12f29918e3239d45e0d37ecbb24e10e7b0a05e2002f398820003f
+generated_at: 2026-09-27T15:38:50.387266+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the admin-only `/users` Express router, wiring authentication, per-route permission checks, response caching, upload rate-limiting, and file-upload handling to the user CRUD controllers. It is the single entry point that maps HTTP verbs/paths to the module's controller functions.
+Defines the Express `Router` for the admin-only `/users` API surface (search, list, read, create, update, delete, restore, 2FA removal). It wires each endpoint to the appropriate authorization key, caching policy, rate-limit, upload, and route-flag middleware, then delegates to the per-action controllers.
 
 ## Key elements
 
-- **`router`** (exported) – the Express `Router` instance mounted by `module.ts`.
-- **`cacheUsersSearch`** – a `searchCache('users', …)` instance whose key parameters match `getUsers`' query schema; applied to `POST /search` and `GET /`.
-- **`invalidateUsers`** – shared `invalidateCache(['users', 'account'])` middleware applied to every write/mutation route so both the user search cache and the caller's own `/account` cache are cleared.
-- **`POST /users/search`** – search; must be declared before `/:id` routes to avoid the literal "search" being captured as an id.
-- **`GET /users`** – list/search users (cached).
-- **`POST /users` / `PUT /users` / `PUT /users/:id`** – create or update; run `uploadLimiter` → `invalidateUsers` → `upload.single('imageUpload')` → `writeUsers`.
-- **`DELETE /users` / `DELETE /users/:id`** – delete (soft by default; `?hardDelete=true` triggers hard delete).
-- **`DELETE /users/:id/hard`** – hard delete spelled in the path; applies `routeFlag('hardDelete')` before delegating to `deleteUsers`.
-- **`GET /users/:id`** – single-user read; cached for 3600 s under tag `users`.
-- **`DELETE /users/:id/2fa`** – admin-assisted 2FA removal; requires `users.any.update` (not `.delete`).
+- **`router`** (exported `Express.Router`) — the single public export; mounted by `src/modules/users/module.ts`.
+- **Router-level middleware** — `getAuth` → `isAuthOrCredential`: every route requires authentication; API keys (`sk_…`) are explicitly allowed alongside session tokens.
+- **`requirePermission('users.any.*')`** — applied per-route with the specific action key (`read`, `create`, `update`, `delete`); there is no single router-wide gate.
+- **Route table** — `POST /search`, `GET /`, `POST /`, `DELETE /`, `GET /:id`, `PUT /:id`, `PATCH /:id`, `DELETE /:id`, `POST /:id/restore`, `DELETE /:id/hard`, `DELETE /:id/2fa`.
+- **Cache middlewares** — `noStore` on `POST /search`; `privateNoCache` on the two `GET` read routes; all write/DELETE routes are uncached by omission.
+- **Upload + rate-limit** — `uploadLimiter` and `upload.image()` guard the three mutation endpoints that accept an avatar (`POST /`, `PUT /:id`, `PATCH /:id`).
+- **`routeFlag('hardDelete')`** — on `DELETE /:id/hard`, injects the flag so the shared `deleteUsers` controller performs a hard (permanent) delete.
 
 ## Relationships
 
-| Neighbor                                        | Interaction                                                                                         |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `kernel/middlewares/authorizations.ts`          | Supplies `getAuth`, `isAuthOrCredential` (router-wide), and `requirePermission` (per-route).        |
-| `infrastructure/http/middlewares/cache.ts`      | Supplies `searchCache`, `setCache`, `invalidateCache` used for read caching and write invalidation. |
-| `infrastructure/http/middlewares/rate-limit.ts` | Supplies `uploadLimiter` applied to create/update routes.                                           |
-| `infrastructure/http/middlewares/upload.ts`     | Supplies `upload.single('imageUpload')` for avatar/profile-image uploads.                           |
-| `infrastructure/http/middlewares/route-flag.ts` | Supplies `routeFlag('hardDelete')` for the `/:id/hard` path.                                        |
-| `controllers/get-users.ts`                      | Exports `getUsers` handler and `searchUsersKeyParameters` (cache key shape).                        |
-| `controllers/write-users.ts`                    | Exports `writeUsers` handler (create + update).                                                     |
-| `controllers/delete-users.ts`                   | Exports `deleteUsers` handler (soft & hard).                                                        |
-| `controllers/get-user-item.ts`                  | Exports `getUserItem` handler.                                                                      |
-| `controllers/delete-user-two-factor.ts`         | Exports `deleteUserTwoFactor` handler.                                                              |
-| `module.ts`                                     | Imports and mounts `router` into the application.                                                   |
-| `tests/unit/routes.test.ts`                     | Unit-tests the route table and middleware ordering.                                                 |
-| `tests/support/routed-modules.ts`               | Test harness that registers this router for integration tests.                                      |
+- **`src/modules/users/module.ts`** — imports `router` and mounts it under the users path prefix.
+- **Controllers** (`get-users`, `create-user`, `update-user`, `delete-users`, `restore-users`, `get-user-item`, `delete-user-two-factor`) — terminal handlers for each route; `deleteUsers` is reused by both `DELETE /:id` and `DELETE /:id/hard` (differentiated only by `routeFlag`).
+- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuthOrCredential`, `requirePermission`.
+- **`src/infrastructure/http/middlewares/cache.ts`** — provides `noStore`, `privateNoCache`.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** — provides `uploadLimiter`.
+- **`src/infrastructure/http/middlewares/upload.ts`** — provides `upload.image()`.
+- **`src/infrastructure/http/middlewares/route-flag.ts`** — provides `routeFlag`.
+- **`src/modules/users/tests/unit/routes.test.ts`** — unit-tests route registration, middleware ordering, and permission keys.
+- **`tests/support/routed-modules.ts`** — mounts this router in integration test harnesses.
 
 ## Notes
 
-- **Auth strategy:** the router-wide gate is `getAuth` + `isAuthOrCredential` (not `isAuth`), deliberately allowing `sk_…` API keys for partner sync. Each route then asserts its own granular `users.any.*` key—no single key is applied at the router level.
-- **Route ordering:** `POST /search` is declared before any `/:id` routes so Express does not match "search" as an id parameter.
-- **Two hard-delete entry points:** `DELETE /:id?hardDelete=true` and `DELETE /:id/hard` invoke the same `deleteUsers` controller; the `/hard` path uses `routeFlag` to set the flag programmatically rather than relying on a query string.
-- **Cache invalidation scope:** `invalidateUsers` clears both the `users` and `account` tags. Clearing only one would leave the other endpoint serving a stale profile after a mutation.
-- **2FA deletion permission:** uses `users.any.update` (not `.delete`), reflecting that removing a second factor is semantically an update to the user record per `shared/authorization-keys.yaml`.
+- **Route order matters:** `POST /search` is registered *before* `GET /:id`; reordering would cause "search" to be captured as `:id`.
+- **Caching policy is deliberate, not incidental:** admin-only responses are excluded from shared (Redis) cache per RFC 9111 §3.5; `privateNoCache` still lets the browser revalidate on each request.
+- **`isAuthOrCredential` vs `isAuth`:** the choice is intentional — partner integrations authenticating with API keys must reach this module. No controller reads `authContext` directly.
+- **`DELETE /:id/hard` is syntactic sugar:** it calls the same `deleteUsers` controller as `DELETE /:id`; the only difference is the `routeFlag('hardDelete')` middleware injecting the flag.
+- **2FA deletion uses `users.any.update`**, not `users.any.delete`, matching the authorization-key catalogue description ("clearing a second factor").

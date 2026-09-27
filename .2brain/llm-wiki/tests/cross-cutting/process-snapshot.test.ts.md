@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/process-snapshot.test.ts
-sha256: 22411d47886e42c0804639045cc21471d0d94d85626f2a8b77587decf4bfeb81
-generated_at: 2026-09-23T19:58:39.059903+00:00
+sha256: 33bcf41f8491ede66859f1884758bbd347ff17223141f42fd9d81c94e501eedb
+generated_at: 2026-09-27T15:51:57.810654+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A cross-cutting guard that enforces two invariants for the process-observability surface: (1) `process.memoryUsage()` and `process.uptime()` may only be called from a small, explicitly allowlisted set of source files, and (2) the memory and uptime fields declared in `openapi.yaml` and `asyncapi.yaml` stay structurally identical. Without it, a fourth independent reader or a silent schema drift between the REST and SSE contracts would go undetected.
+A structural (cross-cutting) test that enforces two invariants on the process-snapshot data: (1) `process.memoryUsage()` and `process.uptime()` may only be read from a small allowlisted set of files, and (2) the memory and uptime fields are declared identically (name, order, type, bounds) in both `openapi.yaml` and `asyncapi.yaml`. It exists to close the gap where three independent readings of the same process state can silently drift apart.
 
 ## Key elements
 
-- **`ALLOWED_READERS`** – `Record<string, string>` mapping repo-relative source paths to a one-line justification. Only two entries: the shared reader (`process-snapshot.ts`) and the prom-client `Gauge` collector (`metrics-registry.ts`). Used by the "only place" test and the stale-allowlist test.
-- **`listSourceFiles`** – Recursively walks `src/` and returns every `.ts` file path. Feeds the sweep and the offender scan.
-- **`relativeToSource`** – Converts an absolute path to a forward-slashed, `src/`-relative string so allowlist keys are platform-stable.
-- **`at`** – Safe key-path walker over a parsed YAML/JSON tree; returns `undefined` on a missing step rather than throwing, so a renamed schema surfaces as a readable assertion failure.
-- **`propertyNames`** – Extracts `Object.keys(properties)` from a JSON-Schema node in declaration order.
-- **Test: "sweeps a source tree that actually has files in it"** – Canary asserting the recursive listing returns >100 files, preventing a silently empty sweep from passing all other assertions.
-- **Test: "is the only place … are read"** – Greps every source file for `process.memoryUsage(` / `process.uptime(` and asserts no file outside `ALLOWED_READERS` matches.
-- **Test: "keeps every allowlisted reader real"** – Asserts every key in `ALLOWED_READERS` still corresponds to an existing file, so a renamed/deleted file cannot silently widen the rule.
-- **Test: "publishes the same memory block …"** – Parses both `openapi.yaml` (`ProcessMemory`) and `asyncapi.yaml` (`ObservabilityMetricsPayload.properties.memory`), then asserts identical property name lists **and order** (`rss`, `heapUsed`, `heapTotal`, `external`), plus `additionalProperties: false` on both.
-- **Test: "types every published uptime as a non-negative integer"** – Checks three schema locations (two in OpenAPI, one in AsyncAPI) declare `type: integer` and `minimum: 0`.
+- **`ALLOWED_READERS`** — a `Record<string, string>` mapping source-relative file paths to a one-line justification for why that file may call `process.memoryUsage()` / `process.uptime()` directly. Currently lists the shared reader itself and the prom-client Gauge.
+- **`listSourceFiles(dir)`** — recursively walks a directory and returns all `.ts` file paths.
+- **`relativeToSource(file)`** — converts an absolute path to a forward-slashed, `src/`-relative key so allowlist lookups are platform-independent.
+- **`at(root, …keys)`** — walks a parsed YAML/JSON object by key path; returns `undefined` on a missing step (never throws).
+- **`propertyNames(node)`** — returns `Object.keys(node.properties)` in declaration order, or `[]` if the node is absent.
+- **`describe('the process snapshot')`** block containing five tests:
+  1. *Canary* — asserts the source sweep found >100 files (guards against an empty walk passing all other assertions).
+  2. *Single-reader* — scans every `.ts` file for literal `process.memoryUsage(` / `process.uptime(` and fails if found outside `ALLOWED_READERS`.
+  3. *No stale exemptions* — asserts every key in `ALLOWED_READERS` still corresponds to a real file on disk.
+  4. *Schema parity* — asserts `ProcessMemory` (OpenAPI) and `memory` (AsyncAPI) have identical property names `[rss, heapUsed, heapTotal, external]` and both set `additionalProperties: false`.
+  5. *Uptime typing* — asserts every `uptimeSeconds` declaration across both documents is `type: integer` with `minimum: 0`.
 
 ## Relationships
 
-- Reads `src/modules/observability/services/process-snapshot.ts` and `src/infrastructure/observability/metrics-registry.ts` as string patterns (the allowlist entries); does not import them at runtime.
-- Parses `src/modules/observability/openapi.yaml` and `src/modules/observability/asyncapi.yaml` via `yaml.parse` to compare schema blocks.
-- No runtime interaction with `src/modules/account/tests/unit/two-factor.test.ts` despite the graph-neighbor listing.
+- **`tests/support/paths.ts`** — provides `REPO_ROOT`, used to anchor every `readFileSync` / `readdirSync` call so the test resolves paths relative to the repository root regardless of the working directory.
 
 ## Notes
 
-- The test is deliberately cross-cutting: it greps the entire `src/` tree by raw string match, so a rename of `process.uptime` to an alias or a re-import would still be caught (the string literal appears in the call).
-- The canary test (`>100` files) exists because an empty `sourceFiles` array would make the offender filter pass vacuously.
-- The `at` helper returns `undefined` rather than throwing; every caller is expected to assert `toBeDefined()`, which is why the tests read as readable expectation failures instead of mid-chain `TypeError`s.
-- The gauge exemption is explicitly _not_ a candidate for folding into the shared reader: its `collect()` callback fires at Prometheus scrape time, a different instant from payload composition.
+- This is a **source-tree / schema lint**, not a unit test of a function. It reads `.ts` files and two YAML documents directly from disk at test time.
+- The prom-client Gauge in `metrics-registry.ts` is explicitly allowed to read `process` because its `collect()` callback fires at scrape time; routing it through the shared reader would change *when* the values are sampled.
+- The allowlist is a **map**, not an array, so each exemption carries its own inline justification and a deleted/renamed file is caught by test 3.
+- Property **order** is asserted (via `toEqual` on the name array), not just set membership, because consumers read the fields side-by-side.
+- The `at()` helper deliberately returns `undefined` rather than throwing, so a renamed schema path produces a readable `expect(…).toBeDefined()` failure instead of a mid-chain `TypeError`.

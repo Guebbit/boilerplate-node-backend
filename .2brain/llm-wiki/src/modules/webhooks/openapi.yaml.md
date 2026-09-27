@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/openapi.yaml
-sha256: 3c871e98b89b87aabef80d0fb68d99049ea5b635133256a5031706ae7fc15e38
-generated_at: 2026-09-23T19:41:01.872104+00:00
+sha256: 028629a20b996b531ee1b8dfe70d79443a2a0b775ceed7f6ace9c3df6bf85ae3
+generated_at: 2026-09-27T15:42:44.438845+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.0.3 module contract that defines the full REST surface of the webhooks service: subscription CRUD, the delivery log, single-delivery replay, and the public event catalogue. It serves as the single source of truth that code generators (orval/zod) and audit tooling consume.
+OpenAPI 3.0.3 module contract for the webhooks subsystem. It defines the full REST surface for managing webhook subscriptions (CRUD), the secret-ring lifecycle (rotate / drop), and the delivery log, serving as the single source of truth for the API shape that both the server implementation and clients (SDKs, UIs) must conform to.
 
 ## Key elements
 
-- **`/webhooks/subscriptions` (GET, POST)** — List (with `enabled` filter and pagination) and create subscriptions. Creation is the only call that returns the minted secret in plaintext.
-- **`/webhooks/subscriptions/{id}` (PATCH, DELETE)** — Partial update; `rotateSecret` adds a new ring secret and returns `newSecret` in plaintext, while `removeSecretId` drops an old one. Delete removes the subscription but preserves its delivery log for auditability.
-- **`/webhooks/deliveries` (GET)** — Read-only delivery log, filterable by `subscriptionId` and `status` (enum `WebhookDeliveryStatus`).
-- **`/webhooks/deliveries/{id}/replay` (POST)** — Synchronously re-signs and re-POSTs against the subscription's _current_ URL and secret ring. Mutates the same row's `attempt`, `status`, `responseCode`, `durationMs`, `error`. Returns **409** (`WEBHOOK_DELIVERY_IN_PROGRESS`) if a live worker holds the delivery lease.
-- **`/webhooks/events` (GET)** — Returns the public event catalogue, sourced from the module's own `asyncapi.yaml` fragment so it cannot drift from what the module actually fires.
-- **`components/schemas`** — Module-local schemas: `WebhookSubscription`, `CreateWebhookSubscriptionRequest`, `UpdateWebhookSubscriptionRequest`, `WebhookSubscriptionsResponseEnvelope`, `WebhookSubscriptionCreatedEnvelope`, `WebhookDeliveriesResponseEnvelope`, `WebhookDeliveryEnvelope`, `WebhookEventCatalogueResponseEnvelope`, `WebhookDeliveryStatus`.
-- **`components` shared refs** — All pagination params, `IdPathParam`, and standard error responses (`401`, `403`, `404`, `409`, `422`, `500`, `Success`) are pulled from `shared/contracts/openapi.root.yaml`.
+- **`/webhooks/subscriptions`** — `GET` lists a shop's subscriptions (paginated, optional `enabled` filter); `POST` creates one and returns the one-time plaintext secret in `201`.
+- **`/webhooks/subscriptions/{id}`** — `PUT` full-replace of url/description/eventTypes/enabled; `PATCH` partial update; `DELETE` removes the subscription (delivery log is retained for audit).
+- **`/webhooks/subscriptions/{id}/rotate-secret`** (`POST`) — adds a new secret to the ring, returns its plaintext once; old secret remains active until explicitly dropped.
+- **`/webhooks/subscriptions/{id}/secrets/{secretId}`** (`DELETE`) — removes one secret from the ring; refuses to empty the ring entirely.
+- **`/webhooks/deliveries`** (`GET`) — paginated delivery log, filterable by subscription and status (newest first). *(Truncated in source.)*
+- **Schemas** (under `components/schemas`) — `CreateWebhookSubscriptionRequest`, `ReplaceWebhookSubscriptionRequest`, `UpdateWebhookSubscriptionRequest`, `WebhookSubscriptionEnvelope`, `WebhookSubscriptionCreatedEnvelope`, `WebhookSubscriptionsResponseEnvelope`. *(Truncated in source.)*
+- **Security** — every operation requires `bearerAuth`.
+- **Tags** — all operations are tagged `Webhooks`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — Referenced extensively via `$ref` for reusable parameters (`PageParam`, `PageSizeParam`, `IdPathParam`) and standard error/success response objects. This file is the sole consumer of those shared definitions within the webhooks module.
-- **`tests/audit/compliance-rules.yaml`** — Consumes this spec as the auditable surface; compliance rules are validated against the operations, security schemes, and response shapes declared here.
+- **`shared/contracts/openapi.root.yaml`** — This file `$ref`s shared parameters (`PageParam`, `PageSizeParam`, `IdPathParam`) and shared error responses (`Unauthorized`, `Forbidden`, `ValidationError`, `NotFound`, `InternalError`, `Success`) from the root contract. Keeping those in one place means the webhook spec only declares module-specific schemas and paths.
+- **`tests/audit/compliance-rules.yaml`** — Consumed by the compliance/audit test suite that validates this OpenAPI document against organizational API standards (naming, security, error-envelope conventions, etc.). Changes here may require updating those rules or vice-versa.
 
 ## Notes
 
-- **URL pattern workaround:** Every `url` schema field uses `(?:^https://…)` (non-capturing group) instead of a bare `^https://…`. Orval's zod generator strips a trailing `/` from regex patterns (assuming a `/regex/` delimiter), which would silently degrade the pattern to `^https:/`. The closing `)` prevents the strip.
-- **Secret visibility is one-shot:** The plaintext secret appears only in the `POST` (create) or `PATCH` (rotate) response. No other endpoint returns it.
-- **DNS re-check on every delivery:** The `https://` + non-private-address validation runs at delivery time, not only at creation, because a subscription's DNS can change after setup.
-- **Replay is not a re-attempt:** It signs with the _current_ ring, not the historical one, and advances `attempt` by exactly one step if backoff tiers remain (unchanged on success or exhaustion).
-- **Event catalogue coupling:** The catalogue endpoint reads from the same `asyncapi.yaml` fragment that generates `asyncapi.public.yaml` (see `docs/api/asyncapi-workflow.md`), guaranteeing the list matches what the module can fire.
-- **409 on replay only:** The Conflict response is specific to the replay endpoint and signals an in-flight delivery lease, not a general optimistic-locking mechanism.
+- **One-time secret disclosure:** The plaintext secret appears *only* in the response of the call that mints it (`POST /subscriptions` or `POST .../rotate-secret`). Every subsequent read returns only `secretIds`. Any client that misses that response must rotate.
+- **PUT vs PATCH semantics:** `PUT` is a full replace — omitting `description` clears it. `PATCH` is partial; omitted fields are left unchanged. Neither touches the secret ring.
+- **Secret rotation is a command route, not a flag:** It lives at its own path rather than as a field on `PATCH` so that the command (mint a new secret) is never conflated with a state update (change url/eventTypes).
+- **SSRF guard is described, not enforced here:** The spec states that `url` must be `https://` and must not resolve to a private/loopback/link-local address, and that the check re-runs on every delivery (DNS can change). The actual enforcement lives in the implementation, not in the OpenAPI schema.
+- **File is truncated:** The `components` block (schemas, and possibly additional shared refs) and the tail of the deliveries endpoint are not fully present in the source excerpt above.

@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/outbox-names.test.ts
-sha256: 657b2658d82d04ffd972df804e2235095a8edc2eee7eab3a54e5bc8c6d3c6970
-generated_at: 2026-09-23T19:57:59.334285+00:00
+sha256: 2314592de07d8e748e08af9689226ea962a3581011e749464d0449e26ff9b34d
+generated_at: 2026-09-27T15:51:33.692635+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Guards the **outbox name** convention: every email template identifier published by this backend must be a stable, backend-agnostic string (`<module>.<event>`, kebab-case) that the paired PHP/Blade twin can match verbatim, and that resolves to a real template file at send time.
+Enforces the naming contract for every email template published by any module. The `template` field is a shared identifier consumed by the paired PHP/Laravel backend's e2e specs (which run against both backends), so names must be extension-free, unique, literal, resolvable to a real file, and match the agreed cross-backend set. This test acts as the single guard that keeps the contract intact after the `.ejs` suffix was moved out of the published name and into `templateFile()`.
 
 ## Key elements
 
-- **`listEmailFiles()`** – Discovers every `src/modules/<name>/emails.ts` on disk rather than maintaining a hardcoded list.
-- **`namesIn(source)`** – Extracts literal string values from `template: '…'` assignments via regex.
-- **`publishedNames()`** – Flattens all modules into a `{ module, name }[]` array used by every test case.
-- **`it('finds the mails it means to check')`** – Canary assertion; fails if discovery silently returns an empty list.
-- **`it('states every name as a literal…')`** – Forbids computed/variable `template:` values so the source-reading tests can't miss them.
-- **`it('keeps the names free of a file extension')`** – Enforces the `^[a-z][\da-z-]*\.[a-z][\da-z-]*$` shape (exactly two kebab-case segments, no dot-suffix like `.ejs`).
-- **`it('gives no two mails the same name')`** – Detects name collisions across modules.
-- **`it('points every name at a template that exists')`** – Calls `templateFile(name)` and asserts the resulting path exists on disk.
-- **`it('publishes the set the pair agreed on')`** – Asserts the exact, sorted list of 16 names matches the agreed cross-backend set.
+- **`listEmailFiles()`** — Discovers every `src/modules/<name>/emails.ts` under `MODULES_ROOT` at runtime (no hardcoded module list).
+- **`templateAssignments(source)`** — Filters source lines to those matching `^\s*template:` (used by the literal-only check).
+- **`namesIn(source)`** — Extracts literal template names via the regex `^\s*template: '([^']+)'` (multi-line global).
+- **`publishedNames()`** — Combines the above into a flat `{ module, name }[]` array; the single data source all assertions read from.
+- **Test: "finds the mails it means to check"** — Canary: asserts ≥ 8 names across ≥ 4 modules so a rename or missing field doesn't make every subsequent assertion pass vacuously.
+- **Test: "states every name as a literal"** — Fails if any `template:` line is not a plain single-quoted string (catches variables, template literals, helper calls).
+- **Test: "keeps the names free of a file extension"** — Asserts every name matches `^[a-z][\da-z-]*\.[a-z][\da-z-]*$` (two kebab-case segments, no dot-suffix).
+- **Test: "gives no two mails the same name"** — Detects cross-module name collisions.
+- **Test: "points every name at a template that exists"** — Calls `templateFile(name)` and asserts the resolved path passes `existsSync`.
+- **Test: "publishes the set the pair agreed on"** — Asserts the sorted list of all published names equals a hardcoded 18-entry array (the cross-backend contract).
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** – Imports `templateFile`, the single function that appends the `.ejs` suffix and resolves a name to a filesystem path. The "template exists" test depends on this to verify the suffix-adding logic produces a real file.
+- **`src/infrastructure/adapters/mailer.ts`** — Provides `templateFile()`, which appends the engine-specific extension (`.ejs`) to a bare name to produce the on-disk path. The "points every name at a template that exists" test depends on this to perform its file-existence check.
+- **`tests/support/paths.ts`** — Provides `MODULES_ROOT`, the filesystem root under which `listEmailFiles()` scans for `<module>/emails.ts` files.
 
 ## Notes
 
-- `path.extname` is explicitly **not** used for validation because names are dotted by design (`account.reset-request` would be misread as extension `reset-request`).
-- The agreed-set test hard-codes the list rather than deriving it, because the contract is with a _different repository_ (the PHP twin) that this test cannot read.
-- Several names in the agreed set (`account.setup-request`, `account.inactivity-warning`, `account.two-factor-code`, `webhooks.subscription-disabled`, `orders.order-product-unavailable`) are Node-only at the time of writing and do not yet exist in the PHP twin's test.
-- The file-extension ban is stated as a **shape** constraint (two segments) rather than a blacklist of forbidden suffixes, so a third templating engine won't slip through.
+- **`path.extname` is deliberately not used** for the extension check: names are dotted by design (`account.verify-request`), so `extname` would misread `.verify-request` as an extension. The regex shape check is the only reliable guard.
+- **The "agreed set" list is stated, not derived.** It encodes agreement with `boilerplate-php-laravel-backend`'s `OutboxNamesTest.php`, a repository this test cannot read. Several entries (`account.setup-request`, `account.inactivity-warning`, `account.two-factor-code`, `webhooks.subscription-disabled`, `orders.order-product-unavailable`, `orders.order-paid`, `orders.order-card-expired`) exist only on the Node side so far and are not yet mirrored in the PHP twin.
+- **Source-text parsing is intentional and limited.** Because the test reads raw source with regex, it can only see literal assignments. The "states every name as a literal" case exists specifically to ensure no name escapes this visibility.
+- **A mistyped name now fails at send time, not at publish time.** Once `.ejs` left the name, a typo is no longer caught by the filesystem at the point the name is written — only the `existsSync(templateFile(name))` assertion in this file catches it.

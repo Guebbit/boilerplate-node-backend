@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/audit.ts
-sha256: 5769a8512d34f5159497052bebc4ec943ceb6db939ce03c089c43da35a0e37b0
-generated_at: 2026-09-23T19:31:36.545830+00:00
+sha256: 9e7495ecc20bf7f2eda7c94f5ed9fd8314e0ae133e302922b7b857874686267a
+generated_at: 2026-09-27T15:35:56.033994+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the audit-action vocabulary for admin-facing user-record mutations (create, update, soft-delete, erase, 2FA strip, ban/unban) and registers those actions into the app-wide `AuditActionMap` via a TypeScript module augmentation. It is purely declarative — no runtime logic beyond the `as const` export.
+Declares the audit action string constants owned by the users module and registers them into the app-wide `AuditActionMap` type via TypeScript declaration merging. It exists so that every audit event the users module emits uses a single, typed vocabulary, and so downstream consumers (query UIs, compliance exports) can filter by these exact action names.
 
 ## Key elements
 
-- **`usersAuditActions`** (`as const` object) — the six action strings owned by this module. Granularity is deliberate: soft-delete vs. erase, ban vs. generic update, so the audit log answers "what happened" without a reader diffing two row revisions.
-- **`declare module '@infrastructure/observability/audit'`** — module augmentation that adds a `users` key to the `AuditActionMap` interface, typed as the union of the values above. This is how the action set becomes visible to the shared audit infrastructure without a shared enum.
+- **`usersAuditActions`** (`const` object, exported) — Maps semantic keys to the string values recorded in audit logs. Covers the full admin lifecycle: `created`, `updated`, `soft_deleted`, `erased`, `restored`, `2FA disabled`, `banned`, `unbanned`, plus one system-originated action (`system.user.erased` for the inactivity reaper).
+- **`declare module '@infrastructure/observability/audit'`** — Augments the `AuditActionMap` interface with a `users` key whose type is the union of all values in `usersAuditActions`, giving call-sites exhaustive typing.
 
 ## Relationships
 
-- **`src/modules/users/service.ts`** — the primary consumer; its `auditActionForUpdate` helper (referenced in this file's comments) selects among the actions emitted here when an admin PUT is processed.
-- **`src/modules/users/controllers/delete-users.ts`** — emits `ADMIN_USER_SOFT_DELETED` or `ADMIN_USER_ERASED` depending on which deletion path is taken.
-- **`src/modules/users/tests/unit/audit.test.ts`** — unit-tests the export shape and the augmentation.
-- **`src/modules/users/tests/integration/service.test.ts`** — asserts the correct action string is recorded for each service operation.
-- **`tests/cross-cutting/audit-actions-registered.test.ts`** — cross-cutting guard that every module's actions are actually registered in `AuditActionMap`.
+- **`src/modules/users/service.ts`** — Emits the actions defined here; its `auditActionForUpdate` logic selects between `ADMIN_USER_UPDATED` and `ADMIN_USER_BANNED`/`ADMIN_USER_UNBANNED` based on the diff.
+- **`src/modules/users/controllers/delete-users.ts`** — Triggers `ADMIN_USER_SOFT_DELETED` or `ADMIN_USER_ERASED` depending on the deletion path.
+- **`src/modules/users/controllers/restore-users.ts`** — Triggers `ADMIN_USER_RESTORED`.
+- **`src/modules/users/tests/integration/service.test.ts`** — Integration tests that assert the correct audit action is recorded for each service operation.
+- **`tests/cross-cutting/audit-actions-registered.test.ts`** — Cross-cutting test verifying every module (including this one) is present in the global `AuditActionMap`.
 
 ## Notes
 
-- The augmentation pattern is intentional (see `modules/account/audit.ts` for rationale) — it avoids a shared enum while keeping each module's vocabulary local and tree-shakable.
-- `audit-logs/model.ts` types the persisted `action` column as a widened `string` so that renaming an action in code does not invalidate historical rows; the constants here are the source of truth for _new_ writes only.
-- `ADMIN_USER_SOFT_DELETED` and `ADMIN_USER_ERASED` were deliberately split from a single "deleted" action: only the hard path scrubs the record, so conflating them would make "was the erasure request discharged?" unanswerable from the log alone.
-- Ban/unban ride on the same `PUT` endpoint as every other update (see `service.ts`'s `auditActionForUpdate`); the distinct action strings exist so the trail is self-explanatory without revision diffing.
+- `soft_deleted` and `erased` are intentionally separate actions so an audit query can answer "was an erasure request discharged?" without inspecting row state.
+- `banned`/`unbanned` are split out from `updated` so "was this account banned?" is answerable from the action field alone, without diffing two revisions of the user row.
+- `SYSTEM_USER_ERASED` deliberately omits the `admin.` prefix because the actor is the inactivity reaper, not a human operator.
+- The declaration-merging pattern (vs. a shared enum) is chosen deliberately; see `modules/account/audit.ts` for the rationale.
+- `audit-logs/model.ts` widens `action` to `string` so that renaming a constant in the future does not invalidate previously stored log entries.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/controllers/list-deliveries.ts
-sha256: f83e7ccf0eedf3241cab6045b979b62a434d740275ba2d2ebcbec30046928704
-generated_at: 2026-09-23T19:38:47.464655+00:00
+sha256: fce007350d916e6678fc1fbf5ba3a486a41d36bca81fc89c58657fa4a17f8fa4
+generated_at: 2026-09-27T15:40:59.556907+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP controller for `GET /webhooks/deliveries`. Returns the calling tenant's webhook delivery log (newest first) with optional filtering by subscription and/or status and standard pagination. It is a thin adapter that validates query params and delegates the actual query to the webhooks service.
+Controller for `GET /webhooks/deliveries`. It exposes a tenant's webhook delivery log (newest first) with optional filtering by subscription and/or status, delegating the actual query to the webhooks service.
 
 ## Key elements
 
-- **`listWebhookDeliveries`** (exported) – The list controller built via `createListController`. Declares entity `'webhookDeliveries'`, a composed query-params schema, and a `runList` callback that calls `webhooksService.listDeliveries` with the tenant context and parsed params.
-- **Query-params schema** – `ListWebhookDeliveriesQueryParams` (from `@api/schemas.zod`) extended with infra `pageSchema`/`pageSizeSchema`, then made fully optional via `.partial()`. The `status` field is closed to the generated wire enum.
+- **`listWebhookDeliveries`** (exported) — A list controller built via `createListController` for the `webhookDeliveries` entity. Accepts query params validated against `ListWebhookDeliveriesQueryParams` (extended with infra `page`/`pageSize` schemas, then made `.partial()`). On invocation it extracts the tenant caller context and calls `webhooksService.listDeliveries`, returning a `WebhookDeliveriesResponse`.
 
 ## Relationships
 
-- **`@infrastructure/surfaces/create-list-controller`** – Provides the `createListController` factory that assembles the route handler, param parsing, and pagination normalization.
-- **`@infrastructure/http/schemas`** – Supplies `pageSchema` and `pageSizeSchema`, the canonical pagination param definitions.
-- **`@infrastructure/http/request`** – Supplies `tenantCallerContextOf` to extract the authenticated tenant context from the incoming request.
-- **`../services`** (`webhooksService`) – The domain service whose `listDeliveries` method performs the actual data retrieval.
-- **`@types`** – Provides the `WebhookDeliveriesResponse` return type.
-- **`src/modules/webhooks/routes.ts`** – Registers `listWebhookDeliveries` as the handler for the `GET /webhooks/deliveries` route.
+- **`src/infrastructure/surfaces/create-list-controller.ts`** — Factory that wraps the controller logic (routing, param parsing, error handling) around the `runList` callback defined here.
+- **`src/infrastructure/http/schemas.ts`** — Supplies `pageSchema` and `pageSizeSchema` so pagination params use the shared infra definitions.
+- **`src/infrastructure/http/request.ts`** — Provides `tenantCallerContextOf`, used to derive the tenant-scoped context passed to the service.
+- **`src/modules/webhooks/services/index.ts`** — Exports `webhooksService`, whose `listDeliveries` method performs the actual data retrieval.
+- **`src/modules/webhooks/routes.ts`** — Registers `listWebhookDeliveries` on the `GET /webhooks/deliveries` route.
+- **`src/types/index.ts`** — Source of the `WebhookDeliveriesResponse` return type.
 
 ## Notes
 
-- `status` is intentionally a closed enum (matching the convention used by audit-logs' `outcome`): an unrecognised value produces a 422 rather than silently matching every row.
-- `page`/`pageSize` are swapped to the infra pair _before_ `.partial()` so that an absent value remains absent in the parsed object, allowing `normalizePagination` (inside `createListController`) to apply its defaults. The Zod-generated schemas are _not_ used here.
+- The `status` query param is a **closed** (non-`.passthrough()`) zod enum inherited from `ListWebhookDeliveriesQueryParams`; an unrecognized value yields a 422 rather than silently matching all rows.
+- `page`/`pageSize` are deliberately swapped to the infra schema pair so that when a value is **absent** it stays `undefined`, allowing `normalizePagination` (inside `createListController`) to apply its defaults.
+- The extended schema is `.partial()`-ed, making every query param optional.

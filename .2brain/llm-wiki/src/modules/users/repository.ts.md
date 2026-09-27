@@ -1,53 +1,44 @@
 ---
 source: src/modules/users/repository.ts
-sha256: b4997e1397c079e768fa63756873cd1f5ac81c8f198559e0e3327bcc15e3fb42
-generated_at: 2026-09-23T19:34:01.567185+00:00
+sha256: 0cbb775ca0f2bad7e9930367bbdd43570cb9d6d638d1dc12f97df6703a3b6391
+generated_at: 2026-09-27T15:38:39.372959+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/users/repository.ts
 
 ## Purpose
-
-Persistence layer for the user collection. Wraps the shared repository factory with standard CRUD, then adds the credential reads, token lifecycle operations, and soft-delete/inactivity queries that the `account` module needs across the shared-kernel boundary.
+Persistence layer for the user collection. Wraps the shared `createRepository` factory with standard CRUD, then layers on the credential, token, OAuth-link, and inactivity-sweep operations that the `account` module needs across the shared-kernel edge. All sensitive fields (`password`, `tokens`, 2FA material, `oauthAccounts`, `pendingEmail`) are `select: false` on the schema; this file is the single sanctioned place to re-select them.
 
 ## Key elements
-
-- **`userRepository`** — the single export. A `Repository<UserDocument, UserWire>` augmented with ~20 domain-specific methods (credential fetches, token spend/supersede/touch, OAuth linking, image writeback, inactivity sweeps).
-- **`CREDENTIAL_FIELDS`** — the `+password +tokens +twoFactorMethods +twoFactorBackupCodes +oauthAccounts +pendingEmail` select string; the only sanctioned way to re-select `select: false` fields.
-- **`AUTHENTICATABLE_FILTER`** — `{ active: { $ne: false }, deletedAt: undefined }`; shared by `findAuthenticatableById` and `findByTokenValue`.
-- **`LAST_ACTIVE_EXPR`** — aggregation `$expr` (`$max` of `tokens.lastUsedAt` array or `createdAt`); shared by all `findInactive*` / `findReaper*` queries.
-- **`findByIdWithCredentials` / `findOneWithCredentials`** — fetch a user including all sensitive fields.
-- **`findByIdWithPendingEmail`** — narrower variant: only re-selects `pendingEmail` (for the self-service profile banner).
-- **`emailOrPendingEmailTaken`** — request-time uniqueness check across `email` and `pendingEmail`.
-- **`findByToken`** — `$elemMatch` on `tokens` array (token hash + type on the _same_ entry); returns user with credentials.
-- **`findAuthenticatableById`** — `findById` scoped to accounts that may still authenticate (active ≠ false, not soft-deleted).
-- **`tokenRemove` / `tokenRemoveByValue`** — atomic `$pull` of a single token; idempotent, `timestamps: false`.
-- **`tokenRemoveExpired`** — bulk `$pull` of expired tokens plus superseded tokens past the retention window; returns a count.
-- **`tokenTouch` / `tokenSupersede` / `sessionRemove`** — remaining token/session lifecycle operations.
-- **`linkOAuthAccount`** — push an `OAuthAccount` onto the user's `oauthAccounts` array.
-- **`writebackImage`** — typed as `ImageWriteback`; delegates image persistence back to the user document.
-- **`findInactiveUnwarned` / `findWarnedStillInactive` / `findReaperSoftDeletedPastGrace`** — inactivity and soft-delete reaping queries using `LAST_ACTIVE_EXPR`.
+- **`userRepository`** (export) — the sole public export. Spreads `createRepository<UserDocument, UserWire>(userModel, …)` for standard CRUD, then adds domain-specific methods. The type is written out explicitly (not inferred) because Mongoose's generics overflow TypeScript's serialization limit (TS7056).
+- **`CREDENTIAL_FIELDS`** (const) — the `+password +tokens +twoFactor… +oauthAccounts +pendingEmail` re-select string; the only place re-selection is spelled out.
+- **`AUTHENTICATABLE_FILTER`** (const) — `{ active: { $ne: false }, deletedAt: undefined }`; shared by `findAuthenticatableById` / `findAuthenticatableByEmail` so the two can't drift.
+- **`LAST_ACTIVE_EXPR`** (const) — aggregation `$expr` computing the latest `tokens[].lastUsedAt` or `createdAt`; reused by every `findInactive*` query.
+- **`findByIdWithCredentials` / `findOneWithCredentials`** — fetch a user with all sensitive fields re-selected.
+- **`findByIdWithPendingEmail`** — lighter variant that re-selects only `pendingEmail` (used by `GET /account`).
+- **`emailOrPendingEmailTaken`** — request-time collision check against both `email` and `pendingEmail` columns (excluding the caller's own id).
+- **`findByToken` / `findByTokenValue`** — locate a user by a (hashed) token; `findByToken` also filters on token `type` via `$elemMatch` on the same array entry.
+- **`tokenRemove` / `tokenRemoveByValue` / `tokenRemoveExpired`** — atomic `$pull`-based token spending and sweeping (avoids load-modify-save and `VersionError`); all pass `timestamps: false`.
+- **`tokenSupersede` / `tokenTouch`** — rotation and last-used stamping.
+- **`sessionRemove`** — remove a specific session from the token array.
+- **`linkOAuthAccount`** — attach an `OAuthAccount` entry to a user document.
+- **`writebackImage`** — typed as `ImageWriteback` (from `image.worker`), wired through the repository for profile-image persistence.
+- **`findInactiveUnwarned` / `findWarnedStillInactive` / `findReaperSoftDeletedPastGrace`** — inactivity-sweep queries built on `LAST_ACTIVE_EXPR`.
+- **`updateMany`** — raw multi-document update passthrough.
+- **`searchable` config** — declares `objectIds`, `text`, `regex`, `booleans` (`active`), and `presence` (`deleted`) filters for the generic search API; deliberately omits `role` (no column; would need a two-step resolve via `@modules/access`).
 
 ## Relationships
-
-- **`src/modules/users/model.ts`** — source of `userModel`, `applyUserTransform`, `hashToken`, `TokenType`, and all shared types (`UserDocument`, `Token`, `OAuthAccount`, `UserWire`).
-- **`src/infrastructure/persistence/create-repository.ts`** — provides the `createRepository` factory, `toObjectId` helper, and the `Repository` interface that `userRepository` extends.
-- **`src/infrastructure/adapters/image.worker.ts`** — supplies the `ImageWriteback` type used to type the `writebackImage` property.
-- **`src/modules/users/service.ts`** — primary consumer of `userRepository`; calls credential, token, and inactivity methods.
-- **`src/modules/users/module.ts`** — wires the repository into the users module graph.
-- **`src/modules/account/tests/…`** (contract + integration) and **`src/modules/api-keys/tests/…`** — exercise the repository through the account and api-keys service flows (login, token rotation, OAuth linking, email collision, soft-delete reaping).
-- **`scenarios/users.ts`** — integration scenario harness that drives the repository via the account service.
+- **`src/infrastructure/persistence/create-repository.ts`** — provides `createRepository`, `toObjectId`, and the `Repository` base type; `userRepository` spreads its return value as the foundation of every method.
+- **`src/infrastructure/adapters/image.worker.ts`** — supplies the `ImageWriteback` type used for the `writebackImage` method.
+- **`./model`** (same module, not in the neighbor list) — source of `userModel`, `applyUserTransform`, `hashToken`, `TokenType`, and the `UserDocument` / `Token` / `OAuthAccount` / `UserWire` types.
+- **`src/modules/account/tests/contract/*` and `src/modules/account/tests/integration/*`** — exercise the auth, token, OAuth, 2FA, deletion, and locale flows that call into `userRepository`; they pin the behavioral contract (e.g., `findAuthenticatableByEmail` must return `null` for deleted or `active: false` accounts, `tokenRemove` must be idempotent).
+- **`scenarios/users.ts`** — end-to-end scenario definitions that drive user CRUD and lifecycle transitions against this repository.
 
 ## Notes
-
-- **Sensitive fields are `select: false` by design.** Any code path that needs `password`, `tokens`, 2FA material, `oauthAccounts`, or `pendingEmail` must go through the `*WithCredentials` / `*WithPendingEmail` helpers. Scattered `.select('+…')` calls are an anti-pattern this file exists to prevent.
-- **`active: { $ne: false }` is intentional.** A document with no `active` field is treated as enabled; filtering on `active: true` would silently lock out such legacy rows.
-- **`LAST_ACTIVE_EXPR` reads `tokens` despite `select: false`.** `select` trims the _returned_ document shape; an aggregation `$expr` filter still sees the stored value. This is safe but non-obvious.
-- **Tokens are never stored or queried in plaintext.** Every read/write path calls `hashToken()` first. Forgetting to hash a parameter before passing it to a token method will silently match nothing.
-- **`findByToken` uses `$elemMatch` deliberately.** A naive two-path filter (`'tokens.token': …, 'tokens.type': …`) could match a user who holds _different_ tokens of the wrong type in the same array.
-- **Token spend uses `$pull`, not load-and-save.** The reset-confirm flow saves the same document twice (password, then token); a second `save()` would raise a `VersionError`. `$pull` is atomic and idempotent.
-- **`tokenRemoveExpired` retention ≠ rotation grace.** The sweep runs _ahead of_ the rotation on the same request; if the cutoff equaled the grace window it would delete the very entry the reuse check was about to read.
-- **Explicit type annotation on `userRepository`.** Mongoose's inferred generic type is too large for TS to serialize at an export boundary (TS7056), so the intersection type is written out by hand.
-- **`emailOrPendingEmailTaken` is only the request-time half of the collision rule.** The swap-time guarantee comes from the unique indexes `users_email` and `users_pending_email`; the read and the swap can be up to 24 h apart.
-- **No `role` filter in `searchable`.** The user document carries no `role` column; role-scoped search requires a two-step resolve through membership rows and is deliberately not implemented in this generic filter.
+- Every token value is **hashed before it touches a query or update** (`hashToken`); the plaintext never reaches Mongoose.
+- Token spend uses **atomic `$pull`**, not load → modify → `save()`. This is a deliberate fix for a `VersionError` race in the reset-confirm flow (two simultaneous confirms both loaded version V).
+- `tokenRemoveExpired` has two retention concerns that must not be collapsed: the **expiration** sweep and the **superseded-rotation** retention window. The caller passes the reuse-detection window as `supersededRetentionMs`; equating it to the rotation grace window would delete entries the reuse check still needs.
+- `active: { $ne: false }` (rather than `=== true`) means a document with no `active` field is treated as enabled — absent ≠ locked out.
+- `select: false` trims query *results* only; `$expr` filters (e.g. `LAST_ACTIVE_EXPR`) can still read `tokens` from the stored document.
+- The `role` filter is intentionally absent from `searchable`: the user document has no `role` column; role-based narrowing lives in `@modules/access` and requires a two-step resolve that the generic `exact` filter cannot express.

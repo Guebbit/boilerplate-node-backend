@@ -1,7 +1,7 @@
 ---
 source: tests/fuzz/ssrf-guard.fuzz.test.ts
-sha256: d574557d8c208ce0f9f2aac865f05bf2f4684ecbb19eac0e80a3c1588f5d12dc
-generated_at: 2026-09-23T20:01:54.868356+00:00
+sha256: 0e5c17e70ec617fc45d4f387176c05adc787bd2be236294a4399dd20857ce849
+generated_at: 2026-09-27T15:54:07.148543+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Fixed-table test suite for the SSRF guard's `resolveSafeOutboundTarget` function, exercising a curated set of known-bypass hostile URLs (private ranges, loopback, link-local, encoded IPv4 literals, 6to4/Teredo embeddings, credentials, insecure schemes) and verifying the guard either rejects with the correct `SsrfRefusedError` reason or returns a pinned lookup. Despite the `fuzz` directory name, cases are deterministic — every input has one correct answer — so this is a regression table, not a `fast-check` property test.
+Deterministic table-driven test suite that exercises `resolveSafeOutboundTarget` (the SSRF guard) against a fixed set of well-known hostile-URL bypass techniques: private/loopback/link-local ranges, encoded IPv4 literals, IPv6-mapped and embedded IPv4 (6to4, Teredo), DNS names resolving to private space, insecure schemes, and embedded credentials. It is a fixed table, not a `fast-check` arbitrary, because the inputs are the known bypass vectors rather than random bytes.
 
 ## Key elements
 
-- **`mockDns(v4, v6)`** — helper that configures the mocked `dns.resolve4`/`resolve6` to return the given address arrays or rejection errors, enabling deterministic "DNS resolves to private space" scenarios.
-- **`describe("literal IP hostiles…")`** — 22-entry `it.each` table covering RFC 1918, 1122 loopback, 3927 link-local (cloud metadata), 6598 CGNAT, broadcast, unspecified, multicast, IPv6 loopback/ULA/link-local, IPv4-mapped IPv6, decimal/octal/hex-encoded IPv4, NAT64, 6to4, and Teredo encodings. All must be refused with `reason: 'unsafe-address'`.
-- **`describe("scheme and credential hostiles…")`** — verifies `http://` is refused (`insecure-scheme`), embedded credentials are refused (`credentials-in-url`), and non-URL strings are refused (`invalid-url`), all _before_ any DNS call.
-- **`describe("hostname whose DNS answer is private space")`** — five cases: sole private answer, multi-answer with one private (fail-closed), mixed v4-private/v6-public, public-only (accepted, `resolvedAddress` asserted), and both record types failing (`dns-resolution-failed`).
-- **`describe("literal IP never triggers a DNS query")`** — asserts `resolve4`/`resolve6` are never called for a public literal IPv4.
-- **`describe("the pinned lookup it hands back")`** — verifies `target.lookup` returns the same validated address for both `{ all: false }` and `{ all: true }` shapes, and that the DNS mock was consulted exactly once total (no re-resolution).
-- **`describe("the exemptHostname parameter")`** — three cases showing `exemptHostname` bypasses scheme + address checks for the exact literal IP, but does _not_ bypass credential checks, and does not apply to a different hostname.
+- **`mockDns(v4, v6)`** — configures the mocked `resolve4`/`resolve6` to return a fixed address array or a rejection, making DNS-dependent cases deterministic.
+- **Literal IP hostiles block** (~31 cases) — asserts `SsrfRefusedError` with `reason: 'unsafe-address'` for every non-public-unicast literal (RFC 1918, 1122, 3927, 6598, 919, IPv6 loopback/ULA/link-local, IPv4-mapped IPv6, decimal/octal/hex IPv4, NAT64, 6to4, Teredo, and other non-routable ranges).
+- **Scheme / credential / invalid-URL block** — asserts `insecure-scheme`, `credentials-in-url`, and `invalid-url` rejections, and verifies no DNS query is issued.
+- **DNS-resolved hostname block** — verifies fail-closed behavior when any one of several answers is private, mixed-family private v4, or complete resolution failure (`dns-resolution-failed`).
+- **Pinned-lookup block** — confirms the returned `target.lookup` always returns the single validated address (never re-resolves) in both `{ all: false }` and `{ all: true }` shapes, and that `resolve4` was called exactly once total (TOCTOU guard).
+- **`exemptHostname` block** — verifies a caller-supplied exact hostname exempts scheme and address checks, but still rejects embedded credentials and non-matching hostnames.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/ssrf-guard.ts`** — the sole dependency under test. This file imports `resolveSafeOutboundTarget` (the main entry point) and `SsrfRefusedError` (the rejection type) from that adapter and asserts on the `reason` discriminator attached to it. The adapter's own module docblock documents the 6to4/Teredo gap that the test table explicitly covers.
-- **`node:dns/promises`** (mocked) — the only external I/O the guard performs; the test replaces it via `jest.mock` so no real DNS resolution ever occurs.
+- **`src/infrastructure/adapters/ssrf-guard.ts`** — the module under test. The test imports `resolveSafeOutboundTarget` and `SsrfRefusedError` from it. The file's docblock references `ssrf-guard.ts`'s own module docblock for the 6to4/Teredo `embeddedIPv4()` gap.
 
 ## Notes
 
-- **Path rationale (documented in file header):** the guard is infrastructure, not a `webhooks` concern. `webhooks` is the only caller _today_, but its tests live under `src/modules/webhooks/tests/fuzz/`. This file stays at the infrastructure level so deleting the webhooks module cannot orphan the guard's test coverage.
-- **Not a true fuzzer:** the `fuzz` directory name is a convention for "adversarial input" suites in this repo; the inputs are a hand-picked table of known bypass techniques, not generated.
-- **DNS mock is mandatory:** the `dns.promises` module is mocked at the top of the file. Any test that exercises a hostname path must call `mockDns(...)` first; `beforeEach` resets the mocks. Forgetting this causes silent `ENOTFOUND` rejections that look like a guard bug but are actually unconfigured test state.
-- **`exemptHostname` does not weaken credential checks:** even the exempted hostname still rejects `user:pass@` URLs. This is an intentional invariant tested explicitly.
+- Lives at `tests/fuzz/`, **not** under `src/modules/webhooks/tests/fuzz/`, because the guard is infrastructure-level. Deleting the `webhooks` module must not delete these tests. The webhook-specific fuzz file (`webhook-ssrf.fuzz.test.ts`) covers redirect/timeout/plain-HTTP cases that reach this same guard along the delivery path.
+- DNS is fully mocked via `jest.mock('node:dns/promises')`; the suite must never depend on a real DNS server.
+- The `require` of the mocked module (with an eslint-disable) exists solely to access the `jest.fn()` instances for per-test configuration.
+- 6to4 and Teredo literals are explicitly in the table because `embeddedIPv4()` in the guard never unwraps them — they would otherwise pass every other range check as ordinary global addresses.
+- The `exemptHostname` parameter is an exact string match on the hostname only; it does not create a blanket bypass (credentials are still rejected, other hostnames are still refused).

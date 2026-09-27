@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/services/attempt.ts
-sha256: 08a28e4bd67c0a6b33279fa1f0c7f43c3a9bf8d6bc61e37911038cd7238bf940
-generated_at: 2026-09-23T19:42:01.090658+00:00
+sha256: 78f0884f7799a5290205e43e506892b0269ba855e402714e83e5a468827dd9ca
+generated_at: 2026-09-27T15:43:35.831701+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the core webhook delivery attempt: signs the payload, performs the SSRF-guarded POST to the subscriber's URL, and records the outcome (succeeded / pending-retry / exhausted) on the delivery row and the subscription's consecutive-failure streak. Shared by the queued job processor (`processDeliveryJob`) and the synchronous admin replay path so both agree on what "recording an outcome" means.
+Implements the single shared code path for "attempt one webhook delivery and record the outcome." It signs the payload, performs the SSRF-guarded POST via `deliverWebhook`, then writes the result (success, retryable failure, or exhaustion) onto the delivery row and the subscription's failure streak. Both the queued worker path (`processDeliveryJob` in `module.ts`) and the synchronous admin replay path (`deliveries.ts`) funnel through `attemptDelivery` so the two cannot drift on what recording an outcome means.
 
 ## Key elements
 
-- **`attemptDelivery`** _(exported)_ — Entry point. Takes an already-claimed `delivery` and a caller-supplied `subscription`; signs with active ring secrets, calls `deliverWebhook`, then delegates to `recordSuccess` or `recordFailure`. Returns `null` if the lease was lost mid-attempt.
-- **`processDeliveryJob`** — Queue handler (registered via `../module.ts` `consumers` entry). Claims the named row, loads its subscription, and calls `deliverIfPossible` → `attemptDelivery`.
-- **`recordSuccess`** — Marks the delivery `succeeded`, increments the success metric, resets the subscription's failure streak via `recordOutcome(id, true)`.
-- **`recordFailure`** — If the backoff ladder still has a slot, leaves the row `pending` with an incremented attempt counter (no subscription write). If exhausted, marks the row `exhausted`, increments the failure streak, and calls `disable` + `notifyOwnerOfAutoDisable` when `shouldAutoDisable` triggers.
-- **`finalizeUndeliverable`** — Terminal `exhausted` write when the subscription is missing, disabled, or has no active secret.
-- **`notifyOwnerOfAutoDisable`** — Emits a system audit event, then fire-and-forgets a courtesy email to the subscription owner (resolved fresh via `userService.getById`). Logs on lookup failure; the audit entry is already recorded.
-- **`requireLeaseToken`** — Runtime guard that throws if `delivery.leaseToken` is falsy, narrowing the optional type so `applyOutcome` receives a definite `string`.
-- **`deliverIfPossible`** — Wrapper that calls `attemptDelivery` or `finalizeUndeliverable` depending on whether the subscription is `null`.
+- **`attemptDelivery`** *(exported)* — Entry point. Validates the subscription is enabled and has at least one active ring secret, builds the Standard Webhooks envelope (`type`, `timestamp`, `data`), calls `deliverWebhook`, then routes to `recordSuccess` or `recordFailure`. Returns the updated delivery document or `null` if the lease was lost mid-attempt.
+- **`notifyOwnerOfAutoDisable`** *(internal)* — Fires an `AuditEvent` (`SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED`) and a best-effort courtesy email to the subscription owner. No-op when `disable` found nothing to disable.
+- **`requireLeaseToken`** *(internal)* — Narrows the optional `leaseToken` to a required `string`; throws if missing (guards against an unclaimed row reaching `applyOutcome`).
+- **`finalizeUndeliverable`** *(internal)* — Marks the delivery `exhausted` when there is nothing to attempt (disabled subscription, no active secret).
+- **`recordSuccess`** *(internal)* — Increments the success metric, writes `status: 'succeeded'` to the delivery, and resets the subscription's failure streak via `webhookSubscriptionRepository.recordOutcome(id, true)`.
+- **`recordFailure`** *(internal)* — Increments the failure metric. If `nextAttemptAt` yields a future timestamp, schedules the next retry (leaves row `pending`, bumps `attempt`). Otherwise delegates to `recordExhaustion`.
+- **`recordExhaustion`** *(internal)* — Writes `status: 'exhausted'`, increments the subscription's failure streak, and if `shouldAutoDisable` fires, disables the subscription, increments the auto-disable metric, and calls `notifyOwnerOfAutoDisable`.
+- **`deliverIfPossible`** *(internal, truncated)* — Wraps `attemptDelivery` to tolerate a possibly-missing subscription lookup.
 
 ## Relationships
 
-- **`../transport/webhook-delivery`** (`deliverWebhook`) — performs the actual signed HTTP POST; this file supplies the envelope, secrets, and SSRF exemption.
-- **`../repository`** (`webhookDeliveryRepository`, `webhookSubscriptionRepository`) — all outcome writes (`applyOutcome`, `recordOutcome`, `disable`) go through these.
+- **`../transport/webhook-delivery`** (`deliverWebhook`) — performs the actual signed, SSRF-guarded HTTP POST.
+- **`../repository`** (`webhookDeliveryRepository`, `webhookSubscriptionRepository`) — all outcome writes go through `applyOutcome` (lease-token-guarded) and `recordOutcome` / `disable`.
 - **`../domain`** (`nextAttemptAt`, `shouldAutoDisable`) — backoff scheduling and auto-disable threshold logic.
-- **`../secrets`** (`activeRingSecrets`) — filters the subscription's secret array to the active ring.
-- **`../config`** (`getWebhookDemoAllowedHost`) — provides the dev/test SSRF exemption host.
-- **`../emails`** (`subscriptionDisabledEmail`) — template for the auto-disable notification.
-- **`../audit`** (`webhooksAuditActions`) — action constants for audit events.
-- **`../metrics`** (`webhookDeliveryAttemptsTotal`, `webhookSubscriptionsAutoDisabledTotal`) — Prometheus counters incremented on each outcome.
-- **`../model`** — `WebhookDeliveryDocument` / `WebhookSubscriptionDocument` type definitions.
-- **`@infrastructure/adapters/mailer`** (`enqueueEmail`) — sends the owner notification email.
-- **`@infrastructure/observability/audit`** (`emitAuditEvent`) — records the auto-disable audit entry.
-- **`@infrastructure/adapters/logger`** — logs the failed owner-lookup error.
+- **`../secrets`** (`activeRingSecrets`) — selects which HMAC key to sign with.
+- **`../config`** (`getWebhookDemoAllowedHost`) — supplies the optional insecure-host exemption for the SSRF guard in dev/test.
+- **`../emails`** (`subscriptionDisabledEmail`) — provides the locale-aware email template for the auto-disable notification.
+- **`../audit`** (`webhooksAuditActions`) — enum value for the auto-disable audit event.
+- **`../metrics`** (`webhookDeliveryAttemptsTotal`, `webhookSubscriptionsAutoDisabledTotal`) — Prometheus counters incremented on every outcome.
+- **`../model`** (`WebhookDeliveryDocument`, `WebhookSubscriptionDocument`) — document shapes and the `leaseToken` contract.
+- **`@modules/users`** (`userService.getById`) — resolves `ownerUserId` to an email address for the courtesy notification.
+- **`@infrastructure/observability/audit`** (`emitAuditEvent`) — records the auto-disable as an audit trail entry.
+- **`@infrastructure/adapters/mailer`** (`enqueueEmail`) — queues the owner notification email.
+- **`@infrastructure/adapters/logger`** (`logger`) — logs the error path when owner lookup fails.
 - **`@infrastructure/i18n`** (`getDefaultLocale`) — locale for the email template.
-- **`@modules/users`** (`userService.getById`) — resolves the owner's current email address.
-- **`../module.ts`** — registers `processDeliveryJob` on the queue consumers manifest.
+- **`../module.ts`** — registers `processDeliveryJob` as a queue consumer; that job is the primary caller of `attemptDelivery`.
 
 ## Notes
 
-- `attemptDelivery` requires an **already-claimed** row. If `applyOutcome` returns `null`, the lease was lost (another worker re-claimed the row); the result is silently dropped — never retried.
-- A single failed attempt with retries remaining does **not** increment the subscription's failure streak. Only a fully exhausted chain counts as one failure.
-- The `timestamp` field in the Standard Webhooks envelope is `delivery.createdAt` (event time), not `Date.now()`, so it stays identical across retries of the same delivery.
-- The subscription is **caller-supplied** (not re-fetched inside `attemptDelivery`). This is deliberate: `processDeliveryJob` already loaded it to decide whether there is anything to send, and `replay` loads it differently.
-- `notifyOwnerOfAutoDisable` is strictly best-effort. The audit entry is written unconditionally; a failed user lookup only costs the email, not the record.
+- **Lease-token race handling:** `applyOutcome` returns `null` if the token no longer matches (another worker re-claimed the row). The result is simply dropped — never retried. This is a design guarantee, not a bug.
+- **Failure streak semantics:** A single failed attempt that still has retries left does **not** increment the subscription's consecutive-failure count. Only a fully exhausted chain (no backoff steps remaining) counts as a failure. This is intentional: "sustained failure" means the whole chain gave up.
+- **`attemptDelivery` requires an already-claimed row.** Callers must have obtained the row via `claimPending` or `claimForReplay` so `leaseToken` is set. Passing an unclaimed row will throw in `requireLeaseToken`.
+- **Subscription is caller-supplied, not re-fetched.** This is what allows `processDeliveryJob` (which fetched it to decide whether to send) and `replay` (which may load it differently) to share the same function without redundant I/O.
+- **Auto-disable notification is fire-and-forget.** The audit entry is written unconditionally; the email is a courtesy. A failed `userService.getById` only costs the email, not the audit record. It is explicitly *not* the operator-facing alert (that is Alertmanager's responsibility).
+- **Payload `timestamp` is `delivery.createdAt`, not `Date.now()`.** This keeps the timestamp identical across every retry of the same delivery, matching the Standard Webhooks spec documented in `asyncapi.yaml`.

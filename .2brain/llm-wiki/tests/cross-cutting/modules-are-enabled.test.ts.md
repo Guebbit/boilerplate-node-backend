@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/modules-are-enabled.test.ts
-sha256: 8ce72804de8dce4139bcf992e5bc611d9748e99d7350d0f4644fcae8c2c11e9e
-generated_at: 2026-09-23T19:57:34.707156+00:00
+sha256: f73e9a83c4057601678fb91cf760f0a17afcbe49ee6e3fee7340739f41da04b5
+generated_at: 2026-09-27T15:51:18.209258+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting consistency guard that enforces a bidirectional invariant: every directory under `src/modules/` appears in `enabledModules`, and every entry in `enabledModules` corresponds to an existing directory. Catches the silent-failure mode where a module exists on disk but is never registered, surfacing the problem in CI rather than as a missing endpoint in production.
+A cross-cutting integration test that enforces bidirectional consistency between the `src/modules/` directory tree and the `enabledModules` array in `src/modules.ts`. It exists because a module folder missing from `enabledModules` fails silently (no boot error, no 404 during dev), and a name in `enabledModules` with no corresponding folder is dead config.
 
 ## Key elements
 
-- **`MODULES_ROOT`** — resolved path to `src/modules/`, built from `__dirname`.
-- **`moduleFolders()`** — returns the names of all immediate subdirectories of `MODULES_ROOT` (uses `readdirSync` + `statSync`).
-- **`describe('modules are enabled')`** — three assertions:
-    - _Canary_: at least one folder exists, so the two real checks can't pass vacuously.
-    - _Forward_: every folder name is present in the `enabledModules[].name` set.
-    - _Reverse_: every `enabledModules[].name` has a matching folder (no orphaned registrations).
+- **`moduleFolders()`** — reads `MODULES_ROOT` via `readdirSync` + `statSync` and returns the names of all subdirectories (i.e., the module folders on disk).
+- **`describe('modules are enabled')`** — contains three assertions:
+  - *Canary*: `moduleFolders()` is non-empty, so the sweep below cannot pass vacuously.
+  - *Folder → enabled*: every folder name appears in `enabledModules.map(m => m.name)`.
+  - *Enabled → folder*: every `appModule.name` in `enabledModules` corresponds to an actual folder.
 
 ## Relationships
 
-- **`src/modules.ts`** — sole import target; the test reads its `enabledModules` export and validates it against the filesystem. A mismatch here is the only thing this file detects.
+- **`src/modules.ts`** — exports `enabledModules`; this test is the sole consumer asserting that its `.name` fields are in 1-to-1 correspondence with the directory tree.
+- **`tests/support/paths.ts`** — provides the `MODULES_ROOT` constant (imported via the `@tests/paths` alias), anchoring the filesystem scan to the project's `src/modules/` directory regardless of CWD.
 
 ## Notes
 
-- The reverse check depends on the convention that `AppModule.name` equals the folder name (documented in `src/kernel/registry.ts`). If that convention is ever relaxed, the reverse assertion will produce false positives.
-- The canary test is intentional: without it, deleting the entire `src/modules/` directory would let both real assertions pass with an empty array, masking a total module loss.
-- Uses `__dirname` (CJS-style) rather than `import.meta.url`; keep in mind if the project migrates to ESM.
+- The test relies on the documented invariant (`src/kernel/registry.ts`) that `AppModule.name` equals its folder name. If that convention changes, both the `enabledModules` entries and this test must be updated together.
+- The canary test (`length > 0`) is intentional guard-rail: without it, a misconfigured `MODULES_ROOT` would cause the two substantive assertions to pass vacuously with an empty array.
+- Only directories are collected; stray files under `src/modules/` are ignored.

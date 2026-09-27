@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/unit/routes.test.ts
-sha256: 69ee66a367e08ea3b7fa833d2765e6c255c0f31c862b33ebdaf5ce04db03ac16
-generated_at: 2026-09-23T19:36:46.058105+00:00
+sha256: e2536e3619b74beda1dc529ef48c8882fe274db62b14aa7ec8defcc928db2b58
+generated_at: 2026-09-27T15:40:25.988257+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Structural contract test for the user-administration router. It asserts that every endpoint is mounted in the documented order, that the full authorization guard chain is present on each route in the correct sequence, that caching tags/keys are shared correctly across the two listing endpoints, that mutations invalidate both serving modules' caches, and that upload and hard-delete middleware are attached exactly where they belong. It exists so a regressed mount order, a dropped guard, or a missing cache invalidation fails loudly in CI rather than silently exposing an admin-only directory.
+Unit tests that verify the user-administration router (`@modules/users/routes`) is mounted correctly: the exact endpoint set and order, per-endpoint authorization guard ordering, cache-header semantics, and upload-middleware attachment. The file exists to catch regressions where a route is added without the identity guard + key assertion, mounted above the shared `router.use(getAuth, isAuthOrCredential)` gate, or accidentally exposed to public or shared-cache paths.
 
 ## Key elements
 
-- **`ALL`** – Ordered list of the 10 documented endpoint signatures (`POST /search` … `DELETE /:id/2fa`). Used as the single source of truth for both the mount-order test and the per-endpoint `it.each` loops.
-- **`describe('user routes — what is mounted')`** – Verifies the exact signature list and that `/search` precedes `/:id` (path specificity).
-- **`describe('user routes — authorization')`** – Per endpoint, asserts the guard chain contains `getAuth`, an identity guard (`isAuthOrCredential`), and `requirePermissionGuard` in that strict order. Also asserts zero endpoints lack `requirePermissionGuard`.
-- **`describe('user routes — caching and uploads')`** – Checks shared cache key (`users:search`, tag `users`) on both listings; single-read cache tag on `GET /:id`; dual-tag invalidation (`users|account`) on all mutation routes; `upload.single(imageUpload)` + `validateUploadedImages` + `quarantineUploadedImages` on create/update; and `routeFlag(hardDelete)` exclusive to `DELETE /:id/hard`.
-- **Jest mocks** – Replaces `cache`, `route-flag`, and `upload` middlewares with lightweight spies (sourced from `tests/support/routes.ts` mock factories) so `chainOf` can read the decorator chain as strings.
+- **`ALL`** — Ordered list of all 11 documented endpoint signatures (`POST /search` … `DELETE /:id/2fa`); the single source of truth for `it.each` iteration.
+- **"what is mounted" block** — Asserts `routeSignatures(router)` equals `ALL` exactly, and that `/search` appears before `/:id` (Express param-matching reachability).
+- **"authorization" block** — For every endpoint, asserts the guard chain contains `getAuth` → an identity guard (`isAuthOrCredential`) → `requirePermissionGuard` in that strict order. A separate test asserts zero endpoints lack `requirePermissionGuard` (no public reads).
+- **"caching and uploads" block** — Asserts GET endpoints carry `privateNoCache` (RFC 9111 §3.5) and never a `setCache*` entry; POST endpoints carry `noStore`; three mutation endpoints include `upload.image` + `validateUploadedImages` + `quantineUploadedImages`; `DELETE /:id/hard` is gated by `routeFlag(hardDelete)` while the other two DELETE routes are not.
+- **`jest.mock` × 3** — Replaces the cache, route-flag, and upload middlewares with lightweight stubs from `@tests/routes` so the router can be imported without side effects.
 
 ## Relationships
 
-- **`src/modules/users/routes.ts`** – The sole SUT. This file imports `{ router }` from it and inspects the router's mounted paths, guard arrays, and middleware chains.
-- **`tests/support/routes.ts`** – Provides all inspection utilities (`routeTable`, `routeSignatures`, `guardsOn`, `optionsOf`, `identityGuardIndex`, `chainOf`) and the three mock factories (`cacheMock`, `routeFlagMock`, `storageMock`) used in the `jest.mock` hoists.
+- **`src/modules/users/routes.ts`** — The file under test. Imported as `router`; all assertions inspect its middleware chain and mounted routes.
+- **`tests/support/routes.ts`** — Provides the structural inspection helpers (`routeTable`, `routeSignatures`, `guardsOn`, `identityGuardIndex`, `chainOf`) and the three mock factories (`cacheMock`, `routeFlagMock`, `storageMock`) consumed by the `jest.mock` calls.
 
 ## Notes
 
-- Guards are asserted **per endpoint** via `it.each(ALL)`, not once globally. This means a route accidentally mounted _above_ the `router.use(getAuth, isAuthOrCredential)` line still produces a failing assertion for that route specifically.
-- The identity guard is `isAuthOrCredential` (not plain `isAuth`) because the user directory doubles as a tenant sync surface reachable by API keys.
-- Cache invalidation must clear **both** `users` and `account` tags: the same row is served to admins at `/users/:id` and to the owner at `/account`. Clearing only one leaves the other serving stale data.
-- `keyParameters` on the shared listing cache key is asserted non-empty — a key with no parameters would collapse all tenant listings into one shared entry.
+- Guards are asserted **per endpoint**, not once at the router level. A route mounted *above* the shared `router.use(getAuth, isAuthOrCredential)` line would still pass a single "guards exist" check but fails here because its individual chain lacks the guard.
+- The identity guard is specifically `isAuthOrCredential`, not a bare `getAuth` — the user directory is a tenant surface that an API key may sync against, so the guard must accept credential-based auth.
+- The `/search`-before-`/:id` test is a *reachability* guard: Express matches `/:id` first if order is wrong, silently swallowing `/search`.
+- The module doc-block at the top of the file is the authoritative spec for the invariant the tests enforce; read it before modifying the router.

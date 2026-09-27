@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/repository.test.ts
-sha256: 2c54272aa7eceb60a07bdad7c3449666a000d76f5d01d61a416997f85233717e
-generated_at: 2026-09-23T19:35:32.172915+00:00
+sha256: d6013f149387d9c8f8e811c1bfcf7240ef92bb83e51f7fac05dfd6455ef23c63
+generated_at: 2026-09-27T15:39:52.177033+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for `userRepository` that exercises the full CRUD surface (create, findById, findOne, findAll, count, save, deleteOne, updateMany) plus the token-facing methods (`tokenRemoveAll`, `tokenRemoveExpired`) against an in-memory MongoDB instance. It verifies repository-level behavior—persistence semantics, lean vs. hydrated documents, pagination options, and token lifecycle—without depending on an external database.
+Integration test suite for `userRepository`, exercising the full CRUD surface and the token-facing methods (`tokenRemoveAll`, `tokenRemoveExpired`) against an in-memory MongoDB instance. It verifies repository behavior end-to-end (including Mongoose pre-save hooks, lean queries, and pagination options) without requiring a real database.
 
 ## Key elements
 
-- **`setupTestDb()`** — called once at module scope; wires up an in-memory Mongo that all suites share.
-- **`describe('create')`** — confirms the pre-save hook hashes the password and the returned document carries a generated `_id`.
-- **`describe('findById')` / `describe('findOne')`** — happy-path retrieval and the `null` return on miss.
-- **`describe('findAll')`** — validates filter, `limit`, `skip` options, and that results are **lean** plain-JS objects (no Mongoose `save`).
-- **`describe('count')`** — total and filtered document counts; returns `0` on empty collection.
-- **`describe('save')`** — flushes in-memory Mongoose mutations back to the database.
-- **`describe('deleteOne')` / `describe('updateMany')`** — destructive removal and batch `$set` updates with filter isolation.
-- **`describe('token methods')`** — exercises `tokenRemoveAll` (by type) and `tokenRemoveExpired` (expiration + `supersededAt` grace-window sweep). Fixtures seed tokens via `hashToken(...)` to mirror production's at-rest format.
+- **`describe('userRepository')`** — top-level block; each nested `describe` maps to one repository method: `create`, `findById`, `findOne`, `findAll`, `count`, `save`, `deleteOne`, `updateMany`, and the token methods.
+- **`setupTestDb()`** (from `@tests/setup-test-db`) — called once at module scope; provisions the in-memory Mongo and resets it between runs.
+- **`makeUser` / `createUser` / `PLAIN_PASSWORD`** (from `@modules/users/tests/factories`) — test helpers: `makeUser` builds a plain object, `createUser` persists one via the repository, `PLAIN_PASSWORD` is the known-plaintext constant used to assert hashing.
+- **`userRepository`** (from `../../repository`) — the SUT; every assertion targets its returned values or side-effects.
+- **`TokenType`, `hashToken`, `userModel`** (from `../../model`) — token constants, the hashing utility used to seed realistic token fixtures, and the raw Mongoose model (imported directly, bypassing the barrel, per the `eslint-plugin-boundaries` allowance for intra-module access).
+- **`asStub`** (from `@tests/stub`) — type-cast helper used in the "returns lean objects" assertion to check for absence of Mongoose methods.
 
 ## Relationships
 
-- **`src/modules/users/repository.ts`** — the system under test; imports `userRepository`.
-- **`src/modules/users/model.ts`** — imports `TokenType`, `hashToken`, the `UserDocument` type, and `userModel as Users` (direct path, not barrel, since no sibling module re-exports it).
-- **`src/modules/users/tests/factories.ts`** — provides `makeUser`, `createUser`, and `PLAIN_PASSWORD` for test fixtures.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory Mongo used by every test.
-- **`tests/support/stub.ts`** — `asStub` is used to type-narrow a lean object and assert absence of Mongoose instance methods.
+- **`src/modules/users/repository.ts`** — the module under test; the suite imports `userRepository` and asserts every public method.
+- **`src/modules/users/model.ts`** — provides `TokenType`, `hashToken`, and `userModel`; the suite uses these to seed token fixtures and to reference the schema directly.
+- **`src/modules/users/tests/factories.ts`** — supplies `makeUser`, `createUser`, and `PLAIN_PASSWORD`, the primary data fixtures for every test case.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`, which wires up the in-memory MongoDB that all tests run against.
+- **`tests/support/stub.ts`** — provides `asStub`, a type-safe cast utility used to assert on object shape (e.g., absence of `.save`).
 
 ## Notes
 
-- Tokens in fixtures are **always** stored via `hashToken(...)`; a plain-text seed would describe a document shape production never writes.
-- `tokenRemoveExpired` returns a **count** (number removed), not a status code—the service layer owns the response semantics.
-- The `supersededAt` grace-window test is critical: a rotated-out token keeps its original `expiration` (up to a year for `remember: long`), so the sweep must also clear tokens whose `supersededAt` is older than the grace window, while preserving those still within it.
-- The direct `@modules/users/model` import bypasses the barrel file intentionally; `eslint-plugin-boundaries` permits a spec reaching into its own module's internals.
+- Token fixtures seed `hashToken(...)` explicitly rather than going through a `tokenAdd` helper, because tokens are always hashed at rest; a plaintext seed would not mirror what production writes.
+- `findAll` is expected to return **lean** (plain JS) objects, not Mongoose documents — the suite asserts `typeof user.save === 'undefined'` to lock that in.
+- `tokenRemoveExpired` returns a **count** of removed tokens, not a status code; the test asserts the numeric return and then re-reads the document to verify the surviving token.
+- The "superseded past grace window" test (truncated in the file) confirms that rotated-away tokens with a long `expiration` are still swept once their `supersededAt` falls outside the grace window, while freshly rotated ones are kept.
+- The direct import of `userModel` from `@modules/users/model` (rather than the barrel) is intentional and sanctioned by `eslint-plugin-boundaries` for same-module specs.

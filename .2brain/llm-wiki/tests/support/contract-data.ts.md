@@ -1,7 +1,7 @@
 ---
 source: tests/support/contract-data.ts
-sha256: bebc59ec7523259002745f2b7ec9e6c3a444b05840e55f9f1ea4f7fd5197c580
-generated_at: 2026-09-23T20:09:46.794042+00:00
+sha256: 0c0e464592d815b623ae8225a7c59251343c21f33768872a2d686f5f4635b385
+generated_at: 2026-09-27T15:59:39.016826+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A Zod-schema-driven payload generator that walks a `ZodType` and produces request bodies that either satisfy the schema (`validPayload`) or violate exactly one constraint (`invalidPayloads`). It exists to let the contract test suite answer "does the API honour its contract for _any_ legal input?" as a complement to the hand-written scenario factories in each module's `tests/factories.ts`.
+Zod-schema-driven payload generator that produces both valid and invalid request bodies for contract testing. It answers "does the API honour its own contract for *any* legal input" — a question the hand-written factories (each module's `tests/factories.ts`) are not designed to answer. It is additive: deterministic scenario tests continue to use the factories; this module covers the full input space.
 
 ## Key elements
 
-- **`resolveContractDataSeed()`** (exported) — reads `RANDOM_DATA_SEED` from the environment; falls back to a fresh random integer. Used once to seed the process-wide PRNG.
-- **`createRandom(seed)`** (internal) — Mulberry32 PRNG returning `() => number` in [0, 1).
-- **`ensureSeeded()`** (internal) — one-time initialisation; logs the seed to `console.log` so it survives a mocked logger.
-- **`randomStringForFormat(format?)`** (internal) — picks a format-appropriate string: one of several email shapes (plus-tag, 8+ char TLD, subdomain), a URL, an ISO datetime, a v4 UUID, or a random word-phrase.
-- **`satisfyPattern(value, checks)`** (internal) — validates a string against every `regex` check; **throws** if no sample exists in `pattern-samples.ts` rather than returning a value the contract declares illegal.
-- **`clampStringLength(value, checks)`** (internal) — pads or truncates to honour `min_length` / `max_length`.
-- **`buildValue(schema)`** (internal) — recursive Zod v4 AST walker; handles `string`, `number`, `boolean`, `literal`, `enum`, `array`, `object` (and the truncated remainder). Always emits whole numbers to cover OpenAPI `type: integer` fields that may lack an explicit `.int()` in the generated schema.
-- **`isOptionalField(schema)`** (internal) — `true` for `optional` **and** `default` wrappers; deliberately **false** for `nullable` (nullable fields must still be present).
-- **`unwrapField(schema)`** (internal) — strips `optional` / `nullable` / `default` wrappers to reach the underlying constraint-carrying schema.
-- **`defOf` / `checksOf`** (internal) — thin accessors over `_zod.def` (Zod v4's typed public introspection surface).
-- **`ZodDef`, `ZodCheckDef`** (internal interfaces) — structural descriptions of the `_zod.def` and check shapes the walker relies on.
+- **`validPayload(schema)`** (exported) — walks a `ZodType` and returns a payload that satisfies every constraint.
+- **`invalidPayloads(schema)`** (exported) — returns an array of payloads, each violating exactly one constraint (useful for asserting per-field 422s).
+- **`resolveContractDataSeed()`** (exported) — reads `RANDOM_DATA_SEED` from the environment; falls back to a random integer if unset.
+- **`createRandom(seed)`** — Mulberry32 PRNG (~10 lines); yields deterministic `[0,1)` floats.
+- **`ensureSeeded()`** — one-time initialisation; logs the seed to `console.log` (bypasses mocked loggers) so a failed run can be reproduced.
+- **`isOptionalField(schema)`** — treats `optional` and `default` as "may be omitted"; deliberately excludes `nullable`.
+- **`unwrapField(schema)`** — recursively peels `optional`/`nullable`/`default` wrappers to reach the inner schema's real constraints.
+- **`randomStringForFormat(format)`** — produces format-appropriate strings (email variants, URL, ISO datetime, v4 UUID, or generic word-strings).
+- **`satisfyPattern(value, checks)`** — validates a string against every `regex` check; substitutes a known-good sample from `pattern-samples.ts` when needed; **throws** if no sample exists rather than emitting a contract-illegal value.
+- **`clampStringLength(value, checks)`** — pads or truncates to satisfy `min_length`/`max_length`.
+- **`buildValue(schema)`** — recursive type-switch (string, number, boolean, literal, enum, array, object, etc.) that assembles a concrete value from a schema node.
+- **`ZodDef` / `ZodCheckDef`** — local structural type annotations for zod v4's `_zod.def` introspection surface.
 
 ## Relationships
 
-- **`tests/contract/request-contract.test.ts`** — primary consumer; calls `validPayload` / `invalidPayloads` to drive the "any legal input" contract assertions.
-- **`tests/support/pattern-samples.ts`** — provides `sampleForPattern`, which `satisfyPattern` calls to obtain a known-good string for a given `RegExp` source; a missing entry is a hard error.
-- **`tests/support/stub.ts`** — provides `asStub`, used by `defOf` to cast a `ZodType` and reach `_zod.def` without widening the public type.
-- **`tests/unit/support/contract-data.test.ts`** — unit-tests the generator itself (seed resolution, `buildValue` output shapes, `satisfyPattern` error path, etc.).
+- **`tests/contract/request-contract.test.ts`** — primary consumer; imports `validPayload` and `invalidPayloads` to drive request-level contract assertions.
+- **`tests/support/pattern-samples.ts`** — provides `sampleForPattern(patternSource)`, the registry of known-good strings that `satisfyPattern` looks up when a generated value fails a regex check.
+- **`tests/support/stub.ts`** — provides `asStub`, the type-eraser used to reach into `_zod.def` without fighting TypeScript's nominal typing on `ZodType`.
+- **`tests/unit/support/contract-data.test.ts`** — unit-test suite exercising this module in isolation (PRNG determinism, optional-field logic, pattern-substitution throw path, etc.).
 
 ## Notes
 
-- The PRNG is seeded **once per process**, not per call. Repeated invocations within a test file draw successive values from the same stream (distinct emails, ids, …) but remain reproducible via the printed seed.
-- `RANDOM_DATA_SEED` is intentionally the **same env-var name** a paired frontend repo uses for its own mock-profile generator. The two PRNGs (Mulberry32 here, Mersenne Twister there) produce unrelated streams for the same seed; that is by design. The shared name is a **vocabulary convention** so a seed quoted in a failure report is actionable in both repos.
-- `satisfyPattern` **throws** on an unregistered pattern rather than silently emitting a value the schema rejects—this keeps 422 failures attributable to the endpoint, not the generator.
-- Numbers are always emitted as **integers** (`Math.round`) to cover the gap where `openapi.yaml` declares `type: integer` but the generated Zod schema only has `.number().min(…)`.
-- The seed is written to `console.log` (with an eslint-disable) rather than the project logger, so it is visible even in test environments that mock the logger.
+- **No faker, no zod-mock library.** `@faker-js/faker@10` is ESM-only and cannot be loaded under this project's ts-jest / CommonJS setup. `zod-fixture` and `@anatine/zod-mock` lag behind zod v4. The in-repo walker avoids both dependency risks.
+- **Seed is process-wide, not per-call.** `ensureSeeded` runs once; subsequent calls draw from the same stream, so repeated calls in one test file produce distinct values.
+- **`RANDOM_DATA_SEED` is a shared vocabulary** with a paired frontend repo (which uses it for its own response-mock generator). The two sides intentionally use *different* PRNG algorithms (Mulberry32 vs. Mersenne Twister); the shared name is for seed-referencing in failure reports, not stream agreement.
+- **Numbers are always rounded to integers.** This satisfies both `type: number` and `type: integer` OpenAPI fields, since `integer` doesn't always surface as `.int()` in the generated zod schema.
+- **`default` is treated as optional; `nullable` is not.** Omitting a defaulted field is legal; omitting a nullable field is not (it must be present and hold `null`).
+- **`satisfyPattern` throws rather than degrading.** If a regex has no entry in `PATTERN_SAMPLES`, the error message tells the developer exactly where to add it. This prevents `validPayload` from silently producing a 422-inducing payload and misattributing the failure to the endpoint.

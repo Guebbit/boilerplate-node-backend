@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/contract/api.contract.test.ts
-sha256: d7510ef1c504722a4f01f5ae45cb24071e8e089e03ba0c8d6af16bf26d4c7d10
-generated_at: 2026-09-23T19:34:52.838582+00:00
+sha256: d88e283b5c0ba60a3a87ebeabe20e0c59b3067a5cafb401a274a0cb287455fe0
+generated_at: 2026-09-27T15:39:26.563593+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the user-facing endpoints (`/users`, `/users/{id}`, `/account`, `/account/signup`). Every response is validated against `openapi.yaml` via the `toSatisfyApiSpec()` matcher, and a string-level guard (`assertNoCredentials`) ensures no password, token, or bcrypt hash ever appears in a serialized body—regardless of field name.
+Contract tests for the `/users` and `/account` endpoints. Because `openapi.yaml` declares `additionalProperties: false` on the `User` schema, these tests verify that **no** undeclared field (password, tokens, a bcrypt hash) can leak into any user response — not just the ones a developer thought to name. They also pin endpoint-specific behavior: cache headers, HTTP status codes for error cases, PUT replace-vs-PATCH merge semantics, and password-provisioning rules on admin create.
 
 ## Key elements
 
-- **`assertNoCredentials(payload)`** — serializes the response body and asserts it contains none of `"password"`, `"tokens"`, or `"$2b$"` (bcrypt prefix). Catches any undeclared credential field the OpenAPI `additionalProperties: false` might not cover.
-- **`jest.mock('@infrastructure/observability/audit')`** — full module replacement (not `jest.spyOn`) that swaps `emitAuditEvent` with a `jest.fn()` and re-wires `recordAudit` to call the mock, because `recordAudit` closes over its own module-level reference.
-- **`GET /users`** — contract + no-credentials check; also asserts each list item carries a `role` value matching the single-user endpoint.
-- **`GET /users/{id}`** — contract + no-credentials check.
-- **`GET /account`** — contract + no-credentials check; additionally asserts `Cache-Control: no-store`.
-- **`POST /account/signup`** — 201 success contract, 409 duplicate-email error contract.
-- **`POST /users`** (admin create) — covers password-supplied, `sendSetupEmail: true`, missing-credential 422, `sendSetupEmail: false` ≡ omitted, and breached-password 422 (verifies no DB row was created via `userRepository.findOne`).
-- **`PUT /users/{id}`** — update without re-supplying password, avatar preservation, breached-password 422.
-- **`DELETE /users/{id}`** — verifies the audit event carries `action: 'admin.user.soft_deleted'` (distinguishes soft delete from erasure).
+- **`assertNoCredentials(payload)`** — serializes the response body to JSON and asserts it contains none of `password`, `tokens`, or `$2b$` (a bcrypt hash prefix).
+- **`jest.mock('@infrastructure/observability/audit', …)`** — replaces the audit port entirely (not a spy) and reroutes `recordAudit` so a spy on `emitAuditEvent` still catches every call.
+- **`describe('GET /users')`** — 200 status, no credentials, and each item carries `role` (regression guard for a `toJSON` transform that silently dropped it).
+- **`describe('GET /users/{id}')`** — 200 status, no credentials.
+- **`describe('GET /account')`** — 200 status, no credentials, and `cache-control: no-store`.
+- **`describe('POST /account/signup')`** — 201 on success; 409 (not 422) on duplicate email.
+- **`describe('POST /users')`** — admin create with direct password, with `sendSetupEmail: true`, and 422 when neither is supplied (or when `sendSetupEmail` is explicitly `false`).
+- **`describe('PUT /users/{id}')`** — full-replace semantics (RFC 9110 §9.3.4): omitted optionals are cleared; `password` is never touched; missing required identity fields → 422; update without resubmitting a password.
+- **`describe('PATCH /users/{id}')`** — partial-merge: sends only `{ role }`, leaves email/username/avatar untouched.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported as side-effect (`@tests/contract`); registers the `toSatisfyApiSpec()` jasmine/jest matcher that validates a response against the OpenAPI document.
-- **`tests/support/http.ts`** — provides `api()` (supertest wrapper) and `authenticateAs(role)` (creates + logs in a test user, returns bearer token).
-- **`tests/support/ports.ts`** — provides `observePort(fn)` which wraps a port function call in a spy-safe observer, working around the swc/CJS non-configurable-getter problem that blocks `jest.spyOn` on namespace imports.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` runs once before the suite to provision the in-memory test database.
-- **`src/modules/users/tests/factories.ts`** — supplies `createUser`, `PLAIN_PASSWORD`, and the `userRepository` instance used to assert absence of a row after a rejected create.
-- **`src/infrastructure/observability/audit.ts`** — fully mocked; the test spies on `emitAuditEvent` to assert the exact audit `action` string emitted on DELETE.
-- **`src/modules/users/repository.ts`** — `userRepository` (from the same module) is queried in the breached-password POST test to confirm no document was persisted.
+- **`tests/support/contract.ts`** — imported as a side-effect (`import '@tests/contract'`); likely registers OpenAPI-schema validation or global contract assertions.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module top-level to provision a clean database before any test runs.
+- **`tests/support/http.ts`** — provides the `api()` supertest helper and `authenticateAs(role)` for obtaining bearer tokens.
+- **`tests/support/ports.ts`** — supplies the `observePort` pattern used to replace (not spy) the audit port under swc/CommonJS.
+- **`src/modules/users/tests/factories.ts`** — `createUser`, `PLAIN_PASSWORD`, and `userRepository` are used to seed test fixtures.
+- **`src/modules/users/model.ts`** — `DEFAULT_USER_IMAGE_URL` is asserted after a PUT that omits `imageUrl`.
+- **`src/infrastructure/observability/audit.ts`** — mocked via `jest.mock`; the real `buildAuditEvent` is still used inside the replacement `recordAudit`.
 
 ## Notes
 
-- The audit mock is a **replacement**, not a spy. `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS namespace import exposes under swc; the factory in `tests/support/ports.ts` (`observePort`) is the sanctioned workaround.
-- `recordAudit` must be explicitly re-wired in the mock because it closes over its _own_ module's `emitAuditEvent`; without the override, spying on the exported `emitAuditEvent` would be blind to `recordAudit` call-sites.
-- `assertNoCredentials` is a blunt string search over the entire JSON. It will false-positive if any legitimate string value (e.g. a username) contains the words "password" or "tokens"—a known trade-off accepted for the security guarantee.
-- The `?role=` filter on `GET /users` was **deliberately removed** (role moved to a membership store) and is not re-tested here.
-- Several tests carry `B25:` comments referencing a security-audit checklist item; they guard against regression of password-breach rejection on create and update paths.
+- **Audit mock is a full replacement, not a spy.** `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS namespace import exposes under swc. The replacement must also reroute `recordAudit` because it closes over its own module's `emitAuditEvent`, bypassing the top-level mock.
+- **PUT vs PATCH.** PUT omits optionals → they are cleared (e.g. `imageUrl` resets to `DEFAULT_USER_IMAGE_URL`, `phone` becomes `undefined`). PATCH sends only the changed field and leaves everything else intact.
+- **`sendSetupEmail: false` is equivalent to omitting it** — both result in 422 if no password is also supplied.
+- **`?role=` filter is deliberately absent.** Role is a membership fact, not a document column; the two-step resolve `createRepository`'s `exact` spec cannot express. No current caller needs it.
+- **Breach checks** (password-strength policies across every password-set path) live in a sibling file `tests/contract/password-set-paths.test.ts`, not here.
+- **409 vs 422 on signup:** duplicate email is a conflict (409), not a validation error (422).

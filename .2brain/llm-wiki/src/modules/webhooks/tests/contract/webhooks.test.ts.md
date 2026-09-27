@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/tests/contract/webhooks.test.ts
-sha256: 282801a72d74fdf16dd65b2abee4871a3b5e60ff8b5de01b1d3cabbd38671ac1
-generated_at: 2026-09-23T19:43:42.873629+00:00
+sha256: 4d34f4e39843f93e48427c2473cba04e250b46910524f5c50ea07187e4c5f713
+generated_at: 2026-09-27T15:45:15.082827+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/webhooks` admin HTTP surface (subscriptions CRUD, delivery log, replay, and the public event catalogue). Each assertion is paired with a `toSatisfyApiSpec()` check that validates the response body against the bundled `openapi.yaml`, ensuring the live API never drifts from its published spec.
+Contract tests that exercise every `/webhooks` admin endpoint (subscriptions CRUD, secret rotation, delivery log, replay, and the public event catalogue) and assert the responses conform to the bundled `openapi.yaml`. They exist to catch API-shape drift before it reaches consumers.
 
 ## Key elements
 
-- **`subscriptionBody(overrides?)`** — factory that returns a valid subscription payload pointing at `https://example.test/inbox` (a URL nothing will ever call). Accepts a shallow-merge override map for mutation tests.
-- **`describe('GET /webhooks/subscriptions')`** — 401 unauth, 403 for a role without the webhooks key, and a positive list test asserting `secret`/`newSecret` are absent while `secretIds` is present.
-- **`describe('POST /webhooks/subscriptions')`** — creation (201, `whsec_` prefix, defaults), 422 for plain-HTTP URL, 422 for empty `eventTypes`, 403 for insufficient role, and 422 when the per-admin subscription cap (env `NODE_WEBHOOK_SUBSCRIPTION_CAP`) is reached.
-- **`describe('PATCH /webhooks/subscriptions/:id')`** — secret rotation (ring grows to 2), 422 when removing the last secret id, 404 for an id outside the caller's scope.
-- **`describe('DELETE /webhooks/subscriptions/:id')`** — 200 on delete, then re-lists to confirm the record is gone.
-- **`describe('GET /webhooks/deliveries')`** — 401, empty-page shape, 422 for an unrecognised `status` filter value.
-- **`describe('POST /webhooks/deliveries/:id/replay')`** — 404 for a non-existent delivery id.
-- **`describe('GET /webhooks/events')`** — returns exactly the six-event public catalogue; 401 unauth.
-- **`setupTestDb()`** — called once at module top-level to seed the test database before any suite runs.
+- **`subscriptionBody(overrides?)`** — local factory returning a default subscription payload pointed at `https://example.test/inbox` so no real delivery ever occurs; tests spread overrides on top.
+- **`describe('GET /webhooks/subscriptions')`** — verifies 401 (no auth), 403 (role without the webhooks key), and that listed items never expose `secret`/`newSecret` but do expose `secretIds[]`.
+- **`describe('POST /webhooks/subscriptions')`** — happy-path (201, `whsec_` prefix, defaults), 422 for plain-`http://` URL, 422 for empty `eventTypes`, 403 for a role lacking the write key, and 422 once the subscription cap (`NODE_WEBHOOK_SUBSCRIPTION_CAP`) is hit.
+- **`describe('PUT /webhooks/subscriptions/:id')`** — full-replace semantics: omitted `description` is cleared; missing required fields → 422; foreign id → 404.
+- **`describe('PATCH /webhooks/subscriptions/:id')`** — partial-update semantics: omitted fields preserved; re-enabling clears `consecutiveFailures`/`disabledAt`; editing an already-enabled sub does **not** reset the failure streak.
+- **`describe('POST /webhooks/subscriptions/:id/rotate-secret')`** — rotation returns `newSecret` and grows `secretIds` to length 2; foreign id → 404.
+- **`describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId')`** — unknown `secretId` → 404 without mutating the ring; deleting the last secret in the ring → 422.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported via `import '@tests/contract'`; registers the `toSatisfyApiSpec()` jest matcher used on every response assertion in this file.
-- **`tests/support/http.ts`** — provides the `api()` request helper (Supertest-style chain) and `authenticateAsRole(role)` which returns a pre-built bearer token for the given preset role.
-- **`tests/support/setup-test-db.ts`** — exports `setupTestDb()`, invoked at module scope to create/reset the in-memory or ephemeral database the tests run against.
+- **`tests/support/contract.ts`** — imported as a bare side-effect (`@tests/contract`); registers OpenAPI validation so every response in this suite is schema-checked automatically.
+- **`tests/support/http.ts`** — provides `api()` (supertest wrapper) and `authenticateAsRole()` used in every test.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module level to give each run a clean database.
+- **`src/modules/webhooks/repository.ts`** — `webhookSubscriptionRepository` (and the imported `webhookDeliveryRepository`) are used directly inside tests to seed fixture state (e.g. setting `consecutiveFailures`, `disabledAt`, or inspecting the secrets ring) that is not reachable through the HTTP surface.
 
 ## Notes
 
-- No test in this file triggers an actual webhook delivery; the `example.test` TLD URL guarantees zero external I/O.
-- The "403 for read-only role" case uses the `customer` role (which has _no_ webhooks keys) because no preset role holds `webhooks.any.read` in isolation — the comment in the source flags this as a test-suite limitation.
-- The subscription-cap test mutates `process.env.NODE_WEBHOOK_SUBSCRIPTION_CAP` and restores it in a `finally` block; running this file in parallel with other suites that read the same variable could interfere.
-- `setupTestDb()` is called once at import time, not per-suite; all suites in this file share that single setup.
+- **PUT vs PATCH:** PUT is a full replace (omitted optional fields are cleared); PATCH is a partial update (omitted fields are untouched). Both are contract-locked here.
+- **Failure-streak reset rule:** Only a transition from `enabled: false → true` resets `consecutiveFailures` and `disabledAt`. Re-sending `enabled: true` on an already-enabled subscription leaves the streak intact.
+- **Cap test mutates `process.env`:** The subscription-cap test sets `NODE_WEBHOOK_SUBSCRIPTION_CAP` inline and restores it in a `finally` block; parallel test runners that share the process will see the mutation.
+- **`@tests/contract` is a side-effect import:** No symbols are destructured; its sole job is to wire up OpenAPI response validation for the duration of the suite.
+- **Secret ring invariant:** A subscription must always retain at least one active secret; the DELETE endpoint enforces this with a 422 rather than allowing an empty ring.

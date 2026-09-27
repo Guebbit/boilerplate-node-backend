@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/authenticated-controllers.test.ts
-sha256: 3ebea560f85d4d02d70fe18636156a70cb14bcea48868bee117c8ef16f32ff78
-generated_at: 2026-09-23T19:53:45.735365+00:00
+sha256: 16c8c009a154d1491d37b0988904065c12f8e2800a3655346b1d3be4c0bead29
+generated_at: 2026-09-27T15:49:30.147956+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting integration test that catches a class of runtime `TypeError` before it ships: a controller that non-null-asserts `request.authContext` (i.e. assumes the caller is a resolved human session) while its route is not actually guarded by `isAuth`. It also enforces that every `requirePermission` key mounted behind the dual `isAuthOrCredential` guard uses the tenant-scoped `.any.` breadth, not `.self.`.
+Cross-cutting invariant test that enforces two auth-middleware guarantees across every module: (1) any controller that non-null-asserts `authContext` must be mounted behind `isAuth` (not merely `isAuthOrCredential`), and (2) every `requirePermission` key behind `isAuthOrCredential` must be tenant-scoped (contain an `.any.` segment). It exists to catch the class of runtime 500s where a handler reads `authContext.id` on a route the auth middleware never populates.
 
 ## Key elements
 
-- **`MODULES_ROOT` / `moduleNames()`** — Resolves `src/modules/` and lists every subdirectory, router-backed or not.
-- **`ASSERTS_AUTH_CONTEXT`** — Regex `/\bauthContext!/` matching a non-null assertion on the identifier `authContext` regardless of whether `request.` is prefixed (catches destructured reads).
-- **`handlersReadingAuthContext(moduleRoot)`** — Scans a module's `controllers/` directory; returns the set of exported handler names whose source contains the assertion.
-- **`handlersMountedUnauthenticated(router)`** — Walks the Express route stack via `effectiveRouteTable`; returns handler names on rows whose chain/applies do **not** include `isAuth`.
-- **`permissionKeysBehindCredentialGuard(router)`** — Returns `requirePermission` keys on rows that include `isAuthOrCredential` in their chain.
-- **`describe('every controller reading the caller…')`** — First test: asserts the intersection of "reads authContext" and "mounted unauthenticated" is empty. Second test (canary): asserts at least 10 handlers were actually scanned so an empty offender list is meaningful.
-- **`describe('every requirePermission key behind isAuthOrCredential…')`** — First test: asserts no key lacks the `any` breadth segment. Second test (canary): asserts at least 10 such keys exist.
+- **`ASSERTS_AUTH_CONTEXT`** — Regex `/\bauthContext!/` matching a non-null assertion (not an optional `?.` read, not a bare reference).
+- **`handlersReadingAuthContext(moduleRoot)`** — Scans `controllers/*.ts` under a module for the regex; returns the set of exported handler names that assert `authContext`.
+- **`handlersMountedUnauthenticated(router)`** — Walks `effectiveRouteTable(router)` and collects handler names from rows whose `applies` + `chain` do **not** include `isAuth`.
+- **`permissionKeysBehindCredentialGuard(router)`** — Returns the `requirePermission` keys from rows that **do** include `isAuthOrCredential`.
+- **`moduleNames()`** — `readdirSync(MODULES_ROOT)`; lists every module directory (routed or not).
+- **Test: "finds no handler asserting an auth context its route does not guarantee"** — Cross-references the two sets above per module and expects no intersection.
+- **Test: "actually finds controllers to check" (canary)** — Asserts the total count of asserting handlers is > 10, so an empty scan cannot masquerade as a pass.
+- **Test: "finds no key with a different breadth segment"** — Filters `isAuthOrCredential` keys lacking `.any.` and expects none.
+- **Test: "actually finds keys to check" (canary)** — Asserts > 10 keys are seen, preventing a false green from zero routes.
+- **Jest mocks** — Stubs `cache`, `route-flag`, `upload`, and `rate-limit` middlewares via factories exposed by `@tests/routes` so route resolution stays deterministic.
 
 ## Relationships
 
-- **`tests/support/routes.ts`** — Provides `effectiveRouteTable(router)`, the resolved-Express route table this test queries to determine which middleware stack each handler sits under. Also supplies the four `jest.mock` factory helpers (`cacheMock`, `routeFlagMock`, `storageMock`, `securityMock`) that stub infrastructure middlewares so the router can be constructed without side effects.
-- **`tests/support/routed-modules.ts`** — Provides `ROUTED_MODULES`, a map from module name to its instantiated Express `Router`, which this test iterates per module.
+- **`tests/support/routes.ts`** — Source of `effectiveRouteTable` (the resolved middleware-per-route table used for all guard lookups) and the mock factories consumed by the `jest.mock` calls.
+- **`tests/support/routed-modules.ts`** — Provides `ROUTED_MODULES`, the name → Express `Router` map that lets the test build each module's route table without booting the full app.
+- **`tests/support/paths.ts`** — Supplies `MODULES_ROOT`, the filesystem root under which `moduleNames()` and `handlersReadingAuthContext` operate.
+- **`src/kernel/registry.ts`** — Indirect dependency: the `ROUTED_MODULES` entries are populated from the module registry, so the set of modules this test iterates is ultimately defined there.
 
 ## Notes
 
-- Deliberately checks `isAuth` only, **not** `isAuthOrCredential`. A credential (`sk_…`) resolves to `request.caller` with no `authContext` at all, so `authContext!` behind the dual guard is equally broken; accepting both would remove the only check distinguishing the two guards.
-- The test reads the **resolved** Express route stack rather than regex-ing `routes.ts` source, so guards written via variables, spreads, or multi-line `router.use` calls are still detected.
-- Each main assertion is paired with a "canary" test that asserts a minimum count of items was scanned. This prevents a silent regression where the scanner stops finding any files and the test passes vacuously.
-- `handlersReadingAuthContext` matches on the bare identifier `authContext!`, not `request.authContext!`, so `const { authContext } = req; authContext!` is still flagged.
+- The guard check is intentionally **`isAuth` only**, not `isAuthOrCredential`. An `sk_…` credential resolves to `request.caller` with no `authContext`, so a `!` read behind the split guard is just as broken as one behind no guard. Widening the filter would remove the only check distinguishing the two.
+- The regex targets `authContext!` (word-boundary) rather than `request.authContext!` so that a destructured `const { authContext } = request; authContext!.x` is still caught.
+- Optional reads (`authContext?.prop`, passing `authContext` as a nullable helper argument) are deliberately **not** flagged — they are the correct pattern behind `isAuthOrCredential`.
+- Route guards are inspected via `effectiveRouteTable` (the resolved Express stack), not by regexing `routes.ts` source. This handles guards written through variables, spreads, or multi-line `router.use` calls.
+- Both invariant blocks pair their assertion with a **canary** count test; if the scanning code silently stops finding targets, the canary fails before the "no offenders" assertion can produce a false green.

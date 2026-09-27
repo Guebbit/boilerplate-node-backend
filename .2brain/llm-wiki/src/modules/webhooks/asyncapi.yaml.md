@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/asyncapi.yaml
-sha256: ba0b735cefed259355bda2065a4a98e7329f38def0ad2c33ed84bc26f901ffd7
-generated_at: 2026-09-23T19:38:01.108988+00:00
+sha256: ff5eb7e0c614511f32526b1020bc865f0342a286134eb97de1db0878e230f511
+generated_at: 2026-09-27T15:40:39.806300+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The public event catalogue for the webhooks module: a self-contained AsyncAPI 3.0.0 document that defines exactly which events a webhook subscriber can receive. It is the single source of truth served by `GET /webhooks/events`, so the catalogue a subscriber reads and the events the module actually fires cannot drift apart.
+The public AsyncAPI 3.0.0 event catalogue for the webhooks module. It is the single source of truth for which events a webhook subscriber can receive, what their payloads look like, and which Standard Webhooks headers accompany every delivery. Served verbatim by `GET /webhooks/events`, it guarantees the catalogue a subscriber reads can never drift from the events the module actually fires.
 
 ## Key elements
 
-- **`servers.subscriberEndpoint`** — A variable (placeholder) server representing the subscriber's configured HTTPS URL; not a host this application runs.
-- **`channels`** — Six event addresses: `order.created`, `order.paid`, `order.shipped`, `order.cancelled`, `payment.succeeded`, `payment.failed`.
-- **`operations`** — Six `send` operations, one per channel, documenting the triggering condition (e.g. `order.paid` is derived from `order.status_changed` filtered to `to: 'paid'`).
-- **`components.messages.*`** — Six message definitions, each pairing `WebhookHeaders` with a per-event envelope schema.
-- **`components.schemas.WebhookHeaders`** — The three Standard Webhooks headers: `webhook-id`, `webhook-timestamp`, `webhook-signature`.
-- **`components.schemas.OrderCreatedEnvelope` / `OrderPaidEnvelope` / `OrderShippedEnvelope` / `OrderCancelledEnvelope` / `PaymentSucceededEnvelope` / `PaymentFailedEnvelope`** — The Standard Webhooks body shape `{ type, timestamp, data }` with event-specific `data` payloads (`OrderIdPayload`, `OrderCancelledPayload`, `PaymentEventPayload`).
+- **`servers.subscriberEndpoint`** — A variable (template) server using `{subscriberHost}` / `{subscriberPath}`. Not a fixed host: each subscription supplies its own HTTPS URL at runtime.
+- **`channels`** (6): `order.created`, `order.paid`, `order.shipped`, `order.cancelled`, `payment.succeeded`, `payment.failed`. Each binds to `subscriberEndpoint` and references one message.
+- **`operations`** (6): One `send` operation per channel, with prose noting which domain event (or filtered `order.status_changed`) fires it.
+- **`components.messages`** — Six message objects, each pairing `WebhookHeaders` with a per-event envelope schema.
+- **`components.schemas.WebhookHeaders`** — The three Standard Webhooks headers (`webhook-id`, `webhook-timestamp`, `webhook-signature`) required on every delivery.
+- **`components.schemas.OrderIdPayload` / `OrderCancelledPayload` / `PaymentEventPayload`** — The `data` field shapes for each event family.
+- **Envelope convention** — Every body is `{ type, timestamp, data }`; `type` identifies the event, `timestamp` is the occurrence time (stable across retries), `data` is the payload above.
 
 ## Relationships
 
-- **`scripts/contracts/asyncapi-bundles.ts`** — Merges this file (classified as `shared`) into both the full `asyncapi.yaml` and `asyncapi.public.yaml`.
-- **`src/modules/webhooks/asyncapi.internal.yaml`** — Sibling file owning the private `worker.webhook.deliver` queue; explicitly excluded from this file's `shared` scope.
-- **`src/modules/webhooks/module.ts`** — Subscribes to the domain events and republishes matching ones to subscriber URLs; also serves this file verbatim on `GET /webhooks/events`.
-- **`orders/events.ts`** / **`payments/events.ts`** — Define the domain events (`order.created`, `order.status_changed`, `order.cancelled`, `payment.succeeded`, `payment.failed`) that `module.ts` listens for on the kernel event bus.
-- **`transport/webhook-signing.ts`** — Generates the `webhook-id`, `webhook-timestamp`, and `webhook-signature` headers documented in `WebhookHeaders`.
+- **`scripts/contracts/asyncapi-bundles.ts`** — This file is a `shared` section in the bundler's merge. It is merged into both `asyncapi.yaml` and `asyncapi.public.yaml`. The bundler enforces that each section is a complete, standalone-valid AsyncAPI document and refuses two sections declaring the same key (`mergeInto`).
+- **`asyncapi.public.yaml`** — Output artifact: this file's contents appear in the public bundle after the bundler merge.
+- **`src/modules/webhooks/asyncapi.internal.yaml`** — Sibling section in the same module but `private` scope; owns the `worker.webhook.deliver` queue. The shared/private split is deliberate: the internal queue is backend-only and must never appear in the public catalogue.
+- **`src/modules/webhooks/module.ts`** — Its `onRegistered` hook subscribes generically to every domain event whose module manifest declares a `publicEvents` entry (`kernel/registry.ts` → `PublicEventTarget`) and republishes matched events (signed, filtered) to the subscriber URL. This file does not import event constants from `orders` or `payments`; the mapping lives in their respective `module.ts` files.
 
 ## Notes
 
-- `order.paid` and `order.shipped` are **derived** from the single `order.status_changed` event filtered by `to`; they are not independent domain events.
-- `payment.failed` can fire **more than once** for the same order (a declined payment is retryable with another method).
-- The `timestamp` in the envelope body is when the underlying event occurred (stable across retries); the `webhook-timestamp` header is when the signing attempt was made.
-- `webhook-id` is shared across all fan-out subscriptions and all retries of one delivery; it is **not** repeated in the body.
-- The six events listed are the reference shop's worked example. A deployment without orders declares its own events here and deletes this file along with the rest of the module.
+- **Authored, not generated.** The six channel names are a worked example. Removing `orders`/`payments` from a deployment means hand-deleting the corresponding channels here and their `publicEvents` declarations in those modules' manifests. There is no code that auto-trims this file.
+- **Channel catalogue is intentionally monolithic.** Splitting channels into per-owning-module files is a follow-up decision, not the current design. The reason: every channel `$ref`s the single `subscriberEndpoint` server and the single `WebhookHeaders` schema, and the bundler requires each section to be independently valid — a `$ref` to a server or schema not declared in the same section fails `lint:asyncapi:modules`.
+- **`webhook-id` is not repeated in the body.** The delivery id lives only in the `webhook-id` header; subscribers deduplicate on that header, not a body field.
+- **`order.paid` and `order.shipped` are derived events.** They are filtered projections of `order.status_changed` (matching `to: 'paid'` / `to: 'shipped'`), not one-to-one domain events. See `orders/events.ts` for the filtering logic.
+- **`payment.failed` can fire multiple times for the same order** (retryable with another payment method); `payment.succeeded` does not.

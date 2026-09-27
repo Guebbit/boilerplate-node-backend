@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/audit.ts
-sha256: 32281603cfa017381dd83b81911daeaf6e2fe24b0187b7b7e8e2da6dd7da40d5
-generated_at: 2026-09-23T19:38:11.018403+00:00
+sha256: 8a0cf2216a5aeb1502c830769687a65e0744f0ca60b2e03f025306401c749987
+generated_at: 2026-09-27T15:40:50.040731+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the webhooks module's audit-action vocabulary and registers it into the application-wide `AuditActionMap` via TypeScript module augmentation. Every write against a subscription (URL, secret) is audited—not just destructive ones—because data-protection questions later need a complete trail.
+Declares the webhook module's audit-action vocabulary and registers it into the app-wide `AuditActionMap` via TypeScript module augmentation. Every write against a subscription (not just destructive ones) is audited, because the subscription URL and signing secret are exactly the data a data-protection inquiry will later ask about.
 
 ## Key elements
 
-- **`webhooksAuditActions`** (`as const`) — the five action identifiers this module owns:
-    - `ADMIN_WEBHOOK_SUBSCRIPTION_CREATED` / `_UPDATED` / `_DELETED` — admin-initiated CRUD on a subscription.
-    - `ADMIN_WEBHOOK_DELIVERY_REPLAYED` — admin-initiated replay of a past delivery.
-    - `SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` — auto-disable triggered by a consecutive-failure streak; no human caller. Recorded with `actor_user_id: 'system'` so it isn't attributed to whichever worker happened to run the failing delivery.
-- **`declare module '@infrastructure/observability/audit'`** — augments the global `AuditActionMap` interface with a `webhooks` key typed to the literal union of the five action strings, making them autocomplete-able and exhaustively checkable across the codebase.
+- **`webhooksAuditActions`** — `as const` object defining the action strings this module owns:
+  - `ADMIN_WEBHOOK_SUBSCRIPTION_CREATED / _UPDATED / _DELETED`
+  - `ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_ROTATED / _REMOVED`
+  - `ADMIN_WEBHOOK_DELIVERY_REPLAYED`
+  - `SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` — emitted when the consecutive-failure streak in `services/attempt.ts` disables a subscription autonomously; no user request is behind it.
+- **`declare module '@infrastructure/observability/audit'`** — augments `AuditActionMap` with a `webhooks` key typed as the union of all values above, making the actions available to the central audit infrastructure without a runtime import cycle.
 
 ## Relationships
 
-- **`src/modules/webhooks/services/attempt.ts`** — the sole emitter of `SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED`; its consecutive-failure logic decides the action, not a request. This file's doc-comment references it directly.
-- **`src/modules/webhooks/services/subscriptions.ts`** — emits the three `ADMIN_WEBHOOK_SUBSCRIPTION_*` actions on create/update/delete paths.
-- **`src/modules/webhooks/services/deliveries.ts`** — emits `ADMIN_WEBHOOK_DELIVERY_REPLAYED` when an admin triggers a replay.
-- **`src/modules/webhooks/tests/integration/delivery.test.ts`** — integration test that exercises the delivery/replay path and thereby validates that the replay audit action is recorded.
+- **`src/modules/webhooks/services/attempt.ts`** — Source of the `SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` action. Its internal consecutive-failure logic decides to auto-disable a subscription; `actor_user_id` is set to the literal `'system'` so the audit log doesn't attribute the action to whichever worker happened to be running the failing delivery.
+- **`src/modules/webhooks/services/subscriptions.ts`** — Expected emitter of the `ADMIN_WEBHOOK_SUBSCRIPTION_*` and `ADMIN_WEBHOOK_DELIVERY_REPLAYED` actions defined here.
+- **`src/modules/webhooks/tests/integration/delivery.test.ts`** — Integration test that exercises delivery paths and (per graph) asserts the audit emissions declared in this file.
 
 ## Notes
 
-- The `system.` prefix (vs. `admin.`) is a deliberate convention: it signals that no human request initiated the event. Any new non-human-triggered audit action in this domain should follow the same prefix.
-- The augmentation target (`@infrastructure/observability/audit`) means this file must compile in the same project that declares that base module; a missing or renamed base module will silently drop the type augmentation.
-- The rationale for auditing _all_ subscription writes (including `updated`) is stated in the module doc-comment: the `url` and secret ring are sensitive fields that data-protection reviewers will ask about.
+- The augmentation pattern mirrors `modules/account/audit.ts`; the file-header comment points there for the rationale. If you add a new webhook audit event, extend `webhooksAuditActions` here — you do **not** need to touch the central `@infrastructure/observability/audit` module, the `declare module` block handles registration.
+- The `system.` prefix (vs. `admin.`) is a deliberate distinction: no caller initiated the action. Keep new autonomous-disable paths under `system.` and user-initiated ones under `admin.`.

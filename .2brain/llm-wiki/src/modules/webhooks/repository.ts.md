@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/repository.ts
-sha256: e50aee67a48d424e40e1d131c0d7c88f792e77fe3ee687899dbc864871fadb2d
-generated_at: 2026-09-23T19:41:21.037407+00:00
+sha256: 7ff59a5804335a1099ebf5cf05bcde6ce8d23af4c0dd4bcaf18600539d3ad448
+generated_at: 2026-09-27T15:43:05.086656+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Repository layer for the two webhook MongoDB collections (subscriptions and deliveries). Wraps the generic `createRepository` factory with domain-specific atomic operations—lease-based claiming, streak recording, conditional disable, and sweep reads—that the shapeless factory cannot express on its own.
+Data-access layer for the two webhook collections (`webhooksubscriptions`, `webhookdeliveries`). Extends the generic `createRepository` factory with domain-specific queries that have no generic shape: atomic lease-based claims, streak-tracking outcome writes, tenant-scoped lookups, and the sweep's due-row read.
 
 ## Key elements
 
-- **`webhookSubscriptionRepository`** (export) — Base CRUD from the factory plus:
-    - `findEnabled()` — returns every subscription with `enabled: true`; called once per published event for in-memory event-type matching.
-    - `recordOutcome(subscriptionId, succeeded)` — On success: single atomic `$set`/`$unset` to reset the streak. On failure: two sequential writes (stamp `failingSince` only-if-absent, then `$inc` `consecutiveFailures`).
-    - `disable(subscriptionId)` — Conditionally flips `enabled` to `false` and stamps `disabledAt`; the `enabled: true` filter prevents a duplicate finalizer from overwriting the timestamp.
-- **`webhookDeliveryRepository`** (export) — Base CRUD (with `searchable` fields) plus:
-    - `claimPending(id)` — Atomically claims a `pending` row or a stranded `in-flight` row whose lease has expired; sets `in-flight` + fresh lease. Returns the row or `null`.
-    - `claimForReplay(id)` — Same exclusive-lease mechanism but also permits claiming rows at a terminal status (`succeeded`, `exhausted`); used by the admin replay path.
-    - `applyOutcome(id, leaseToken, patch)` — Writes an outcome patch only while the caller's `leaseToken` still matches; a superseded claim's write is silently dropped.
-    - `findDue(limit)` — Sweep read: all `pending` rows whose `nextAttemptAt` has passed, plus stranded `in-flight` rows with expired leases, oldest first, capped at `limit`.
-- **`WEBHOOK_DELIVERY_SORT`** (export) — `{ createdAt: -1, _id: -1 }` sort spec for listing deliveries newest-first.
-- **`lease()`** (internal) — Generates `{ leaseToken: randomUUID(), leaseExpiresAt: now + 60s }`.
-- **`LEASE_DURATION_MS`** (internal) — 60 000 ms; intentionally well above the 10 s transport timeout to tolerate a DB round-trip or GC pause without stranding a live attempt.
+- **`webhookSubscriptionRepository`** (exported) — base CRUD + `findEnabled`, `findByIdInTenant`, `recordOutcome`, `disable`.
+- **`webhookDeliveryRepository`** (exported) — base CRUD + `claimPending`, `claimForReplay`, `applyOutcome`, `findDue`, `findByIdInTenant`.
+- **`WEBHOOK_DELIVERY_SORT`** (exported) — `{ createdAt: -1, _id: -1 }` sort spec for delivery listings.
+- **`findEnabled`** — collection scan for all `enabled: true` subscriptions; matched in-memory downstream (no index by design).
+- **`findSubscriptionByIdInTenant` / `findDeliveryByIdInTenant`** — single-doc lookup narrowed to `tenant` in the query; wrong-tenant and unknown-id both return `null`.
+- **`recordOutcome`** — success: one atomic write resetting `consecutiveFailures` and unsetting `failingSince`; failure: delegates to `recordFailure`.
+- **`recordFailure`** (internal) — two sequential `findOneAndUpdate` calls: first stamps `failingSince` (conditional on `$exists: false`), then `$inc`s the streak. Order matters for the returned document.
+- **`disable`** — conditional on `enabled: true` so a concurrent double-exhaust cannot overwrite `disabledAt`.
+- **`claimPending`** — atomic `pending → in-flight` (or stranded `in-flight` with expired lease) transition with a fresh UUID lease token.
+- **`claimForReplay`** — same lease mechanism but permits reclaiming rows at any terminal status; only blocked by a *live* lease.
+- **`applyOutcome`** — writes an outcome patch guarded by `leaseToken` equality; returns `null` if the token no longer matches (caller must not retry).
+- **`findDue`** — sweep's read: `pending` rows whose `nextAttemptAt` has passed, plus stranded `in-flight` rows, oldest first, capped by `limit`.
+- **`lease()` / `LEASE_DURATION_MS`** (internal) — generates `{ leaseToken, leaseExpiresAt }`; duration is 60 s.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — Supplies the `createRepository` factory (base CRUD), `toObjectId` helper, and the `Repository<TDocument, TWire>` type contract that both exported repositories spread and extend.
-- **`src/modules/webhooks/model.ts`** — Provides the Mongoose models (`webhookSubscriptionModel`, `webhookDeliveryModel`), document-to-wire transforms, and the `WebhookSubscriptionDocument` / `WebhookDeliveryDocument` type aliases used throughout this file.
-- **`src/modules/webhooks/services/attempt.ts`** — The sole caller of `claimPending` and `applyOutcome`; the only place a delivery's status legitimately moves past `in-flight`.
-- **`src/modules/webhooks/services/sweep.ts`** — Consumes `findDue` to build its queue-publish batch (publishes without claiming; the worker's own `claimPending` enforces exclusivity).
-- **`src/modules/webhooks/services/publish.ts`** — Calls `findEnabled` to retrieve the subscription set that an event must be matched against.
-- **`src/modules/webhooks/services/subscriptions.ts`** — Uses the subscription repository's CRUD and `disable` / `recordOutcome`.
-- **`src/modules/webhooks/tests/integration/*`** and **`tests/cross-cutting/webhook-event-producers.test.ts`** — Integration and cross-cutting tests that exercise the delivery, subscription, and sweep paths through these repositories.
+- **`src/infrastructure/persistence/create-repository.ts`** — supplies the `createRepository` factory, `toObjectId` helper, and the `Repository<TDocument, TWire>` type that both exports extend.
+- **`src/modules/webhooks/model.ts`** — provides the Mongoose models (`webhookSubscriptionModel`, `webhookDeliveryModel`), document transforms, and document/wire type aliases used throughout.
+- **`src/types/index.ts`** — source of the `WebhookSubscription` and `WebhookDelivery` wire types that appear in the exported repository signatures.
+- **`src/modules/webhooks/services/attempt.ts`** — sole caller of `applyOutcome`; reads `leaseToken` off the claimed row and passes it here.
+- **`src/modules/webhooks/services/subscriptions.ts`** — calls `findByIdInTenant`, `recordOutcome`, and `disable` on the subscription repository.
+- **`src/modules/webhooks/services/sweep.ts`** — calls `findDue` to discover work; does *not* call `claimPending` itself (the worker does).
+- **`src/modules/webhooks/services/publish.ts`** — calls `findEnabled` to select matching subscriptions, and `create` on the delivery repository.
+- **Tests** (`contract/webhooks.test.ts`, `integration/delivery.test.ts`, `integration/subscriptions.test.ts`, `integration/sweep.test.ts`, `cross-cutting/webhook-event-producers.test.ts`, `scenarios/webhooks.ts`) — exercise the repositories through the service layer.
 
 ## Notes
 
-- The explicit `Repository<…> & { … }` annotations on both exports are required, not stylistic: TypeScript raises TS7056 when it tries to serialize the inferred type of a spread of the factory result without a named target type.
-- `recordFailure` deliberately uses two sequential `findOneAndUpdate` calls instead of a single aggregation-pipeline update; the `failingSince: { $exists: false }` filter makes the "first failure" stamp atomic on its own.
-- `claimForReplay` vs. `claimPending`: the only semantic difference is the filter—replay allows any status except a _live_ `in-flight`, whereas the queued/sweep path only accepts `pending` or _expired_ `in-flight`.
-- `findDue` is a pure read; it does not claim. A row it returns may already be mid-attempt by the time the queue consumer picks it up, but that is safe because the consumer's own `claimPending` is the gate that decides who performs the HTTP attempt.
-- The subscription repository intentionally has no `searchable` configuration—the admin list view applies no server-side filters.
+- **Two-step failure write is intentional.** `recordFailure` issues two separate `findOneAndUpdate` calls (stamp `failingSince`, then `$inc` the streak) rather than a single aggregation-pipeline update. The `$exists: false` filter makes the "first failure" case atomic on its own; combining into one round-trip was rejected for clarity.
+- **`findEnabled` is a deliberate collection scan.** No index on `enabled` — the table is expected to stay small (per-tenant cap), and downstream matching is set-membership/wildcard logic that an index cannot serve.
+- **Explicit type annotations on both exports are load-bearing.** Mongoose's `Query` generics are wide enough that TypeScript raises TS7056 (unserializable inferred type) at the export boundary once the factory result is spread; naming the `Repository<…> & {…}` intersection fixes it.
+- **`applyOutcome` must not be retried on `null`.** A `null` return means another worker already holds the lease; that new holder is solely responsible for the row's next state.
+- **Lease duration (60 s) vs. delivery timeout (10 s).** The 50 s gap covers DB round-trips and GC pauses without letting a truly crashed worker strand a row long enough to matter before the sweep's `findDue` reclaims it.

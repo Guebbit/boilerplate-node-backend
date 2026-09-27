@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/locale-namespaces.test.ts
-sha256: 987eb19d971d210b778324a4b335ecfd21391f45b63888b8f9c76a93abb65aa7
-generated_at: 2026-09-23T19:56:11.432111+00:00
+sha256: 8f7f54aa8034f8062f28ae588746f5b71efc3e6e6d8804901d09bb2381a07d30
+generated_at: 2026-09-27T15:50:18.822928+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates that locale keys remain namespace-unique across the codebase. The deep last-writer-wins merge that `infrastructure` performs at boot silently drops or shadows strings on collision, producing wrong copy with no error. This test makes those two failure modes (module shadowing a shared key, two modules claiming the same key) plus a structural invariant (each module stays under its own top-level key) explicit and fast-failing.
+Guards the locale-merge contract: because `infrastructure` deep-merges every module's `locales/en.json` onto the shared dictionary at boot (last-writer-wins), a silent collision or shadow would produce wrong copy with no error. This suite statically verifies that no module shadows a shared key, no two modules claim the same key, and every module's keys live under its own top-level namespace.
 
 ## Key elements
 
-- **`flatten(value, prefix)`** – recursively walks a locale dictionary and returns every dotted leaf key (e.g. `account.email.reset-request.subject`).
-- **`readDictionary(file)`** – reads and parses a JSON locale file.
-- **`moduleKeys()`** – scans `src/modules/*/locales/en.json` and returns a `Map<moduleName, string[]>` of that module's keys. Discovery is dynamic (`readdirSync`), not a hard-coded list.
-- **`describe('locale namespaces across modules')`** – four test cases:
-    1. _Canary_ – at least one module ships copy (guards against a broken path returning an empty set silently).
-    2. _No shadowing_ – no module key intersects the shared `src/locales/en.json` key set.
-    3. _No collision_ – no key appears in more than one module.
-    4. _Namespace containment_ – every key in a module begins with that module's own name as the top-level segment.
+- **`flatten(value, prefix)`** – Recursively collects every dotted leaf key from a nested dictionary (e.g. `account.email.reset-request.subject`).
+- **`readDictionary(file)`** – Reads and JSON-parses a locale file into a plain object.
+- **`moduleKeys()`** – Scans `MODULES_ROOT` on disk and returns a `Map<moduleName, string[]>` of every key each module ships in its `en.json`. Discovery-based; no hardcoded module list.
+- **`describe('locale namespaces across modules')`** – Four assertions:
+  - *Canary* – confirms the sweep actually sees modules (checks `readdirSync` count > 0, not a fixed number).
+  - *No shadowing* – no module key appears in the shared `src/locales/en.json`.
+  - *No cross-module collision* – no key is claimed by two different modules.
+  - *Namespace ownership* – every key in module `X` starts with `X.`.
 
 ## Relationships
 
-No dependency-graph neighbors are recorded. The file reads sibling fixture files (`src/locales/en.json`, `src/modules/*/locales/en.json`) at runtime via `node:fs` but has no import-time dependency on them.
+- **`tests/support/paths.ts`** – Imports `MODULES_ROOT` and `REPO_ROOT` to locate `src/modules/*/locales/en.json` and `src/locales/en.json` relative to the repo root.
+- **`tests/cross-cutting/locale-parity.test.ts`** (referenced in the file header) – Complementary test that asserts key-parity *across locales* (en vs. other languages) against the merged dictionaries. This file is orthogonal: it checks cross-module collisions and namespace discipline.
 
 ## Notes
 
-- Language-parity (same key set across all locale files) is **not** checked here; it lives in `tests/cross-cutting/locale-parity.test.ts` and operates on the merged dictionary.
-- The canary test asserts `readdirSync(MODULES_ROOT).length > 0` rather than pinning a specific count, so adding or removing a domain module doesn't break a locale test.
-- Only `en.json` is inspected. The test assumes the key _structure_ is identical across locales (guaranteed by the parity test); it does not itself compare non-English files.
-- The namespace rule (test 4) means the top-level key **must** equal the module directory name. A module named `account` cannot ship keys under `billing.*` or any other root.
+- The shared keys under `generic.*` (e.g. `generic.error-internal`) are a **cross-repo contract**: the paired frontend reads them by name from `GET /locales/:locale`. Redefining one in a module would silently change API copy the frontend depends on.
+- The canary test deliberately asserts against `readdirSync(MODULES_ROOT).length > 0` rather than pinning a module count, so adding a new domain module doesn't break this locale-specific test.
+- The namespace rule (`key.startsWith(`${name}.`)`) is what makes "which module owns this string" answerable from the key alone and ensures deleting a module can't orphan a shared namespace segment.
+- This suite reads files from disk at test time; it does **not** import or execute the merge logic in `infrastructure`. It is a static structural check.

@@ -1,7 +1,7 @@
 ---
 source: tests/fuzz/endpoints.fuzz.test.ts
-sha256: d6519b2220fdee2e341c2828674a0fecc01775d826c16bc589d3ac141459601f
-generated_at: 2026-09-23T20:01:40.361060+00:00
+sha256: 68fbefbab4f0f032d05c51eecbb06ec6532c7678a28dfda37e8a921cabead7aa
+generated_at: 2026-09-27T15:53:52.069698+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Spec-driven fuzz test (L5) that fires `fast-check`-generated, spec-valid-but-hostile requests at every operation declared in `openapi.yaml` and asserts (1) the server never returns 5xx and (2) the response shape and status match the OpenAPI contract. Operations are auto-discovered by walking the spec, so new routes are covered on the next run without any list to update.
+Spec-driven fuzzing (L5): for every operation declared in `openapi.yaml`, it fires spec-valid but hostile requests at the running app (via supertest) and asserts that no response is a 5xx and that every response conforms to the spec's status codes and schemas. Because the operation list comes from `listOperations()` (a spec walk), any route added to `openapi.yaml` is covered automatically without updating a test list. Each operation is fuzzed as an admin, a plain customer, and with no credentials.
 
 ## Key elements
 
-- **`SEED`** (IIFE) — Reads `RANDOM_DATA_SEED` from the environment or rolls a random 32-bit seed; logs it to the terminal (bypassing the logger mock) so a nightly failure is reproducible.
-- **`buildUrl(operation)`** — Substitutes path parameters with well-formed values (`OBJECT_ID` or `'tok'`) so requests reach the handler instead of failing at URL parsing.
-- **`NO_BODY`** — `fc.constant(undefined)` placeholder for operations whose spec declares no request body.
-- **`FUZZABLE`** — `OPERATIONS` filtered to exclude `multipart/form-data` operations (fast-check cannot meaningfully generate file bodies).
-- **`describe.each(FUZZABLE …)`** — One jest case per operation; each runs `fc.assert` with `bodyArbitraryFor(operation.bodySchema)`, asserting `< 500` and `toSatisfyApiSpec()`. Uses `endOnFailure: true` and a 120 s timeout.
-- **`describe('the spec walk itself', …)`** — Meta / tripwire tests: asserts the walk found > 40 operations, that `unsupportedKeywords()` and `ungeneratablePatterns()` are both empty, and that the multipart skip count is bounded (neither zero nor > 25 % of all ops). These guard against the fuzzer silently passing while generating nothing useful.
+- **`SEED`** — One `fast-check` seed per run. Pinned by `RANDOM_DATA_SEED` env var or rolled randomly; always logged so a failure is reproducible.
+- **`OPERATIONS`** — The full list from `listOperations()`; the driving set for every `describe.each`.
+- **`FUZZABLE`** — `OPERATIONS` minus multipart operations (file-upload half is excluded).
+- **`seedWorld(owner)`** — Creates a product, an order (owned by `owner`), and a second user via test factories; returns their IDs so path parameters name real rows.
+- **`parameterValue(path, name, world)`** — Resolves a single path parameter to a literal (`LITERAL_PARAMETERS`), a seeded row ID, or a well-formed-but-unowned ObjectId.
+- **`buildUrl(operation, world)`** — Substitutes all `{param}` placeholders in an operation's path.
+- **`fuzzAs(operation, bearer, world, runs, check)`** — The core loop: runs `fc.asyncProperty` drawing body + query arbitraries, fires requests as the given caller, and passes each response to `check`.
+- **`"the spec walk itself"`** — Four tripwire tests: operation count > 40, no unsupported JSON-Schema keywords, no ungeneratable patterns, and multipart skip count is bounded.
+- **S13 `describe.each`** (truncated) — Re-fuzzes multipart operations as `application/x-www-form-urlencoded` to cover the string-transport decode path.
 
 ## Relationships
 
-| Neighbor                            | Interaction                                                                                                                             |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/support/spec-walk.ts`        | Provides `listOperations()`, `unsupportedKeywords()`, `ungeneratablePatterns()`, and the `Operation` type that drive the entire test.   |
-| `tests/support/spec-arbitraries.ts` | Provides `bodyArbitraryFor(schema)` which converts an OpenAPI body schema into a `fast-check` Arbitrary.                                |
-| `tests/support/http.ts`             | Provides `api()` (supertest agent) and `authenticateAs('admin')` for the bearer token.                                                  |
-| `tests/support/contract.ts`         | Imported **for side effect only**: its module body calls `jestOpenAPI(openapi.yaml)`, which registers the `toSatisfyApiSpec()` matcher. |
-| `tests/support/setup-test-db.ts`    | `setupTestDb()` is called at module scope to prepare the test database before any case runs.                                            |
-| `tests/support/knobs.ts`            | Supplies `FUZZ_RUNS_PER_OPERATION`, the `fast-check` iteration count per operation.                                                     |
+- **`tests/support/spec-walk.ts`** — Provides `listOperations`, `ungeneratablePatterns`, `unsupportedKeywords`, and the `Operation` type that drive the entire suite.
+- **`tests/support/spec-arbitraries.ts`** — Supplies `bodyArbitraryFor` and `queryArbitraryFor`, which turn spec schemas into `fast-check` arbitraries.
+- **`tests/support/contract.ts`** (via `@tests/response-contract`) — `assertResponseMatchesContract` is called inline inside the property function (not in an `afterEach`) so `fast-check` can shrink failures.
+- **`tests/support/http.ts`** — `api` (supertest wrapper) and `authenticateAs` (bearer-token helper) are the transport layer.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module level to provision a fresh test database.
+- **`tests/support/knobs.ts`** — `FUZZ_RUNS_PER_OPERATION` sets the run count; `REFUSED_CALLER_RUNS` derives a smaller count for the two non-admin passes.
+- **`src/modules/users/tests/factories.ts`**, **`src/modules/products/tests/factories.ts`**, **`src/modules/orders/tests/factories.ts`** — `createUser`, `createProduct`, `createOrder`, `toOrderItem` seed the rows that path parameters reference.
+- **`src/modules/users/index.ts`** / **`src/modules/users/model.ts`** — `UserDocument` type used by `seedWorld`'s parameter.
+- **`src/infrastructure/runtime/readiness.ts`** — `markServerListening()` is called once so `GET /readyz` returns 200 instead of tripping the no-5xx invariant.
+- **`scripts/docs/generate-role-matrix.ts`** — Shares the same spec-walk vocabulary (operation listing); listed as a graph neighbor via the shared `spec-walk` dependency.
 
 ## Notes
 
-- **Not in `npm run test`.** Runs nightly or via `npm run test:fuzz`. Treated as a _hunter_ (finds bugs for a human to triage), not a merge gate — same rationale as mutation testing.
-- **Multipart is skipped by design.** File bodies (PNGs, etc.) are outside `fast-check`'s domain; the upload path is covered separately by `tests/integration/upload-security.test.ts`. The skip count is asserted so "skipped" can't silently become "skipped everything."
-- **Seed is rolled per run, not fixed.** A pinned seed would re-test the same ~660 requests forever, reducing the fuzzer to a regression test. The logged seed (and the shared `RANDOM_DATA_SEED` env var name) is the reproduction mechanism.
-- **Tripwire tests exist because a silent spec-walk failure looks green.** If `listOperations()` returns an empty array, or the arbitrary builder hits an unsupported keyword and omits fields, every endpoint 422s and the suite passes. The meta-tests in `'the spec walk itself'` catch both failure modes.
-- The `console.log` for the seed carries an explicit `eslint-disable no-console` comment because the standard logger may be mocked in the test environment.
+- **Multipart file uploads are skipped.** The file half of `multipart/form-data` operations is excluded (no useful `fast-check` arbitrary for binary content); the skip count is bounded by a test so the exclusion cannot silently grow.
+- **PDF adapter is mocked.** `renderHtmlToPdf` resolves a stub buffer; the real invoice render path is covered elsewhere.
+- **`markServerListening()` is called manually.** Under `NODE_ENV=test` the real boot never runs, so the readiness endpoint would 503 and fail the no-5xx assertion on every fuzz run.
+- **The response contract judge is called inline, not in `afterEach`.** Importing from `@tests/contract` would trigger an automatic `afterEach` that judges responses a second time, breaking `fast-check` shrinking. The file explicitly imports `assertResponseMatchesContract` from `@tests/response-contract` instead.
+- **Runs in two modes.** Small `FUZZ_RUNS_PER_OPERATION` default in `npm run test` (merge gate); a much larger value in `.github/workflows/fuzz.yml` (nightly). A failure is treated as a real finding.
+- **`LITERAL_PARAMETERS`** hard-codes a few non-id path params (`locale`, `entityType`, `method`, `provider`) so the generator doesn't have to invent them.

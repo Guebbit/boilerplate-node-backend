@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/serialize.property.test.ts
-sha256: 6d0db000a13b5d5a9665611c6aa5171a5024072512473e0900e358a4b20f18cd
-generated_at: 2026-09-23T20:00:14.193909+00:00
+sha256: ec4c2fef250b37ed8a022cc243e91dc9f7a04148f2f71bc3882dfa53c934828f
+generated_at: 2026-09-27T15:52:26.546225+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Property-based tests (fast-check) that verify the universal invariants of `applySerialization` for _any_ document shape, not just the five model shapes that exist today. Because 95 of `openapi.yaml`'s schemas declare `additionalProperties: false`, a single leaked `_id` or `__v` is a contract violation. The transform also serves two very different inputs (Mongoose `toJSON` vs. raw `.lean()`/`.aggregate()` BSON), and these tests cover the second case where Mongoose provides no help.
+Property-based (fast-check) tests that pin down the universal guarantees of the serialization transform in `applySerialization` — rename `_id`→`id`, delete `__v`, drop every `omit` key — for *any* document shape, not just the handful the models define. These guarantees are load-bearing: 95 of the OpenAPI schemas declare `additionalProperties: false`, so a single leaked internal key is a contract violation. The tests also cover the `.lean()`/`.aggregate()` path, where Mongoose has not pre-processed the document.
 
 ## Key elements
 
-- **`RUN`** — Shared test config: fixed seed `20_260_809`, 300 runs, `endOnFailure: true`. Counterexamples should be written back as examples with this seed.
-- **`fakeSchema()`** — Minimal `{ set: () => 0 }` stand-in so `applySerialization` can be called without a real Mongoose schema.
-- **`buildTransform(options?)`** — Convenience wrapper around `applySerialization(fakeSchema(), options)` returning a ready-to-call `SerializeTransform`.
-- **`documentKey()`** — Arbitrary string arb filtered to exclude `__proto__` (spreading `__proto__` mutates the prototype, not the object, producing false counterexamples).
-- **`documentLike()`** — Arbitrary JSON-keyed dictionary (max 8 keys) representing an opaque document body.
-- **`withReservedFields()`** — Layers `_id` (non-empty string) and `__v` (integer) onto a `documentLike` so every case exercises both the rename and the version-key deletion.
-- **`describe('applySerialization — universal guarantees')`** — Ten property assertions: `_id` absent, `__v` absent, `_id`→`id` string rename, `dropId` removes both spellings, `omit` keys absent, non-reserved keys preserved, in-place mutation (same reference returned), idempotency, no-throw on arbitrary shapes, and `after` hook runs once _after_ shared steps.
+- **`RUN`** – shared fast-check config: fixed seed `20_260_809`, 300 runs, `endOnFailure: true`.
+- **`fakeSchema()`** – minimal `{ set: () => 0 }` stand-in so `applySerialization` can be called without a real Mongoose schema.
+- **`buildTransform(options?)`** – convenience wrapper that calls `applySerialization(fakeSchema(), options)` and returns a ready-to-invoke `SerializeTransform`.
+- **`documentKey()`** – arbitrary string key with `__proto__` filtered out (spread-operator prototype quirk, not a serializer concern).
+- **`documentLike()`** – `fc.dictionary` of 1–8 JSON-ish keys/values.
+- **`withReservedFields()`** – layers a non-empty `_id` string and an integer `__v` onto a `documentLike`, so every generated case exercises both the rename and the delete.
+- **`describe('applySerialization — universal guarantees')`** – ten `fc.assert` properties covering:
+  - `_id` never present in output
+  - `__v` never present in output
+  - `_id` renamed to a string `id` for any id representation
+  - `dropId: true` removes both `_id` and `id`
+  - every key in `omit` is absent from output
+  - every key *not* in the reserved/omit set is preserved (complement guard)
+  - transform returns the same object reference (in-place mutation)
+  - idempotency (applying twice yields the same result)
+  - no exception thrown for any document shape
+  - `after` hook runs exactly once, after the shared rename/delete steps
 
 ## Relationships
 
-- **`src/infrastructure/persistence/serialize.ts`** — The module under test. Provides `applySerialization` (the function being property-tested) and the `SerializeTransform` type. The test also references `SerializableSchema` in a comment to explain why `fakeSchema` is sufficient, and notes that `normalize` in `create-repository` depends on the in-place mutation contract this test enforces.
+- **`src/infrastructure/persistence/serialize.ts`** – the sole subject under test. The file imports `applySerialization` (function) and the `SerializeTransform` type. No other source modules are imported; the test is self-contained apart from `fast-check`.
 
 ## Notes
 
-- The test deliberately uses `Object.hasOwn` rather than `toHaveProperty`/`toHaveProperty`-style assertions, because the latter walks the prototype chain and would report inherited members like `toString` as "present." Only own keys matter for wire serialization.
-- The `never throws` property uses `fc.anything()` (not `fc.jsonValue()`), making it strictly broader — it can generate `undefined`, `NaN`, `Symbol`, functions, etc. as values.
-- The in-place mutation property (`returns the same object it was handed, mutated in place`) is load-bearing for the `.lean()`/`.aggregate()` code path in `create-repository`, where the caller keeps the returned reference. The `toJSON` path discards the return value and relies on the mutation instead.
-- Seed is fixed; if a new counterexample is found, the convention is to pin it as a concrete example with the seed in a comment rather than changing the seed.
+- **Seeded for reproducibility.** The file header states that any counterexample found should be written back as a concrete example with its seed in a comment.
+- **`Object.hasOwn` over `toHaveProperty`.** The omit and "no `_id`" assertions deliberately use `hasOwn` to check own properties only; `toHaveProperty` walks the prototype chain and would report inherited members like `toString`.
+- **In-place mutation is a contract.** The transform mutates the input object and returns that same reference. Both the `toJSON` path (Mongoose discards the return, keeps the mutation) and the lean path (`normalize` keeps the returned value) depend on identity being preserved.
+- **Complement test matters.** Without "keeps every key it was not asked to touch," a transform that deleted *all* keys would still pass every "drops X" assertion.
+- **`__proto__` exclusion is a test-hygiene detail**, not a serializer guarantee — generating it would produce false counterexamples caused by the spread operator setting the prototype rather than creating an own key.

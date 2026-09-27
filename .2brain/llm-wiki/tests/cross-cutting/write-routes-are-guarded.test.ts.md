@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/write-routes-are-guarded.test.ts
-sha256: 807262ecf7b2a3a45dfa670244da3b87e9c12b9dbb9aff71908ec0e54e08fd33
-generated_at: 2026-09-23T20:01:24.150714+00:00
+sha256: 11756b3f5fdeb5f98b0563f18d6861c6891ada9cc63af2ff9a7ca16d5c345040
+generated_at: 2026-09-27T15:53:34.099287+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Enforces the app-wide invariant that every write route (POST/PUT/PATCH/DELETE) on every routed module is authenticated and gated behind a `requirePermission` key, unless explicitly exempted. It exists so the guarantee is stated once globally rather than re-asserted per-module, meaning a newly added module inherits the check automatically without needing its own `routes.test.ts`.
+App-wide invariant test: every write route (POST/PUT/PATCH/DELETE) across all routed modules must be authenticated and carry a `requirePermissionGuard` by default, unless explicitly listed in `WRITE_EXCEPTIONS`. It exists so that a new module inherits the guarantee automatically rather than having to restate it in its own `routes.test.ts`.
 
 ## Key elements
 
-- **`WRITE_EXCEPTIONS`** — `Record<string, WriteException>` keyed `"${module} ${METHOD} ${path}"`. Each entry records `requiresAuth` (whether a session is still needed) and a human-readable `reason`. Covers all deliberate opt-outs: credential-exchange routes (login, signup, reset), token-in-request routes (verify-confirm, email-change-confirm, 2FA steps), own-resource CRUD (cart, wishlist, addresses, account settings), and the payment webhook.
-- **`WriteException`** — interface: `{ requiresAuth: boolean; reason: string }`.
-- **`WRITE_METHODS`** — `Set(['POST','PUT','PATCH','DELETE'])`; the methods this test treats as state-changing.
-- **`writesOn(router)`** — filters `effectiveRouteTable` to write methods and returns `"METHOD path"` signatures.
-- **`MODULES_ROOT`** — filesystem path to `src/modules`, used to cross-check that `ROUTED_MODULES` covers every module directory that has a `routes.ts`.
-- **Three test groups** inside the `describe` block:
-    1. Module-coverage: `ROUTED_MODULES` keys match the set of directories containing `routes.ts`.
-    2. Stale-exception check: no `WRITE_EXCEPTIONS` key references a route that is no longer mounted.
-    3. Per-route guard assertion (via `it.each`): default routes must have an identity guard _before_ `requirePermissionGuard`; exception routes must lack the permission guard and match their `requiresAuth` flag.
-- **Jest mocks** — cache, route-flag, upload/storage, and rate-limit middlewares are replaced with shared factories from `@tests/routes` so the route tables are introspectable without real infrastructure.
+- **`WRITE_METHODS`** — `Set(['POST','PUT','PATCH','DELETE'])`; the methods this guard applies to.
+- **`WriteException`** — interface with `requiresAuth: boolean` and `reason: string`, describing why a route is exempt from the `requirePermissionGuard` default.
+- **`WRITE_EXCEPTIONS`** — record keyed by `` `${module} ${METHOD} ${path}` `` listing every deliberately keyless write, each with a human-readable justification. This is the single canonical list of "writes that need no permission key."
+- **`writesOn(router)`** — extracts all write-method route signatures from a given Express router via `effectiveRouteTable`.
+- **Main `describe` block** — three assertion groups:
+  1. *Import completeness*: `ROUTED_MODULES` keys match exactly the module directories that contain a `routes.ts`.
+  2. *No stale exceptions*: every key in `WRITE_EXCEPTIONS` still maps to a mounted write.
+  3. *Per-route guard check* (`it.each` over every write in every module): verifies identity guard + `requirePermissionGuard` ordering for non-exempt routes, or the correct relaxed guard for exempt ones.
 
 ## Relationships
 
-- **`tests/support/routed-modules.ts`** — exports `ROUTED_MODULES`, the map from module name to its mounted Express `Router`. This test iterates it to enumerate every write route and cross-checks its completeness against the filesystem.
-- **`tests/support/routes.ts`** — provides the introspection helpers (`effectiveRouteTable`, `guardsOn`, `identityGuardIndex`) and the mock factories (`cacheMock`, `routeFlagMock`, `storageMock`, `securityMock`) used both in the `jest.mock` calls and in asserting guard order.
+- **`tests/support/paths.ts`** — provides `MODULES_ROOT`, used to enumerate module directories on disk for the import-completeness check.
+- **`tests/support/routed-modules.ts`** — provides `ROUTED_MODULES`, the map of module name → mounted Express `Router`; the test iterates over it to enumerate every write route.
+- **`tests/support/routes.ts`** — provides `effectiveRouteTable`, `guardsOn`, `identityGuardIndex` (the inspection primitives the assertions rely on), and the mock factories (`cacheMock`, `routeFlagMock`, `storageMock`, `securityMock`) that are wired in via `jest.mock` at the top of this file.
 
 ## Notes
 
-- The `observability` module is skipped in the per-route loop because it mounts zero writes; `it.each` throws on an empty table.
-- Exception keys use the exact signature format `${moduleName} ${METHOD} ${routePath}` as produced by `writesOn`, including parameter placeholders like `:id`.
-- The test asserts _ordering_: the identity guard index must be strictly less than the index of `requirePermissionGuard`. A route that has both but in the wrong order will fail.
-- Adding a new write route without adding a `WRITE_EXCEPTIONS` entry (or without adding the guards to the route) will fail this test — that is the intended fail-safe.
-- `requiresAuth: false` does **not** mean "public"; it means the credential is carried in the request itself (token, cookie, signed body) rather than in a session.
+- The `observability` module has zero write routes; the `it.each` loop skips it explicitly because `it.each` rejects an empty table. Any future module with no writes will need the same `continue` guard.
+- `WRITE_EXCEPTIONS` is intentionally *not* a short allowlist — it enumerates **all** keyless writes (most are "the caller's own resource" patterns like cart, wishlist, address book) plus a handful that need no session at all (login, signup, webhook, token-based confirms).
+- The stale-exception test means adding/removing a route without updating `WRITE_EXCEPTIONS` (or vice-versa) fails the suite, keeping the list in sync with the live router.
+- Mocks for `cache`, `route-flag`, `upload`, and `rate-limit` middlewares are required so that importing routers in a test context doesn't pull in real infrastructure.

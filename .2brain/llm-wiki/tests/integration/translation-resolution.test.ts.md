@@ -1,7 +1,7 @@
 ---
 source: tests/integration/translation-resolution.test.ts
-sha256: 5757b3080e116b00c803ba4a561ca5cc9c3c40c8e9ebfe247aafa4283c428e91
-generated_at: 2026-09-23T20:08:13.560198+00:00
+sha256: dd766d60510d624c3b2b7fa8086fed9904166c721dd8362f59e4d6e9e03a4316
+generated_at: 2026-09-27T15:59:03.670067+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies the read-side of the translation system: product titles are resolved to the caller's negotiated `Accept-Language`, untranslated items fall back to the source title (never blank), region tags resolve to their base language, a full page of products is translated in a single batched query, and free-text search unions across both the product's own columns and its translation rows. Placed at the top-level `tests/integration/` (not under either module's `tests/`) because it exercises the cross-module path between `products` and `locales`.
+Integration test verifying that product reads resolve titles in the caller's negotiated language (via `Accept-Language`). It covers single-product fetch, whole-page batched resolution, and free-text / `title=` search — confirming that translated, untranslated, and region-tagged cases all behave correctly against the live API. Because the test spans the `products` read path and the `locales` data ownership, it lives at the top-level `tests/` rather than under either module.
 
 ## Key elements
 
-- **`FALLBACK`** (`'en'`) — the fallback locale assumed in every test environment; used to decide whether a translation row needs a `source` annotation.
-- **`givenLocale(tag)`** — creates a locale row via `localeRepository.create(makeLocale(…))`.
-- **`givenTranslation(productId, locale, title)`** — upserts an entity-locale translation row; passes `'digest'` as source for non-fallback locales, `undefined` for the fallback.
-- **`describe('GET /products/:id …')`** — three tests: Italian title returned, source-title fallback when no translation exists, region tag `it-CH` resolving to base `it`.
-- **`describe('GET /products … one batched query')`** — two tests: all items on a page translated, and a mixed page (translated + untranslated) returning both titles without blanking.
-- **`describe('free-text search …')`** — five tests covering: search matching a translation word absent from the source column, search still reaching the source column when no translation exists, union (not intersection) of own-column and translation matches, non-matching products excluded, and the `title=` filter behaving the same way as `text=`.
+- **`FALLBACK`** — constant `'en'`, the fallback locale for every environment this suite runs in.
+- **`givenTranslation(productId, locale, title)`** — local helper that seeds a translation row via `translationRepository.upsertEntityLocale`; marks non-fallback rows with a `'digest'` provenance tag.
+- **`describe('GET /products/:id resolves to the caller's language')`** — single-product resolution: exact locale match, fallback when no translation row exists, and region-tag (`it-CH` → `it`) resolution.
+- **`describe('GET /products resolves a whole page in one batched query')`** — list endpoint: all items translated, and mixed translated/untranslated items on the same page without blanking.
+- **`describe('free-text search follows the caller's locale')`** — `?text=` and `?title=` filters: matches via translation column, falls back to own column, unions (not intersects) both match sources, excludes non-matching rows, and mirrors the union behavior for the `title=` parameter.
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module load to initialise a clean test database.
-- **`tests/support/http.ts`** — provides the `api()` test HTTP client used in every request.
-- **`tests/support/contract.ts`** — side-effect import that registers `toSatisfyApiSpec` for API-contract assertions on responses.
-- **`src/modules/locales/factories.ts`** — `makeLocale` builds locale fixtures inside `givenLocale`.
-- **`src/modules/locales/repository.ts`** — `localeRepository` and `translationRepository` are the two repositories the helpers write through.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` creates the product rows that the tests then translate or query.
+- **`src/modules/locales/repository.ts`** — imports `translationRepository` to upsert entity-locale rows used as seed data.
+- **`src/modules/locales/tests/factories.ts`** — imports `givenLocale` to register a locale (e.g. `'it'`) before translating.
+- **`src/modules/products/tests/factories.ts`** — imports `createProduct` to seed product documents.
+- **`tests/support/contract.ts`** — imported as a side-effect module (`import '@tests/contract'`) to establish shared test contract/expectations.
+- **`tests/support/http.ts`** — imports `api()` to drive requests through the real HTTP layer.
+- **`tests/support/setup-test-db.ts`** — calls `setupTestDb()` at module load to provision an isolated database per run.
 
 ## Notes
 
-- The file is intentionally **not** nested under `src/modules/…/tests/` — the header comment explains this is cross-module by design.
-- `en` as fallback is an environment assumption (see `.env-example`); if the test environment changes its fallback locale, the `FALLBACK` constant and the `source`-annotation logic in `givenTranslation` must be updated together.
-- Search semantics under test are **union**: a product can appear if it matches on its own column _or_ on its translation row, not both. The "unions rather than intersects" test exists specifically to guard against an implementation that accidentally intersects.
-- Every assertion that checks a resolved response also calls `.toSatisfyApiSpec()` (except the two fallback/no-translation tests), tying correctness to the OpenAPI contract.
+- Tests exercise the **public HTTP API** (not in-process calls), so they validate serialization, routing, and query composition end-to-end.
+- `FALLBACK` is hardcoded to `'en'` and is documented as guaranteed by `.env-example`; if the fallback locale changes in an environment, these assertions will silently mis-attribute rows.
+- The search union behavior (own-column OR translation-column) is an intentional design choice asserted here; a future refactor to intersection would break the "unions rather than intersects" test.
+- `setupTestDb()` is called at module scope (not inside `beforeAll`), so DB setup runs before any test file in the worker has loaded its other imports.

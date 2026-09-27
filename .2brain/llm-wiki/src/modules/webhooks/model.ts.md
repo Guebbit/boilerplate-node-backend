@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/model.ts
-sha256: 93254fac6aa0dd6785bf3826c031e85664edc8e2dd4d9bd15ab22fd31a7bd04f
-generated_at: 2026-09-23T19:40:31.233755+00:00
+sha256: 160ec97dc2140dabaeaaf082da61547a6d72150af12fae83272e93439476c591
+generated_at: 2026-09-27T15:42:08.602989+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the two Mongoose collections the webhooks module owns — `webhooksubscriptions` (a tenant's standing subscription to event types) and `webhookdeliveries` (one row per event×subscription, tracking retry attempts through to success or exhaustion) — including their schemas, interfaces, index definitions, and serialization transforms for the HTTP wire shape.
+Defines the two Mongoose collections the webhooks module owns — `webhooksubscriptions` and `webhookdeliveries` — including their schemas, document interfaces, indexes, TTL, and the serialization transforms that shape API responses. Every other file in the webhooks module reads or writes through the models exported here.
 
 ## Key elements
 
-- **`WebhookSecretRingEntry`** — interface for a single secret in a subscription's ring (id, ciphertext, createdAt). Only ciphertext is persisted; plaintext lives transiently in memory.
-- **`WebhookSubscriptionDocument` / `WebhookSubscriptionModel`** — the subscription schema type. Tracks tenant, url, eventTypes, enabled state, failure streak (`consecutiveFailures` + `failingSince`), `ownerUserId`, and the `secrets` array.
-- **`webhookSubscriptionSchema`** — Mongoose schema with two compound indexes: `{ tenant, createdAt desc }` and `{ enabled, eventTypes }`. Secrets sub-document uses `_id: false` with an explicit `id` field so `secrets.ts#mintRingSecret` can name entries before the parent document is saved.
-- **`applyWebhookSubscriptionTransform`** — serialization: omits `tenant`, `ownerUserId`, `failingSince`; collapses `secrets` to `secretIds` (ids only, never ciphertext) via the `after` hook.
-- **`webhookSubscriptionModel`** — Mongoose model instance, collection `webhooksubscriptions`.
-- **`WebhookDeliveryDocument` / `WebhookDeliveryModel`** — the delivery schema type. Tracks status (`pending → in-flight → succeeded/exhausted`), attempt count, response details, `nextAttemptAt`, and the lease pair (`leaseToken` / `leaseExpiresAt`).
-- **`webhookDeliverySchema`** — Mongoose schema with five indexes: admin-log filters (tenant, subscription, status — all with `createdAt desc`), the sweep's due-row read (`status + nextAttemptAt`), the sweep's stranded-lease read (`status + leaseExpiresAt`), and a TTL index on `createdAt`.
-- **`deliveryRetentionDays`** — read once at import from `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` (default 30 days) to set the TTL.
+- **`WebhookSecretRingEntry`** — interface for one entry in a subscription's secret ring (`id`, `ciphertext`, `createdAt`). Ciphertext is the only persisted form.
+- **`WebhookSubscriptionDocument` / `WebhookSubscriptionModel`** — document and model types for the subscription collection. Tracks `tenant`, `url`, `eventTypes`, `enabled`, failure streak (`consecutiveFailures`, `failingSince`, `disabledAt`), `ownerUserId`, and the `secrets` ring.
+- **`webhookSubscriptionSchema`** — Mongoose schema. Notable: `secrets` sub-document uses `_id: false` with an explicit `id` field so `secrets.ts#mintRingSecret` can name the entry before the row is saved. Two indexes: `{tenant, createdAt}` and `{enabled, eventTypes}`.
+- **`applyWebhookSubscriptionTransform`** — serialization: omits `tenant`, `ownerUserId`, `failingSince`; in its `after` hook collapses `secrets` to `secretIds` (ids only, never ciphertext).
+- **`webhookSubscriptionModel`** — the exported Mongoose model for collection `webhooksubscriptions`.
+- **`WebhookDeliveryDocument` / `WebhookDeliveryModel`** — document and model types for per-event delivery rows. Tracks `status` (from `@types` `WebhookDeliveryStatus`), `attempt`, `nextAttemptAt`, and the lease pair (`leaseToken`, `leaseExpiresAt`).
+- **`webhookDeliverySchema`** — Mongoose schema with `subscriptionId` as an `ObjectId` ref. Five indexes (tenant+created, subscription+created, status+created, status+nextAttemptAt, status+leaseExpiresAt) plus a TTL index on `createdAt`.
+- **`deliveryRetentionDays`** — read via `environmentNumber('NODE_WEBHOOK_DELIVERY_RETENTION_DAYS', 30, 1)` at import time; feeds the TTL `expireAfterSeconds`.
 - **`applyWebhookDeliveryTransform`** — serialization: omits `tenant`, `payload`, `leaseToken`, `leaseExpiresAt`.
-- **`webhookDeliveryModel`** — Mongoose model instance, collection `webhookdeliveries`.
+- **`webhookDeliveryModel`** — the exported Mongoose model for collection `webhookdeliveries`.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, the helper used to build both wire-shape transforms.
-- **`src/infrastructure/runtime/environment.ts`** — provides `environmentNumber`, used to read the TTL retention setting at import time.
-- **`src/modules/webhooks/secrets.ts`** — owns encryption-at-rest and rotation of the `ciphertext` values stored in the subscription's `secrets` array; mints the `id` field before the subscription is persisted.
-- **`src/modules/webhooks/repository.ts`** — sole writer of `failingSince`; performs `claimPending` / `claimForReplay` (stamping `leaseToken` + `leaseExpiresAt`) and `applyOutcome` (guarded by token match).
-- **`src/modules/webhooks/services/attempt.ts`** — resolves `ownerUserId` to an email at send time for auto-disable notices; writes delivery outcomes.
-- **`src/modules/webhooks/services/publish.ts`** — queries the `{ enabled: 1, eventTypes: 1 }` index to fan out a new event to matching subscriptions.
-- **`src/modules/webhooks/services/sweep.ts`** — reads the `{ status, nextAttemptAt }` and `{ status, leaseExpiresAt }` indexes to find due and stranded deliveries.
-- **`src/modules/webhooks/index.ts`** — barrel re-export for the module's public API.
+- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, which both `applyWebhookSubscriptionTransform` and `applyWebhookDeliveryTransform` wrap. The `omit`/`after` ordering is an invariant this file relies on (see Notes).
+- **`src/infrastructure/runtime/environment.ts`** — provides `environmentNumber`, used to read the delivery-retention env var at import time.
+- **`src/modules/webhooks/secrets.ts`** — `mintRingSecret` mints the `id` (`randomUUID()`) before the subscription is saved; this file's schema (`_id: false` + explicit `id`) exists to make that possible. Encryption/rotation logic lives in `secrets.ts`; only ciphertext is stored here.
+- **`src/modules/webhooks/repository.ts`** — sole writer of `failingSince` (`recordOutcome`); performs the lease-based claiming (`claimPending`, `claimForReplay`) and conditional `applyOutcome` writes that the lease fields on the delivery schema support.
+- **`src/modules/webhooks/services/publish.ts`** — queries subscriptions via the `{enabled, eventTypes}` index to find which subscriptions want a given event.
+- **`src/modules/webhooks/services/attempt.ts`** — resolves `ownerUserId` to an email at notice-send time for the auto-disable path.
+- **`src/modules/webhooks/services/enqueue.ts`** — creates `WebhookDelivery` rows (initial `pending` status) when an event is published.
+- **`src/modules/webhooks/services/deliveries.ts`** / **`subscriptions.ts`** — read/write the two models for their respective API surfaces.
+- **`src/modules/webhooks/index.ts`** — module barrel; re-exports the models and transforms.
+- **Tests** (`schema-contract.test.ts`, `secrets.test.ts`, `delivery.test.ts`, `sweep.test.ts`) — assert schema shape, serialization output, and lease/claim behavior against these definitions.
 
 ## Notes
 
-- **TTL index is immutable at runtime.** Changing `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` and restarting will fail boot because Mongo cannot modify `expireAfterSeconds` in place. `npm run db:sync` must be run to drop and rebuild the index.
-- **`secrets.id` is a real schema field, not a virtual.** This is deliberate so `.lean()` reads (which never apply virtuals) still expose it. The `_id: false` on the sub-document plus the explicit `id` field lets `mintRingSecret` return the id in the CREATE response before the parent document exists.
-- **`failingSince` is absent (not `null`) when `consecutiveFailures` is 0.** Code checking for an active streak should test for the field's presence, not for a non-null value.
-- **No `failed` delivery status exists by design.** A failed attempt with retries remaining reverts to `pending` with a later `nextAttemptAt`; only `exhausted` is terminal. Per-attempt history (if added later) would carry its own outcome enum.
-- **`in-flight` is a leased claim, not a caller-set state.** `repository.ts` stamps it atomically with `leaseToken`/`leaseExpiresAt`; the sweep never claims, it only publishes.
-- **`tenant` here is the organisation identifier**, unrelated to `locales/model.ts`'s same-named field (a translation keyspace).
+- **`secrets` sub-document id strategy:** `_id: false` is set on the sub-schema and a real `id: String` field is declared so the id round-trips through `.lean()` reads (where Mongoose virtuals are absent). Do not switch this back to an auto-generated `_id` without breaking the pre-save naming in `secrets.ts`.
+- **Serialization ordering:** `omit` runs *before* `after` in `applySerialization`. That is why `secrets` is read and deleted inside the `after` callback rather than listed in `omit` — naming it in `omit` would make it unavailable to the derivation.
+- **TTL index is not hot-swappable:** Mongo will not modify `expireAfterSeconds` in place. Changing `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` and restarting the process will fail boot. Use `npm run db:sync` to drop and rebuild the index.
+- **No `failed` delivery status:** By design, a failed attempt that still has retries left goes back to `pending`; only `exhausted` is terminal. Per-attempt outcomes are (currently) not stored as a sub-collection — the `attempt` number and top-level `responseCode`/`error` fields are the record.
+- **`tenant` on subscriptions is not the same `tenant` as `locales/model.ts`** — they share a name and nothing else (see `docs/theory/tenancy.md`).
+- **`ownerUserId` is a pointer, not a copy:** GDPR minimisation (Art. 5(1)(c)/(d)). The current email is resolved at send time in `attempt.ts`. Absent on legacy rows or stranger-created subscriptions; in either case no auto-disable notice is sent, but the audit entry is still written.

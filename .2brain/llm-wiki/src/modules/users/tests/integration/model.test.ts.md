@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/model.test.ts
-sha256: 04ea7376fccdc13aff8235032be51511e24518c881043e3903519bb2266bdb37
-generated_at: 2026-09-23T19:35:16.097818+00:00
+sha256: 3841d51be00672d5b51d7607046fa820b44a02e20de51e955025adad3da0ccef
+generated_at: 2026-09-27T15:39:40.452869+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies credentials (bcrypt hash, live tokens) can never leak into a serialized user response. It asserts two independent guards: the Mongoose `select: false` option prevents loading, and the `applyUserTransform` allowlist (exposed via `toJSON`) strips them at serialization time—including for `.lean()` documents that bypass `toJSON` hooks.
+Integration test that verifies two invariants of the user model: (1) email addresses are stored and looked up case-insensitively via a unique index, and (2) credential fields (`password`, `tokens`) can never leak into a serialised response. The second invariant is checked at two independent layers — Mongoose `select: false` at the query level and the `toJSON` allowlist at the serialisation boundary — including `.lean()` results that bypass `toJSON` entirely.
 
 ## Key elements
 
-- **`expectNoCredentials(payload)`** — helper that JSON-stringifies a payload and asserts it contains no `password`, `tokens`, or `$2b$` substrings. The single assertion reused across every test case.
-- **`withTokens()`** — seeds a user (via `createUser` factory) with one live `REFRESH` token so tests have a realistic credentials-bearing document.
-- **`describe('select: false (the safety net)')`** — four tests confirming `findById`, `findOne`, `findAll` (lean) omit `password`/`tokens`, while `findByIdWithCredentials` deliberately returns them.
-- **`describe('applyUserTransform (the contract boundary)')`** — tests that `toJSON()` output:
-    - strips credentials even from a fully-loaded document,
-    - replaces `_id`/`__v` with a single `id` string,
-    - emits exactly the OpenAPI `User` property set (asserted via a sorted key list),
-    - keeps `active` independent of `deletedAt` (four quadrants),
-    - defaults `active` to `true` when unset,
-    - exposes `deletedAt` on soft-deleted accounts without loosening credential guards,
-    - normalizes lean lists through `userService.search` and single lookups through `userService.getById`.
+- **`expectNoCredentials(payload)`** — Assertion helper that JSON-serialises an arbitrary payload and fails if the strings `password`, `tokens`, or the bcrypt prefix `$2b$` appear. Used by nearly every "no-leak" test.
+- **`withTokens()`** — Factory wrapper around `createUser` that seeds a user with one live `TokenType.REFRESH` token, giving tests a realistic secret to attempt to leak.
+- **`describe('email is case-insensitive (B5)')`** — Four cases covering lowercased storage, cross-case `findForLogin`, unique-index rejection of case-differing duplicates, and direct `normalizeEmail` behaviour.
+- **`describe('select: false (the safety net)')`** — Verifies that `findById`, `findOne`, and `findAll` (lean) omit `password`/`tokens`, while the explicit `*WithCredentials` finders still return them.
+- **`describe('applyUserTransform (the contract boundary)')`** — Verifies that `toJSON()` strips credentials even from a credential-carrying document, replaces `_id`/`__v` with `id`, emits exactly the OpenAPI `User` key set (sorted, asserted via `toSorted()`), keeps `active` and `deletedAt` as independent fields, defaults `active` to `true`, exposes `deletedAt` on soft-deleted accounts, and normalises both lean lists (`userService.search`) and single lookups (`userService.getById`).
 
 ## Relationships
 
-- **`src/modules/users/model.ts`** — source of the `TokenType` enum imported here, and the schema whose `select: false` fields and `toJSON` transform (i.e. `applyUserTransform`) are the behavior under test.
-- **`src/modules/users/repository.ts`** — `userRepository` is exercised directly for `findById`, `findOne`, `findAll`, and `findByIdWithCredentials`.
-- **`src/modules/users/service.ts`** — `userService.search` and `userService.getById` are the service-level paths that must also emit clean payloads.
-- **`src/modules/users/tests/factories.ts`** — `createUser` seeds fixtures (optionally with tokens, `active`, `deletedAt`, etc.) before each assertion.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module load to provision/tear down a temporary database for the integration run.
-- **`tests/support/stub.ts`** — `asStub` is used to type-assert the `items[0]` element of `userService.search` without importing a concrete response interface.
+- **`src/modules/users/model.ts`** — Source of `TokenType` and `normalizeEmail`, which are exercised directly in the email tests.
+- **`src/modules/users/repository.ts`** — Provides `userRepository`; the tests call `findById`, `findOne`, `findAll`, and `findByIdWithCredentials` to confirm the `select: false` guard.
+- **`src/modules/users/service.ts`** — Imported both as a namespace (`userService.search`, `userService.getById`) and as a named object (`userServiceObject.findForLogin`); tests verify the service-level serialisation path.
+- **`src/modules/users/tests/factories.ts`** — `createUser` is the sole seeding mechanism; the `withTokens` wrapper in this file composes it.
+- **`src/infrastructure/persistence/normalize-email.ts`** — Re-exported through `model.ts`; the `normalizeEmail` unit assertion in the B5 block exercises its trim-and-lowercase contract.
+- **`tests/support/setup-test-db.ts`** — Called once at module top to spin up an isolated in-memory (or temporary) Mongoose database for every test in this file.
+- **`tests/support/stub.ts`** — `asStub` is used to cast `items[0]` from `search` without a full type, letting the test read `.id` safely.
 
 ## Notes
 
-- The `expectNoCredentials` helper checks for the literal substrings `'password'`, `'tokens'`, and `'$2b$'` in the serialized output. Any field name containing those words will trip it—keep payload field names disjoint from those strings, or the test will false-positive.
-- `findAll` is tested via the lean (plain-object) path; the lean branch bypasses Mongoose's `toJSON` virtual, so the `select: false` guard is the only protection there. The `toJSON`-based tests use `findByIdWithCredentials` to confirm the allowlist is a second, independent layer.
-- The exact-key assertion (`toSorted()` comparison) is intentionally brittle: adding or removing a field from the `User` contract requires updating this list. That is the point—it acts as a contract diff.
-- `active` and `deletedAt` are tested as orthogonal flags, not as a derived boolean. Do not introduce a computed `active` that folds in `deletedAt` without revisiting these four-quadrant cases.
+- The test file deliberately imports the service **twice** (`import * as userService` and `import { userService as userServiceObject }`) to cover both call styles; this is intentional, not a duplication bug.
+- The OpenAPI key list assertion (`toSorted()` equals a hardcoded array) acts as a **closed contract guard**: adding a new field to the user document without updating this test will break CI. `role` is explicitly *absent* by design — it belongs to `@modules/access`.
+- `active` and `deletedAt` are tested as **orthogonal** booleans, not as a derived state. The four-combination matrix test is the guard against regressing them into a single tri-state.
+- The `expectNoCredentials` helper checks for the literal substring `$2b$` (bcrypt salt prefix) in addition to the key names, catching cases where the hash value leaks even if the field name changes.

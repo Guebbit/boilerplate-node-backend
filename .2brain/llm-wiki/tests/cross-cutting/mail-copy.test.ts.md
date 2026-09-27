@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/mail-copy.test.ts
-sha256: 046589107b9b747925905f235549b7ccb611a2c280ccc28d0c3ecfe087a91ba3
-generated_at: 2026-09-23T19:56:43.265475+00:00
+sha256: 5da10913750b1b9759119c0010d5eb5f36be80e9f47bec0d7fa37a5b4b8f83f5
+generated_at: 2026-09-27T15:50:36.246032+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Static cross-cutting test that verifies every EJS mail template under `shared/templates/emails/` only interpolates variables that its corresponding builder (in `src/modules/*/emails.ts`) actually supplies in the `data` object. It exists because both EJS (render-throw) and Blade's `__()` (returns the key itself) fail silently in practice — the mail sends, the user sees garbled copy, and the template author never notices. The check is purely text-based (regex scan of template source + depth-aware parse of builder source), so it runs with no booted framework, no SMTP, and no translator.
+Statically cross-checks that every EJS email template under `shared/templates/emails/` receives a value for every variable it interpolates, by reading the template markup as text and the `EmailContent`-returning builders in each module's `emails.ts` as source. It exists to catch the silent failure mode where a template references a variable the builder never supplies — a mail that would render broken at send time with no earlier signal.
 
 ## Key elements
 
-- **`outputTags(source)`** — extracts every `<%= … %>` / `<%- … %>` tag, returning the full body and the leading identifier (`head`).
-- **`loopLocals(source)`** — collects variable names bound by `.forEach(function (x) { … })` so they are excluded from the "required" set.
-- **`includedPartials(source)`** — returns relative paths from `include('…')` calls, enabling recursive walks.
-- **`requiredVariables(filePath, visited?)`** — recursively collects all bare variables a template (and its includes) need; `visited` guards against cycles.
-- **`unsupportedTags(filePath)`** — flags any tag whose body is not a single identifier (the tripwire that enforces the "bare interpolation only" contract).
-- **`templateFiles()`** — lists `.ejs` files in `shared/templates/emails/`.
-- **`builderDataKeys()`** — scans every `src/modules/*/emails.ts` for `template: '…'` declarations and extracts the top-level keys of the following `data: { … }` object.
-- **`topLevelEntries(body)`** / **`entryKey(entry)`** / **`extractBalanced(source, openIndex)`** — depth-aware helpers that correctly split a `data` object literal into its top-level entries without breaking on nested braces, parens, or brackets.
-- **`stripComments(source)`** — removes `/* … */` and `// …` before parsing builder source, preventing comment text from being misread as object keys.
-- **`describe` block (4 tests)** — canary (≥ 6 templates & builders), bare-interpolation tripwire, orphan-template detection, and full variable-coverage check.
+- **`outputTags(source)`** — extracts every `<%= … %>` / `<%- … %>` tag; returns its trimmed body and the leading identifier (`head`).
+- **`loopLocals(source)`** — collects variable names bound by `.forEach(function (x) { … })` so they aren't mistaken for external data.
+- **`includedPartials(source)`** — finds `include('…')` calls to recurse into partials.
+- **`requiredVariables(filePath, visited)`** — recursively walks a template and its `include()`s, returning the set of bare variables it needs. `visited` guards against include cycles.
+- **`unsupportedTags(filePath)`** — flags any tag whose body is not a single identifier (or an `include` call); used as the tripwire test.
+- **`stripComments(source)` / `topLevelEntries(body)` / `entryKey(entry)`** — parse a builder's `data: { … }` object literal without executing it, splitting on top-level commas only.
+- **`extractBalanced(source, openIndex)`** — returns the text between a `{` and its matching `}`.
+- **`builderDataKeys()`** — scans every `<module>/emails.ts` under `MODULES_ROOT` for `template: '…'` + `data: { … }` pairs; returns `Map<templateName, dataKey[]>`.
+- **`describe` block (4 tests)** — canary (non-empty scan), tripwire (bare-interpolation-only invariant), orphan detection (template with no matching builder), and the core missing-variable assertion.
 
 ## Relationships
 
-No direct imports or runtime interactions with the listed graph neighbors (`scripts/contracts/build-bundles.ts`, `scripts/docs/generate-role-matrix.ts`, `src/modules/account/tests/unit/two-factor.test.ts`) are present in this file. Its runtime data dependencies are the template files in `shared/templates/emails/` and the builder source in each module's `emails.ts`.
+- **`tests/support/paths.ts`** — imported as `@tests/paths`; supplies `REPO_ROOT` (to locate `shared/templates/emails/`) and `MODULES_ROOT` (to locate each module's `emails.ts`). No other graph neighbor is imported or referenced directly by this file.
 
 ## Notes
 
-- **Scope boundary:** `shared/templates/documents/orders.invoice.ejs` is deliberately excluded — it renders a PDF via a different shape (`invoiceDocument`) and is not an `EmailContent`. It would need its own pass.
-- **Tripwire is a test, not a lint:** the "bare interpolation only" contract is enforced by a failing test, not a build-time check. If a template author introduces `<%= user.name %>` or a method call, the test fails loudly rather than silently checking the wrong variable name.
-- **Canary test:** the first `it` asserts ≥ 6 templates and ≥ 6 builders exist, so a moved directory or renamed field cannot silently turn every assertion into a no-op pass.
-- **Comment-stripping safety:** `stripComments` does a blind regex strip. This is safe only because none of the `data` objects in `emails.ts` contain a literal `//` or `/*` inside a string value. Adding one would break the parse.
-- **Parallel to PHP's `MailCopyTest`:** same intent (builder supplies every template variable), same static approach, adapted from Blade's `__()` failure mode to EJS's render-time throw.
+- **Static by design.** No framework, SMTP, queue, or translator is booted. Templates are read as text, builders as source. This keeps the test in the zero-dependency layer.
+- **Bare-interpolation invariant.** The entire walk assumes templates only print a bare identifier or loop one array via `.forEach(function (x) {…})`. The tripwire test (`uses only bare interpolation…`) will fail loudly the moment a template introduces property access (`user.name`) or a method call — do not remove that test to "fix" a template that violates the rule.
+- **Explicitly excluded:** `shared/templates/documents/orders.invoice.ejs`. It uses the same EJS mechanism but is not an `EmailContent`; widening this file to cover it would require a second data shape for one template.
+- **Canary threshold (≥ 6).** Guards against a moved directory or renamed field silently producing an empty scan that passes all assertions vacuously.
+- **`stripComments` is a blind replace.** Safe here because none of the builder data objects contain `//` or `/*` inside string literals. If that invariant changes, the strip must become context-aware.

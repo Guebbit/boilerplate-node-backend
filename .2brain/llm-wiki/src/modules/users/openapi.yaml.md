@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/openapi.yaml
-sha256: 898558df5581858df03283f2dda110ff33b8e6eef2d25b324f8efc78aeea4e89
-generated_at: 2026-09-23T19:33:39.777485+00:00
+sha256: 5a891abd9d2e145091d7d82541adb5ae4b39e03fa5727ba66cdb9c770a0f44c1
+generated_at: 2026-09-27T15:38:21.669685+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.0.3 contract (v2.0.0) defining the REST endpoints for the **users** module. It specifies the request/response shapes, authentication, and error semantics for every user-facing route so that clients, tests, and documentation can be generated or validated against a single source of truth.
+OpenAPI 3.0.3 contract (v2.0.0) that defines the full REST surface for the **users** module: list, create, delete, get-by-id, full-replace, and partial-update operations. It serves as the single source of truth for the module's request/response shapes, parameter semantics, and error responses, and is the document other tooling (codegen, client SDKs, docs) consumes.
 
 ## Key elements
 
-- **`/users` (GET / POST / PUT / DELETE)** — Collection-level routes for listing, creating, editing, and deleting users. All require `bearerAuth`.
-- **`/users/{id}` (GET / PUT / DELETE)** — Item-level routes; functionally equivalent to the collection forms (noted via `x-alias-of` and inline comments).
-- **Multipart support** — `POST /users` and both `PUT` routes accept `multipart/form-data` alongside `application/json` for optional image uploads.
-- **`hardDelete` parameter** — Acceptable as query param _or_ body field on DELETE; a `true` from any source wins.
-- **Rate-limiting (429)** — Declared on the two upload-capable routes; enforced by an `uploadLimiter` middleware (see `routes.ts`).
-- **Local schemas** — `UsersResponseEnvelope`, `CreateUserRequest`, `UpdateUserRequest`, `DeleteUserRequest`, and their `*Multipart` / `*ById` variants defined under `#/components/schemas`.
+- **`GET /users`** (`listUsers`) — paginated user listing with filter params (`email`, `username`, `active`, `deleted`). Returns `UsersResponseEnvelope` (local component).
+- **`POST /users`** (`createUser`) — creates a user; accepts `application/json` or `multipart/form-data` (for optional image upload). `password` is optional when `sendSetupEmail` is used. 409 signals an undeclared role or privilege-escalation denial; 429 is emitted by the `uploadLimiter` middleware.
+- **`DELETE /users`** (`deleteUser`) — body-carrying delete. `hardDelete` flag readable from query *or* body; a `true` from any source wins. Soft delete is one-way; undo via `POST /users/{id}/restore`. Carries `x-alias-of: deleteUserById`.
+- **`GET /users/{id}`** (`getUserById`) — equivalent to `GET /users?id={id}`.
+- **`PUT /users/{id}`** (`replaceUserById`) — full replace per RFC 9110 §9.3.4 (omitted optional fields are cleared). `password` is exempt from clearing. Supports multipart for image.
+- **`PATCH /users/{id}`** (`updateUserById`) — merge per RFC 7396 (omitted fields unchanged, `null` clears). Supports multipart for image.
+- **`DELETE /users/{id}`** — path-param variant of `DELETE /users` (truncated in this listing; `x-alias-of` links the two).
+- **Local `components/schemas`** — `UsersResponseEnvelope`, `CreateUserRequest`, `CreateUserRequestMultipart`, `DeleteUserRequest`, `ReplaceUserByIdRequest`, `ReplaceUserByIdRequestMultipart`, `UpdateUserByIdRequest`, `UpdateUserByIdRequestMultipart`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — Primary dependency. Nearly every error response (`401`, `403`, `404`, `422`, `429`, `500`), common parameter (`PageParam`, `PageSizeParam`, `TextParam`, `IdParam`, `IdPathParam`, `HardDeleteParam`), and shared schema (`UserEnvelope`, `Email`, `HardDeleteRequest`) is pulled in via `$ref`. Keeping these in the shared contract prevents duplication across module specs.
-- **`src/modules/webhooks/module.ts`** — Graph-adjacent module in the same codebase; no direct reference is visible in this spec (interaction, if any, is indirect via the shared runtime).
+- **`shared/contracts/openapi.root.yaml`** — every shared parameter (`PageParam`, `PageSizeParam`, `TextParam`, `IdParam`, `IdPathParam`, `HardDeleteParam`), common schema (`Email`, `UserEnvelope`), and standard error/success responses (`Unauthorized`, `Forbidden`, `ValidationError`, `InternalError`, `Success`, `NotFound`, `Conflict`, `TooManyRequests`) are pulled in via `$ref`. This file is the *consumer*; the root contract is the *provider*.
+- **`src/modules/webhooks/module.ts`** — listed as a graph neighbor. No direct `$ref` or import visible in this file; the relationship is at the module-registry level (both live under `src/modules/`).
 
 ## Notes
 
-- `x-alias-of` is a non-standard extension linking the collection-level `PUT /users` → `updateUserById` and `DELETE /users` → `deleteUserById`. Tooling that only reads `operationId` will see four distinct operations; the alias clarifies they share one controller.
-- The `hardDelete` flag is deliberately over-ridable: any `true` wins regardless of source (query vs. body). The `{id}` form marks `requestBody` as optional because the flag can arrive purely via query.
-- File paths for `$ref` are relative (`../../../shared/...`); if the file is relocated, every reference breaks silently in some OpenAPI tooling.
-- The truncated portion of the file (beyond `DELETE /users/{id}`) may contain additional paths or component definitions not captured here.
+- **PUT vs PATCH semantics differ intentionally.** PUT is a full replace (RFC 9110); PATCH is a merge (RFC 7396). Don't treat them as interchangeable when writing client code or tests.
+- **`password` is special-cased** on PUT/PATCH: it is never cleared by omission and has its own flow (`sendSetupEmail`). Omitting it leaves it unchanged.
+- **`hardDelete` is "any-true-wins."** A `true` in the query, a `true` in the body, or both — the result is a hard delete. A `false` in one location does *not* cancel a `true` in the other.
+- **`x-alias-of` extension** on `DELETE /users` links it to `deleteUserById`; the two routes share one controller (`surface: 'delete'` reads params, query, and body whichever route it's mounted on).
+- **`uploadLimiter`** is a route-level middleware (referenced in comments, lives in `routes.ts`) that produces the 429 responses on upload-accepting routes. It is not declared in this OpenAPI spec's `security` or `x-` fields.
+- **Multipart variants** exist alongside JSON for every mutation that can carry an image. The `*Multipart` schemas are distinct components; they are not simply the JSON schema with an `image` field added.

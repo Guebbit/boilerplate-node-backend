@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/unit/schema-contract.test.ts
-sha256: 350d7f44b6d26d08cf62af515d083c255a3b3fd16de4044cb55fcdba13b14c58
-generated_at: 2026-09-23T19:31:01.490844+00:00
+sha256: d8e1fe0b27a5a0e4f95073cec62b139f013bb6f8de306d33ff46e9fdaa5f36a7
+generated_at: 2026-09-27T15:35:38.806288+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests that pin down the product schema's field contract (required fields, defaults, min constraints, indexes, timestamps) and the `applyProductTransform` function that derives an `available` count from the `onHand` / `reserved` stock counters. They exist to make the _intent_ behind each default explicit and to prevent regressions that would silently break downstream consumers (cart, facet, storefront).
+Locks down the product schema's contract — required fields, validation bounds, defaults, and index declarations — and pins the behavior of `applyProductTransform`'s derived `available` value. It exists so that any change to the schema or transform must consciously update these expectations, making the "what a product means when a field was never set" contract explicit and regression-safe.
 
 ## Key elements
 
-- **`serialize(onHand, reserved)`** (local helper) — builds a minimal product document and returns `applyProductTransform(doc).available`, used by all availability tests.
-- **`describe('productSchema — what a product must carry')`** — asserts required paths are exactly `['price','title']`; min 0 on both stock counters; defaults for `onHand`, `reserved`, `active`, `requiresShipping`, `description`, `categories`, `tags`, `imageUrl`, `deletedAt`; and that `timestamps` is enabled.
-- **`describe('productSchema — indexes')`** — asserts the two named compound indexes (`products_active_deletedAt`, `products_createdAt`) and their sort directions.
-- **`describe('applyProductTransform — the derived availability')`** — verifies subtraction, clamping at zero, `undefined`-counter safety (avoids `NaN`→`null`), and that non-number values are treated as zero rather than coerced.
+- **`serialize(onHand, reserved)`** — local helper that builds a minimal document and runs it through `applyProductTransform`, returning only the computed `.available`. Used by every transform test.
+- **`describe('productSchema — what a product must carry')`** — asserts required paths (`price`, `title` only), `min: 0` on both stock counters, and the full default set: `onHand`/`reserved` → 0, `active` → true, `requiresShipping` → true, `description` → `''`, `categories`/`tags` → `[]`, `imageUrl` → env-overridable placeholder, `deletedAt` → undefined, `timestamps` → true.
+- **`describe('productSchema — indexes')`** — asserts the exact named index set (`products_active_deletedAt`, `products_createdAt`, `products_sku`) and that `products_sku` is both sparse and unique (SH4).
+- **`describe('applyProductTransform — the derived availability')`** — verifies `available = onHand - reserved` clamped at 0, that `undefined` counters are treated as 0 (not NaN), and that non-number values are treated as 0 rather than coerced.
 
 ## Relationships
 
-- **`src/modules/products/model.ts`** — source of `productSchema` (Mongoose schema under test) and `applyProductTransform` (the transform whose output this file exercises).
-- **`tests/support/schema.ts`** — provides the schema-introspection helpers (`requiredPaths`, `defaultOf`, `pathOptions`, `optionsOf`, `indexSpecs`) used to query the schema without instantiating documents.
+- **`src/modules/products/model.ts`** — the sole subject under test; provides `productSchema` (the Mongoose/compile schema) and `applyProductTransform` (the read-transform that computes `available`).
+- **`tests/support/schema.ts`** — supplies the introspection utilities the tests rely on: `requiredPaths`, `defaultOf`, `pathOptions`, `optionsOf`, `indexSpecs`, `indexOptionSpecs`. The tests never inspect the schema object directly; all assertions go through these helpers.
 
 ## Notes
 
-- The `imageUrl` default reads `process.env.NODE_DEFAULT_IMAGE_PRODUCT`; tests will pass any string, so the assertion is order-sensitive to the env var's state at test time.
-- Several comments reference external contracts (`openapi.yaml` defaults, the `inventory` module's stock counters, the facet endpoint, the `cart` shipping decision) — these are _rationale_ for the assertion, not additional imports.
-- The `serialize` helper hardcodes `_id: 'x'`; the transform does not read `_id`, but the document shape mirrors what a real Mongoose doc would look like.
-- The "wrong type" test (`'12'` for `onHand`) documents a deliberate design choice: fail visibly with 0 rather than risk JS numeric coercion producing a plausible-but-wrong availability number.
+- The `imageUrl` default assertion reads `process.env.NODE_DEFAULT_IMAGE_PRODUCT` at test time; a deployment that sets that env var will see a different expected value.
+- The transform tests intentionally pass `undefined` and string values to `onHand`/`reserved`. These are defensive paths for legacy documents or malformed writes — they are not expected in normal operation but must not produce `NaN` or a silently coerced number.
+- Comments reference external contract IDs ("SH4" for the sparse-unique SKU rule, "3.1" for the inventory-row-at-creation guarantee) that live outside this file; changing those external contracts without updating the tests here will break the build.

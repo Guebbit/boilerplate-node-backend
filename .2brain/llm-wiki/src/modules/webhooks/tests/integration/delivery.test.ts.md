@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/tests/integration/delivery.test.ts
-sha256: 363775f4f3b143cad4965bd42298cfe748034b9429c7ab4893a836f5d15bc7a2
-generated_at: 2026-09-23T19:44:13.136838+00:00
+sha256: b21fe387642a41e51a7e5f314711b7daac3f1489383143e1aab865ee47c4fec4
+generated_at: 2026-09-27T15:45:44.929971+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,44 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-End-to-end integration test for the webhook delivery pipeline. It spins up a real local HTTPS listener (via `tests/support/https-test-server.ts`) and a real test database, then exercises the full path: signed delivery arrival, 500 → retry scheduling, sustained-failure auto-disable, replay re-send, and delivery-log bookkeeping. Everything in the pipeline runs for real except the SSRF guard (loopback would be correctly refused) and the mailer/audit sinks (replaced with mocks).
+End-to-end integration test for the webhook delivery pipeline. It runs against a real database and a self-managed local HTTPS listener (`tests/support/https-test-server.ts`), covering the full lifecycle: signed delivery, 500-triggered retry scheduling, sustained-failure auto-disable, replay re-send, and delivery-log state at each step. It deliberately does **not** use the Compose `webhook-tester` service.
 
 ## Key elements
 
-- **`createSubscription(url, eventTypes?, ownerUserId?)`** – Persists a `WebhookSubscriptionDocument` with one minted ring secret via `webhookSubscriptionRepository.create`.
-- **`createPendingDelivery(subscription, eventType?)`** – Inserts a `pending`, attempt-1 delivery row and returns the wire-shape fields (`deliveryId`, `eventId`, `eventType`, `occurredAt`, `data`) needed for body/signature assertions.
-- **`repointSubscription(subscriptionId, url)`** – Mutates an existing subscription's `url` to simulate an endpoint moving or recovering.
-- **`backdateFailingStreak(subscriptionId)`** – Sets `failingSince` to `WEBHOOK_MIN_FAILING_MS + 60 s` in the past so auto-disable triggers without waiting a real multi-day window.
-- **`runChainToCompletion(deliveryId)`** – Repeatedly calls `processDeliveryJob({ deliveryId })` up to `WEBHOOK_MAX_ATTEMPTS` rounds until the delivery leaves `pending`.
-- **`describe` blocks** – One per scenario: successful delivery, 500 retry, auto-disable, replay, delivery-log integrity (truncated in this view).
-- **Module-level `jest.mock` calls** – `node:https` (CA injection), `ssrf-guard` (loopback bypass), `mailer` (enqueueEmail), `audit` (emitAuditEvent / recordAudit re-route).
+- **`jest.mock('node:https', …)`** – wraps `request` to inject `TEST_CA_CERT` into every outbound TLS connection so the local test server's self-signed cert is accepted without disabling certificate verification globally.
+- **`jest.mock('@infrastructure/adapters/ssrf-guard', …)`** – overrides only `resolveSafeOutboundTarget` to allow loopback (a real local listener is inherently on 127.0.0.1, which the real guard correctly refuses). All other guard behaviour (HTTPS-only, pinned `lookup`) is preserved.
+- **`jest.mock('@infrastructure/adapters/mailer', …)`** – replaces `enqueueEmail` with a plain `jest.fn()` so the auto-disable notification can be asserted in isolation.
+- **`jest.mock('@infrastructure/observability/audit', …)`** – replaces `emitAuditEvent` and reroutes `recordAudit` through the replacement (because `recordAudit` closes over its module's own `emitAuditEvent`). Replaced rather than spied on due to a non-configurable CJS namespace getter.
+- **`createSubscription`** – mints a ring secret via `mintRingSecret()` and persists a real subscription row through `webhookSubscriptionRepository`.
+- **`createPendingDelivery`** – inserts a `pending`, attempt-1 delivery row and returns the wire-shape fields (`deliveryId`, `eventId`, `eventType`, `occurredAt`, `data`) needed for body/signature assertions. Does **not** return the job payload.
+- **`repointSubscription`** – updates a subscription's `url` in place (simulates an endpoint moving or recovering).
+- **`backdateFailingStreak`** – sets `failingSince` into the past so the time-gated auto-disable threshold (`WEBHOOK_MIN_FAILING_MS`) is crossed without waiting in real time.
+- **`runChainToCompletion`** – re-submits `{ deliveryId }` to `processDeliveryJob` up to `WEBHOOK_MAX_ATTEMPTS` rounds until the delivery leaves `pending`.
+- **Test blocks** – `describe` groups for: successful delivery (signature + envelope + log), 500 retry scheduling, sustained-failure auto-disable (truncated in sample), replay re-send.
 
 ## Relationships
 
-- **`@modules/webhooks/services/index.ts`** – Imports `processDeliveryJob`, the primary SUT under test.
-- **`@modules/webhooks/services/deliveries.ts`** – Imports `replay` for the replay re-send scenario.
-- **`@modules/webhooks/repository.ts`** – Uses `webhookSubscriptionRepository` and `webhookDeliveryRepository` to create/inspect rows.
-- **`@modules/webhooks/secrets.ts`** – Uses `mintRingSecret` (fixture setup) and `activeRingSecrets` (signature verification).
-- **`@modules/webhooks/domain/index.ts`** – Imports `WEBHOOK_MAX_ATTEMPTS`, `WEBHOOK_MAX_CONSECUTIVE_FAILURES`, `WEBHOOK_MIN_FAILING_MS` to drive loop bounds and backdating.
-- **`@modules/webhooks/model.ts`** – Type-only import of `WebhookSubscriptionDocument`.
-- **`@modules/webhooks/audit.ts`** – Imports `webhooksAuditActions` for audit-event assertions.
-- **`@infrastructure/observability/audit.ts`** – Mocked module; the test asserts on `emitAuditEvent` calls and re-routes `recordAudit` through the mock.
-- **`@infrastructure/adapters/logger.ts`** – Imported (likely for log-transport assertions in the delivery-log scenario).
-- **`@modules/users/tests/factories.ts`** – `createUser` for owner-scoped subscription tests.
-- **`@modules/users/index.ts`** – `userService` for tenant-scoped user operations.
-- **`@modules/webhooks/tests/verify-signature.fixture.ts`** – `verifyWebhookSignatureForTest` to independently validate the `webhook-signature` header.
-- **`tests/support/callers.ts`** – `callerAs('manager')` and `TEST_TENANT_ID` for the auth context.
+| Neighbor | Interaction |
+|---|---|
+| `modules/webhooks/services/index.ts` | Calls `processDeliveryJob({ deliveryId })` – the Claim Check entry point. |
+| `modules/webhooks/services/deliveries.ts` | Calls `replay` to re-send a previously completed delivery. |
+| `modules/webhooks/repository.ts` | Reads/writes `webhookSubscriptionRepository` and `webhookDeliveryRepository` for all fixture setup and state assertions. |
+| `modules/webhooks/secrets.ts` | Uses `mintRingSecret` (fixture creation) and `activeRingSecrets` (signature verification). |
+| `modules/webhooks/domain/index.ts` | Imports `WEBHOOK_MAX_ATTEMPTS`, `WEBHOOK_MAX_CONSECUTIVE_FAILURES`, `WEBHOOK_MIN_FAILING_MS` to drive retry-loop bounds and time-backdating. |
+| `modules/webhooks/model.ts` | `WebhookSubscriptionDocument` type used in fixtures. |
+| `modules/webhooks/audit.ts` | Imports `webhooksAuditActions` for audit-event assertions. |
+| `infrastructure/observability/audit.ts` | Mocked; `emitAuditEvent` and `recordAudit` replaced to capture audit side-effects. |
+| `infrastructure/adapters/logger.ts` | Imported as `logger` (available for log assertions or silencing). |
+| `modules/users/index.ts` / `modules/users/service.ts` | `userService` used for owner-related setup. |
+| `modules/users/tests/factories.ts` | `createUser` factory to create a real user row. |
+| `tests/support/callers.ts` | `callerAs('manager')` and `TEST_TENANT_ID` for auth/tenant context. |
+| `modules/webhooks/tests/verify-signature.fixture.ts` | `verifyWebhookSignatureForTest` to independently verify the received `webhook-signature` header. |
 
 ## Notes
 
-- **SSRF guard is intentionally mocked.** A real local HTTPS listener binds to `127.0.0.1`, which the guard correctly refuses. The mock preserves the HTTPS-only and pinned-lookup contract so the real TLS path still exercises the guard's code. A dedicated fuzz suite (`tests/fuzz/webhook-ssrf.fuzz.test.ts`) covers the guard itself.
-- **`node:https` mock injects `TEST_CA_CERT`** into every request's `ca` array rather than setting `NODE_TLS_REJECT_UNAUTHORIZED`, because the latter cannot be scoped per-request in this Node/Jest setup.
-- **Audit is replaced, not spied.** `jest.spyOn` cannot redefine the non-configurable getter on a CJS namespace import, so the whole module is replaced. `recordAudit` is re-wired to call the mocked `emitAuditEvent` because it closes over its own module's real binding.
-- **`runChainToCompletion` re-sends the same `{ deliveryId }`** each round; `claimPending` reads the row's current `attempt` internally, so the test does not track attempt numbers across retries.
-- **Auto-disable timing** is time-gated (`WEBHOOK_MIN_FAILING_MS`); the test backdates `failingSince` rather than waiting in real time.
-- **The `PendingDeliveryFixture` is intentionally not the job payload.** `processDeliveryJob` takes only `{ deliveryId }` (Claim Check pattern per `asyncapi.internal.yaml`); the fixture exists solely to give assertion helpers the fields they need.
+- **SSRF guard is mocked on purpose.** A real local listener resolves to loopback, which the production guard (correctly) always rejects. The dedicated SSRF test lives in `tests/fuzz/webhook-ssrf.fuzz.test.ts`.
+- **`NODE_TLS_REJECT_UNAUTHORIZED` is NOT used.** The test CA is injected per-request via the `node:https` mock, avoiding a global process-level flag that would leak across tests.
+- **Job payload is Claim Check (`{ deliveryId }` only).** The full wire body is reconstructed from the persisted delivery row at delivery time; fixtures must therefore return the row's fields, not a pre-built job object.
+- **Auto-disable is time-gated** (`WEBHOOK_MIN_FAILING_MS`). A fast-failing test loop never crosses it naturally; `backdateFailingStreak` backdates `failingSince` to simulate a multi-day streak.
+- **Audit mock uses full module replacement, not `jest.spyOn`.** The CJS namespace getter is non-configurable, so the standard spy pattern fails. `recordAudit` is explicitly rerouted because it closes over the module's own `emitAuditEvent`.
+- The test suite starts/stops its own HTTPS server per `describe` block; it never depends on the Compose `webhook-tester` service.

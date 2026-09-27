@@ -1,7 +1,7 @@
 ---
 source: tests/integration/app-health.test.ts
-sha256: 3aa3195a1eac7953f0cd0038d4d8768212e413e88c8baeed1ee047726f5338f2
-generated_at: 2026-09-23T20:02:18.558388+00:00
+sha256: b35506a9e3a6dec95ef1fac22affad4e0bdd05090d33a1a706fa9cbc3ce3f901
+generated_at: 2026-09-27T15:54:22.773199+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the system routes (`/`, unknown-path 404, `x-request-id` handling) and the `/observability/*` routes (Prometheus metrics, SSE event stream, auth-gated sub-paths). They exercise the real application exported from `src/app.ts` through the shared supertest harness, ensuring the middleware stack actually mounted on the production app is what gets tested.
+Integration tests for the system routes (`/`, `/readyz`, 404 handling, `x-request-id` validation) and the observability routes (`/observability/metrics`, `/observability/events`, and auth-guarded sub-paths). They exercise the real application assembled in `src/app.ts` through the shared supertest harness, verifying readiness-state transitions, request-id sanitization, Prometheus metrics exposure, SSE event streaming, and that auth middleware is actually mounted on protected paths.
 
 ## Key elements
 
-- **`describe('System routes')`** — asserts 200 + welcome payload on `GET /`, 404 on unknown paths, and validates the `x-request-id` echo/replacement logic (well-formed UUIDs are reflected; non-UUID values are replaced with a generated UUID to prevent log-injection).
-- **`describe('Observability routes')`** — covers:
-    - `GET /observability/metrics` — expects Prometheus text exposition, authenticates via a static `Bearer` token (`NODE_METRICS_TOKEN`).
-    - `GET /observability/events` — SSE snapshot; logs in as an admin to obtain a `jwt` session cookie, then reads the stream with a custom parser that destroys the socket after the first `data:` line (supertest would otherwise hang on the infinite stream).
-    - `it.each` over `/observability/health`, `/observability/metrics/overview`, `/observability/audit` — each must return **401** (not 404/500) without credentials, proving the auth middleware is mounted on the path.
+- **`describe('System routes')`** — Asserts `GET /` returns 200 with `x-request-id` header and `data.status === 'ok'`; unknown paths return 404; a well-formed UUID in `x-request-id` is echoed back; a non-UUID value is replaced with a generated UUID (log-injection guard).
+- **`describe('GET /readyz')`** — Drives the readiness phase directly via `markServerListening` / `markServerDraining` and asserts 503 (booting) → 200 (listening) → 503 (draining).
+- **`describe('Observability routes')`** — Verifies `/observability/metrics` returns Prometheus text (auth via `NODE_METRICS_TOKEN` bearer); `/observability/events` streams SSE with an admin session cookie; three protected sub-paths return **401** (proving auth middleware exists, not just a missing route).
+- **Custom SSE parser** — A `parse` callback attached to the supertest request reads the stream, aborts on the first `data: ` chunk, and resolves the buffered body so supertest does not wait for an EOF that never comes.
 
 ## Relationships
 
-- **`tests/support/http.ts`** — provides the `api()` factory that wraps supertest around the real app instance; every request in this file goes through it.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module level to provision a clean database, required because the SSE test authenticates via an admin session cookie that needs a user row.
-- **`src/modules/users/tests/factories.ts`** — `createAdminUser()` creates the admin record used for the SSE login; `PLAIN_PASSWORD` is the constant password the factory sets, reused in the login POST body.
+- **`tests/support/http.ts`** — Provides the `api()` supertest client bound to the real app. Under `NODE_ENV=test` the app's auto-start (which would call `markServerListening`) is suppressed here, so readiness tests must drive the phase manually.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is invoked at module top-level to provision the test database; required because the SSE events test authenticates with an admin session cookie.
+- **`src/modules/users/tests/factories.ts`** — `createAdminUser` creates a test admin; `PLAIN_PASSWORD` is the shared test password used for the login call that yields the session cookie.
+- **`src/infrastructure/runtime/readiness.ts`** — Exports `markServerListening` and `markServerDraining`, which the readyz tests call directly to transition the process through its lifecycle phases.
 
 ## Notes
 
-- Redis is intentionally **not** started; none of the routes under test require it.
-- The SSE test uses a hand-rolled `parse` callback on the supertest request. This is a workaround for supertest's buffering behavior against an infinitely-ongoing stream — the stream is destroyed once `data: ` appears in the buffer.
-- The `x-request-id` malformed-value test asserts against a non-UUID string rather than an injected CR/LF, because Node's HTTP client rejects the latter at the socket level before it reaches the server.
-- The 401 assertions are deliberately specific: they must return 401 (auth middleware present) rather than 404 (path missing) or 500 (middleware error), which would mask a misconfigured mount.
+- **Test order matters for readyz.** The "still booting" case must remain first in its `describe` block: it asserts the default (un-listened) state, and would silently pass if a later test had already called `markServerListening`.
+- **Redis is intentionally absent.** None of the routes under test require Redis, so no Redis server is started.
+- **SSE stream is never fully consumed.** The custom parser destroys the socket after the first `data: ` event; do not remove this or supertest will hang waiting for a stream that never ends.
+- **401 vs 404 distinction on observability sub-paths.** The `it.each` block asserts 401 specifically — a 404 would mean the auth middleware was never mounted on the path, which would mask a real misconfiguration.

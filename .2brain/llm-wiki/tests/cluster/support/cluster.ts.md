@@ -1,7 +1,7 @@
 ---
 source: tests/cluster/support/cluster.ts
-sha256: 65a7958ce8343238de397423502143f98401135d6d3a2d0a7f92de3f99d7d87a
-generated_at: 2026-09-23T19:51:18.815889+00:00
+sha256: 58ffe0a02d2956de0a0ef1bdff8cadc085f7c4bd2629bfed5a0182d75a3a340a
+generated_at: 2026-09-27T15:47:36.784244+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Boots the production cluster entry point (`src/cluster.ts`) as a real child process that forks multiple workers listening on a shared TCP port. This exists because every other suite in the repo runs the app in a single process (supertest against a mounted Express app), which is structurally unable to catch bugs that only manifest across worker boundaries — e.g. a per-process counter that looks correct in isolation but is wrong cluster-wide.
+Boots the real `src/cluster.ts` as a child process with forked workers listening on a live TCP port, providing a black-box harness for tests that must observe cross-worker state (e.g. per-process counters) that a single-process supertest structurally cannot see.
 
 ## Key elements
 
-- **`Cluster`** (interface) — the return shape of `startCluster`: a `port` and a `stop()` that tears down workers + DB.
-- **`startCluster({ workers, env, bootTimeoutMs })`** — the main entry point. Creates an ephemeral Mongo under `tmp/test/cluster-mongo/<uuid>`, picks a free port, spawns `npx tsx src/cluster.ts` with `detached: true`, wires output capture, and returns a `Cluster` handle.
-- **`freePort()`** — binds to port `0`, reads back the OS-assigned port, closes the probe. Avoids `EADDRINUSE` races between concurrent runs.
-- **`waitForListening(port, timeoutMs)`** — polls TCP-connect until something accepts on the port. Proves at least one worker is up.
-- **`waitForWorkers(workers, timeoutMs, countReady)`** — polls a live counter until _all_ N workers have logged their ready marker. Needed because `waitForListening` alone lets a burst hit a still-single-worker cluster.
-- **`WORKER_READY_MARKER`** (`'Server listening on port'`) — the log line `src/app.ts` emits after `.listen()` is acknowledged; the only per-worker ready signal observable from outside the process.
-- **`capture(chunk)`** — accumulates stdout/stderr into a bounded ring (`MAX_CAPTURED_CHUNKS = 40`) and counts `WORKER_READY_MARKER` occurrences across chunk boundaries via a `readyTail` carry.
-- **`signalGroup(signal)`** — sends a signal to the entire process group (`process.kill(-child.pid, …)`) so `npx → tsx → primary → workers` all die together, regardless of whether intermediate layers forward signals.
-- **`stop()`** — sends SIGTERM to the group, waits for exit, then removes the ephemeral Mongo data directory.
+- **`Cluster`** (interface, exported) — the handle returned by `startCluster`; exposes `port` and `stop()`.
+- **`startCluster({ workers, env?, bootTimeoutMs? })`** — the main boot function. Spawns `npx tsx src/cluster.ts` in a detached process group, wires up an in-memory Mongo, a free port, and all required env vars, then waits for every worker to report ready before resolving a `Cluster`.
+- **`freePort()`** — binds to port `0`, reads back the OS-assigned number, closes the probe. Avoids `EADDRINUSE` races between concurrent test runs.
+- **`waitForListening(port, timeoutMs)`** — polls TCP connects to `127.0.0.1:port` until something accepts. Proves at least one worker is up.
+- **`waitForWorkers(workers, timeoutMs, countReady)`** — polls a live counter until all N workers have emitted the ready marker. Necessary because `waitForListening` alone can fire while only one worker is registered, masking per-worker state bugs.
+- **`WORKER_READY_MARKER`** (`'Server listening on port'`) — the log line counted per worker.
+- **`capture(chunk)`** (internal) — appends to a bounded output buffer, increments a running `workersReady` total, and maintains a `readyTail` so the marker is not missed when split across two `data` events.
+- **`signalGroup(signal)`** (internal) — sends a signal to the entire process group via `process.kill(-child.pid, …)` so the cascade reaches `npx → tsx → primary → workers` regardless of whether each layer forwards SIGTERM.
 
 ## Relationships
 
-- **`scenarios/support/ephemeral-mongo.ts`** — imported as `startEphemeralMongo`; provides the in-memory MongoDB instance the workers connect to over TCP.
-- **`scenarios/support/ephemeral-mongod.ts`** — imported as `startInProcessMongod`; passed as the `startInProcess` implementation to `startEphemeralMongo`.
-- **`tests/cluster/rate-limit.test.ts`** — primary consumer; its "gives each worker its own budget" case is cited in comments as the bug that motivated `waitForWorkers`.
+- **`scenarios/support/ephemeral-mongo.ts`** — imports `startEphemeralMongo` to provision the in-memory Mongo instance the workers connect over TCP.
+- **`scenarios/support/ephemeral-mongod.ts`** — imports `startInProcessMongod`, passed as the `startInProcess` strategy to `startEphemeralMongo`.
+- **`tests/support/paths.ts`** — imports `REPO_ROOT` for `cwd`, the `dbPath` location, and the spawned process's working directory.
+- **`tests/cluster/rate-limit.test.ts`** — a direct consumer; its "gives each worker its own budget" case is the motivating example cited in `waitForWorkers`'s docblock for why waiting on all workers (not just one listener) is required.
 
 ## Notes
 
-- `NODE_ENV` is set to `'development'`, **not** `'test'`, because `src/app.ts` skips `startServer()` entirely under `test`, which would leave forked workers mounted but never listening.
-- `NODE_ENABLE_CLUSTERING=1` is required; without it the child is a single process and all cross-worker assertions pass for the wrong reason.
-- `NODE_ENV=development` also activates `assertRequiredConfig`, so the env must supply `NODE_URL`, `NODE_TOKEN_*`, and the encryption keys explicitly (CI has no local `.env`).
-- The `readyTail` is kept at `marker.length - 1` characters to prevent double-counting a marker that ends exactly on a chunk boundary.
-- `detached: true` is essential: it puts the child at the head of a new process group so `-child.pid` reaches every descendant. Without it, `child.kill()` only signals `npx` and relies on each layer forwarding the signal.
-- The Mongo data dir lives under the repo's `tmp/test/` (not `os.tmpdir()`) so it inherits the same ownership setup `global-setup.ts` establishes, keeping ~200 MB of ephemeral data out of a shared `/tmp`.
+- **`NODE_ENV` is `'development'`, not `'test'`.** This forces `assertRequiredConfig` (`kernel/required-config.ts`) to run its full check, so the child must be supplied with every required secret explicitly (token keys, encryption keys, `NODE_URL`). A local `.env` would cover a dev machine; CI does not, hence the inline values.
+- **`NODE_ENABLE_CLUSTERING` must be `'1'`.** Setting `NODE_CLUSTER_WORKERS` alone is a no-op; without the enable flag the child is a single process and every cross-worker assertion passes for the wrong reason.
+- **`detached: true` + negative-PID kill.** The child is `npx`, not the cluster primary. `child.kill()` only reaches `npx`. The detached group flag makes `-child.pid` address every descendant in one signal.
+- **`workersReady` is a running total, not derived from the `output` array.** The array is trimmed to `MAX_CAPTURED_CHUNKS` (40); a derived count would silently undercount once early boot chatter pushes a ready line out of the window.
+- **`readyTail` holds `marker.length - 1` characters.** This is the maximum a split marker can leave behind, guaranteeing a whole marker that ended exactly on a chunk boundary is never counted twice.
+- **`dbPath` lives under `REPO_ROOT/tmp/test/cluster-mongo/<uuid>`.** Without this, `mongodb-memory-server` falls back to `os.tmpdir()`, escaping the ownership guarantees `tests/support/global-setup.ts` establishes and dumping ~200 MB into a shared `/tmp`.

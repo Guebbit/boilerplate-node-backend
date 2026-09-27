@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/services/catalogue.ts
-sha256: 24607e36aec3dfa01c16176b89bf600bdaab5181a2b4edbbce3bfb46b41d98c8
-generated_at: 2026-09-23T19:42:09.301721+00:00
+sha256: bda5d82ef64c0d763dd4008bfb696b7d9d2ed6374d63a34479769602d8f42d2d
+generated_at: 2026-09-27T15:43:43.706505+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Exposes a static list of webhook event names and descriptions, sourced from the module's own `asyncapi.yaml` fragment. Because the public endpoint and the fireable events both derive from the same file (which is also the source for `asyncapi.public.yaml` via `npm run contracts:bundle`), the catalogue and the actual capability can never drift apart.
+Provides a static, in-memory list of the webhook events this module can emit, sourced directly from the local `asyncapi.yaml` fragment. By reading the same file that `asyncapi.public.yaml` is generated from, the public event endpoint and the module's actual capabilities cannot drift apart.
 
 ## Key elements
 
-- **`AsyncApiChannelsDocument`** (local interface) — Minimal structural type for the `channels` section of an AsyncAPI document; only `name → { description? }` is consumed.
-- **`catalogue`** (module-private `const`, computed at import time via IIFE) — Reads and YAML-parses `../asyncapi.yaml` once per process, then maps channel entries into `readonly WebhookEventCatalogueEntry[]`.
-- **`listWebhookEventCatalogue()`** (exported function) — Returns the cached `catalogue` array; no I/O, no mutation.
+- **`catalogue`** (module-level constant) — Parsed once at import time via an IIFE: reads `../asyncapi.yaml` from disk, parses it with `yaml.parse`, and maps `channels` into an array of `{ name, description }` objects. Never re-parsed per request.
+- **`listWebhookEventCatalogue()`** (exported function) — Returns the frozen `catalogue` array. This is the sole public API of the module.
+- **`AsyncApiChannelsDocument`** (local interface) — Minimal structural type describing the subset of the AsyncAPI YAML this file actually reads (just `channels` with optional `description`).
 
 ## Relationships
 
-- **`src/modules/webhooks/controllers/list-events.ts`** — Consumes `listWebhookEventCatalogue` to build the response for `GET /webhooks/events`.
-- **`src/modules/webhooks/services/index.ts`** — Barrel file that re-exports this module so other code can import from the services entry point.
+- **`src/modules/webhooks/controllers/list-events.ts`** — Consumes `listWebhookEventCatalogue()` to populate the `GET /webhooks/events` response.
+- **`src/modules/webhooks/services/index.ts`** — Re-exports this module so other services can import the catalogue function through the services barrel.
+- **`src/types/index.ts`** — Supplies the `WebhookEventCatalogueEntry` type that shapes both the parsed array and the return type of the exported function.
 
 ## Notes
 
-- The YAML file is resolved relative to the compiled output directory (`path.join(__dirname, '..', 'asyncapi.yaml')`), not the source tree. In a bundled/compiled layout the relative path may differ.
-- Parsing happens exactly once per process (at `import` time). There is no invalidation or reload mechanism; a changed `asyncapi.yaml` requires a process restart.
-- The returned array is `readonly` at the type level but is a plain JS array at runtime—callers _can_ mutate it if they cast, so treat it as immutable by convention.
+- The YAML file is read **synchronously at import time** using `readFileSync`. There is no caching layer, no watch, and no refresh mechanism — if the YAML changes at runtime (it shouldn't; it's a build-time artifact), the in-memory copy will not update until the process restarts.
+- The path resolution uses `__dirname/../asyncapi.yaml`, so the file must sit one directory above this service file. A mis-located YAML will throw at import, crashing the entire module tree.
+- Only `channels` and their `description` are extracted; operation IDs, payloads, and other AsyncAPI metadata are intentionally ignored.

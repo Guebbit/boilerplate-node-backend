@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/unit/routes.test.ts
-sha256: 54f416fa50d506671972e2b212ea9f8994f21d0330cebf2a6fc7b0a82e30fcc7
-generated_at: 2026-09-23T19:30:51.660191+00:00
+sha256: 6a8fa8367602da2ad8b1bf1960e6c6d177863bab013df71696ba4c4a26ecfbef
+generated_at: 2026-09-27T15:35:28.381368+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Guards the product catalogue's Express route table against regressions that the TypeScript compiler cannot detect: a silently dropped admin guard, a static path shadowed by a later `/:id` param, a cache tag renamed on the writer but not the reader, or an upload field rename that makes multer ignore the file. The assertions are written as whole-table checks rather than per-route spot checks so that an _unexpected extra_ mount or a _reordered_ guard is also caught.
+Structural contract tests for the product catalogue's Express router. They verify that the route table is mounted exactly as documented (no extra or missing endpoints), that static paths are ordered before parameterised ones, that authorization guards are present and correctly sequenced, that cache tags are consistent between readers and writers, and that upload/validation and route-flag middleware are in the right places. The file exists to catch regressions a type checker cannot: a dropped guard, a shadowed path, a renamed cache tag, or a misapplied upload field.
 
 ## Key elements
 
-- **`TAG`** – Local constant `'products'`; stated once so a cache-tag rename has a single place to fail in the reader-side tests.
-- **`describe('product routes — what is mounted')`** – Asserts the exact ordered list of `routeSignatures`, verifies static segments (`/search`, `/categories`) precede `/:id`, and confirms `getAuth` is at the router level (not per-route).
-- **`describe('product routes — authorization')`** – For every mutating/admin route, asserts an identity guard precedes `requirePermissionGuard`; verifies `POST /` and `PATCH /:id` stack _two_ permission guards (products + translations); verifies all read routes carry _no_ identity guard.
-- **`describe('product routes — caching')`** – Asserts `GET /` and `POST /search` share the same `setCache` key (`products:search`) with non-empty `keyParameters`; asserts `GET /categories` and `GET /:id` carry the `products` tag; asserts every write route calls `invalidateCache([products])`.
-- **`describe('product routes — uploads and flags')`** – Verifies `upload.single(imageUpload)` is present on write routes, followed by `validateUploadedImages` and `quarantineUploadedImages`; verifies `routeFlag(hardDelete)` appears only on `DELETE /:id/hard` and is _absent_ from the soft-delete and bulk-delete routes.
-- **`jest.mock` calls (×3)** – Replace `@infrastructure/http/middlewares/{cache,route-flag,upload}` with factories supplied by `@tests/routes` (`cacheMock`, `routeFlagMock`, `storageMock`) so the route table can be inspected without booting real infrastructure.
+- **`TAG`** — the literal string `'products'`, asserted directly in cache-invalidation checks so a rename fails here rather than propagating silently.
+- **`describe('product routes — what is mounted')`** — asserts the full ordered list of 12 route signatures, static-before-parameter ordering (`/search`, `/categories` < `/:id`), and router-level `getAuth` middleware.
+- **`describe('product routes — authorization')`** — via `it.each(GUARDED)` verifies `getAuth` precedes `requirePermissionGuard` on every mutating route; confirms `POST /`, `PUT /:id`, `PATCH /:id` carry **two** `requirePermissionGuard` entries (products + translations); asserts public routes carry no identity guard.
+- **`describe('product routes — caching')`** — asserts `GET /` and `POST /search` share the same `setCache` key (`products:search`), that `GET /categories` and `GET /:id` use the catalogue tag, and that every write route calls `invalidateCache([products])`.
+- **`describe('product routes — uploads and flags')`** — checks `upload.image` + `validateUploadedImages` + `quarantineUploadedImages` on create/update/patch routes; confirms `routeFlag(hardDelete)` appears only on `DELETE /:id/hard` and is absent from `DELETE /:id` and `DELETE /`.
+- **`jest.mock` blocks** (×3) — replace `cache`, `route-flag`, and `upload` middleware with factories from `@tests/routes` so the real side-effects never fire.
 
 ## Relationships
 
-- **`src/modules/products/routes.ts`** – The module under test. This file imports its `router` export and inspects every property of that Express Router instance (mounted paths, middleware chains, per-route options).
-- **`tests/support/routes.ts`** – Source of every inspection helper (`routeTable`, `routerMiddleware`, `routeSignatures`, `optionsOf`, `identityGuardIndex`, `chainOf`) and of the three mock factories referenced inside the `jest.mock` factories. Without it, no assertion in this file could run.
+- **`src/modules/products/routes.ts`** — the unit under test. This file imports its `router` export and inspects every route's middleware chain, path, and cache options.
+- **`tests/support/routes.ts`** — provides all test helpers (`routeTable`, `routerMiddleware`, `routeSignatures`, `optionsOf`, `identityGuardIndex`, `chainOf`) and the mock factories (`cacheMock`, `routeFlagMock`, `storageMock`) used in the three `jest.mock` calls. It is the canonical explanation for *why* those middleware are mocked.
 
 ## Notes
 
-- The `jest.mock` factories call `jest.requireActual('@tests/routes')` (not the real infrastructure path) so that the mock definitions live alongside the helpers, not in `__mocks__` directories.
-- Several assertions deliberately use **literal strings** (`'products'`, `'imageUpload'`, `'hardDelete'`) rather than importing the source constants. The comment in the invalidation test makes the intent explicit: a rename in `routes.ts` must _fail_ here instead of silently following the new name.
-- The ordering assertion (`indexOf('/search') < indexOf('/:id')`) exists because Express resolves routes in mount order; a param route mounted before a literal segment makes the literal unreachable.
-- `identityGuardIndex` returning `-1` means "no identity guard found"; the public-route tests assert this explicitly rather than asserting the chain is empty, so a future non-identity middleware addition does not break the test.
+- Express matches routes in mount order; the first `/:id` shadows any later literal segment. The ordering test exists specifically to prevent that silent shadowing.
+- Cache-invalidation assertions use the literal `'products'` string (not the `TAG` constant) deliberately — a rename must **fail** the test rather than tracking the constant.
+- The `identityGuardIndex` helper returns the index of `getAuth` in a chain; `-1` means no auth middleware is present.
+- `it.each` with a `GUARDED` array keeps the admin-guard list in one place; adding a new mutating route without adding it there is a test gap, not a test failure.

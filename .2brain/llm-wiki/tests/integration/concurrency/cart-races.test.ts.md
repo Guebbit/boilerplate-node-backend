@@ -1,7 +1,7 @@
 ---
 source: tests/integration/concurrency/cart-races.test.ts
-sha256: 630b32412fe3941bae0aad96c56c182d41ccfd6a871a82f7ab94823889cc4c41
-generated_at: 2026-09-23T20:03:52.538546+00:00
+sha256: 134315d6cced6c29fb11c4d399e400d77e1f8d8ed6884445aa299a2bff064664
+generated_at: 2026-09-27T15:55:28.670736+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that fire concurrent HTTP requests against the cart and checkout endpoints to verify the invariants behind two specific race conditions: **R2** (double-checkout producing duplicate orders) and **R3** (concurrent cart upserts producing duplicate lines or lost writes). The tests exist to lock in the conditional-write and retry-with-compensation designs in the cart repository and checkout flow, and to serve as the reference implementation for how concurrency bugs are exercised end-to-end.
+Integration test suite that exercises two documented concurrency defects in the cart/checkout path: **R2** (unconditional cart-clear at checkout allows double-charge) and **R3** (untested retry/duplicate-key logic in the cart upsert). Each test fires N concurrent HTTP requests against a real database and asserts the resulting DB state, closing or guarding the specific race the header comment names.
 
 ## Key elements
 
-- **`describe('R3 — concurrent writes of the SAME product')`** — Fires N parallel `POST /cart` with one product; asserts exactly one cart, one line, and every caller gets 200/201.
-- **`describe('R3 — concurrent adds of DIFFERENT products')`** — Same shape but N distinct products; the only case that can distinguish a working `$ne`-in-filter guard from a broken one (a single-product race cannot).
-- **`describe('R3 — concurrent quantity writes to the same line')`** — N parallel `PUT /cart/:id` with different quantities in SET mode; asserts the final quantity is one of the values sent (no merge artefact) and no second cart appears.
-- **`describe('R2 — concurrent checkouts of one cart')`** — Six sub-tests covering: exactly one order created, 409 for losers (`CART_CHANGED`), cart emptied once, no orphan order from a loser, loser's product hold released (verified via `productService.findByIdRaw`), and a normal uncontended checkout still succeeds.
-- **`describe('account deletion racing a cart write')`** — Verifies no orphaned cart document and no 5xx when account deletion and a cart write overlap. _(content truncated in source)_
-- **Module-level `setupTestDb()`** — Truncates/reinitialises the test database before the suite runs.
+- **`describe('R3 — concurrent writes of the SAME product')`** — N parallel `POST /cart` for one product; asserts one cart doc, one line, all callers receive 200/201.
+- **`describe('R3 — concurrent adds of DIFFERENT products')`** — N parallel `POST /cart` for N products; asserts one cart with exactly N distinct lines. This is the case that catches a broken `$ne`-in-filter (a single-product race cannot).
+- **`describe('R3 — concurrent quantity writes to the same line')`** — N parallel `PUT /cart/:productId`; asserts one cart, one line, and that the surviving quantity is one of the values actually sent.
+- **`describe('R2 — concurrent checkouts of one cart')`** — five tests:
+  - Exactly one `orderModel` document after N parallel `POST /cart/checkout`.
+  - Exactly one success (200/201), the rest 409.
+  - Cart emptied to zero items.
+  - Loser's pre-written order is retracted (no orphan orders).
+  - Loser's product hold is released (`productService.findByIdRaw` → `reserved` equals winner's quantity only).
+  - Uncontended checkout still succeeds (guard against the conditional write breaking the happy path).
+- **`setupTestDb()`** — called at module scope to reset the database before the suite runs.
 
 ## Relationships
 
-- **`tests/support/race.ts`** — Supplies `raceN` (fan-out N concurrent requests), `countStatus`, `expectNoServerErrors`, and the `RACE_SIZE` constant used throughout.
-- **`tests/support/http.ts`** — Provides `api` (supertest wrapper) and `authenticateAs` for issuing authenticated requests.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` isolates each run from prior state.
-- **`src/modules/cart/model.ts`** — `cartModel` is queried directly (`countDocuments`, `findOne`) to assert invariants (one cart, correct line count) that HTTP status codes alone cannot confirm.
-- **`src/modules/orders/model.ts`** — `orderModel` queried directly to verify order count and item contents after checkout races.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` creates fixture products with controlled `onHand`/`price` for every test.
-- **`src/modules/products/index.ts` / `src/modules/products/service.ts`** — `productService.findByIdRaw` is used to inspect the `reserved` field and confirm that losing checkouts released their stock hold rather than leaking it.
+- **`tests/support/race.ts`** — provides the concurrency harness: `raceN` fires N promises in parallel, `countStatus` tallies HTTP codes, `expectNoServerErrors` guards against 5xx, and `RACE_SIZE` sets the fan-out count.
+- **`tests/support/http.ts`** — `api` (supertest agent) and `authenticateAs` (creates a user, returns bearer token) are used in every test.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` wipes and re-seeds the test database before the suite executes.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` builds a product with configurable `onHand`/`price` for each scenario.
+- **`src/modules/products/index.ts` / `src/modules/products/service.ts`** — `productService.findByIdRaw` is called to inspect the `reserved` field after a checkout race, verifying hold-release.
+- **`src/modules/cart/model.ts`** — `cartModel` is queried directly (`countDocuments`, `findOne`) to assert cart-document and line-level invariants that HTTP status codes alone cannot verify.
+- **`src/modules/orders/model.ts`** — `orderModel` is queried directly to assert order count and line contents after the checkout race.
 
 ## Notes
 
-- The file header documents the R2 and R3 bugs in detail; reading it first orients you on _what_ each `describe` block is protecting before reading the assertions.
-- `POST /cart` and `PUT /cart/:productId` both use **SET** semantics (`cartItemSetById`), not increment. The repository's `add` mode exists but no route reaches it, so tests correctly assert "one line, correct quantity" rather than a sum.
-- R2 losers are expected to **retract** their already-written order (compensation) and **release** their product hold. The tests verify both: order count stays at 1, and `reserved` equals only the winner's quantity.
-- The multi-product race (second `describe`) is the only test that would fail if the `$ne`-in-filter guard were removed; the single-product race would pass either way.
-- Assertions hit the database directly (`cartModel`, `orderModel`, `productService.findByIdRaw`) rather than relying solely on response bodies — this is intentional to catch invariants invisible in HTTP.
+- The header comment is load-bearing: it explains *why* R2 and R3 exist and names the exact fix (`clearLinesIfUnchanged`, conditional on `__v`). New contributors should read it before modifying the tests.
+- R3 cases 3 and 4 (same vs. different product) are deliberately separate. The single-product case passes even with a broken `$ne`-in-filter; only the multi-product case exposes the "two lines for one product" failure. Do not merge them.
+- The tests assert DB state via Mongoose models (`cartModel`, `orderModel`) rather than relying solely on response bodies. This is intentional: the invariants under test are persistence-level, not presentation-level.
+- The "loser retracts its order" test and the "hold is released" test cover two independent compensation steps inside the same code path. Removing either leaves a silent resource leak that the other test does not catch.
+- `POST /cart` and `PUT /cart/:productId` both use **set** semantics (not increment). The tests assert "one line, one quantity," not a sum. Asserting a sum would encode semantics the API does not implement.

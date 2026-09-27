@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/index.ts
-sha256: 4979e638cd7f85a2df7b7b5a4aee380e0921df7c61293a1bc838ffb84ab1c18c
-generated_at: 2026-09-23T19:32:54.290231+00:00
+sha256: 70d127f544625d0b7fe5d303cb7aa65445b8db2d802d5d843bf11e656a1ddc82
+generated_at: 2026-09-27T15:37:24.595766+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Public barrel for the `users` module. It is the **only** import surface a sibling module (in practice, `account`) is permitted to use, enforcing the strategic-DDD boundary described in `docs/theory/strategic-ddd.md` §5. It re-exports the service, domain events, and a narrow set of model helpers while keeping `userRepository` and the model's runtime internals private to the module.
+Public barrel for the `users` module — the sole import surface available to sibling modules (enforced per `docs/theory/strategic-ddd.md` §5). It re-exports the service, events, and selected model members so that external code never reaches into internal files directly.
 
 ## Key elements
 
-- **`export * from './service'`** — re-exports the full `userService` API. All cross-module reads and writes (including those made by `account`) must go through this service; the repository is never exposed.
-- **`export * from './events'`** — re-exports user domain events for consumption by other modules.
-- **Named model exports** (`TokenType`, `zodUserSchema`, `hashToken`, `isLiveRefreshSession`) — the token-type enum, the Zod schema, and two pure helpers that travel with the schema. These are the only model values exposed outward.
-- **`export type * from './model'`** — all model _type_ definitions (interfaces, type aliases) are re-exported as types only.
-- **`userModel`** is deliberately **not** exported; nothing outside this module calls it.
+- **`export * from './service'`** — exposes `userService` (and any other service members) as the only sanctioned path for reads/writes.
+- **`export * from './events'`** — exposes the module's event definitions/subscriptions.
+- **Named exports from `./model`** — `TokenType`, `zodUserSchema`, `hashToken`, `isLiveRefreshSession`, `normalizeEmail`, `DEFAULT_USER_IMAGE_URL`: the schema, token-type enum, pure helpers, and default avatar URL.
+- **`export type * from './model'`** — re-exports all type-only members (interfaces, type aliases) from the model.
+- **`userModel` and `userRepository`** — deliberately **not** exported; no external code may call them.
 
 ## Relationships
 
-This barrel is the sole import edge from `account` into `users`. Every file under `src/modules/account/` (controllers, services, and `module.ts`) that needs user data or events imports from this index rather than reaching into `./service`, `./model`, or `./events` directly. The two scripts (`scripts/db/access-grant.ts`, `scripts/ops/reap-inactive-accounts.ts`) also consume these exports for operational access to user data.
+- **`account` module** (controllers, services, routes, module) is the one shared-kernel consumer in the repo. `account` authenticates and co-administers the same user document this module owns. All of `account`'s reads and writes flow through `userService` — never through `userRepository` or `userModel` directly.
+- **Scripts** (`scripts/db/access-grant.ts`, `scripts/ops/reap-inactive-accounts.ts`) appear as graph neighbors, implying they consume exports from this barrel for their respective DB/ops tasks.
 
 ## Notes
 
-- The `account` ↔ `users` pairing is described as the repo's one **shared-kernel** relationship: `account` authenticates and co-administers the same user document that `users` owns.
-- The design rule is explicit: even `account` must go through `userService` for every read or write; it must not touch the repository or model runtime directly.
-- Because this is a barrel, adding a new `export` here widens the public API surface for every sibling module. Treat new re-exports as a boundary decision.
+- `userModel` stays unexported by design; nothing outside this module calls it. Any new external need must go through `userService`.
+- The barrel is intentionally wider than a typical module's because of the `account` shared-kernel coupling — but the internal repo and model runtime remain private.
+- For the architectural rationale see `docs/theory/strategic-ddd.md` §5; for module-level docs see `docs/modules/users.md`.

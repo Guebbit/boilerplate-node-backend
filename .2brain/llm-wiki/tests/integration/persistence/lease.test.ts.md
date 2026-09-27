@@ -1,7 +1,7 @@
 ---
 source: tests/integration/persistence/lease.test.ts
-sha256: 5a653857d299ea9abf49cd3a3f9c582b5843ac5b5702489319268d4ea38742c9
-generated_at: 2026-09-23T20:05:23.274869+00:00
+sha256: 14e03a63b1d8383526267bfe485bd3c55b8b6e6501fd9ec6ab34e06a5bc6b617
+generated_at: 2026-09-27T15:56:48.544325+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for `withLease` (the Mongo-based lease acquisition primitive) against a real database. It verifies the four safety properties a scaled-up cron container depends on: mutual exclusion, expiry is not permanent, a crash frees the lease immediately (no `ttlMs` wait), and a lost contended acquisition resolves `undefined` rather than rejecting. Real Mongo is required because the property under test is MongoDB's own concurrent `findOneAndUpdate` upsert semantics, which a mock cannot exercise.
+Integration tests that exercise `withLease` and `recordJobOutcome` against a **real MongoDB instance** (not a mock), verifying the concurrency-safety properties a scaled-up cron container depends on: mutual exclusion, expired-lease re-acquisition, immediate release on failure, and non-throwing loss of a contested acquisition. Uses real Mongo because the critical property is how MongoDB handles concurrent `findOneAndUpdate` upserts, which a mock cannot replicate honestly.
 
 ## Key elements
 
-- **`waitForLeaseOwner(name)`** — helper that polls `leaseModel.exists` up to 50 × 5 ms to confirm a prior acquisition has landed before asserting on subsequent state, avoiding fixed-`setTimeout` races.
-- **`describe('withLease')`** — six `it` blocks covering:
-    - Mutual exclusion when a lease is already held (second caller resolves `undefined`, body never runs).
-    - First-insert race: two back-to-back `Promise.all` calls on a fresh name; exactly one wins, the other gets `undefined`.
-    - Re-acquisition after release (release stamps `expiresAt` to epoch, so the next call finds it expired immediately).
-    - Immediate release on body throw — a same-window retry succeeds without waiting out `ttlMs`; `lastError` is cleared on the next success.
-    - Bookkeeping: `lastError` recorded on throw, `lastSuccessAt` recorded on clean run, stale `lastError` cleared by a subsequent success.
-    - Losing a duplicate-key race against a pre-existing held document leaves the holder's record untouched (owner, `expiresAt` unchanged).
+- **`MINUTE_MS` (60 000)** — TTL constant for all lease acquisitions in these tests; long enough to prevent accidental expiry during test execution.
+- **`waitForLeaseOwner(name)`** — polls `leaseModel.exists({ _id: name })` at 5 ms intervals (up to 50 attempts) to confirm a prior `withLease` call's document has landed, replacing a fixed `setTimeout` guess.
+- **`describe('withLease')`** — six cases covering:
+  - One-of-two contention while a lease is actively held (second caller resolves `undefined`, body never runs).
+  - First-insert race (two truly concurrent upserts for a fresh name; exactly one body runs).
+  - Re-acquisition after expiry (release stamps `expiresAt` to epoch, so next acquire succeeds immediately).
+  - Immediate release on body throw (a follow-up acquire succeeds without waiting out `ttlMs`; `lastError` is cleared).
+  - Outcome recording: `lastError` on failure, `lastSuccessAt` on clean run, and stale `lastError` cleared on recovery.
+  - Losing a held-lease race leaves the winner's document untouched.
+- **`describe('recordJobOutcome')`** — three cases covering:
+  - Creating an outcome-only row (already-expired `expiresAt`, so it never blocks a real lease).
+  - Recording failure then success (clears prior `lastError`).
+  - Not overwriting an existing `owner` field (`$setOnInsert` semantics).
 
 ## Relationships
 
-- **`src/infrastructure/persistence/lease.ts`** — the module under test. The file imports `withLease` (the public acquire-run-release wrapper) and `leaseModel` (the Mongoose model used for direct state inspection and pre-seeding held documents).
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`, called once at module top-level to point Mongoose at a real (presumably in-memory or ephemeral) MongoDB instance for the duration of the suite.
+- **`src/infrastructure/persistence/lease.ts`** — source of all three APIs under test (`leaseModel`, `withLease`, `recordJobOutcome`). The tests assert the behavioral contract defined there.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`, called once at module level to spin up a real MongoDB instance for the test suite.
 
 ## Notes
 
-- The first test deliberately holds the lease open via a deferred `Promise` so the second acquisition genuinely overlaps the first; an instantly-resolving body would let the first call finish and release before the second's request reaches the server, masking the contention.
-- Lease names are prefixed `scheduled-jobs-test.` to avoid colliding with production documents or other test files sharing the same test database.
-- The "expired" test relies on an implementation detail: release stamps `expiresAt` to the epoch (`RELEASED` sentinel in `lease.ts`), so no actual time must elapse for the next acquisition to succeed.
-- `MINUTE_MS` (60 s) is used as `ttlMs` throughout — long enough that no test's window can accidentally expire, yet irrelevant to assertions because the tests verify logical state rather than wall-clock deadlines.
+- The file header references `docs/reference/ops.md#scheduled-jobs` for the rationale of choosing a Mongo lease over a Redis lock.
+- `recordJobOutcome` is documented as the "D9 path" used by every `docker/crontab` job via `scripts/run-script.ts`, not only jobs that also take a mutual-exclusion lease.
+- Test names use the `scheduled-jobs-test.` prefix (with sub-suffixes like `.fresh`, `.expired`, `.throws`) to namespace lease documents and avoid cross-test collisions.
+- The contention test uses a manually-resolved promise (`finishFirst`) to keep the first caller's body in flight long enough for the second acquisition to genuinely race — an instantly-resolving body would serialize the two calls and defeat the test.

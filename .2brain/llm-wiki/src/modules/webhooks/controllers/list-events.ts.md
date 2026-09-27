@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/controllers/list-events.ts
-sha256: 7b0815b909a263f157585397e1d09ca6cb89e41336ef44857351cfa0abb5abf2
-generated_at: 2026-09-23T19:38:53.603452+00:00
+sha256: bee43bb185ef46792fa81ba705830377229c49a3f4e5248c3384a879c0436f85
+generated_at: 2026-09-27T15:41:06.627334+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express controller for the `GET /webhooks/events` endpoint. It returns the full webhook event catalogue (sourced from `asyncapi.yaml`) as a JSON array, giving API consumers a list of every event a subscription can filter on.
+Express controller that handles `GET /webhooks/events`. It returns the full list of webhook event catalogue entries (sourced from `../asyncapi.yaml` upstream) so that clients and API consumers can discover every event a subscription may filter on.
 
 ## Key elements
 
-- **`listWebhookEvents`** (exported) — Express handler (`(req, res) => void`). Calls `listWebhookEventCatalogue()`, spreads the result into a fresh array, and sends it via `successResponse<WebhookEventCatalogueEntry[]>`. Ignores the request object entirely (prefixed `_request`).
+- **`listWebhookEvents`** (exported) — The sole handler. Accepts an unused `Request` and a `Response`; calls `listWebhookEventCatalogue()` from the webhooks services barrel, spreads the result into an array, and returns it via `successResponse` typed as `WebhookEventCatalogueEntry[]`.
 
 ## Relationships
 
-- **`src/modules/webhooks/routes.ts`** — registers `listWebhookEvents` as the handler for the `GET /webhooks/events` route.
-- **`src/modules/webhooks/services/index.ts`** — barrel re-export that this controller imports `listWebhookEventCatalogue` from.
-- **`src/modules/webhooks/services/catalogue.ts`** — actual implementation of `listWebhookEventCatalogue`; the source of the data returned.
-- **`src/infrastructure/http/response.ts`** — provides the `successResponse` helper used to shape the HTTP reply.
-- **`src/types/index.ts`** — defines the `WebhookEventCatalogueEntry` type that parameterises the response payload.
+- **`src/modules/webhooks/routes.ts`** — Registers `listWebhookEvents` as the handler for the `GET /webhooks/events` route.
+- **`src/modules/webhooks/services/index.ts`** — Barrel module that re-exports `listWebhookEventCatalogue` (defined in `catalogue.ts`); this file imports from that barrel.
+- **`src/modules/webhooks/services/catalogue.ts`** — Provides the `listWebhookEventCatalogue` function whose return value is spread into the response body.
+- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the standard envelope wrapper used here.
+- **`src/types/index.ts`** — Defines the `WebhookEventCatalogueEntry` type used as the generic parameter of `successResponse`.
 
 ## Notes
 
-- The controller spreads the catalogue result (`[...]`) before passing it to `successResponse`, guaranteeing the response body is a plain array even if the service returns a non-standard iterable.
-- No authentication, pagination, or query-parameter filtering is applied here — the full catalogue is always returned.
-- The request parameter is unused; any future filtering or auth middleware would need to be added at the route level (in `routes.ts`).
+- The `request` parameter is intentionally unused (prefixed `_`); the endpoint takes no query params or path variables.
+- The catalogue is read at request time (the function is called inside the handler), so any runtime re-evaluation of the YAML-derived data would be reflected.
+- The handler is synchronous and returns the wrapped value directly (no `next` callback, no `res.json` call) — consistent with the `successResponse` helper contract.

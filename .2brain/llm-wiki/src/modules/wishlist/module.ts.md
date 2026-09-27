@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/module.ts
-sha256: df17b0ba9ee51ef87d050a4204f9c338b9b84f11c813b20d7c0ec99e38b7e1e1
-generated_at: 2026-09-23T19:47:31.038567+00:00
+sha256: 0e01ea502c2df900cd0acb82f9848230163e16a4af6caedd724d89148ae6289f
+generated_at: 2026-09-27T15:45:58.042327+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the wishlist feature. It wires the wishlist's HTTP routes, domain-event subscriptions (cleanup on product/user deletion), a personal-data collector for account exports, and locale files into the application's module registry. The wishlist itself is a single document per user holding product references; this file contains no business logic beyond that wiring.
+Module manifest and wiring for the wishlist feature. Registers routes, a `personalData` hook for account erasure, and a domain-event subscription so that deleted products are cleaned out of every wishlist. It is deliberately thin — no domain logic lives here, only the glue that connects the wishlist service to the kernel lifecycle.
 
 ## Key elements
 
-- **`default` export** — An object satisfying `AppModule` with:
-    - `name` / `basePath` — Identifies the module and its URL prefix (`/wishlist`).
-    - `routes` — The Express router from `./routes`.
-    - `personalData` — A collector that calls `wishlistService.wishlistGet(userId)` and returns the user's saved items (used by the account data-export flow).
-    - `subscribe` — Registers two `onDomainEvent` handlers:
-        - `PRODUCT_DELETED` → `productRemoveFromWishlistsById(productId)`
-        - `USER_DELETED` → `wishlistDeleteByUserId(userId)`
-    - `locales` — Path to the `locales/` directory relative to this file.
+- **Default export** — an object satisfying `AppModule` with:
+  - `name: 'wishlist'`, `basePath: '/wishlist'`
+  - `routes` — the Express router from `./routes`
+  - `personalData` — a single section (`'wishlist'`) exposing `collect` (reads the user's saved items via `wishlistService.wishlistGet`) and `erase` (calls `wishlistDeleteByUserId`)
+  - `subscribe` — registers a `PRODUCT_DELETED` handler that invokes `productRemoveFromWishlistsById`
+  - `locales` — path to the `locales/` directory alongside this file
+- **`onDomainEvent(PRODUCT_DELETED, …)`** — the only runtime side-effect of this module; fires when a product is deleted anywhere in the system.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — Supplies the `AppModule` type that the default export must satisfy.
-- **`src/kernel/events.ts`** — Supplies `onDomainEvent`, the subscription mechanism used inside `subscribe()`.
-- **`src/modules.ts`** — The module loader that imports and registers this default export.
-- **`src/modules/products/index.ts`** — Exports `PRODUCT_DELETED`, the event this module subscribes to for stale-reference cleanup.
-- **`src/modules/users/index.ts`** — Exports `USER_DELETED`, the event this module subscribes to for orphaned-wishlist cleanup.
-- **`src/modules/wishlist/routes.ts`** — Provides the `router` attached to this manifest.
-- **`src/modules/wishlist/service.ts`** — Provides `wishlistDeleteByUserId`, `productRemoveFromWishlistsById`, and `wishlistService` (used in the personal-data collector).
-- **`src/modules/wishlist/module.yaml`** — Co-located manifest metadata (consumed by tooling or the runtime alongside this file).
-- **`src/modules/account/module.yaml`** — The account module that likely consumes the `personalData` collector declared here to build the user's data export.
+- **`src/kernel/registry.ts`** — provides the `AppModule` type; the default export is validated against it via `satisfies`.
+- **`src/kernel/events.ts`** — provides `onDomainEvent`, the kernel's event-bus subscription API used in `subscribe`.
+- **`src/modules/products/index.ts`** — exports the `PRODUCT_DELETED` event constant consumed by the subscription.
+- **`src/modules/wishlist/routes.ts`** — supplies the HTTP router mounted at `/wishlist`.
+- **`src/modules/wishlist/service.ts`** — supplies `wishlistService` (read), `wishlistDeleteByUserId` (erase), and `productRemoveFromWishlistsById` (event cleanup).
+- **`src/modules/wishlist/module.yaml`** — the declarative manifest that mirrors/complements this file (module name, dependencies, etc.).
+- **`src/modules/account/module.yaml`** — the account module that *calls* this module's `personalData.erase` hook during account deletion; the relationship is event/hook-based, not an import.
+- **`src/modules.ts`** — top-level module registry that loads this module at boot.
 
 ## Notes
 
-- Event subscriptions are registered at module-init time via the `subscribe()` callback, not at import time. Ensure the module loader calls `subscribe()` after all modules are loaded so event bus is ready.
-- The personal-data collector is a **fire-and-forget async** call (`wishlistGet(...).then(...)`) — callers must not assume it is synchronous.
-- Cleanup is purely reactive (event-driven); there is no periodic sweep or foreign-key constraint. If an event is lost, stale wishlist entries persist.
-- The doc comment explicitly notes the wishlist has no domain rules of its own beyond "deleting it costs a convenience, not a capability" — do not expect invariants or validation logic in the service layer beyond basic CRUD.
+- **Acyclic imports by design.** Cleanup of deleted products is done via a domain event (not an import from `products`), and account erasure is done via the `personalData.erase` hook (not an import from `account`). This keeps the static import graph a DAG.
+- **`erase` joins the caller's transaction.** Per the DDD-D6 comment, `wishlistDeleteByUserId` participates in the same hard-delete transaction as the account deletion; it is not a fire-and-forget call.
+- **No business rules here.** The module header explicitly states there is nothing worth modelling at this layer — all rules live in `service.ts`.

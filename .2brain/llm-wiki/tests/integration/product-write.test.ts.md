@@ -1,7 +1,7 @@
 ---
 source: tests/integration/product-write.test.ts
-sha256: a20af8a8b4a8a0d4a94dcf9327cd390d29b5a677307da244ee8c35fadd199246
-generated_at: 2026-09-23T20:06:08.121308+00:00
+sha256: 25a9553aaa4fe3924fdd767f418fd7e1fdf5a25dfd2f670e68cfeb3cca5cc72d
+generated_at: 2026-09-27T15:57:39.418149+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for `productService.writeCreate` and `productService.writeUpdate`, exercising the multilingual product write path against a real database and a real translation port. Because the trigger lives in the `products` module while the translation rows and locale validation live in the `locales` module, the suite sits at the top-level `tests/integration/` rather than under either module's own `tests/` directory.
+Cross-module integration test proving that `productService.writeCreate` and `writeUpdate` correctly write and modify translation rows in a **real database** through the **real translation port**. It lives at the repository top level (not under `products/tests/` or `locales/tests/`) because the trigger is in the products module but the rows and locale validation live in the locales repository. The wiring-only and storage-only halves are covered in each module's own `tests/integration/`; this file covers the combined, both-sides-real case.
 
 ## Key elements
 
-- **`FALLBACK`** (`'en'`) — the locale that must always be present; assumed by every test case.
-- **`givenLocale(tag, overrides?)`** — shorthand that creates a locale via `localeRepository.create` + `makeLocale`.
-- **`beforeAll`** — imports `enabledModules` (triggering the import-time `registerTranslationPort` side-effect) and configures `localeService.setTranslatables` for the `product` entity.
-- **`beforeEach`** — ensures the `en` fallback locale exists before each test.
-- **`afterAll`** — clears the translatables config.
-- **`describe('productService.writeCreate')`** — three cases: happy-path (product + translation rows written atomically), missing fallback locale (reject, no rows written), unregistered translation locale (reject with field-level error, no rows written).
-- **`describe('productService.writeUpdate')`** — three cases: mixed edit + delete in one PATCH, `null` on the fallback locale (reject, rows untouched), PATCH carrying no `translations` key (product fields updated, translation rows left alone).
+- **`beforeAll`** — calls `registerModules([localesModule, productsModule])`, which triggers `localesModule.onRegistered` to resolve `translatables` from the products manifest and install the translation port that `productService` writes through.
+- **`beforeEach`** — ensures the `en` fallback locale exists (via `givenLocale`) so the fallback-presence precondition holds for every test.
+- **`describe('productService.writeCreate')`** — three cases:
+  - Writes product document + all translation rows atomically; verifies rows and the derived `title` index column.
+  - Rejects and writes *nothing* (product or rows) when the fallback locale is absent.
+  - Rejects and writes *nothing* when a translation references an unregistered locale; surfaces a per-field error on `translations.xx`.
+- **`describe('productService.writeUpdate')`** — three cases:
+  - A single PATCH edits one locale row and deletes another; verifies only the surviving row remains.
+  - Rejects `null` on the fallback locale; existing rows are untouched.
+  - A PATCH that carries no `translations` key leaves all rows intact (price-only update).
+- **`FALLBACK`** — constant set to `'en'`; the fallback locale for every environment this suite targets (see `.env-example`).
 
 ## Relationships
 
-- **`src/modules.ts`** — `enabledModules` is imported solely to fire the `registerTranslationPort` side-effect that opens the `products → locales` translation channel.
-- **`src/modules/products/index.ts`** — re-exports `productService` (the SUT) and the `ProductDocument` type.
-- **`src/modules/products/model.ts`** — source of the `ProductDocument` type used in assertions.
-- **`src/modules/products/service.ts`** — implements `writeCreate` / `writeUpdate`; the logic under test.
-- **`src/modules/products/tests/factories.ts`** — provides `createProduct` for seeding a product document before `writeUpdate` tests.
-- **`src/modules/locales/repository.ts`** — `translationRepository.findEntityTranslations` and `upsertEntityLocale` are used for assertions and pre-seeding; `localeRepository.create` is used by `givenLocale`.
-- **`src/modules/locales/factories.ts`** — `makeLocale` builds locale documents for the `givenLocale` helper.
-- **`src/modules/locales/services/index.ts`** — `localeService.setTranslatables` registers which product fields are translatable.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the in-test database.
-- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity expected by `writeCreate`/`writeUpdate`.
+| Neighbor | Interaction |
+|---|---|
+| `src/kernel/registry.ts` | `registerModules` is called in `beforeAll` to wire the translation port. |
+| `src/modules/locales/module.ts` | Registered as a module so its `onRegistered` hook installs `translatables` resolution. |
+| `src/modules/locales/repository.ts` | `translationRepository.findEntityTranslations` / `upsertEntityLocale` are used to assert and seed translation rows. |
+| `src/modules/locales/tests/factories.ts` | `givenLocale` seeds the required locale records before each test. |
+| `src/modules/products/index.ts` | Source of the `productService` import and the `ProductDocument` type. |
+| `src/modules/products/module.ts` | Registered alongside locales so its manifest contributes `product` to `translatables`. |
+| `src/modules/products/service.ts` | The system under test: `writeCreate` and `writeUpdate`. |
+| `src/modules/products/tests/factories.ts` | `createProduct` seeds a product document for the update-path tests. |
+| `tests/support/callers.ts` | `testCallerContext` is the caller identity passed to every write call. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` at module top level provisions the real database connection. |
 
 ## Notes
 
-- The `void enabledModules` import is **not** a no-op: its purpose is the import-time side-effect that registers the translation port. Removing it would break every test in the file.
-- `'en'` is hard-coded as the fallback. The suite assumes it exists in every test environment (documented via `.env-example`). It is not parameterised.
-- Convention (mirrored in `locales/tests/integration/translations.test.ts`): every test case must write the fallback locale at least once; the `beforeEach` guard exists to make that assumption explicit.
-- In `writeUpdate`, a `null` value in the `translations` map means "delete this locale's row," while omitting the `translations` key entirely means "leave all translation rows untouched."
+- **Placement is intentional.** The file deliberately sits in `tests/integration/` rather than under `products/tests/` or `locales/tests/` because it exercises the seam *between* the two modules. Each module's own integration tests use a fake stand-in for the other side.
+- **Registration order matters.** The translation port only exists after *both* modules are registered; registering products alone would leave the port uninstalled and writes would fail.
+- **Fallback locale is environment-dependent.** The constant `FALLBACK = 'en'` is hardcoded here but the actual fallback is read from environment config; if the environment changes, this constant and the `beforeEach` seed must be updated in lockstep.
+- **Atomicity is the key assertion.** Every rejection test explicitly verifies that *neither* the product document *nor* any translation row was written, confirming the all-or-nothing contract of `writeCreate`/`writeUpdate`.

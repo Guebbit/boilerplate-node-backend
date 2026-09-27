@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/services/index.ts
-sha256: 8899eaf9f063330e1e59d851408b619ab3a5f6234246a99c435a4c1bd3826457
-generated_at: 2026-09-23T19:42:32.530898+00:00
+sha256: fff9da5f4e27fa0b6075eac1e87989291fd0b7b77eb3dcc0b37b51a0f6edcc90
+generated_at: 2026-09-27T15:44:17.192306+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (re-export) file for the webhooks `services/` directory. It is the single import surface that controllers and the module wiring use to reach the service layer, so that callers never import bare functions from individual sibling files. The doc comment points to `docs/theory/layers.md#when-service-ts-becomes-services-` for the rationale behind splitting into multiple service files.
+Barrel/index file for the webhooks module's service layer. It re-exports the public functions and types from the individual service files and assembles the admin-facing operations (`subscriptions.*`, `deliveries.*`) into a single `webhooksService` object, giving controllers one stable import point.
 
 ## Key elements
 
-- **`webhooksService`** — a plain object that groups the six admin-surface CRUD operations (`listSubscriptions`, `createSubscription`, `updateSubscription`, `removeSubscription`, `listDeliveries`, `replayDelivery`) pulled from `subscriptions.ts` and `deliveries.ts`. Controllers are expected to call through this object rather than importing the underlying functions directly.
-- **Re-exported functions** — `subscribeToWebhookEvents` (from `publish`), `sweepDueWebhookDeliveries` (from `sweep`), `processDeliveryJob` (from `attempt`), and `listWebhookEventCatalogue` (from `catalogue`). These are the non-CRUD entry points (event fan-out, retry sweep, delivery worker, catalogue lookup).
-- **Re-exported types** — `WebhookEventCatalogueEntry` (from `@types`), `SubscriptionWithMintedSecrets` (from `subscriptions`), and `DeliveryListFilters` (from `deliveries`).
+- **`webhooksService`** (const object) — bundles the eight admin operations: `listSubscriptions`, `createSubscription`, `updateSubscription`, `rotateSubscriptionSecret`, `removeSubscriptionSecret`, `removeSubscription`, `listDeliveries`, `replayDelivery`. Controllers import this object rather than reaching into individual service files.
+- **`subscribeToWebhookEvents`** — re-exported from `./publish`; the domain-event fan-out entry point.
+- **`sweepDueWebhookDeliveries`** — re-exported from `./sweep`; the retry sweep invoked by `scripts/ops/sweep-webhook-retries.ts`.
+- **`processDeliveryJob`** — re-exported from `./attempt`; the shared delivery core used by both replay and the queued worker.
+- **`listWebhookEventCatalogue`** — re-exported from `./catalogue`.
+- **Type re-exports** — `WebhookEventCatalogueEntry` (from `@types`), `SubscriptionWithMintedSecrets` (from `./subscriptions`), `DeliveryListFilters` (from `./deliveries`).
 
 ## Relationships
 
-- **Controllers** (`create-subscription`, `delete-subscription`, `list-deliveries`, `list-events`, `list-subscriptions`, `replay-delivery`, `update-subscription`) — import `webhooksService` (or the individual re-exported functions) from this file to perform their operations. This file is the contract boundary between the controller and service layers.
-- **`src/modules/webhooks/index.ts` / `module.ts`** — wire the module together; this file provides the service-layer exports they register or re-expose.
-- **Sibling service files** (`subscriptions`, `deliveries`, `attempt`, `catalogue`, `publish`, `sweep`) — the actual implementations. This file imports `subscriptions` and `deliveries` as namespaces to build `webhooksService`, and re-exports named functions/types from the remaining four.
+- **All webhooks controllers** (`create-subscription`, `delete-subscription`, `list-deliveries`, `list-events`, `list-subscriptions`, `remove-subscription-secret`, `replay-delivery`, `rotate-subscription-secret`, `update-subscription`) import `webhooksService` (or the individual re-exports) from this file as their sole service-layer entry point.
+- **`src/modules/webhooks/index.ts` / `module.ts`** — consume the exports of this file to wire the module's public API and dependency-injection bindings.
+- **`attempt.ts`, `catalogue.ts`, `deliveries.ts`, `publish.ts`** — the implementation files whose named exports this barrel re-exports or bundles into `webhooksService`.
 
 ## Notes
 
-- The file imports `subscriptions` and `deliveries` only to compose the `webhooksService` object; all other re-exports are named `export … from` statements that do not retain a local binding.
-- The `webhooksService` object intentionally exposes _only_ the six admin-surface operations. The event fan-out, sweep, attempt, and catalogue functions are exposed as flat named re-exports instead — they are not part of the CRUD surface.
-- Per the inline comment, controllers must go through this barrel ("never the bare functions"). Bypassing it breaks the intended indirection.
+- The file's module-level doc comment points to `docs/theory/layers.md#when-service-ts-becomes-services-` for the rule of when a module graduates from a single `service.ts` to a `services/` directory.
+- The inline comment on `webhooksService` explicitly states: *"controllers call through this, never the bare functions."* Treat the object as the required import surface for admin operations.
+- `subscriptions.ts` and `sweep.ts` are also imported/re-exported here but are not listed as graph neighbors in this context; they follow the same barrel pattern as the others.

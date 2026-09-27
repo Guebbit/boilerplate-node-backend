@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/services/subscriptions.ts
-sha256: ddd7a083589eb8cf306ef599756a76e8e55279d9a4bdecab517884c0376d2336
-generated_at: 2026-09-23T19:43:08.373936+00:00
+sha256: 9405bc13fdee814508912c4c44871e91f8eb4d0bbc27598201e427fa0511b1b7
+generated_at: 2026-09-27T15:44:50.671240+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements tenant-scoped CRUD for webhook subscriptions (list, create, update, remove). Handles secret-ring lifecycle (mint on create, rotate/remove on update), enforces a per-tenant subscription cap with race-safe two-phase checking, and emits audit records for every mutation.
+Tenant-scoped CRUD and secret-ring management for webhook subscriptions. Handles listing, creation (with a race-safe per-tenant cap), state updates, secret rotation/removal, and deletion. The secret ring is the core abstraction: each subscription carries one or more signing secrets, and the plaintext is returned exactly once at creation or rotation time.
 
 ## Key elements
 
-- **`SubscriptionWithMintedSecrets`** — response shape pairing a `WebhookSubscriptionDocument` with an optional `secret` (create) or `newSecret` (rotate). Plaintext is shown exactly once and never retrievable afterwards.
-- **`list(context, filters)`** — paginated, newest-first query of a tenant's subscriptions; optional `enabled` filter.
-- **`insertionRank(subscriptionId, tenant)`** — counts rows at-or-before the given `_id` for the tenant; exploits Mongo ObjectId total ordering to assign a stable rank even under concurrent inserts.
-- **`rollbackOverCap(subscription)`** — deletes the just-inserted row and returns a 422 reject.
-- **`finalizeCreate(subscription, plaintext, tenant, context)`** — post-insert cap check via `insertionRank`; on pass, records audit and returns a 201 envelope.
-- **`create(body, context)`** — pre-check tenant count → mint first ring secret → insert → `finalizeCreate`. The two-phase cap check (count-then-rank) ensures at most `cap` rows survive regardless of concurrent creates.
-- **`update(id, body, context)`** — partial update of `url`/`description`/`eventTypes`/`enabled`, plus `rotateSecret` (push new ring entry) and `removeSecretId` (pop one, 422 if ring would empty). Re-enabling clears `disabledAt` and resets `consecutiveFailures`.
-- **`remove(id, context)`** — deletes the subscription; delivery log rows are intentionally left in place.
+- **`SubscriptionWithMintedSecrets`** — interface pairing a `WebhookSubscriptionDocument` with an optional one-time plaintext (`secret` on create, `newSecret` on rotate).
+- **`list`** — paginated, newest-first query of a tenant's subscriptions; supports an `enabled` filter. No free-text search (repository has no `searchable` spec).
+- **`create`** — enforces the per-tenant cap twice (pre-insert `count`, post-insert `insertionRank`) to survive concurrent creates. Mints the ring's first secret via `mintRingSecret`, stores only the encrypted entry, returns the plaintext once.
+- **`update`** — mutates `url`, `description`, `eventTypes`, `enabled`. Only a disabled→enabled transition resets `consecutiveFailures` and clears `disabledAt` (re-arm). The secret ring is untouched here.
+- **`rotateSecret`** — appends a new secret entry to the ring; returns the new plaintext alongside the saved document.
+- **`removeSecret`** — removes one ring entry by id. Returns 404 if the id isn't in the ring; 422 if removal would empty the ring.
+- **`insertionRank`** *(internal)* — counts all rows for the tenant with `_id` ≤ the given id, giving a stable ordinal that resolves concurrent-insert races.
+- **`rollbackOverCap`** *(internal)* — deletes a just-inserted row and returns a 422 reject.
+- **`finalizeCreate`** *(internal)* — ranks the new row; if over cap, rolls back; otherwise records an audit event and returns the 201 envelope.
 
 ## Relationships
 
-- **`../repository.ts`** — all reads/writes go through `webhookSubscriptionRepository` (`search`, `count`, `create`, `findById`, `save`, `deleteOne`).
-- **`../secrets.ts`** — `mintRingSecret()` produces the `{ entry, plaintext }` pair stored on the document; `removeRingSecret()` filters the ring array.
-- **`../config.ts`** — `getWebhookSubscriptionCap()` supplies the per-tenant cap used by both the pre-check and the rank check.
-- **`../audit.ts`** — `webhooksAuditActions` provides the action strings passed to `recordAudit`.
-- **`../model.ts`** — `WebhookSubscriptionDocument` is the persistence shape used throughout.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` build every HTTP envelope.
-- **`@infrastructure/i18n`** — `t()` localises all user-facing error messages.
-- **`@infrastructure/observability/audit`** — `recordAudit` writes an audit entry on every successful mutation.
-- **`@types`** — `TenantCallerContext` (guarantees `caller.tenantId` is set), plus request/response type aliases.
-- **`@infrastructure/persistence/create-repository`** — `PaginatedResult` type for the list endpoint.
-- **`../services/index.ts`** — barrel re-export for the webhooks services layer.
+- **`../repository.ts`** — all persistence goes through `webhookSubscriptionRepository` (search, count, create, findByIdInTenant, save, deleteOne).
+- **`../secrets.ts`** — `mintRingSecret` produces the `{ entry, plaintext }` pair; `removeRingSecret` filters an entry out of the ring.
+- **`../config.ts`** — `getWebhookSubscriptionCap()` supplies the per-tenant subscription limit.
+- **`../audit.ts`** — `webhooksAuditActions` provides the action-string constants passed to `recordAudit`.
+- **`../model.ts`** — `WebhookSubscriptionDocument` is the persisted document shape used throughout.
+- **`@infrastructure/http/response`** — all return values are `generateSuccess` / `generateReject` envelopes.
+- **`@infrastructure/i18n`** — `t()` localizes every user-facing error message.
+- **`@infrastructure/observability/audit`** — `recordAudit` is called after every successful mutation.
+- **`@infrastructure/persistence/changes`** — `clearedOrValue` turns `null` into a `$unset` sentinel for optional fields.
+- **`@infrastructure/persistence/create-repository`** — source of the `PaginatedResult` type used by `list`.
+- **`../services/index.ts`** — barrel re-export of this module's public functions.
+- **`src/modules/webhooks/tests/integration/subscriptions.test.ts`** — integration tests covering the CRUD and secret-ring flows.
 
 ## Notes
 
-- **Two-phase cap enforcement:** a plain `count` before insert handles the common case; the post-insert `insertionRank` closes the race where two callers both read a sub-cap count and both insert. Only rows whose rank ≤ cap survive; the rest are deleted and a 422 returned.
-- **`async/await` in `finalizeCreate`:** deliberate deviation from the repo's usual `.then` chaining. TypeScript's contextual typing in a `.then` callback does not distribute over the `ResponseSuccess | ResponseReject` union and silently narrows to one branch; `await` checks each `return` against the declared type directly.
-- **`ownerUserId` is a pointer, not an email.** The auto-disable notification resolves the recipient fresh at send time (`services/attempt.ts`); the field is `undefined` when the caller has no `id`.
-- **Secrets are single-use plaintext.** The `secret` / `newSecret` fields on the response are the only moment the plaintext exists in application code; after that only the opaque `entry` lives in the document.
-- **Tenant scoping is structural:** every query includes `tenant: context.caller.tenantId` in its scope; there is no path to cross-tenant reads because `TenantCallerContext` guarantees the field is non-null for any `webhooks.*` caller.
+- **Race-safe cap**: two concurrent creates can both pass the pre-insert count check; the post-insert `insertionRank` + `rollbackOverCap` pair guarantees at most `cap` rows survive regardless of concurrency.
+- **Plaintext is single-use**: the only responses carrying a secret in cleartext are `create` (201) and `rotateSecret` (200). All other reads return the encrypted entries only.
+- **Re-arm is directional**: setting `enabled: true` on an already-enabled subscription does *not* reset the failure streak; only the disabled→enabled edge does.
+- **`ownerUserId` is a reference, not an email**: it stores `context.caller.id` for later resolution at auto-disable notification time; it is intentionally nullable (pre-existing subscriptions have no owner).
+- **`async/await` in `finalizeCreate`** is deliberate: TypeScript's contextual typing on `.then` callbacks mis-narrows the `ResponseSuccess | ResponseReject` union, whereas `await` checks each `return` against the declared signature.
+- **Every read/write is tenant-scoped** via `context.caller.tenantId`; the module is unreachable without a `tenant`-scoped authorization key.

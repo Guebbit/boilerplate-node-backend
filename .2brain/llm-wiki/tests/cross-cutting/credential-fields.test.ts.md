@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/credential-fields.test.ts
-sha256: 7c1aa48f57939a95181e6214a4ec0b4a8f7387b5f7b1087599ecb3e3e19dfe32
-generated_at: 2026-09-23T19:55:48.390453+00:00
+sha256: 5bc33408593f2419f1c16b3e2cc98d3d51eacc428584885148057120fa623e23
+generated_at: 2026-09-27T15:50:09.944196+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A cross-cutting invariant test that asserts no credential-shaped key (matching `password|token|secret|salt|apikey|api_key|credential|privatekey|otp`) appears anywhere in the `toJSON()` output of any Mongoose model registered under `src/modules/`. It exists because the only thing preventing a hash or live token from reaching a response body is a manual `omit` entry; this test makes that a checked property rather than a remembered one.
+Cross-cutting test that asserts no credential-shaped field name (password, token, secret, salt, apikey, credential, privatekey, otp) survives Mongoose `toJSON()` serialization on any registered model. It exists because the sole defense against leaking a secret into a response body is the `omit` list passed to `buildTransform` per model — a list that is easy to forget when adding a new schema field. Rather than trusting a static list of known fields, this test matches by *shape* so it catches fields nobody has added yet.
 
 ## Key elements
 
-- **`CREDENTIAL_SHAPE`** — a case-insensitive regex identifying any key that should never be published. Deliberately shape-based (not an explicit field list) so it catches fields added later.
-- **`PUBLISHABLE`** — an allowlist of `(model, key, because)` tuples for keys that _look_ credential-shaped but are safe (currently: `WebhookSubscription.secretIds`, opaque ring IDs only).
-- **`registerAllModels`** — walks `src/modules/*/model.ts` via `fs.readdirSync` and `jest.requireActual` to populate `mongoose.models` without a hardcoded import list.
-- **`subSchema`** — type-narrows a `SchemaType` to extract its nested `Schema` when present.
-- **`sensitivePaths`** — returns every path name (one level of subdocument deep) whose name matches `CREDENTIAL_SHAPE`.
-- **`secretValues`** — builds a document object that fills _only_ credential-shaped paths with the sentinel `'SENSITIVE'`, leaving everything else at defaults.
-- **`keysWithin`** — recursively collects every key at every depth of a serialized value as dotted paths.
-- **`isPublishable`** — checks a `(model, key)` pair against the `PUBLISHABLE` allowlist.
-- **Test cases** — four `it` blocks: (1) canary asserting ≥ 8 models and ≥ 1 has a sensitive path; (2) the main assertion that no credential-shaped key survives `toJSON()`; (3) stale-exemption check (allowlist entries whose model no longer exists); (4) every exemption carries a reason of ≥ 20 chars.
+- **`CREDENTIAL_SHAPE`** — Regex (`/password|token|secret|salt|apikey|api_key|credential|privatekey|otp/i`) used to flag property names at every depth of serialized output.
+- **`PUBLISHABLE`** — Allowlist of keys that match `CREDENTIAL_SHAPE` but are safe to publish. Currently one entry: `WebhookSubscription.secretIds` (opaque ring IDs, never the secret value). Each entry requires a written reason.
+- **`registerAllModels()`** — Walks `MODULES_ROOT` on disk, `requireActual`s every `<module>/model.ts`, so `mongoose.models` holds the full catalogue without a static import list.
+- **`subSchema(type)`** — Narrows a `SchemaType` to its nested `Schema` (present only on document-array / single-nested subclasses).
+- **`sensitivePaths(schema)`** — Returns every path name (plus one level of subdocument children) that matches `CREDENTIAL_SHAPE`.
+- **`secretValues(schema)`** — Builds a plain object with `'SENSITIVE'` stuffed into every credential-shaped path so the serialized document *has* the value rather than omitting it by default.
+- **`keysWithin(value, prefix)`** — Recursively flattens a serialized value into dotted-path key strings (handles arrays and nested objects).
+- **`isPublishable(model, key)`** — Checks a key against the `PUBLISHABLE` allowlist.
+- **`describe('credential-shaped fields')`** — Four tests: (1) canary that ≥ 8 models loaded and ≥ 1 has a sensitive path; (2) the core assertion that no non-publishable credential-shaped key appears in any model's `toJSON()` output; (3) no stale `PUBLISHABLE` entries reference a model that no longer exists; (4) every `PUBLISHABLE` entry has a reason ≥ 20 chars.
 
 ## Relationships
 
-- **`src/modules/account/tests/unit/two-factor.test.ts`** — Exercises the two-factor / OTP flow that produces credential-shaped fields (`otp`, `tokens`) the cross-cutting test then asserts are stripped on serialization. The unit test validates _behavior_ of the 2FA module; this file validates the _output contract_ of the schema transform that both modules (and every other) share.
+- **`tests/support/paths.ts`** — Imports `MODULES_ROOT`, the filesystem root under which each module directory (and its `model.ts`) lives. This is what makes the discovery loop work.
+- **`src/modules/account/tests/unit/two-factor.test.ts`** — Described in the file's header as "the twin." That file approaches the same guarantee from the *query* side (reading API resource definitions as text); this file approaches it from the *serialization* side (building a live document and calling `toJSON`). They complement each other: a field could pass a query-shape check but still leak if the transform renames it, and vice versa.
 
 ## Notes
 
-- The test drives `toJSON()` directly rather than running a query, because `select: false` only affects reads that omit the field; the login path deliberately selects `+password`. The transform (and its `omit` list) is the real boundary, so that is what gets tested.
-- No database connection is required; a Mongoose document can be instantiated and serialized in-memory.
-- `jest.requireActual` is used (not bare `require`) both to comply with a repo-wide lint ban and to guarantee the real schema (and thus its real transform) is loaded.
-- The `PUBLISHABLE` allowlist is intentionally empty-by-default and requires a written justification plus a reviewer; each entry is a deliberate exception to the "no credential-shaped key reaches the wire" rule.
+- **No DB connection required.** Mongoose documents can be instantiated and serialized in-memory; only `save()` would need a connection.
+- **`select: false` is not the defence.** It is a read-time default that keeps a field out of un-requested queries. The login path intentionally selects `+password`. The transform's `omit` list is the only layer that actually prevents serialization.
+- **`requireActual` over `require`.** Bare `require` is banned repo-wide; `requireActual` is also needed so the schema (and its transform) is the real one.
+- **Vacuous-pass guard.** The first test asserts ≥ 8 models and ≥ 1 sensitive path. Without it, a broken `registerAllModels` would let the main assertion pass over zero models and report a false all-clear.
+- **Adding a `PUBLISHABLE` entry requires a reason string ≥ 20 chars**, enforced by its own test. Treat it as a small, reviewed exception — the file's comment calls every exemption "a small hole."

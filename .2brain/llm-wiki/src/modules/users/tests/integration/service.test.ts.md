@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/service.test.ts
-sha256: 353c616e98254de4c6d50b49cc5a003dd36de91606e3eff48d3e087dbc6383c7
-generated_at: 2026-09-23T19:36:18.286579+00:00
+sha256: 8e057a847c839271b583c61b3c69312132a8ec0fdfc106b9ec43f9a06dfa5768
+generated_at: 2026-09-27T15:40:13.719570+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for `userService` covering data validation, search/filter/pagination, and admin create/update/delete flows. Runs against a real in-memory MongoDB instance (via `setupTestDb`) rather than mocks, exercising the repository and model layers as the service would see them in production.
+Integration test suite for `userService` (validation, search, create, update, delete) running against an in-memory MongoDB via `setupTestDb`. It verifies end-to-end service behaviour — validation rules, query filters, pagination, audit emission, event dispatch, erasure-registry callbacks, and access-role assignment — without hitting a real database or filesystem.
 
 ## Key elements
 
-- **`expectCreated(...)`** — Helper that calls `userService.create`, asserts the envelope is `success: true`, and returns the unwrapped `UserDocument`. Keeps individual tests to one fewer assertion.
-- **`seedActiveAndDeleted()`** — Creates three users whose `active` and `deletedAt` values disagree, backing the `active`-filter tests (deactivated ≠ deleted; deleted-but-active is a distinct case).
-- **`jest.mock('@infrastructure/observability/audit')`** — Replaces `emitAuditEvent` with a `jest.fn()` _and_ manually rewires `recordAudit` to call that replacement (because `recordAudit` closes over its own module's original binding, immune to a plain property override).
-- **`jest.mock('@infrastructure/adapters/image-store')`** — Stubs `imageStore.remove` to resolve `true`; the service only needs a handle, not real file I/O.
-- **`describe('userService.validateData')`** — Checks email/username/password rules, role names, `imageUrl` as a relative path, tolerance of undeclared keys, wrong-typed flags, and that error messages are translated (not raw i18n keys).
-- **`describe('userService.search')`** — Covers default pagination, text/email/username filters, `active` vs. soft-delete semantics, phone decryption through `toUser` on a lean document, and empty-collection meta.
-- **`describe('userService.getById')`** — Retrieves a user by ID (content truncated in source).
+- **`jest.mock('@infrastructure/observability/audit')`** — Replaces `emitAuditEvent` with a spy and rewrites `recordAudit` to route through that spy (because the real `recordAudit` closes over its own module-level `emitAuditEvent`).
+- **`jest.mock('@infrastructure/adapters/image-store')`** — Spreads the real module and overrides only `imageStore.remove` with a no-op `jest.fn()`, keeping `applyImageWriteback` functional.
+- **`expectCreated(...args)`** — Helper that awaits `userService.create`, asserts the success envelope, and returns the `UserDocument`. Used by every `describe('userService.create')` case except the breach case.
+- **`seedActiveAndDeleted()`** — Seeds three users with deliberately disagreeing `active` / `deletedAt` combinations to exercise filter semantics.
+- **`describe('userService.validateData', …)`** — Covers email/username/password validation, wrong-typed `active`, declared role names, relative `imageUrl`, unknown keys, and i18n message shape.
+- **`describe('userService.search', …)`** — Covers text/email/username filters, `active` vs soft-delete independence, pagination, and phone decryption on the `.lean()` path.
+- **`describe('userService.create', …)`** (truncated in snippet) — Admin create flow, audit, events, erasure-registry, and access-role assignment.
+- Imports `personalDataErasers` / `setPersonalDataErasers` to assert the erasure registry is invoked during lifecycle operations.
+- Imports `onDomainEvent` / `resetDomainEvents` to observe domain events (`USER_SETUP_REQUESTED`) emitted by the service.
 
 ## Relationships
 
-- **`src/modules/users/service.ts`** — System under test; all `describe` blocks call its exported functions directly.
-- **`tests/support/setup-test-db.ts`** — Called once at module top-level to wire up the in-memory Mongo that `userRepository` talks to.
-- **`src/modules/users/tests/factories.ts`** — Provides `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD` for seeding valid documents and realistic passwords.
-- **`tests/support/callers.ts`** — Supplies `testCallerContext` and `callerContextAs` to simulate authenticated/tenant-scoped callers in service calls.
-- **`tests/support/ports.ts`** — `observePort` helper (referenced in the audit-mock comment) for clearing and re-exposing `jest.fn()` ports.
-- **`src/infrastructure/observability/audit.ts`** — Mocked; tests spy on `emitAuditEvent` to assert audit side-effects.
-- **`src/kernel/events.ts`** — `onDomainEvent` / `resetDomainEvents` register and flush domain-event listeners between tests.
-- **`src/modules/access/index.ts`** — `assignRole`, `membershipsOf`, `rolesOf` used to verify role-assignment side-effects of create/update.
-- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` identifies the tenant scope for test caller contexts.
-- **`src/modules/users/model.ts`** — `toUser` and `UserDocument` type used to assert shape of returned documents.
-- **`src/modules/users/events.ts`** — `USER_SETUP_REQUESTED` event constant asserted on domain-event emissions.
-- **`src/infrastructure/http/response.ts`** — `ResponseSuccess` / `ResponseReject` types shape the envelope assertions.
+- **`src/modules/users/service.ts`** — System under test; every `describe` block calls its exported functions (`create`, `search`, `updateById`, `validateData`, …).
+- **`src/modules/users/tests/factories.ts`** — Provides `createUser` (DB seeding helper) and the `PLAIN_PASSWORD` / `REPLACEMENT_PASSWORD` constants used throughout.
+- **`tests/support/callers.ts`** — Supplies `testCallerContext` and `callerContextAs` for permission-scoped calls.
+- **`src/kernel/permissions.ts`** — Source of `systemCallerContext` (bypasses tenant/role checks).
+- **`src/kernel/access/tenant.ts`** — Source of `DEPLOYMENT_TENANT_ID` used in tenant-scoped assertions.
+- **`src/infrastructure/observability/audit.ts`** — Mocked; tests assert on `emitAuditEvent` spy and the `usersAuditActions` constants from the module's own `audit.ts`.
+- **`src/kernel/events.ts`** — `onDomainEvent` / `resetDomainEvents` let tests subscribe to and clear the global event bus.
+- **`src/modules/access/index.ts`** — `assignRole`, `membershipsOf`, `rolesOf` are called to verify role/membership side-effects of user creation.
+- **`src/modules/users/erasure-registry.ts`** — `setPersonalDataErasers` registers stubs; tests assert the registry is invoked on delete/erasure paths.
+- **`src/modules/users/model.ts`** — `toUser` is used to verify decryption (e.g. phone) on lean documents returned by `search`.
+- **`src/infrastructure/http/response.ts`** — `ResponseSuccess` / `ResponseReject` type guards used in assertions and the `expectCreated` helper.
 
 ## Notes
 
-- The `audit` mock is intentionally over-engineered: `recordAudit` captures its module-local `emitAuditEvent` at definition time, so a simple property swap on the module namespace is invisible to it. The mock re-implements `recordAudit` to route through the _replacement_ fn, preserving spy visibility.
-- `search()` internally uses the `.lean()` repository path (plain objects, not hydrated Mongoose docs). The phone-decryption test explicitly calls `toUser` on a lean item to confirm it works on both shapes.
-- The `active` filter and soft-deletion (`deletedAt`) are orthogonal: a deleted account can still be `active: true`, and the `active: true` filter deliberately includes it.
-- Validation tests assert the _shape_ of i18n keys (dotted identifier regex) rather than exact message text, so copy changes don't break the suite.
-- `setupTestDb()` is invoked at module scope (not in `beforeEach`), so the in-memory DB is shared across all tests in this file; tests rely on unique emails/usernames for isolation.
+- **Audit mock subtlety:** `recordAudit` in the real module closes over its *own* `emitAuditEvent`, so simply mocking `emitAuditEvent` is insufficient. The mock redefines `recordAudit` to call the spy directly. Forgetting this makes `recordAudit`-based audit assertions silently pass against the real (unmocked) emitter.
+- **Image-store mock:** Only `remove` is stubbed. `applyImageWriteback` is a pure in-memory mutation the tests depend on for real image-URL writeback; the spread-then-override pattern preserves it.
+- **`.lean()` vs hydrated:** `search()` returns plain objects (Mongoose `.lean()`). Tests that assert `toUser` decryption (e.g. phone) must account for this — `toUser` must handle a non-hydrated document.
+- **Validation is intentionally non-strict:** Unknown body keys (e.g. `id` on a PUT) are tolerated. The `active` field, however, *must* be validated at the service layer because a wrong type propagates to Mongoose and produces a 500 CastError instead of the contractual 422.
+- **`imageUrl` contract:** Accepts a `uri-reference` (server-relative path like `/uploads/…`), not a full absolute `uri`. Tests guard against a regression to strict-URL validation.
+- **i18n assertion strategy:** Rather than matching specific copy text (which changes), the test asserts the error `message` does *not* match the shape of a raw i18n key (dotted identifier, no spaces) and that each error carries `details.field` for form-level highlighting.

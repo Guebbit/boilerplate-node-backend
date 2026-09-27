@@ -1,7 +1,7 @@
 ---
 source: tests/integration/security-middleware.test.ts
-sha256: e57efe4017d9209e6343b1dc83219b952a1bd290eb4003fb2b28cf5f6aac020e
-generated_at: 2026-09-23T20:07:21.284432+00:00
+sha256: 35982e2e2b2aa580f42599098c398e43dece7dbf5ddd0666b121901c1ede3d6d
+generated_at: 2026-09-27T15:58:52.233504+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies two security behaviors of `src/app/security.ts` which no other test asserts: that helmet headers reach an ordinary (non-static) API response, and that a spoofed `X-Forwarded-For` header cannot obtain a fresh rate-limit bucket when `NODE_TRUST_PROXY_HOPS=0` (the deployment default). Both tests drive the fully-wired real app.
+Integration tests that verify `src/app/security.ts` behaves correctly end-to-end: helmet security headers appear on ordinary API responses, a forged `X-Forwarded-For` cannot create a fresh rate-limit bucket when `NODE_TRUST_PROXY_HOPS=0`, static assets are exempt from the global rate limiter and carry correct cache-control values, and CORS is configured to let browsers send `Idempotency-Key` and read rate-limit headers.
 
 ## Key elements
 
-- **`describe('helmet')`** — One test (`GET /`) that asserts three specific header properties: `x-content-type-options: nosniff` is present, `x-frame-options` is set, and `x-powered-by` is absent. Deliberately a targeted subset, not a full header-set snapshot.
-- **`describe('trust proxy')`** — One test that sends two `GET /` requests with different forged `X-Forwarded-For` values and asserts `RateLimit-Remaining` drops by exactly 1 between them, proving both requests consumed the same bucket keyed on the real socket address.
-- **`api()` helper** (imported from `@tests/http`) — Constructs a Supertest instance against the real app; the sole HTTP entry point in this file.
+- **`remainingOf(response)`** — Extracts the `remaining` value from the draft-7 `RateLimit` header (`limit=…, remaining=…`).
+- **`describe('helmet')`** — Single test: asserts `X-Content-Type-Options: nosniff`, presence of `X-Frame-Options`, and absence of `X-Powered-By` on a plain `GET /` JSON response. Deliberately avoids a full header-set assertion to stay resilient across helmet upgrades.
+- **`describe('trust proxy')`** — Sends two `GET /` requests with different forged `X-Forwarded-For` values and asserts `RateLimit-Remaining` drops by exactly 1, proving both hit the same bucket keyed on the real socket IP.
+- **`describe('static files')`** — Creates a sandbox directory under `NODE_PUBLIC_PATH`, then verifies: (a) static assets don't consume the caller's rate-limit budget, (b) digested images get `max-age=31536000, immutable`, (c) fixed-name assets (favicon) get `max-age=86400`.
+- **`describe('CORS')`** — Preflight (`OPTIONS /account/login`) confirms `Idempotency-Key` is in `Access-Control-Allow-Headers`; a subsequent `GET /` confirms `Retry-After` and `RateLimit-Policy` are in `Access-Control-Expose-Headers`.
 
 ## Relationships
 
-- **`tests/support/http.ts`** — Provides the `api()` function used by both tests to issue requests against the fully-wired Express app. No other file is imported directly; `src/app/security.ts` is the unit under test but is exercised only through the running app, not by importing it.
-- Contrast with `identity-rate-limit.test.ts` — that file tests `express-rate-limit`'s own bucket arithmetic via a trivial harness; this file tests that `src/app/security.ts` actually applied `NODE_TRUST_PROXY_HOPS` to the real middleware chain.
-- Contrast with `upload-security.test.ts` — that file covers the static-asset path (configured by `src/app/static-assets.ts` with a relaxed `Cross-Origin-Resource-Policy`); this file covers the ordinary JSON API path.
+- **`tests/support/http.ts`** — Provides the `api()` helper (imported via `@tests/http`). Every request in this file goes through it to drive the fully-wired real Express app, as opposed to a synthetic harness.
 
 ## Notes
 
-- The helmet test intentionally checks only a few headers to avoid brittleness across helmet upgrades; it is not a regression snapshot.
-- The trust-proxy test relies on `NODE_TRUST_PROXY_HOPS=0` being the default in both test and production environments. A synthetic Express app with `trust proxy` unset would pass this test even if `src/app/security.ts` never ran, which is why the test drives the real app rather than building a minimal harness.
-- The `RateLimit-Remaining` header is the observation point: the global `rateLimiter` (referenced at `src/app/security.ts:207`) is mounted ahead of every route and keys its bucket on `request.ip` with no per-route override, so the header is a direct read of what Express resolved `request.ip` to.
+- The trust-proxy test **must** use the real app, not a narrower Express harness. A synthetic app with Express's default `trust proxy` unset would pass regardless of whether `src/app/security.ts` actually applied `NODE_TRUST_PROXY_HOPS`. The point is proving this repo's own wiring.
+- `NODE_TRUST_PROXY_HOPS=0` is both the test and production default; it means Express never reads `X-Forwarded-For`.
+- The helmet test targets the **JSON API path** only. The static-asset path (with a relaxed `Cross-Origin-Resource-Policy`) is covered separately in `upload-security.test.ts`.
+- The static-files sandbox (`tests/support/file-sandbox.ts`) is created in `beforeAll` and removed in `afterAll`; it is empty until these tests populate it.
+- See `docs/tools/security.md` for the broader security model these tests pin down.
