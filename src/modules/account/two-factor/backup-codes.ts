@@ -48,9 +48,7 @@ export const hashBackupCode = (code: string, salt: string): string =>
  * form; `hashBackupCodes` under a fresh {@link generateBackupCodeSalt} is what persists.
  */
 export const generateBackupCodes = (): string[] =>
-    Array.from({ length: BACKUP_CODE_COUNT }, () =>
-        randomBytes(BACKUP_CODE_BYTES).toString('hex')
-    );
+    Array.from({ length: BACKUP_CODE_COUNT }, () => randomBytes(BACKUP_CODE_BYTES).toString('hex'));
 
 /** Hashes every code of one freshly minted set under the same salt — see {@link hashBackupCode}. */
 export const hashBackupCodes = (codes: readonly string[], salt: string): string[] =>

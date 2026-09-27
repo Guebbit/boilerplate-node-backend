@@ -159,8 +159,9 @@ describe('webhook signatures', () => {
     it('accepts an uppercase-hex signature identically to the lowercase form', () => {
         const header = signWebhookPayload(body);
         // Only the digest half of `v1=<hex>` is upper-cased — `t=` stays a plain decimal timestamp.
-        const uppercased = header.replace(/v1=([0-9a-f]+)/u, (_match, hex: string) =>
-            `v1=${hex.toUpperCase()}`
+        const uppercased = header.replace(
+            /v1=([0-9a-f]+)/u,
+            (_match, hex: string) => `v1=${hex.toUpperCase()}`
         );
 
         expect(() => verifyWebhookSignature(body, uppercased)).not.toThrow();

@@ -55,8 +55,8 @@ filter that matches nothing. Failing closed is a property of the shape, not of t
 
 ## Secrets stored with the data
 
-| Attack              | How it works                            | This boilerplate                                                                                                                                                                                       |
-| ------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Attack              | How it works                            | This boilerplate                                                                                                                                                                                                           |
+| ------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Secrets in database | third-party tokens in plaintext columns | Refresh, reset and delete-confirmation tokens are stored as sha256 digests; backup codes as salted `scrypt`; a TOTP device secret is AES-256-GCM under a versioned key — `users/model.ts#hashToken`, `account/two-factor/` |
 
 ## Related
