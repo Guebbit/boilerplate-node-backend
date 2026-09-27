@@ -10,6 +10,7 @@
         "error-tenant-unknown": "The tenant {{tenant}} is not one this deployment serves — see GET /locales/tenants.",
         "error-language-is-fallback": "The fallback locale {{tag}} cannot be deactivated or deleted — every translatable entity's source row lives there.",
         "error-entity-type-unknown": "{{entityType}} is not a registered translatable entity type.",
+        "error-entity-not-found": "No {{entityType}} exists with id {{entityId}}.",
         "error-translation-locale-unknown": "The locale {{locale}} does not exist.",
         "error-translation-locale-inactive": "The locale {{locale}} is not active.",
         "error-translation-field-unknown": "{{field}} is not a translatable field of {{entityType}}.",

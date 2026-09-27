@@ -42,6 +42,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
         counters: { onHand: number; reserved: number }
     ) => Promise<void>;
     writeTranslatedFields: (productId: string, fields: Record<string, string>) => Promise<void>;
+    existsById: (productId: string) => Promise<boolean>;
     writebackImage: ImageWriteback;
 } = {
     ...createRepository<ProductDocument, Product>(productModel, {
@@ -153,6 +154,17 @@ export const productRepository: Repository<ProductDocument, Product> & {
             .updateOne({ _id: toObjectId(productId) }, { $set: fields }, { timestamps: false })
             .exec()
             .then(() => undefined),
+
+    /**
+     * The `locales` translation port's existence check — the `exists` half of `TranslatableTarget`
+     * in `kernel/registry.ts`, checked before any translation write. `async` because `toObjectId`
+     * throws on a malformed id — see {@link findByIdScoped}.
+     *
+     * @param productId - the product's id
+     * @returns whether a product with this id exists, regardless of scope
+     */
+    existsById: async (productId: string) =>
+        (await productModel.exists({ _id: toObjectId(productId) }).exec()) !== null,
 
     /**
      * The image digest pipeline's writeback for the `products` collection — see `ImageTarget` in

@@ -43,6 +43,10 @@ export interface EntityTranslationsResult {
 const entityTypeUnknown = (entityType: string): ResponseReject =>
     generateReject(422, [t('locales.error-entity-type-unknown', { entityType })]);
 
+/** An `entityId` the module named by `entityType` does not currently hold. */
+const entityNotFound = (entityType: string, entityId: string): ResponseReject =>
+    generateReject(404, [t('locales.error-entity-not-found', { entityType, entityId })]);
+
 /**
  * One `VALIDATION_ERROR` rejection for a single locale slot — the shape every {@link planSlot}
  * refusal shares, differing only in the message key, its interpolation params, and which
@@ -264,6 +268,10 @@ export const writeForPort = (
  * time it gets here: PATCH's payload is the caller's body verbatim, PUT's has an explicit `null`
  * added for every stored locale the caller's body left out.
  *
+ * Answers the contract's 404 when `target.exists` says the entity is gone — checked AFTER the
+ * batch validates but BEFORE anything writes, so neither a missing entity nor a malformed id ever
+ * leaves an orphan translation row behind.
+ *
  * @param context - caller context for the `ADMIN_TRANSLATION_UPDATED` audit emit and
  *   `translatedBy`; omitted by tests that call this as a plain helper — no context means no emit
  */
@@ -276,6 +284,10 @@ const applyTranslationBatch = async (
     const plan = await planTranslationWrites(entityType, payload);
     if (isRejection(plan)) return plan;
     const { target, fallbackLocale, planned } = plan;
+
+    // Checked before any write: a missing (or malformed) entity id must never leave orphan
+    // translation rows behind for a document that was never there to translate.
+    if (!(await target.exists(entityId))) return entityNotFound(entityType, entityId);
 
     const translatedBy = context?.caller.id ?? undefined;
     // Writes the rows AND the derived index column — see `writePlannedTranslations`'s docblock.

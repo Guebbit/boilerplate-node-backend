@@ -59,6 +59,7 @@ describe('resolveTranslatables', () => {
                         collection: 'products',
                         fields: ['title'],
                         cacheTag: 'products',
+                        exists: jest.fn(),
                         writeDerived: writeProduct
                     }
                 },
@@ -71,6 +72,7 @@ describe('resolveTranslatables', () => {
                         collection: 'pages',
                         fields: ['body'],
                         cacheTag: 'pages',
+                        exists: jest.fn(),
                         writeDerived: writePage
                     }
                 },
@@ -83,12 +85,14 @@ describe('resolveTranslatables', () => {
                 collection: 'products',
                 fields: ['title'],
                 cacheTag: 'products',
+                exists: expect.any(Function),
                 writeDerived: writeProduct
             },
             page: {
                 collection: 'pages',
                 fields: ['body'],
                 cacheTag: 'pages',
+                exists: expect.any(Function),
                 writeDerived: writePage
             }
         });
@@ -103,6 +107,7 @@ describe('resolveTranslatables', () => {
             collection: 'products',
             fields: ['title'],
             cacheTag: 'products',
+            exists: jest.fn(),
             writeDerived: jest.fn()
         };
         const modules: AppModule[] = [

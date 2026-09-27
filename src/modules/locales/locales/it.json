@@ -10,6 +10,7 @@
         "error-tenant-unknown": "Il tenant {{tenant}} non è tra quelli serviti da questa installazione — vedi GET /locales/tenants.",
         "error-language-is-fallback": "La lingua di fallback {{tag}} non può essere disattivata né eliminata: è dove vive la riga sorgente di ogni entità traducibile.",
         "error-entity-type-unknown": "{{entityType}} non è un tipo di entità traducibile registrato.",
+        "error-entity-not-found": "Nessun {{entityType}} esiste con id {{entityId}}.",
         "error-translation-locale-unknown": "La lingua {{locale}} non esiste.",
         "error-translation-locale-inactive": "La lingua {{locale}} non è attiva.",
         "error-translation-field-unknown": "{{field}} non è un campo traducibile di {{entityType}}.",

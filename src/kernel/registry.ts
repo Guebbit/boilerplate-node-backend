@@ -114,6 +114,18 @@ export interface TranslatableTarget {
     collection: string;
 
     /**
+     * Whether `entityId` currently names a real document on {@link collection} — checked before
+     * ANY translation write, so a missing entity answers the contract's declared 404 instead of
+     * writing orphan translation rows first and only discovering the miss when {@link writeDerived}
+     * runs. Supplied by the OWNING module, same reasoning as {@link writeDerived}: `locales` cannot
+     * resolve the target's Mongoose model by collection name to check this itself (SD-09).
+     *
+     * @param entityId - the id exactly as it arrived on the request path — may be malformed
+     * @returns whether a document with this id exists
+     */
+    exists: (entityId: string) => Promise<boolean>;
+
+    /**
      * Field names on this collection a translation row may carry. Validated against at write
      * time — a translation naming a field this list does not declare is a 422, not a silently
      * accepted key nothing ever reads.

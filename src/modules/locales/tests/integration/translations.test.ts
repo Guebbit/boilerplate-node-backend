@@ -6,6 +6,7 @@
  * with.
  */
 
+import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct, readProduct } from '@modules/products/tests/factories';
 import {
@@ -93,6 +94,34 @@ describe('upsertEntityTranslations', () => {
         );
 
         expect(result.status).toBe(422);
+    });
+
+    it('refuses a nonexistent entity with 404, writing no rows', async () => {
+        const missingId = new Types.ObjectId().toString();
+
+        const result = await localeService.upsertEntityTranslations('product', missingId, {
+            [FALLBACK]: { fields: { title: 'Bed' } }
+        });
+
+        expect(result.status).toBe(404);
+        const rows = await translationRepository.findEntityTranslations('product', missingId);
+        expect(rows).toEqual([]);
+    });
+
+    it('rejects rather than writing anything for a malformed entity id', async () => {
+        // `target.exists` throws the same `BSONError` `toObjectId` always does on a bad id
+        // (`create-repository.ts`) — the controller's `catchAs` turns it into a 422. The property
+        // under test here is the ORDER: the rejection must land before any row is written.
+        const malformedId = 'not-an-object-id';
+
+        await expect(
+            localeService.upsertEntityTranslations('product', malformedId, {
+                [FALLBACK]: { fields: { title: 'Bed' } }
+            })
+        ).rejects.toThrow();
+
+        const rows = await translationRepository.findEntityTranslations('product', malformedId);
+        expect(rows).toEqual([]);
     });
 
     it('refuses a locale that is not active', async () => {
@@ -303,5 +332,19 @@ describe('upsertEntityTranslations', () => {
 
         const [row] = await translationRepository.findEntityTranslations('product', id);
         expect(row.origin).toBe('human');
+    });
+});
+
+describe('replaceEntityTranslations', () => {
+    it('refuses a nonexistent entity with 404, writing no rows', async () => {
+        const missingId = new Types.ObjectId().toString();
+
+        const result = await localeService.replaceEntityTranslations('product', missingId, {
+            [FALLBACK]: { fields: { title: 'Bed' } }
+        });
+
+        expect(result.status).toBe(404);
+        const rows = await translationRepository.findEntityTranslations('product', missingId);
+        expect(rows).toEqual([]);
     });
 });
