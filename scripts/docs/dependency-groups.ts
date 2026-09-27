@@ -127,8 +127,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
             '@swc/core',
             '@swc/jest',
             'supertest',
-            'mongodb-memory-server',
-            'jest-openapi'
+            'mongodb-memory-server'
         ]
     },
     {
