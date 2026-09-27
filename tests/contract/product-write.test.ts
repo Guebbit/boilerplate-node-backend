@@ -1,9 +1,8 @@
 /**
  * The multilingual product write surface, over real HTTP: `POST /products`, `PATCH /products/{id}`
  * and `GET /products/{id}/admin`. Cross-module by nature, sitting at the top level rather than
- * under `src/modules/products/tests/` for the same reason `translation-cascades.test.ts` does:
- * driving these routes needs a real `locales` collection row, which `products` may only reach
- * through the `kernel/translation.ts` port.
+ * under `src/modules/products/tests/`: driving these routes needs a real `locales` collection
+ * row, which `products` may only reach through the `kernel/translation.ts` port.
  */
 
 import '@tests/contract';

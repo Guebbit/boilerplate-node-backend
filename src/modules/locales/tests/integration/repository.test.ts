@@ -401,6 +401,69 @@ describe('the translations collection', () => {
     });
 });
 
+describe('removeEntityTranslations', () => {
+    // `entityType: 'widget'` on purpose — no `widget` module exists. `removeEntityTranslations`
+    // is the kernel translation port's `removeAll`, called by ANY module's hard delete
+    // (`products/service.ts`'s `remove`, today); this collection's own cascade guarantee holds
+    // for a caller this module has never heard of, which a real product would not prove.
+    it('removes every locale row for the entity, and reports how many', async () => {
+        await translationRepository.upsertEntityLocale(
+            'widget',
+            'w1',
+            FALLBACK,
+            { title: 'Gadget' },
+            'human',
+            undefined,
+            undefined
+        );
+        await translationRepository.upsertEntityLocale(
+            'widget',
+            'w1',
+            'it',
+            { title: 'Gadgetto' },
+            'human',
+            undefined,
+            'digest'
+        );
+
+        const removed = await translationRepository.removeEntityTranslations('widget', 'w1');
+
+        expect(removed).toBe(2);
+        expect(await translationRepository.findEntityTranslations('widget', 'w1')).toEqual([]);
+    });
+
+    it('leaves another entity’s rows standing', async () => {
+        await translationRepository.upsertEntityLocale(
+            'widget',
+            'w1',
+            FALLBACK,
+            { title: 'Doomed' },
+            'human',
+            undefined,
+            undefined
+        );
+        await translationRepository.upsertEntityLocale(
+            'widget',
+            'w2',
+            FALLBACK,
+            { title: 'Survivor' },
+            'human',
+            undefined,
+            undefined
+        );
+
+        await translationRepository.removeEntityTranslations('widget', 'w1');
+
+        expect(await translationRepository.findEntityTranslations('widget', 'w2')).toHaveLength(1);
+    });
+
+    it('reports zero for an entity with no rows', async () => {
+        await expect(translationRepository.removeEntityTranslations('widget', 'none')).resolves.toBe(
+            0
+        );
+    });
+});
+
 describe('readMessages', () => {
     it('builds the tree a client downloads, and states the revision it belongs to', async () => {
         await givenLanguage('es', {

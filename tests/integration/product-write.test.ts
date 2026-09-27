@@ -1,9 +1,12 @@
 /**
  * `productService.writeCreate` / `writeUpdate` — the multilingual product write surface, driven
- * against a real database and a real translation port. Cross-module by nature, the same way
- * `translation-cascades.test.ts` is: the trigger is `productService.write*`, the rows and the
- * locale check live in `locales/repository.ts`, so this lives at the top level rather than under
- * either module's own `tests/`.
+ * against a real database and a real translation port. Cross-module by nature: the trigger is
+ * `productService.write*`, the rows and the locale check live in `locales/repository.ts`, so this
+ * lives at the top level rather than under either module's own `tests/`.
+ *
+ * The WIRING half (a write calls the port) and the STORAGE half (the port's own collection holds
+ * up) are each proven with a fake stand-in for the other module instead — `products`' and
+ * `locales`' own `tests/integration/` — so only this real-database, both-sides case lives here.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
