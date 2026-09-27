@@ -26,12 +26,12 @@ import { contactRequestEmail } from '@modules/feedback/emails';
 import {
     orderConfirmEmail,
     paymentSucceededEmail,
-    invoiceDocument,
     bankTransferInstructionsEmail,
     bankTransferExpiredEmail,
     cardHoldExpiredEmail,
     productUnavailableCancelledEmail
 } from '@modules/orders/emails';
+import { buildDocumentView } from '@modules/invoicing/emails';
 import { shipmentShippedEmail } from '@modules/delivery/emails';
 import { subscriptionDisabledEmail } from '@modules/webhooks';
 
@@ -169,10 +169,22 @@ describe('email templates render in every supported locale', () => {
      */
     it.each(listSupportedLocales())('renders the invoice document in %s', async (locale) => {
         const html = await ejs.renderFile(
-            path.resolve('shared', 'templates', 'documents', 'orders.invoice.ejs'),
-            invoiceDocument(locale, {
-                id: 'an-order-id',
-                items: [{ product: { title: 'A product', price: 10, taxRate: 0.22 }, quantity: 2 }]
+            path.resolve('shared', 'templates', 'documents', 'invoicing.document.ejs'),
+            buildDocumentView(locale, {
+                kind: 'invoice',
+                number: '2026-000001',
+                issuedAt: new Date('2026-01-15'),
+                currency: 'EUR',
+                locale,
+                seller: {},
+                lines: [{ title: 'A product', quantity: 2, unitPrice: 10, taxRate: 0.22 }],
+                netTotal: 16.39,
+                taxTotal: 3.61,
+                shippingNetAmount: 0,
+                shippingTaxAmount: 0,
+                taxSummary: [{ rate: 0.22, netAmount: 16.39, taxAmount: 3.61, grossAmount: 20 }],
+                shippingByRate: [],
+                grandTotal: 20
             })
         );
 

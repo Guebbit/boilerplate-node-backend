@@ -1,32 +1,25 @@
 /**
  * @module
- * The order confirmation email and the invoice document. Both render MONEY and a line per item,
- * making them the two places where a formatting slip is read as a billing error by the person
- * least able to check it. `orderTotal` itself is covered by `totals.property.test.ts`; here it's
- * only asserted that this builder USES it rather than recomputing a second, drifting answer.
+ * The order confirmation email. Renders MONEY and a line per item, the place where a formatting
+ * slip is read as a billing error by the person least able to check it. `orderTotal` itself is
+ * covered by `totals.property.test.ts`; here it's only asserted that this builder USES it rather
+ * than recomputing a second, drifting answer.
+ *
+ * The invoice document itself is `invoicing`'s own — see
+ * `src/modules/invoicing/tests/unit/emails.test.ts`.
  */
-import {
-    orderConfirmEmail,
-    invoiceDocument,
-    type OrderLines,
-    type InvoiceOrder,
-    type InvoiceVatBlock
-} from '@modules/orders/emails';
-import { orderTotal, orderTaxBreakdown } from '@modules/orders/domain';
+import { orderConfirmEmail, type OrderLines } from '@modules/orders/emails';
+import { orderTotal } from '@modules/orders/domain';
 import { orderFrontendLink } from '@modules/orders/config';
 
 const NAME = 'Ada Lovelace';
 const ORDER_ID = 'order-1';
 
-/**
- * Two lines with different titles, quantities and prices, so no field can stand in for another.
- * Typed `InvoiceOrder` (a `taxRate` on each line) rather than the looser `OrderLines`, since this
- * fixture is reused by both the confirmation-email tests below and the invoice tests further down.
- */
-const ORDER: InvoiceOrder = {
+/** Two lines with different titles, quantities and prices, so no field can stand in for another. */
+const ORDER: OrderLines = {
     items: [
-        { quantity: 2, product: { title: 'Grain-Free Dog Food', price: 100, taxRate: 0.22 } },
-        { quantity: 3, product: { title: 'Memory Foam Dog Bed', price: 7.5, taxRate: 0.22 } }
+        { quantity: 2, product: { title: 'Grain-Free Dog Food', price: 100 } },
+        { quantity: 3, product: { title: 'Memory Foam Dog Bed', price: 7.5 } }
     ],
     shippingCost: 4.25
 };
@@ -162,179 +155,5 @@ describe('orderConfirmEmail', () => {
         expect(`${subject} ${body}`).toMatch(/awaiting payment/i);
         expect(subject).not.toMatch(/confirmed/i);
         expect(body).not.toMatch(/confirmed/i);
-    });
-});
-
-describe('invoiceDocument', () => {
-    it('renders one line per item, with each item"s own values', () => {
-        const lines = invoiceDocument('en', { ...ORDER, id: 'abc123' }).lines as string[];
-
-        expect(lines).toHaveLength(2);
-        expect(lines[0]).toContain('Grain-Free Dog Food');
-        expect(lines[1]).toContain('Memory Foam Dog Bed');
-    });
-
-    it('names the order in its title metadata', () => {
-        // The invoice is a document a customer keeps and a support agent is asked about; it has
-        // to say which order it is for.
-        const meta = invoiceDocument('en', { ...ORDER, id: 'abc123' }).pageMetaTitle as string;
-
-        expect(meta).toContain('abc123');
-    });
-
-    it('renders an id that is not a string without emitting [object Object]', () => {
-        // `id` is `unknown` because an order's id arrives as an ObjectId here as often as a
-        // string. `String(...)` is what makes that safe, and dropping it is invisible until a
-        // customer receives an invoice titled `[object Object]`.
-        const meta = invoiceDocument('en', {
-            ...ORDER,
-            id: { toString: () => '65dc8a99604c307b702b5ccc' }
-        }).pageMetaTitle as string;
-
-        expect(meta).toContain('65dc8a99604c307b702b5ccc');
-        expect(meta).not.toContain('[object Object]');
-    });
-
-    it('carries the locale and translates by it', () => {
-        const english = invoiceDocument('en', { ...ORDER, id: 'x' });
-        const italian = invoiceDocument('it', { ...ORDER, id: 'x' });
-
-        expect(english.locale).toBe('en');
-        expect(italian.locale).toBe('it');
-        expect(italian.title).not.toBe(english.title);
-    });
-
-    it("never re-resolves a line's title through `t()`, even one that collides with a real key", () => {
-        const collidingTitle = 'orders.invoice.title';
-        const order = {
-            items: [{ quantity: 1, product: { title: collidingTitle, price: 1, taxRate: 0.22 } }],
-            id: 'x'
-        };
-
-        const english = invoiceDocument('en', order).lines as string[];
-        const italian = invoiceDocument('it', order).lines as string[];
-
-        expect(english[0]).toContain(collidingTitle);
-        expect(italian[0]).toContain(collidingTitle);
-    });
-
-    /*
-     * SH2 = C: the PDF is a receipt, not a tax invoice — no national e-invoicing system is
-     * involved, so it must never claim to be one, in either language.
-     */
-    it('titles itself an order confirmation / receipt, never an invoice', () => {
-        const english = invoiceDocument('en', { ...ORDER, id: 'x' }).title as string;
-        const italian = invoiceDocument('it', { ...ORDER, id: 'x' }).title as string;
-
-        expect(english).not.toMatch(/invoice/i);
-        expect(italian).not.toMatch(/fattura/i);
-    });
-
-    it('carries a disclaimer that this is not a tax invoice', () => {
-        const english = invoiceDocument('en', { ...ORDER, id: 'x' }).disclaimer as string;
-        const italian = invoiceDocument('it', { ...ORDER, id: 'x' }).disclaimer as string;
-
-        expect(english).toMatch(/not a tax invoice/i);
-        expect(italian).toMatch(/non è una fattura fiscale/i);
-    });
-});
-
-/** A single-line, single-rate order for the VAT-block tests — anything simpler risks masking a bug. */
-const VAT_ORDER = {
-    items: [{ quantity: 5, product: { title: 'Widget', price: 19.99, taxRate: 0.22 } }],
-    id: 'vat-order-1'
-};
-
-/** Matches `shopCurrency()`'s default (`.env-example`'s `NODE_DEFAULT_CURRENCY`, unset here). */
-const eur = new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR' });
-
-describe('invoiceDocument — the VAT block', () => {
-    it('computes grossAmount from netAmount + taxAmount, never from a float multiply of price × quantity', () => {
-        // 19.99 × 5 is 99.94999999999999 in IEEE 754, not 99.95 —
-        // if this ever re-derives from the price again instead of the already-reconciled pair
-        // beside it, a rate where that drift survives rounding would print a wrong total.
-        const vat = invoiceDocument('en', VAT_ORDER).vat as InvoiceVatBlock;
-        const breakdown = orderTaxBreakdown(VAT_ORDER);
-
-        expect(vat.rows[0].grossAmount).toBe(
-            eur.format(breakdown.lines[0].netAmount + breakdown.lines[0].taxAmount)
-        );
-    });
-
-    it('formats every amount through Intl.NumberFormat, not a raw number', () => {
-        const vat = invoiceDocument('en', VAT_ORDER).vat as InvoiceVatBlock;
-
-        for (const value of [
-            vat.rows[0].unitPrice,
-            vat.rows[0].netAmount,
-            vat.rows[0].taxAmount,
-            vat.rows[0].grossAmount,
-            vat.netTotal,
-            vat.taxTotal,
-            vat.grandTotal
-        ])
-            expect(typeof value).toBe('string');
-    });
-
-    it('prints the grand total as the amount actually paid — every line plus shipping', () => {
-        const withShipping = { ...VAT_ORDER, shippingCost: 4.5 };
-        const vat = invoiceDocument('en', withShipping).vat as InvoiceVatBlock;
-
-        expect(vat.grandTotal).toBe(eur.format(orderTotal(withShipping)));
-    });
-
-    it('has no shipping table when the order chose no delivery method', () => {
-        const vat = invoiceDocument('en', VAT_ORDER).vat as InvoiceVatBlock;
-
-        expect(vat.shipping).toBeUndefined();
-    });
-
-    it('has one shipping row per rate shipping was apportioned to and taxed at', () => {
-        const order = {
-            items: [
-                { quantity: 1, product: { title: 'A', price: 10, taxRate: 0.22 } },
-                { quantity: 1, product: { title: 'B', price: 10, taxRate: 0.1 } }
-            ],
-            shippingCost: 10,
-            id: 'x'
-        };
-        const vat = invoiceDocument('en', order).vat as InvoiceVatBlock;
-
-        expect(vat.shipping?.rows).toHaveLength(2);
-        expect(vat.shipping?.rows.map((row) => row.taxRateLabel).toSorted()).toEqual([
-            '10%',
-            '22%'
-        ]);
-    });
-
-    it('has one summary row per distinct rate, combining goods and shipping', () => {
-        const order = {
-            items: [
-                { quantity: 1, product: { title: 'A', price: 10, taxRate: 0.22 } },
-                { quantity: 1, product: { title: 'B', price: 10, taxRate: 0.22 } }
-            ],
-            id: 'x'
-        };
-        const vat = invoiceDocument('en', order).vat as InvoiceVatBlock;
-
-        // Two lines at the SAME rate merge into one summary row, unlike the per-line table above.
-        expect(vat.summaryRows).toHaveLength(1);
-    });
-
-    // FA37/E6: the invoice is the ORDER's own record — it must print what the shop actually
-    // charged, not whatever `NODE_DEFAULT_CURRENCY` happens to say by the time someone opens it.
-    it("formats every amount in the order's own frozen currency, not the live shop default", () => {
-        const gbp = new Intl.NumberFormat('en', { style: 'currency', currency: 'GBP' });
-        const order = { ...VAT_ORDER, currency: 'GBP' };
-
-        const vat = invoiceDocument('en', order).vat as InvoiceVatBlock;
-
-        expect(vat.grandTotal).toBe(gbp.format(orderTotal(order)));
-    });
-
-    it('falls back to the live shop currency for an order that predates the field', () => {
-        const vat = invoiceDocument('en', VAT_ORDER).vat as InvoiceVatBlock;
-
-        expect(vat.grandTotal).toBe(eur.format(orderTotal(VAT_ORDER)));
     });
 });

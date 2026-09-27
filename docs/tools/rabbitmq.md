@@ -60,10 +60,10 @@ Controllers using it:
 
 ### Invoice PDF rendering — NOT a queue
 
-`GET /orders/:id/invoice` renders the PDF synchronously, on the request thread —
-`src/modules/orders/services/invoice.ts`'s `renderInvoicePdf` — and streams the bytes back. There
-is no queue, no worker and no stored status: the invoice is a view of the order, rendered when
-someone asks for it, never a durable artefact this broker moves around.
+`GET /orders/:id/invoice` and `/credit-note` render synchronously, on the request thread —
+`src/modules/invoicing/services/render.ts` — and stream the bytes back. There is no queue, no
+worker and no stored status: the frozen `Invoice`/`CreditNote` row is the system of record, and
+each request just renders it again — see [invoicing](../modules/invoicing.md).
 
 ## Job lifecycle
 

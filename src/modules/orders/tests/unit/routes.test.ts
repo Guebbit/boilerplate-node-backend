@@ -6,6 +6,9 @@
  * /:id/cancel` is deliberately NOT admin-guarded, since a customer cancelling their own order is
  * the one write they may make; its safety comes from the service's scoped conditional write, not
  * the router.
+ *
+ * `GET /:id/invoice` and `/credit-note` are NOT here — `invoicing` mounts its own router at this
+ * same `/orders` basePath, see `src/modules/invoicing/tests/unit/routes.test.ts`.
  */
 import { routeTable, routeSignatures, guardsOn, chainOf } from '@tests/routes';
 
@@ -30,7 +33,6 @@ describe('order routes — what is mounted', () => {
             'DELETE /',
             'POST /:id/cancel',
             'POST /:id/status-override',
-            'GET /:id/invoice',
             'GET /:id',
             'PUT /:id',
             'PATCH /:id',
@@ -40,14 +42,11 @@ describe('order routes — what is mounted', () => {
         ]);
     });
 
-    it('declares /search and the two-segment reads before /:id', () => {
+    it('declares /search before /:id', () => {
         const paths = routeTable(router).map(({ path }) => path);
 
-        // `/search` genuinely shadows: one segment, same verb family. `/:id/invoice` is two
-        // segments so it cannot be shadowed by `/:id` — it is ordered for readability, and
-        // asserting it keeps the file's stated convention from decaying silently.
+        // `/search` genuinely shadows: one segment, same verb family.
         expect(paths.indexOf('/search')).toBeLessThan(paths.indexOf('/:id'));
-        expect(paths.indexOf('/:id/invoice')).toBeLessThan(paths.indexOf('/:id'));
     });
 });
 
@@ -59,7 +58,6 @@ describe('order routes — authorization', () => {
         'DELETE /',
         'POST /:id/cancel',
         'POST /:id/status-override',
-        'GET /:id/invoice',
         'GET /:id',
         'PUT /:id',
         'PATCH /:id',
@@ -91,7 +89,7 @@ describe('order routes — authorization', () => {
         expect(guardsOn(router, 'POST /:id/cancel')).not.toContain('requirePermissionGuard');
     });
 
-    it.each(['POST /search', 'GET /', 'GET /:id', 'GET /:id/invoice'])(
+    it.each(['POST /search', 'GET /', 'GET /:id'])(
         '%s is readable by any logged-in caller, scoped in the service',
         (signature) => {
             expect(guardsOn(router, signature)).not.toContain('requirePermissionGuard');
@@ -117,14 +115,6 @@ describe('order routes — caching', () => {
         expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
     });
 
-    // Not cached — every hit renders fresh, and there is no separate ready/pending status left to
-    // invalidate a cache entry over.
-    it('GET /:id/invoice carries no setCache', () => {
-        expect(
-            chainOf(router, 'GET /:id/invoice').some((entry) => entry.startsWith('setCache'))
-        ).toBe(false);
-    });
-
     it('invalidates products wherever stock moves', () => {
         // Creating an order and cancelling one both change availability, so both must clear the
         // catalogue.
@@ -136,20 +126,5 @@ describe('order routes — caching', () => {
         expect(chainOf(router, 'DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
         expect(chainOf(router, 'DELETE /:id')).not.toContain('routeFlag(hardDelete)');
         expect(chainOf(router, 'DELETE /')).not.toContain('routeFlag(hardDelete)');
-    });
-});
-
-describe('order routes — invoice rate limiting', () => {
-    it('budgets the invoice render, and only it', () => {
-        // Every hit spawns a Chromium launch — see `rate-limits.ts`'s own docs for why this
-        // route alone needs a budget the rest of the router does not.
-        const unexpected = routeSignatures(router).filter(
-            (signature) =>
-                signature !== 'GET /:id/invoice' &&
-                chainOf(router, signature).includes('orders-invoice')
-        );
-
-        expect(chainOf(router, 'GET /:id/invoice')).toContain('orders-invoice');
-        expect(unexpected).toEqual([]);
     });
 });

@@ -20,12 +20,14 @@ flowchart LR
     cart["cart"]
     delivery["delivery"]
     inventory["inventory"]
+    invoicing["invoicing"]
     payments["payments"]
     products["products"]
     users["users"]
 
     cart --> orders
     delivery --> orders
+    invoicing --> orders
     payments --> orders
     orders --> inventory
     orders --> products
@@ -33,6 +35,7 @@ flowchart LR
     inventory -. "inventory.reservation_expired" .-> orders
     products -. "product.deactivated" .-> orders
     products -. "product.deleted" .-> orders
+    orders -. "order.status_changed" .-> invoicing
     orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
 
@@ -41,7 +44,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class delivery,inventory,payments,users supporting;
+    class delivery,inventory,invoicing,payments,users supporting;
     class orders centre;
 ```
 
@@ -95,14 +98,13 @@ Three scheduled jobs, all nightly via `docker/crontab`: `npm run reap:orders` re
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
 `NODE_ORDER_PII_RETENTION_DAYS` has passed from the order's OWN `createdAt`, counted from account
 erasure or that date, whichever is later — amounts, line items and dates survive, only the person
-is gone. An admin CAN still hard-delete an order outright, paid included (`services/crud.ts`'s
-`remove`) — this reap is what protects the far more common case, the order nobody ever deletes.
-`npm run sweep:order-effects` re-announces
-`order.refund_owed` for a refund the event bus's one delivery attempt did not carry through. `npm run
-reap:invoices` sweeps the invoice CACHE — an orphaned file with no order left to name it (the
-hard-delete path cleans up its own file; this is the backstop for a row removed any other way),
-and any file past its TTL. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full
-mechanism.
+is gone. An admin can still hard-delete an UNPAID order outright (`services/crud.ts`'s `remove`) —
+this reap is what protects the far more common case, the order nobody ever deletes. A paid order
+refuses a hard delete instead, once and for as long as `paidAt` is stamped: `invoicing` freezes a
+legal document from that same transition, and it must survive the order it was issued for. `npm run
+sweep:order-effects` re-announces `order.refund_owed` for a refund the event bus's one delivery
+attempt did not carry through. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the
+full mechanism.
 
 ## Creating an order
 
@@ -195,39 +197,35 @@ order out of `pending` — the same commit a normal payment confirmation trigger
 reservation sweep would eventually release units an override already shipped, since the sweep only
 knows the order is still `pending` from its own point of view.
 
-## The receipt
+## The invoice
 
-`GET /orders/{id}/invoice` is a PDF order confirmation / receipt, not a tax invoice — Italy (the
-demo's default `NODE_SHOP_COUNTRY`) needs no invoice at all for an ordinary online sale unless the
-customer asks for one through the national e-invoicing system, which this application does not
-integrate with. `orderNumber` is Shopify's `#1001`, not a fiscal sequence: gaps are fine (E13), and
-the PDF says as much on its own face. A real `invoicing` module — a frozen document, its own
-numbering, credit notes — is a candidate future module, not this one.
+`orderNumber` is Shopify's `#1001`, not a fiscal sequence: gaps are fine (E13), and it names this
+order alone. The actual tax invoice — a frozen document, its own numbering series, credit notes on
+refund — is [`invoicing`](./invoicing.md), a module this one has no import of and no wiring for:
+`invoicing` depends on `orders`, never the reverse, and reaches its own `GET /orders/{id}/invoice`
+and `GET /orders/{id}/credit-note` by sharing this module's `/orders` basePath (the same pattern
+[`addresses`](./addresses.md) uses on `/account`).
 
-It is a VIEW of the order, rendered when someone asks for it — never a durable artefact with a
-status of its own. It renders synchronously, on the request thread (`services/invoice.ts`'s
-`renderInvoicePdf`), and streams the bytes straight back: `200` every time the order exists and the
-caller may see it, `404` otherwise. No queue, no `pending`/`ready` status, no polling.
+The only trace of that relationship here is `paidAt` (`model.ts`), stamped by `services/status.ts`'s
+`markPaid` in the same write that moves an order to `paid` — the proxy `services/scope.ts`'s
+`actions.invoice` flag and `services/crud.ts`'s hard-delete refusal both read, so neither has to ask
+`invoicing` whether the freeze actually landed.
 
-The placed-order email sends immediately, linking to the order's page — it is never held for the
-render, and there is nothing left to wait on there either.
-
-See [RabbitMQ](../tools/rabbitmq.md#invoice-pdf-rendering-not-a-queue).
+The placed-order email carries no invoice: nothing is invoiced yet at that point, whatever the
+payment method — see [`invoicing`](./invoicing.md) for what changed and why.
 
 ## Configuration
 
-| Variable                         | Default                | Meaning                                                                                                                                                                                          |
-| -------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NODE_SHOP_COUNTRY`              | —                      | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it                          |
-| `NODE_SHIP_TO_COUNTRIES`         | `NODE_SHOP_COUNTRY`    | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
-| `NODE_SHOP_VAT_NUMBER`           | —                      | The shop's VAT id, printed on the invoice. Optional — a deployment below the registration threshold prints no VAT number rather than a fake one                                                  |
-| `NODE_SHOP_LEGAL_NAME`           | —                      | The shop's legal name, printed on the invoice — distinct from any storefront brand name                                                                                                          |
-| `NODE_INVOICE_CACHE_PATH`        | `tmp/storage/invoices` | Where a rendered invoice may be cached. Outside `NODE_PUBLIC_PATH` on purpose — an invoice is personal and financial data, reachable only through the authenticated download route               |
-| `NODE_INVOICE_CACHE_TTL_MINUTES` | `5`                    | How long a rendered invoice stays cached. `0` under demo mode or `NODE_ENV=test`, whatever the env says — see [Invoice PDF rendering](../tools/rabbitmq.md#invoice-pdf-rendering-not-a-queue)    |
+| Variable                 | Default             | Meaning                                                                                                                                                                                          |
+| ------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_SHOP_COUNTRY`      | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it                          |
+| `NODE_SHIP_TO_COUNTRIES` | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
 
-The first three are read fresh per call (`config.ts`), so a correction needs no restart; an empty
-string reads as unset, never as a blank invoice row. The VAT RATES charged against an order line
-are a different thing with a different owner — see [products](./products.md#configuration); this
+The seller's own legal identity for invoicing (VAT number, legal name, street address) is
+[`invoicing`'s own configuration](./invoicing.md#configuration), not this module's — `orders` keeps
+only `NODE_SHOP_COUNTRY`, since it is also the checkout/VAT-jurisdiction fact above. Both are read
+fresh per call (`config.ts`), so a correction needs no restart. The VAT RATES charged against an
+order line are a different thing with a different owner — see [products](./products.md#configuration); this
 module only freezes onto the order the rate `products` hands it at checkout.
 
 ## Related pages

@@ -11,8 +11,9 @@
  * (`services/crud.ts`, `services/cancel.ts`) for a buyer's stored locale — the confirmation and
  * expiry emails this module sends, never a live account's authorization state.
  *
- * No queue consumer of its own: the invoice is rendered on demand, on whichever request thread
- * asks for it — see `services/invoice.ts`.
+ * No queue consumer of its own. `invoicing` depends on this module (for the VAT breakdown and an
+ * auth-scoped order read) and reacts to `ORDER_STATUS_CHANGED` on its own — this module has no
+ * import of, or wiring for, `invoicing` at all. See `docs/modules/invoicing.md`.
  */
 
 import path from 'node:path';
@@ -23,7 +24,6 @@ import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { PRODUCT_DELETED, PRODUCT_DEACTIVATED } from '@modules/products';
 import { router } from './routes';
 import { cancelById, cancelPendingOrdersHolding, detachUserId, findOwnOrders } from './services';
-import { ordersRateLimits } from './rate-limits';
 // Also registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
 // ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
 // module's own barrel — see CLAUDE.md's module-barrel rule.
@@ -117,8 +117,6 @@ export default {
         );
     },
     locales: path.join(__dirname, 'locales'),
-    // See `./rate-limits.ts` — every invoice render spawns a Chromium launch.
-    rateLimits: ordersRateLimits,
     /**
      * The order states the storefront and the admin both have a screen for.
      *

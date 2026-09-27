@@ -127,7 +127,14 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
                 order.status,
                 isDigitalOnlyOrder(order.items),
                 authContext
-            )
+            ),
+            // `paidAt` is stamped in the SAME write that moves an order to `paid`
+            // (`repository.ts#markPaid`), so it is a same-module, no-dependency proxy for "an
+            // invoice was issued" — `invoicing` freezes one from the very same transition, in its
+            // own event listener. `GET /orders/{id}/invoice` (owned by `invoicing`) still checks
+            // for real and 404s on the rare gap this flag cannot see — the same "gaps are
+            // acceptable" policy `orderNumber` already lives under.
+            invoice: Boolean(order.paidAt)
         }
     }));
 };

@@ -21,6 +21,7 @@ import cart from './modules/cart/module';
 import delivery from './modules/delivery/module';
 import feedback from './modules/feedback/module';
 import inventory from './modules/inventory/module';
+import invoicing from './modules/invoicing/module';
 import locales from './modules/locales/module';
 import observability from './modules/observability/module';
 import orders from './modules/orders/module';
@@ -42,6 +43,7 @@ export const enabledModules: AppModule[] = [
     delivery,
     feedback,
     inventory,
+    invoicing,
     locales,
     observability,
     orders,
@@ -85,6 +87,7 @@ export type ModuleName =
     | 'delivery'
     | 'feedback'
     | 'inventory'
+    | 'invoicing'
     | 'locales'
     | 'observability'
     | 'orders'

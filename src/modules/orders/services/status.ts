@@ -44,11 +44,23 @@ const markSystemMove = (orderId: string, to: OrderStatus): Promise<OrderDocument
 /**
  * Report that a payment settled. `payments`' `settlePayment` is the one caller — see that
  * module's docblock for why there is only one place money is reconciled.
+ *
+ * Its own conditional write (`repository.ts`'s `markPaid`), not {@link markSystemMove}: `paid` is
+ * the one destination that stamps an extra fact (`paidAt`) in the same write, which
+ * `markSystemMove`'s shared `$set` has no slot for. `invoicing` subscribes to the
+ * `ORDER_STATUS_CHANGED` event emitted below to issue the order's invoice — see
+ * `docs/modules/invoicing.md`.
  * @param orderId - the order the payment was for
  * @returns the order as it now stands, or `null` if it could no longer be paid
  */
-export const markPaid = (orderId: string): Promise<OrderDocument | null> =>
-    markSystemMove(orderId, OrderStatus.paid);
+export const markPaid = (orderId: string): Promise<OrderDocument | null> => {
+    const [from] = statusesLeadingTo(OrderStatus.paid, 'system');
+    return orderRepository.markPaid(orderId, from).then((updated) => {
+        if (updated)
+            void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from, to: OrderStatus.paid });
+        return updated;
+    });
+};
 
 /**
  * Report that fulfilment started on a paid order. `delivery`'s own door for this move —

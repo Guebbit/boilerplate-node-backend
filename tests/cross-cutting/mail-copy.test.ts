@@ -17,8 +17,8 @@
  *
  * ── Scope ─────────────────────────────────────────────────────────────────────────────────────
  * `shared/templates/emails/*.ejs` and the `EmailContent`-returning builders in each module's
- * `emails.ts` — mail only. `shared/templates/documents/orders.invoice.ejs` is the same mechanism
- * (EJS, `orders/emails.ts`'s `invoiceDocument`) rendering a PDF rather than a mail,
+ * `emails.ts` — mail only. `shared/templates/documents/invoicing.document.ejs` is the same
+ * mechanism (EJS, `invoicing/emails.ts`'s `buildDocumentView`) rendering a PDF rather than a mail,
  * found on the way and deliberately left out: it is not an `EmailContent`, so it does not fit this
  * file's builder-matching without a second shape, and it is one template. Worth its own pass, not
  * a reason to widen this one.

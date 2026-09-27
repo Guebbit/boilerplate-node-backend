@@ -21,6 +21,21 @@ declare module '@kernel/events' {
          * each attempt is its own fact, same as `paymentsAuditActions.PAYMENT_FAILED`.
          */
         'payment.failed': { paymentId: string; orderId: string };
+
+        /**
+         * A `succeeded` payment moved to `refunded` — emitted from `./services/refunds.ts`'s
+         * `markRefunded`, on the same at-most-once write, whether an operator asked for it
+         * (`refundByOrder`) or the automatic `ORDER_REFUND_OWED` compensation did. `invoicing` is
+         * the one listener today, issuing the order's credit note from this fact — see
+         * `docs/modules/invoicing.md`. Absent for a hand-paid refund left for an operator
+         * (`leaveForOperator`): the payment never actually moved to `refunded` there.
+         */
+        'payment.refunded': {
+            paymentId: string;
+            orderId: string;
+            amount: number;
+            currency: string;
+        };
     }
 }
 
@@ -29,3 +44,6 @@ export const PAYMENT_SUCCEEDED = 'payment.succeeded';
 
 /** See `DomainEventMap['payment.failed']` above. */
 export const PAYMENT_FAILED = 'payment.failed';
+
+/** See `DomainEventMap['payment.refunded']` above. */
+export const PAYMENT_REFUNDED = 'payment.refunded';

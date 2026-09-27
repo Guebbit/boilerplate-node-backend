@@ -1,25 +1,24 @@
 /**
  * @module
- * PDF invoice controller. Renders synchronously on the request thread — `orderService.
- * renderInvoicePdf` — and streams the bytes back: `200` every time an order exists and the caller
- * may see it, `404` otherwise, `500` on a render failure (an `INSTALL_CHROMIUM=false` deployment,
- * for one). No `202`, no polling: the invoice is a view of the order, not a durable artefact with
- * a status of its own.
+ * PDF invoice controller. Renders synchronously on the request thread and streams the bytes back:
+ * `200` once the order has been invoiced, `404` for an order that has none yet (never paid, or a
+ * gap in the "gaps are acceptable" policy `orderNumber` already lives under) or does not exist at
+ * all, `500` on a render failure (an `INSTALL_CHROMIUM=false` deployment, for one).
  */
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { orderService } from '../services';
+import { orderService } from '@modules/orders';
+import { invoicingService } from '../services';
 import { rejectResponse } from '@infrastructure/http/response';
 import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
 
-/**
- * GET /orders/:id/invoice — PDF invoice for the order; non-admin callers see only their own.
- */
+/** GET /orders/:id/invoice — the invoice PDF; non-admin callers see only their own order's. */
 export const getOrderInvoice = (request: Request<{ id?: string }>, response: Response) => {
-    // 404 on an unusable id, checked before the query for the reason `get-order-item.ts` spells
-    // out: a malformed id would otherwise reject as a 422, not the 404 a lookup by id should give.
+    // 404 on an unusable id, checked before the query for the reason `get-order-item.ts` (orders)
+    // spells out: a malformed id would otherwise reject as a 422, not the 404 a lookup by id should
+    // give.
     if (!isValidObjectId(request.params.id)) {
         rejectResponse(response, 404, [t('orders.not-found')]);
         return;
@@ -33,17 +32,15 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
                 return undefined;
             }
 
-            const orderId = String(order._id);
-
-            return orderService.renderInvoicePdf(orderId).then((pdf) => {
-                // Hard-deleted between the read above and the render — vanishingly unlikely, but
-                // the render's own `findByIdRaw` is a second, independent lookup that can miss.
-                if (!pdf) {
-                    rejectResponse(response, 404, [t('orders.not-found')]);
+            return invoicingService.findInvoiceForOrder(String(order._id)).then((invoice) => {
+                if (!invoice) {
+                    rejectResponse(response, 404, [
+                        { code: 'ORDER_INVOICE_NOT_ISSUED', message: t('invoicing.not-issued') }
+                    ]);
                     return undefined;
                 }
 
-                return (
+                return invoicingService.renderInvoicePdf(invoice).then((pdf) =>
                     response
                         .status(200)
                         .setHeader('Content-Type', 'application/pdf')
@@ -51,7 +48,7 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
                         // decides what to do with it — download, or a same-tab preview.
                         .setHeader(
                             'Content-Disposition',
-                            `inline; filename="invoice-${order.orderNumber ?? orderId}.pdf"`
+                            `inline; filename="invoice-${invoice.number}.pdf"`
                         )
                         // Personal and financial data — never a shared/CDN cache, and never the
                         // browser's own disk cache either.

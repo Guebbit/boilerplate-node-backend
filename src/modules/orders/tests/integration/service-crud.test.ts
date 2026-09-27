@@ -42,17 +42,6 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 }));
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
-/**
- * `renderInvoicePdf` is mocked for the same reason `cart`'s own checkout suite mocks it: `create`'s
- * placed-order email attaches the invoice, and a real render is a Chromium launch this suite has no
- * business paying for on every order it creates. Everything else in the module stays real.
- */
-const renderInvoicePdfMock = jest.fn().mockResolvedValue(undefined);
-jest.mock('../../services/invoice', () => ({
-    ...jest.requireActual('../../services/invoice'),
-    renderInvoicePdf: (orderId: string) => renderInvoicePdfMock(orderId)
-}));
-
 /** Waits out `create`'s fire-and-forget placed-order email, same convention as `cart`'s checkout suite. */
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -100,7 +89,7 @@ describe('create', () => {
         expect(asSuccess(result).data.email).toBe(user.email);
     });
 
-    it('assigns each new order its own sequential invoice number', async () => {
+    it('assigns each new order its own sequential order number', async () => {
         // Mid-year and frozen: two orders straddling a real UTC New Year would get numbers from
         // two different yearly sequences, both correctly, and fail the "one apart" check below.
         freezeDate(Date.UTC(2026, 5, 15, 12));
@@ -462,6 +451,36 @@ describe('remove — the hard path and the shelf', () => {
 
         expect(await inventoryService.isStockBoundToOrder(String(order._id))).toBe(false);
         await expect(orderRepository.count({})).resolves.toBe(0);
+    });
+
+    /**
+     * `invoicing` freezes an invoice from the same `paidAt` write — a legal document must survive
+     * the order it was issued for, so once `paidAt` is stamped the row is never destroyed, only
+     * ever soft-deleted.
+     */
+    it('refuses a hard delete once the order has been paid (and therefore invoiced)', async () => {
+        const { order } = await seedOrder();
+        order.paidAt = new Date();
+        await orderRepository.save(order);
+
+        const result = await remove(order, true);
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('ORDER_INVOICED');
+        await expect(orderRepository.count({})).resolves.toBe(1);
+    });
+
+    it('still allows a soft delete on a paid order — the row survives either way', async () => {
+        const { order } = await seedOrder();
+        order.paidAt = new Date();
+        await orderRepository.save(order);
+
+        const result = await remove(order, false);
+
+        expect(result.success).toBe(true);
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored!.deletedAt).toBeInstanceOf(Date);
     });
 });
 

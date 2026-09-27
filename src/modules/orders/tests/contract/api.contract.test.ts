@@ -14,18 +14,9 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { orderRepository } from '../../repository';
 
-// No real Chromium in the test environment — same stub `invoice.test.ts` uses. The invoice route
-// renders synchronously now, so a fixed buffer is all any case here needs.
-jest.mock('@infrastructure/adapters/pdf', () => ({
-    renderHtmlToPdf: () => Promise.resolve(Buffer.from('pdf'))
-}));
-
 setupTestDb();
 
-/**
- * An order with real lines to invoice. Scope/permission tests below have nothing to do with the
- * render itself — that has its own coverage in `orders/tests/unit/invoice.test.ts`.
- */
+/** An order with real lines — the download-scope suite is `invoicing`'s own, not this file's. */
 const seedOrderFor = async (user: Parameters<typeof createOrder>[0]) => {
     const product = await createProduct();
     return createOrder(user, [toOrderItem(product, 2)]);
@@ -185,67 +176,6 @@ describe('GET /orders/{id}', () => {
             expect(response.status).toBe(404);
         }
     );
-
-    it.each([['admin'], ['user']] as const)(
-        'the invoice route answers the same 404 for a %s caller',
-        async (role) => {
-            const { bearer } = await authenticateAs(role);
-
-            const response = await api()
-                .get('/orders/not-an-id/invoice')
-                .set('Authorization', bearer);
-
-            expect(response.status).toBe(404);
-        }
-    );
-
-    it("a scoped caller cannot download another customer's invoice — absence, not refusal", async () => {
-        // `getOrderInvoice` scopes through `orderService.callerScope`, the same rule `GET
-        // /orders/:id` enforces. The malformed-id case above 404s before any scope is consulted,
-        // so it cannot prove this — this is the one request that names a REAL order owned by
-        // someone else.
-        const { user: owner } = await authenticateAs('user');
-        const order = await seedOrderFor(owner);
-
-        const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
-        const login = await api()
-            .post('/account/login')
-            .send({ email: stranger.email, password: PLAIN_PASSWORD });
-
-        const response = await api()
-            .get(`/orders/${String(order._id)}/invoice`)
-            .set('Authorization', `Bearer ${login.body.data.token as string}`);
-
-        expect(response.status).toBe(404);
-    });
-
-    it("an unrestricted caller CAN download another customer's invoice — the scope narrows, the route isn't broken", async () => {
-        const { user: owner } = await authenticateAs('user');
-        const order = await seedOrderFor(owner);
-        const { bearer: ownerBearer } = await authenticateAs('admin');
-
-        const response = await api()
-            .get(`/orders/${String(order._id)}/invoice`)
-            .set('Authorization', ownerBearer);
-
-        expect(response.status).toBe(200);
-        expect(response.headers['content-type']).toBe('application/pdf');
-    });
-
-    // No separate ready/pending state to wait on any more — a brand-new order's invoice answers
-    // 200 on the very first request, same as any other.
-    it('answers 200 on the first request — nothing to wait on', async () => {
-        const { user: owner, bearer } = await authenticateAs('user');
-        const product = await createProduct();
-        const order = await createOrder(owner, [toOrderItem(product, 1)]);
-
-        const response = await api()
-            .get(`/orders/${String(order._id)}/invoice`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(200);
-        expect(response.headers['content-type']).toBe('application/pdf');
-    });
 });
 
 describe('POST /orders/{id}/cancel', () => {

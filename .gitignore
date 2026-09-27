@@ -23,13 +23,12 @@ public/images/*
 # `tmp/stryker` (Stryker's own per-run sandbox copy of the whole project), `tmp/test` (per-run
 # in-memory Mongo data directories and file sandboxes — see tests/support/global-setup.ts),
 # `tmp/quarantine` (an upload pending processing — src/infrastructure/adapters/image-store.ts)
-# and `tmp/storage` (the invoice cache and the mail spool — src/modules/orders/config.ts,
-# src/infrastructure/adapters/mail-spool.ts).
+# and `tmp/storage` (the mail spool — src/infrastructure/adapters/mail-spool.ts).
 #
-# `quarantine` and `storage` are the exception to "throwaway": NODE_QUARANTINE_PATH,
-# NODE_INVOICE_CACHE_PATH and NODE_MAIL_SPOOL_PATH each point a real deployment at a durable
-# mounted volume instead — the unset default living under `tmp/` is a local-dev convenience,
-# not the thing carrying the durability guarantee there.
+# `quarantine` and `storage` are the exception to "throwaway": NODE_QUARANTINE_PATH and
+# NODE_MAIL_SPOOL_PATH each point a real deployment at a durable mounted volume instead — the
+# unset default living under `tmp/` is a local-dev convenience, not the thing carrying the
+# durability guarantee there.
 tmp
 
 # Written and removed around one assertion in self-barrel-import.test.ts; ignored so a crash

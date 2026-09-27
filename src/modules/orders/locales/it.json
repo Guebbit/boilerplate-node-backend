@@ -11,32 +11,7 @@
         "override": {
             "not-allowed": "Questa forzatura non può spostare l'ordine a quello stato dalla posizione in cui si trova."
         },
-        "invoice": {
-            "meta-title": "Ricevuta — ordine {{order}}",
-            "title": "Conferma d'ordine / ricevuta",
-            "disclaimer": "Questo documento non è una fattura fiscale.",
-            "line": "{{title}} — {{quantity}} × {{price}}",
-            "number": "Ordine n. {{number}}",
-            "date": "Data: {{date}}",
-            "vat": {
-                "column-description": "Descrizione",
-                "column-quantity": "Qtà",
-                "column-unit-price": "Prezzo unitario (lordo)",
-                "column-net": "Imponibile",
-                "column-rate": "Aliquota IVA",
-                "column-tax": "IVA",
-                "column-gross": "Totale",
-                "shipping-title": "Spedizione",
-                "shipping-row": "Spedizione, tassata al {{rate}}",
-                "summary-title": "Riepilogo IVA",
-                "summary-row": "Tassato al {{rate}}",
-                "net-total": "Totale imponibile",
-                "tax-total": "Totale IVA",
-                "grand-total": "Totale generale",
-                "vat-number": "Partita IVA: {{number}}",
-                "vat-number-missing": "Partita IVA non configurata"
-            }
-        },
+        "invoiced": "Questo ordine ha una fattura emessa e non può più essere eliminato definitivamente.",
         "email-confirm": {
             "subject": "Ordine ricevuto — in attesa di pagamento",
             "meta-title": "Ordine ricevuto",

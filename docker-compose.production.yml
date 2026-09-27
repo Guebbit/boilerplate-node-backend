@@ -242,7 +242,7 @@ services:
 
         volumes:
             - ./docker/crontab:/app/crontab:ro
-            # `reap:quarantine`, `reap:invoices` and `reap:mail-spool` all sweep directories
+            # `reap:quarantine` and `reap:mail-spool` both sweep directories
             # `app` writes, so cron mounts the same two volumes. Without these the jobs would
             # walk an empty read-only path and report nothing to do, every night, silently.
             - storage:/app/tmp/storage

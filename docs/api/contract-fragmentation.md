@@ -149,6 +149,7 @@ paths it owns:
 | `account`       | `/account`        | `Auth` + `Account`     |
 | `addresses`     | `/account`        | `Account` (a subset — see below) |
 | `orders`        | `/orders`         | `Orders`                |
+| `invoicing`     | `/orders`         | `Invoicing` (a subset — see below) |
 | `users`         | `/users`          | `Users`                  |
 | `products`      | `/products`       | `Products`               |
 | `cart`          | `/cart`           | `Cart`                    |
@@ -173,6 +174,10 @@ hit them first:
 - **`account` and `addresses` share a `basePath` and a tag.** Both mount at `/account`, and address
   operations are tagged `Account` too — fragmenting by `basePath` still splits them correctly,
   since `addresses`' own paths (`/account/addresses*`) never overlap `account`'s.
+- **`orders` and `invoicing` share a `basePath`, but NOT a tag.** Both mount at `/orders`;
+  `invoicing`'s two paths (`/orders/{id}/invoice`, `/orders/{id}/credit-note`) are tagged
+  `Invoicing` rather than `Orders`, since download-a-frozen-document is a different concern from
+  the order resource itself — fragmenting by `basePath` still splits the two files correctly.
 - **`access` has no HTTP surface of its own** — headless by design, the one module whose manifest
   declares neither `basePath` nor `routes`. A module with no paths simply contributes no fragment;
   it is not an error, and it is a good sign: that module is consumed through the permission model

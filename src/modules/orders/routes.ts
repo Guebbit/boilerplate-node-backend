@@ -2,7 +2,12 @@
  * @module
  * Express router for order management — authenticated throughout; non-admin callers see only
  * their own orders. Route order matters where a static segment (`/search`) or a longer path
- * (`/:id/invoice`, `/:id/hard`) would otherwise be swallowed by `/:id`.
+ * (`/:id/hard`) would otherwise be swallowed by `/:id`.
+ *
+ * `GET /orders/{id}/invoice` and `/credit-note` are NOT here: `invoicing` mounts its own router at
+ * this same `/orders` basePath (see `docs/theory/layers.md`'s `account`/`addresses` precedent) and
+ * owns both, since it owns what they read. Router order at the app tier still matters between the
+ * two — see `invoicing/module.ts`.
  */
 
 import { Router } from 'express';
@@ -13,13 +18,11 @@ import { replaceOrderById, updateOrderById } from './controllers/update-order';
 import { deleteOrders } from './controllers/delete-orders';
 import { restoreOrders } from './controllers/restore-orders';
 import { getOrderItem } from './controllers/get-order-item';
-import { getOrderInvoice } from './controllers/get-order-invoice';
 import { postCancelOrder } from './controllers/post-cancel-order';
 import { postOrderStatusOverride } from './controllers/post-order-status-override';
 import { invalidateCache, noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
-import { invoiceLimiter } from './rate-limits';
 
 /** Express router for order management (authenticated; non-admin users see only their own orders). */
 export const router = Router();
@@ -28,7 +31,7 @@ export const router = Router();
  * All order routes require authentication — a SESSION, not an api key.
  *
  * `isAuth` rather than `isAuthOrCredential` because this router is mixed: the `orders.any.*`
- * routes are tenant-scoped and would qualify, but `/:id`, `/:id/cancel` and `/:id/invoice` are
+ * routes are tenant-scoped and would qualify, but `/:id` and `/:id/cancel` are
  * the customer's own view and narrow their reads through `orderService.callerScope(authContext)`.
  * A credential reaching those resolves to no `authContext` and would silently widen the scope
  * from "my orders" to whatever the fallback is — exactly the bug the split guard exists to make
@@ -69,11 +72,6 @@ router.post(
     requirePermission('orders.any.override'),
     postOrderStatusOverride
 );
-
-// GET /orders/:id/invoice — must come before /:id. Not cached: every hit renders fresh, and
-// caching PDF bytes as a JSON-cache value would only ever hold the first byte range express
-// actually flushed. `invoiceLimiter` guards the Chromium launch every render spawns.
-router.get('/:id/invoice', invoiceLimiter, getOrderInvoice);
 
 // GET /orders/:id — never Redis-cached, same reasoning as the search routes above: this is the
 // caller's OWN order.

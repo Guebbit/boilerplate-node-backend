@@ -66,6 +66,8 @@ tags:
     - name: Wishlist
     - name: Orders
     - name: Payments
+    - name: Invoicing
+      description: The frozen invoice and credit-note PDFs — issued at payment and at refund, never before.
     - name: Delivery
     - name: Inventory
     - name: Feedback
@@ -1051,7 +1053,7 @@ components:
         OrderActions:
             type: object
             additionalProperties: false
-            required: [transitions, cancel, pay, start, ship, deliver, fulfill, override]
+            required: [transitions, cancel, pay, start, ship, deliver, fulfill, override, invoice]
             description: >-
                 What the requesting caller may do to this order, decided by the server. A client
                 renders its controls from this rather than re-implementing the lifecycle: the rules
@@ -1112,6 +1114,15 @@ components:
                         destination for this caller right now — empty for anyone without
                         `orders.any.override`, or once the order has left every overridable status.
                     example: [processing, shipped, delivered]
+                invoice:
+                    type: boolean
+                    description: >-
+                        Whether `GET /orders/{id}/invoice` would answer a PDF rather than a 404 —
+                        `true` once the order has been invoiced (its `pending → paid` transition
+                        landed), regardless of anything that happened to it since. A gap between
+                        this and the actual download is possible but rare, the same "gaps are
+                        acceptable" policy `orderNumber` already lives under — see
+                        `docs/modules/invoicing.md`.
 
         # One VAT rate's slice of the whole order — goods and shipping folded into the same row,
         # since shipping is taxed at each line's own rate rather than carrying one of its own. See
@@ -1335,7 +1346,8 @@ components:
                     wishlist,
                     sessions,
                     auditLog,
-                    apiKeys
+                    apiKeys,
+                    invoicing
                 ]
             properties:
                 exportedAt:
@@ -1408,6 +1420,22 @@ components:
                     description: Present only when `NODE_EXPORT_INCLUDE_FEEDBACK=true`.
                     items:
                         $ref: '../../src/modules/feedback/openapi.yaml#/components/schemas/ExportFeedbackTicket'
+                # Every invoice/credit note issued for one of this account's OWN orders — collected
+                # by `orderId`, since neither collection is itself keyed by `userId`. Empty arrays,
+                # never absent, for an account with no paid orders yet.
+                invoicing:
+                    type: object
+                    additionalProperties: false
+                    required: [invoices, creditNotes]
+                    properties:
+                        invoices:
+                            type: array
+                            items:
+                                $ref: '../../src/modules/invoicing/openapi.yaml#/components/schemas/ExportInvoiceDocument'
+                        creditNotes:
+                            type: array
+                            items:
+                                $ref: '../../src/modules/invoicing/openapi.yaml#/components/schemas/ExportInvoiceDocument'
 
         AccountExportEnvelope:
             type: object
@@ -1678,8 +1706,13 @@ paths:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1cancel'
     /orders/{id}/status-override:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1status-override'
+
+    # ---------- invoicing ---------- (shares the `/orders` basePath with `orders` above, same as
+    # `addresses` sharing `/account` with `account` — see docs/api/contract-fragmentation.md)
     /orders/{id}/invoice:
-        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1invoice'
+        $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1invoice'
+    /orders/{id}/credit-note:
+        $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1credit-note'
 
     # ---------- payments ----------
     /payments/methods:

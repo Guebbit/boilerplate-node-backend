@@ -1,0 +1,94 @@
+openapi: 3.0.3
+info:
+    title: invoicing — module contract
+    version: '1.0.0'
+
+paths:
+    /orders/{id}/invoice:
+        get:
+            tags: [Invoicing]
+            summary: Download the order's invoice (PDF)
+            description: >-
+                The frozen tax invoice for the order identified by `{id}`, as a binary PDF —
+                numbered and issued once, the moment the order moved `pending → paid`, never
+                re-rendered from today's config. Refuses with `404` for an order that has not been
+                invoiced yet (never paid, or the rare gap the "gaps are acceptable" numbering
+                policy already accepts). The client should stream or save the response with an
+                appropriate `Content-Disposition` header.
+            operationId: getOrderInvoice
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Invoice PDF
+                    content:
+                        application/pdf:
+                            schema:
+                                type: string
+                                format: binary
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # An order that exists but has never been invoiced. `errors[].code` is
+                # `ORDER_INVOICE_NOT_ISSUED`; a genuinely unknown/inaccessible order answers the
+                # same status with `orders.not-found` instead — the client cannot tell the two
+                # apart from the status code alone, by design (see `orders`' own `GET /orders/{id}`).
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `invoicingLimiter` sits in front of this route — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /orders/{id}/credit-note:
+        get:
+            tags: [Invoicing]
+            summary: Download the order's credit note (PDF)
+            description: >-
+                The frozen credit note for the order identified by `{id}`, as a binary PDF —
+                issued once a refund on this order's payment actually lands. Refuses with `404`
+                for an order with no credit note (never refunded, or nothing to reverse in the
+                first place).
+            operationId: getOrderCreditNote
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Credit note PDF
+                    content:
+                        application/pdf:
+                            schema:
+                                type: string
+                                format: binary
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # `errors[].code` is `ORDER_CREDIT_NOTE_NOT_ISSUED` for an order that exists but has
+                # none; `orders.not-found` for a genuinely unknown/inaccessible order.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # `POST /account/export`'s own row for one issued document — never the full frozen
+        # document (lines, seller identity, VAT breakdown): an export answers "what did I buy
+        # invoices for", not a reprint of the PDF itself, which stays behind the download routes.
+        ExportInvoiceDocument:
+            type: object
+            additionalProperties: false
+            required: [orderId, number, issuedAt, currency, grandTotal]
+            properties:
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                number:
+                    type: string
+                issuedAt:
+                    type: string
+                    format: date-time
+                currency:
+                    type: string
+                grandTotal:
+                    type: number
+                    format: double
+                    minimum: 0

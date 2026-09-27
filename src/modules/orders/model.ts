@@ -148,6 +148,20 @@ export interface OrderDocument
      */
     anonymizeAfter?: Date;
     /**
+     * The moment `services/status.ts#markPaid` moved this order to `paid` — written in the SAME
+     * conditional write as the status move, by whichever caller wins that transition, never
+     * recomputed afterwards. Internal only: never on the wire (see `applyOrderTransform`'s `omit`).
+     *
+     * The proxy every cross-module read uses instead of asking `invoicing` whether an invoice
+     * exists — `services/scope.ts#withActions`' `actions.invoice`, and `services/crud.ts#remove`'s
+     * no-hard-delete-once-invoiced guard both read this rather than importing that module, keeping
+     * `orders` free of a dependency on the module that depends on it. An invoice is issued at this
+     * same instant (`invoicing`'s own `ORDER_STATUS_CHANGED` listener), so the two normally agree;
+     * a listener failure is the one documented gap, the same policy `orderNumber` already accepts.
+     * Absent on an order that has never reached `paid`.
+     */
+    paidAt?: Date;
+    /**
      * What the cancel decided but has not yet seen through. Written in the same conditional write
      * that moves the status, so the intent and the decision cannot come apart; emptied once the
      * listener has actually returned. Non-empty means `retryPendingEffects` still owes this order
@@ -345,6 +359,13 @@ export const orderSchema = new Schema<OrderDocument>(
          */
         orderNumber: {
             type: String
+        },
+        /*
+         * Stamped once, in the same conditional write that moves the order to `paid` — see the
+         * interface field's own comment for what reads it.
+         */
+        paidAt: {
+            type: Date
         },
         /*
          * ISO-4217, frozen from `shopCurrency()` at the same moment `orderNumber` is minted —
@@ -561,10 +582,11 @@ export const applyOrderTransform = applySerialization(orderSchema, {
     // `anonymizeAfter` is the reaper's own bookkeeping and `pendingEffects` the cancel sweep's,
     // neither part of the `Order` contract — same reasoning as `users`' `pendingImageKey`/
     // `inactivityWarnedAt`. `statusOverrides` is staff-only history (who overrode the status, and
-    // why) — never the owning customer's to read off their own order. `transferReference` is NOT
+    // why) — never the owning customer's to read off their own order. `paidAt` is internal
+    // bookkeeping too — see the schema field's own comment. `transferReference` is NOT
     // listed here: `omit` runs before `after` below, and `applyTransferInstructions` still needs
     // to read it — it strips the raw field itself, once it no longer does.
-    omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides'],
+    omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides', 'paidAt'],
     after: (serialized) => {
         applyOrderItems(serialized);
         applyOrderTotals(serialized);

@@ -434,7 +434,8 @@ describe('withActions', () => {
             ship: false,
             deliver: false,
             fulfill: false,
-            override: []
+            override: [],
+            invoice: false
         });
     });
 
@@ -454,7 +455,8 @@ describe('withActions', () => {
             ship: false,
             deliver: false,
             fulfill: false,
-            override: []
+            override: [],
+            invoice: false
         });
     });
 

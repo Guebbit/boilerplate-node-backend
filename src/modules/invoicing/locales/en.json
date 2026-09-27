@@ -1,0 +1,34 @@
+{
+    "invoicing": {
+        "not-issued": "This order has not been invoiced yet.",
+        "credit-note-not-issued": "This order has no credit note.",
+        "document": {
+            "meta-title": "Invoice {{number}}",
+            "credit-note-meta-title": "Credit note {{number}}",
+            "title": "Invoice",
+            "credit-note-title": "Credit note",
+            "reversal-notice": "This credit note reverses invoice {{number}}.",
+            "number": "No. {{number}}",
+            "date": "Date: {{date}}",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "vat": {
+                "column-description": "Description",
+                "column-quantity": "Qty",
+                "column-unit-price": "Unit price (gross)",
+                "column-net": "Net",
+                "column-rate": "VAT rate",
+                "column-tax": "VAT",
+                "column-gross": "Total",
+                "shipping-title": "Shipping",
+                "shipping-row": "Shipping, taxed at {{rate}}",
+                "summary-title": "VAT summary",
+                "summary-row": "Taxed at {{rate}}",
+                "net-total": "Net total",
+                "tax-total": "VAT total",
+                "grand-total": "Grand total",
+                "vat-number": "VAT number: {{number}}",
+                "vat-number-missing": "VAT number not configured"
+            }
+        }
+    }
+}

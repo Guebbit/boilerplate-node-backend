@@ -1,12 +1,14 @@
 /**
  * @module
- * The shop's own identity as it appears on an invoice, the bank-transfer payment method's
- * deployment config, the invoice render cache's own two knobs, and this module's one link into the
- * paired frontend (its own order page) — all read per call rather than captured at import, the
- * pattern `inventory/config.ts` sets, so a deployment can correct any of them without a restart.
+ * The shop's own jurisdiction, the bank-transfer payment method's deployment config, and this
+ * module's one link into the paired frontend (its own order page) — all read per call rather than
+ * captured at import, the pattern `inventory/config.ts` sets, so a deployment can correct any of
+ * them without a restart.
  *
- * Owned by `orders` because `./emails`' invoice payload is the only reader of the shop identity.
- * The bank-transfer values are owned here for a different reason: `orders` renders
+ * The shop's own LEGAL identity for invoicing (legal name, VAT number, street address) lives in
+ * `@modules/invoicing`'s own `config.ts`, not here — only `shopCountry` stays, since it is also
+ * the VAT-jurisdiction and ship-to-country assumption `orders`/`cart` enforce at checkout, not an
+ * invoice-only fact. The bank-transfer values are owned here because `orders` renders
  * `transferInstructions` on its own responses AND enforces the open-transfer cap at order
  * creation, so a business rule about how many pending transfers one account may hold belongs with
  * the entity it constrains, not in `infrastructure`. `payments` and `cart` read these through
@@ -19,9 +21,7 @@
  * infrastructure may not know a module by name.
  */
 
-import path from 'node:path';
 import { environmentNumber } from '@infrastructure/runtime/environment';
-import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import { frontendLink } from '@infrastructure/http/frontend-link';
 import type { OrderTransferInstructions } from '@types';
 
@@ -54,27 +54,12 @@ export const shipToCountries = (): string[] => {
 };
 
 /**
- * The shop's VAT identification number, printed on the invoice. Optional: a deployment below the
- * registration threshold, or not yet registered, prints no VAT number rather than a fake one.
- * @returns the configured VAT number, or `undefined`
- */
-export const shopVatNumber = (): string | undefined =>
-    process.env.NODE_SHOP_VAT_NUMBER || undefined;
-
-/**
- * The shop's legal name, printed on the invoice — distinct from any storefront brand name, which
- * this codebase does not otherwise configure.
- * @returns the configured legal name, or `undefined`
- */
-export const shopLegalName = (): string | undefined =>
-    process.env.NODE_SHOP_LEGAL_NAME || undefined;
-
-/**
- * The one ISO-4217 currency this deployment trades in — every invoice amount, and every payment
- * `payments` stamps at intent time. Owned here, not in `payments`, for the same reason the
- * bank-transfer values are: `orders` already renders the invoice this formats, and `payments`
- * already depends on `orders` for `markPaid`. A shop that ever needs a second currency needs a
- * real design, not two modules quietly reading the same env var.
+ * The one ISO-4217 currency this deployment trades in — frozen onto every order, and every
+ * payment `payments` stamps at intent time. Owned here, not in `payments`, for the same reason
+ * the bank-transfer values are: `orders` freezes it first, and `payments` already depends on
+ * `orders` for `markPaid`. `invoicing` freezes the SAME value again from its own event listener,
+ * never re-reading this getter once an invoice is issued. A shop that ever needs a second
+ * currency needs a real design, not several modules quietly reading the same env var.
  * @returns the configured ISO-4217 currency code
  */
 export const shopCurrency = (): string => process.env.NODE_DEFAULT_CURRENCY ?? 'EUR';
@@ -164,31 +149,6 @@ export const transferInstructionsFor = (reference: string): OrderTransferInstruc
         ...(bic ? { bic } : {}),
         reference
     };
-};
-
-/**
- * Where a rendered invoice may be cached, resolved against the WORKING DIRECTORY when relative —
- * same as `NODE_QUARANTINE_PATH`, and, like it, must stay OUTSIDE `NODE_PUBLIC_PATH`: an invoice
- * carries personal and financial data, and must only be reachable through the authenticated
- * `GET /orders/{id}/invoice`, never as a guessable static url. The `tmp/storage/invoices` default
- * is a local-dev convenience only — a real deployment sets `NODE_INVOICE_CACHE_PATH` to its own
- * mounted volume.
- * @returns the cache directory
- */
-export const invoiceCachePath = (): string =>
-    path.resolve(process.env.NODE_INVOICE_CACHE_PATH ?? path.join('tmp', 'storage', 'invoices'));
-
-/**
- * How long a rendered invoice stays cached — long enough to absorb one person's burst (download,
- * view, re-download), never long enough to make the cache a second copy of the order's own
- * retention. `0` under `isDemoMode()` or `NODE_ENV === 'test'`, WHATEVER the env says: a `0` TTL
- * means the render never touches the disk at all, so a demo deployment or a test run never leaves
- * PII behind it did not mean to keep.
- * @returns the TTL, in minutes; `0` means "never cache"
- */
-export const invoiceCacheTtlMinutes = (): number => {
-    if (isDemoMode() || process.env.NODE_ENV === 'test') return 0;
-    return environmentNumber('NODE_INVOICE_CACHE_TTL_MINUTES', 5, 0);
 };
 
 /**

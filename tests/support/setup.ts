@@ -103,10 +103,10 @@ process.env.NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX ??= '1000';
 
 /**
- * `invoiceLimiter` needs the same treatment: keyed on the ACCOUNT, and the orders contract suite
+ * `invoicingLimiter` needs the same treatment: keyed on the ACCOUNT, and a contract suite
  * downloads the same seeded order's invoice repeatedly across many cases.
  */
-process.env.NODE_INVOICE_RATE_LIMIT_MAX ??= '1000';
+process.env.NODE_INVOICING_RATE_LIMIT_MAX ??= '1000';
 
 /**
  * The shared window every limiter above measures against

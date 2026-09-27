@@ -43,6 +43,4 @@
 # docs/modules/inventory-reservations.md.
 # WARNING: owned by the inventory module — delete it when removing the module (docs/modules/inventory.md)
 */5 * * * * cd /app && npm run sweep:reservations
-# WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
-25 2 * * * cd /app && npm run reap:invoices
 30 2 * * * cd /app && npm run reap:mail-spool

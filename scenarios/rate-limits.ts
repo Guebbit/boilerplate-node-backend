@@ -67,7 +67,7 @@ export const RAISED_RATE_LIMIT_ENV_VARS = [
     // top of it. Without these two, the flow throws on its own retried-card case every run.
     'NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX',
     'NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX',
-    'NODE_INVOICE_RATE_LIMIT_MAX',
+    'NODE_INVOICING_RATE_LIMIT_MAX',
     'NODE_API_KEY_RATE_LIMIT_MAX',
     'NODE_PASSWORD_CHECK_RATE_LIMIT_MAX',
     'NODE_MFA_SEND_MAX'

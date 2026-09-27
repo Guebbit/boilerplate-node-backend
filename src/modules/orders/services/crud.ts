@@ -27,7 +27,6 @@ import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
 import { resolveCurrentImages } from './current';
 import { placeOrder } from './place';
-import { deleteCachedInvoice } from './invoice';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import {
     readAll,
@@ -291,12 +290,23 @@ export const updateById = (
  * the units back first: an order holds stock, and destroying the row without releasing it
  * leaves the shelf holding units for nothing, until the TTL sweep records the deletion as an
  * expiry.
+ *
+ * Refused outright once `paidAt` is stamped: `invoicing` freezes an invoice from that exact
+ * transition, and a legal invoice document must survive the order it was issued for — the same
+ * reason `docs/modules/invoicing.md` gives for the module never hard-deleting one of its own.
+ * `paidAt` alone answers this, with no need to ask `invoicing` whether the freeze actually landed
+ * (see `services/scope.ts`'s `invoice` flag): a paid order is worth keeping either way.
  * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
  */
 export const remove = (
     order: OrderDocument,
     hardDelete = false
 ): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> => {
+    if (hardDelete && order.paidAt)
+        return Promise.resolve(
+            generateReject(409, [{ code: 'ORDER_INVOICED', message: t('orders.invoiced') }])
+        );
+
     // HARD delete
     if (hardDelete)
         return (
@@ -307,9 +317,6 @@ export const remove = (
                 // sequence with nothing left to do about it.
                 .releaseForOrder(String(order._id))
                 .then(() => orderRepository.deleteOne(order))
-                // Best-effort, after the row is gone: a cached invoice outlives the document it
-                // was rendered for otherwise — nothing else deletes one.
-                .then(() => deleteCachedInvoice(String(order._id)))
                 .then(() => generateSuccess(undefined, 200, t('orders.hard-deleted')))
         );
 
