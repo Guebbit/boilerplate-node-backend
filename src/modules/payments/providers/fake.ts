@@ -13,7 +13,7 @@
 import { createHmac } from 'node:crypto';
 import { logger } from '@infrastructure/adapters/logger';
 import { verifyWebhookSignature, WebhookRejected } from './webhook-signature';
-import { PaymentInFlightError } from './index';
+import { PaymentInFlightError } from './errors';
 import type { PaymentProvider, ProviderPaymentState, ProviderPaymentStatus } from './index';
 
 /** The webhook body as it arrives — the contract's `PaymentWebhookEvent`, flat. `status` is

@@ -12,6 +12,9 @@
 import { environmentChoice } from '@infrastructure/runtime/environment';
 import { fakePaymentProvider } from './fake';
 
+/** Re-exported from `./errors` — see there for why it isn't declared in this file. */
+export { PaymentInFlightError } from './errors';
+
 export {
     signWebhookPayload,
     verifyWebhookSignature,
@@ -41,18 +44,6 @@ export interface PreparedPayment {
      * persisted, logged or audited: it authorises completing this payment.
      */
     clientSecret?: string;
-}
-
-/**
- * A provider's refusal to cancel: the intent already succeeded or is still mid-flight there, so
- * there is nothing open left to close — only a refund could move that money back. Thrown by
- * {@link PaymentProvider.cancel}, and nowhere else in this port.
- */
-export class PaymentInFlightError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'PaymentInFlightError';
-    }
 }
 
 /** A webhook delivery, normalised — the provider owns the translation from its own event shape. */
