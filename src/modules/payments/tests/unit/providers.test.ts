@@ -12,6 +12,7 @@ import {
     FAKE_SUCCESS_METHOD,
     fakePaymentProvider
 } from '../../providers/fake';
+import { PaymentInFlightError } from '../../providers';
 import {
     signWebhookPayload,
     verifyWebhookSignature,
@@ -114,6 +115,38 @@ describe('fakePaymentProvider.refund', () => {
         await expect(
             fakePaymentProvider.refund('fake_pi_h', charge, { idempotencyKey: 'refund:payment-1' })
         ).resolves.toBeUndefined();
+    });
+});
+
+describe('fakePaymentProvider.cancel', () => {
+    it('closes an intent nobody ever confirmed', async () => {
+        await expect(
+            fakePaymentProvider.cancel('fake_pi_never_confirmed', { reason: 'abandoned' })
+        ).resolves.toBeUndefined();
+    });
+
+    it('answers a second cancel of the same intent as success, not a repeat refusal', async () => {
+        await fakePaymentProvider.cancel('fake_pi_twice', { reason: 'abandoned' });
+
+        await expect(
+            fakePaymentProvider.cancel('fake_pi_twice', { reason: 'abandoned again' })
+        ).resolves.toBeUndefined();
+    });
+
+    it('lets a declined attempt be cancelled — nothing at the provider is still moving', async () => {
+        await fakePaymentProvider.confirm('fake_pi_declined_cancel', FAKE_DECLINE_METHOD);
+
+        await expect(
+            fakePaymentProvider.cancel('fake_pi_declined_cancel', { reason: 'recorded by hand' })
+        ).resolves.toBeUndefined();
+    });
+
+    it('refuses to cancel a payment that already succeeded at the provider', async () => {
+        await fakePaymentProvider.confirm('fake_pi_succeeded_cancel', FAKE_SUCCESS_METHOD);
+
+        await expect(
+            fakePaymentProvider.cancel('fake_pi_succeeded_cancel', { reason: 'recorded by hand' })
+        ).rejects.toThrow(PaymentInFlightError);
     });
 });
 

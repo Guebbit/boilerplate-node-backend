@@ -43,6 +43,18 @@ export interface PreparedPayment {
     clientSecret?: string;
 }
 
+/**
+ * A provider's refusal to cancel: the intent already succeeded or is still mid-flight there, so
+ * there is nothing open left to close — only a refund could move that money back. Thrown by
+ * {@link PaymentProvider.cancel}, and nowhere else in this port.
+ */
+export class PaymentInFlightError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'PaymentInFlightError';
+    }
+}
+
 /** A webhook delivery, normalised — the provider owns the translation from its own event shape. */
 export interface ProviderWebhookEvent {
     /** The provider's event id, deduplicated so a retried delivery settles nothing twice. */
@@ -113,6 +125,22 @@ export interface PaymentProvider {
         charge: { amount: number; currency: string },
         idempotency: { idempotencyKey: string }
     ): Promise<void>;
+
+    /**
+     * Close an intent that has not succeeded yet — the customer abandoned it, or this application
+     * is recording the money another way instead. The counterpart to `prepare`.
+     *
+     * Idempotent: a provider that already considers the intent cancelled answers success, since
+     * the caller's own goal — nothing left open — already holds. Every reference platform allows
+     * this from any pre-success state; Stripe's own `PaymentIntent`s never expire on their own,
+     * which is why this exists at all.
+     *
+     * @param providerRef - what {@link prepare} returned
+     * @param reason - recorded at the provider, for support and reconciliation
+     * @throws {PaymentInFlightError} when the intent already succeeded or is still mid-flight —
+     *   there is money to refund instead, not an intent left to cancel
+     */
+    cancel(providerRef: string, { reason }: { reason: string }): Promise<void>;
 
     /**
      * Turn a raw webhook delivery into an event this module can act on.

@@ -13,6 +13,7 @@
 import { createHmac } from 'node:crypto';
 import { logger } from '@infrastructure/adapters/logger';
 import { verifyWebhookSignature, WebhookRejected } from './webhook-signature';
+import { PaymentInFlightError } from './index';
 import type { PaymentProvider, ProviderPaymentState, ProviderPaymentStatus } from './index';
 
 /** The webhook body as it arrives — the contract's `PaymentWebhookEvent`, flat. `status` is
@@ -83,6 +84,12 @@ export const FAKE_DECLINE_METHOD = 'pm_card_declined';
  */
 const outcomes = new Map<string, ProviderPaymentState>();
 
+/**
+ * `providerRef`s this stub has already cancelled — so a second `cancel` of the same one is the
+ * provider's own idempotent success, never a repeat refusal.
+ */
+const cancelledIntents = new Set<string>();
+
 /** The last four digits a reference implies: its own trailing digits, or the demo's default. */
 const lastFourOf = (paymentMethodRef: string): string =>
     /(\d{4})$/u.exec(paymentMethodRef)?.[1] ?? '4242';
@@ -152,6 +159,28 @@ export const fakePaymentProvider: PaymentProvider = {
         logger.info(
             `[fake-psp] refund ${charge.amount} ${charge.currency} on ${providerRef} (${idempotencyKey})`
         );
+        return Promise.resolve();
+    },
+
+    cancel: (providerRef, { reason }) => {
+        if (cancelledIntents.has(providerRef)) {
+            // Stryker disable next-line all
+            logger.info(`[fake-psp] cancel ${providerRef} → already cancelled`);
+            return Promise.resolve();
+        }
+        // Only `succeeded` is checked: `confirm` above writes STRAIGHT to the settled outcome
+        // (see its own comment), so `outcomes` never actually rests on `processing` here — a real
+        // provider's own intent can, and must refuse a cancel there too (see the port's own doc).
+        if (outcomes.get(providerRef)?.status === 'succeeded') {
+            // Stryker disable next-line all
+            logger.info(`[fake-psp] cancel ${providerRef} refused → already succeeded`);
+            return Promise.reject(
+                new PaymentInFlightError(`Payment ${providerRef} already succeeded at the provider`)
+            );
+        }
+        cancelledIntents.add(providerRef);
+        // Stryker disable next-line all
+        logger.info(`[fake-psp] cancel ${providerRef} (${reason})`);
         return Promise.resolve();
     },
 

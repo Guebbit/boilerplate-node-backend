@@ -57,14 +57,15 @@ flowchart TD
     class X future;
 ```
 
-| Member                                            | Contract                                                                                                                                                                                                                                                |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                                            | Persisted on every payment document, so a row says who handled it.                                                                                                                                                                                      |
-| `prepare(charge, metadata)`                       | Opens an intent for an amount this application already froze. Returns `providerRef` (persisted) and `clientSecret` (handed to the browser, never stored). **Idempotent on `metadata.paymentId`** — the double-click case must not open a second intent. |
-| `confirm(providerRef, methodRef)`                 | Attaches the browser's tokenised method and asks for the money. Returns one of four states; **a decline is an answer, not an error** — only transport failures throw.                                                                                   |
-| `retrieve(providerRef)`                           | Reads the authoritative state back. The reconciliation path, and what a finished challenge settles against.                                                                                                                                             |
-| `refund(providerRef, charge, { idempotencyKey })` | Idempotent on the key (`refund:{paymentId}`) — a real PSP refunds once per key, so a retry cannot return the money twice. The caller guards its own side by only calling this on a `succeeded` payment, and only once it has confirmed.                 |
-| `parseWebhook(rawBody, signature)`                | Verifies the delivery and translates the provider's own event shape into this module's. Takes the **unparsed** body — a signature covers exact bytes.                                                                                                   |
+| Member                                            | Contract                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                                            | Persisted on every payment document, so a row says who handled it.                                                                                                                                                                                                                                                                 |
+| `prepare(charge, metadata)`                       | Opens an intent for an amount this application already froze. Returns `providerRef` (persisted) and `clientSecret` (handed to the browser, never stored). **Idempotent on `metadata.paymentId`** — the double-click case must not open a second intent.                                                                            |
+| `confirm(providerRef, methodRef)`                 | Attaches the browser's tokenised method and asks for the money. Returns one of four states; **a decline is an answer, not an error** — only transport failures throw.                                                                                                                                                              |
+| `retrieve(providerRef)`                           | Reads the authoritative state back. The reconciliation path, and what a finished challenge settles against.                                                                                                                                                                                                                        |
+| `refund(providerRef, charge, { idempotencyKey })` | Idempotent on the key (`refund:{paymentId}`) — a real PSP refunds once per key, so a retry cannot return the money twice. The caller guards its own side by only calling this on a `succeeded` payment, and only once it has confirmed.                                                                                            |
+| `cancel(providerRef, { reason })`                 | Closes an intent that has not succeeded yet — an abandoned card flow, or money recorded another way instead. **Idempotent**: an already-cancelled intent answers success. Throws `PaymentInFlightError` when the intent already succeeded or is still mid-flight — there is money to refund instead, not an intent left to cancel. |
+| `parseWebhook(rawBody, signature)`                | Verifies the delivery and translates the provider's own event shape into this module's. Takes the **unparsed** body — a signature covers exact bytes.                                                                                                                                                                              |
 
 ::: warning A typo'd env value fails loudly
 `resolvePaymentProvider` throws when the environment names a provider this build does not carry.
@@ -100,6 +101,11 @@ documented value away.
 `retrieve` answers `processing` for a reference it does not know. That is deliberate: `processing`
 is the only status that settles nothing in either direction, and an intent the stub has forgotten
 (a restart, a second worker) must move no money.
+
+`cancel` refuses once a reference has settled to `succeeded` — the only rest state a `confirm` on
+this stub ever writes down, since it settles eagerly rather than staying `processing` at rest. A
+second `cancel` of an already-cancelled reference is success, not a repeat refusal, matching a real
+provider's own idempotent behaviour there.
 
 ::: tip Every call is logged, and that is the point
 A real PSP leaves a trail you can go and read — a dashboard, a webhook log, a statement. This one
