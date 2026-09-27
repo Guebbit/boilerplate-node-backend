@@ -1,4 +1,5 @@
 subdomain: supporting
+group: foundation
 dependsOn:
     - access # rolesOf/assignRole/assignDefaultRole/promoteVerifiedCustomer
     - users # the User document — the repo's one shared kernel

@@ -1,4 +1,5 @@
 subdomain: core
+group: shop
 dependsOn:
     - inventory # a claim on units, released on cancel or RESERVATION_EXPIRED
     - products # a line copies the catalogue row's fields at purchase time

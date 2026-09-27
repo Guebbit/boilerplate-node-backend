@@ -1,3 +1,4 @@
 subdomain: generic
+group: foundation
 dependsOn:
     - audit-logs # GET /observability/audit

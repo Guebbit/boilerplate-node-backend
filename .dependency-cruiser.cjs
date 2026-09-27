@@ -102,6 +102,30 @@ const moduleCouplingRules = MODULE_NAMES.map((name) => {
     };
 });
 
+/**
+ * `{ moduleName: 'foundation' | 'shop' }`, read from each module's own `module.yaml#group` —
+ * DDD-D1. Fails closed the same way `MODULE_EDGES` does: a module folder with no descriptor, or
+ * whose `group` is missing or spelled wrong, throws naming the offending file rather than quietly
+ * leaving the line unenforced for it.
+ */
+const MODULE_GROUP = Object.fromEntries(
+    MODULE_NAMES.map((name) => {
+        const descriptorPath = path.join(MODULES_ROOT, name, 'module.yaml');
+        if (!fs.existsSync(descriptorPath))
+            throw new Error(`${descriptorPath}: missing — every module needs a group`);
+
+        const group = parseYaml(fs.readFileSync(descriptorPath, 'utf8'))?.group;
+        if (group !== 'foundation' && group !== 'shop')
+            throw new Error(`${descriptorPath}: "group" must be "foundation" or "shop"`);
+
+        return [name, group];
+    })
+);
+
+/** Every module in each group, read off `MODULE_GROUP` rather than hand-listed, so relabelling a module in its own `module.yaml` is the only edit this rule ever needs. */
+const FOUNDATION_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'foundation');
+const SHOP_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'shop');
+
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
     forbidden: [
@@ -200,6 +224,31 @@ module.exports = {
         ...moduleCouplingRules,
 
         {
+            name: 'foundation-cannot-reach-shop',
+            comment:
+                "DDD-D1: a `group: foundation` module ships with every deployment; a `group: shop` one is the demo shop's own worked example, deletable on its own (see docs/theory/strategic-ddd.md). The arrow only points one way — a SHOP module reaching another shop module, or a foundation module reaching another foundation module, is untouched by this rule and is `moduleCouplingRules`' concern instead. Relabel the importing module in its own `module.yaml` if the coupling is actually intentional; don't widen this rule to let it through.",
+            severity: 'error',
+            from: {
+                path: `^src/modules/(${FOUNDATION_MODULES.join('|')})/`,
+                // A co-located spec legitimately boots the whole app over supertest (every
+                // contract/integration test does — see `src-cannot-reach-scenarios`'s own
+                // reasoning), which reaches every module including the shop's. That is the test
+                // suite exercising the app, not a foundation module coupling itself to the shop.
+                pathNot: `^src/modules/(${FOUNDATION_MODULES.join('|')})/tests/`
+            },
+            to: { path: `^src/modules/(${SHOP_MODULES.join('|')})/`, reachable: true }
+        },
+
+        {
+            name: 'not-to-unresolvable',
+            comment:
+                'A specifier dependency-cruiser cannot resolve to a file on disk at all — the case `not-to-dev-dep` and `no-non-package-json` above cannot catch, since both need a resolved module to classify. Left unchecked, deleting a module (or a package) can leave a dangling import that still "passes" every other rule here. `tests/load/*.js` is exempted: k6\'s own `k6`/`k6/http` are injected by the k6 binary at run time, not an npm dependency, and dependency-cruiser has no way to see them.',
+            severity: 'error',
+            from: { pathNot: '^tests/load/' },
+            to: { couldNotResolve: true }
+        },
+
+        {
             name: 'no-deprecated-core',
             comment:
                 'A deprecated Node core module keeps working until the major that removes it, at which point the upgrade fails at runtime rather than at install.',
@@ -220,6 +269,21 @@ module.exports = {
          * would pass over nothing.
          */
         tsConfig: { fileName: 'tsconfig.json' },
+
+        /*
+         * `not-to-unresolvable`'s reason to exist: without reading a package's own `exports`
+         * field, dependency-cruiser falls back to a plain file-system lookup for every subpath
+         * import, which fails for any package that only ships its real files under `dist/` (or
+         * similar) and maps the public subpath onto them through `exports` — `altcha-lib`,
+         * `@casl/ability/extra` and `@opentelemetry/semantic-conventions/incubating` all do this,
+         * and so, for its own bare `.` entry, does `@typescript-eslint/utils`. Six false alarms
+         * from `not-to-unresolvable`, cleared by resolving the way Node itself would.
+         * https://github.com/webpack/enhanced-resolve#resolver-options
+         */
+        enhancedResolveOptions: {
+            exportsFields: ['exports'],
+            conditionNames: ['import', 'require', 'node', 'default', 'types']
+        },
 
         /*
          * The RUNTIME graph, deliberately — `tsPreCompilationDeps` is left off.

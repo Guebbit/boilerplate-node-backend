@@ -10,10 +10,17 @@ import { readFileSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 
-/** `dependsOn` and `subdomain`, nothing else — an extra key is a typo or a misunderstanding of what this file is for. */
+/** `dependsOn`, `subdomain` and `group`, nothing else — an extra key is a typo or a misunderstanding of what this file is for. */
 export const moduleDescriptorSchema = z
     .object({
         subdomain: z.enum(['core', 'supporting', 'generic']),
+        /**
+         * Whether this module belongs to every deployment (`foundation`) or is the demo shop's own
+         * worked example (`shop`) — see `docs/theory/strategic-ddd.md`'s foundation/shop section.
+         * `.dependency-cruiser.cjs`'s `foundation-cannot-reach-shop` rule reads this, fail-closed:
+         * the line is enforced, not aspirational.
+         */
+        group: z.enum(['foundation', 'shop']),
         dependsOn: z.array(z.string())
     })
     .strict();

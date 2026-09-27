@@ -1,4 +1,5 @@
 subdomain: core
+group: shop
 dependsOn:
     - addresses # the checkout's delivery address
     - delivery # shipping price, pure functions

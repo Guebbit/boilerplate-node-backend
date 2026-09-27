@@ -1,4 +1,5 @@
 subdomain: supporting
+group: shop
 dependsOn:
     - cart # move-to-cart writes a line
     - products # a saved line is meaningless without one
