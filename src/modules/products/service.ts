@@ -544,6 +544,11 @@ export const writeUpdate = async (
  * `GET /products/{id}/admin` — a product with every language it has a row for, for the editor's
  * form to populate its tabs. Unscoped (the route is admin-only) and never resolved to one
  * language, unlike {@link getById}.
+ *
+ * Without a translation provider (`locales` uninstalled), or with one that simply has no row yet
+ * for this product's fallback language, `readAllTranslations` answers no rows at all — the
+ * fallback tab is built here from the product's own `title`/`description` columns instead, which
+ * are the fallback language's real content either way (see `update`'s `derivedFields`).
  */
 export const getAdmin = (id: string): Promise<ProductAdmin | null> =>
     productRepository.findById(id).then((product) => {
@@ -559,6 +564,13 @@ export const getAdmin = (id: string): Promise<ProductAdmin | null> =>
                     // undefined` isn't, since the index signature already promises every key is a
                     // `string`.
                     ...('description' in fields ? { description: fields.description } : {})
+                };
+
+            const fallbackLocale = getFallbackLocale();
+            if (!(fallbackLocale in translations))
+                translations[fallbackLocale] = {
+                    title: product.title,
+                    ...(product.description ? { description: product.description } : {})
                 };
 
             return { ...toProduct(product), translations };
