@@ -11,32 +11,7 @@
         "override": {
             "not-allowed": "This override cannot move the order to that status from where it is now."
         },
-        "invoice": {
-            "meta-title": "Receipt — order {{order}}",
-            "title": "Order confirmation / receipt",
-            "disclaimer": "This is not a tax invoice.",
-            "line": "{{title}} — {{quantity}} × {{price}}",
-            "number": "Order no. {{number}}",
-            "date": "Date: {{date}}",
-            "vat": {
-                "column-description": "Description",
-                "column-quantity": "Qty",
-                "column-unit-price": "Unit price (gross)",
-                "column-net": "Net",
-                "column-rate": "VAT rate",
-                "column-tax": "VAT",
-                "column-gross": "Total",
-                "shipping-title": "Shipping",
-                "shipping-row": "Shipping, taxed at {{rate}}",
-                "summary-title": "VAT summary",
-                "summary-row": "Taxed at {{rate}}",
-                "net-total": "Net total",
-                "tax-total": "VAT total",
-                "grand-total": "Grand total",
-                "vat-number": "VAT number: {{number}}",
-                "vat-number-missing": "VAT number not configured"
-            }
-        },
+        "invoiced": "This order has an issued invoice and can no longer be permanently deleted.",
         "email-confirm": {
             "subject": "Order received — awaiting payment",
             "meta-title": "Order received",

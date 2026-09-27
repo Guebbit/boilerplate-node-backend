@@ -40,11 +40,15 @@ import { MODULES_ROOT } from '@tests/paths';
  * audit a spent budget, and a burst of solved-but-refused challenges is exactly that shape.
  * `addresses` edits the caller's own book — the same "your own thing" shape as `wishlist` — and
  * was never audited while it still lived inside `account`; nothing about the move changes that.
+ * `invoicing` never receives an actor-driven write at all: both its documents are frozen from a
+ * domain event (`ORDER_STATUS_CHANGED`, `PAYMENT_REFUNDED`), a system reaction to a decision
+ * `orders`/`payments` already audited under their own action — its two routes are GETs.
  */
 const EXPECTED_NON_AUDITING: string[] = [
     'addresses',
     'antibot',
     'audit-logs',
+    'invoicing',
     'observability',
     'wishlist'
 ];

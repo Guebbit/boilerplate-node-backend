@@ -32,6 +32,9 @@ describe('markPaid', () => {
         const updated = await markPaid(String(order._id));
 
         expect(updated?.status).toBe(OrderStatus.paid);
+        // Stamped in the SAME write as the status move — `services/scope.ts`'s `invoice` action
+        // flag and `services/crud.ts`'s hard-delete refusal both read this.
+        expect(updated?.paidAt).toBeInstanceOf(Date);
         await expect(readOrder(String(order._id))).resolves.toHaveProperty('status', 'paid');
         expect(events).toEqual([
             { orderId: String(order._id), from: OrderStatus.pending, to: OrderStatus.paid }

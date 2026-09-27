@@ -45,6 +45,7 @@ export const MODULE_SECTIONS = [
     'wishlist',
     'orders',
     'payments',
+    'invoicing',
     'delivery',
     'inventory',
     'webhooks',

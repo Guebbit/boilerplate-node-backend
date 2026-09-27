@@ -69,7 +69,6 @@
         "access:grant": "tsx scripts/db/grant-access.ts",
         "deploy:setup": "npm run db:sync && npm run access:bootstrap",
         "reap:quarantine": "tsx scripts/ops/reap-quarantine.ts",
-        "reap:invoices": "tsx scripts/ops/reap-invoices.ts",
         "reap:mail-spool": "tsx scripts/ops/reap-mail-spool.ts",
         "reap:inactive-accounts": "tsx scripts/ops/reap-inactive-accounts.ts",
         "reap:orders": "tsx scripts/ops/reap-orders.ts",

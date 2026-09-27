@@ -24,10 +24,12 @@ import {
 import type { PaymentStatus, AuthContext } from '@types';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { emitDomainEvent } from '@kernel/events';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import { paymentsAuditActions } from '../audit';
 import { providerNamed } from '../providers';
 import { paymentRepository } from '../repository';
+import { PAYMENT_REFUNDED } from '../events';
 import type { PaymentDocument } from '../model';
 import { callerScope } from './scope';
 
@@ -92,6 +94,17 @@ const markRefunded = (
                 outcome: auditOutcome,
                 target_type: 'order',
                 target_id: orderId
+            });
+            // Fire-and-forget, same reasoning as `PAYMENT_SUCCEEDED` in `./settlement.ts`:
+            // `invoicing` issues the order's credit note from this fact, and a slow or failing
+            // listener there must not delay this call's own caller. Emitted even for the
+            // corrupted-row case (`auditOutcome: 'failure'`) — `invoicing` cannot see that
+            // distinction and a credit note is owed either way, once the payment reads `refunded`.
+            void emitDomainEvent(PAYMENT_REFUNDED, {
+                paymentId: String(updated._id),
+                orderId,
+                amount: updated.amount,
+                currency: updated.currency
             });
             return updated;
         });

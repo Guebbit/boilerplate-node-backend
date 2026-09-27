@@ -32,7 +32,6 @@ import { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from
 import { markPaid, markProcessing, markShipped, markDelivered, markFulfilled } from './status';
 import { overrideStatus, forceMove } from './override';
 import { unavailableLines } from './availability';
-import { renderInvoicePdf, reapOrphanedInvoices, reapExpiredInvoices } from './invoice';
 
 /*
  * Every operation is published by name as well as through the object below: `module.ts` wires
@@ -66,9 +65,9 @@ export { callerScope, actorOf, ownerScope, withActions } from './scope';
 export { unavailableLines, cancelPendingOrdersHolding, type UnavailableLine } from './availability';
 export { freezeOrderLines } from './snapshot';
 export { allocateOrderNumber } from './order-numbering';
-export { renderInvoicePdf, reapOrphanedInvoices, reapExpiredInvoices } from './invoice';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.
+// `shopCountry` is here for `invoicing`'s own seller-address block — see `docs/modules/invoicing.md`.
 export {
     bankTransferBeneficiary,
     bankTransferBic,
@@ -78,6 +77,7 @@ export {
     bankTransferIbanFriendly,
     bankTransferMaxOpenPerAccount,
     shopCurrency,
+    shopCountry,
     shipToCountries
 } from '../config';
 
@@ -108,9 +108,6 @@ export const orderService = {
     forceMove,
     detachUserId,
     anonymizeDueOrders,
-    renderInvoicePdf,
-    reapOrphanedInvoices,
-    reapExpiredInvoices,
     cancelById,
     retryPendingEffects,
     markRefundOwed,

@@ -1,0 +1,4 @@
+subdomain: supporting
+dependsOn:
+    - orders # the VAT breakdown, the seller's jurisdiction, and an auth-scoped order read
+    - payments # PAYMENT_REFUNDED — the fact a credit note is issued from

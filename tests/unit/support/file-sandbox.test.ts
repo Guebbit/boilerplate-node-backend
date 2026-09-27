@@ -26,7 +26,6 @@ const OWNED_VARIABLES = [
     'NODE_PUBLIC_PATH',
     'NODE_QUARANTINE_PATH',
     'NODE_UPLOAD_STAGING_PATH',
-    'NODE_INVOICE_CACHE_PATH',
     'NODE_MAIL_SPOOL_PATH'
 ] as const;
 
@@ -77,7 +76,6 @@ describe('applyFileSandbox', () => {
         expect(process.env.NODE_PUBLIC_PATH).toBe(path.join(directory, 'public'));
         expect(process.env.NODE_QUARANTINE_PATH).toBe(path.join(directory, 'quarantine'));
         expect(process.env.NODE_UPLOAD_STAGING_PATH).toBe(path.join(directory, 'uploads'));
-        expect(process.env.NODE_INVOICE_CACHE_PATH).toBe(path.join(directory, 'invoices'));
         expect(process.env.NODE_MAIL_SPOOL_PATH).toBe(path.join(directory, 'mail-spool'));
     });
 
@@ -93,13 +91,12 @@ describe('applyFileSandbox', () => {
 });
 
 describe('emptyFileSandbox', () => {
-    it('deletes every file the test file wrote, in all five directories', async () => {
+    it('deletes every file the test file wrote, in all four directories', async () => {
         applyFileSandbox(TEST_PATH);
         const written = [
             path.join(process.env.NODE_PUBLIC_PATH ?? '', 'images', 'thumbs', 'v1', 'a.webp'),
             path.join(process.env.NODE_QUARANTINE_PATH ?? '', 'a.png'),
             path.join(process.env.NODE_UPLOAD_STAGING_PATH ?? '', 'a.png'),
-            path.join(process.env.NODE_INVOICE_CACHE_PATH ?? '', 'a.pdf'),
             path.join(process.env.NODE_MAIL_SPOOL_PATH ?? '', 'a.pdf')
         ];
         await Promise.all(written.map((file) => touch(file)));

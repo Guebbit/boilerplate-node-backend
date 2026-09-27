@@ -30,6 +30,7 @@ import { router as cartRouter } from '@modules/cart/routes';
 import { router as deliveryRouter } from '@modules/delivery/routes';
 import { router as feedbackRouter } from '@modules/feedback/routes';
 import { router as inventoryRouter } from '@modules/inventory/routes';
+import { router as invoicingRouter } from '@modules/invoicing/routes';
 import { router as localesRouter } from '@modules/locales/routes';
 import { router as observabilityRouter } from '@modules/observability/routes';
 import { router as ordersRouter } from '@modules/orders/routes';
@@ -50,6 +51,7 @@ export const ROUTED_MODULES: Record<string, Router> = {
     delivery: deliveryRouter,
     feedback: feedbackRouter,
     inventory: inventoryRouter,
+    invoicing: invoicingRouter,
     locales: localesRouter,
     observability: observabilityRouter,
     orders: ordersRouter,

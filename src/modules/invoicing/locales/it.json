@@ -1,0 +1,34 @@
+{
+    "invoicing": {
+        "not-issued": "Questo ordine non ha ancora una fattura.",
+        "credit-note-not-issued": "Questo ordine non ha una nota di credito.",
+        "document": {
+            "meta-title": "Fattura {{number}}",
+            "credit-note-meta-title": "Nota di credito {{number}}",
+            "title": "Fattura",
+            "credit-note-title": "Nota di credito",
+            "reversal-notice": "Questa nota di credito storna la fattura {{number}}.",
+            "number": "N. {{number}}",
+            "date": "Data: {{date}}",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "vat": {
+                "column-description": "Descrizione",
+                "column-quantity": "Qtà",
+                "column-unit-price": "Prezzo unitario (lordo)",
+                "column-net": "Imponibile",
+                "column-rate": "Aliquota IVA",
+                "column-tax": "IVA",
+                "column-gross": "Totale",
+                "shipping-title": "Spedizione",
+                "shipping-row": "Spedizione, tassata al {{rate}}",
+                "summary-title": "Riepilogo IVA",
+                "summary-row": "Tassato al {{rate}}",
+                "net-total": "Totale imponibile",
+                "tax-total": "Totale IVA",
+                "grand-total": "Totale generale",
+                "vat-number": "Partita IVA: {{number}}",
+                "vat-number-missing": "Partita IVA non configurata"
+            }
+        }
+    }
+}

@@ -21,19 +21,6 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 }));
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
-/*
- * `sendOrderPlacedEmail` renders the invoice before it dispatches — fire-and-forget, deliberately,
- * so a Chromium launch never stretches out checkout's own response. `renderInvoicePdf` is real
- * here otherwise (no Chromium stub configured in this file), so it is mocked to answer "nothing to
- * attach" instead: the enqueue itself, still exactly one microtask chain away from `orderConfirm`
- * returning, is what `flush()` below waits out.
- */
-const renderInvoicePdfMock = jest.fn().mockResolvedValue(undefined);
-jest.mock('../../../orders/services/invoice', () => ({
-    ...jest.requireActual('../../../orders/services/invoice'),
-    renderInvoicePdf: (orderId: string) => renderInvoicePdfMock(orderId)
-}));
-
 /** Waits out `sendOrderPlacedEmail`'s own fire-and-forget chain, so its `enqueueEmail` call has
  * already landed before a case clears or asserts on the mock. */
 const flush = () => new Promise((resolve) => setImmediate(resolve));

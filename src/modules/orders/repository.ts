@@ -162,6 +162,26 @@ const updateStatusIfIn = (
         .exec();
 
 /**
+ * Move an order from `from` to `paid`, stamping `paidAt` in the SAME write — its own function
+ * rather than a call through {@link updateStatusIfIn}, since `paidAt` is a `paid`-only fact and
+ * every other status move has nothing to add to `$set`. The conditional filter is what makes this
+ * at-most-once, same reasoning as {@link updateStatusIfIn}'s own docblock: `paidAt` is stamped
+ * exactly once, by whichever caller's write actually lands.
+ * @param id - the order to move
+ * @param from - the status this move must currently be in — see `domain/lifecycle.ts`'s
+ *   `statusesLeadingTo`
+ * @returns the order as it now stands, or `null` if it was not in `from`
+ */
+const markPaid = (id: string, from: OrderStatus): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
+            { $set: { status: OrderStatus.paid, paidAt: new Date() } },
+            { returnDocument: 'after' }
+        )
+        .exec();
+
+/**
  * Move an order to `to` from any status in `from`, appending one override-history entry in the
  * SAME write — an override's history entry and the status move it describes must never come
  * apart, the same reasoning {@link updateStatusIfIn}'s `effects` parameter already follows for
@@ -456,6 +476,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         scope?: Record<string, unknown>,
         effects?: readonly OrderPendingEffect[]
     ) => Promise<OrderDocument | null>;
+    markPaid: (id: string, from: OrderStatus) => Promise<OrderDocument | null>;
     applyStatusOverride: (
         id: string,
         from: readonly OrderStatus[],
@@ -482,6 +503,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     findByIdScoped,
     ownerScope,
     updateStatusIfIn,
+    markPaid,
     applyStatusOverride,
     findWithPendingEffects,
     findPendingByProductId,
