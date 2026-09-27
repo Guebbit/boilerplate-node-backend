@@ -26,6 +26,7 @@ import { apiKeyRepository } from '../repository';
 import { mintApiKey, displayIdOf } from '../credentials';
 import { apiKeysAuditActions } from '../audit';
 import { ERROR_CODES } from '@api/error-codes';
+import { presentApiKey } from '../presenter';
 
 /**
  * Is `key` something `caller` may hand out on a credential?
@@ -128,9 +129,7 @@ export const mint = (
             });
             return generateSuccess(
                 {
-                    // `.toJSON()` applies `applyApiKeyTransform`'s `_id` → `id` rename and field
-                    // omission: the document is typed as stored, not as the wire shape it produces.
-                    ...(apiKey.toJSON() as ApiKeyCreated),
+                    ...presentApiKey(apiKey),
                     secret: plaintext
                 },
                 201
