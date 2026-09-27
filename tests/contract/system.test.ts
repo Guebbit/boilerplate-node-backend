@@ -17,7 +17,6 @@ describe('GET /', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('ok');
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -29,7 +28,6 @@ describe('GET /readyz', () => {
         const response = await api().get('/readyz');
 
         expect(response.status).toBe(503);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the contract once ready (200, empty body)', async () => {
@@ -38,7 +36,6 @@ describe('GET /readyz', () => {
         const response = await api().get('/readyz');
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -55,6 +52,5 @@ describe('error envelopes', () => {
         const response = await api().post('/account/login').send({ email: 'not-an-email' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });

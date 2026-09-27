@@ -4,12 +4,12 @@
 
 ## Tools
 
-| Tool                                                                                              | Role                                                                                                                            |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/support/contract-data.ts`                                                                  | An in-repo zod v4 AST walker — `validPayload(schema)` / `invalidPayloads(schema)`                                               |
-| zod v4's `_zod.def`                                                                               | Zod's own typed, public introspection surface (not an implementation-detail hack) — see `node_modules/zod/v4/core/schemas.d.ts` |
-| A hand-rolled Mulberry32 PRNG                                                                     | Deterministic, seeded, reproducible fixture values — see "Why not `@faker-js/faker`"                                            |
-| [Jest](https://jestjs.io/) + [jest-openapi](https://github.com/openapi-library/OpenAPIValidators) | Same runner and response-shape matcher as [Contract Testing](./contract-testing.md)                                             |
+| Tool                                                                                   | Role                                                                                                                            |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/support/contract-data.ts`                                                       | An in-repo zod v4 AST walker — `validPayload(schema)` / `invalidPayloads(schema)`                                               |
+| zod v4's `_zod.def`                                                                    | Zod's own typed, public introspection surface (not an implementation-detail hack) — see `node_modules/zod/v4/core/schemas.d.ts` |
+| A hand-rolled Mulberry32 PRNG                                                          | Deterministic, seeded, reproducible fixture values — see "Why not `@faker-js/faker`"                                            |
+| [Jest](https://jestjs.io/) + [orval](https://orval.dev/)'s strict response Zod schemas | Same runner and response-shape judge as [Contract Testing](./contract-testing.md)                                               |
 
 ## Why an in-repo walker instead of a library
 

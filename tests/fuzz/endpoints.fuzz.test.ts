@@ -16,8 +16,9 @@
  *
  * That auto-discovery is the property that made `schemathesis` tempting. It is achieved here in
  * TypeScript instead, by reusing four things this repo already has — the spec itself,
- * `fast-check`, the supertest harness, and `jest-openapi`'s `toSatisfyApiSpec()` — rather than
- * adding a Python toolchain that every copy of this boilerplate would inherit.
+ * `fast-check`, the supertest harness, and the orval-generated, per-status Zod schemas
+ * `tests/support/response-contract.ts` judges a response against — rather than adding a Python
+ * toolchain that every copy of this boilerplate would inherit.
  *
  * ── Three callers, not one ───────────────────────────────────────────────────────────────────
  * Every operation is fuzzed as an admin, as a plain customer, and with no credentials. The admin
@@ -50,9 +51,10 @@
 import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-// Imported for its side effect: it calls `jestOpenAPI(openapi.yaml)`, which is what
-// registers the `toSatisfyApiSpec()` matcher used below.
-import '@tests/contract';
+// Not `@tests/contract`: that file's automatic afterEach would judge these same responses a
+// second time. Calling the judge directly, inside the property function, is what lets `fast-check`
+// shrink a mismatch to the smallest failing input instead of reporting from an unrelated afterEach.
+import { assertResponseMatchesContract } from '@tests/response-contract';
 import {
     listOperations,
     ungeneratablePatterns,
@@ -251,21 +253,16 @@ const fuzzAs = (
 /**
  * The two properties every response must have, whoever asked:
  *   1. no 5xx — a well-formed request must not reach an unhandled throw;
- *   2. it matches the contract, status included — `additionalProperties: false` on the
- *      response schemas makes the shape check real.
+ *   2. it matches the contract, status included — `assertResponseMatchesContract` fails on an
+ *      undocumented status exactly as it does on a documented one whose body doesn't fit.
  *
- * A binary body (the invoice PDF) is held to its status only: `toSatisfyApiSpec()` compares a
- * body against a JSON schema, and a `format: binary` string is not one a Buffer can match.
- *
- * @param operation - the operation that answered, for its documented statuses
+ * A binary body (the invoice PDF) needs no special case: orval emits `zod.unknown()` for a
+ * response with no JSON schema of its own, which any body satisfies.
  */
-const neverCrashesOffContract =
-    (operation: Operation) => (response: Awaited<ReturnType<ReturnType<typeof api>['get']>>) => {
-        expect(response.status).toBeLessThan(500);
-        if (response.type === 'application/pdf')
-            expect(operation.documentedStatuses).toContain(String(response.status));
-        else expect(response).toSatisfyApiSpec();
-    };
+const neverCrashesOffContract = (response: Awaited<ReturnType<ReturnType<typeof api>['get']>>) => {
+    expect(response.status).toBeLessThan(500);
+    assertResponseMatchesContract(response);
+};
 
 describe.each(
     FUZZABLE.map(
@@ -276,13 +273,7 @@ describe.each(
         const { user, bearer } = await authenticateAs('admin');
         const world = await seedWorld(user);
 
-        await fuzzAs(
-            operation,
-            bearer,
-            world,
-            FUZZ_RUNS_PER_OPERATION,
-            neverCrashesOffContract(operation)
-        );
+        await fuzzAs(operation, bearer, world, FUZZ_RUNS_PER_OPERATION, neverCrashesOffContract);
     }, 120_000);
 
     it('does the same for a plain customer, whom most of the surface refuses', async () => {
@@ -290,13 +281,7 @@ describe.each(
         const world = await seedWorld(admin);
         const { bearer } = await authenticateAs('user');
 
-        await fuzzAs(
-            operation,
-            bearer,
-            world,
-            FUZZ_RUNS_PER_OPERATION,
-            neverCrashesOffContract(operation)
-        );
+        await fuzzAs(operation, bearer, world, FUZZ_RUNS_PER_OPERATION, neverCrashesOffContract);
     }, 120_000);
 
     it('answers 401 without credentials where the spec requires them, and never crashes', async () => {
@@ -304,7 +289,7 @@ describe.each(
         const world = await seedWorld(admin);
 
         await fuzzAs(operation, undefined, world, REFUSED_CALLER_RUNS, (response) => {
-            neverCrashesOffContract(operation)(response);
+            neverCrashesOffContract(response);
             if (operation.requiresAuth) expect(response.status).toBe(401);
         });
     }, 120_000);
@@ -353,7 +338,7 @@ describe.each(
                     .send(body as Record<string, unknown>);
 
                 expect(response.status).toBeLessThan(500);
-                expect(response).toSatisfyApiSpec();
+                assertResponseMatchesContract(response);
             }),
             { seed: SEED, numRuns: FUZZ_RUNS_PER_OPERATION, endOnFailure: true }
         );

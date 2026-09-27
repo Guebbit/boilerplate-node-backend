@@ -61,7 +61,6 @@ describe('GET /locales', () => {
         const response = await api().get('/locales');
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('reports every deployed language as one the API can answer in', async () => {
@@ -92,7 +91,6 @@ describe('GET /locales', () => {
 
         expect(portuguese.tenants).toEqual(['demo-fe']);
         expect(portuguese.source).toBe('dynamic');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('merges a language present in both tiers into one row with both tenants', async () => {
@@ -147,7 +145,6 @@ describe('GET /locales/:locale', () => {
         const response = await api().get('/locales/en');
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('serves the API’s own dictionary, shared keys and module keys together', async () => {
@@ -217,7 +214,6 @@ describe('GET /locales/:locale/messages', () => {
         expect(response.body.data.messages).toEqual({
             products: { list: { title: 'Catálogo', empty: 'Sem resultados' } }
         });
-        expect(response).toSatisfyApiSpec();
     });
 
     it('states the revision the dictionary belongs to', async () => {
@@ -238,7 +234,6 @@ describe('GET /locales/:locale/messages', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.messages).toEqual({});
-        expect(response).toSatisfyApiSpec();
     });
 
     it('is public, like every other locale read', async () => {
@@ -260,7 +255,6 @@ describe('GET /locales/:locale/messages', () => {
 
         expect(hidden.status).toBe(404);
         expect(unknown.status).toBe(404);
-        expect(hidden).toSatisfyApiSpec();
     });
 });
 
@@ -274,7 +268,6 @@ describe('POST /locales', () => {
             .send({ tag: 'pt', name: 'Portuguese', nativeName: 'Português' });
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('409s on a duplicate tag', async () => {
@@ -287,7 +280,6 @@ describe('POST /locales', () => {
             .send({ tag: 'pt', name: 'Portuguese', nativeName: 'Português' });
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('422s on a tag that is not a language tag', async () => {
@@ -299,7 +291,6 @@ describe('POST /locales', () => {
             .send({ tag: 'Portuguese!', name: 'Portuguese', nativeName: 'Português' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     /*
@@ -318,7 +309,6 @@ describe('POST /locales', () => {
                 .send({ ...PORTUGUESE, [field]: '   ' });
 
             expect(response.status).toBe(422);
-            expect(response).toSatisfyApiSpec();
         }
     );
 
@@ -339,7 +329,6 @@ describe('POST /locales', () => {
             .send({ tag: 'pt', name: 'Portuguese', nativeName: 'Português' });
 
         expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('403s for a non-admin caller', async () => {
@@ -351,7 +340,6 @@ describe('POST /locales', () => {
             .send({ tag: 'pt', name: 'Portuguese', nativeName: 'Português' });
 
         expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -370,7 +358,6 @@ describe('PUT /locales/:locale', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.nativeName).toBe('Português (Brasil)');
         expect(response.body.data.active).toBe(false);
-        expect(response).toSatisfyApiSpec();
     });
 
     // A PUT body IS the new resource (RFC 9110 §9.3.4) — none of this resource's four fields has
@@ -385,7 +372,6 @@ describe('PUT /locales/:locale', () => {
             .send({ nativeName: 'Português (Brasil)', active: false });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('404s for a language that does not exist', async () => {
@@ -397,7 +383,6 @@ describe('PUT /locales/:locale', () => {
             .send({ name: 'X', nativeName: 'X', direction: 'ltr', active: false });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('422s on a whitespace-only name, the same as the create route', async () => {
@@ -412,7 +397,6 @@ describe('PUT /locales/:locale', () => {
             .send({ name: '   ', nativeName: 'Português', direction: 'ltr', active: true });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('403s for a non-admin caller', async () => {
@@ -441,7 +425,6 @@ describe('PATCH /locales/:locale', () => {
         expect(response.body.data.nativeName).toBe('Português (Brasil)');
         expect(response.body.data.active).toBe(false);
         expect(response.body.data.name).toBe('Portuguese');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('404s for a language that does not exist', async () => {
@@ -453,7 +436,6 @@ describe('PATCH /locales/:locale', () => {
             .send({ active: false });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('422s on a whitespace-only name, the same as the create route', async () => {
@@ -466,7 +448,6 @@ describe('PATCH /locales/:locale', () => {
             .send({ name: '   ' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('403s for a non-admin caller', async () => {
@@ -489,7 +470,6 @@ describe('DELETE /locales/:locale', () => {
         const response = await api().delete('/locales/pt').set('Authorization', bearer);
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the contract once the language is inactive, and takes its entries', async () => {
@@ -501,7 +481,6 @@ describe('DELETE /locales/:locale', () => {
         const response = await api().delete('/locales/pt').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
 
         const gone = await api().get('/locales/pt/messages');
         expect(gone.status).toBe(404);
@@ -513,7 +492,6 @@ describe('DELETE /locales/:locale', () => {
         const response = await api().delete('/locales/zz').set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('401s unauthenticated', async () => {
@@ -533,7 +511,6 @@ describe('GET /locales/:locale/entries', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(1);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the contract when the language has no entries yet', async () => {
@@ -543,7 +520,6 @@ describe('GET /locales/:locale/entries', () => {
         const response = await api().get('/locales/pt/entries').set('Authorization', bearer);
 
         expect(response.body.data.items).toHaveLength(0);
-        expect(response).toSatisfyApiSpec();
     });
 
     // Without its own pagination validation this endpoint would silently clamp `?pageSize=500`
@@ -559,7 +535,6 @@ describe('GET /locales/:locale/entries', () => {
                 .set('Authorization', bearer);
 
             expect(response.status).toBe(422);
-            expect(response).toSatisfyApiSpec();
         }
     );
 
@@ -567,7 +542,6 @@ describe('GET /locales/:locale/entries', () => {
         const response = await api().get('/locales/pt/entries');
 
         expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('403s for a non-admin caller', async () => {
@@ -576,7 +550,6 @@ describe('GET /locales/:locale/entries', () => {
         const response = await api().get('/locales/pt/entries').set('Authorization', bearer);
 
         expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('answers an empty page for a tenant nobody configured, rather than every tenant', async () => {
@@ -590,7 +563,6 @@ describe('GET /locales/:locale/entries', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toEqual([]);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('422s a tenant outside the id pattern, instead of dropping the filter', async () => {
@@ -602,7 +574,6 @@ describe('GET /locales/:locale/entries', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -617,7 +588,6 @@ describe('POST /locales/:locale/entries', () => {
             .send({ tenant: 'demo-fe', key: 'cart.title', value: 'Carrinho' });
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('409s on a duplicate key', async () => {
@@ -631,7 +601,6 @@ describe('POST /locales/:locale/entries', () => {
             .send({ tenant: 'demo-fe', key: 'cart.title', value: 'Outro' });
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     /*
@@ -649,7 +618,6 @@ describe('POST /locales/:locale/entries', () => {
             .send({ tenant: 'demo-fe', key: 'products.list', value: 'Lista' });
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('409s in the other direction too', async () => {
@@ -675,7 +643,6 @@ describe('POST /locales/:locale/entries', () => {
             .send({ tenant: 'demo-fe', key: '', value: 'x' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('404s for a language that does not exist', async () => {
@@ -687,7 +654,6 @@ describe('POST /locales/:locale/entries', () => {
             .send({ tenant: 'demo-fe', key: 'cart.title', value: 'x' });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -704,7 +670,6 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.value).toBe('O seu carrinho');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the contract when removing one key', async () => {
@@ -717,7 +682,6 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
 
         const dictionary = await api().get('/locales/pt/messages');
         expect(dictionary.body.data.messages).toEqual({});
@@ -733,7 +697,6 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
             .send({ value: 'x' });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('422s on a malformed entry id rather than answering 500', async () => {
@@ -746,7 +709,6 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
             .send({ value: 'x' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('422s on a malformed entry id for the delete route too', async () => {
@@ -758,7 +720,6 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('403s for a non-admin caller', async () => {
@@ -796,7 +757,6 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ created: 0, updated: 1, removed: 1 });
-        expect(response).toSatisfyApiSpec();
 
         const dictionary = await api().get('/locales/pt/messages');
         expect(dictionary.body.data.messages).toEqual({ cart: { title: 'O seu carrinho' } });
@@ -813,7 +773,6 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ created: 0, updated: 1, removed: 0 });
-        expect(response).toSatisfyApiSpec();
 
         const dictionary = await api().get('/locales/pt/messages');
         expect(dictionary.body.data.messages).toEqual({
@@ -849,7 +808,6 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
             });
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('422s on a body that is not an entry list', async () => {
@@ -862,7 +820,6 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
             .send({ tenant: 'demo-fe', entries: [{ key: 'cart.title' }] });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('401s unauthenticated', async () => {
@@ -871,7 +828,6 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
             .send({ tenant: 'demo-fe', entries: [] });
 
         expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -922,7 +878,6 @@ describe('GET /locales/tenants', () => {
         const response = await api().get('/locales/tenants');
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         expect(response.body.data.tenants).toEqual([
             { id: 'demo-be', label: 'API', kind: 'backend' },
             { id: 'demo-fe', label: 'Frontend', kind: 'frontend' }
@@ -948,7 +903,6 @@ describe('tenants on the write routes', () => {
             .send({ tenant: 'nobody', key: 'cart.title', value: 'Carrinho' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('refuses a bulk import for a tenant nobody configured, before writing anything', async () => {
@@ -1013,7 +967,6 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.translations).toEqual([]);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('upserts a locale and matches the spec', async () => {
@@ -1033,7 +986,6 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
             fields: { title: 'Cama' },
             origin: 'human'
         });
-        expect(response).toSatisfyApiSpec();
     });
 
     it('422s an unregistered entityType, matching the spec', async () => {
@@ -1044,7 +996,6 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('422s a null on the fallback locale, matching the spec', async () => {
@@ -1057,7 +1008,6 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
             .send({ en: null });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('401s without a token, matching the spec', async () => {
@@ -1070,7 +1020,6 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
             });
 
         expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -1105,7 +1054,6 @@ describe('PUT /locales/translations/:entityType/:id', () => {
             locale: 'en',
             fields: { title: 'Bed, replaced' }
         });
-        expect(response).toSatisfyApiSpec();
     });
 
     it('refuses a replace that omits the fallback locale', async () => {
@@ -1120,6 +1068,5 @@ describe('PUT /locales/translations/:entityType/:id', () => {
             .send({ pt: { fields: { title: 'Cama' } } });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
