@@ -1,0 +1,35 @@
+keys:
+    # -- locales -------------------------------------------------------------------------------
+    - key: locales.self.read
+      module: locales
+      subject: Locale
+      action: read
+      scope: tenant
+      description: Read active, undeleted locales and their dictionaries — the storefront's own view.
+      conditions:
+          active: true
+          deletedAt: null
+    - key: locales.any.read
+      module: locales
+      subject: Locale
+      action: read
+      scope: tenant
+      description: Read every locale regardless of publish state — what staff need to see a draft language.
+    - key: locales.any.create
+      module: locales
+      subject: Locale
+      action: create
+      scope: tenant
+      description: Add a locale.
+    - key: locales.any.update
+      module: locales
+      subject: Locale
+      action: update
+      scope: tenant
+      description: Change a locale or one of its entries.
+    - key: locales.any.delete
+      module: locales
+      subject: Locale
+      action: delete
+      scope: tenant
+      description: Remove a locale or one of its entries.

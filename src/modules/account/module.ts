@@ -57,7 +57,6 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
-    permissions: ['tokens.any.delete'],
     routes: router,
     /** The credential/signup/reset/MFA/password-check budgets — see `./rate-limits.ts`. */
     rateLimits: accountRateLimits,

@@ -1,0 +1,35 @@
+keys:
+    # -- payments ------------------------------------------------------------------------------
+    - key: payments.self.read
+      module: payments
+      subject: Payment
+      action: read
+      scope: tenant
+      description: Read the caller's own payments.
+      conditions:
+          userId: $caller.id
+    - key: payments.any.read
+      module: payments
+      subject: Payment
+      action: read
+      scope: tenant
+      description: Read every payment in the shop — the support desk, helping with an order that is never their own.
+    - key: payments.any.create
+      module: payments
+      subject: Payment
+      action: create
+      scope: tenant
+      description: Record a payment that arrived outside the provider — cash, a transfer, by hand.
+      # Money the shop is now on the hook to have actually received. Same tier as
+      # payments.any.update: the admin's word is the only proof, and a stolen access token proves
+      # nothing about how recently its holder typed their password.
+      stepUp: critical
+    - key: payments.any.update
+      module: payments
+      subject: Payment
+      action: update
+      scope: tenant
+      description: Reconcile a payment against the provider, or return the money.
+      # Money leaving the shop. The one action here whose damage cannot be undone by another
+      # request.
+      stepUp: critical

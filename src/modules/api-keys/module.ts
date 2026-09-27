@@ -39,7 +39,6 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone.
      */
-    permissions: ['apikeys.any.read', 'apikeys.any.create', 'apikeys.any.delete'],
     personalData: [
         {
             section: 'apiKeys',

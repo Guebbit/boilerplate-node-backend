@@ -43,12 +43,6 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone.
      */
-    permissions: [
-        'webhooks.any.read',
-        'webhooks.any.create',
-        'webhooks.any.update',
-        'webhooks.any.delete'
-    ],
     onRegistered,
     /*
      * `handler: processDeliveryJob` directly, no separate guard in front of it: `schema` below

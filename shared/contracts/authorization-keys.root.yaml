@@ -1,0 +1,138 @@
+# Every permission key that exists, and the only place one may be introduced.
+#
+# Committed with identical bytes in `boilerplate-node-backend` and
+# `boilerplate-php-laravel-backend`. Neither repo's formatter touches it — see the exclusion in
+# `.prettierignore` / `dprint.json`, for the same reason `spectral.yaml` is excluded: two
+# formatters over one shared artefact is a silent fork.
+#
+# ROLES ARE DATA, PERMISSIONS ARE CODE. A deployment may create roles at runtime. It may never
+# invent a key, because a key nothing checks grants nothing while looking like it grants
+# something. Assignment validates against this file, not against a string.
+#
+# THE ONE INVARIANT, and the reason `scope` is a field rather than a naming convention:
+#   a bare key can never be satisfied by a platform-scope caller, and a `platform.` key can never
+#   be satisfied by a tenant-scope caller.
+# A platform operator administers shared reference data and is not a super-member. Mapping that
+# person onto the old `admin` boolean was one line to write and a total confidentiality failure.
+#
+# THE SHAPE: `<family>.<breadth>.<action>`, breadth ALWAYS written — `orders.self.read`,
+# `orders.any.read`, `products.any.create`. Breadth is `self` where the key is genuinely scoped to
+# the caller's own rows (`cart.self.checkout`) or to the narrow, default reading a family gives a
+# customer (`products.self.read`); `any` everywhere else, including every key with no owner to
+# scope by at all. An omitted breadth reads as "someone forgot one" — a key you can grep for by
+# shape beats a key you have to know the default of. There is no wildcard of any kind, per-family
+# or scope-wide; see the note at the foot of this file.
+
+version: 1
+
+# CASL's action vocabulary, plus the additions this model needs. `manage` is NOT in this list: it
+# is not a declared action, since there is no wildcard of any kind, per-family or scope-wide —
+# see the note at the foot of this file for why — so `manage` names nothing here.
+#
+# `write` is deliberately absent. It collapses create, update and delete into one key, and the
+# shop needs them apart: a support agent may update a user and may not delete one, a warehouse
+# operator may adjust stock and may not delete a product.
+#
+# `checkout`, `sweep`, `override` and `start` are the four additions beyond CASL's own CRUD
+# vocabulary, and all four follow the same rule: a verb is added only when CRUD cannot say the
+# thing, never when CRUD is merely inconvenient, and the reason is recorded on the key itself.
+#   - `checkout` is `cart.self.checkout`'s action, and nowhere else. CRUD has no verb for "spend
+#     the basket": `create` on `Cart` collided with `orders.any.create` (raising an order on
+#     someone else's behalf) and `update` said nothing about what changed.
+#   - `sweep` is `inventory.any.sweep`'s action, and nowhere else. A sweep clears expired
+#     reservation holds on a schedule: no noun it creates, no row whose update names the action.
+#   - `override` is `orders.any.override`'s action, and nowhere else. It skips the normal
+#     lifecycle gate to force a delivery move or correct a status by hand, with a recorded
+#     reason — `update` would hide that this write deliberately bypasses the ordinary rule.
+#   - `start` is `delivery.any.start`'s action, and nowhere else. Moving a paid order into
+#     `processing` creates no shipment yet — there is no parcel row to `update` — and it is a
+#     narrower grant than `orders.any.update`, which lets an admin rewrite the order outright.
+actions:
+    - read
+    - create
+    - update
+    - delete
+    - checkout
+    - sweep
+    - override
+    - start
+
+# The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
+scopes:
+    tenant: Content belonging to one shop. Keys are bare.
+    platform: Shared operational data, across shops. Keys are prefixed `platform.`.
+
+# Step-up — the third axis, declared on the KEY rather than on a route.
+#
+# A key may carry `stepUp: critical | sensitive`, and `requirePermission` then demands that the
+# caller proved themselves within that window before it lets them through. The tiers are the ones
+# `REAUTH_TIME_CRITICAL` / `REAUTH_TIME_SENSITIVE` already name, so this adds a place to say WHICH
+# actions are worth a challenge, not a second mechanism for making one.
+#
+# On the key and not the route because the key is what the action IS: erasing somebody's account
+# deserves a fresh session wherever it is reached from, and a second route that reaches it would
+# otherwise have to remember. `amr` may also be named, so a future passkey tier is a line here
+# rather than a guard change — the reason `amr` was carried as a list rather than a boolean.
+
+# Conditions — the ABAC half, and the reason this is not pure RBAC.
+#
+# A key may carry `conditions`: a filter fragment that must ALSO hold of the row. It is the same
+# shape CASL takes as its third argument and the same shape both repositories already spread into
+# a query, which is what lets it be compiled INTO the read instead of checked after it.
+#
+# `$caller.<field>` is substituted from the resolved caller at request time. That is the whole
+# placeholder grammar; there is no expression language, on purpose.
+#
+# THE FIELD NAMES ARE THE MODEL'S, not either storage's. `active` and `userId` are what the rule
+# is ABOUT; one backend stores them under those names and the other under `active` and `user_id`,
+# and each maps this vocabulary onto its own columns on the way into a query. The shared artefact
+# is the condition set, and each backend generates its own query from it.
+#
+# Tenancy is NOT written here. Every tenant-scope rule has `tenantId: $caller.tenantId` injected
+# by the resolver, so no key can forget it and no request parameter can supply it.
+#
+# A key with no `conditions` is unconditional within its scope. `products.self.read` sees active,
+# undeleted rows; `products.any.read` sees every row — which is why breadth and condition move
+# together on the four families where the narrow reading is filtered at all.
+#
+# `deletedAt: null` is on the `self` reads of the subjects that HAVE it — `Product`, `Locale` and
+# `Order`. A payment is a record of money moving and is never withdrawn from view, so it carries
+# no such column and no such condition; a rule naming a column the table lacks is a query that
+# throws rather than one that narrows.
+#
+# It is on the narrow reads and not the wide ones, and that asymmetry is the rule
+# somebody would otherwise have to remember: a soft-deleted row is gone for the audience it was
+# hidden from and still there for the staff who can restore it. Matching `null` covers a field
+# that is absent as well as one that is set to nothing, which is what an "unset to restore" write
+# leaves behind.
+
+# The keys themselves.
+#
+# `subject` is the CASL subject type the key authorises — the concrete thing a rule is about. The
+# key's own first segment is the resource FAMILY, which is plural and matches the module folder;
+# the subject is the singular type. They differ on purpose: `orders.any.read` is a permission,
+# `Order` is a thing.
+#
+# Modules absent from this list have no keys, and that is a decision rather than an omission:
+# `wishlist` and `account` are *your own things*. What you may do with them follows from being
+# signed in, not from a role, and giving them keys would invite a role that grants access to
+# someone else's basket. `cart` is nearly the same — its one exception is `cart.self.checkout`
+# below, a fact about the ACCOUNT (has this address been proven?) rather than about the basket's
+# contents, which stay keyless.
+
+# %AUTHORIZATION_KEYS%
+
+# WHY THERE IS NO WILDCARD OF ANY KIND ANY MORE
+#
+# The per-family `manage` key used to expand, unconditionally, to every action its family declared
+# — which was the only way to say "read everyone's, change nothing" for a family whose narrow read
+# carried a condition. That made the family's own write keys reachable through a route asking only
+# for the wide read, and it meant breadth was something a wildcard implied rather than something a
+# role stated. It went first, and breadth has been written on the keys themselves ever since.
+#
+# `all.manage` — the SCOPE wildcard, `admin`'s alone — is worth naming as the one remaining case:
+# the same argument applies one level up — "a key no module declares grants nothing" is only true
+# of the wildcard as long as nothing reads it as a shortcut instead. `admin` holds every declared
+# tenant key BY NAME, spelled out in `authorization-roles.yaml`, the same way every other role
+# does. A new key that should reach `admin` is a line in that file, not an assumption the wildcard
+# already covers it — the property this whole file exists for, applied to `admin` too.

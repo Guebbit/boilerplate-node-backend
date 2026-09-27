@@ -1,0 +1,20 @@
+keys:
+    # -- cart ----------------------------------------------------------------------------------
+    # `cart` otherwise declares no keys — see the note above on `keys` — because a basket is your
+    # own thing. This one exception is not about the basket's CONTENTS (still keyless: add, remove,
+    # set quantity) but about spending it, which is a fact about the ACCOUNT — an unproven address
+    # must not be able to place an order — and a fact about the account belongs on a key, not a
+    # route mount. `checkout`, not `create` on `Order`: `orders.any.create` already means "raise an
+    # order on someone else's behalf", and reusing it here would be the identical CASL tuple,
+    # indistinguishable once packed for the browser. `self` because this is the one key that is
+    # genuinely about the caller's own basket — see docs/theory/authorization.md.
+    - key: cart.self.checkout
+      module: cart
+      subject: Cart
+      action: checkout
+      scope: tenant
+      description: Spend the caller's own basket — place an order and start paying for it.
+      # The 403 keeps its specific wording rather than `requirePermission`'s generic one: a
+      # customer refused THIS key is being told to confirm their email, not that they lack
+      # permission in the abstract. `t('generic.error-<deniedCode, kebab-cased>')`.
+      deniedCode: EMAIL_NOT_VERIFIED

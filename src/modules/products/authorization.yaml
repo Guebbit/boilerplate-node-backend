@@ -1,0 +1,35 @@
+keys:
+    # -- products ------------------------------------------------------------------------------
+    - key: products.self.read
+      module: products
+      subject: Product
+      action: read
+      scope: tenant
+      description: Read active, undeleted products — the storefront's own view.
+      conditions:
+          active: true
+          deletedAt: null
+    - key: products.any.read
+      module: products
+      subject: Product
+      action: read
+      scope: tenant
+      description: Read every product regardless of publish state — what staff need to see a draft.
+    - key: products.any.create
+      module: products
+      subject: Product
+      action: create
+      scope: tenant
+      description: Add a product to the catalogue.
+    - key: products.any.update
+      module: products
+      subject: Product
+      action: update
+      scope: tenant
+      description: Change a product, including its price and its published state.
+    - key: products.any.delete
+      module: products
+      subject: Product
+      action: delete
+      scope: tenant
+      description: Remove a product. Separate from update because the blast radius is.
