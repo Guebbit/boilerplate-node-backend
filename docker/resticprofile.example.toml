@@ -75,3 +75,29 @@
     [acme.schedule]
         schedule = '03:30'
         schedule-permission = 'system'
+
+# The `uploads` and `storage` named volumes back nothing up on their own — a restore brings the
+# database back with rows pointing at images and mail-spool files that no longer exist. Same
+# client, same repository, its own profile: restic snapshots one stdin stream per run, so a second
+# source is a second profile rather than a second entry under `[acme.backup]`.
+[acme-uploads]
+    inherit = 'default'
+    repository = 's3:https://s3.example.com/change-me/acme'
+
+    [acme-uploads.backup]
+        stdin = true
+        stdin-filename = 'acme-uploads.tar.gz'
+        # Only the durable half of `storage/`: `mail-spool/` is queued outbound mail a restart
+        # must not lose. The sibling `invoices/` render cache is deliberately left out — SH2 made
+        # the PDF a receipt, rendered on demand, so losing the cache costs nothing but a re-render.
+        # `-C /app <path> <path>` keeps both trees' relative layout in the one archive; restoring
+        # extracts them back under the same two mount points, `uploads:` and `storage:mail-spool/`.
+        stdin-command = '''
+            docker compose --env-file clients/acme/.env -f docker-compose.production.yml \
+                exec -T app tar -czf - -C /app public/images tmp/storage/mail-spool
+        '''
+        tag = ['acme', 'uploads']
+
+    [acme-uploads.schedule]
+        schedule = '03:45'
+        schedule-permission = 'system'
