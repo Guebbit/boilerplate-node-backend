@@ -13,7 +13,7 @@ import { testCallerContext } from '@tests/callers';
 import { runWithLocale } from '@infrastructure/i18n';
 import { registerTranslationPort } from '@kernel/translation';
 import { createProduct } from '@modules/products/tests/factories';
-import { productService } from '@modules/products';
+import { productService } from '../../service';
 import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
 import type { ProductDocument } from '../../model';
 

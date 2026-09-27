@@ -31,7 +31,13 @@ import {
     shutdownInfra
 } from '@infrastructure/runtime/server-lifecycle';
 import { markServerListening } from '@infrastructure/runtime/readiness';
-import { bootI18n, refreshLocaleOverrides, startLocaleOverrideRefresh } from '@infrastructure/i18n';
+import {
+    bootI18n,
+    isLocaleOverrideAvailable,
+    refreshLocaleOverrides,
+    startLocaleOverrideRefresh
+} from '@infrastructure/i18n';
+import { isTranslationAvailable } from '@kernel/translation';
 
 import { registerModules } from '@kernel/registry';
 import { enabledModules, enabledModuleLocales } from './modules';
@@ -91,7 +97,11 @@ export const bootInfrastructure = () => {
              * waiting a few milliseconds to avoid that costs nothing.
              */
             .then(() => refreshLocaleOverrides())
-            .then(() => startLocaleOverrideRefresh())
+            // No provider (`locales` uninstalled) means every refresh would be a no-op forever —
+            // a timer with nothing to poll is a leak of intent, not just of a file descriptor.
+            .then(() => {
+                if (isLocaleOverrideAvailable()) startLocaleOverrideRefresh();
+            })
             /*
              * After i18n, because the map resolves its copy through `t`. Registering it earlier
              * would install a translator with no dictionary behind it.
@@ -170,6 +180,12 @@ export const stopServer = () => {
  * not only once the process actually starts listening.
  */
 registerModules(enabledModules, APP_NON_MODULE_CHECKS);
+
+// LOCALES_OPTIONAL_0925 D-LO1: `locales` being absent is a supported deployment shape, not a
+// misconfiguration — this is the one line that says so, once, rather than a reader inferring it
+// from an admin screen that quietly has nothing to show.
+if (!isTranslationAvailable())
+    logger.info('translation provider: none — content is monolingual');
 
 /*
  * The middleware stack, in the order a request travels it.
