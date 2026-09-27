@@ -11,7 +11,7 @@ flowchart TB
     Property["Property\nfast-check\nfor EVERY input, not one"]
     Integration["Integration\nsupertest(app)\nrouting · middleware wiring"]
     Concurrency["Concurrency\nN requests at once\nraces the serial suite cannot see"]
-    ContractResponse["Contract — Response Shape\njest-openapi\nvs openapi.yaml"]
+    ContractResponse["Contract — Response Shape\norval Zod schemas\nvs openapi.yaml"]
     ContractRequest["Contract — Request Data\nzod-derived generation\nvs openapi.yaml"]
     Fuzz["Fuzzing\nspec walk + fast-check\nendpoints nobody tested"]
     Mutation["Mutation\nStryker\nchecks the checkers"]
@@ -40,7 +40,7 @@ flowchart TB
 | ------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------ | ----------------------------------------------------------- |
 | Unit                      | Is this unit's logic right?                                                                         | Jest, no database                  | `npm run test:unit`                  | [Unit Testing](./unit-testing.md)                           |
 | Integration               | Are the units actually wired together?                                                              | Jest + supertest                   | `npm run test:integration`           | [Integration Testing](./integration-testing.md)             |
-| Contract — Response Shape | Does the wire response match `openapi.yaml`, exactly?                                               | jest-openapi                       | `npm run test:contract`              | [Contract Testing](./contract-testing.md)                   |
+| Contract — Response Shape | Does the wire response match `openapi.yaml`, exactly?                                               | orval strict Zod schemas           | `npm run test:contract`              | [Contract Testing](./contract-testing.md)                   |
 | Contract — Request Data   | Does the API accept every payload the contract declares legal, and reject what it declares illegal? | A zod-v4 AST walker + seeded PRNG  | `npm run test:contract` (same suite) | [Contract-Derived Request Data](./contract-request-data.md) |
 | Property                  | Does the rule hold for _every_ input, not just the ones someone thought of?                         | fast-check                         | `npm run test:unit` (same suite)     | [Property Testing](./property-testing.md)                   |
 | Concurrency               | Does it still hold when N requests arrive at once?                                                  | supertest + `Promise.allSettled`   | `npm run test:integration` (same)    | [Concurrency Testing](./concurrency-testing.md)             |
@@ -188,7 +188,7 @@ isolated from one another. Worth measuring before changing, not assuming.
 | [Jest](https://jestjs.io/) (+ [ts-jest](https://kulshekhar.github.io/ts-jest/))                                             | Runner for unit, integration and both contract layers                                                                                                    |
 | [mongodb-memory-server](https://nodkz.github.io/mongodb-memory-server/)                                                     | In-memory MongoDB — used by the integration layer and both contract layers via `setupTestDb()`; `tests/unit` never opens one                             |
 | [supertest](https://github.com/ladjs/supertest)                                                                             | Drives `src/app.ts` over real HTTP without binding a port                                                                                                |
-| [jest-openapi](https://github.com/openapi-library/OpenAPIValidators)                                                        | Validates real responses against `openapi.yaml`                                                                                                          |
+| [orval](https://orval.dev/)                                                                                                 | Generates the strict, per-status Zod schemas real responses are validated against — see [Contract Testing](./contract-testing.md)                        |
 | A hand-rolled zod-v4 AST walker (`tests/support/contract-data.ts`)                                                          | Generates request payloads _from_ `openapi.yaml`-derived schemas — see [Contract-Derived Request Data](./contract-request-data.md) for why not a library |
 | [Stryker](https://stryker-mutator.io/)                                                                                      | Mutation testing — checks the tests work                                                                                                                 |
 | [ESLint](https://eslint.org/)                                                                                               | Code consistency and correctness checks                                                                                                                  |

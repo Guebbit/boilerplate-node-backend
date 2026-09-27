@@ -39,11 +39,11 @@ import { reservationModel, stockMovementModel } from '@modules/inventory/model';
 import { Types } from 'mongoose';
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
 import {
-    CreateProductResponse,
-    CreateOrderResponse,
-    GetUserByIdResponse,
-    ListAuditEntriesResponse,
-    GetAddressesResponse
+    CreateProduct201Response,
+    CreateOrder201Response,
+    GetUserById200Response,
+    ListAuditEntries200Response,
+    GetAddresses200Response
 } from '@api/schemas.zod';
 
 /*
@@ -265,7 +265,7 @@ describe('conformance: a produced row parses as the response the API would serve
 
         for (const product of products)
             expect(() =>
-                CreateProductResponse.shape.data.parse(wireShape(product.toJSON()))
+                CreateProduct201Response.shape.data.parse(wireShape(product.toJSON()))
             ).not.toThrow();
     });
 
@@ -278,7 +278,7 @@ describe('conformance: a produced row parses as the response the API would serve
         // stored order never carries. See `orders/services/current.ts`.
         for (const order of orders) {
             const wire = await orderService.withActions(order);
-            expect(() => CreateOrderResponse.shape.data.parse(wireShape(wire))).not.toThrow();
+            expect(() => CreateOrder201Response.shape.data.parse(wireShape(wire))).not.toThrow();
         }
     });
 
@@ -288,7 +288,7 @@ describe('conformance: a produced row parses as the response the API would serve
 
         for (const user of users)
             expect(() =>
-                GetUserByIdResponse.shape.data.parse(wireShape(user.toJSON()))
+                GetUserById200Response.shape.data.parse(wireShape(user.toJSON()))
             ).not.toThrow();
     });
 
@@ -296,7 +296,7 @@ describe('conformance: a produced row parses as the response the API would serve
         const entries = await auditLogModel.find().exec();
         expect(entries.length).toBeGreaterThan(0);
 
-        const entrySchema = ListAuditEntriesResponse.shape.data.shape.items.element;
+        const entrySchema = ListAuditEntries200Response.shape.data.shape.items.element;
         for (const entry of entries)
             expect(() => entrySchema.parse(wireShape(entry.toJSON()))).not.toThrow();
     });
@@ -305,7 +305,7 @@ describe('conformance: a produced row parses as the response the API would serve
         const books = await addressBookModel.find().exec();
         expect(books.length).toBeGreaterThan(0);
 
-        const addressSchema = GetAddressesResponse.shape.data.shape.addresses.element;
+        const addressSchema = GetAddresses200Response.shape.data.shape.addresses.element;
         for (const book of books) {
             // Decrypted first, same as every real reader (`addresses/repository.ts`'s
             // `decryptBook`) — `.toJSON()` alone would parse ciphertext, not what `GET

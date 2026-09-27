@@ -39,7 +39,6 @@ describe('POST /feedback/contact', () => {
         const response = await api().post('/feedback/contact').send(CONTACT_PAYLOAD);
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('starts a new request in the `new` status', async () => {
@@ -53,7 +52,6 @@ describe('POST /feedback/contact', () => {
         const response = await api().post('/feedback/contact').send(withoutName);
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a malformed email', async () => {
@@ -62,7 +60,6 @@ describe('POST /feedback/contact', () => {
             .send({ ...CONTACT_PAYLOAD, email: 'not-an-email' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a missing message', async () => {
@@ -70,7 +67,6 @@ describe('POST /feedback/contact', () => {
         const response = await api().post('/feedback/contact').send(withoutMessage);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     // `maxLength` lives in openapi.yaml itself, so the generated schema is what enforces it —
@@ -81,7 +77,6 @@ describe('POST /feedback/contact', () => {
             .send({ ...CONTACT_PAYLOAD, message: 'a'.repeat(5001) });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -92,7 +87,6 @@ describe('GET /feedback', () => {
         const response = await api().get('/feedback').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the contract when the list is empty', async () => {
@@ -100,7 +94,6 @@ describe('GET /feedback', () => {
         const response = await api().get('/feedback').set('Authorization', bearer);
 
         expect(response.body.data.items).toHaveLength(0);
-        expect(response).toSatisfyApiSpec();
     });
 
     // Without its own pagination validation this endpoint would silently clamp `?pageSize=500`
@@ -115,7 +108,6 @@ describe('GET /feedback', () => {
 
             expect(response.status).toBe(422);
             expect(response.body.success).toBe(false);
-            expect(response).toSatisfyApiSpec();
         }
     );
 
@@ -126,7 +118,6 @@ describe('GET /feedback', () => {
         const response = await api().get('/feedback?status=archived').set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -145,7 +136,6 @@ describe('POST /feedback/search', () => {
             .send({ page: 1, pageSize: 10 });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('filters on a body field, which is the whole point of the route', async () => {
@@ -158,7 +148,6 @@ describe('POST /feedback/search', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(0);
-        expect(response).toSatisfyApiSpec();
     });
 
     // The same bounds as the query form, from the same shared schema — the two spellings of one
@@ -174,7 +163,6 @@ describe('POST /feedback/search', () => {
 
             expect(response.status).toBe(422);
             expect(response.body.success).toBe(false);
-            expect(response).toSatisfyApiSpec();
         }
     );
 
@@ -188,7 +176,6 @@ describe('POST /feedback/search', () => {
             .send({ status: 'archived' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -203,7 +190,6 @@ describe('PUT /feedback/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('resolved');
-        expect(response).toSatisfyApiSpec();
     });
 
     // A PUT body IS the new resource (RFC 9110 §9.3.4) — an omitted optional
@@ -223,7 +209,6 @@ describe('PUT /feedback/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.adminNotes).toBeUndefined();
-        expect(response).toSatisfyApiSpec();
     });
 
     it('refuses a PUT body missing the required status', async () => {
@@ -235,7 +220,6 @@ describe('PUT /feedback/{id}', () => {
             .send({ adminNotes: 'no status here' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a status outside the enum', async () => {
@@ -247,7 +231,6 @@ describe('PUT /feedback/{id}', () => {
             .send({ status: 'archived' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a request that does not exist', async () => {
@@ -258,7 +241,6 @@ describe('PUT /feedback/{id}', () => {
             .send({ status: 'spam' });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -279,7 +261,6 @@ describe('PATCH /feedback/{id}', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('resolved');
         expect(response.body.data.adminNotes).toBe('first pass');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('clears adminNotes on an explicit null', async () => {
@@ -297,7 +278,6 @@ describe('PATCH /feedback/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.adminNotes).toBeUndefined();
-        expect(response).toSatisfyApiSpec();
     });
 
     it('refuses "" for adminNotes, never a synonym for null', async () => {
@@ -309,7 +289,6 @@ describe('PATCH /feedback/{id}', () => {
             .send({ adminNotes: '' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a request that does not exist', async () => {
@@ -320,7 +299,6 @@ describe('PATCH /feedback/{id}', () => {
             .send({ status: 'spam' });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -333,7 +311,6 @@ describe('POST /feedback/contact — honeypot', () => {
 
         // The bot must learn nothing from the response — same 201 a real submission gets.
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
         expect(response.body.data).not.toHaveProperty('website');
 
         const listed = await api().get('/feedback').set('Authorization', bearer);
@@ -349,7 +326,6 @@ describe('DELETE /feedback/{id}', () => {
         const response = await api().delete(`/feedback/${id}`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
 
         const listed = await api().get('/feedback').set('Authorization', bearer);
         expect(listed.body.data.items).toHaveLength(0);
@@ -360,7 +336,6 @@ describe('DELETE /feedback/{id}', () => {
         const response = await api().delete(`/feedback/${MISSING_ID}`).set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('answers 404, not 500, for a malformed id', async () => {
@@ -370,6 +345,5 @@ describe('DELETE /feedback/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });

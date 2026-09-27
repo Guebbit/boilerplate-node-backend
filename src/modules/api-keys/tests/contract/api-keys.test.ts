@@ -27,7 +27,6 @@ describe('GET /api-keys', () => {
         const response = await api().get('/api-keys');
 
         expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('403s a role holding no apikeys key at all', async () => {
@@ -36,7 +35,6 @@ describe('GET /api-keys', () => {
         const response = await api().get('/api-keys').set('Authorization', bearer);
 
         expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('lists an owner’s own credentials, never a secret', async () => {
@@ -53,7 +51,6 @@ describe('GET /api-keys', () => {
         for (const item of response.body.data.items) {
             expect(item.secret).toBeUndefined();
         }
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -70,7 +67,6 @@ describe('POST /api-keys', () => {
         expect(typeof response.body.data.secret).toBe('string');
         expect(response.body.data.secret.startsWith('sk_')).toBe(true);
         expect(response.body.data.permissions).toEqual(['orders.self.read']);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('422s a permission the caller does not hold', async () => {
@@ -84,7 +80,6 @@ describe('POST /api-keys', () => {
             .send({ name: 'over-reaching', permissions: ['platform.observability.any.read'] });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('422s an empty permissions list', async () => {
@@ -96,7 +91,6 @@ describe('POST /api-keys', () => {
             .send({ name: 'no permissions', permissions: [] });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('403s a role holding no apikeys key at all', async () => {
@@ -108,7 +102,6 @@ describe('POST /api-keys', () => {
             .send({ name: 'partner integration', permissions: ['orders.self.read'] });
 
         expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -125,7 +118,6 @@ describe('DELETE /api-keys/:id', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('404s an id from outside this admin’s reach', async () => {
@@ -136,6 +128,5 @@ describe('DELETE /api-keys/:id', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });

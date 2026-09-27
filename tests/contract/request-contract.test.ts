@@ -132,7 +132,6 @@ describe('POST /users (contract-derived)', () => {
 
         expect(response.status).toBeGreaterThanOrEqual(200);
         expect(response.status).toBeLessThan(300);
-        expect(response).toSatisfyApiSpec();
     });
 
     it.each(invalidPayloads(CreateUserBody))(
@@ -143,7 +142,6 @@ describe('POST /users (contract-derived)', () => {
 
             expect(response.status).toBe(422);
             expect(response.body.success).toBe(false);
-            expect(response).toSatisfyApiSpec();
         }
     );
 });
@@ -169,7 +167,6 @@ describe('POST /products (contract-derived)', () => {
 
         expect(response.status).toBeGreaterThanOrEqual(200);
         expect(response.status).toBeLessThan(300);
-        expect(response).toSatisfyApiSpec();
     });
 
     it.each(invalidPayloads(CreateProductBody))(
@@ -183,7 +180,6 @@ describe('POST /products (contract-derived)', () => {
 
             expect(response.status).toBe(422);
             expect(response.body.success).toBe(false);
-            expect(response).toSatisfyApiSpec();
         }
     );
 });
@@ -197,7 +193,6 @@ describe('POST /orders (contract-derived)', () => {
 
         expect(response.status).toBeGreaterThanOrEqual(200);
         expect(response.status).toBeLessThan(300);
-        expect(response).toSatisfyApiSpec();
     });
 
     it.each(invalidPayloads(CreateOrderBody))(
@@ -215,7 +210,6 @@ describe('POST /orders (contract-derived)', () => {
 
             expect(response.status).toBe(422);
             expect(response.body.success).toBe(false);
-            expect(response).toSatisfyApiSpec();
         }
     );
 });
@@ -229,7 +223,6 @@ describe('POST /cart (contract-derived)', () => {
 
         expect(response.status).toBeGreaterThanOrEqual(200);
         expect(response.status).toBeLessThan(300);
-        expect(response).toSatisfyApiSpec();
     });
 
     it.each(invalidPayloads(UpsertCartItemBody))(
@@ -251,7 +244,6 @@ describe('POST /cart (contract-derived)', () => {
 
             expect(response.status).toBe(422);
             expect(response.body.success).toBe(false);
-            expect(response).toSatisfyApiSpec();
         }
     );
 });
@@ -264,7 +256,6 @@ describe('POST /feedback/contact (contract-derived)', () => {
 
         expect(response.status).toBeGreaterThanOrEqual(200);
         expect(response.status).toBeLessThan(300);
-        expect(response).toSatisfyApiSpec();
     });
 
     it.each(invalidPayloads(CreateFeedbackRequestBody))(
@@ -274,7 +265,6 @@ describe('POST /feedback/contact (contract-derived)', () => {
 
             expect(response.status).toBe(422);
             expect(response.body.success).toBe(false);
-            expect(response).toSatisfyApiSpec();
         }
     );
 });
@@ -287,7 +277,6 @@ describe('POST /account/signup (contract-derived)', () => {
 
         expect(response.status).toBeGreaterThanOrEqual(200);
         expect(response.status).toBeLessThan(300);
-        expect(response).toSatisfyApiSpec();
     });
 
     it.each(invalidPayloads(SignupBody))(
@@ -301,7 +290,6 @@ describe('POST /account/signup (contract-derived)', () => {
 
             expect(response.status).toBe(422);
             expect(response.body.success).toBe(false);
-            expect(response).toSatisfyApiSpec();
         }
     );
 });
@@ -320,7 +308,6 @@ describe('POST /account/login (contract-derived, invalid payloads only)', () => 
 
             expect(response.status).toBe(422);
             expect(response.body.success).toBe(false);
-            expect(response).toSatisfyApiSpec();
         }
     );
 });
@@ -434,7 +421,6 @@ describe('invalid query parameters (contract-derived)', () => {
             );
 
             expect(response.status).toBe(422);
-            expect(response).toSatisfyApiSpec();
         }
     );
 });

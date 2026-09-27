@@ -62,7 +62,6 @@ describe('POST /products', () => {
 
         expect(response.status).toBe(201);
         expect(response.body.data.title).toBe('Memory Foam Bed');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('rejects a body missing the fallback locale', async () => {
@@ -74,7 +73,6 @@ describe('POST /products', () => {
             .send({ price: 10, translations: {} });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     /*
@@ -97,7 +95,6 @@ describe('POST /products', () => {
 
         expect(response.status).toBe(201);
         expect(response.body.data.onHand).toBe(7);
-        expect(response).toSatisfyApiSpec();
 
         const movements = await api()
             .get(`/inventory/movements?productId=${String(response.body.data.id)}`)
@@ -131,7 +128,6 @@ describe('PUT /products/{id}', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.price).toBe(15);
         expect(response.body.data.title).toBe('Bed, replaced');
-        expect(response).toSatisfyApiSpec();
     });
 
     // A PUT body IS the new resource (RFC 9110 §9.3.4) — `active`/`requiresShipping`/`categories`/
@@ -146,7 +142,6 @@ describe('PUT /products/{id}', () => {
             .send({ price: 15, translations: { en: { title: 'Bed, replaced' } } });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     // The factory now validates PUT against `zodProductReplaceSchema`, not the raw generated one —
@@ -171,7 +166,6 @@ describe('PUT /products/{id}', () => {
         expect(response.body.errors.map((error: { message: string }) => error.message)).toContain(
             fieldPriceMin()
         );
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -188,7 +182,6 @@ describe('PATCH /products/{id}', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.price).toBe(15);
         expect(response.body.data.title).toBe('Bed, revised');
-        expect(response).toSatisfyApiSpec();
     });
 
     // The write route stacks `products.any.update` AND `translations.any.update`. No preset role
@@ -221,7 +214,6 @@ describe('PATCH /products/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.taxClass).toBeUndefined();
-        expect(response).toSatisfyApiSpec();
     });
 
     // The factory now validates PATCH against `zodProductUpdateSchema` directly, and
@@ -239,7 +231,6 @@ describe('PATCH /products/{id}', () => {
         expect(response.body.errors.map((error: { message: string }) => error.message)).toContain(
             fieldPriceMin()
         );
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -258,7 +249,6 @@ describe('SKU (SH4)', () => {
 
         expect(response.status).toBe(201);
         expect(response.body.data.sku).toBe('DOG-BED-15KG');
-        expect(response).toSatisfyApiSpec();
     });
 
     // Unique across the catalogue, not per request — the sparse unique index
@@ -274,7 +264,6 @@ describe('SKU (SH4)', () => {
             .send({ price: 10, sku: 'DUP-1', translations: { en: { title: 'Collides' } } });
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('clears a sku back to unset on an explicit null', async () => {
@@ -288,7 +277,6 @@ describe('SKU (SH4)', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.sku).toBeUndefined();
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -309,7 +297,6 @@ describe('GET /products/{id}/admin', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.translations.en.title).toBe('Memory Foam Bed');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('is refused to a caller with no permission at all', async () => {

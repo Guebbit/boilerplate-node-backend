@@ -171,7 +171,7 @@ three of them are exactly that:
 
 | Generated output                                                | Read by                                                    | Committed?                                                                                                                             |
 | ----------------------------------------------------------------| ------------------------------------------------------------------------------------------------------- | ---------- |
-| `openapi.yaml`                                                  | spectral · orval · Prism · `jest-openapi` · the frontend                                                 | no — gitignored, rebuilt by `postinstall` |
+| `openapi.yaml`                                                  | spectral · orval · Prism · the frontend                                                                  | no — gitignored, rebuilt by `postinstall` |
 | `api/models/` · `api/schemas.zod.ts`                            | `@types` and the services that validate input                                                            | no — gitignored, rebuilt by `postinstall` |
 | `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                                                              | no — gitignored, rebuilt by `postinstall` |
 | `asyncapi.yaml`                                                 | the AsyncAPI CLI · `gen:asyncapi`                                                                        | yes |

@@ -43,7 +43,6 @@ describe('GET /cart', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(0);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the contract for a cart holding items', async () => {
@@ -52,7 +51,6 @@ describe('GET /cart', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(1);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -67,7 +65,6 @@ describe('POST /cart', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.summary.totalQuantity).toBe(3);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a product that does not exist', async () => {
@@ -78,7 +75,6 @@ describe('POST /cart', () => {
             .send({ productId: MISSING_ID, quantity: 1 });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a product outside the public catalogue', async () => {
@@ -92,7 +88,6 @@ describe('POST /cart', () => {
             .send({ productId: String(hidden._id), quantity: 1 });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -114,7 +109,6 @@ describe('DELETE /cart', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(1);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a missing body', async () => {
@@ -124,7 +118,6 @@ describe('DELETE /cart', () => {
         const response = await api().delete('/cart').set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a product that is not in the cart', async () => {
@@ -135,7 +128,6 @@ describe('DELETE /cart', () => {
             .send({ productId: MISSING_ID });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -146,7 +138,6 @@ describe('DELETE /cart/all', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(0);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -160,7 +151,6 @@ describe('PUT /cart/{productId}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.summary.totalQuantity).toBe(5);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an invalid body', async () => {
@@ -171,7 +161,6 @@ describe('PUT /cart/{productId}', () => {
             .send({ quantity: 0 });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a product that does not exist', async () => {
@@ -184,7 +173,6 @@ describe('PUT /cart/{productId}', () => {
             .send({ quantity: 1 });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a product outside the public catalogue', async () => {
@@ -196,7 +184,6 @@ describe('PUT /cart/{productId}', () => {
             .send({ quantity: 1 });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -211,7 +198,6 @@ describe('PUT /cart/shipping-method', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.shippingMethodId).toBe('standard');
         expect(response.body.data.summary.shippingCost).toBeGreaterThanOrEqual(0);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the contract when clearing the choice with null', async () => {
@@ -228,7 +214,6 @@ describe('PUT /cart/shipping-method', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.shippingMethodId).toBeUndefined();
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an unknown method', async () => {
@@ -239,7 +224,6 @@ describe('PUT /cart/shipping-method', () => {
             .send({ shippingMethodId: 'teleport' });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a digital-only basket', async () => {
@@ -256,7 +240,6 @@ describe('PUT /cart/shipping-method', () => {
             .send({ shippingMethodId: 'standard' });
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it("matches the error contract for a basket outside the method's weight range", async () => {
@@ -274,7 +257,6 @@ describe('PUT /cart/shipping-method', () => {
             .send({ shippingMethodId: 'express' });
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a malformed body', async () => {
@@ -285,7 +267,6 @@ describe('PUT /cart/shipping-method', () => {
             .send({});
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -298,7 +279,6 @@ describe('DELETE /cart/{productId}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(0);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a malformed product id', async () => {
@@ -307,7 +287,6 @@ describe('DELETE /cart/{productId}', () => {
         const response = await api().delete('/cart/not-an-id').set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -317,7 +296,6 @@ describe('GET /cart/summary', () => {
         const response = await api().get('/cart/summary').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the contract for a cart holding items', async () => {
@@ -326,18 +304,16 @@ describe('GET /cart/summary', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.itemsCount).toBe(1);
-        expect(response).toSatisfyApiSpec();
     });
 
-    // FA37: `currency` is now required on the summary, empty cart included — `toSatisfyApiSpec`
-    // already enforces this; asserted directly too, since a required-but-empty string would still
-    // satisfy the schema.
+    // FA37: `currency` is now required on the summary, empty cart included — the automatic
+    // contract check already enforces this; asserted directly too, since a required-but-empty
+    // string would still satisfy the schema.
     it('always carries the shop currency, even on an empty cart', async () => {
         const { bearer } = await authenticateAs('user');
         const response = await api().get('/cart/summary').set('Authorization', bearer);
 
         expect(response.body.data.currency).toBe('EUR');
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -351,7 +327,6 @@ describe('POST /cart/checkout', () => {
         const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
     });
 
     /*
@@ -376,7 +351,6 @@ describe('POST /cart/checkout', () => {
             .set('Idempotency-Key', 'checkout-replay-key-1')
             .send(requestBody);
         expect(first.status).toBe(201);
-        expect(first).toSatisfyApiSpec();
 
         // Without `idempotencyKey`, this second call would hit the now-empty cart and answer
         // `CART_EMPTY` instead of replaying — see this test's own docblock.
@@ -415,7 +389,6 @@ describe('POST /cart/checkout', () => {
             .send({ notes: 'Leave with the concierge' });
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
         expect(response.body.data.order.notes).toBe('Leave with the concierge');
     });
 
@@ -427,7 +400,6 @@ describe('POST /cart/checkout', () => {
             .send({ paymentMethod: 'crypto' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     // `pickup.requiresAddress` is false — it ships to nobody, so naming an address for it is a
@@ -454,7 +426,6 @@ describe('POST /cart/checkout', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
-        expect(response).toSatisfyApiSpec();
     });
 
     // E12: `NODE_SHIP_TO_COUNTRIES` defaults to the shop's own country alone (`IT` in tests) — a
@@ -481,7 +452,6 @@ describe('POST /cart/checkout', () => {
 
         expect(response.status).toBe(422);
         expect(response.body.errors[0].code).toBe('CART_SHIP_TO_COUNTRY_NOT_SUPPORTED');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('a pickup method needing no address is never blocked by the shopper own country', async () => {
@@ -503,7 +473,6 @@ describe('POST /cart/checkout', () => {
         const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('empties the cart on success', async () => {
@@ -525,7 +494,6 @@ describe('POST /cart/checkout', () => {
         const response = await api().post('/cart/checkout').set('Authorization', bearer);
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract when a line exceeds the shelf', async () => {
@@ -553,7 +521,6 @@ describe('POST /cart/checkout', () => {
                 available: 1
             }
         ]);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an unoffered payment method', () =>
@@ -571,7 +538,6 @@ describe('POST /cart/checkout', () => {
 
                 expect(response.status).toBe(409);
                 expect(response.body.errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
-                expect(response).toSatisfyApiSpec();
             }
         ));
 
@@ -601,7 +567,6 @@ describe('POST /cart/checkout', () => {
                     // longer the order's own id.
                     reference: expect.stringMatching(/^RF\d{2}[\dA-Z]{19}$/)
                 });
-                expect(response).toSatisfyApiSpec();
             })
         ));
 });
@@ -624,7 +589,6 @@ describe('POST /cart/reorder/{orderId}', () => {
             [String(keyboard._id), String(mouse._id)].toSorted()
         );
         expect(response.body.data.summary.totalQuantity).toBe(3);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('adds on top of what the cart already holds', async () => {
@@ -645,7 +609,6 @@ describe('POST /cart/reorder/{orderId}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.summary.totalQuantity).toBe(5);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('skips products that have left the public catalogue and lands the rest', async () => {
@@ -661,7 +624,6 @@ describe('POST /cart/reorder/{orderId}', () => {
         expect(response.status).toBe(200);
         const items: { productId: string }[] = response.body.data.items;
         expect(items.map(({ productId }) => productId)).toEqual([String(alive._id)]);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('answers 409 when nothing on the order is still available', async () => {
@@ -675,7 +637,6 @@ describe('POST /cart/reorder/{orderId}', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('REORDER_UNAVAILABLE');
-        expect(response).toSatisfyApiSpec();
     });
 
     it("answers 404 for another user's order — no existence leak", async () => {
@@ -689,7 +650,6 @@ describe('POST /cart/reorder/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a malformed order id', async () => {
@@ -698,6 +658,5 @@ describe('POST /cart/reorder/{orderId}', () => {
         const response = await api().post('/cart/reorder/not-an-id').set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });

@@ -37,7 +37,6 @@ describe('GET /delivery/methods', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.methods.length).toBeGreaterThan(0);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('lists every method regardless of a query string trying to filter it', async () => {
@@ -49,7 +48,6 @@ describe('GET /delivery/methods', () => {
         const ids = (response.body.data.methods as { id: string }[]).map(({ id }) => id);
         expect(ids).toContain('standard');
         expect(ids).toContain('express');
-        expect(response).toSatisfyApiSpec();
     });
 
     // E12: the answer names which countries this deployment ships to — the frontend reads it here
@@ -59,7 +57,6 @@ describe('GET /delivery/methods', () => {
 
         // `tests/support/setup.ts` sets `NODE_SHOP_COUNTRY=IT`; `NODE_SHIP_TO_COUNTRIES` is unset.
         expect(response.body.data.shipToCountries).toEqual(['IT']);
-        expect(response).toSatisfyApiSpec();
     });
 
     // FA37: every method carries the shop's own currency — the frontend reads it here rather
@@ -71,7 +68,6 @@ describe('GET /delivery/methods', () => {
             ({ currency }) => currency
         );
         expect(currencies.every((currency) => currency === 'EUR')).toBe(true);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -85,7 +81,6 @@ describe('GET /delivery/order/{orderId}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.trackingCode).toContain('TRK-');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract when the order has not shipped', async () => {
@@ -98,7 +93,6 @@ describe('GET /delivery/order/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -116,7 +110,6 @@ describe('POST /delivery/order/{orderId}/start', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('processing');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an order that is not paid', async () => {
@@ -129,7 +122,6 @@ describe('POST /delivery/order/{orderId}/start', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a customer, who holds no delivery.any.start', async () => {
@@ -143,7 +135,6 @@ describe('POST /delivery/order/{orderId}/start', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -162,7 +153,6 @@ describe('POST /delivery/order/{orderId}/ship', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.trackingCode).toBe('TRK-SHIPDOOR1');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract when a tracked method has no code', async () => {
@@ -179,7 +169,6 @@ describe('POST /delivery/order/{orderId}/ship', () => {
             .send({});
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a digital-only order — nothing here would ever ride in a parcel', async () => {
@@ -196,7 +185,6 @@ describe('POST /delivery/order/{orderId}/ship', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('ORDER_NOTHING_TO_SHIP');
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -214,7 +202,6 @@ describe('POST /delivery/order/{orderId}/fulfill', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('delivered');
-        expect(response).toSatisfyApiSpec();
         // No parcel is created by this door — `GET /delivery/order/{orderId}` still answers 404.
         const shipment = await api()
             .get(`/delivery/order/${String(order._id)}`)
@@ -235,7 +222,6 @@ describe('POST /delivery/order/{orderId}/fulfill', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('ORDER_NOT_DIGITAL_ONLY');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a digital-only order that is not processing yet', async () => {
@@ -251,7 +237,6 @@ describe('POST /delivery/order/{orderId}/fulfill', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('ORDER_NOT_PROCESSING');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a customer, who holds no delivery.any.update', async () => {
@@ -266,7 +251,6 @@ describe('POST /delivery/order/{orderId}/fulfill', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
     });
 
     /*
@@ -321,7 +305,6 @@ describe('POST /delivery/order/{orderId}/deliver', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('delivered');
-        expect(response).toSatisfyApiSpec();
     });
 
     /*
@@ -344,7 +327,6 @@ describe('POST /delivery/order/{orderId}/deliver', () => {
             .send({ forced: true, reason: 'testing the override path' });
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
         const stored = await readOrder(String(order._id));
         expect(stored?.status).toBe(OrderStatus.processing);
     });

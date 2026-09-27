@@ -29,7 +29,6 @@ describe('Idempotency-Key — POST /feedback/contact', () => {
             .send(PAYLOAD);
 
         expect(first.status).toBe(201);
-        expect(first).toSatisfyApiSpec();
 
         const second = await api()
             .post('/feedback/contact')
@@ -54,7 +53,6 @@ describe('Idempotency-Key — POST /feedback/contact', () => {
 
         expect(response.status).toBe(422);
         expect(response.body.errors[0].code).toBe('IDEMPOTENCY_KEY_MISMATCH');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('answers 409 while a request with the same key is still in flight', async () => {
@@ -78,7 +76,6 @@ describe('Idempotency-Key — POST /feedback/contact', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('IDEMPOTENCY_IN_FLIGHT');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('rejects a malformed key before writing to the ledger', async () => {
@@ -88,7 +85,6 @@ describe('Idempotency-Key — POST /feedback/contact', () => {
             .send(PAYLOAD);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
         expect(await idempotencyRecordModel.countDocuments({})).toBe(0);
     });
 

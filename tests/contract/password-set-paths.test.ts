@@ -157,7 +157,6 @@ describe.each([signupPath, changePath, resetPath, adminCreatePath, adminUpdatePa
             const { response, assertNoChange } = await attempt();
 
             expect(response.status).toBe(422);
-            expect(response).toSatisfyApiSpec();
             await assertNoChange();
         });
     }
