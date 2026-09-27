@@ -69,18 +69,29 @@ x-error-codes:
             status: 415,
             description: "The request's `Content-Type` is not one this operation accepts."
         }
-    LIMIT_PART_COUNT: { status: 400, description: 'A multipart upload carries too many parts (multer).' }
-    LIMIT_FILE_SIZE: { status: 400, description: 'An uploaded file exceeds this deployment''s size limit (multer).' }
-    LIMIT_FILE_COUNT: { status: 400, description: 'A multipart upload carries too many files (multer).' }
+    LIMIT_PART_COUNT:
+        { status: 400, description: 'A multipart upload carries too many parts (multer).' }
+    LIMIT_FILE_SIZE:
+        {
+            status: 400,
+            description: "An uploaded file exceeds this deployment's size limit (multer)."
+        }
+    LIMIT_FILE_COUNT:
+        { status: 400, description: 'A multipart upload carries too many files (multer).' }
     LIMIT_FIELD_KEY: { status: 400, description: 'A multipart field name is too long (multer).' }
     LIMIT_FIELD_VALUE: { status: 400, description: 'A multipart field value is too long (multer).' }
-    LIMIT_FIELD_COUNT: { status: 400, description: 'A multipart upload carries too many non-file fields (multer).' }
+    LIMIT_FIELD_COUNT:
+        {
+            status: 400,
+            description: 'A multipart upload carries too many non-file fields (multer).'
+        }
     LIMIT_UNEXPECTED_FILE:
         {
             status: 400,
             description: 'A multipart upload carries a file under a field name this operation does not accept (multer).'
         }
-    MISSING_FIELD_NAME: { status: 400, description: 'A multipart file part carries no field name (multer).' }
+    MISSING_FIELD_NAME:
+        { status: 400, description: 'A multipart file part carries no field name (multer).' }
     SERVICE_UNAVAILABLE:
         {
             status: 503,
