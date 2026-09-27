@@ -34,10 +34,10 @@ jobs:
             # Picks the query pack and sets up the extractor. No build step: JS/TS is analysed
             # from source, so unlike compiled languages nothing has to run first.
             - name: Initialize CodeQL
-              uses: github/codeql-action/init@v3
+              uses: github/codeql-action/init@v4
               with:
                   languages: javascript-typescript
 
             # Runs the queries and uploads the SARIF results to the Security tab.
             - name: Perform CodeQL analysis
-              uses: github/codeql-action/analyze@v3
+              uses: github/codeql-action/analyze@v4
