@@ -1,7 +1,7 @@
 ---
 source: src/kernel/required-config.ts
-sha256: 43b9c5eedaa5faf23a9b237544382e0b7e1086c1ff6ee86eb9afec3cd6b8a7d0
-generated_at: 2026-09-23T17:56:17.782875+00:00
+sha256: d1a3d8cdb217596f03fb4aed4d1aebf19fc838c3908952f8bef1617b570ae8a4
+generated_at: 2026-09-27T14:20:01.016373+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Boot-time configuration gate. Collects every required environment variable across all enabled modules plus app-tier checks, validates them in a single pass, and throws once listing **all** offending variables — so a misconfigured deployment names every mistake at once instead of one per restart. Skipped entirely under `NODE_ENV=test` and the demo profile.
+Boot-time configuration gate. Before the application starts, it validates every required environment variable across all enabled modules plus app-tier checks, collecting **all** failures into a single thrown error so a misconfigured deployment reports every mistake at once instead of one per restart.
 
 ## Key elements
 
-- **`NonModuleChecks` (interface)** — the shape the caller (currently `src/app/required-config.ts`) hands in for variables that belong to neither a module nor the kernel: optional `required` entries and `customChecks` callbacks.
-- **`checkSelector` (const)** — wraps a resolver that _throws_ on an unrecognised selector and converts that throw into the standard `string[]` message shape. Reports the resolver's own message rather than folding the bare key into the "missing / too short / placeholder" phrasing, which would misdescribe a "value present but unknown" error.
-- **`assertRequiredConfig` (const, exported)** — the main entry point. Accepts `AppModule[]` and optional `NonModuleChecks`. Builds three problem buckets (missing/short/placeholder, custom-check failures, forbidden-in-production) and throws a single `Error` if any bucket is non-empty. Returns silently in test or demo mode.
-- **`applies` (private)** — filters a `RequiredConfig` entry by its `productionOnly` flag against the current `NODE_ENV`.
-- **`fails` (private)** — checks a comma-separated env value member-by-member against `minLength` and `placeholder`, so a key-ring variable is validated across all members, not just the first.
-- **`forbiddenUnderProduction` (private)** — collects module-declared `forbiddenInProduction` variables that are actually _set_ when `NODE_ENV=production` (the inverse of every other check).
+- **`NonModuleChecks`** (interface) — App-tier configuration checks that belong to no module: declarative `required` entries (same shape as a module's `requiredConfig`) and `customChecks` callbacks returning `string[]`.
+- **`checkSelector`** (function) — Probes a resolver that throws on an unrecognised selector; returns `[]` on success or a one-element array with the resolver's own error message on failure. Used to confirm a configured provider/implementation exists in this build.
+- **`assertRequiredConfig`** (function) — The main entry point. Merges module-declared `requiredConfig`, `NonModuleChecks`, module `customCheck` callbacks, and `forbiddenInProduction` entries; throws once with every problem listed if any check fails. No-ops under `NODE_ENV=test` or demo mode.
+- **`applies` / `fails` / `forbiddenUnderProduction`** (internal helpers) — Scope filtering (`productionOnly`), value validation (absent / too short / placeholder, including comma-separated member-by-member), and inverse production-forbidden check respectively.
 
 ## Relationships
 
-- **`src/app/required-config.ts`** — the current caller; supplies `NonModuleChecks` for app-tier variables that no module owns and invokes `assertRequiredConfig` at startup.
-- **`src/infrastructure/runtime/demo-profile.ts`** — provides `isDemoMode()` used to short-circuit the entire check for demo deployments.
-- **`src/kernel/registry.ts`** — source of the `AppModule` and `RequiredConfig` types that every check consumes.
-- **Module manifests** (`antibot/module.ts`, `payments/module.ts`, etc.) — each module declares its own `requiredConfig`, `customCheck`, and `forbiddenInProduction` entries on its `AppModule` object; this file reads them generically via the `appModules` array.
-- **`tests/unit/kernel/required-config.test.ts`** — unit tests for the gate's own logic.
-- **`tests/unit/app/required-config.test.ts`** — tests the app-tier caller and its `NonModuleChecks` wiring.
-- **Module config tests** (`orders/config.test.ts`, `products/config.test.ts`, `webhooks/module.test.ts`, `antibot/module.test.ts`, `payments/module.test.ts`, `two-factor.test.ts`) — exercise the module-declared config entries that flow through this gate.
+- **`src/kernel/registry.ts`** — Provides the `AppModule` and `RequiredConfig` types consumed throughout this file.
+- **`src/infrastructure/runtime/demo-profile.ts`** — Supplies `isDemoMode()`; when true, `assertRequiredConfig` returns early so demo deployments (often booted from a copied `.env-example`) are not blocked.
+- **`src/app/required-config.ts`** — The current caller that assembles and passes the `NonModuleChecks` object into `assertRequiredConfig`.
+- **`tests/unit/kernel/required-config.test.ts`** — Unit tests for this module's exports.
+- **`tests/unit/app/required-config.test.ts`** — Tests the app-tier caller path.
+- **`tests/unit/scripts/setup/first-run.test.ts`** — Exercises the gate in the first-run setup scenario.
+- **Module tests** (antibot, payments, orders, products, webhooks, account) — Exercise `assertRequiredConfig` indirectly through their module manifests' `requiredConfig` / `customCheck` / `forbiddenInProduction` declarations.
 
 ## Notes
 
-- The throw message deliberately uses **three separate clauses** (missing/short/placeholder; custom-check failures; forbidden-set) rather than one flat list, so the operator can tell _which kind_ of problem each variable has.
-- `checkSelector` exists because a resolver that throws is a _different_ failure category from "value absent or too short" — folding it into the bare-key list would mislead the operator.
-- `fails` splits on commas so multi-member values (e.g. token key rings) are checked member-by-member; a placeholder in the _second_ member still blocks boot.
-- The `eslint-disable` on the try/catch in `checkSelector` is intentional: the resolver's throw **is** the signal being probed; there is no synchronous "does this throw?" API.
-- The file docblock references `docs/reference/ops.md` for operational context.
+- `minLength: 0` means "may stay unset": an empty value passes, but the literal placeholder string is still refused if the variable *is* set to it.
+- Comma-separated values (e.g. token key rings) are validated **member-by-member**; a placeholder or truncation on any member — not just the first — fails the check. Blank members from trailing commas are dropped, not treated as missing.
+- `checkSelector` deliberately reports the resolver's own thrown message (which names the variable and allowed values) rather than folding into the generic "missing, too short, or placeholder" phrasing used for bare-key entries.
+- The thrown error message uses three distinct clauses (one per failure shape) so the operator can tell which kind of problem applies to which variable.
+- `forbiddenInProduction` is the inverse of every other check: it refuses a variable that **is** set in production rather than one that is absent.

@@ -1,7 +1,7 @@
 ---
 source: src/kernel/authentication.ts
-sha256: 3eb7afdfaeb649496cb749f763e64949756568a52238e73cd832a08880441339
-generated_at: 2026-09-23T17:54:54.420965+00:00
+sha256: aace2c3382f3048a764381673d2e8ea3c131ce5b3ec227d08539d186e8344969
+generated_at: 2026-09-27T14:18:13.169120+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Kernel-level port that decouples token _resolution_ from token _validation_. It declares two resolver interfaces (user tokens and machine credentials), holds the registered implementations in module-scoped variables, and exposes thin async wrappers that middleware and guards call. Modules (`account`, `api-keys`) install their concrete implementations at import time, so the kernel never imports a module directly.
+Declares the kernel's authentication port: the contract between the kernel (which needs to know *who* is calling) and the modules that can answer (`account` for user tokens, `api-keys` for machine credentials). It exists so the dispatch logic and the 401-vs-403 distinction live in one kernel-level file rather than being scattered across middleware, while concrete token verification stays in the owning module.
 
 ## Key elements
 
-- **`AuthResolver`** — interface with `fromAccessToken` / `fromRefreshToken`; returns `AuthContext | undefined` (undefined means the user no longer exists, not that the token is bad).
-- **`CredentialResolver`** — interface with `fromBearerToken`; returns `ResolvedCredential | undefined`.
-- **`ResolvedCredential`** — `{ caller: Caller; credentialId: string }`; a caller already scoped to the credential's own permissions.
-- **`API_KEY_TOKEN_PREFIX`** (`'sk_'`) — dispatch constant. A JWT always starts with `eyJ` (base64url of `{"alg"`), so the kernel can route to the correct resolver by prefix alone without attempting a JWT decode.
-- **`registerAuthResolver(impl)`** / **`registerCredentialResolver(impl)`** — one-shot setters called at module import time.
-- **`resolveAccessToken(token)`** / **`resolveRefreshToken(token)`** — delegate to the registered `AuthResolver`. Throws if none is registered (no `account` module → no valid build).
-- **`resolveCredential(token)`** — delegates to the registered `CredentialResolver`; returns `undefined` (not an error) when no `api-keys` module is present in the build.
-- **`requireResolver()`** (private) — guards the auth path; throws a descriptive error when unregistered.
+- **`AuthResolver`** (interface) — the port `account` implements: `fromAccessToken` / `fromRefreshToken`, each returning `Promise<AuthContext | undefined>`.
+- **`CredentialResolver`** (interface) — the port `api-keys` implements: `fromBearerToken`, returning `Promise<ResolvedCredential | undefined>`.
+- **`ResolvedCredential`** (interface) — `{ caller: Caller, credentialId: string }`; the caller is pre-floored to the credential's own permissions.
+- **`API_KEY_TOKEN_PREFIX`** — the literal `'sk_'`; used by `authorizations` to dispatch between the JWT and machine-credential paths without attempting a JWT parse.
+- **`registerAuthResolver`** / **`registerCredentialResolver`** — one-shot installers called from the respective module's `onRegistered`.
+- **`resolveAccessToken`** / **`resolveRefreshToken`** — thin wrappers that throw if no `AuthResolver` is registered, then delegate. Throwing is correct here: `account` is load-bearing in every build.
+- **`resolveCredential`** — delegates to `credentialResolver` if present; returns `undefined` (not an error) when the `api-keys` module was excluded from the build.
 
 ## Relationships
 
-- **`src/types/auth-context.ts`** — source of `AuthContext` and `Caller` types consumed throughout this file.
-- **`src/modules/account/module.ts`** — imports `registerAuthResolver` and supplies the `AuthResolver` implementation at boot.
-- **`src/modules/api-keys/module.ts`** — imports `registerCredentialResolver` and supplies the `CredentialResolver` implementation.
-- **`src/modules/api-keys/credentials.ts`** — implements the actual credential validation logic behind the `CredentialResolver` port.
-- **`src/kernel/middlewares/authorizations.ts`** — the HTTP guard that calls `resolveAccessToken`, `resolveRefreshToken`, or `resolveCredential` and maps results to 200/401/403.
-- **`tests/unit/kernel/authorizations.test.ts`** — exercises the guard's decision tree against these resolution functions.
-- **`src/modules/api-keys/tests/integration/api-keys.test.ts`** — integration test that exercises the full `registerCredentialResolver` → `resolveCredential` path.
+- **`src/types/auth-context.ts` / `src/types/index.ts`** — supplies the `AuthContext` and `Caller` types this file re-exports in its interfaces.
+- **`src/modules/account/module.ts`** — calls `registerAuthResolver` during boot to install its session resolver.
+- **`src/modules/account/session/resolver.ts`** — provides the concrete `AuthResolver` implementation (JWT verification, user lookup).
+- **`src/modules/api-keys/module.ts`** — calls `registerCredentialResolver` during boot.
+- **`src/modules/api-keys/services/resolver.ts`** — provides the concrete `CredentialResolver` implementation (`fromBearerToken`).
+- **`src/modules/api-keys/credentials.ts`** — defines the credential record shape consumed by the resolver and surfaced in `ResolvedCredential.credentialId`.
+- **`src/kernel/middlewares/authorizations.ts`** — the guard that calls `resolveAccessToken` / `resolveRefreshToken` / `resolveCredential` and applies the 401-vs-403 split.
+- **`tests/unit/kernel/authentication.test.ts`** — unit-tests the registration, dispatch, and error paths in this file.
+- **`tests/unit/kernel/authorizations.test.ts`** — exercises the middleware that depends on these resolvers.
+- **`tests/unit/kernel/api-keys.test.ts`** (integration) — end-to-end test of the `sk_` credential path through `resolveCredential`.
 
 ## Notes
 
-- **401 vs 403 contract.** A _rejected_ token (malformed, expired, wrongly signed) and a _resolved-but-user-deleted_ token (`undefined`) must stay distinct. Collapsing them would turn a deleted account's 403 into a 401 ("log in again") for an account that can no longer log in.
-- **Asymmetry on unregistered resolvers.** `resolveAccessToken` / `resolveRefreshToken` _throw_ when no `AuthResolver` is registered (a build without `account` is broken). `resolveCredential` _returns `undefined`_ when no `CredentialResolver` is registered (a build without `api-keys` is perfectly valid). Guards must not special-case the missing-credential path.
-- **Dispatch by string prefix, not by token shape.** The `sk_` prefix check is a kernel concern and lives here, not in `api-keys`. Do not move it.
-- **Registration is at import time, not boot time.** Both `register*` functions are called during module evaluation (top-level import), so by the time the first request arrives the resolvers are set. There is no runtime re-registration.
+- **401 vs 403 is intentional and structural.** A *reject* (malformed/expired/unsigned token) is a 401; a *resolve-to-undefined* (valid token, user deleted) is a 403. Collapsing them would tell a deleted user to "log in again" for an account that cannot exist. The module docstring and `docs/tools/security.md` both call this out.
+- **Asymmetric failure semantics.** `resolveAccessToken` / `resolveRefreshToken` throw when no resolver is registered (the build is broken). `resolveCredential` silently returns `undefined` in that case, because `api-keys` is an optional module. Do not "fix" this asymmetry without understanding why.
+- **`API_KEY_TOKEN_PREFIX` lives here, not in `api-keys`.** The *dispatch* between the two credential paths is a kernel concern; the module that mints the tokens doesn't need to know the prefix.
+- **`Promise.resolve().then(…)` wrappers** are used to keep the public API always-async (so callers can `.catch` uniformly) while the resolver itself may be synchronous. This is a convention, not a performance choice.

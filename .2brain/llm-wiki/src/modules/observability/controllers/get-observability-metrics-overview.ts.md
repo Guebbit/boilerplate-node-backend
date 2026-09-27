@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/controllers/get-observability-metrics-overview.ts
-sha256: 88b49590472ed01ef633214f571e24fc2cb43c6831f9a4c0b9fadc89dfbcac67
-generated_at: 2026-09-23T18:55:47.658229+00:00
+sha256: e9f5d18c48fb2cf98652a8655dfd7f259a749c134efe25b2de11c416f7baedff
+generated_at: 2026-09-27T15:04:09.954454+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller for `GET /observability/metrics/overview`. Aggregates HTTP, auth, business, database, and process metrics into a single structured JSON response. It resolves every domain counter **by metric name** off the shared prom-client registry instead of importing the counter objects, which keeps this module decoupled from the domain modules it reports on (enforced by the `module-coupling-observability` dependency-cruiser rule).
+Controller for `GET /observability/metrics/overview`. Aggregates a fixed set of operational counters, gauges, and process stats into a single JSON summary. It resolves every domain metric by **name** off the shared prom-client registry instead of importing the domain counters directly, so this module survives the deletion of any business domain it reports on.
 
 ## Key elements
 
-- **`readCounter(name)`** — Looks up a metric by name via `metricsRegistry.getSingleMetric(name)`. Returns `[]` if the metric is absent (i.e. the owning module isn't in this build), so the response shape stays stable.
-- **`sumByLabel(values, labelKey, labelValue)`** — Filters `MetricSample[]` by a specific label (e.g. `status: "success"`) and sums the matching values.
-- **`getObservabilityMetricsOverview`** (exported) — The Express handler. Fires all metric reads in parallel with `Promise.all`, assembles an `ObservabilityMetricsSummary`, and replies via `successResponse`. Errors are funnelled through `catchAs`.
-- **`MetricSample`** (local interface) — Shape of one prom-client sample: `{ value, labels }`.
+- **`MetricSample`** (interface) — shape of one prom-client counter sample: `{ value, labels }`.
+- **`readCounter(name: string): Promise<MetricSample[]>`** — looks up a metric by name on `metricsRegistry`; returns `[]` when the metric is absent (i.e. the owning module isn't in this build). No domain import required.
+- **`sumByLabels(values, filter)`** — sums `MetricSample[]` entries whose labels match every key/value pair in `filter`. Used to split counters by `status: 'success' | 'failure'`.
+- **`getObservabilityMetricsOverview`** (exported) — the Express handler. Fans out 11 reads in parallel via `Promise.all`, assembles an `ObservabilityMetricsSummary`, and sends it through `successResponse`. Errors are forwarded to `catchAs`.
 
 ## Relationships
 
-- **`metrics-registry.ts`** — `readCounter` calls `metricsRegistry.getSingleMetric(name)` to resolve metrics by string name. This is the core decoupling mechanism.
-- **`metrics-http.ts`** — `httpInflightRequests` gauge is imported directly (infrastructure-owned, not domain-owned) and read via `.get()`.
-- **`http-readback.ts`** — Supplies `getHttpRequestCounters`, `getLatencyPercentiles`, and the `sumMetricValues` helper used throughout the aggregation.
-- **`process-snapshot.ts`** — `processSnapshot()` provides uptime and memory figures for the `process` section of the response.
-- **`response.ts`** — `successResponse` wraps the JSON payload.
-- **`controller.ts`** — `catchAs` handles the error path and writes a structured error response.
-- **`routes.ts`** — Registers this handler on the `/observability/metrics/overview` route.
-- **`types/index.ts`** — `ObservabilityMetricsSummary` defines the response shape (fixed by `openapi.yaml`).
-- **`metrics-overview.test.ts`** — Unit tests for the controller.
+- **`src/infrastructure/http/response.ts`** — imports `successResponse` for the 200 reply.
+- **`src/infrastructure/http/controller.ts`** — imports `catchAs` for uniform error serialization.
+- **`src/infrastructure/observability/metrics-http.ts`** — imports the `httpInflightRequests` gauge (read directly, not by name).
+- **`src/infrastructure/observability/metrics-registry.ts`** — imports `metricsRegistry`; the single lookup point `readCounter` uses to resolve any metric by name.
+- **`src/modules/observability/http-readback.ts`** — imports `getHttpRequestCounters`, `getLatencyPercentiles`, and `sumMetricValues` helpers.
+- **`src/modules/observability/services/process-snapshot.ts`** — imports `processSnapshot` for uptime and memory.
+- **`src/modules/observability/routes.ts`** — registers this handler on the `/observability/metrics/overview` route.
+- **`src/types/index.ts`** — imports the `ObservabilityMetricsSummary` response type.
+- **`src/modules/observability/tests/unit/metrics-overview.test.ts`** — unit-tests this controller.
 
 ## Notes
 
-- **Name-based lookup is intentional and enforced.** Importing domain counters (auth, cart, orders) would couple this module to three domains and make deleting any of them a compile error here. The dependency-cruiser rule `module-coupling-observability` restricts cross-module imports to `audit-logs` only.
-- **Absent metric ≠ error.** If a module owning a counter is not in the current build, `readCounter` returns `[]` and the corresponding field reads as zero. The response shape is identical either way, so clients never need to know which modules are present.
-- **Gauges are read identically to counters.** `products_low_stock_total` and `inventory_reserved_units_total` are gauges, but `readCounter` works the same way because prom-client's `.get()`/`collect` recounts at scrape time.
-- **`httpInflightRequests` is the one direct import of a metric object.** It is infrastructure-owned (not a domain counter), so it bypasses the name-lookup pattern.
+- **No domain imports by design.** The file must not import counters from `account`, `cart`, or `orders`. The dependency-cruiser rule `module-coupling-observability` (in `.dependency-cruiser.cjs`) enforces that this module may only reach `audit-logs` among business domains. Adding a direct counter import will break that rule.
+- **Absent metric ≠ error.** If a module (e.g. inventory) is excluded from the build, its counter is simply missing from the registry and `readCounter` returns `[]`, which sums to `0`. The response shape stays constant per `openapi.yaml`, so clients never need to branch on which modules exist.
+- **Gauges read the same way.** `products_low_stock_total` and `inventory_reserved_units_total` are gauges, but `readCounter` handles them identically because prom-client `get()` on a gauge also returns `{ values }`.
+- **`httpInflightRequests` is the one metric read by direct import** rather than by name; it lives in the observability infrastructure layer, not a business domain, so the coupling rule does not apply.

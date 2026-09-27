@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/tests/integration/stock.test.ts
-sha256: 446f9883f42af4a087654a1062e03c5a683516ed2756d113b5e6820cd6757209
-generated_at: 2026-09-23T18:34:06.123561+00:00
+sha256: 32206fc03f47b69e7db8cadc101274bd748c6ec753cf4f56b1eeebb9d2124673
+generated_at: 2026-09-27T14:48:27.927908+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for the reservation-based stock model. Verifies the core invariant that units are _held_ (reserved) between checkout and payment rather than _sold_, and are recoverable by cancellation or expiry sweep. Runs against a real MongoDB instance because the guarantees under test are conditional writes that a mock cannot demonstrate.
+Integration test suite for the stock reservation model across the full order lifecycle. Verifies the core invariant that units leave the shop only once PAID: between checkout and payment they are held (reserved), not sold, and recoverable via cancel or expiry sweep. Every case asserts `onHand` and `reserved` together to catch a shop that merely decrements stock. Runs against real MongoDB because the guarantees under test (conditional/atomic writes) cannot be demonstrated with mocks.
 
 ## Key elements
 
-- **`countersOf(productId)`** — helper that reads `onHand`, `reserved`, and derived `available` directly from the product document. Every assertion in the file goes through this so both counters are checked together.
-- **`withoutWindow(body)`** — wraps a test body with `NODE_RESERVATION_TTL_MINUTES=0` via `withEnvironment`, making any hold immediately stale for expiry-sweep cases. Scoped per-call so other tests keep a normal TTL.
-- **`describe('checkout holds units without selling them')`** — happy-path reservation, insufficient-stock refusal (single and multi-line), all-units-held scenario, rollback of partial reservations, and a concurrent-last-unit race.
-- **`describe('a rollback that itself fails')`** — forced-failure paths where `reserveForOrder` writes an order row but the subsequent `deleteOne` or hold-release throws; asserts the customer sees the stock refusal (409), not a 500.
-- **`beforeEach`** — calls `resetDomainEvents()` then `registerModules([...])` so inter-module event subscriptions (notably `orders` listening for `RESERVATION_EXPIRED`) are wired.
+- **`setupTestDb()`** — initialises the in-memory (or containerised) Mongo instance for the suite.
+- **`beforeEach` block** — calls `resetDomainEvents()` and `registerCheckoutModules([paymentsModule])` so that cross-module event subscriptions (notably `orders` listening for `RESERVATION_EXPIRED`) are active before every test.
+- **`withoutWindow` helper** — wraps a test body with `NODE_RESERVATION_TTL_MINUTES=0` so any reservation opened inside it is immediately stale when the sweep reads it. Scoped per-test, not global, because the TTL is read lazily on each reserve.
+- **`describe('checkout holds units without selling them')`** — six cases: reservation on confirm, insufficient-stock refusal (single and multi-line), all-units-held-by-another, partial-hold rollback on a failed line, and a concurrent "last unit" race where exactly one checkout wins the conditional write.
+- **`describe('a rollback that itself fails')`** — verifies that a refused reserve writes no order and burns no order-number counter, and that the order is still retracted even when `inventoryService.releaseForOrder` rejects. Spies on `orderRepository`, `cartRepository`, `inventoryService`, and `logger`.
+- **`countersOf` (from products factories)** — the central assertion helper that reads `{ onHand, reserved, available }` from Mongo after each scenario.
 
 ## Relationships
 
-- **`src/modules/cart/services/index.ts`** — primary test target; `cartService.orderConfirm` and `cartService.cartItemAddById` are exercised in every case.
-- **`src/modules/inventory/service.ts`** — `inventoryService.reserveForOrder` is spied on in the rollback-failure block to force a `held: false` outcome deterministically.
-- **`src/modules/orders/repository.ts`** — `orderRepository.deleteOne` is spied on to simulate a failed rollback; `readOrder` is imported for order state assertions.
-- **`src/modules/orders/module.ts`** — registered so its `RESERVATION_EXPIRED` subscription is active; without it the expiry sweep would release units but leave orders `pending`, making expiry assertions half-blind.
-- **`src/kernel/registry.ts`** — `registerModules` wires all module subscriptions before each test.
-- **`src/kernel/events.ts`** — `resetDomainEvents` clears the event bus between tests to prevent cross-test leakage.
-- **`src/infrastructure/adapters/logger.ts`** — `logger.error` is spied on to assert the rollback-failure log line.
-- **`src/modules/cart/repository.ts`** — `cartRepository` imported for cart-state verification (e.g., cart survives a refused checkout).
-- **`src/modules/account/module.ts`, `src/modules/delivery/module.ts`, `src/modules/inventory/module.ts`, `src/modules/payments/module.ts`, `src/modules/products/module.ts`, `src/modules/users/module.ts`** — all registered together so their cross-module subscriptions and event handlers are present; the file does not call their services directly (except `productService.findByIdRaw` inside `countersOf`).
+- **`src/modules/cart/services/index.ts`** — `cartService` is the primary system under test (`cartItemAddById`, `orderConfirm`, `cartGetForBadge`).
+- **`src/modules/cart/repository.ts`** — `cartRepository.setShippingMethod` prepares the cart; `clearLinesIfUnchanged` is spied in the rollback-failure case.
+- **`src/modules/inventory/index.ts` / `src/modules/inventory/service.ts`** — `inventoryService.releaseForOrder` is the release path mocked to simulate a Mongo outage.
+- **`src/modules/orders/index.ts` / `src/modules/orders/services/index.ts`** — `orderService` imported for the order-creation side of checkout.
+- **`src/modules/orders/repository.ts`** — `orderRepository.create`, `deleteOne`, `incrementOrderNumberCounter` spied to assert rollback boundaries.
+- **`src/modules/orders/tests/factories.ts`** — provides `orderRepository`, `readOrder`, `countOrders` test helpers.
+- **`src/modules/payments/module.ts`** — registered via `registerCheckoutModules` so the payments subscription is live.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` and `countersOf` are the stock-state fixtures and assertions.
+- **`src/modules/users/tests/factories.ts`** — `createUser` fixtures for multi-user race tests.
+- **`src/kernel/events.ts`** — `resetDomainEvents()` clears the in-memory event bus between tests.
+- **`tests/support/callers.ts`** — `testCallerContext` and `asCustomer` provide authenticated caller metadata.
+- **`tests/support/checkout-modules.ts`** — `registerCheckoutModules` wires module event subscriptions for the test process.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.error` spied (and silenced) in the rollback-failure case.
 
 ## Notes
 
-- **Real Mongo, not mocks.** The file header explicitly states the guarantees are conditional writes a mock cannot show. `setupTestDb()` is called at module top-level.
-- **`clearMocks` vs. forced failures.** The rollback-failure block uses `jest.spyOn(...).mockResolvedValue / mockRejectedValue` and must restore with `jest.restoreAllMocks()` in `afterEach` because the global `clearMocks` only empties call logs, not implementations.
-- **`available` is always asserted alongside `onHand` and `reserved`.** The file header calls out that checking either counter alone can pass for a shop that never reserved.
-- **Concurrent-checkout test uses `Promise.all`** — both pre-flights see the unit as available; the loser is refused by the _conditional reserve_, not the pre-flight. The error's `available: 0` reflects the winner's post-hold state, not what the loser observed earlier.
-- **TTL is read lazily on each reserve**, which is what makes `withoutWindow` viable as a per-test override rather than a global setting.
+- **Real Mongo, not mocks.** The suite's whole point is conditional (atomic) writes — a mock cannot prove that two concurrent `orderConfirm` calls can't both reserve the last unit. Do not replace the DB with in-memory fakes.
+- **`clearMocks` vs `restoreAllMocks`.** Jest's `clearMocks` resets call counts but leaves `mockImplementation`/`mockRejectedValue` in place. The rollback-failure describe block therefore calls `jest.restoreAllMocks()` in its own `afterEach`.
+- **Event-driven cross-module edge.** `RESERVATION_EXPIRED` is the only interaction that travels as a domain event rather than a direct call. If `registerCheckoutModules` is skipped, the expiry sweep releases units but leaves orders in `pending`, and the expiry cases pass only half the assertions.
+- **Hold precedes order write.** The reservation is taken before `orderRepository.create` is called. A refused reserve therefore has no order to roll back — the tests explicitly assert `createSpy` and `counterSpy` were never invoked.
+- **`withoutWindow` is deliberately narrow.** Setting the TTL to zero globally would make every reservation in the suite expire mid-run; the helper exists so only the expiry-specific cases see a closed window.

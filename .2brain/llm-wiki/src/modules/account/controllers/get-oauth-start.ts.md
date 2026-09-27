@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/get-oauth-start.ts
-sha256: b9a2a7ca00e8909e0cda5a112ed534fba3bf4904ad8cb0c978db3dcea6ce950c
-generated_at: 2026-09-23T18:00:40.419645+00:00
+sha256: e56bea531e0561a0aece4b8801fa3474cc57ddc2d8c35b5d82a1af42d04015af
+generated_at: 2026-09-27T14:23:15.151963+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express controller for `GET /account/oauth/:provider`. It is the single route in the account module that responds with a `Location` redirect (302) rather than a JSON envelope, sending the browser to the provider's consent screen after minting CSRF `state` and PKCE credentials.
+Express controller for `GET /account/oauth/:provider`. It is the single account route that responds with a `Location` redirect (302) rather than a JSON envelope: it mints the OAuth `state` and PKCE verifier, stores both (plus an optional `continue` path) as cookies, and sends the browser to the provider's consent screen.
 
 ## Key elements
 
-- **`getOAuthStart(request, response)`** – The sole export. Resolves the provider by name (lowercased), 404s via `rejectResponse` if unconfigured, then:
-    1. Generates an OAuth `state` token and sets it as a cookie.
-    2. Generates a PKCE code verifier, sets it as a cookie, and derives the code challenge.
-    3. Builds the authorize URL via `provider.authorizeUrl(state, redirectUri, challenge)` and issues a 302 redirect.
+- **`getOAuthStart`** (exported) — the route handler. Accepts `(request: Request, response: Response)`.
+  - Resolves the provider by lowercasing `:provider` and calling `resolveOAuthProvider`.
+  - On unknown provider: calls `rejectResponse(response, 404, …)` and returns early.
+  - Generates `state` and `codeVerifier`, sets them via `createStateCookie` / `createVerifierCookie`.
+  - If `request.query.continue` passes `isSameOriginPath`, persists it with `createContinueCookie`; otherwise silently ignored.
+  - Builds the authorize URL via `provider.authorizeUrl(state, oauthRedirectUri, codeChallengeOf(verifier))` and issues `response.redirect(302, authorizeUrl)`.
 
 ## Relationships
 
-- **`src/modules/account/routes.ts`** – Registers the `GET /account/oauth/:provider` route that dispatches to `getOAuthStart`.
-- **`src/modules/account/oauth/providers/index.ts`** – Supplies `resolveOAuthProvider`, the lookup that maps a provider name string to a configured provider object (or `null`).
-- **`src/modules/account/oauth/state.ts`** – Supplies all PKCE/CSRF primitives: `generateOAuthState`, `createStateCookie`, `generateCodeVerifier`, `codeChallengeOf`, `createVerifierCookie`.
-- **`src/modules/account/oauth/config.ts`** – Supplies `oauthRedirectUri(name)`, the canonical callback URL handed to the provider.
-- **`src/infrastructure/http/response.ts`** – Supplies `rejectResponse`, used to emit the 404 JSON envelope when the provider is unknown.
-- **`src/infrastructure/i18n/index.ts`** – Supplies the `t` translation function used in the 404 error message (`account.oauth.unknown-provider`).
+- **`src/modules/account/routes.ts`** — registers `getOAuthStart` as the handler for `GET /account/oauth/:provider`.
+- **`src/modules/account/oauth/providers/index.ts`** — `resolveOAuthProvider` maps the string param to a concrete provider object (with `.name`, `.authorizeUrl`).
+- **`src/modules/account/oauth/state.ts`** — supplies all cryptographic and cookie helpers: `generateOAuthState`, `generateCodeVerifier`, `codeChallengeOf`, `createStateCookie`, `createVerifierCookie`, `createContinueCookie`, `isSameOriginPath`.
+- **`src/modules/account/oauth/config.ts`** — `oauthRedirectUri` returns the registered callback URL for a given provider name.
+- **`src/infrastructure/http/response.ts`** — `rejectResponse` is the only error path (404 unknown provider); it emits the standard JSON error envelope.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — `t('account.oauth.unknown-provider')` localises that 404 message.
 
 ## Notes
 
-- The 404 is deliberate and loud: an unconfigured provider must not silently fall through. The comment explicitly parallels the "unset `NODE_PAYMENT_PROVIDER`" convention.
-- The controller is the _only_ route in this module that returns a redirect; every other account controller returns a JSON envelope via the `rejectResponse` / success helpers.
-- Provider name matching is case-insensitive (`toLowerCase()` on the param) but must still be an exact key in the provider registry.
-- Both `state` and the PKCE verifier are stored as cookies (not query params) so they survive a potential multi-step consent flow and are not visible in the URL.
+- This route is the **only** account endpoint that cannot express a JSON error body to the user — the browser is already mid-navigation. The one exception is the 404, which is deliberately "loud" (mirrors the `NODE_PAYMENT_PROVIDER` unset pattern) so a misconfigured deployment is immediately visible.
+- An invalid or absent `?continue=` value is **dropped silently** (no error response, no redirect loop); only same-origin relative paths are accepted.
+- The provider param is lowercased before lookup, so `?provider=Google` and `?provider=google` both resolve.
+- The redirect is **302** (temporary), not 301, consistent with OAuth consent-screen semantics.

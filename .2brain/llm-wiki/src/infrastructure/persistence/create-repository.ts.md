@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/persistence/create-repository.ts
-sha256: 45a21ef3cde276abc8131dd9d94eeda17f4ca6b3468184ab2f40ae2ce5003d61
-generated_at: 2026-09-23T17:49:49.576169+00:00
+sha256: 7be3f30402d163efa27fd45862841577d47637787784dc44a04bfde72a030f33
+generated_at: 2026-09-27T14:13:51.603609+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generic repository factory that every module's `repository.ts` builds on. It encapsulates Mongoose-specific concerns (ObjectId coercion, lean→normalized mapping, filter-bag → query compilation) behind a single `createRepository` call, so module services never hand-roll `$regex`, `$elemMatch`, or `ObjectId` conversion. Modules consume it via object spread—not `extends`—so a module that cannot honour part of the contract narrows its own type rather than inheriting a method it would have to break.
+Generic repository factory that every module's `repository.ts` composes. It binds Mongoose CRUD operations and spec-driven search (regex, ObjectId, ranges, presence, text) into a single typed contract, so individual modules never hand-roll query construction or lean→wire normalization. A module spreads the factory's result into its own repository object (composition, not inheritance), narrowing its own type when it can't honour part of the contract.
 
 ## Key elements
 
-- **`createRepository<TDocument>(model, options)`** — The factory. Returns a `Repository<TDocument>` object with `findById`, `findOne`, `findByIdRaw`, `findAll`, `count`, `create`, `save`, `build`, `deleteOne`, `search`, `normalize`, and `buildWhere`.
-- **`Repository<TDocument>`** — Explicitly written-out return type (avoids TS7056 serialization errors when spread into a module repository). The single reference for what a repository can do.
-- **`SearchSpec`** — Per-collection declaration of which filter keys map to which Mongo paths, and how (objectId, exact, boolean, regex, arrayRegex, text, ranges). Keeping this declarative pushes `$regex`/`$elemMatch`/`$gte` out of services.
-- **`FindAllOptions`** — Optional `sort`, `skip`, `limit` (defaults to `FIND_ALL_LIMIT = 1000`) for `findAll` pagination.
-- **`PaginatedResult<TDocument>`** — `{ items, meta }` shape returned by `search`.
-- **`RepositoryOptions`** — Takes a `SerializeTransform` (from `./serialize`) and an optional `SearchSpec`.
-- **`Lean<TDocument>`** — Type helper: what `.lean()` actually returns (strips `Document` instance methods and `id` virtual, restores `_id`).
-- **`toObjectId(value)`** — Coerces a value to `Types.ObjectId`; throws on malformed input (safe direction vs. silent empty results in aggregation `$match`).
-- **`buildWhere(filters, spec)`** — (private) Compiles a filter bag into a Mongo query per the declared `SearchSpec`. Exposed on the factory result as `repository.buildWhere` for building aggregation `$match` stages.
-- **`isPresent(value)`** — (private) Treats `undefined`/`null`/empty/whitespace strings as "filter not supplied."
+- **`Lean<TDocument>`** — Type representing what `.lean()` actually returns: the document's own fields minus `Document` machinery, with `_id` restored explicitly.
+- **`Wire<TDocument>`** — The default wire shape after a no-op transform: `Lean` minus `_id`, plus a string `id`.
+- **`SearchSpec`** — Declarative filter map per collection: `objectIds`, `exact`, `booleans`, `regex`, `arrayRegex`, `text`, `ranges`, `presence`. Services say *what* to filter; this spec encodes *how* it becomes a Mongo query.
+- **`FindAllOptions`** — Optional `sort`, `skip`, `limit` (defaults to `FIND_ALL_LIMIT = 1000`).
+- **`toObjectId(value)`** — Coerces a string to a BSON `ObjectId`; throws on malformed input (safe for aggregation `$match`).
+- **`buildWhere(filters, spec)`** *(internal)* — Compiles a filter bag into a Mongo query object per the declared `SearchSpec`. Handles `$in` batches, case-insensitive regex (ReDoS-escaped), `$elemMatch`, one-sided numeric ranges, and presence checks.
+- **`isPresent(value)`** *(internal)* — Treats `undefined`, `null`, and blank strings as "filter absent."
+- **`Repository<TDocument, TWire>`** — The explicit return-type interface for the factory: `findById`, `findOne`, `findByIdRaw`, `findAll`, `count`, `create`, `save`, `build`, `deleteOne`, `search`, `aggregate`, and a bound `buildWhere`. Written out (not inferred) to avoid TS7056 at export boundaries.
+- **`RepositoryOptions`** — Configuration: `transform` (the model's serializer) and optional `searchable` (`SearchSpec`).
+- **`PaginatedResult<TWire>`** — `{ items: TWire[]; meta: PaginatedMeta }`, the return shape of `search`.
+- **`createRepository(model, options)`** *(exported factory, body truncated in listing)* — The entry point each module calls.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/search.ts`** — Provides `normalizePagination`, `buildPaginatedMeta`, `addTextFilter`, `addRegexFilter`, `toSearchPattern`, `DEFAULT_SORT`, and the `PaginatedMeta`/`PaginationInput` types. `createRepository` delegates all query-text and pagination logic here.
-- **`src/infrastructure/persistence/metrics.ts`** — Provides `trackDatabaseQuery`, called inside the factory to instrument every query it issues.
-- **`src/infrastructure/persistence/serialize.ts`** — Provides the `SerializeTransform` type that `RepositoryOptions.transform` must conform to; applied by `normalize` and therefore by `search`.
-- **Module repositories** (`addresses`, `api-keys`, `audit-logs`, `cart`, `delivery`, `feedback`, `inventory`) — Each spreads `createRepository` into its own repository object and optionally adds domain-specific methods or narrows types.
-- **Module services** (`api-keys/services/api-keys.ts`, `audit-logs/service.ts`, `cart/services/checkout.ts`, `feedback/service.ts`) — Consume the typed repository; never see Mongoose `Query` objects or raw Mongo operators.
-- **`src/modules/account/tests/unit/two-factor.test.ts`** — Exercises repository-backed code paths in the account module.
+- **`./search.ts`** — Supplies `normalizePagination`, `buildPaginatedMeta`, `addTextFilter`, `addRegexFilter`, `toSearchPattern`, `DEFAULT_SORT`, and the `PaginatedMeta` type used in `PaginatedResult`.
+- **`./metrics.ts`** — Supplies `trackDatabaseQuery`, used to instrument query execution.
+- **`./serialize.ts`** — Supplies the `SerializeTransform` type accepted by `RepositoryOptions.transform`.
+- **Module repositories** (e.g. `modules/account`, `modules/api-keys`, `modules/cart`, `modules/delivery`, `modules/feedback`, `modules/inventory`, `modules/audit-logs`, `modules/addresses`) — Each calls `createRepository` and spreads the result into its own typed repository object, optionally narrowing or extending methods.
+- **Module services** (e.g. `api-keys/services/api-keys.ts`, `cart/services/view.ts`, `feedback/service.ts`, `audit-logs/service.ts`) — Consume the repository's `Repository` interface; they pass filter objects shaped by `SearchSpec` and receive wire-typed results.
+- **`modules/account/tests/unit/two-factor.test.ts`** — Exercises repository behavior indirectly through account-module flows.
 
 ## Notes
 
-- **Spread, not inheritance.** The factory result is an object literal. A module that needs to override or drop a method re-declares it in its own object rather than using `extends`/`implements`. This is deliberate to avoid protected-hook complexity.
-- **`findByIdRaw` vs `findById` vs `search`.** `findByIdRaw` returns a lean object _without_ the transform (keeps `_id`/`__v`); `findAll` likewise skips normalization. Only `search` applies the wire-shape transform. Use `findByIdRaw` when embedding a snapshot in another document.
-- **Boolean filters are not re-coerced.** `SearchSpec.booleans` expects a real `boolean` in the bag. Controllers are responsible for decoding `'true'`/`'false'` strings first; re-coercing in the repository would mask a controller bug.
-- **Regex inputs are always escaped.** `addRegexFilter` and `toSearchPattern` both sanitize; passing raw user text into `$regex` without them is a public ReDoS vector.
-- **`buildWhere` is also exposed publicly** on the returned object so that aggregation pipelines can reuse the same filter rules for their `$match` stage.
-- **`FIND_ALL_LIMIT` is a backstop, not a page size.** Actual pagination belongs in `search`; `findAll` just prevents an unbounded scan if a caller forgets to set `limit`.
-- **`toObjectId` throws on bad input.** This is intentional: in an aggregation `$match` a raw string matches nothing (silently wrong), whereas a thrown error surfaces as a 422 about the specific request.
+- **No inheritance, no `extends`** — Modules *spread* the factory result. This is deliberate: a module that can't honour a method narrows its own type rather than overriding.
+- **`findByIdRaw` / `findAll` return untransformed lean objects** — Only `search` (and `aggregate`) apply the `transform`. Use `findByIdRaw` when embedding a snapshot that must retain `_id`.
+- **Boolean filters must be pre-decoded by the controller** — `booleans` in `SearchSpec` expects real `boolean` values; the factory does *not* coerce the string `"false"`. Forgetting to decode in the controller is a 500, not a silent no-op.
+- **`buildWhere` accepts `object`, not `Record<string, unknown>`** — Generated request DTOs are interfaces without an implicit index signature; the single cast is confined to `buildWhere`'s first line.
+- **Regex inputs are always escaped** — `addRegexFilter` and `toSearchPattern` guard against ReDoS; `arrayRegex` additionally strips control characters (a NUL would cause a 500).
+- **`FIND_ALL_LIMIT` (1000) is a backstop, not a page size** — Paging goes through `search`; `findAll` without a limit simply caps at 1000 to prevent unbounded collection scans.
+- **`deleteOne` accepts an optional `ClientSession`** — DDD-D6 transaction participation; all pre-existing callers omit it and remain non-transactional.

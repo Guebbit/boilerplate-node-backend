@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/service-override.test.ts
-sha256: 41b76cf0321571b7a69eddbca34f59aaf6dd1edaf11ac1a9dc04f5b34cc908b3
-generated_at: 2026-09-23T19:12:25.507747+00:00
+sha256: 77be4d72c8bb52b2e1ec32eccf080d6e1a63e2baabe0bf39a95d773231cbdbbc
+generated_at: 2026-09-27T15:19:54.052862+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the admin-order-override service (`orders/services/override.ts`). Runs against a real MongoDB instance to verify that the two override doors — `overrideStatus` (forward-only, status-only) and `forceMove` (skip-ahead) — perform correct conditional writes, record the expected `statusOverrides` history entries, and emit the right domain events.
+Integration tests for the admin-override service (`overrideStatus` and `forceMove`). Uses a real MongoDB instance rather than mocks because the critical guarantee is the atomic conditional write, and a mock cannot race against itself. Mirrors the rationale already established in `service-status.test.ts`.
 
 ## Key elements
 
-- **`seedOrder(status)`** — local helper that creates a user, product, and order via the test factories and returns the order in the given `OrderStatus`.
+- **`setupTestDb()`** — boots a real Mongo for the test run (from `tests/support/setup-test-db.ts`).
+- **`afterEach(() => resetDomainEvents())`** — tears down any event-bus subscriptions after each test.
 - **`describe('overrideStatus')`** — four cases:
-    - Forward move succeeds, writes one `statusOverrides` entry (`mode: 'status'`), and fires exactly one `ORDER_STATUS_CHANGED` event with `{ orderId, from, to }`.
-    - Targeting `OrderStatus.paid` is refused (system-only destination).
-    - Backward move (shipped → processing) is refused.
-    - Moving to `shipped` leaves no shipment/parcel record (confirms it is the status-only door).
-- **`describe('forceMove')`** — two cases:
-    - Skips past a status the normal lifecycle would refuse (paid → shipped), recording `mode: 'forced'`.
-    - Refuses if the order has already advanced beyond the target.
-- **`setupTestDb()` / `afterEach(() => resetDomainEvents())`** — real-Mongo bootstrap and event-subscription cleanup.
+  - Forward move records a `statusOverrides` entry and emits exactly one `ORDER_STATUS_CHANGED` event with `{ orderId, from, to }` (no extra flags).
+  - Refuses a move *into* `OrderStatus.paid` (system-only destination).
+  - Refuses a backward move (e.g. `shipped → processing`).
+  - Confirms no parcel/shipment record is created — status-only door.
+- **`describe('forceMove')`** — three cases:
+  - Jumps an order past a status the normal lifecycle would refuse (e.g. `paid → shipped`), recording `mode: 'forced'`.
+  - Returns `null` when the order has already moved past the target.
+  - Returns `{ success: false, status: 403 }` when the caller lacks `orders.any.override`, proving the check lives inside `forceMove` itself and does not depend on an upstream gate.
 
 ## Relationships
 
-- **`src/modules/orders/services/override.ts`** — the system under test; exports `overrideStatus` and `forceMove`.
-- **`src/modules/orders/events.ts`** — provides the `ORDER_STATUS_CHANGED` constant used to subscribe and assert the emitted payload.
-- **`src/kernel/events.ts`** — `onDomainEvent` / `resetDomainEvents` drive the in-process event bus the tests observe and clean up.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem`, `readOrder` build and inspect order documents.
-- **`src/modules/users/tests/factories.ts`** — `createUser` supplies the order's owner.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` supplies the order line item.
-- **`tests/support/callers.ts`** — `callerContextAs('admin', …)` fabricates the admin caller context passed to both service functions.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` provisions and tears down the real MongoDB used throughout.
-- **`src/types/index.ts`** — `OrderStatus` enum used in assertions and seeds.
+- **`src/modules/orders/services/override.ts`** — system under test; provides `overrideStatus` and `forceMove`.
+- **`src/modules/orders/events.ts`** — supplies the `ORDER_STATUS_CHANGED` constant used to subscribe and assert event payloads.
+- **`src/kernel/events.ts`** — supplies `onDomainEvent` / `resetDomainEvents` for in-process event-bus assertions.
+- **`src/modules/orders/tests/factories.ts`** — supplies `seedOrder` (insert a fixture order) and `readOrder` (verify stored state after the operation).
+- **`src/types/index.ts`** — supplies the `OrderStatus` enum used in assertions.
+- **`tests/support/callers.ts`** — supplies `callerContextAs(role, id)` to build permission-bearing caller contexts.
+- **`tests/support/setup-test-db.ts`** — supplies `setupTestDb` for the real-Mongo integration environment.
 
 ## Notes
 
-- Deliberately uses **real Mongo** (same rationale as `service-status.test.ts`): the guarantee under test is the conditional write, which a mock cannot race against itself to falsify.
-- The `ORDER_STATUS_CHANGED` payload contains **no `override` flag**. Downstream listeners (e.g. webhooks) key off `to` alone; status-only and forced deliveries are intentionally indistinguishable in the event.
-- `overrideStatus` records `mode: 'status'`; `forceMove` records `mode: 'forced'` — the distinction lives in the `statusOverrides` array, not in the event.
-- `paid` is hard-locked as a system-only destination; no admin override path may target it.
+- The `ORDER_STATUS_CHANGED` payload deliberately carries **no** `override` or `mode` field; downstream listeners (e.g. webhooks) key only on `to`. Do not expect the event to distinguish a status-only override from a forced delivery-door move.
+- `forceMove` enforces the `orders.any.override` permission **internally**. The 403 test uses a `warehouse` caller that holds `delivery.any.update` but not `orders.any.override`, confirming the check is not delegated to a caller-side gate.
+- `paid` is a system-only destination for `overrideStatus`; any attempt to override *into* it must fail regardless of the source status.

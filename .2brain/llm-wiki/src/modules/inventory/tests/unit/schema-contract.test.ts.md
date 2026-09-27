@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/unit/schema-contract.test.ts
-sha256: 291aca9336415a7c433d4463b29f1781a747a239c164e4aafc162c1ba21b80ab
-generated_at: 2026-09-23T18:47:35.573411+00:00
+sha256: f62ee2045af1b4a86654d6e07786b6b276667f139cbe1533fad78b9e595a793e
+generated_at: 2026-09-27T14:57:27.997005+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates that the two inventory Mongoose schemas (`stockMovementSchema` and `reservationSchema`) declare the correct database-level guarantees: required fields, enum values, defaults, type references, and index specifications. These assertions exist because the guarantees (exactly-once reservation, replayable ledger, terminal-state integrity) are enforced by the database, not by code paths — a silent schema drift would break invariants with no runtime error.
+Unit tests that assert the database-level invariants of the two inventory schemas (`stockMovementSchema` and `reservationSchema`). These rules (unique indexes, zero-defaulted deltas, enum constraints, index shapes) are enforced by MongoDB, not by application code, so they can silently disappear without any runtime failure. This file pins them down so a schema refactor that weakens a constraint is caught in CI.
 
 ## Key elements
 
-- **`describe('stockMovementSchema — the ledger')`** — seven tests asserting required paths (`productId`, `reason`), the six `StockMovementReason` values in order, `ObjectId`/`Product` reference, zero defaults on `onHandDelta`/`reservedDelta`, `timestamps: true`, and the exact two index specs (both `createdAt: -1`).
-- **`describe('reservationSchema — the hold')`** — six tests asserting the unique `orderId` index (exactly-once), four required paths including `items`, the three-value `status` enum with `held` default, the `items` sub-schema (`productId` + `quantity` with `min: 1`, `_id` disabled), the sweep index (`status+1, expiresAt+1`), and the **absence** of any TTL index.
-- **Test helpers** — all introspection is delegated to utilities imported from `@tests/schema` (`requiredPaths`, `enumOf`, `defaultOf`, `typeOf`, `refOf`, `optionsOf`, `pathOptions`, `subSchema`, `indexSpecs`, `indexOptionSpecs`, `indexBehaviour`).
+- **`describe('stockMovementSchema — the ledger')`** — asserts required paths, the seven-reason enum, `productId` ref/type, zero defaults on `onHandDelta`/`reservedDelta`, `timestamps: true`, and the exact two composite indexes (both `createdAt: -1`).
+- **`describe('reservationSchema — the hold')`** — asserts the unique `orderId` index (exactly-once reservation), required paths, the four-state `status` enum with `held` default, the nested `items` sub-schema (positive quantity, no `_id`), the two indexes (unique `orderId`, sweep `status+1, expiresAt+1`), and that **no** index carries `expireAfterSeconds` (TTL would delete documents and leak stock).
+- **Introspection helpers** (from `@tests/schema`) — `requiredPaths`, `defaultOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`, `indexBehaviour`, `optionsOf`, `pathOptions`, `refOf`, `subSchema`, `typeOf`. All are thin readers over the Mongoose schema definition.
 
 ## Relationships
 
-- **`src/modules/inventory/model.ts`** — the source of truth under test. This file imports `stockMovementSchema`, `reservationSchema`, and `MOVEMENT_REASONS` to introspect them.
-- **`src/types/index.ts`** — provides the `StockMovementReason` enum used to cross-check that the schema's generated enum matches the shared type definition.
-- **`tests/support/schema.ts`** — supplies every schema-introspection helper used in the assertions; without it the tests could not read Mongoose schema metadata programmatically.
+- **`src/modules/inventory/model.ts`** — source of `stockMovementSchema`, `reservationSchema`, and `MOVEMENT_REASONS`; the sole subject under test.
+- **`src/types/index.ts`** — provides the `StockMovementReason` enum; used once to confirm the schema's enum mirrors the generated type (the "not a fourth declaration" guard).
+- **`tests/support/schema.ts`** — supplies every introspection helper used in the assertions; the tests contain no schema-reading logic of their own.
 
 ## Notes
 
-- The reasons test deliberately spells out the six literal strings rather than comparing `MOVEMENT_REASONS` to `Object.values(StockMovementReason)` — the latter would be the same expression on both sides (a tautology that can never fail).
-- The "no TTL index" test is a regression guard: a TTL index **deletes** the reservation document, silently leaking reserved stock. Expiry must go through a sweep that releases units first.
-- Zero defaults on the delta columns are not cosmetic: `$sum` treats `undefined` as absent, so an undefined delta breaks the ledger-replay invariant.
+- The seven-reason test spells the literals out rather than comparing `MOVEMENT_REASONS` to `Object.values(StockMovementReason)`. The file's own comment explains why: `MOVEMENT_REASONS` *is* defined as that expression, so the comparison would be tautological. Spelling the list makes a dropped or reordered member visible.
+- The TTL-index test iterates `Object.values(indexBehaviour(reservationSchema))` and asserts none carry `expireAfterSeconds`. This guards against a future dev adding a TTL index "for convenience" that would silently delete reservations and orphan the reserved stock.
+- The module doc-block frames the testing philosophy: these are invariants whose absence causes no exception — "the guarantee just stops existing, silently." The tests exist because there is no other mechanism to detect the loss.

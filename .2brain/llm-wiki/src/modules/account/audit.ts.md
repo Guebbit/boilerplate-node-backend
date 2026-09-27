@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/audit.ts
-sha256: 31c449528543b1549b2f85fb1f16e7a2de9c0d5d3a6da8d4fd3cf194d31522cd
-generated_at: 2026-09-23T17:58:27.379586+00:00
+sha256: 65f78a1288a9eda51c0163ab01cb22022b91092448af53619b7a7f2b03d9162d
+generated_at: 2026-09-27T14:21:47.807554+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central registry of every audit action string the account module can emit. It exists so that (a) all event names live in one place for consistency, and (b) the infrastructure audit type map learns about the account vocabulary via a type-only module augmentation—no runtime import crosses the boundary upward.
+Single source of truth for every audit action string the account module emits. It declares the vocabulary as a typed const and augments the infrastructure audit action map via a type-only module augmentation, so log tooling, alert rules, and the type system all agree on the same set of event names without any runtime coupling.
 
 ## Key elements
 
-- **`accountAuditActions`** (`as const` object) — the single source of truth for every `auth.*` action string fired by account services (login, signup, password reset, email change, token refresh/reuse, 2FA enrollment/challenge/backup-codes, OAuth link/fail, session revocation, data export, expired-token cleanup, etc.). Importers reference entries by key (e.g. `accountAuditActions.AUTH_LOGIN`) so the wire value stays in one spot.
-- **`declare module '@infrastructure/observability/audit'`** — augments `AuditActionMap` with a new `account` key typed to the union of all values above. Type-only; adds no runtime dependency from account → infrastructure.
+- **`accountAuditActions`** (exported const) — Map of every audit event the module can fire: login, signup, profile/password/email changes, account deletion, token refresh & reuse detection, reauth, logout, session revocation, token-expiry cleanup, data export, 2FA enrollment/dismissal/code-sent/challenge-failure/backup-code-regeneration, and OAuth link/failed. All values use the `auth.*` wire prefix (not `account.*`) for backward compatibility with pre-existing log queries and alert rules.
+- **`declare module '@infrastructure/observability/audit'`** — Type-only augmentation that adds a `account` key to `AuditActionMap`, so the infrastructure layer's union of known actions includes this module's strings without a runtime import.
 
 ## Relationships
 
-- Every service that emits an audit event (authentication, two-factor, oauth, profile, export, token-cleanup, verification, post-reset-request, session/login-observability) imports `accountAuditActions` to supply the action string when calling the infrastructure audit emitter.
-- Tests (`audit.test.ts`, `oauth.contract.test.ts`, `oauth-link.test.ts`, `self-service.test.ts`, `service-flows.test.ts`, `token-cleanup-job.test.ts`) assert on specific action values, pinning the wire format.
-- The `declare module` augmentation is consumed by `@infrastructure/observability/audit`, which types its emitter's `action` parameter against `AuditActionMap`.
+- **Services & controllers in the same module** (e.g. `authentication.ts`, `oauth.ts`, `profile.ts`, `two-factor.ts`, `token-cleanup.ts`, `export.ts`, `post-reset-request.ts`, `login-observability.ts`) — import `accountAuditActions` to supply the action string when emitting an audit event.
+- **`tests/cross-cutting/audit-actions-registered.test.ts`** — cross-cutting test that asserts every action declared here is present in the infrastructure `AuditActionMap`.
+- **Contract / integration / unit tests** (`login-paths.contract.test.ts`, `oauth-link.test.ts`, `self-service.test.ts`, `service-flows.test.ts`, `token-cleanup-job.test.ts`) — assert that specific `accountAuditActions` values are emitted during the flows under test.
 
 ## Notes
 
-- **`auth.` prefix is deliberate, not a typo.** The strings are queried by pre-existing log tooling and alert rules that predate the `account/` folder layout. Renaming to `account.*` would break those queries; the module folder is free to be named for the domain while the wire format stays fixed.
-- **Type-only coupling.** The module augmentation means the account folder never imports infrastructure at runtime; only the type checker walks the edge.
-- **`AUTH_REFRESH_TOKEN_REUSE_DETECTED`** fires only when a rotated token is replayed _outside_ the grace window (i.e., not a benign two-tab race) and triggers revocation of the entire refresh-token set in the same operation.
-- **`AUTH_2FA_CODE_SENT`** is the only 2FA action an _unauthenticated_ caller can trigger an outbound message with—useful as the primary signal for mail/SMS-bombing detection.
-- Several actions carry a `metadata.method` discriminator (2FA enroll/disable) or are paired (e.g., `*_REQUESTED` / `*_COMPLETED` for password reset, email change, account delete) to distinguish "intent initiated" from "irreversible swap completed."
+- The `auth.` prefix is deliberate and **not** a naming bug: changing it would break existing log-tooling queries and alert rules. Renaming the folder or module is safe; renaming the wire strings is not.
+- This file is **type-and-constant only** — it imports nothing at runtime and is safe to reference from anywhere without creating a dependency cycle.
+- Several actions carry a `requested` / `completed` pair (password reset, account delete, email change) plus a `cancelled` variant for email change. Consumers of the audit log should treat the pair as a state transition, not as independent events.
+- `AUTH_2FA_CODE_SENT` is the only 2FA action an **unauthenticated** caller can trigger; it is the primary signal for mail-bombing attempts.

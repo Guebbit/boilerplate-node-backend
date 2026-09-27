@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/cancel.ts
-sha256: 3ea153d31ca3612780361812bdf34f8f9049810aface86fd4475467b35c8cfc5
-generated_at: 2026-09-23T19:06:17.371045+00:00
+sha256: aa3bdc237f5556d09e490beba1dd9ff375345bba4b9b1f4e2961b4de1bff867b
+generated_at: 2026-09-27T15:13:14.831989+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles order cancellation as a single conditional status write followed by its side effects (inventory release, refund intent, domain-event broadcast, audit, analytics, and a conditional expiry email). Also exposes the sweep function that discharges refund effects that failed on the happy path, making the cancel at-least-once durable without an in-app scheduler.
+Implements the order-cancellation write path and its follow-up side effects (inventory release, domain-event emission, refund tracking, audit, analytics, and customer notification). It exists as a single service so that both customer-initiated cancels and system-initiated cancels (reservation expiry, product removal) share one conditional-status-write guarantee and one ordered sequence of consequences.
 
 ## Key elements
 
-- **`cancelById(id, authContext?, options?, context?)`** — Core cancellation. Performs a `updateStatusIfIn` (conditional move, not read-check-write) scoped to the actor's allowed statuses, then sequentially: releases the inventory hold, emits `ORDER_CANCELLED`, clears the refund marker only if every listener settled, optionally sends a bank-transfer expiry email (system-only), records audit and analytics. Returns `200` / `409` / `404`.
-- **`retryPendingEffects()`** — External sweep (invoked by `scripts/ops/sweep-order-effects.ts`). Finds up to 200 orders still carrying the `refund` pending-effect marker older than the configured grace window, re-emits `ORDER_CANCELLED` for each, and clears the marker only on full listener success. Returns the count settled.
-- **`PENDING_REFUND`** — Frozen `['refund']` array written into the order document alongside the status change.
-- **`SWEEP_BATCH_SIZE`** (200) — Cap per sweep run; hitting it logs a warning to re-run.
+- **`cancelById(id, authContext?, options?, context?, viaReservationExpiry?)`** — Primary export. Performs the conditional status move via `orderRepository.updateStatusIfIn`, then delegates to `afterCancel`. Distinguishes 404 (not found) from 409 (not cancellable) only after the write returns null.
+- **`afterCancel(order, refund, context?, viaReservationExpiry?)`** — Internal. Runs the post-cancel sequence: inventory release → restock fallback → `ORDER_CANCELLED` event → `ORDER_REFUND_OWED` event + marker clear (if refund) → optional reservation-expiry email → audit → analytics → success response.
+- **`markRefundOwed(orderId)`** — Export. Writes the `'refund'` pending-effect marker on an order whose payment settled after it was already cancelled (called by the `payments` module).
+- **`clearRefundOwed(orderId)`** — Export. Removes the `'refund'` marker once the refund actually lands.
+- **`retryPendingEffects()`** — Export. Batch sweep (200 per run) that re-emits `ORDER_REFUND_OWED` for every order still carrying the marker, clearing each marker only after the send returns. Driven by `scripts/ops/sweep-order-effects.ts`; no in-app scheduler.
+- **`PENDING_REFUND`** — Frozen `['refund']` array; the exact value `$set` into the order document as the effect marker.
+- **`SWEEP_BATCH_SIZE`** — 200; per-run cap for `retryPendingEffects`.
 
 ## Relationships
 
-- **`@kernel/permissions`** — `actorOf` resolves the caller's role; `callerForSubject(SYSTEM_ACTOR, …)` fabricates the system-actor context used when the sweep triggers the cancel.
-- **`@kernel/events`** — `emitDomainEvent(ORDER_CANCELLED, …)` is the single broadcast point; its boolean return gates whether the refund marker is cleared.
-- **`@modules/inventory`** → **`inventoryService`** — `releaseForOrder` returns held stock after the conditional write succeeds (at-most-once via the same `$in` guard).
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape the HTTP response.
-- **`@infrastructure/i18n`** — `t` localizes user-facing messages; `getDefaultLocale` supplies the fallback for the expiry email when the buyer has no stored locale.
-- **`@infrastructure/adapters/mailer`** — `enqueueEmail` sends the `bankTransferExpiredEmail` (fire-and-forget, system expiry only).
-- **`@infrastructure/observability/audit`** — `recordAudit` logs the action with role/user overrides for system expiry.
-- **`@infrastructure/observability/analytics`** — `emitAnalyticsEvent` + `buildAnalyticsBase` emit either `ORDER_CANCELLED` or `ORDER_RESERVATION_EXPIRED`.
-- **`@infrastructure/runtime/environment`** — `environmentNumber` reads the retry grace-window minutes from env.
-- **`@infrastructure/adapters/logger`** — `logger.warn` / `logger.info` in the sweep path.
-- **`../analytics`** (`ordersAnalyticsEvents`) / **`../audit`** (`ordersAuditActions`) — module-local enum constants naming the audit and analytics events.
+- **`src/kernel/permissions.ts`** — `callerForSubject` / `SYSTEM_ACTOR` build the caller context for system-initiated cancels (no `AuthContext` available).
+- **`src/kernel/events.ts`** — `emitDomainEvent` fires `ORDER_CANCELLED` and `ORDER_REFUND_OWED`; no built-in retry, which is why the refund marker + sweep exist.
+- **`src/modules/inventory/index.ts` / `service.ts`** — `inventoryService.releaseForOrder` (releases `held` reservations) and `restockForOrder` (returns `committed` units from paid orders). Both called speculatively; each claims conditionally so a race is safe.
+- **`src/modules/orders/domain/index.ts`** — `statusesLeadingTo(OrderStatus.cancelled, actor)` reads the lifecycle table to get the allowed source statuses per actor role.
+- **`src/modules/orders/analytics.ts`** — `ordersAnalyticsEvents` provides the event-name constants (`ORDER_CANCELLED`, `ORDER_RESERVATION_EXPIRED`).
+- **`src/modules/orders/audit.ts`** — `ordersAuditActions` provides the audit action constant.
+- **`src/modules/orders/config.ts`** — `orderEffectRetryMinutes` (used by the sweep's caller for scheduling cadence).
+- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape the HTTP response returned to the HTTP layer.
+- **`src/infrastructure/i18n/index.ts`** — `t()` localizes user-facing messages.
+- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` sends the reservation-expiry explanation.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the audit row.
+- **`src/infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` / `buildAnalyticsBase` emit the analytics event.
 
 ## Notes
 
-- **Refund is non-waivable for non-admins.** `options.refund` is only honoured when the actor is `admin`; a customer or operator (moderator/warehouse) always gets `refund: true`.
-- **The refund marker is the at-least-once contract.** It is written in the same document write as the status change, cleared only when `emitDomainEvent` returns `true` (all listeners succeeded), and is the sole input to `retryPendingEffects`. A failed listener therefore leaves the marker in place for the next sweep.
-- **Idempotency is downstream.** `retryPendingEffects` may re-emit `ORDER_CANCELLED` for an already-refunded order; the payments listener's own conditional `succeeded → refunded` move makes the second announcement a no-op.
-- **No in-app scheduler.** Both the reservation sweep and this effect sweep are driven by external scripts; the app ships no cron/timer.
-- **Stryker annotations** (`// Stryker disable …` / `// Stryker restore …`) suppress mutation testing on the logging lines in the sweep — a convention, not functional logic.
+- **Conditional write, not read-check-write.** The `$in: [pending, …]` filter in `updateStatusIfIn` is the only guard against double-cancels or admin-race. The post-null `getById` read exists solely to choose 404 vs 409; the decision is already final.
+- **`held` vs `committed` inventory holds.** `releaseForOrder` matches `held → released`; it will *never* match a `committed` (paid) hold. `restockForOrder` handles that path. Both are called sequentially and speculatively—whichever doesn't match is a no-op.
+- **Refund is a separate event.** Re-emitting `ORDER_CANCELLED` to retry a stuck refund would re-deliver the customer-facing webhook on every sweep pass. `ORDER_REFUND_OWED` is the dedicated retry channel.
+- **`viaReservationExpiry` is load-bearing.** Without it, the reservation-sweep's expiry email and `availability.ts`'s product-removed email (which sends its *own* explanation) would be indistinguishable from a bare missing `context`.
+- **Customer refund is unconditional.** Only an `admin` actor can pass `options.refund = false`; a moderator/warehouse operator is forced to refund because their permission key (`orders.any.update`) does not imply the operator-level waiver.
+- **No in-app scheduler.** `retryPendingEffects` and the reservation sweep are driven by external `scripts/ops/*` entry points.

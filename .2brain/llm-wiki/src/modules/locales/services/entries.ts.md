@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/services/entries.ts
-sha256: d29f38d8d10505e817a218bf51683f7a8229e871f9984fc62654112f7ac57351
-generated_at: 2026-09-23T18:51:32.207647+00:00
+sha256: cb8bb1f98415b8cfebc69c7bc9cb8c023b6256fd144f8e1929890dd59e92cdc4
+generated_at: 2026-09-27T15:01:00.369341+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CRUD and bulk-import operations for locale entries (translated key-value rows) within a single language and tenant. Every function resolves the language by tag first, then performs the operation through the repository layer, emitting an audit record on success. It exists to centralize the validation rules (duplicate-key, key-collision, tenant-allowlist, cross-language ownership) that apply uniformly across all entry mutations.
+Service layer for individual locale entries (one language's translated keys). Provides the read (paginated search), create, update, delete, and bulk-import operations that the locale editing surface calls, all scoped to a language tag and a tenant keyspace.
 
 ## Key elements
 
-- **`searchEntries`** — Paginated, key-sorted listing of a language's entries. Accepts optional `text` and `tenant` filters. Does _not_ reject unknown tenants (avoids leaking tenant names to readers).
-- **`createEntry`** — Adds one key to a language+tenant. Validates: language exists → tenant is known → key not already present → key doesn't collide with an existing key in the same tree. Emits `ADMIN_LOCALE_ENTRY_CREATED`.
-- **`updateEntry`** — Changes one entry's text value. Looks up by entry id, then verifies the entry's `locale` matches the path tag (cross-language access → 404). Emits `ADMIN_LOCALE_ENTRY_UPDATED`.
-- **`deleteEntry`** — Removes one entry from a language. Same cross-language ownership check as update. Emits `ADMIN_LOCALE_ENTRY_DELETED`.
-- **`importEntries`** — Bulk write in `replace` or `merge` mode. Validates the entire batch (duplicates, collisions, unusable keys vs. survivors) before any write lands. `replace` deletes unnamed stored keys; `merge` leaves them. Emits `ADMIN_LOCALE_ENTRY_IMPORTED` with mode, tenant, counts, and revision.
+- **`searchEntries(tag, filters)`** — Returns one page of entries for a language, sorted by `key` (the unique-within-locale ordering). Passes `tenant` to the repository as a filter; unknown tenants yield an empty page rather than a 422.
+- **`createEntry(tag, payload, context?)`** — Adds one key for one tenant. Validates tenant, trims the key, checks for an exact duplicate and a structural collision (e.g. `products.list` vs `products.list.title`) scoped to that tenant, then writes. Emits `ADMIN_LOCALE_ENTRY_CREATED` audit and calls `refreshOverlay`.
+- **`updateEntry(tag, entryId, payload, context?)`** — Changes the translated value of an existing entry. Resolves the entry via `findEntryInLanguage` (id + locale check) before saving. Emits `ADMIN_LOCALE_ENTRY_UPDATED`; metadata records the key, not the new text.
+- **`deleteEntry(tag, entryId, context?)`** — Removes one entry. Other languages retain their copies. Emits `ADMIN_LOCALE_ENTRY_DELETED`.
+- **`importEntries(tag, tenant, entries, mode, context?)`** — Bulk write in two modes: `'replace'` (delete un-named keys) or `'merge'` (leave them). Validates the whole batch (duplicates, collisions, unusable keys) before any I/O. Collision checks in `replace` mode ignore keys the batch is about to overwrite. Emits `ADMIN_LOCALE_ENTRY_IMPORTED` with mode, tenant, counts, and revision.
+- **`findEntryInLanguage(entryId, tag)`** (internal) — Looks up by id, then verifies `entry.locale === normalizeTag(tag)`. Returns `null` on mismatch, producing a 404 rather than a cross-language edit.
+- **`entryNotFound()`** (internal) — Single canonical 404 response for the "entry not in this language" case.
 
 ## Relationships
 
-- **`../repository`** (`localeEntryRepository`, `localeRepository`) — All persistence reads/writes (search, listKeys, create, save, remove, import, findById).
-- **`../model`** — Source of the `LocaleEntryDocument` type returned by mutations.
-- **`../audit`** — Provides the `localeAuditActions` constants used in every `recordAudit` call.
-- **`./keys`** — Validation helpers: `findDuplicateKey`, `findBatchCollision`, `rejectUnusableKey`.
-- **`./languages`** — `languageNotFound` (404 for unknown tag) and `rejectUnknownTenant` (422 on write path).
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` envelope builders and the `ResponseSuccess` / `ResponseReject` types.
-- **`@infrastructure/i18n`** — `t()` for localized error messages.
-- **`@infrastructure/observability/audit`** — `recordAudit` for structured audit-log emission.
-- **`@infrastructure/persistence/search`** — `PaginatedMeta` type in search results.
-- **`@types`** — Request/response shapes (`CreateLocaleEntryRequest`, `LocaleEntry`, `LocaleImportResult`, etc.) and `CallerContext`.
-- **`./index`** — Re-exports these functions as the public service API of the locales module.
+- **`src/infrastructure/http/response.ts`** — All return values are built with `generateSuccess` / `generateReject`; typed as `ResponseSuccess` | `ResponseReject`.
+- **`src/infrastructure/i18n/index.ts`** — `t()` supplies user-facing error strings (e.g. `locales.error-entry-not-found`, `locales.error-key-exists`).
+- **`src/infrastructure/persistence/search.ts`** — `PaginatedMeta` types the metadata returned alongside paged results.
+- **`src/types/index.ts`** — Imports request/response payload types (`CreateLocaleEntryRequest`, `UpdateLocaleEntryRequest`, `LocaleEntryInput`, etc.) and `CallerContext`.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` is called after every successful mutation; the optional `context` gates whether an emit occurs.
+- **`src/modules/locales/audit.ts`** — Provides the `localeAuditActions` enum values used in audit records.
+- **`src/modules/locales/model.ts`** — `normalizeTag` (tag normalisation) and the `LocaleEntryDocument` shape.
+- **`src/modules/locales/repository.ts`** — `localeRepository` (language lookup by tag) and `localeEntryRepository` (all entry CRUD, key listing, and bulk import).
+- **`src/modules/locales/services/keys.ts`** — `findDuplicateKey`, `findBatchCollision`, `rejectUnusableKey` supply key-level validation.
+- **`src/modules/locales/services/languages.ts`** — `languageNotFound` (404 for unknown tag) and `rejectUnknownTenant` (422 for unconfigured tenant on write paths).
+- **`src/modules/locales/services/overlay.ts`** — `refreshOverlay` is called after every successful write to invalidate the in-memory overlay cache.
 
 ## Notes
 
-- **Tenant check is write-only by design.** `searchEntries` deliberately skips `rejectUnknownTenant` so a typo'd or guessed tenant simply returns an empty page rather than confirming which tenants exist.
-- **Audit metadata stores the key, never the value.** Prevents the audit trail from becoming an unmanaged second copy of the dictionary.
-- **`context` is optional on every mutation.** Omitting it (as tests do) suppresses the audit emit entirely.
-- **Import collision checks are mode-aware.** In `replace` mode, stored keys the batch overwrites are excluded from the collision set ("survivors" = `[]`); in `merge` mode they remain. This prevents a batch from being rejected for colliding with keys it is about to replace.
-- **All-or-nothing import.** Validation of every key completes before the repository call; a half-applied import is never possible.
-- **Sort key is `(key)`, not `createdAt`.** Guarantees stable pagination since `(locale, key)` is the uniqueness constraint.
+- **Tenant scoping is the core invariant.** A key is unique only within `(locale, tenant)`. All duplicate/collision checks pass the target tenant's key list, never the global set. This is why `generic.error-internal` can exist in two tenants simultaneously.
+- **Optional `context` parameter.** Every mutating export accepts `context?: CallerContext`. When omitted (unit tests calling the function directly) `recordAudit` is a no-op — no audit row is written.
+- **Audit metadata stores the key, never the translated value.** Prevents the audit log from becoming a second, unmanaged copy of the dictionary.
+- **`importEntries` is all-or-nothing.** The entire batch is validated (duplicates, collisions, structural checks) before the repository write begins. A half-applied import is treated as worse than a rejected one.
+- **Read path does not reject unknown tenants.** `searchEntries` passes the tenant string straight to the repository filter; an unconfigured tenant simply yields zero rows. The 422 rejection (`rejectUnknownTenant`) is reserved for write paths, so a guessed tenant on a read does not leak which tenants exist.

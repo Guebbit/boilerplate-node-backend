@@ -1,38 +1,35 @@
 ---
 source: src/modules/account/controllers/post-password-change.ts
-sha256: 398cf08da82e9ec951890ea86fe1c0c85d1dd300dc65e93e5a3a276771720f2f
-generated_at: 2026-09-23T18:03:04.826753+00:00
+sha256: f758edcf5873100cedfb7bc7ba163affbb2065d2a06fcaea59825b6e91a318d7
+generated_at: 2026-09-27T14:25:20.224162+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/controllers/post-password-change.ts
 
 ## Purpose
-
-HTTP controller for `POST /account/password`. Accepts a password-change request, validates the body shape, delegates the actual credential swap to `accountService.passwordChangeWithCurrent`, then re-mints the caller's session token. It exists as the thin Express adapter between the route and the account service.
+HTTP controller for `POST /account/password`. Accepts a verified caller's current password and a new one, delegates the actual change and cross-session revocation to `accountService.passwordChangeWithCurrent`, then re-mints the caller's own session token so they remain signed in to the tab they are typing in.
 
 ## Key elements
-
-- **`changePasswordShape`** — Zod schema built by extending `ChangePasswordBody` and overriding the three password fields with bare `z.string()`. Used only to verify the body has the expected keys; content rules (min-length, etc.) are intentionally excluded so the service can produce its own localized field-level errors.
-- **`postPasswordChange(request, response)`** — The exported handler. Reads `request.authContext.id`, shape-parses the body, calls `accountService.passwordChangeWithCurrent`, and on success calls `issueSession` to hand back a fresh token. Emits `authPasswordChangeTotal` metrics on every path (success / failure / degraded).
+- **`postPasswordChange(request, response)`** — the sole export. Performs shape validation (field presence via a stripped-down `ChangePasswordBody` zod schema), calls the service, handles success/refusal/database-error paths, and issues a new session token.
+- **`changePasswordShape`** — a local zod schema derived from the API contract's `ChangePasswordBody` with content rules (min length, etc.) removed. Exists so that *absent* fields produce a generic validation 400 here, while *content* violations (weak password, mismatch, wrong current) are answered by the service in the caller's language.
+- **Session re-mint with graceful degradation** — if `issueSession` throws after the password write and cross-session revoke have already committed, the controller logs a warning, still increments the success metric, and returns 200 with no token rather than a 500. The password *did* change; a 500 would misreport reality.
 
 ## Relationships
-
-- **`@infrastructure/http/response`** — `successResponse` and `rejectResponse` are the only ways this controller writes an HTTP reply.
-- **`@infrastructure/http/controller`** — `rejectValidation` formats Zod shape errors into a standard 422 body.
-- **`@infrastructure/http/errors`** — `rejectDatabaseError` maps unexpected thrown errors to a 500 with a stable error code.
-- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts locale/IP context forwarded to the service.
-- **`@infrastructure/i18n`** — `t(...)` provides the localized success message string.
-- **`@infrastructure/adapters/logger`** — `logger.warn` records a re-mint failure so the degrade-to-200 path is not silent.
-- **`../services` (`accountService`)** — owns the business logic: verify current password, enforce content rules, write the new hash, revoke all other sessions.
-- **`../session/session` (`issueSession`)** — signs a fresh auth token for the surviving session.
-- **`../metrics` (`authPasswordChangeTotal`)** — Prometheus counter incremented on every outcome.
-- **`@types`** — `ChangePasswordRequest` types the Express body; `AuthTokens` types the success payload.
-- **`../routes.ts`** — registers `postPasswordChange` at the `POST /account/password` path (the controller itself contains no route definition).
+- **`routes.ts`** — wires `POST /account/password` to `postPasswordChange`, behind the `isAuth` middleware that populates `request.authContext`.
+- **`services/index.ts`** — calls `accountService.passwordChangeWithCurrent`, which performs the password verification, write, and revocation of all *other* sessions.
+- **`session/session.ts`** — calls `issueSession` to mint a fresh token for the caller after the change.
+- **`metrics.ts`** — increments `authPasswordChangeTotal` with `{ status: 'success' | 'failure' }` on every terminal path.
+- **`controller.ts`** — uses `rejectValidation` (shape errors) and `refused` (service-level refusals like wrong current password).
+- **`errors.ts`** — delegates unhandled DB/service errors to `rejectDatabaseError`.
+- **`request.ts`** — extracts `callerContextOf(request)` to pass locale/IP context into the service for localized error copy.
+- **`response.ts`** — sends the final 200 via `successResponse` with an i18n success message.
+- **`i18n/index.ts`** — calls `t('account.password-change.success')` for the localized success string.
+- **`logger.ts`** — emits a `warn`-level entry when the re-mint fails but the password change succeeded.
+- **`types/index.ts`** — imports `ChangePasswordRequest` (typed request body) and `AuthTokens` (response payload shape).
 
 ## Notes
-
-- **Two-layer validation is deliberate.** The controller checks _shape only_ (keys present, values are strings). The service enforces _content_ rules (length, complexity) and produces its own localized per-field errors. Merging the two layers would make the controller's generic Zod error shadow the service's specific copy.
-- **Re-mint failure is a 200, not a 500.** By the time `issueSession` is called the password write and all-other-session revocation have already committed. Returning an error would mislead the client into retrying. The failure is logged and the response omits the token, but still says success.
-- **`request.authContext!`** uses a non-null assertion. The `isAuth` middleware guarantees it is set; no runtime guard exists in this file.
-- **`changePasswordShape` is derived from the contract schema.** If a new field is added to `ChangePasswordBody` in `@api/schemas.zod`, it automatically appears here as a required key — but its content rules are still stripped, so the service remains the authority on validation.
+- Shape validation is intentionally split from content validation: the controller only checks that `currentPassword`, `password`, and `passwordConfirm` are *present strings*. All policy (min length, complexity, mismatch) lives in the service so error copy can be localized.
+- The `changePasswordShape` schema is derived from the generated `ChangePasswordBody` contract; if a field is added to the contract, this local shape must be updated too (noted in the inline comment).
+- The re-mint-failure path returns `200` with an empty body (`undefined` as the data arg) rather than the usual `{ token }` shape — clients should treat "no token in body" as "password changed, but you need to re-authenticate."
+- The service is expected to revoke every *other* session; this controller does **not** invalidate the caller's own session before re-minting.

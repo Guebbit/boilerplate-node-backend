@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/contract/api.contract.test.ts
-sha256: 347c3529ea5c6acbb1a2e925915fe15931e3a9c850a6116037e46035c3a33a46
-generated_at: 2026-09-23T18:46:32.636071+00:00
+sha256: 5a6421bd56abcbb82767058128508360849b53f331bbf122ac03b8580b7b838f
+generated_at: 2026-09-27T14:56:55.186198+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP contract tests for the inventory module. Pins every contract branch reachable over the API surface—the two read endpoints, the two write transitions with their 200/404/409/422 responses, the reservation sweep, and the 401/403 auth guard—by asserting both the status/body and the `toSatisfyApiSpec()` shape. Business-rule logic for transitions is deferred to the unit suite; this file only verifies the wire-level contract.
+Contract tests for the `/inventory` HTTP surface. Each test drives a real request through the app and asserts both the business-level response (status, body shape, counters) and that the entire payload conforms to the published API spec via `toSatisfyApiSpec()`. The file covers the two read endpoints, the two write transitions (receipts, adjustments) with their success and error branches (404, 409, 422), and the reservations sweep. Transition *rules* (e.g. how `onHand` is computed) are delegated to the unit suite; this file only pins the wire contract.
 
 ## Key elements
 
-- **`MISSING_ID`** (`'f'.repeat(24)`) — a syntactically valid ObjectId guaranteed to never match a real fixture, used to exercise the 404 branch without risking a collision with seeded data.
-- **`GET /inventory/levels`** (3 tests) — happy path with counter fields, `lowOnly=true` filter, and pagination (`page`/`pageSize` + `meta` shape).
-- **`GET /inventory/movements`** (4 tests) — empty ledger, paginated ledger with correct `totalItems`/`totalPages`, filter by `reason`, and filter by `productId` verifying both `onHandDelta` and `reservedDelta` on each row.
-- **`POST /inventory/receipts`** (3 tests) — 200 with updated counters, 404 for unknown product, 422 for invalid body.
-- **`POST /inventory/adjustments`** (3 tests) — 200 with corrected counters, 409 (`INVENTORY_BELOW_RESERVED`) when delta would drop `onHand` under `reserved`, 422 for zero delta.
-- **`POST /inventory/reservations/sweep`** (1 test) — 200 with `{ expired: 0 }` when nothing is due.
+- **`setupTestDb()`** — called once at module top; resets the test database before the suite runs.
+- **`describe('GET /inventory/levels')`** — 3 cases: full read with all three counters, `lowOnly=true` filter, and pagination (`page`/`pageSize`).
+- **`describe('GET /inventory/movements')`** — 4 cases: empty ledger, paginated ledger with `totalItems` reflecting the full filtered set, `reason` filter, and product-scoped read exposing `onHandDelta`/`reservedDelta`.
+- **`describe('POST /inventory/receipts')`** — 3 cases: 200 success returning updated counters, 404 for an unknown `productId` (uses `MISSING_ID`), 422 for an invalid body.
+- **`describe('POST /inventory/adjustments')`** — 3 cases: 200 for a negative delta, 409 with error code `INVENTORY_BELOW_RESERVED`, 422 for a zero delta.
+- **`describe('POST /inventory/reservations/sweep')`** — 1 case: 200 returning `{ expired: 0 }`.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** (`@tests/contract`) — registers the `toSatisfyApiSpec()` custom matcher used in every test to validate the response against the declared API spec.
-- **`tests/support/http.ts`** (`@tests/http`) — provides `api()` (supertest-style request builder) and `authenticateAs(role)` for obtaining a bearer token.
-- **`tests/support/setup-test-db.ts`** (`@tests/setup-test-db`) — `setupTestDb()` is called once at module scope to reset and seed a test database before any test runs.
-- **`src/modules/products/tests/factories.ts`** (`@modules/products/tests/factories`) — `createProduct({ onHand, reserved, title })` seeds product rows so inventory endpoints have valid `productId` references.
+- **`tests/support/contract.ts`** — provides the `toSatisfyApiSpec()` matcher (imported as a side-effect module) that every assertion block relies on for spec conformance.
+- **`tests/support/setup-test-db.ts`** — exports `setupTestDb()`, used to initialise a clean database for the run.
+- **`tests/support/http.ts`** — exports `api()` (the HTTP client) and `authenticateAs()` (returns a bearer token for a given role).
+- **`src/modules/products/tests/factories.ts`** — exports `createProduct()`, used to seed inventory rows with specific `onHand`/`reserved` values before each assertion.
+- **`tests/support/ids.ts`** — exports `MISSING_ID`, a sentinel ID that is guaranteed not to exist, used to exercise 404 paths.
 
 ## Notes
 
-- Every assertion ends with `expect(response).toSatisfyApiSpec()`; omitting it silently drops spec-shape coverage.
-- The 404 test deliberately uses `MISSING_ID` (all `f` chars) rather than a random hex string to eliminate the (small) chance of matching a real seeded ObjectId.
-- Auth is always `admin`; the 401/403 guard tests mentioned in the header are not present in this file—check for a separate auth-guard contract test if they are expected here.
-- `setupTestDb()` runs at import time (module scope), not inside `beforeAll`, so it executes before Jest collects any `describe` blocks.
+- The file docstring mentions 401/403 coverage ("keep the counters off a customer's screen"), but no such tests are present in the file body — only admin-authenticated requests are exercised here.
+- Every test's final assertion is `expect(response).toSatisfyApiSpec()`; omitting it would mean the response shape is unchecked against the spec.
+- The 409 test on adjustments asserts a *specific* error code (`INVENTORY_BELOW_RESERVED`) in `body.errors[0].code`, not just the status — other 4xx tests only assert status + spec.
+- The sweep endpoint is tested only for the no-op case; there is no test that seeds expired reservations and asserts a non-zero `expired` count.

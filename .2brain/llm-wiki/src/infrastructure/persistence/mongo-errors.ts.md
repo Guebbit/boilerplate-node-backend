@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/persistence/mongo-errors.ts
-sha256: 461fd15c80fbfaf2b9d45e591dd57595b45e656dec1a17e4a7078a08f7433368
-generated_at: 2026-09-23T17:50:31.023815+00:00
+sha256: 90ac3d624253e330aa7d561e22e4bee8f19c9fd7903b33d58ece05bf44050162
+generated_at: 2026-09-27T14:14:23.599304+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides two small predicate helpers that let callers determine _what kind_ of Mongo driver error they caught, without reaching into the response/HTTP layer. It exists so that repositories and the HTTP error interpreter can share a single, correct definition of "duplicate key" and "bad ObjectId" instead of each re-deriving the check inline.
+Driver-level error classifiers for Mongo/Mongoose write and read failures. It centralises "what *kind* of driver error is this?" so that repositories and the HTTP error interpreter can branch on a driver fact without reaching into the response layer for something that belongs to the driver.
 
 ## Key elements
 
-- **`isDuplicateKey(error: unknown): boolean`** — Returns `true` when the caught value carries `code === 11000` (Mongo's E11000 duplicate-key). Checks the numeric code rather than the error message, so it survives index renames.
-- **`isBadObjectId(error: unknown): boolean`** — Returns `true` when the caught value is a `mongoose.Error.CastError` whose `kind` is `'ObjectId'`. Distinguishes a malformed ID from a well-formed-but-absent one (both should surface as 404, but the distinction matters for logging/alerting).
+- **`isDuplicateKey(error)`** — Returns `true` when `error.code === 11_000` (E11000), i.e. a unique-index rejection. Used by repositories as a "racing upsert, retry" signal and by `http/errors.ts` to emit 409.
+- **`isBadObjectId(error)`** — Returns `true` when the caught rejection is a `mongoose.Error.CastError` with `kind === 'ObjectId'`. Lets `findById`-style catches distinguish a malformed id from a well-formed-but-missing one (both should yield 404).
+- **`isConnectionError(error)`** — Returns `true` when the failure indicates the database was unreachable (server-selection, network, not-connected, network-timeout, or Mongoose buffering timeout). The HTTP layer maps this to 503 rather than the generic 500.
+- **`CONNECTION_ERROR_NAMES`** *(internal)* — `Set` of the five error `.name` strings checked by `isConnectionError`.
+- **`BUFFERING_TIMEOUT_MESSAGE`** *(internal)* — The literal `"buffering timed out"` string Mongoose embeds in its bare `MongooseError` for buffering-timeout failures.
 
 ## Relationships
 
-- **`src/infrastructure/http/errors.ts`** — The HTTP error interpreter consumes `isDuplicateKey` to map E11000 to a 409 "already taken" response.
-- **`src/modules/cart/repository.ts`**, **`src/modules/inventory/repository.ts`**, **`src/modules/payments/repository.ts`** — Each repository calls `isDuplicateKey` (as a retry signal on racing upserts) and `isBadObjectId` (to normalise a malformed-ID `CastError` into the same 404 path as a genuine miss).
-- **`src/infrastructure/http/controller.ts`** — Indirectly benefits: controllers throw/receive the errors these predicates classify, letting the error interpreter produce the correct status code.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — May rely on `isDuplicateKey` to detect that a write already completed (idempotent replay).
-- **`tests/unit/infrastructure/persistence/mongo-errors.test.ts`** — Unit-tests both predicates, including the "not a CastError" and "wrong code" negative cases.
+- **`src/infrastructure/http/errors.ts`** — Consumes `isDuplicateKey` (→ 409) and `isConnectionError` (→ 503) inside its `databaseErrorInterpreter`.
+- **`src/modules/cart/repository.ts`, `src/modules/inventory/repository.ts`, `src/modules/payments/repository.ts`** — Call `isDuplicateKey` to detect racing upserts and `isBadObjectId` in `findById` catch blocks.
+- **`tests/unit/infrastructure/persistence/mongo-errors.test.ts`** — Unit-tests all three exported predicates.
 
 ## Notes
 
-- Both helpers accept `unknown` (not `Error`) because a `.catch()` callback's argument is typed `unknown` in TS; the narrowing is the whole point.
-- `isDuplicateKey` deliberately checks `code`, not `message`, to avoid coupling to the human-readable index name that Mongo embeds in the E11000 text.
-- The module doc-comment explicitly notes that the list of callers is intentionally _not_ maintained here to avoid staleness.
+- **Code, not message, for E11000.** `isDuplicateKey` checks `error.code === 11000`; it deliberately avoids matching the human-readable text because the message names the index and would break on rename.
+- **`name` string, not `instanceof`, for connection errors.** `mongodb` is a transitive dependency of more than one package; an `instanceof` against the wrong copy silently misses. The same convention is used by `isPermanentConnectError` in `runtime/database.ts`.
+- **Buffering timeout has no dedicated class.** Mongoose throws the generic `MongooseError` with the fixed message `"buffering timed out"`, so `isConnectionError` falls back to a `message.includes` check — the only distinguishable signal.
+- **All predicates accept `unknown`.** A `.catch()` callback's argument is never provably a specific error type, so each helper destructures defensively (`(error ?? {}) as {…}`) before inspecting `name`/`code`/`message`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/services/index.ts
-sha256: 848597299517357b0841d2d9decf866f8cca5ed9bc2cc4516bb44a7747b850c9
-generated_at: 2026-09-23T18:32:29.244039+00:00
+sha256: b68587b74014744c1f31d1b3dcab1e7354acf903d986c465f7acfb9c00e26d0d
+generated_at: 2026-09-27T14:46:20.062567+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (index) file for the cart service folder. It aggregates the individual service sub-modules (`items`, `checkout`, `reorder`, `cleanup`) into a single entry point so that controllers and other modules can import one object (`cartService`) rather than reaching into each sub-file. The folder exists because the combined surface exceeded the ~300-line threshold described in `docs/theory/layers.md`.
+Barrel (facade) file for the cart service layer. It re-exports the individual service functions from `items.ts`, `checkout.ts`, `cleanup.ts`, and `reorder.ts` both as named exports and as a single `cartService` object, giving controllers and sibling modules one import point for all cart operations. It exists as a folder-plus-index rather than a single file because the service exceeded ~300 lines (see `docs/theory/layers.md`).
 
 ## Key elements
 
-- **Named re-exports** — Individual functions lifted from `./items` (`cartGet`, `cartGetForBadge`, `cartGetForView`, `cartItemSetById`, `cartItemAdd`, `cartItemUpdateQuantity`, `cartItemAddById`, `cartItemRemoveById`, `cartRemove`), `./checkout` (`orderConfirm`), and `./cleanup` (`cartDeleteByUserId`, `productRemoveFromCartsById`). These exist for `module.ts` event wiring and the unit test suite, which drive operations directly.
-- **`cartService` (const object)** — The primary public API. Bundles all the above _plus_ `reorderIntoCart` from `./reorder` into a single namespace. Controllers and sibling modules are expected to call through this object exclusively.
-- **`reorder` import** — `./reorder` is imported but **not** re-exported by name; `reorderIntoCart` is reachable only via `cartService.reorderIntoCart`.
+- **Named re-exports** — `cartGet`, `cartGetForBadge`, `cartGetForView`, `cartItemSetById`, `cartItemAdd`, `cartItemUpdateQuantity`, `cartItemAddById`, `cartItemRemoveById`, `cartRemove`, `cartShippingMethodSet` (from `./items`); `orderConfirm` (from `./checkout`); `cartDeleteByUserId`, `productRemoveFromCartsById` (from `./cleanup`).
+- **`cartService` (const object)** — The canonical namespace export. Bundles all of the above *plus* `reorderIntoCart` (from `./reorder`) into a single object. Controllers and sibling modules are expected to call through this object rather than the bare named functions.
+- **`./reorder`** — Imported and exposed only via `cartService.reorderIntoCart`; it is *not* listed among the named exports.
+- **`./view`** — Referenced in the header doc-comment (it holds line-to-product joins) but not imported here.
 
 ## Relationships
 
-- **Downstream (imports):** `./items`, `./checkout`, `./reorder`, `./cleanup` — each supplies the functions re-exported here.
-- **Upstream (consumers):**
-    - All cart controllers (`get-cart`, `post-cart`, `put-cart-item`, `delete-cart-item`, `delete-cart-all`, `get-cart-summary`, `post-checkout`, `post-reorder`) consume the `cartService` object.
-    - `src/modules/cart/module.ts` uses the named exports (`cartDeleteByUserId`, `productRemoveFromCartsById`) to register cleanup handlers on user/product deletion events.
-    - `src/modules/cart/index.ts` re-exports this barrel outward.
-    - `src/modules/addresses/tests/integration/addresses.test.ts` references cart operations (likely via the controller path).
+- **`src/modules/cart/services/items.ts`, `checkout.ts`, `cleanup.ts`, `reorder.ts`** — Direct dependencies; this file imports each as a namespace and re-exports selected members.
+- **Cart controllers** (`get-cart`, `get-cart-summary`, `post-cart`, `put-cart-item`, `delete-cart-item`, `delete-cart-all`, `put-cart-shipping-method`, `post-checkout`, `post-reorder`) — Consume `cartService` (or the named exports) for their business logic.
+- **`src/modules/cart/module.ts`** — Wires `cleanup.cartDeleteByUserId` and `cleanup.productRemoveFromCartsById` into the domain events that trigger them.
+- **`src/modules/cart/index.ts`** — Upward-facing barrel that re-exposes this module (and its controllers) to the rest of the app.
+- **`src/modules/addresses/tests/integration/addresses.test.ts`** — Integration test that exercises cart behavior alongside address flows.
 
 ## Notes
 
-- `reorderIntoCart` is the **only** function available solely through the `cartService` object; there is no standalone named export for it.
-- Type definitions (line/cart types) intentionally live in `./view` and are **not** re-exported from this file. Callers that need them import directly from `./view`.
-- The in-code comment is explicit: _"controllers and siblings call through this, never the bare functions."_ Treating the named exports as an internal/test-only surface is the intended convention.
+- **Dual export pattern is intentional.** Named exports exist so `module.ts` can wire events and the test suite can call item operations directly without the namespace. The `cartService` object is the path controllers use. Adding a function to one surface without the other will create a silent gap.
+- **`reorderIntoCart` is asymmetric.** It appears in `cartService` but has no named re-export. If a test or event-wiring site needs it directly, add the named export here.
+- **`view.ts` is a sibling, not a dependency of this file.** The header comment mentions it for orientation only; do not expect it to be imported here.
+- **Line-type re-exports are deliberately omitted.** The comment notes that a barrel line for a type "nobody asks the barrel for" would be a maintenance burden; import types from `./view` directly.

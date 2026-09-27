@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/invoice.test.ts
-sha256: e4265612562a95fe3b50f7e5e1a32cff02526bc99f2216181dff8e85a9cffad5
-generated_at: 2026-09-23T19:13:59.168158+00:00
+sha256: a1582d2754dcfe9fca2d41941070c607822494adc029233d4e56f5f043d77558
+generated_at: 2026-09-27T15:21:33.095744+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the invoice-rendering service (`services/invoice.ts`). Covers locale-frozen rendering, the not-found and failed-render paths, the TTL disk cache (hit, miss, expiry, negative-case), single-flight collapsing of concurrent misses, and the two reap sweeps. A final describe block (historically co-located here) exercises the upload chain's locale re-entry after multer consumes the stream.
+Unit tests for the invoice PDF render pipeline (`services/invoice.ts`). Covers locale-frozen rendering, the not-found and failed-render paths, the TTL disk cache, single-flight deduplication, and the two reap sweeps (`reapOrphanedInvoices` / `reapExpiredInvoices`). A trailing describe block also pins an unrelated historical concern: the upload chain re-entering the request locale after multer consumes the stream mid-request.
 
 ## Key elements
 
-- **`escaped(value)`** — HTML-escapes a string to mirror EJS `<%= %>` output; used in every `toContain` expectation so test strings match what the template actually emits.
-- **`renderHtmlToPdfMock`** — Jest mock for `@infrastructure/adapters/pdf.renderHtmlToPdf`; resolves to a `Buffer` by default, rejects on demand.
-- **`findByIdRawMock` / `existingIdsMock`** — Jest mocks for `orderRepository` methods; the primary way tests shape the order under test.
-- **`ttlMinutesMock`** — Stand-in for `invoiceCacheTtlMinutes()`; defaults to `0` (matching `NODE_ENV=test`) and is overridden to `5` only inside the TTL-cache describe block.
-- **`renderedHtml()`** — Reads the first argument passed to `renderHtmlToPdfMock` so tests can assert on the HTML handed to the (mocked) PDF engine.
-- **`orderFixture(locale?)`** — Returns a minimal order shape (`items: [{ product, quantity, locale }]`) for `findByIdRaw` to resolve.
-- **`fileExists(target)`** — `stat`-based boolean check used to prove cache writes/deletes landed on disk.
-- **`withCacheRoot()`** — `beforeEach`/`afterEach` pair that creates a `mkdtemp` directory, sets `NODE_INVOICE_CACHE_PATH`, and tears it down. Exposes `root()` and `pathFor(orderId)`.
-- **Describe: "renders in its OWN frozen locale"** — Italian vs English rendering, ambient-locale independence, empty-items fallback, title interpolation, null-order → `undefined`, render rejection propagation, and the TTL-0 no-disk-write guarantee.
-- **Describe: "single-flight"** — Two concurrent misses for the same order produce exactly one render; different orders render independently; a settled render does not block a subsequent call.
-- **Describe: "the TTL cache"** — Fresh hit short-circuits DB + Chromium; miss writes a file; expired (backdated via `utimes`) file is re-rendered; null order writes nothing. _(Further cases truncated.)_
+- **`escaped(value)`** — local helper that replicates EJS `<%= %>` HTML-escaping so test expectations match what the template actually emits.
+- **`renderHtmlToPdfMock` / `findByIdRawMock` / `existingIdsMock`** — module-level Jest mocks for the PDF adapter and the order repository, set up via `jest.mock` factories.
+- **`ttlMinutesMock`** — mocks `invoiceCacheTtlMinutes()` (returns `0` by default to mirror the real test-env rule); individual blocks override it to `5` to reach the non-zero cache branch.
+- **`orderFixture(locale?)`** — minimal order shape (`items: [{ product, quantity, locale }]`) returned by the repository mock.
+- **`withCacheRoot()`** — `beforeEach`/`afterEach` helper that creates a `mkdtemp` directory, points `NODE_INVOICE_CACHE_PATH` at it, and tears it down. Exposes `root()` and `pathFor(orderId)`.
+- **`describe` blocks** — frozen-locale rendering, single-flight collapse, TTL cache (hit / miss / expiry / not-found / atomic-write), and the multer-locale re-entry case.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/index.ts`** (barrel) — Import source for `runWithLocale`, `getLocaleContext`, `getDefaultLocale`; the test uses `runWithLocale('en', …)` to prove the order's frozen locale overrides the ambient one, and `getDefaultLocale()` for the empty-items fallback assertion.
-- **`src/infrastructure/i18n/context.ts`** — Implementation of the locale-context functions imported above.
-- **`src/infrastructure/i18n/catalog.ts`** — Provides the locale resolution the renderer depends on; the test's `en.json` / `it.json` imports and `escaped(itOrders.orders.invoice.title)` assertions verify the catalog values actually reach the rendered HTML.
-- **`tests/support/stub.ts`** — Source of the `asStub` helper (imported at top; used in the truncated portion of the file).
+- **`@infrastructure/i18n`** (via `index.ts` barrel → `context.ts`): imports `runWithLocale`, `getLocaleContext`, `getDefaultLocale`. Tests call `runWithLocale('en', …)` to verify the ambient locale is ignored in favor of the order's frozen locale, and assert `<html lang="…">` against `getDefaultLocale()`.
+- **`@infrastructure/i18n`** (via `catalog.ts` / locale JSON): imports `enOrders` and `itOrders` from `../../locales/*.json` to build expected strings for `escaped()` comparisons.
+- **`tests/support/file-sandbox.ts`**: imports `fileExists` to assert whether a cache file is present or absent on disk without reading its content.
+- **`tests/support/stub.ts`**: imports `asStub` (used in the truncated trailing section for the multer/locale re-entry test).
 
 ## Notes
 
-- **TTL mock is load-bearing.** `invoiceCacheTtlMinutes()` is forced to `0` under `NODE_ENV=test` by design (asserted separately in `config.test.ts`). Without the `ttlMinutesMock` override, the cache-specific tests would never exercise the non-zero branch. Every describe block except the TTL one relies on the default `0`.
-- **`invoiceCachePath()` is intentionally _not_ mocked.** The cache directory is controlled purely by the `NODE_INVOICE_CACHE_PATH` env var set in `withCacheRoot()`, keeping the path-resolution logic under test.
-- **Single-flight test runs at TTL 0.** The comment explains: at TTL 0, `renderInvoicePdf` reaches `renderFreshOnce` synchronously with no `readCached` `stat` gap, making two back-to-back calls deterministic rather than racing real filesystem calls.
-- **Dynamic `await import('../../services/invoice')`** inside each test resets the module's in-memory state (single-flight map, etc.) between cases.
-- **EJS escaping.** The `escaped()` helper is not a shortcut — it mirrors the exact `<%= %>` escape set (`&`, `<`, `>`, `"`, `'`). Loosening the template to `<%- %>` is explicitly rejected.
-- **Historical co-location.** The final describe block (upload-chain locale re-entry) is unrelated to invoice rendering and lives here for historical reasons, per the file-header comment.
+- **TTL is always `0` in a real test run** (enforced by `NODE_ENV=test`, asserted separately in `config.test.ts`). The only way to exercise the non-zero cache branch is the `ttlMinutesMock` override; every block other than the cache `describe` keeps it at `0`.
+- **EJS escaping is intentional.** Templates use `<%= %>` (escaped) for user-supplied titles. Test expectations must run through `escaped()`; do not "fix" this by switching templates to `<%- %>`.
+- **Single-flight test deliberately runs at TTL 0.** This forces the synchronous `renderFreshOnce` path with no `readCached`/`stat` gap, making two back-to-back calls deterministic rather than racing two real filesystem `stat` calls.
+- **`NODE_INVOICE_CACHE_PATH`** (not a code-level constant) controls the cache directory per block. `withCacheRoot()` saves and restores the env var; `invoiceCachePath()` itself is left unmocked.
+- **Atomic-write pinning.** The TTL-cache block includes a test (partially truncated) that verifies the cache write lands under the final name via `rename` rather than a direct `writeFile`, preventing a concurrent reader from seeing a truncated file.
+- **The trailing describe block is a historical holdover.** It tests the upload/locale chain, not invoice rendering, but lives in this file by convention rather than by concern.

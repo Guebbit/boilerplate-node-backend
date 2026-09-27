@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/service-crud.test.ts
-sha256: 199380beeadd1f86f4432025ea818521917b93fe5b3058d1cae1664deba9fc21
-generated_at: 2026-09-23T19:12:12.941902+00:00
+sha256: 749875f80636fbf0c771a8ddfe79bee1ce1f2c3502007595eceee1e779debbfd
+generated_at: 2026-09-27T15:19:39.871161+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the **write** half of the order CRUD service (`create`, `getById`, `update`, `updateById`, `remove`, `removeById`). The read/aggregation half (`search`) is covered in `service-search.test.ts`. Two behaviors carry the most weight here: `create` embeds a full product snapshot (title, price) so later repricing cannot rewrite historical charges, and `getById`'s `scope` argument acts as an authorization boundary — a mismatched scope must return `undefined` with no leak that the order exists.
+Integration tests for the **write** half of the order CRUD service (`create`, `update`, `updateById`, `remove`, `removeById`, `restoreById`). The read/aggregation half (`search`) is covered in a sibling `service-search.test.ts`. The suite exercises the service against a real test database while mocking only the external side-effects (mailer, invoice PDF rendering), and pins two load-bearing invariants: product snapshots are frozen at order time, and `scope` acts as a hard authorization boundary.
 
 ## Key elements
 
-- **`seedOrder`** – helper that creates a user + two products, calls `create`, and returns the persisted order document alongside its fixtures.
-- **`reload`** – re-reads an order via `orderRepository.findById` so `update` operates on current DB state rather than a stale in-memory reference.
-- **`releaseHold`** – delegates to `inventoryService.releaseForOrder` to return held stock before an items-rewrite test can proceed.
-- **`deleteCachedInvoiceMock`** – a Jest mock that replaces `deleteCachedInvoice` (the only call into `services/invoice.ts`). Under `NODE_ENV=test` the cache TTL is forced to 0 so no real cache file is ever written; the mock simply records the call.
-- **`describe('create')`** – verifies 201 response, sequential invoice numbering (`YEAR-SEQ`), product-snapshot embedding, snapshot immutability after `saveProduct`, one-line-per-item, 422 on empty items, 404 on missing product, and all-or-nothing (no partial order persisted).
-- **`describe('getById')`** – covers bare-id lookup, missing/empty id, scoped (matching & mismatched) lookups, the `_id` vs `id` shape divergence between scoped (plain object) and unscoped (Mongoose document) paths, and computed totals on the scoped path.
-- **`describe('update')`** – validates allowed lifecycle transitions, and pins the rule that cancellation must go through the dedicated cancel endpoint (not a bare status assignment), returning 409 with `ORDER_CANCEL_VIA_CANCEL_ENDPOINT`.
+- **`seedOrder()`** — helper that creates a user, two products, and a two-line order via `create`, returning all four entities for assertions.
+- **`describe('create', …)`** — the primary block. Covers 201 response, sequential invoice numbering (with a frozen clock), currency freezing, product snapshot integrity (including a "reprice later" regression), all-or-nothing creation (empty list → 422, missing product → 404, zero rows written), buyer-lookup failure fallback (greeting uses email), and stock-hold refusal (409, no row, no counter increment).
+- **`describe('update' / 'updateById' / 'remove' / 'removeById' / 'restoreById', …)`** — (truncated in source) exercise mutation and deletion paths.
+- **Mocks** — `enqueueEmail` (mailer adapter) and `renderInvoicePdf` (invoice service) are jest-mocked to avoid a Chromium launch and to let tests assert mail content independently.
+- **`flush()`** — `setImmediate`-based helper that waits out `create`'s fire-and-forget placed-order email before asserting on `mockEnqueueEmail` calls.
+- **`afterEach`** — restores all spies and resets timers (no-op unless `freezeDate` was used) to prevent clock leaks between tests.
 
 ## Relationships
 
-- **`src/modules/orders/services/crud.ts`** – the module under test; all six write operations are imported and exercised here.
-- **`src/modules/orders/services/index.ts`** – barrel re-export; the test imports the public API surface (`getById`, `create`, `update`, `updateById`, `remove`, `removeById`, `search`, `callerScope`, `orderService`) from here rather than reaching into `crud.ts` directly.
-- **`src/modules/orders/services/scope.ts`** – the scope/authorization logic that the `getById` scoped tests exercise (matching owner vs. stranger).
-- **`src/modules/orders/repository.ts`** – used by `reload` and by the all-or-nothing assertion (`orderRepository.count`); also used directly to set `paid` status before an `update` test.
-- **`src/modules/orders/model.ts`** – provides the `OrderDocument` type for local helpers.
-- **`src/modules/inventory/service.ts` (via `index.ts`)** – `releaseForOrder` is called to free stock holds before rewrite tests.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` / `saveProduct` seed and mutate fixture products.
-- **`src/modules/users/tests/factories.ts`** – `createUser` seeds fixture users (owner, stranger, buyer).
-- **`tests/support/callers.ts`** – `testCallerContext`, `asCustomer`, `asAdmin` supply caller/permission context for service calls.
-- **`tests/support/response.ts`** – `asSuccess` / `asReject` unwrap the service's `Result` type for assertions.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises the in-memory (or temp) MongoDB instance for the suite.
-- **`tests/support/stub.ts`** – `asStub` casts a value into a loosely-typed object for shape assertions (the scoped/unscoped shape test).
+- **`src/modules/orders/services/crud.ts`** — the module under test; all SUT functions are imported from `src/modules/orders/services/index.ts` which re-exports them.
+- **`src/modules/orders/repository.ts`** — `orderRepository` is imported directly for post-conditions (re-reading rows, counting, spying on `create` / `incrementOrderNumberCounter`).
+- **`src/modules/inventory/index.ts` / `service.ts`** — `inventoryService` is imported; stock-hold refusal and rollback tests depend on its `hold` / `release` contract.
+- **`src/modules/users/index.ts` / `service.ts`** — `userService.getById` is spied on to simulate buyer-lookup failure; `createUser` factory seeds test users.
+- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` is mocked; tests assert template name, recipient, and greeting fallback.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.error` is spied on to verify that both pricing and mail buyer-lookup failures are logged with expected messages.
+- **`src/modules/orders/tests/factories.ts`** — provides `countOrders` for post-creation assertions.
+- **`src/modules/products/tests/factories.ts`** — provides `createProduct`, `saveProduct`, `countersOf` for product seeding and reprice simulation.
+- **`tests/support/callers.ts`** — supplies `asCustomer`, `asAdmin`, `testCallerContext` for scope/authorization test cases.
+- **`src/modules/orders/services/scope.ts`** — `callerScope` is imported for scope-related assertions.
 
 ## Notes
 
-- **Scoped vs. unscoped `getById` return different shapes.** Unscoped returns a Mongoose document keyed by `_id`; scoped returns a transformed plain object keyed by `id`. Because Mongoose exposes a virtual `id`, both branches resolve `order.id`, making the divergence easy to miss. The test explicitly asserts `_id` is `undefined` on the scoped path.
-- **Cancellation is intentionally NOT a field assignment.** `update({ status: 'cancelled' })` is rejected with 409 (`ORDER_CANCEL_VIA_CANCEL_ENDPOINT`) because cancellation is a multi-step sequence (release stock, emit `ORDER_CANCELLED`, trigger payment refund) that a bare status write would skip.
-- **`deleteCachedInvoice` is the sole mock in the file.** Everything else (repository, inventory, product lookups) runs against the real test database. The mock exists only because the invoice-cache write is untestable in-process (TTL forced to 0) and the test needs to assert the call was made.
-- **The test file is truncated in the source snapshot**; the `update`, `updateById`, `remove`, and `removeById` suites are present but not fully visible here. The documented behaviors above cover only what is visible.
+- **Mocked PDF rendering is intentional.** A real `renderInvoicePdf` call launches Chromium; the suite mocks it and relies on a dedicated invoice suite for render correctness. Everything else in the invoice module stays real.
+- **`flush()` is mandatory** before asserting on `mockEnqueueEmail` in any test that exercises the placed-order email path; the email is enqueued via a fire-and-forget `Promise` that is not awaited by `create`.
+- **Invoice-number tests freeze the clock** (`freezeDate`) to avoid a UTC year boundary splitting the sequential counter across two yearly sequences. `afterEach` resets timers as a safety net.
+- **All-or-nothing creation** is explicitly tested: a single missing product must result in zero orders persisted and zero counter increments. A regression here would produce phantom orders.
+- **The product-snapshot invariant** (embedding title + price on the order line) is tested both positively (snapshot exists) and negatively (reprice the product, reload the order, assert the old price persists). This is the core reason the schema embeds rather than references.

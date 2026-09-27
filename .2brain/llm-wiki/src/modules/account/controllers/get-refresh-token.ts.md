@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/get-refresh-token.ts
-sha256: 54f95367a2cdae183eb96517722231ca9f17133903c7e31a405f6f5a49c0585b
-generated_at: 2026-09-23T18:00:54.767673+00:00
+sha256: d8b58dd093a692ea1e614e9731a3ad3244ea63b6f2eee64f757e1d1fb924a721
+generated_at: 2026-09-27T14:23:27.447648+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express controller for `GET /account/refresh`. It reads the refresh token from the `jwt` cookie, optionally runs a collection-wide token-cleanup sweep, then delegates to `accountService.refreshAccessToken` to mint a new access token and rotate the refresh cookie. It is a thin HTTP adapter: all business logic lives in the account service layer.
+HTTP controller for `GET /account/refresh`. It reads the refresh token from a cookie, conditionally runs a housekeeping sweep of expired tokens, then calls `accountService.refreshAccessToken` to mint a new short-lived access token **and** rotate the refresh token. The rotated refresh value is written back into the client's cookie in the same response.
 
 ## Key elements
 
-- **`getRefreshToken(request, response)`** — sole export. The full handler for the refresh endpoint. Reads the `jwt` cookie, conditionally runs `runTokenCleanup()`, calls `accountService.refreshAccessToken`, sets the rotated refresh + logged cookies, records the `authRefreshTotal` metric, and sends either a 200 (with the new access token) or a 401.
+- **`getRefreshToken(request, response)`** — sole export; the full request handler.
+  - Reads the refresh token via `readRefreshCookie` (cookie-only; the token is never accepted from the URL or body).
+  - Conditionally runs `runTokenCleanup()` *only* when a cookie is present, so anonymous requests cannot trigger a collection-wide DB sweep.
+  - Calls `accountService.refreshAccessToken(refreshToken, callerContextOf(request))`.
+  - On success: sets the rotated refresh cookie (`createRefreshCookie`) and a session "logged" cookie (`createLoggedCookie`), increments `authRefreshTotal` (`status: 'success'`), and returns the new access token via `successResponse<RefreshTokenResponse>`.
+  - On auth failure: increments `authRefreshTotal` (`status: 'failure'`) and responds **401** via `rejectResponse`.
+  - On cleanup failure: logs the error and responds via `rejectDatabaseError` (isolated so a routine maintenance failure doesn't surface as a 500 on an otherwise valid refresh).
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — source of `accountService.refreshAccessToken` and `runTokenCleanup`; the two calls that drive this controller.
-- **`src/modules/account/services/token-cleanup.ts`** — implements the sweep that `runTokenCleanup` triggers; runs before the refresh and is intentionally fire-and-forget.
-- **`src/modules/account/session/cookies.ts`** — provides `createRefreshCookie` and `createLoggedCookie`, used to set the rotated refresh cookie and the login-timestamp cookie on the response.
-- **`src/modules/account/metrics.ts`** — exports `authRefreshTotal`, incremented with a `status` label (`success` / `failure`).
-- **`src/infrastructure/http/response.ts`** — provides `successResponse` and `rejectResponse` for the 200 and 401 paths.
-- **`src/infrastructure/http/errors.ts`** — provides `rejectDatabaseError`, used in the cleanup-failure catch to shape the 500 response.
-- **`src/infrastructure/http/request.ts`** — provides `callerContextOf(request)` to pass caller metadata into the service call.
-- **`src/infrastructure/adapters/logger.ts`** — `logger.error` records a non-fatal cleanup failure before delegating to `rejectDatabaseError`.
-- **`src/types/index.ts`** — supplies the `RefreshTokenResponse` type that shapes the 200 body.
-- **`src/modules/account/routes.ts`** — upstream neighbor that mounts this controller at `GET /account/refresh`.
-- **`src/modules/account/tests/unit/token-cleanup.test.ts`** — unit-tests the cleanup logic this controller conditionally invokes.
+- **`src/modules/account/services/index.ts`** — source of `accountService.refreshAccessToken` and `runTokenCleanup`; the core business logic lives here, not in this file.
+- **`src/modules/account/session/cookies.ts`** — provides `createRefreshCookie` and `createLoggedCookie` used to set response cookies.
+- **`src/kernel/cookies.ts`** — provides `readRefreshCookie` for extracting the token from the request.
+- **`src/modules/account/metrics.ts`** — exports the `authRefreshTotal` counter incremented on both success and failure paths.
+- **`src/infrastructure/http/response.ts`** — `successResponse` / `rejectResponse` shape the HTTP replies.
+- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseError` handles the cleanup-failure branch.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf` extracts caller metadata passed into the service call.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.error` is called when the cleanup sweep rejects.
+- **`src/modules/account/routes.ts`** — upstream router that wires `GET /account/refresh` to this handler (not a direct import in this file).
+- **`src/types/index.ts`** — defines the `RefreshTokenResponse` shape returned to the client.
 
 ## Notes
 
-- **Cookie-only by design.** The refresh token is never placed in the URL, query string, or body; it is read exclusively from the `HttpOnly` `jwt` cookie to avoid leaking through browser history, proxy logs, or `Referer` headers.
-- **Cleanup is conditional.** `runTokenCleanup()` is skipped entirely when the `jwt` cookie is absent, so anonymous traffic cannot schedule a database sweep.
-- **Cleanup failure ≠ refresh failure.** The cleanup `.catch` is separate from the refresh `.catch`. A failed sweep logs an error and calls `rejectDatabaseError` (500) without conflating it with the 401 path of a bad/expired token.
-- **Token rotation is atomic per response.** The rotated refresh value and the new access token are set in the same response; the client must not reuse the old refresh value.
-- **Cookie name coupling.** The cookie is read as `cookies.jwt`; the name is decided in `post-login.ts`, not here.
-- **Stryker suppression.** A `Stryker disable next-line all` comment guards the `logger.error` line from mutation testing, since removing it would not change observable HTTP behavior.
+- **Token rotation is mandatory.** The rotated refresh value replaces the client's cookie in the *same* response. If this is skipped, the client keeps presenting the superseded token and relies on a grace window on the next refresh.
+- **Cleanup is intentionally decoupled from auth.** Its rejection is caught in a separate `.catch` so a failed sweep doesn't turn a valid refresh into a 500. The auth rejection (401) and the cleanup rejection (500) are distinct code paths.
+- **Cookie-only by design.** The file's docblock explicitly states the refresh token must not appear in the URL to avoid leaking into browser history, proxy logs, and `Referer` headers.
+- **Cleanup guard.** `runTokenCleanup()` is only invoked when a refresh cookie actually exists; otherwise a `Promise.resolve()` is used to skip the DB work entirely.

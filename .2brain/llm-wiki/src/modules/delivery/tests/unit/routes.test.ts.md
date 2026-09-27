@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/unit/routes.test.ts
-sha256: 58fabaa64b31fc00e07b996fcacebcf63699362c19d53adae9e6ab1d9f1f6894
-generated_at: 2026-09-23T18:38:43.352786+00:00
+sha256: bd3d8586abe4d622f6e607a9efa99522888c9e697bce3d4151e79361bcfa2815
+generated_at: 2026-09-27T14:52:16.080221+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the delivery module's route table. Verifies that the four documented endpoints are mounted in the expected order and that each carries the correct authentication/authorization guard. The final "sweep" test acts as a safety net: any future route added without a guard will fail this suite rather than shipping open.
+Unit tests that pin the delivery route table to its documented contract: the exact set and order of endpoints, and the authentication/permission guard attached to each. The file exists so that adding or modifying a route in `routes.ts` without the correct guard is caught immediately rather than discovered in production.
 
 ## Key elements
 
-- **`routeSignatures(router)`** — asserts the exact list and order of mounted endpoints (`GET /methods`, `GET /order/:orderId`, `POST /order/:orderId/ship`, `POST /order/:orderId/deliver`).
-- **`guardsOn(router, signature)`** — returns the guard names attached to a given route; used in each per-route assertion.
-- **Per-route guard tests** — confirm `GET /methods` has no `isAuth`; `GET /order/:orderId` has `isAuth` but no `requirePermissionGuard`; both `POST` write routes carry `requirePermissionGuard`.
-- **Sweep test** (`leaves nothing but the methods list unauthenticated`) — filters all routes, keeps only those without `isAuth`, and asserts the result is exactly `['GET /methods']`. This is the drift guard for future route additions.
+- **`describe('delivery routes')`** — single suite containing eight assertions covering:
+  - **Endpoint signature & order** — asserts `routeSignatures(router)` returns the six documented routes in sequence.
+  - **Public read (`GET /methods`)** — asserts no `isAuth` guard; shipping costs are pre-purchase info.
+  - **Auth-only read (`GET /order/:orderId`)** — asserts `isAuth` present, `requirePermissionGuard` absent.
+  - **Operator-gated writes (`POST /order/:orderId/{start,ship,deliver,fulfill}`)** — each asserts `requirePermissionGuard` is present.
+  - **Unauthenticated sweep** — filters all routes lacking `isAuth` and asserts the result is exactly `['GET /methods']`. A new route added without any guard fails this assertion.
 
 ## Relationships
 
-- **`src/modules/delivery/routes.ts`** — provides the `router` instance under test; all assertions target its mounted routes and guards.
-- **`tests/support/routes.ts`** — provides the `routeSignatures` and `guardsOn` helpers that introspect a router's route table and per-route guard array.
+- **`src/modules/delivery/routes.ts`** — the system under test; this file imports `router` and asserts against its route table and per-route guard array.
+- **`tests/support/routes.ts`** — provides the two test helpers used throughout: `routeSignatures(router)` (flat list of `"METHOD /path"` strings) and `guardsOn(router, signature)` (array of guard names on a given route).
 
 ## Notes
 
-- Guards are attached **per route**, not inherited from a parent. The file's own doc comment flags this as the most likely drift point when a fifth route is added.
-- `isAuth` on `GET /order/:orderId` is only the _presence_ gate; the actual ownership check (caller owns the order) lives downstream in the controller/service layer.
-- The sweep test checks for `isAuth` specifically, not for `requirePermissionGuard`. A route that has `requirePermissionGuard` but not `isAuth` would pass the sweep — a minor gap if that combination were ever meaningful.
-- Assertions are by **guard name string**, not by invoking the guards. Renaming a guard in the app without updating these strings will break the tests.
+- Guards are **per-route**, not inherited. The module doc comment explicitly flags this as the arrangement most likely to drift: a new route added to `routes.ts` arrives with no guard unless someone adds one. The sweep test is the safety net for exactly that case.
+- The sweep only checks for `isAuth` absence; it does not verify that `requirePermissionGuard` is present on writes. A new write route with `isAuth` but no permission guard would pass the sweep while still being under-restricted.
+- Test order matters: the first assertion locks the *order* of routes, so reordering in `routes.ts` breaks this test even if the set is unchanged.

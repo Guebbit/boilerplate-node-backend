@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/openapi.yaml
-sha256: 1fcb2441ca12acbd4cb6ea6441f4554805cc231ecf1b58382bf93db2523ed813
-generated_at: 2026-09-23T19:27:38.399086+00:00
+sha256: 2d6c8fc2afdd240a6f8d793688225d32e2aa3a6f6da497a9dfc5d4c706d3988a
+generated_at: 2026-09-27T15:32:57.723755+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.0.3 specification for the Products module. It declares the full REST surface (list, create, read, edit, delete, catalogue facets) so that tooling, docs, and the module's runtime contract are generated from a single source of truth rather than hand-maintained.
+OpenAPI 3.0.3 specification (v2.0.0) defining the full HTTP contract for the Products module: routes, parameters, request/response schemas, and error semantics. It exists as the single source of truth for what the products API exposes, enabling codegen, client typing, and documentation without reading the controllers.
 
 ## Key elements
 
-- **`GET /products`** — Paginated product listing with rich query filters (`category`, `tag`, `minPrice`, `maxPrice`, `title`, `active`). Mirrors the filters also available via `POST /products/search`; the controller merges query and body so both forms hit the same code path.
-- **`POST /products`** — Create a product. Accepts `application/json` or `multipart/form-data` (image upload). Requires the fallback locale to be present in `translations`. Subject to `uploadLimiter` (429).
-- **`DELETE /products`** / **`DELETE /products/{id}`** — Functionally equivalent delete routes served by one controller. `hardDelete` is readable from query _or_ body; a `true` from any source wins over a `false` elsewhere. Marked with `x-alias-of: deleteProductById`.
-- **`GET /products/categories`** — Public, unauthenticated catalogue facets: every category and tag with a count of visible products, sorted by count desc then name. Powers storefront filter chips.
-- **`GET /products/{id}`** — Full product detail. Equivalent to `GET /products?id={id}`.
-- **`PATCH /products/{id}`** — Merge-update (not replace). `translations` uses three-way semantics per locale: key absent → no-op, object → upsert, `null` → delete row. Empty object `{}` is a 422; `null` on the fallback locale is a 422. Accepts `multipart/form-data` for image re-upload.
-- **Shared `$ref`s** — Parameters (`PageParam`, `PageSizeParam`, `IdPathParam`, `HardDeleteParam`, etc.) and error responses (`ValidationError`, `Unauthorized`, `Forbidden`, `NotFound`, `TooManyRequests`, `InternalError`) are pulled from the root contract.
+- **`/products` (GET)** – Paginated, filterable product list. Accepts `category`, `tag`, `minPrice`, `maxPrice`, `title`, `active`, `deleted` as query params. The `deleted` flag is tri-state (true / false / absent) and is permission-gated.
+- **`/products` (POST)** – Create a product. Accepts JSON or `multipart/form-data` (image upload). Requires `bearerAuth`. Returns 201.
+- **`/products` (DELETE)** – Delete by body-supplied `id`. `hardDelete` flag readable from query *or* body (OR semantics). Marked `x-alias-of: deleteProductById`.
+- **`/products/categories` (GET)** – Public (`security: []`) catalogue facets: every category/tag with a visibility-aware product count, sorted count-desc then name.
+- **`/products/{id}` (GET)** – Single product by path param. Functionally equivalent to `GET /products?id=…`.
+- **`/products/{id}` (PUT)** – Full replace. Omitted scalars are *cleared*; `translations` still uses per-locale upsert/delete semantics (not wholesale replace).
+- **`/products/{id}` (PATCH)** – Partial merge. `translations` merges one locale at a time with three signals (upsert / delete / no-change).
+- **Local schemas** – `ProductsResponseEnvelope`, `ProductEnvelope`, `CreateProductRequest(Multipart)`, `ReplaceProductRequest(Multipart)`, `UpdateProductRequest`, `DeleteProductRequest`, `CatalogueFacetsEnvelope` (referenced but defined below the truncated portion).
+- **Shared $refs** – Parameters (`PageParam`, `PageSizeParam`, `TextParam`, `IdParam`, `HardDeleteParam`, `IdPathParam`) and standard error responses are pulled from the shared root spec.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — Every cross-cutting parameter, response, and security scheme is `$ref`'d from this file. The products spec is a _fragment_ that composes onto the root; it never redefines shared types.
-- **`src/modules/products/module.ts`** — The module entry point that registers these routes at runtime and wires up the controller, `uploadLimiter`, and any middleware. The OpenAPI spec is the contract that `module.ts` is expected to satisfy.
+- **`shared/contracts/openapi.root.yaml`** – This file `$ref`s shared parameter definitions and canonical error responses (401, 403, 404, 409, 422, 429, 500) from that root. Changes to shared response shapes propagate here automatically; this file only contributes product-specific schemas and path-level logic.
+- **`src/modules/products/module.ts`** – The module entry that registers the products routes and middleware (e.g. `uploadLimiter` noted in comments). The OpenAPI spec here is the contract that `module.ts`'s controllers implement; `operationId` values in this file map 1:1 to the handler names expected by the module's router.
 
 ## Notes
 
-- **Dual routes are intentional.** `DELETE /products` and `DELETE /products/{id}` (and similarly `GET /products?id=x` / `GET /products/{id}`) share one controller. Do not treat them as separate implementations.
-- **`hardDelete` is "any-true-wins."** A `false` in one source (query vs. body) does not cancel a `true` in another. This is documented inline and is a deliberate design choice, not an oversight.
-- **Translations merge ≠ replace.** The PATCH description spells out the three-signal table (absent / object / null). An empty object `{}` is explicitly _not_ a delete; only `null` deletes a locale row. This guards against accidental data loss from cleared form fields.
-- **`uploadLimiter` is external.** The 429 responses on `POST /products` and `PATCH /products/{id}` are enforced by middleware in `routes.ts`, not by the spec itself. The spec documents the response; the rate-limiting logic lives elsewhere.
-- **File is truncated in the repo snapshot** — the `components.schemas` section (e.g. `ProductsResponseEnvelope`, `CreateProductRequest`, `ProductEnvelope`, `CatalogueFacetsEnvelope`) is referenced but not shown here. See the full file for schema definitions.
+- **Dual-source params**: Several filters (e.g. `category`, `hardDelete`) are declared both as query params *and* inside the request body because the controller merges both sources. The spec declares them in both places intentionally — they are not redundant.
+- **PUT ≠ PATCH for `translations`**: PUT and PATCH share per-locale upsert/delete semantics for translations, even though PUT is "full replace" for every other scalar. The spec explicitly calls this out in descriptions.
+- **`deleted` param is permission-aware**: A caller lacking the "see deleted" permission gets an empty page for `deleted=true` rather than a 403. Documented in the param description.
+- **Rate limiting**: 429 responses on POST and PUT are gated by an `uploadLimiter` middleware applied in `routes.ts` (not in this spec file). The spec only documents the possible status code.
+- **Locale requirement on create**: The fallback locale (`NODE_FALLBACK_LOCALE`) must be present and non-null in `translations`; a product with no fallback "cannot exist."
+- **Path duplication**: `GET /products/{id}` and `GET /products?id=…` are the same operation served by the same controller; the spec documents both for client convenience.

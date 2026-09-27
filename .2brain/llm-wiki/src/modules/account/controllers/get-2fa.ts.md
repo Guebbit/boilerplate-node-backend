@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/get-2fa.ts
-sha256: 0264b93ee95a09a1870f266c21f5514690c2413737cf37475cbb2a5b6e59ffc8
-generated_at: 2026-09-23T17:59:40.689262+00:00
+sha256: 76994639d8ec69cb5cbfc8eacab88281cad5c110ac93cc1cf401003182d7d741
+generated_at: 2026-09-27T14:22:48.568716+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter that exposes a `GET /account/2fa` endpoint, returning the caller's own second-factor authentication status and any additional methods they could enable. Delegates all business logic to `twoFactorService.twoFactorStatus` and maps the result onto an Express response.
+Thin HTTP adapter for `GET /account/2fa`. It reads the authenticated caller's current second-factor status (active methods and available options) by delegating to `twoFactorService.twoFactorStatus`, then formats the result into a standard success or rejection response.
 
 ## Key elements
 
-- **`get2fa`** (exported) — Express handler for `GET /account/2fa`. Extracts `id` from `request.authContext`, calls `twoFactorService.twoFactorStatus(id)`, and responds with either the `TwoFactorStatus` payload (success) or a structured error (failure / unexpected exception).
+- **`get2fa(request, response)`** – The sole export. Pulls `id` from `request.authContext`, calls `twoFactorService.twoFactorStatus(id)`, and dispatches `successResponse<TwoFactorStatus>` or `rejectResponse` based on the result. Errors in the promise chain are forwarded to `catchAs(response, 'get2fa')`.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — Imports `twoFactorService`; the controller's sole domain dependency. All status logic lives in that service.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` and `rejectResponse` for serializing the result or the service-level error.
-- **`src/infrastructure/http/errors.ts`** — Provides `rejectDatabaseError`, used as the `.catch` fallback for unexpected (e.g., database) exceptions.
-- **`src/types/index.ts`** — Supplies the `TwoFactorStatus` type used to type the success payload.
-- **`src/modules/account/routes.ts`** — The route table that registers `get2fa` against the `/account/2fa` path (and likely applies the `isAuth` middleware guard).
+- **`@infrastructure/http/response`** – Supplies `successResponse` and `rejectResponse` used to shape the HTTP reply.
+- **`@infrastructure/http/controller`** – Supplies `catchAs`, which converts an unhandled rejection into a logged error response.
+- **`@types`** – Provides the `TwoFactorStatus` type that parameterizes the success payload.
+- **`../services` (index)** – Source of `twoFactorService`; the controller calls its `twoFactorStatus` method.
+- **`routes.ts`** – Expected to register `get2fa` on the `GET /account/2fa` path (the controller itself does not declare routing).
 
 ## Notes
 
-- Auth level is intentionally `isAuth` only (basic session), _not_ step-up: reading your own 2FA status is considered non-sensitive, so no MFA challenge is required.
-- The `request.authContext!` non-null assertion means the route **must** be behind the auth middleware; calling it without auth will throw at runtime rather than returning a clean 401.
-- The `.then` / `.catch` chain (not `async/await`) is the established pattern in this controller layer; the `.catch` handler swallows all non-service errors into a uniform database-error shape, so callers never see a raw stack.
+- Uses a `!` non-null assertion on `request.authContext`, relying on an upstream auth middleware to guarantee presence. No fallback or guard is in the handler.
+- The doc comment explicitly notes that only `isAuth` (basic authentication) is required—no step-up verification—because reading your own 2FA status is considered non-sensitive.
+- Follows the repo's `.then()/.catch()` promise-chain style rather than `async/await`.

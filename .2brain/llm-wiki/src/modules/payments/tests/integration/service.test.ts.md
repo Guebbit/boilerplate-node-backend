@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/integration/service.test.ts
-sha256: 35e2b300c8059b97d5c0d23e8b82d6b7ff0fa52fc9ea0d608deea0d84ec3a2cf
-generated_at: 2026-09-23T19:24:00.723194+00:00
+sha256: 6b9e680951789705be2c9bc6d4ca430b92c8254387f08b46efebc07df8819ecd
+generated_at: 2026-09-27T15:29:01.873440+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for the payments service layer. It pins the invariants of the intent → confirm → (refund) lifecycle against a real Mongo database, using the `fake` payment provider. The guarantees under test are the conditional writes (one payment per order, order-status-conditional confirmation, at-most-once refund) and the stable error codes the public API exposes.
+Integration tests that pin the core invariants of the payments service: an intent freezes the order's published total (shipping included), a confirm transitions the order `pending → paid` before the payment row is marked `succeeded`, a decline leaves the payment retryable, and a refund is at-most-once. The tests run against a real MongoDB instance and the project's `fake` payment provider (not a mock), because the guarantees under test are the conditional database writes themselves.
 
 ## Key elements
 
-- **`GOOD_METHOD`** – `'pm_card_visa'`, an opaque card-handle string that the fake provider accepts.
-- **`FAKE_DECLINE_METHOD`** – imported from `providers/fake`; triggers a simulated card decline.
-- **`orderFor(price, quantity)`** – fixture: creates a user, a product, and a pending order with the given line total.
-- **`paidOrder()`** – fixture: runs `createIntent` + `confirmPayment(GOOD_METHOD)` to yield a fully paid order.
-- **`auth(user)`** – wraps a user id into an `asCustomer` caller context.
-- **`describe('createIntent')`** – asserts: amount equals `order.totalPrice` (shipping included); idempotency (one row per order); 404 for non-owners; 409 `PAYMENT_ORDER_NOT_PAYABLE` for non-pending orders; `method` stored as `'card'`.
-- **`describe('confirmPayment')`** – asserts: order → `paid` and payment → `succeeded` together; decline is 409 `PAYMENT_DECLINED` and retryable; 404 for non-owners; 409 `PAYMENT_NOT_CONFIRMABLE` on double-confirm; 409 + provider refund when the order is cancelled in the intent→confirm window (status becomes `refunded`, not back to `requires_confirmation`).
-- **`describe('getForOrder')`** – (truncated in source) owner-vs-stranger access checks.
+- **`orderFor(price?, quantity?)`** — Fixture returning a paying customer with a two-line order; the starting point for most tests.
+- **`paidOrder()`** — Fixture that runs `createIntent` + `confirmPayment` with `GOOD_METHOD` so subsequent tests begin from a settled state.
+- **`auth(user)`** — Shorthand wrapping a user as an `asCustomer` caller context.
+- **`GOOD_METHOD` / `FAKE_DECLINE_METHOD`** — Opaque card handles for the fake provider's success and decline paths.
+- **`describe('createIntent', …)`** — Verifies total-freezing (including a shipping-inclusion regression), idempotency (one payment row per order), 404 for non-owners, 409 + `PAYMENT_ORDER_NOT_PAYABLE` for non-pending orders, and `method: 'card'` vocabulary.
+- **`describe('confirmPayment', …)`** — Verifies order→paid / payment→succeeded ordering, decline is retryable with a better card, 404 for strangers, 409 + `PAYMENT_NOT_CONFIRMABLE` on double-confirm, 409 on re-intent after payment, and (A1) refusal *before* the provider is ever called when the order was cancelled in the window (spies on `fakePaymentProvider.confirm/refund` to prove neither was invoked).
+- **`describe('getForOrder', …)`** — Verifies caller-scoped lookup (owner sees payment, stranger gets 404) and moderator-permission visibility.
+- **Additional service functions under test** (imported, exercised in truncated portions): `syncPayment`, `applyWebhookDelivery`, `applyWebhookSettlement`, `refundByOrder`, `recordOfflinePayment`, `retryPendingEffects`.
 
 ## Relationships
 
-- **`@modules/payments/services` (index)** – imports `createIntent`, `confirmPayment`, `syncPayment`, `applyWebhookDelivery`, `applyWebhookSettlement`, `getForOrder`, `refundByOrder`, `recordOfflinePayment`; the code under test.
-- **`@modules/payments/providers/fake.ts`** – supplies `fakePaymentProvider` (spied in the refund-on-cancel test) and `FAKE_DECLINE_METHOD`.
-- **`@modules/payments/repository.ts`** – `paymentRepository` used to assert persisted state (amount, status, cardLast4, providerRef, method).
-- **`@modules/payments/module.ts`** – registered via `registerModules` so the module's listeners (e.g. `ORDER_CANCELLED` refund hook) are active.
-- **`@modules/orders/index.ts`** – `orderService` used to read order status and to call `cancelById` in the race-condition test.
-- **`@modules/orders/tests/factories.ts`** – `createOrder`, `forceOrderStatus`, `toOrderItem` build the fixture orders.
-- **`@kernel/registry.ts`** – `registerModules` wires all domain modules into the test context.
-- **`@kernel/events.ts`** – `resetDomainEvents` clears the in-memory event bus between tests.
-- **Module registrations** – `inventory`, `products`, `users`, `account`, `cart`, `delivery` modules are registered to satisfy cross-module event listeners and service lookups at runtime.
+- **`@modules/payments/services`** (barrel → `intent`, `offline`, `refunds`, `settlement`, `effects`) — The unit under test; every `describe` block exercises one or more of these exports.
+- **`@modules/payments/repository`** — `paymentRepository.findByOrderId` / `.count` used to assert database state after each operation.
+- **`@modules/payments/providers/fake`** — `fakePaymentProvider` is the real provider instance the service calls; `FAKE_DECLINE_METHOD` triggers the decline path; spied on in the cancelled-order test to assert no provider call occurs.
+- **`@modules/payments/module`** — Imported for module-level wiring (likely event-listener registration such as the `ORDER_REFUND_OWED` listener).
+- **`@modules/orders`** (→ `orderService`) — `getById` to verify order status transitions; `cancelById` in the A1 cancelled-order scenario.
+- **`@modules/orders/tests/factories`** — `createOrder`, `forceOrderStatus`, `toOrderItem` build and manipulate the order fixture.
+- **`@modules/inventory`** (→ `inventoryService`) — Imported for inventory-state assertions (likely in the truncated refund/settlement sections).
+- **`@kernel/events`** — `resetDomainEvents` clears the in-memory event bus between tests so listeners (e.g. `ORDER_REFUND_OWED`) don't fire twice.
+- **`@tests/setup-test-db`**, **`@tests/environment`**, **`@tests/callers`**, **`@tests/response`**, **`@tests/checkout-modules`** — Shared test infrastructure: real Mongo lifecycle, env vars, caller-context builders, rejection assertion helper, and multi-module registration.
 
 ## Notes
 
-- Tests run against **real Mongo** (`setupTestDb`), not an in-memory mock, because the invariants being pinned are conditional-write guarantees that only a real driver exercises.
-- The refund-on-cancel test asserts the refund reference is read from the **persisted row** (`paymentRepository`), not from the API response—deliberately, to prevent a future refactor from leaking `providerRef` in a public payload.
-- `confirmPayment` returns the payment id via a nested `data.id` shape; the test casts it (`as { data?: { id?: string } }`) rather than relying on a typed return, which suggests the service API returns a loose envelope.
-- The file is truncated in the source snapshot; the `getForOrder` suite and any `syncPayment` / webhook / offline suites are not visible.
+- **Real database, not mocks.** `setupTestDb()` spins up a real MongoDB; the tests assert on conditional-write guarantees (e.g. "payment row only says `succeeded` when the order does"), which cannot be verified against a mock.
+- **Fake provider ≠ mock.** `fakePaymentProvider` is the project's committed fake implementation; the A1 test still `jest.spyOn`s it to prove the service short-circuits *before* the provider is reached.
+- **`asReject` pattern.** All negative assertions go through `asReject(result)` from `@tests/response`, which unwraps the standard error envelope (`status`, `errors[].code`).
+- **Shipping-inclusion regression.** The "charges the total the order publishes" test exists specifically to catch a historical bug where the intent summed line items in isolation, silently dropping `shippingCost` on every non-free order.
+- **File is truncated.** The visible content covers `createIntent`, `confirmPayment`, and the start of `getForOrder`. The imports (`refundByOrder`, `applyWebhookSettlement`, `recordOfflinePayment`, `retryPendingEffects`, `syncPayment`) indicate additional `describe` blocks for refunds, webhooks, offline, and effects exist further down.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/unit/config.test.ts
-sha256: 149daeb0513b14af6e255124703eae3d2692a1af14a36419f0ea084c74705f8d
-generated_at: 2026-09-23T19:24:09.321462+00:00
+sha256: b571cecfe5f0261267140bf9b2068e27f6d1a61d86e99c2c45dc4aa407611e1f
+generated_at: 2026-09-27T15:29:28.003472+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the two pure environment-read functions exported by `src/modules/payments/config.ts`: `listPaymentMethods` (backs `GET /payments/methods` and checkout) and `validateBankTransferConfig` (the boot-time `customCheck`). Because both functions only read `process.env`, no database or server is required.
+Unit tests for the three pure, environment-driven exports in `src/modules/payments/config.ts` (`listPaymentMethods`, `validateBankTransferConfig`, `validateStripeSecretKey`). These cover the logic behind `GET /payments/methods` and the boot-time `customCheck` validation, requiring no database.
 
 ## Key elements
 
-- **`configureBankTransfer()`** — local helper that sets the two variables `bankTransferEnabled()` requires (`NODE_BANK_TRANSFER_BENEFICIARY` and `NODE_BANK_TRANSFER_IBAN`) to known-good values.
-- **`TOUCHED`** — readonly array of every environment variable the file may write. Passed to `withoutEnvironmentInThisFile` so each test starts with a clean slate and the file restores prior values on exit.
-- **`describe('listPaymentMethods')`** — three cases: unconfigured → only `card`; configured → `card` + `bank_transfer` with default `holdHours: 168`; configured with `NODE_BANK_TRANSFER_HOLD_HOURS=48` → `holdHours: 48`.
-- **`describe('validateBankTransferConfig')`** — seven cases covering: fully unconfigured (no errors), valid IBAN + beneficiary, missing beneficiary, malformed IBAN, IBAN with spaces (accepted, matching `ibantools`), malformed BIC, and valid BIC.
+- **`configureBankTransfer()`** — local helper that sets the two env vars (`NODE_BANK_TRANSFER_BENEFICIARY`, `NODE_BANK_TRANSFER_IBAN`) needed for bank-transfer tests.
+- **`TOUCHED`** — readonly array listing every env var the file mutates; passed to `withoutEnvironmentInThisFile` to guarantee a clean slate before each test and full restoration after the file finishes.
+- **`describe('listPaymentMethods')`** — verifies the payment-method list: card-only when transfer is unconfigured, card + `bank_transfer` (default 168 h hold) when configured, and a custom `holdHours` override.
+- **`describe('validateBankTransferConfig')`** — exercises the boot-time validator: empty config, valid IBAN + beneficiary, missing beneficiary, malformed IBAN, IBAN with spaces (accepted per `ibantools`), malformed/valid BIC.
+- **`describe('validateStripeSecretKey')`** — checks key-mode rules: no key, `sk_test_` outside production, `sk_live_` in production, and rejection of `sk_test_` in production (via `withEnvironment` to fake `NODE_ENV`).
 
 ## Relationships
 
-- **`src/modules/payments/config.ts`** — the system under test; this file imports `listPaymentMethods` and `validateBankTransferConfig` from it.
-- **`tests/support/environment.ts`** — provides `withoutEnvironmentInThisFile`, the isolation utility that snapshots and restores the `TOUCHED` variables around the whole file.
+- **`src/modules/payments/config.ts`** — the module under test; this file imports its three exports and asserts their return values.
+- **`tests/support/environment.ts`** — provides `withoutEnvironmentInThisFile` (clear/restore the `TOUCHED` list around the file) and `withEnvironment` (temporarily override `NODE_ENV` for the production-mode Stripe tests).
 
 ## Notes
 
-- The "bank transfer not configured" state is **created** by this file (via env-var clearing) rather than assumed. The global `tests/support/setup.ts` already sets bank-transfer variables for the `shop` scenario, so a fresh process would not be in the unconfigured state.
-- Default hold hours when `NODE_BANK_TRANSFER_HOLD_HOURS` is unset is **168** (7 days), as seen in the expected output.
-- IBAN validation is delegated to `ibantools`; spaces in the IBAN string are accepted by that library and therefore by `validateBankTransferConfig`.
+- The global test setup (`tests/support/setup.ts`) pre-configures bank transfer for the `shop` scenario, so the "fully unconfigured" state this file tests must be actively created by clearing env vars — it is **not** the default.
+- IBAN validation is delegated to `ibantools`; the test with a spaced IBAN (`DE89 3704 …`) documents that behavior rather than enforcing a stricter format.
+- `validateStripeSecretKey` is mode-aware: it reads `NODE_ENV` to decide whether a `sk_test_` key is acceptable, which is why the production-path tests use `withEnvironment` rather than a bare `process.env` assignment.

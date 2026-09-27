@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/factories.ts
-sha256: 59d76ab2adeeef8a38e127a26e8945e847793f8fc38a4b594b72647417851f46
-generated_at: 2026-09-23T19:03:20.403380+00:00
+sha256: 0f8ce67b8dc3851efe8b55ee0e92cf995e4f3a9818280aeca91bc6a1585bffd6
+generated_at: 2026-09-27T15:10:59.534104+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Test-fixture factory that builds an `OrderDocument` ready for `orderRepository.create`. Because an order embeds a product **snapshot** (no `ref`) and several wire fields (totals, `current`, `transferInstructions`) are derived at serialization rather than stored, this module isolates the mapping from caller-friendly overrides to a storable document, stripping anything the schema has no column for.
+Builds an order document (ready for `orderRepository.create`) from caller-supplied overrides. Because an order embeds a **product snapshot** (not a reference) and derives its totals at serialization time, constructing a valid order fixture requires non-trivial mapping — contract ids become ObjectIds, ISO dates become `Date`s, `taxClass` becomes a frozen `taxRate`, and several wire-only fields must be excluded. This file centralises that logic so test fixtures don't repeat it.
 
 ## Key elements
 
-- **`OrderSnapshotInput`** – Type for the embedded product snapshot. Requires `id`/`title`/`price`; replaces `taxClass` with a resolved `taxRate`; drops `onHand`/`reserved` (no path in the embedded schema).
-- **`OrderLineInput`** – One order line: a `product` snapshot + `quantity` + optional `locale`. Drops `current`, `taxAmount`, `netAmount` (all derived at read time).
-- **`OrderOverrides`** – Caller-facing override type. Omits `items` (replaced by `OrderLineInput[]`), the three totals, and `transferInstructions`. Adds `transferReference` for `bank_transfer` fixtures (not part of the `Order` contract).
-- **`OrderFixture`** – Output type: `Partial<OrderDocument> & { _id }`, i.e. "an order ready for `orderRepository.create`".
-- **`toSnapshot`** _(internal)_ – Converts an `OrderSnapshotInput` to `FrozenOrderLineProduct`: maps `id` → `Types.ObjectId`, ISO strings → `Date`, strips undefined fields.
-- **`makeOrder`** _(exported)_ – Builds the full `OrderFixture`. Defaults `email` and per-line `locale`; passes `status` through untouched (the model owns its own `pending` default); wraps optional columns in `stripUndefined` so absent fields stay absent on write.
+- **`OrderSnapshotInput`** — Type for the embedded product snapshot. Requires `id`, `title`, `price`; replaces `taxClass` with `taxRate`; omits `onHand`/`reserved` (no schema path exists for them).
+- **`OrderLineInput`** — One order line: a snapshot + `quantity` + optional `locale`. Drops `current`, `taxAmount`, `netAmount` (all derived at serialization).
+- **`OrderOverrides`** — What a caller may pin on the parent order. Excludes the three totals and `transferInstructions` (wire-only, never stored). Adds `userId`, `items`, and `transferReference`.
+- **`OrderFixture`** — Output type: `Partial<OrderDocument> & { _id: OrderDocument['_id'] }`.
+- **`toSnapshot`** *(internal)* — Maps `OrderSnapshotInput` → `FrozenOrderLineProduct`: `id` → `_id` (ObjectId), ISO dates → `Date`, spreads remaining fields through `stripUndefined`.
+- **`makeOrder`** — The public builder. Fills identity (`identityOf`), defaults `email` and per-line `locale`, maps items via `toSnapshot`, and passes through all optional columns via `stripUndefined` so "not stated" stays absent.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/factories.ts`** – Imports `identityOf`, `stripUndefined`, `toDate`, and the `OverridesFor<T>` helper that `OrderOverrides` and `OrderSnapshotInput` are derived from.
-- **`src/infrastructure/i18n/index.ts`** – Imports `getDefaultLocale`, used as the per-line `locale` default in `makeOrder`.
-- **`src/infrastructure/i18n/catalog.ts`** – Indirect: `getDefaultLocale` reads the active locale from the i18n catalog this file defines.
-- **`src/types/index.ts`** – Imports the domain types `Id`, `Order`, `OrderItem`, `Product` that the local override types are `Omit`-ed from.
-- **`src/modules/orders/model.ts`** – Imports `FrozenOrderLineProduct` and `OrderDocument`, the schema-level types that `toSnapshot` and `OrderFixture` target.
-- **`src/modules/orders/tests/factories.ts`** – Downstream consumer; re-exports or wraps `makeOrder` for test suites.
-- **`src/modules/orders/tests/unit/factories.test.ts`** – Unit tests for the factory itself.
+- **`src/infrastructure/persistence/factories.ts`** — Provides the shared helpers used throughout: `identityOf`, `stripUndefined`, `toDate`, and the `OverridesFor<T>` type utility.
+- **`src/infrastructure/i18n/catalog.ts`** (via `src/infrastructure/i18n/index.ts`) — Supplies `getDefaultLocale()`, used as the fallback when a caller omits `locale` on an order line.
+- **`src/modules/orders/model.ts`** — Source of `FrozenOrderLineProduct` (the snapshot shape `toSnapshot` produces) and `OrderDocument` (the Mongoose document `makeOrder` targets).
+- **`src/types/index.ts`** — Source of the contract types (`Order`, `OrderItem`, `Product`, `Id`) from which the input/override types are derived.
+- **`src/modules/orders/tests/factories.ts`** — Downstream re-export/aggregation point for test fixtures that consume `makeOrder`.
+- **`src/modules/orders/tests/unit/factories.test.ts`** — Unit tests exercising the builder's mapping and defaulting behaviour.
 
 ## Notes
 
-- **Snapshot vs. reference:** `product` is embedded data, not an id. A fixture must pass the full snapshot as a value; there is no lazy lookup.
-- **Derived fields are intentionally absent:** `totalItems`, `totalQuantity`, `totalPrice`, `current`, `taxAmount`, `netAmount`, and `transferInstructions` have no column. Pinning one in a fixture would silently disappear on write.
-- **`status` is not defaulted here:** The Mongoose model carries `default: OrderStatus.pending`. Repeating it in the factory is a drift risk, so `makeOrder` just passes it through.
-- **Shipping fields pass through, not defaulted:** All three (`shippingMethod`, `shippingCost`, `shippingAddress`) are optional on the wire. Defaulting them would erase the "not chosen" vs. "free (`pickup`)" distinction.
-- **`stripUndefined` is load-bearing:** Because `OrderOverrides` derives from the contract `Order` type, a field can be accepted and then omitted from the write without a type error. `stripUndefined` ensures that "caller didn't set it" maps to "field is absent in the document," not "field is `undefined`."
-- **Subdocument timestamps:** `createdAt`/`updatedAt` on the snapshot must be passed explicitly. Mongoose stamps subdocuments on insert regardless of the parent's `timestamps: false`, which would otherwise date the snapshot to the order's creation time rather than the product row's.
+- **Deliberate omissions are load-bearing.** `onHand`, `reserved`, the three totals, and `transferInstructions` are absent not by oversight but because the embedded schema has no path for them (or they are computed at serialization). Pinning them in a fixture would silently drop on write.
+- **`status` is pass-through, not defaulted.** The Mongoose model already defaults it to `OrderStatus.pending`; repeating that default here is how the two would drift.
+- **Shipping fields are intentionally un-defaulted.** `shippingMethod`, `shippingCost`, `shippingAddress` stay `undefined` unless the caller states them, preserving the distinction between "not chosen" and "free (pickup)".
+- **Snapshot timestamps are explicit.** `createdAt`/`updatedAt` from the catalogue row are written into the subdocument to override Mongoose's subdocument auto-stamping (which would otherwise date the snapshot to the order's insert time).
+- **`locale` is optional** in `OrderLineInput` (unlike the contract's `OrderItem`) so fixtures need not specify it; `makeOrder` fills in `getDefaultLocale()`.

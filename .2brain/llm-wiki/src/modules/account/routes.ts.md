@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/routes.ts
-sha256: cb97189396a42a9876db15b97ecaad376c1f503590b7051192ea323957ce5a07
-generated_at: 2026-09-23T18:08:07.696863+00:00
+sha256: 87488d33fab9e09df529259242f33aba5c2bea67b3ffeb68851b9760ddd3f9cc
+generated_at: 2026-09-27T14:28:39.636183+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express router that wires every account-domain HTTP endpoint (authentication, password reset, 2FA, sessions, email verification, account deletion, OAuth, data export) under the shared `/account` prefix. It applies cross-cutting middleware—auth context, rate-limiting, caching, human-challenge, idempotency—at the route level so individual controllers stay focused on business logic.
+Express router for the account module's entire HTTP surface: auth (login, signup, refresh, logout), password management, email verification, 2FA, sessions, account deletion/export, and OAuth. Mounted under the `/account` prefix (see `./module.ts` for the mount point). It exists as the single wiring file where every controller handler, rate-limiter, auth guard, and HTTP-infrastructure middleware is ordered per route.
 
 ## Key elements
 
-- **`router`** (exported) – The Express `Router` instance mounted at `/account` by `./module.ts`.
-- **`isChangingEmail`** – Predicate passed to `requireFreshAuthWhen` on `PUT /account`; mirrors the exact email-comparison `putAccount` makes so guard and controller never disagree.
-- **Route definitions** – One entry per endpoint, each composing the middleware chain in a specific order:
-    - `GET /` → `getAccount`
-    - `PUT /` → `upload.single` → `requireFreshAuthWhen(isChangingEmail)` → `putAccount`
-    - `DELETE /` → `deleteAccountRequest`; `DELETE /delete-confirm` → `deleteAccountConfirm`
-    - `POST /login`, `/signup`, `/reset`, `/reset-confirm`, `/password`, `/password/check`, `/reauth`
-    - `GET /abilities` → `getMyAbilities` (intentionally unguarded beyond `getAuth`)
-    - `GET /refresh`, `POST /logout`, `POST /logout-all`
-    - `GET /sessions`, `DELETE /sessions/:sessionId`
-    - `POST /verify-request`, `/verify-confirm`, `/email-change-confirm`
-    - `DELETE /tokens/expired` → `deleteExpiredTokens`
-    - `POST /export` → `postAccountExport`
-    - `POST /login/2fa/send`, `POST /login/2fa`, `GET /2fa`, 2FA setup/confirm/delete routes
-    - OAuth provider/start/callback routes
+- **`router`** (exported) — the `express.Router()` instance; the only public export.
+- **`isChangingEmail`** (internal) — predicate that compares `request.body.email` against `request.authContext.email` using `normalizeEmail`. Feeds `requireFreshAuthWhen` on `PUT`/`PATCH /` so only an actual email change triggers a step-up re-auth.
+- **Router-wide middleware** — `getAuth` (populates `authContext`) and `noStore` (marks every response non-cacheable; prevents any route from accidentally serving a cached profile or credential response).
 
 ## Relationships
 
-- **`@kernel/middlewares/authorizations`** – Imports `getAuth`, `isAuth`, `requirePermission`, `requireFreshAuth`, `requireFreshAuthWhen`, and the `REAUTH_TIME_*` constants; these gate nearly every route.
-- **`@infrastructure/http/middlewares/rate-limit`** – Imports `uploadLimiter` (global upload-size/throughput guard); per-route credential/signup/reset limiters come from the local `./rate-limits`.
-- **`@infrastructure/http/middlewares/human-challenge`** – Imports `humanChallengeGate`, applied on `/signup` and `/reset` as a pre-parse anti-bot rung.
-- **`@infrastructure/http/middlewares/idempotency`** – Imports `idempotencyKey`, applied on `/signup` after the upload parse.
-- **`@infrastructure/http/middlewares/upload`** – Imports `upload` (multer); `.single('imageUpload')` is used on `PUT /` and `POST /signup`.
-- **`@infrastructure/http/middlewares/cache`** – Imports `noStore` (applied router-wide) and `invalidateCache` (applied per mutating route to bust `users`/`account` cache tags).
-- **Controllers** (`./controllers/*`) – Each route delegates to exactly one controller handler (e.g., `getAccount`, `deleteSession`, `delete2faMethod`, `delete2fa`, `deleteExpiredTokens`, `getMyAbilities`, `deleteAccountConfirm`, `deleteAccountRequest`, `get2fa`).
+- **`authorizations.ts`** — source of `getAuth`, `isAuth`, `requirePermission`, `requireFreshAuth`, `requireFreshAuthWhen`, and the `REAUTH_TIME_CRITICAL` / `REAUTH_TIME_SENSITIVE` tiers. Applied per-route and router-wide.
+- **`rate-limit.ts`** — provides `uploadLimiter` (PUT/PATCH `/`, signup) and the local `credentialLimiters`, `signupLimiters`, `resetRequestLimiters`, `passwordCheckLimiter`, `mfaChallengeLimiter`, `mfaSendLimiter`, `loginChallengeGate` defined in `./rate-limits`.
+- **`human-challenge.ts`** — `humanChallengeGate` guards `POST /signup` and `POST /reset` (rung 3, off by default).
+- **`idempotency.ts`** — `idempotencyKey` is applied to `POST /signup`, ordered **after** `upload.image()`.
+- **`upload.ts`** — `upload.image()` handles multipart avatar payloads on `PUT`/`PATCH /` and `POST /signup`.
+- **`cache.ts`** — `noStore` is applied router-wide; the file's comment documents the mutual-exclusion contract with `setCache`.
+- **`normalize-email.ts`** — `normalizeEmail` is called inside `isChangingEmail` so the guard and the service compare emails identically.
+- **Controllers** (each is a single route handler wired into this router): `cancel-pending-email`, `delete-2fa-method`, `delete-2fa`, `delete-account-confirm`, `delete-account-request`, `delete-expired-tokens`, `delete-session`, `get-2fa`, plus many others (login, signup, password, sessions, OAuth, export, etc.).
 
 ## Notes
 
-- **Middleware order is load-bearing.** `isChangingEmail` and `idempotencyKey` both read `request.body`, which only exists after `upload.single` has parsed multipart data. Placing them earlier silently degrades (empty body → predicate always false / identical fingerprint).
-- **`noStore` is router-wide.** It marks every response as non-cacheable so that no future route can accidentally let `setCache` cache a user's own profile. Per-route `invalidateCache` calls handle active-cache busting on mutations.
-- **Route ordering matters for 2FA.** `POST /login/2fa/send` is declared _before_ `POST /login/2fa` so the longer path matches first in Express.
-- **Limiter choice is deliberate per route.** `credentialLimiters` uses an identity key and `skipSuccessfulRequests`; routes that always return 200 (`/reset`, `/password/check`) use dedicated limiters because a success-based budget would never spend.
-- **The address book module** shares the `/account` URL prefix from its own routes file (`@modules/addresses/routes`); this router does not mount those paths.
-- **`GET /abilities` is intentionally open** (only `getAuth`, no `isAuth`) so unauthenticated visitors receive the `guest` rule set for client-side rendering.
+- **Middleware order is load-bearing on two routes.** Both `isChangingEmail` (on PUT/PATCH `/`) and `idempotencyKey` (on POST `/signup`) must run **after** `upload.image()`, because they read `request.body`, which multer only populates once it has parsed the multipart stream. Mounting either earlier reads an empty body and silently disables the guard or fingerprint.
+- **Fresh-auth tiers are deliberate, not arbitrary.** `DELETE /` (account destruction) uses `REAUTH_TIME_CRITICAL`; `POST /logout-all`, `DELETE /sessions/:id`, and `POST /export` use `REAUTH_TIME_SENSITIVE`. An unconditional gate on `PUT /` would force a password on every avatar upload, so the sensitive tier is gated *conditionally* on `isChangingEmail`.
+- **`GET /abilities` has no auth guard beyond router-wide `getAuth`.** Guests have rules (the `guest` role); the route is intentionally public so a client can render permissions before login.
+- **`GET /refresh` requires no auth** — the JWT cookie *is* the credential for minting a new access token.
+- **`POST /password/check` uses `passwordCheckLimiter`** (address-keyed), not `credentialLimiters`, because the request body carries no email/username; the latter's identity key would bucket every caller as `anonymous` under one shared budget.
+- **The address-book module reuses the `/account` prefix** from its own routes file (`@modules/addresses/routes`); this file does not mount it.
+- **`PUT /` replaces the full profile; `PATCH /` merges.** Both accept multipart image uploads and both apply the same email-change step-up gate.

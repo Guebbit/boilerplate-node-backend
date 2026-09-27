@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/two-factor/index.ts
-sha256: fa47b2780e5ccf2d2574f71d47d10fd7c4fc1e604f2fe374bc5b34cda06ed6ab
-generated_at: 2026-09-23T18:18:27.663161+00:00
+sha256: 8ec78d23cce3c7a17a545f9764c39e7ecc4211d88a9ff1fb1682552427818276
+generated_at: 2026-09-27T14:37:55.694277+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (re-export) file for the two-factor module. It consolidates the public API surface—method registry, backup-code helpers, delivered-code lifecycle, and TOTP crypto—behind a single import path so that services, admin recovery flows, and test suites can reach for the right pieces without deep path navigation.
+Barrel (re-export) file for the two-factor module. It gives consumers a single import path for the registry API, backup-code crypto helpers, delivered-code (one-time code) helpers, and TOTP utilities without needing to know each sub-module's file location.
 
 ## Key elements
 
-- **Re-exports from `./registry`** – `availableTwoFactorMethods`, `orderedEntries`, `twoFactorMethod`, and the `MethodEligibility` / `TwoFactorMethodHandler` types. Drives which 2FA methods are offered and how they are executed.
-- **Re-exports from `./backup-codes`** – `BACKUP_CODE_COUNT`, `generateBackupCodes`, `hashBackupCode`. Pure helpers for the admin recovery path.
-- **Re-exports from `./delivered-codes`** – TTL/cooldown constants (`DELIVERED_CODE_TTL_MS`, `DELIVERED_CODE_MAX_ATTEMPTS`, `DELIVERED_CODE_RESEND_SECONDS`) plus the `armDeliveredCode` / `consumeDeliveredCode` / `clearDeliveredCode` / `generateDeliveredCode` / `hashDeliveredCode` / `deliveryCooldownRemaining` lifecycle functions.
-- **Re-exports from `./totp`** – `buildOtpauthUri`, `encryptTotpSecret`, `decryptTotpSecret`, `verifyTotpCode`, and the `TotpVerification` type.
-
-No logic lives here; every symbol is a re-export.
+- **From `./registry`** — `availableTwoFactorMethods`, `orderedEntries`, `twoFactorMethod`, `MethodEligibility`, `TwoFactorMethodHandler`. The dispatch/eligibility layer services use to enumerate and invoke a user's enrolled methods.
+- **From `./backup-codes`** — `BACKUP_CODE_COUNT`, `generateBackupCodes`, `generateBackupCodeSalt`, `hashBackupCode`, `hashBackupCodes`. Pure helpers for generating and hashing the static recovery codes handed out at enrollment.
+- **From `./delivered-codes`** — `DELIVERED_CODE_MAX_ATTEMPTS`, `DELIVERED_CODE_RESEND_SECONDS`, `DELIVERED_CODE_TTL_MS`, `armDeliveredCode`, `clearDeliveredCode`, `consumeDeliveredCode`, `deliveryCooldownRemaining`, `generateDeliveredCode`, `hashDeliveredCode`. Time-limited one-time codes (e.g. emailed/SMS codes) with attempt limits, TTL, and resend cooldown.
+- **From `./totp`** — `buildOtpauthUri`, `decryptTotpSecret`, `encryptTotpSecret`, `verifyTotpCode`, `TotpVerification`. TOTP secret encryption/decryption, `otpauth://` URI construction, and code verification.
 
 ## Relationships
 
-- **`src/modules/account/two-factor/registry.ts`**, **`backup-codes.ts`**, **`delivered-codes.ts`**, **`totp.ts`** – The four sibling modules whose symbols are re-exported. This file is their sole public aggregation point within the `two-factor/` directory.
-- **`src/modules/account/services/two-factor.ts`** – Service layer that imports from this barrel to drive the 2FA flow (method availability, TOTP verification, delivered-code consumption, backup-code validation).
-- **`src/modules/account/tests/unit/two-factor.test.ts`** – Unit tests import the pure crypto helpers (backup-code hashing, TOTP verify) directly through this barrel.
-- **`tests/integration/two-factor.test.ts`** – Integration tests exercise the full 2FA lifecycle through the barrel's exports.
+- **`./registry`**, **`./backup-codes`**, **`./delivered-codes`**, **`./totp`** — This file is a pure re-export of every public symbol from these four siblings. It contains no logic of its own.
+- **`src/modules/account/services/two-factor.ts`** — The service layer imports the registry API (`twoFactorMethod`, `orderedEntries`, etc.) through this barrel to drive enrollment/verification flows.
+- **`src/modules/account/tests/unit/two-factor.test.ts`** and **`src/modules/account/tests/integration/two-factor.test.ts`** — Test suites import the crypto helpers (backup-codes, delivered-codes, TOTP) directly via this barrel, per the module doc comment.
 
 ## Notes
 
-- The file is intentionally logic-free; any behavior change belongs in one of the four sibling modules.
-- The module doc comment flags two consumers that bypass the service layer: unit test suites and the admin recovery path, both of which reach for the crypto helpers directly. Keep exports stable or update those callers alongside.
-- Type-only exports (`MethodEligibility`, `TwoFactorMethodHandler`, `TotpVerification`) are listed with the `type` keyword, so they are erased at compile time—safe to tree-shake.
+- This file is a zero-logic barrel: no side effects, no conditional exports, no default export. Deleting or renaming a sub-module symbol requires updating this file or the build will fail.
+- The module-level JSDoc explicitly frames this as the public surface that both the service layer *and* the test/recovery code consume—add new sub-modules here if they should be part of the same public API.

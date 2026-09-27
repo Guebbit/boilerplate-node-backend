@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/controllers/write-locale-entries.ts
-sha256: 1bb18b33adf758cc960c63bfe1e01d48cffe0e4bd9c7e396e4d9861a02926c6f
-generated_at: 2026-09-23T18:49:16.346012+00:00
+sha256: 24d068b605ffafd7ad42e8dd058beff49a37a47b3d1b6a885f60e01ca87a9ac6
+generated_at: 2026-09-27T14:59:02.586401+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP handler layer for the four write routes on a language's locale entries: single-key create and update, plus bulk replace (PUT) and merge (PATCH). Each handler validates the body with a Zod schema, delegates to `localeService`, and refreshes the i18n override cache on success.
+HTTP controller layer for the four mutating locale-entry routes: create one entry, update one entry's value, replace all entries (PUT), and merge/upsert a subset (PATCH). Sits between the Express router and `localeService`, handling body validation, caller-context extraction, and response shaping.
 
 ## Key elements
 
-- **`createLocaleEntry`** — `POST /locales/:locale/entries`. Validates with `CreateLocaleEntryBody`, calls `localeService.createEntry`, returns 201 with the entry.
-- **`updateLocaleEntry`** — `PUT /locales/:locale/entries/:entryId`. Validates with `UpdateLocaleEntryBody`, calls `localeService.updateEntry`. The key is immutable (identity); only the value changes.
-- **`replaceLocaleEntries`** — `PUT /locales/:locale/entries`. Validates with `ReplaceLocaleEntriesBody`, delegates to the shared `importEntries` helper in `'replace'` mode. Anything not in the payload is deleted.
-- **`mergeLocaleEntries`** — `PATCH /locales/:locale/entries`. Validates with `MergeLocaleEntriesBody`, delegates to `importEntries` in `'merge'` mode. Upserts sent keys; never deletes.
-- **`importEntries`** (private) — Common bulk handler shared by replace/merge; parameterised by `mode`, `tenant`, and `entries`.
-- **`refreshOverrides`** (private) — Fire-and-forget call to `refreshLocaleOverrides()` so the editing worker sees the change immediately.
+- **`createLocaleEntry`** — `POST /locales/:locale/entries`. Validates body via `CreateLocaleEntryBody`, delegates to `localeService.createEntry`, returns `201` with the new `LocaleEntry`.
+- **`updateLocaleEntry`** — `PUT /locales/:locale/entries/:entryId`. Edits the *value* of one entry; the key itself is immutable. Delegates to `localeService.updateEntry`.
+- **`importEntries`** (private) — Shared implementation for both bulk routes. Accepts a `mode: 'replace' | 'merge'` argument and calls `localeService.importEntries`.
+- **`replaceLocaleEntries`** — `PUT /locales/:locale/entries`. Full replacement: entries not in the payload are deleted. Delegates with `mode = 'replace'`.
+- **`mergeLocaleEntries`** — `PATCH /locales/:locale/entries`. Upsert-only: entries not in the payload are left untouched. Delegates with `mode = 'merge'`.
 
 ## Relationships
 
-- **`src/modules/locales/services/index.ts`** — All four handlers delegate business logic to `localeService` (create, update, import entries).
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, `refused`, and `rejectValidation` for uniform error and rejection handling.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)` to extract auth/tenant context passed into service calls.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for consistent JSON success envelopes.
-- **`src/infrastructure/i18n/index.ts`** — Exports `refreshLocaleOverrides`, called after every successful write to update the local override cache.
-- **`src/modules/locales/routes.ts`** — Upstream consumer that binds these exported handlers to their Express routes.
-- **`src/types/index.ts`** — Source of the domain types (`LocaleEntry`, `LocaleEntryInput`, `LocaleImportResult`, request-body types, `LocaleTenant`).
+- **`@infrastructure/http/controller`** — Supplies `rejectValidation`, `refused`, and `catchAs` helpers used by every handler for the validation-failure, tenant-refusal, and exception paths.
+- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts the tenant/caller identity passed to every service call.
+- **`@infrastructure/http/response`** — `successResponse` builds the JSON envelope for 2xx replies.
+- **`@types`** — Provides the wire/DTO types (`LocaleEntry`, `LocaleEntryInput`, `LocaleImportResult`, `LocaleTenant`, etc.) used in handler signatures and response generics.
+- **`@api/schemas.zod`** — Zod schemas (`CreateLocaleEntryBody`, `UpdateLocaleEntryBody`, `ReplaceLocaleEntriesBody`, `MergeLocaleEntriesBody`) drive runtime body validation before the service is called.
+- **`../services`** — `localeService` is the sole domain-service dependency; every handler delegates actual data work to it.
+- **`src/modules/locales/routes.ts`** — Registers these four exports as the route callbacks.
 
 ## Notes
 
-- The bulk routes are two separate methods (PUT/PATCH) rather than one route with a mode flag, so a mis-set boolean can't silently empty a dictionary.
-- `result.data.toJSON()` is required before sending the entry back: the Mongoose model stores `_id` and native `Date`, while the wire type `LocaleEntry` expects `id` and ISO strings.
-- `refreshOverrides` is called for frontend-tenant writes as well, even though those writes cannot affect the API overlay — the cost of the unconditional call is cheaper than threading tenant through.
-- Error handling is promise-chain (`.then`/`.catch`) rather than async/await; `catchAs` tags the handler name for logging.
+- The two bulk routes are intentionally split into separate handlers (PUT vs PATCH) rather than one route with a boolean flag, so a mis-set flag cannot silently empty a dictionary.
+- `.toJSON()` is called on the Mongoose document before returning it, applying the model's `_id → id` and date-to-ISO-string transform; the returned object is then cast to the `LocaleEntry` wire type.
+- The entry key (its `entryId`) is treated as identity and is not editable via `updateLocaleEntry`; changing a key is a delete + create, not an update.
+- All handlers follow the same pattern: `safeParse` → early `rejectValidation` → service call → `refused` check → `successResponse` → `catchAs` on the catch branch.

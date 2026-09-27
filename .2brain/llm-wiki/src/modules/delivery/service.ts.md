@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/service.ts
-sha256: d3eff12013686bde3afde3abdc47472a3d75e776e3a579b7ee8938fd457e69c8
-generated_at: 2026-09-23T18:37:34.806873+00:00
+sha256: d69c6f05b08894154ca0370780eb37fe054bafcf99b25bc5c20f8e4248c84103
+generated_at: 2026-09-27T14:51:17.598832+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for the delivery lifecycle: records a parcel's handover to a carrier (`recordShipment`) and its arrival (`recordDelivery`). It owns all shipment/parcel writes and delegates every order-status mutation to the `orders` module — delivery never writes order status directly.
+Service layer for the delivery module. Orchestrates the three status doors — `startFulfilment` (paid → processing), `recordShipment`/`recordDelivery` (processing → shipped → delivered), and `fulfillOrder` (processing → delivered, digital-only) — by writing the parcel record first and then delegating every status change to the `orders` module. It also owns the shipping-method list endpoint and the shared "forced override" permission gate.
 
 ## Key elements
 
-- **`listMethods(weight?)`** — Returns the shipping-method selector payload. Filters by basket weight (advisory only); always a success response.
-- **`getForOrder(orderId, authContext?)`** — Reads the shipment for an order, scoped to the caller's ownership via `orderService.callerScope`. 404 if the order or shipment is missing.
-- **`recordShipment(orderId, trackingCode?, context, forced?, reason?)`** — The "shipped" door. Validates eligibility (normal or override), writes the shipment record (idempotent upsert), then asks `orders` to move to `shipped`. On success, fires the carrier email and audit entry.
-- **`recordDelivery(orderId, context, forced?, reason?)`** — The "delivered" door (truncated). Confirms a `shipped` parcel exists _first_ (read-only), then moves the order, then stamps the shipment `delivered`.
-- **`refuseUnearnedForce(context, forced, reason)`** — Shared gate: a `forced: true` call must hold the `orders.any.override` ability key _and_ supply a reason string. Returns a 403/422 reject or `undefined`.
-- **`notifyShipped(orderId, order, shipment)`** — Resolves the buyer's locale/username, enqueues the shipment email, and logs.
-- **`moveAndStampDelivered(orderId, context, forced?, reason?)`** — Order-first delivery write: moves the order to `delivered`, then conditionally updates the shipment (`updateStatusIfIn`).
-- **`toShipmentResponse(shipment)`** — Maps a `ShipmentDocument` to the OpenAPI `Shipment` shape (optional fields spread conditionally).
+- **`listMethods`** (internal) – Returns the full `SHIPPING_METHODS` array annotated with the caller's live currency and `shipToCountries`. Always a success; no filtering (that belongs to the cart/checkout layer).
+- **`toShipmentResponse`** (internal) – Maps a `ShipmentDocument` to the `openapi.yaml` `Shipment` shape, conditionally including optional fields.
+- **`getForOrder`** (exported) – Fetches the shipment for an order, scoped through `orderService.callerScope` so non-admins only see their own. Returns 404 if the order or shipment is missing.
+- **`startFulfilment`** (exported) – Moves a paid order to `processing`. No `forced` variant; admin override is handled by the orders module's own endpoint. Writes an audit entry on success.
+- **`refuseUnearnedForce`** (internal) – Shared gate: if `forced` is true, the caller must hold `orders.any.override` **and** supply a `reason`; otherwise returns 403/422. Used by both `recordShipment` and `recordDelivery`.
+- **`notifyShipped`** (internal) – Sends the carrier notification email (localised via `mailBuyer`) and writes an operator log line.
+- **`auditOrderEvent`** (internal) – Writes a single `recordAudit` entry with the caller context, a `deliveryAuditActions` value, and the order as target.
+- **`fulfillOrder`** (exported) – The digital-only path: `processing → delivered` with no parcel record. Refuses orders that still carry a physical line with the same 409 shape `recordShipment` uses for digital-only orders.
+- **`afterShipmentRecorded`** (internal) – Post-parcel-write orchestration: moves the order to `shipped` (forced or normal), then notifies and audits. Order move is verified before side-effects fire.
+- Rejection helpers – `notPaid`, `notProcessing`, `nothingToShip`, `notDigitalOnly`: shared 409 bodies so both doors produce symmetric "wrong door" errors.
 
 ## Relationships
 
-- **`./domain` (rates.ts, index.ts)** — Provides `findShippingMethod` and `methodsForWeight` for tracking-code validation and the methods list.
-- **`./audit.ts`** — Supplies the `deliveryAuditActions` enum values used in audit entries.
-- **`@infrastructure/observability/audit.ts`** — `recordAudit` for structured audit logging.
-- **`@infrastructure/adapters/mailer.ts`** — `enqueueEmail` for the shipped-parcel notification.
-- **`@infrastructure/adapters/logger.ts`** — Operator-facing log line on shipment.
-- **`@infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` response constructors.
-- **`@infrastructure/i18n` (catalog, context, index)** — `t()` for user-facing error strings; `getDefaultLocale` for email fallback.
-- **`@kernel/ability.ts`** — `holdsKey` to check the `orders.any.override` permission for forced operations.
-- **`@modules/orders`** — `orderService.getById`, `callerScope`, `markShipped`, `markDelivered`, `forceMove`; `canTransition`, `canOverrideTo` for lifecycle eligibility.
-- **`@modules/users`** — `userService.getById` to resolve buyer locale/username for the notification email.
-- **`./repository`** — `shipmentRepository.upsertForOrder`, `findByOrderId`, `updateStatusIfIn`.
-- **`./emails`** — `shipmentShippedEmail` template builder.
-- **Controllers** (`post-ship-order`, `post-deliver-order`, `get-shipment-by-order`, `get-shipping-methods`) — Invoke the exported functions; this file is their sole service dependency.
+- **`src/modules/orders`** (not listed as a graph neighbor but imported directly) – `orderService` performs all status writes (`markProcessing`, `markShipped`, `markFulfilled`, `forceMove`); `mailBuyer` localises and sends buyer-facing mail; `isDigitalOnlyOrder`, `shopCurrency`, `shipToCountries` supply domain predicates and live config.
+- **`src/infrastructure/http/response.ts`** – `generateSuccess` / `generateReject` shape every return.
+- **`src/infrastructure/i18n/index.ts`** – `t()` provides all user-facing message strings.
+- **`src/infrastructure/adapters/mailer.ts`** – `enqueueEmail` delivers the carrier notification inside `notifyShipped`.
+- **`src/infrastructure/adapters/logger.ts`** – `logger.info` logs the shipped event.
+- **`src/infrastructure/observability/audit.ts`** – `recordAudit` writes the admin-action audit trail.
+- **`src/kernel/ability.ts`** – `holdsKey` checks `orders.any.override` in `refuseUnearnedForce`.
+- **`src/modules/delivery/audit.ts`** – `deliveryAuditActions` enum values passed to `auditOrderEvent`.
+- **`src/modules/delivery/domain/index.ts`** – `SHIPPING_METHODS` static array and `findShippingMethod` lookup used by `listMethods`.
+- **`src/modules/delivery/controllers/*`** – The five controller files (`post-start-order`, `post-ship-order`, `post-deliver-order`, `post-fulfill-order`, `get-shipment-by-order`, `get-shipping-methods`) are the HTTP entry points that call the exports above.
 
 ## Notes
 
-- **Write order is deliberate and asymmetric.** Shipment: parcel written _before_ order move (parcel is the primary record). Delivery: order moved _before_ parcel stamped (parcel is evidence of the order's state). This prevents an orphaned `delivered` parcel paired with a `shipped` order on a refused move.
-- **Order moves are at-most-once, not transactional.** A racing loser in `recordShipment` still gets a 409 after the idempotent upsert has already written — the parcel exists but the order did not move.
-- **`forced` is a second, stricter permission** on top of the route-level `delivery.any.update` gate. Requiring both the `orders.any.override` key _and_ a reason string is the contract; the reason is recorded on the order's override history.
-- **`listMethods` weight filter is advisory.** `cart`'s checkout re-validates the chosen method against the real basket server-side; a stale or omitted weight here cannot unlock a hidden method.
-- **`order.userId` may be absent** after account detach; `notifyShipped` falls back to `order.email` and the default locale.
+- **Orders is the sole status writer.** This module never mutates `Order.status` directly; it only calls `orderService` transition methods. If you're looking for the actual status write, it lives in the orders module.
+- **Parcel write is idempotent; the order move is not.** The shipment upsert is unique on `orderId`, but the `markShipped`/`markFulfilled` move is at-most-once. `afterShipmentRecorded` checks the move result *before* notifying or auditing so a racing loser never fires side-effects for a shipment the order never reached.
+- **`forced` is a two-key permission.** The route's own `delivery.any.update` gate is insufficient; `orders.any.override` is the second, stricter key, and a `reason` string is mandatory. Both `recordShipment` and `recordDelivery` share `refuseUnearnedForce` so the requirement cannot drift.
+- **`listMethods` reads config per call.** `shopCurrency()` and `shipToCountries()` are live deployment values (`NODE_DEFAULT_CURRENCY`, `NODE_SHIP_TO_COUNTRIES`); caching them at import time would freeze the value.
+- **Symmetric 409s for "wrong door."** A digital-only order hitting `recordShipment` and a physical order hitting `fulfillOrder` both get 409 with distinct codes (`ORDER_NOTHING_TO_SHIP` / `ORDER_NOT_DIGITAL_ONLY`) but the same HTTP status, so clients treat either as a routing error rather than a state error.

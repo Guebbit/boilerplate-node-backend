@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/jwt.test.ts
-sha256: 082f52bb68173bb17330b19021d1724ab89675545f7b6eced496744b36b2157c
-generated_at: 2026-09-23T18:13:21.418504+00:00
+sha256: 89c451d099213a7633c7c493563112dc62eb7683e4b631f782c335f470baaa9a
+generated_at: 2026-09-27T14:34:43.966560+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for the JWT session lifecycle in `session/jwt.ts`. It exercises the full round-trip of access and refresh token creation, verification, and revocation against a real database, guarding the security-critical contract that access tokens are stateless (signature + expiry only) while refresh tokens are stateful (checked against the user document so that logout can actually end a session).
+Integration tests for the JWT session lifecycle (`session/jwt.ts`): token creation, verification, rotation, and revocation. Exercises the real database and real user documents to verify the security-critical contract that access tokens are stateless (signature + expiry only) while refresh tokens are stateful (must exist on the user document), and that revocation (removing the token row) genuinely ends a session.
 
 ## Key elements
 
-- **`signAs`** — helper that signs fixture tokens exactly as `jwt.ts` does, stamping `keyid: keyId(secret)` so the key-ring lookup resolves. Defaults `auth_time` and `amr` into the payload since `TokenData` requires both.
-- **`beforeEach` / `afterEach` env block** — explicitly sets `NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, and two expiry keys, then restores them. Necessary because unit tests do not load dotenv; the SUT reads these from `process.env` at call time.
-- **`describe('verifyAccessToken')`** — covers valid signature, wrong-secret rejection, expired token, malformed string, and payload tampering (forged base64url payload with original signature).
-- **`describe('verifyRefreshToken')`** — covers valid + stored, orphan token (signature valid but not on any user → `Forbidden`), post-removal rejection, wrong-secret rejection, and expired-without-DB-hit.
-- **`describe('createRefreshToken')`** — covers persistence on the user doc (verified via round-trip), correct `TokenType.REFRESH` storage with future expiry, unknown-user rejection, deactivated/soft-deleted rejection, and multi-device accumulation (two tokens both remain verifiable).
-- **`describe('createAccessToken')`** — covers refresh→access exchange, refusal after revocation, and the `select: false` edge case where a document loaded without credentials still revokes via atomic `$pull`.
-- **`setupTestDb()`** — called at module scope to ensure a real database connection for the whole suite.
+- **`signAs(secret, payload, options)`** — local helper that signs a JWT the same way `jwt.ts` does, stamping `keyid: keyId(secret)` so the key-ring lookup resolves correctly. Injects `auth_time` and `amr` defaults required by the `TokenData` shape.
+- **`verifyAccessToken` suite** — happy path, cross-secret rejection, expiry, malformed input, and payload-tamper detection.
+- **`verifyRefreshToken` suite** — signature + DB-presence check; revocation via `tokenRemoveAll`; cross-secret rejection; expiry short-circuits before any DB hit.
+- **`createRefreshToken` suite** — persistence under `TokenType.REFRESH` with a real expiry; rejection for unknown, deactivated, or soft-deleted users; multi-device accumulation (push, not replace).
+- **`createAccessToken` suite** — mint from a stored refresh token; refusal after revocation; behavior when the in-memory document never loaded its `select:false` tokens.
+- **`runTokenCleanup`** (imported from `services/index.ts`) — available for cleanup-related assertions.
+- **`TokenReuseError`** (imported from `session/jwt.ts`) — expected for rotation/replay scenarios.
+- **`beforeEach` / `afterEach`** — pins four `NODE_TOKEN_*` env vars to explicit test secrets and restores originals, since the test environment does not load `.env`.
 
 ## Relationships
 
-- **`session/jwt.ts`** — the system under test; provides `verifyAccessToken`, `verifyRefreshToken`, `createRefreshToken`, `createAccessToken`, `rotateRefreshToken`, and `TokenReuseError`.
-- **`session/key-ring.ts`** — `keyId()` is called by `signAs` to produce the `keyid` header value the verifier expects.
-- **`session/config.ts`** — exports `RefreshTokenExpiryTime` enum used as the tier argument to `createRefreshToken`.
-- **`services/index.ts`** — re-exports `runTokenCleanup`, imported here (exercised in the truncated rotation/cleanup section).
-- **`services/token-cleanup.ts`** — implementation behind `runTokenCleanup`.
-- **`users/index.ts`** — provides `TokenType` and `hashToken` used for storage assertions and token type checks.
-- **`users/model.ts`** — user document methods `tokenAdd` and `tokenRemoveAll` drive the revocation scenarios.
-- **`users/repository.ts`** — `findByIdWithCredentials` reloads the `select: false` tokens array for assertions and pre-revocation reads.
-- **`users/tests/factories.ts`** — `createUser` builds test users; `userRepository` gives direct repo access for credential reloads.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the integration test database.
-- **`tests/support/environment.ts`** — `withEnvironmentOverrides` (imported; likely used in the truncated section for env-dependent cases).
+- **`src/modules/account/session/jwt.ts`** — the module under test; all five exported functions and `TokenReuseError` are imported directly.
+- **`src/modules/account/session/key-ring.ts`** — `keyId()` is used by `signAs` to stamp the correct `kid` header, mirroring production signing.
+- **`src/modules/account/session/config.ts`** — `RefreshTokenExpiryTime` tiers drive the expiry values passed to `createRefreshToken`.
+- **`src/modules/users/tests/factories.ts`** — `createUser` builds test fixtures; re-exports `userRepository` for credential-aware reads.
+- **`src/modules/users/model.ts`** — `tokenAdd` / `tokenRemoveAll` are the revocation surface exercised by refresh-token tests.
+- **`src/modules/users/repository.ts`** — `findByIdWithCredentials` is used to re-read the `select:false` `tokens` array after writes.
+- **`src/modules/users/index.ts`** — provides `TokenType` enum and `hashToken` helper.
+- **`src/modules/account/services/index.ts`** — exports `runTokenCleanup` for cleanup-path tests.
+- **`tests/support/setup-test-db.ts`** — called once at module top to provision the integration database.
+- **`tests/support/clock.ts`** — `freezeDate` / `advanceDate` available for time-sensitive assertions.
+- **`tests/support/environment.ts`** — `withEnvironmentOverrides` imported (utility for scoped env changes, though this file manages env vars manually in `beforeEach`/`afterEach`).
 
 ## Notes
 
-- Tokens are stored **as hashes** (`hashToken(issued)`), never as plaintext. Assertions that inspect the stored row must hash the expected value before comparing.
-- The `tokens` array on the user model is `select: false`. A plain `findById` returns `tokens === undefined`, not `[]`. Tests that need to inspect or pre-revoke tokens must use `findByIdWithCredentials`.
-- `createRefreshToken` **accumulates** (pushes) into `tokens` rather than replacing the array — a regression to assignment would silently break multi-device sessions.
-- Env teardown in `afterEach` distinguishes "key was originally unset" (deletes the key) from "key had a value" (restores it), preventing cross-test contamination.
-- The `signAs` helper exists because `jwt.ts` internally stamps `keyid` from the secret; forgetting this in a hand-rolled fixture would cause the key-ring lookup to fail silently, producing a confusing "invalid signature" rather than a "wrong key" error.
+- Secrets are set explicitly in `beforeEach` (not inherited from `.env`) because the unit-test runner does not load dotenv. The values are simple strings (`'test-access-secret'`, `'test-refresh-secret'`), not real cryptographic material.
+- `tokens` on the user document is `select: false`, so any test that inspects stored tokens must use `findByIdWithCredentials` rather than reading the in-memory object returned by `createUser`.
+- The `signAs` helper is the single source of "how a test token looks to the key-ring." If `keyId` logic changes, every fixture breaks at once.
+- Revocation tests deliberately assert the pre-revocation success case *before* calling `tokenRemoveAll`, so a vacuous pass (token never worked in the first place) is ruled out.
+- The `rotateRefreshToken` and `TokenReuseError` imports suggest rotation/replay tests exist further down in the (truncated) file.

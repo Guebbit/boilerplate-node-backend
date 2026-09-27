@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/services/index.ts
-sha256: ecc3b26bbda2bdde3656b2e0bb2cde2f8351a12a85d7c904bc738a9637078ae3
-generated_at: 2026-09-23T18:25:25.788483+00:00
+sha256: 3fb7af2c1ad2e1bc806026198edcfa6981b87520b190bafe65999f617f73f8f0
+generated_at: 2026-09-27T14:41:35.336170+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (re-export) file for the `api-keys` module's `services/` directory. It exposes a single `apiKeysService` object that maps the module's three operations to their implementations in `./api-keys.ts`, giving controllers one stable import surface instead of reaching into individual service functions.
+Barrel file for the `api-keys` module's service layer. It gives controllers and the module index a single, stable import surface (`apiKeysService`) rather than exposing the individual CRUD functions directly, and it re-exports the credential resolver under a domain-specific name.
 
 ## Key elements
 
-- **`apiKeysService`** – The sole export. An object with three keys that alias functions from `./api-keys`:
-    - `listApiKeys` → `apiKeys.list`
-    - `mintApiKey` → `apiKeys.mint`
-    - `revokeApiKey` → `apiKeys.revoke`
+- **`apiKeysService`** (const object) — The sole export controllers are expected to use. Wraps three functions from `./api-keys`:
+  - `listApiKeys` → delegates to `apiKeys.list`
+  - `mintApiKey` → delegates to `apiKeys.mint`
+  - `revokeApiKey` → delegates to `apiKeys.revoke`
+- **`resolveApiKeyCredential`** — Re-export of `fromBearerToken` from `./resolver`; the `CredentialResolver` the kernel installs at startup.
+- **`findOwnApiKeys`** — Direct re-export from `./api-keys`; used for per-user key lookups (e.g. in UI or auth flows) that bypass the controller-facing service object.
 
 ## Relationships
 
-- **Imports** `src/modules/api-keys/services/api-keys.ts` — the actual implementation of `list`, `mint`, and `revoke`.
-- **Imported by** the three controllers (`list-api-keys.ts`, `mint-api-key.ts`, `revoke-api-key.ts`), which call the mapped methods on `apiKeysService` rather than importing bare functions directly.
-- **Re-exported through** `src/modules/api-keys/index.ts` for any consumer outside the module's own directory.
+- **Consumed by** `controllers/list-api-keys.ts`, `controllers/mint-api-key.ts`, `controllers/revoke-api-key.ts` — each controller imports `apiKeysService` from this barrel and calls the corresponding method.
+- **Re-exports from** `services/api-keys.ts` (the actual CRUD implementation) and `services/resolver.ts` (token parsing / credential resolution).
+- **Re-exported by** `src/modules/api-keys/index.ts`, which surfaces these names at the module top level.
 
 ## Notes
 
-- The JSDoc explicitly states controllers must call through `apiKeysService` and never the underlying bare functions. Treat this indirection as a hard convention.
-- The file exists purely as a namespace/alias layer; it adds no logic. Any bug in an operation should be traced to `./api-keys.ts`, not here.
+- Controllers must import through `apiKeysService` (the object), **not** by reaching into `./api-keys` directly. The doc comment makes this explicit; treat it as a convention enforced by review rather than by lint.
+- `findOwnApiKeys` is the one function exported *outside* the `apiKeysService` object. If you need a new consumer-facing function, decide whether it belongs on the service object or as a standalone re-export.

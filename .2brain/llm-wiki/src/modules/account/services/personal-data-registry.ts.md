@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/personal-data-registry.ts
-sha256: 33d95d5749684de50e3effe49ca81f6c29c117b3384f988a0242d0570cac385b
-generated_at: 2026-09-23T18:09:18.039875+00:00
+sha256: 5c12f8b13f13d4ce9ee85ab43b798ef689705d9db55f557047944d54752d9555
+generated_at: 2026-09-27T14:30:07.210403+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Holds the list of `PersonalDataSection` entries for the account module. Because `account` cannot import sibling modules to collect their manifest entries (the same circular-dependency wall as `@modules/locales/services/translatables.ts`), the app tier assembles the list externally and injects it here at boot. This file is a passive store, never an assembler.
+A module-scoped, in-memory store for the list of `PersonalDataSection` entries. It exists because the `account` module cannot import sibling modules to collect their manifest entries (the same isolation wall that constrains `@modules/locales/services/translatables.ts`), so the sections must be supplied from outside once the full set of enabled modules is known.
 
 ## Key elements
 
-- **`sections`** (module-private) — `readonly PersonalDataSection[]`, initialized to `[]`. Replaced wholesale by the setter.
-- **`setPersonalDataSections(registered)`** — Replaces the stored list with the supplied one. Called once at boot; tests call it to install a fixture and again to restore `[]`.
-- **`personalDataSections()`** — Returns the current list in declaration order.
+- **`setPersonalDataSections(registered: readonly PersonalDataSection[]): void`** – Replaces the internal section list. Called once during boot; tests also call it to install fixtures and to reset to an empty list.
+- **`personalDataSections(): readonly PersonalDataSection[]`** – Returns the current list of registered sections in declaration order.
+- **`sections`** (module-private) – The backing array; empty until `setPersonalDataSections` is called.
+- **`PersonalDataSection`** (imported type) – The shape of each section, defined in the kernel.
 
 ## Relationships
 
-- **`src/app.ts`** — The sole producer. Calls `resolvePersonalDataSections(enabledModules)` and hands the result to `setPersonalDataSections`. This is the one direction data crosses into the account module.
-- **`src/kernel/registry.ts`** — Source of the `PersonalDataSection` type imported here.
-- **`src/modules/account/module.ts`** — Module registration surface; this service lives under the account module's service tree.
-- **`src/modules/account/services/export.ts`** — Consumes `personalDataSections()` to build export payloads.
+- **`src/kernel/registry.ts`** – Source of the `PersonalDataSection` type used as the element type of the stored list.
+- **`src/modules/account/module.ts`** – Its `onRegistered` hook resolves the section list from all enabled modules (via `resolvePersonalDataSections`) and calls `setPersonalDataSections` to populate this registry.
 
 ## Notes
 
-- `setPersonalDataSections` **replaces** the list; it does not merge or append. Calling it twice overwrites the first call entirely.
-- The module deliberately has no import of `src/modules/*`. Any code that needs the sections should call `personalDataSections()`, never re-derive them.
-- Tests are expected to call `setPersonalDataSections([])` in teardown to avoid leaking fixtures between test cases.
+- This file **never** assembles or discovers sections itself; it is purely a passive holder. If the list is empty, the app tier hasn't supplied it yet (or a test reset it).
+- `setPersonalDataSections` is **idempotent by replacement**—calling it a second time overwrites the previous list entirely, which is how tests swap fixtures in and out.
+- The "once at boot" contract is enforced by convention and the caller in `module.ts`, not by any guard in this file.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/tests/unit/schema-contract.test.ts
-sha256: 65ace207c10867ec54198273b654962ba3695184d6b7ed0d6f6951b4fcff2f8d
-generated_at: 2026-09-23T18:35:03.297859+00:00
+sha256: 8d75247c1b2b466d9091fe4bedeccf3f6eadf1b977ae630437e2e1d2ea10bff0
+generated_at: 2026-09-27T14:48:59.240765+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract test that pins the exact shape, indexes, and options of `cartSchema`. It encodes the boundary between cart and wishlist (a cart line carries `quantity`; a wishlist line does not) and asserts that "one cart per user" is enforced by a unique index rather than application logic.
+Asserts the full Mongoose schema contract for the cart collection: which fields are required, what indexes exist, what the `items` sub-schema looks like, and where the cart/wishlist boundary lies (the `quantity` field). It pins the schema so that a refactor of `model.ts` that silently drops an index, changes a default, or adds a field to a cart line fails immediately.
 
 ## Key elements
 
-- **`RETENTION_SECONDS`** — module-level constant computed from `NODE_CART_RETENTION_DAYS` (default 365). Used to assert the TTL value without hard-coding a literal, so the test and the model stay in lockstep if the env var changes.
-- **`describe('cartSchema')`** — top-level assertions:
-    - Only `userId` is required; `items` defaults to `[]`; `userId` is a `ObjectId` ref to `User`.
-    - Exact index set (`carts_updatedAt_ttl`, `items.productId_1`, `userId_1`) and their options (`expireAfterSeconds`, `unique=true`).
-    - `timestamps: true` on the schema options.
-- **`describe('cartSchema — a line')`** — sub-schema (`items`) assertions:
-    - Required paths are `productId` + `quantity`; `_id` is disabled; `productId` refs `Product`.
-    - `quantity` has `min: 1` (a zero-quantity line is a logical removal that didn't remove).
-    - `pathNames` is exactly `['productId', 'quantity']`, cementing the cart-vs-wishlist distinction.
+- **`RETENTION_SECONDS`** — module-level constant computed from `NODE_CART_RETENTION_DAYS` (default 365). Mirrors the model's own TTL default so the test and the policy move together.
+- **`describe('cartSchema')`** — verifies top-level invariants:
+  - `userId` is the sole required path; typed `ObjectId` ref to `User`.
+  - `userId` carries a `unique` index (one cart per user enforced at the DB level).
+  - `items` defaults to `[]`.
+  - Full index set: TTL on `updatedAt`, `items.productId_1`, `userId_1`.
+  - `timestamps: true`.
+- **`describe('cartSchema — a line')`** — verifies the `items` sub-schema:
+  - Required paths are exactly `['productId', 'quantity']`; `_id` disabled.
+  - `quantity` has `min: 1` (no zero-quantity lines).
+  - `productId` has **no** Mongoose `ref` (joins go through `productService`, not `populate`).
+  - Field list is exactly `['productId', 'quantity']`, confirming the cart/wishlist shape boundary.
 
 ## Relationships
 
-- **`src/modules/cart/model.ts`** — source of the `cartSchema` under test. Every assertion in this file reads its indexes, defaults, refs, and options.
-- **`tests/support/schema.ts`** — provides the introspection helpers (`requiredPaths`, `indexSpecs`, `indexOptionSpecs`, `defaultOf`, `typeOf`, `refOf`, `optionsOf`, `pathNames`, `pathOptions`, `subSchema`) that turn a Mongoose schema into comparable plain-value specs, avoiding direct Mongoose-internal access.
+- **`src/modules/cart/model.ts`** — provides `cartSchema`, the sole subject under test. Every assertion in this file reads its Mongoose metadata (paths, indexes, defaults, options).
+- **`tests/support/schema.ts`** — supplies the small assertion helpers (`requiredPaths`, `indexSpecs`, `indexOptionSpecs`, `defaultOf`, `typeOf`, `refOf`, `pathNames`, `pathOptions`, `subSchema`, `optionsOf`) that turn raw Mongoose internals into comparable strings/arrays.
 
 ## Notes
 
-- The TTL assertion compares against `RETENTION_SECONDS` (derived from the same env var the model reads), not a hard-coded number. A new TTL index appearing elsewhere would fail the exact-array `toEqual` in the retention test.
-- The index set is asserted with `toEqual` (exact order and membership), so adding or reordering an index in `model.ts` breaks this test deliberately.
-- The file does **not** test runtime behavior (mutations, upserts); it only freezes the schema's declarative contract.
+- The TTL test asserts `expireAfterSeconds` against the **computed** `RETENTION_SECONDS`, not a hard-coded number. Changing the env var moves both the model and this test in lockstep; a TTL index appearing on any other index also fails here.
+- The absence of a `ref` on `items.productId` is a deliberate DDD choice (see `docs/theory/strategic-ddd.md` §5). A future contributor who "helpfully" adds `ref: 'Product'` will break this test — that is intentional.
+- The `quantity.min === 1` assertion encodes the rule that removal is *deleting the line*, not setting quantity to zero.

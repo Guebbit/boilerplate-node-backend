@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/contract/api.contract.test.ts
-sha256: 26f5efed664470c6d59b29fa9e58047eca0ed4454b449f85a396794f59572d20
-generated_at: 2026-09-23T18:12:32.737248+00:00
+sha256: f8593191bf408c06d2e94e15b3751ffc5dfdc9193ba82694449f09347049fe96
+generated_at: 2026-09-27T14:33:02.485834+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,45 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the self-service `/account` API surface (profile update, password change, session management, email verification). They target scenario-level branches that require specific state — a second account holding the email, a revoked cookie, a spent one-time token — which random-payload unit sweeps cannot produce. Assertions check concrete values (IDs, messages, cookie attributes), not just lengths or status codes.
+Contract tests for the self-service `/account` HTTP surface: login (with remember-me tiers), profile update (PUT full-replace and PATCH partial), password change, email verification (request + confirm), sessions listing, and single-session logout. These tests target scenario branches that depend on specific state (a second account owning the email, a revoked cookie, a spent token, a time-sensitive step-up window) that generated-payload unit sweeps cannot exercise.
 
 ## Key elements
 
-- **`setupTestDb()`** – boots a per-suite database (from `@tests/setup-test-db`).
-- **`jest.mock('@infrastructure/adapters/mailer')`** – _replaces_ the mailer module (not a spy) so `enqueueEmail` is a `jest.fn()`; required because the plaintext verify token only exists in the emailed link.
-- **`MISSING_ID`** – a syntactically valid ObjectId guaranteed not to exist, used to exercise the 404 branch specifically.
-- **`loginWithCookie(overrides?)`** – logs in via `POST /account/login` and returns both the bearer token _and_ the `jwt` cookie; needed for flows (`logout`, `refresh`, `current`) that depend on the session cookie, which `authenticateAs` deliberately drops.
-- **`readVerifyToken(userId)`** – checks _presence_ of a verify-token digest in the user's `tokens` array (the stored value is a hash, not the usable token).
-- **`verifyTokenFromMail()`** – extracts the plaintext `?token=` query parameter from the last queued mail's `linkUrl`; reads `mailerPort.enqueueEmail` mock calls directly (not via `observePort`, which clears history).
-- **`mailTo(to)`** – searches all queued mail for the envelope addressed to `to`; a genuine `PUT /account` email change queues _two_ mails, so "last call" would miss the notice to the old address.
-- **`cookieMaxAge(response, name)`** – parses the `Max-Age` directive from the `Set-Cookie` header for the named cookie.
-- **`describe('POST /account/login — remember me')`** – asserts `jwt` / `isAuth` cookie `Max-Age` matches the tier's expiry from `getExpiryTime`, and that an undeclared tier yields 422 before credential check.
-- **`describe('PUT /account')`** – profile rename, email pending flow (holds new address as `pendingEmail`), cancel-pending by restating current address, 409 on taken email, 422 on invalid body.
-- **`describe('POST /account/reset-confirm')`** – verifies that a weak password returns the field-specific locale message (`itUsers.users['field-password-min']`) rather than the generic size message.
-- **`describe('POST /account/password')`** – confirms 200 + re-login with the new password works.
+- **`loginWithCookie`** — helper that creates a user, logs in via `POST /account/login`, and returns both the bearer token and the `jwt` cookie (needed because `authenticateAs` drops the cookie).
+- **`loginRemembered`** — variant of the above that passes `remember: 'short'` so the refresh cookie outlives clock advances used in step-up tests.
+- **`staleButRefreshedBearer`** — advances the fake clock past `REAUTH_TIME_SENSITIVE`, calls `/account/refresh`, and returns the renewed bearer token (simulates a long-lived-but-stale session).
+- **`verifyTokenFromMail`** — extracts the plaintext verify token from the `?token=` param of the last queued mail's `linkUrl`. Reads `mailerPort.enqueueEmail` mock calls directly (not via `observePort`, which would clear history).
+- **`mailTo`** — searches all queued mails for one addressed to a given recipient (a single `PATCH /account` email change enqueues two mails).
+- **`readVerifyToken`** — checks presence (not value) of a stored email-verify token, since it is a `hashToken` digest at rest.
+- **`cookieMaxAge`** — parses `Max-Age` seconds from a named `Set-Cookie` header.
+- **`jest.mock('@infrastructure/adapters/mailer')`** — replaces the module (not spies on it) because `enqueueEmail` is a non-configurable getter under swc/CJS; the mock resolves `undefined` and records calls.
+- **Test blocks** — `POST /account/login` (remember tiers, invalid tier 422), `PUT /account` (full-replace semantics, required fields), step-up auth (re-cased email vs. genuine change), `PATCH /account` (partial update, pending email flow), and (in truncated portion) password change, verify-confirm, sessions, and logout.
 
 ## Relationships
 
-| Neighbor                                                    | Interaction                                                                                                                                  |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/modules/users/tests/factories.ts`                      | `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, `WEAK_PASSWORD`, `userRepository` used for fixture setup and token-state inspection. |
-| `src/modules/users/index.ts`                                | `TokenType` (for `user.tokenAdd`) and `userService` imports.                                                                                 |
-| `src/modules/account/services/index.ts`                     | `EMAIL_VERIFY_TOKEN_TYPE` constant for token-type filtering.                                                                                 |
-| `src/modules/account/session/config.ts`                     | `getExpiryTime` / `RefreshTokenExpiryTime` — the same accessor the app uses to size cookies; tests assert against it, not raw env vars.      |
-| `src/infrastructure/adapters/mailer.ts`                     | Fully mocked at module level; `enqueueEmail` call history is the observation channel for emailed tokens.                                     |
-| `src/infrastructure/adapters/logger.ts`                     | Imported (likely for error-path logging assertions or suppression).                                                                          |
-| `src/infrastructure/http/response.ts`                       | `ResponseSuccess` type import for response-shape assertions.                                                                                 |
-| `src/modules/products/tests/factories.ts`                   | `createProduct` for order-related fixtures.                                                                                                  |
-| `src/modules/orders/tests/factories.ts`                     | `createOrder`, `toOrderItem` for order fixtures tied to the account.                                                                         |
-| `src/modules/payments/index.ts` / `services/intent.ts`      | `createIntent` for payment-intent fixtures.                                                                                                  |
-| `src/types/index.ts`                                        | `Payment` type import.                                                                                                                       |
-| `src/modules/users/repository.ts`, `model.ts`, `service.ts` | Underlying domain logic exercised through the HTTP API in these contract tests.                                                              |
+- **`@infrastructure/adapters/mailer`** — module-mocked; all email assertions go through its recorded `enqueueEmail` calls.
+- **`@infrastructure/adapters/logger`** — imported (likely spied on in the truncated portion to assert audit logging).
+- **`@infrastructure/http/response`** — `ResponseSuccess` type used for response-shape assertions.
+- **`@kernel/middlewares/authorizations`** — `REAUTH_TIME_SENSITIVE` constant drives the step-up time-window tests.
+- **`@modules/account/services`** — `EMAIL_VERIFY_TOKEN_TYPE` discriminant for reading stored tokens.
+- **`@modules/account/session/config`** — `getExpiryTime` / `RefreshTokenExpiryTime` used to assert cookie `Max-Age` matches the tier's code-side default.
+- **`@modules/users/tests/factories`** — `createUser`, `userRepository`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, `WEAK_PASSWORD` for fixture setup and password assertions.
+- **`@modules/users`** — `TokenType`, `userService` (and transitively `users/model`, `users/repository`, `users/service`) for token-type checks and service-level assertions.
+- **`@modules/products/tests/factories`** — `createProduct` for populating orders in multi-tenant or role-scenario setups.
+- **`@modules/orders/tests/factories`** — `createOrder`, `toOrderItem` for the same reason.
+- **`@modules/payments`** — `createIntent` to seed a payment context relevant to account-role tests.
 
 ## Notes
 
-- **Mailer mock is a replacement, not a spy.** `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS namespace import exposes under SWC; the module is replaced via `jest.mock` with a spread of `requireActual` plus the overridden `enqueueEmail`.
-- **Verify tokens are one-way digests at rest.** The only way to obtain the plaintext token is to read it out of the queued mail's `linkUrl`. This is why the mailer must be mocked rather than simply observed.
-- **`mailTo` searches all calls, not just the last.** An email change triggers two queued mails (notice to old address + link to new address); reading only `.at(-1)` would miss the first.
-- **`verifyTokenFromMail` bypasses `observePort`.** That helper clears the mock's call history on hand-out, which would erase the very call being read.
-- **Cookie expiry assertions go through `getExpiryTime`.** The tiers carry code-side defaults, so asserting against the accessor (not a raw env var) keeps the test correct even when the environment never sets the variable.
-- **`toSatisfyApiSpec()`** (from `@tests/contract`) validates response shape against the OpenAPI contract on every assertion that matters, in addition to the targeted value checks.
+- The mailer mock is a full module replacement, not a `jest.spyOn`. The file comments explain this is a swc/CJS interop constraint: the namespace object's getters are non-configurable.
+- `verifyTokenFromMail` reads mock calls directly rather than through the shared `observePort` helper because that helper clears call history on hand-out, which would destroy the very call being read.
+- `mailTo` is a *search* over all calls, not "last call" — a single email-change request enqueues two mails (notice to old, link to new).
+- Step-up tests use `remember: 'short'` deliberately: an unqualified login gives the refresh token the same short TTL as the access token (`NODE_TOKEN_ACCESS_TIME`), which would expire during the clock advance and mask the freshness gate behind a plain 401.
+- `PUT /account` is treated as a full-replace (RFC 9110 §9.3.4): omitted optional fields are cleared, and `email` + `username` are required.
+- Italian locale JSON files (`it.json`) are imported for i18n error-message assertions (visible in the import list; used in the truncated portion).
+- The file ends with `setupTestDb()` at module scope, so the DB is torn down per test-file run, not per test.

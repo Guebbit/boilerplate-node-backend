@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/module.ts
-sha256: e1e58d3f6136aa2f4f2526e021c2727b8cd3964d110e8e838cb9f6a71da24956
-generated_at: 2026-09-23T18:56:24.127773+00:00
+sha256: 4337753319ff0078b14c3e02e8be7a65bb7911695532758fa8562777833cfa34
+generated_at: 2026-09-27T15:04:28.783270+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the operator-facing observability module. Declares the module's identity (name, base path), its single permission key, its HTTP router, required boot config, locale path, and personal-data classification so the kernel can mount and govern it. Owns no data and exposes no events — it is purely a URL and permission surface.
+The module manifest for the **observability** module. It declares the module's identity, base path, permission, route table, required config, locales, and personal-data posture to the kernel registry so the service can mount and guard it. The file itself contains no runtime logic beyond a `path.join` for the locales directory.
 
 ## Key elements
 
-- **`default` export** — an object typed as `AppModule`. Carries:
-    - `name: 'observability'`, `basePath: '/observability'`
-    - `permissions: ['platform.observability.any.read']` — the sole permission this module introduces; cross-cutting tests enforce bidirectional attribution.
-    - `routes: router` — the Hono/express router imported from `./routes`.
-    - `requiredConfig` — guards against the shipped placeholder `change-me-dev-metrics-token`; `minLength: 0` is intentional so an _unset_ variable is allowed (fail-closed by default) while the known placeholder blocks boot.
-    - `locales`, `personalData: 'none'`.
+- **`export default` (satisfies `AppModule`)** — the sole export. Fields of note:
+  - `name` / `basePath` — registers as `observability` under `/observability`.
+  - `permissions` — claims `platform.observability.any.read`; ownership is enforced by `tests/cross-cutting/module-permissions.test.ts`.
+  - `routes` — the Hono/Fastify router re-exported from `./routes.ts`.
+  - `requiredConfig` — `NODE_METRICS_TOKEN` with `minLength: 0`; the validation only *rejects* the known placeholder `change-me-dev-metrics-token`. An unset token is a valid fail-closed state (scrape returns 503).
+  - `locales` — points to `./locales` (resolved at import time via `__dirname`).
+  - `personalData` — `'none'`; the module owns no collection and records nothing personal.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — provides the `AppModule` type this manifest must satisfy; the kernel reads this object to register the module.
-- **`src/modules.ts`** — top-level aggregation that imports this module's default export alongside other module manifests.
-- **`src/modules/observability/routes.ts`** — supplies the `router` instance attached here; all route handlers, auth guards, and endpoint logic live there.
-- **`src/modules/observability/asyncapi.yaml`** — the API contract document for this module's endpoints (SSE stream, Prometheus scrape, health, audit).
+- **`src/kernel/registry.ts`** — provides the `AppModule` type that this object must satisfy.
+- **`src/modules.ts`** — aggregates module manifests; this file is one entry in that list.
+- **`src/modules/observability/routes.ts`** — source of the `router` value; defines the actual HTTP handlers (health, metrics, SSE, audit, Prometheus scrape).
+- **`src/modules/observability/asyncapi.yaml`** — API description for the module's endpoints; this manifest declares no event subscriptions, so the spec documents request/response contracts only.
 
 ## Notes
 
-- **Metric reads are string-based, never import-based.** The module calls `metricsRegistry.getSingleMetric('auth_login_total')` etc. by name. Renaming a counter in any domain compiles cleanly but silently zeroes out the reported value. `metric-names.test.ts` exists specifically to catch this.
-- **The barrel (`index.ts`) is intentionally empty.** This module exports no data or reusable utilities to siblings — it owns URLs, not logic.
-- **Auth is per-route, not uniform.** Every endpoint is authenticated, but the mechanism varies (session, bearer, scraper token). See `routes.ts` for the actual guard wiring.
-- **Depends on `audit-logs`** for the `GET /observability/audit` endpoint, but that dependency is at the route-handler level, not visible in this manifest file.
+- **String-based metric reads.** This module (and its routes) reads counters from the shared Prometheus registry by *string* (`metricsRegistry.getSingleMetric('auth_login_total')`), never by typed import. Renaming a counter in any domain compiles cleanly but breaks observability silently; `metric-names.test.ts` is the guard.
+- **`minLength: 0` is intentional.** It does not mean "no validation"; it means *only* the placeholder check applies. Do not raise `minLength` without also handling the unset case.
+- **Barrel note.** `./index.ts` re-publishes `./services` (health, job/dependency health, process reader, SSE stream) for potential sibling-module consumption; no sibling currently imports them.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/intent.ts
-sha256: bf9993c18d5820185c3f79b1ebb6137135d523582fc15a5182191500a40a34e9
-generated_at: 2026-09-23T19:21:07.490424+00:00
+sha256: 7da3785b2d844e5f81839b38007a927605ea033a3320a2425976874c0664777f
+generated_at: 2026-09-27T15:26:22.206800+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Entry point for the payment-intent flow: creates (or refreshes) the intent for a given order by freezing the amount, verifying the order is still payable and its lines are available, resolving the payer, and obtaining a `clientSecret` from the configured provider. It is the one response in the module that carries a `clientSecret` on the wire, since that value is never stored.
+Entry point for the money-moving flow in the payments module. Creates (or refreshes) a payment intent for an order, resolves the payer identity, and handles cancellation of open intents at the provider. All four rules documented in `../index`'s module docblock apply here.
 
 ## Key elements
 
-- **`resolvePayerId(orderUserId: string | undefined)`** — Looks up the order's account id against the users service to persist a verified payer id. If the user no longer resolves, it falls back to the raw `orderUserId` (logged as a warning) rather than refusing the payment. Returns `undefined` immediately when the order's account has been detached (erased), so nothing is persisted.
-- **`createIntent(orderId, authContext?)`** — Orchestrates the full intent-creation sequence: load order via `orderService.getById` with caller scoping → check `isPayable(status)` → check `unavailableLines(order)` for post-checkout product deactivation → resolve payer id → `paymentRepository.upsertIntent` with `orderTotal` / `shopCurrency` / provider name → `provider.prepare` → `paymentRepository.attachProviderRef` → return `201` with the payment (`.toJSON()`) plus `clientSecret`. Re-asking on an already-paid order yields `409`.
+- **`resolvePayerId(orderUserId)`** — Resolves the payer against the `users` module. Returns `undefined` if the account was fully detached (erased); otherwise falls back to the order's stored id (with a warning) if the user no longer resolves. Never blocks payment on resolution failure.
+- **`createIntent(orderId, authContext?)`** — Main export. Loads the order, verifies it is payable (`isPayable`), checks product availability fresh against `products`, upserts the payment row via `paymentRepository.upsertIntent`, calls the resolved provider's `prepare` to obtain a `providerRef` + `clientSecret`, attaches the ref, and returns a 201 response carrying the `clientSecret`. Idempotent for the double-click case; returns 409 if the order already settled.
+- **`cancelOpenIntent(payment, reason)`** — Closes a single payment's open intent at its named provider. Resolves immediately if there is no `providerRef` or the provider is `manual`. Throws `PaymentInFlightError` if the provider reports the intent already succeeded or is mid-flight.
+- **`cancelOpenIntentForOrder(orderId)`** — Best-effort wrapper used by the `order.cancelled` listener (wired in `../module.ts`). Looks up the payment, skips `succeeded`/`refunded`, calls `cancelOpenIntent`, and **logs** rather than rethrows on failure (the order is already gone; a provider error cannot stop the cancel).
 
 ## Relationships
 
-- **`@modules/orders`** (via `orders/index.ts`, `domain/lifecycle.ts`, `domain/totals.ts`, `services/availability.ts`): Consumes `orderService.getById` + `callerScope`, `isPayable`, `orderTotal`, `unavailableLines`, and `shopCurrency`. The amount, payability rule, and line-availability check are all owned by the orders module; this file never re-implements them.
-- **`@modules/payments/providers`** (`providers/index.ts`): Calls `resolvePaymentProvider()` to obtain the active provider, then invokes `provider.prepare({amount, currency}, {orderId, paymentId})` to get `providerRef` and `clientSecret`.
-- **`@modules/payments/repository.ts`**: Calls `paymentRepository.upsertIntent` to create/refresh the intent row and `paymentRepository.attachProviderRef` to link the provider reference.
-- **`@infrastructure/http/response`**: Uses `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` types for all return values.
-- **`@infrastructure/i18n`**: Calls `t()` for every user-facing message.
-- **`@infrastructure/adapters/logger`**: Emits a `logger.warn` when a payer id cannot be resolved to a live account.
-- **`services/index.ts`**: Re-exports this module's public API.
-- **`services/offline.ts`**: Sibling service in the same directory; shares the module's conventions but handles the offline path separately.
-- **`account/tests/contract/api.contract.test.ts`**: Exercises the intent endpoint contractually.
+- **`@modules/orders`** (`index`, `domain/lifecycle`, `domain/totals`, `services/availability`, `config`) — Source of `orderService`, `isPayable`, `orderTotal`, `unavailableLines`, and `shopCurrency`. The payable check delegates to the order's lifecycle owner; the amount is frozen through `orderTotal` to stay consistent with the order serializer and confirmation email.
+- **`../providers/index`** — `resolvePaymentProvider()` supplies the active provider for `createIntent`; `providerNamed()` is used by `cancelOpenIntent` to route cancellation to the correct provider.
+- **`../repository`** — `paymentRepository.upsertIntent` persists the intent row; `attachProviderRef` stores the provider reference; `findByOrderId` is used by `cancelOpenIntentForOrder`.
+- **`../model`** — `PaymentDocument` type used in `cancelOpenIntent`'s signature; `.toJSON()` applied before the response is built.
+- **`../module`** — Registers `cancelOpenIntentForOrder` as the `order.cancelled` event listener.
+- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape all HTTP responses.
+- **`@infrastructure/i18n`** — `t()` provides user-facing error strings.
+- **`@infrastructure/adapters/logger`** — Warn/error logging for unresolved payer and failed best-effort cancels.
+- **`@modules/account/tests/contract/api.contract.test.ts`** — Contract-level tests exercise the response shapes and status codes this file produces.
 
 ## Notes
 
-- `orderTotal` is used for the intent amount, not a sum of line items alone — shipping is frozen on the order at checkout and included in `orderTotal`.
-- `unavailableLines` is checked against the live product catalog, _not_ the order's frozen snapshot, to catch the race window between a product's auto-cancel listener firing and a payment already in flight.
-- `resolvePayerId` intentionally never rejects: an unresolvable payer degrades to the raw order id (logged) because orders must survive account deletion.
-- `clientSecret` is returned in the response body but never persisted; it is the one field that appears on the wire and then disappears.
-- The `.toJSON()` call on the stored payment applies the model's `_id → id` and date transforms before spreading into the response payload.
+- **Payer resolution is never a hard gate.** An unresolvable or erased account still allows payment to proceed (the order's id is persisted unverified). Only a fully detached (`undefined`) account skips the lookup entirely.
+- **Availability check is a race backstop, not the primary guard.** The normal door is `orders`' auto-cancel listener. This fresh check against `products` closes the gap between that event firing and a payment already in flight.
+- **`clientSecret` is response-only.** It is never stored in the payment row and never read back from the repository; it appears solely in the 201 body.
+- **Two cancellation paths with different failure semantics.** `cancelOpenIntent` throws (caller can refuse the request); `cancelOpenIntentForOrder` swallows errors (no request left to refuse). Don't conflate them.
+- **Stryker annotations** surround the fallback `return` in `resolvePayerId` and the `.catch` in `cancelOpenIntentForOrder`, marking them as intentionally un-mutated.

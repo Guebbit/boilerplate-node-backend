@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/controllers/list-api-keys.ts
-sha256: 047b374418bbdfba27022112a3bb1cf7d804c9521fb3bc6b30db24f7f4233d9e
-generated_at: 2026-09-23T18:23:32.008942+00:00
+sha256: 5492ca9404df3a58f92753e2621851d333e07975788c614570fb4cbc756c973e
+generated_at: 2026-09-27T14:40:44.571391+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP controller that handles `GET /api-keys`. It validates pagination query params, extracts the tenant's caller context from the request, and delegates to the API-keys service. The resulting list is ordered newest-first and never includes secret material.
+HTTP controller for `GET /api-keys`. Returns the calling tenant's API-key credentials in newest-first order, with pagination. Secrets are never included in the response.
 
 ## Key elements
 
-- **`listApiKeys`** (exported) — The list-controller instance produced by `createListController`. Accepts a parsed pagination query and a raw HTTP request; returns a `Promise<ApiKeysResponse>`.
-- **`entity: 'apiKeys'`** — Identifier passed to the list-controller factory (used for logging, response metadata, or cache keys depending on the factory's implementation).
-- **`schema: paginationSchema`** — Query-parameter validation schema applied before `runList` is invoked.
+- **`listApiKeys`** (exported) — The route handler, built via `createListController`. Accepts a paginated query (validated by `paginationSchema`), extracts the tenant caller context from the request, and delegates to `apiKeysService.listApiKeys`. Returns `Promise<ApiKeysResponse>`.
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-list-controller.ts`** — Factory used to build the controller; provides the standard list-endpoint contract (validation, error handling, response shaping).
-- **`src/infrastructure/http/schemas.ts`** — Source of `paginationSchema`, the shared pagination query schema.
-- **`src/infrastructure/http/request.ts`** — Source of `tenantCallerContextOf`, which extracts the tenant-scoped caller context from the incoming request.
-- **`src/modules/api-keys/services/index.ts`** — Exposes `apiKeysService`, whose `listApiKeys` method performs the actual data retrieval.
-- **`src/modules/api-keys/routes.ts`** — Registers `listApiKeys` on the `GET /api-keys` route.
-- **`src/types/index.ts`** — Defines the `ApiKeysResponse` shape returned to the client.
+- **`@infrastructure/surfaces/create-list-controller`** — Provides the `createListController` factory that wires query-parsing, validation, and response formatting around the `runList` callback.
+- **`@infrastructure/http/schemas`** — Supplies `paginationSchema`, used to validate the incoming query parameters (page, limit, etc.).
+- **`@infrastructure/http/request`** — Supplies `tenantCallerContextOf`, which derives the tenant-scoped caller context from the raw `request` object.
+- **`@types`** — Supplies the `ApiKeysResponse` type used as the return type of `runList`.
+- **`../services`** (api-keys service index) — Provides `apiKeysService`, the domain service whose `listApiKeys` method performs the actual data retrieval.
+- **`src/modules/api-keys/routes.ts`** — The routes file that registers `listApiKeys` on the `GET /api-keys` path.
 
 ## Notes
 
-- The controller is deliberately stateless and contains no business logic; all listing behavior lives in `apiKeysService.listApiKeys`.
-- "Never returns a secret" is a contract enforced at the service layer, not by this controller—review the service if you need to confirm which fields are redacted.
+- Ordering (newest first) and the "no secrets" guarantee are stated in the doc comment but are enforced by the service layer, not this controller.
+- The controller is intentionally thin: all domain logic lives in `apiKeysService`. Pagination and auth-context extraction are the only controller-level concerns.

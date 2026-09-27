@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/services/messages.ts
-sha256: 16b4f4663d00542822cd93aa475b0e754c4fce8002a8c7252624fb421f29cafd
-generated_at: 2026-09-23T18:52:25.237231+00:00
+sha256: 99a21dd817e5971c484e1c704a9cf7bca6862cd55e683155bf1d6f7fe136c819
+generated_at: 2026-09-27T15:01:36.588425+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the two read paths for stored locale overrides: one that a frontend client downloads per language, and one that the API's i18n provider calls to rebuild its backend overlay. Both expand flat key-value rows through `buildMessageTree`, differing only in which tenant's keyspace they serve.
+Provides the two read paths that hand out stored locale copy: `readMessages` serves a frontend tenant's downloadable overrides for one language, and `readApiOverrides` returns the backend tenant's full override set grouped by language. Both expand flat key/value rows into nested trees via `buildMessageTree`; they differ in which tenant's keyspace they serve and how they treat inactive languages.
 
 ## Key elements
 
-- **`readMessages(tag, tenant?)`** – Returns a frontend tenant's message tree for a single language tag, wrapped in a `generateSuccess` envelope. Defaults `tenant` to `frontendTenant()`. Returns a 404 (`languageNotFound`) for backend tenants, unconfigured ids, or inactive languages.
-- **`readApiOverrides()`** – Returns every backend-tenant override grouped by language and expanded into trees. Includes inactive languages deliberately. Catches per-locale `buildMessageTree` failures so one bad dictionary does not abort the whole refresh.
+- **`readMessages(tag, tenant?)`** — Returns a client-ready `LocaleMessages` object (tag, revision, tree) for one frontend tenant and one language. Rejects non-frontend tenants, unknown tags, and inactive languages with a `languageNotFound` (404) response. Defaults `tenant` to the deployment's `frontendTenant()`.
+- **`readApiOverrides()`** — Returns a `Record<locale, tree>` of all backend-tenant entries, including inactive languages. Groups rows by locale, builds a tree per locale inside a `try/catch` so one malformed locale logs a warning and is skipped rather than aborting the whole refresh.
 
 ## Relationships
 
-- **`src/modules/locales/services/keys.ts`** – Supplies `buildMessageTree`, the shared routine both reads use to turn flat rows into nested objects.
-- **`src/modules/locales/services/languages.ts`** – Supplies `languageNotFound`, the 404 response used by `readMessages`.
-- **`src/modules/locales/tenants.ts`** – Supplies `backendTenant`, `frontendTenant`, and `isFrontendTenant` for tenant scoping and validation.
-- **`src/modules/locales/repository.ts`** – Supplies `localeRepository.findByTag` (language lookup + active flag) and `localeEntryRepository.listEntries` / `listEntriesByTenant` (row retrieval).
-- **`src/infrastructure/http/response.ts`** – Provides `generateSuccess` and the `ResponseSuccess` / `ResponseReject` types for the HTTP envelope.
-- **`src/infrastructure/adapters/logger.ts`** – `logger.warn` is called in the per-locale catch block of `readApiOverrides`.
-- **`src/types/index.ts`** – Provides the `LocaleMessages` and `LocaleTenant` type imports.
-- **`src/modules/locales/services/index.ts`** – Barrel file that re-exports the public surface of this module.
+- **`../repository`** — Calls `localeRepository.findByTag` (look up language metadata) and `localeEntryRepository.listEntries` / `listEntriesByTenant` (fetch flat key/value rows).
+- **`./keys`** — Calls `buildMessageTree` to expand flat `{ key, value }` arrays into the nested object shape both exports return.
+- **`./languages`** — Imports `languageNotFound` as the standard 404 response for missing/inactive languages.
+- **`../tenants`** — Uses `frontendTenant()`, `backendTenant()`, and `isFrontendTenant()` to determine which keyspace each function serves and to guard the tenant parameter.
+- **`@infrastructure/http/response`** — Uses `generateSuccess` to wrap successful payloads and the `ResponseSuccess` / `ResponseReject` types for the return signature.
+- **`@infrastructure/adapters/logger`** — Emits a `warn` in the per-locale catch block of `readApiOverrides`.
+- **`@types`** — Imports `LocaleMessages` and `LocaleTenant` for type annotations.
 
 ## Notes
 
-- `readMessages` returns **404, not 403 or an empty 200**, for inactive languages so the response does not reveal that a draft translation exists.
-- `readApiOverrides` **includes inactive languages on purpose**: the `active` flag governs public visibility, and excluding a draft backend override would silently revert API copy mid-translation.
-- The per-locale `try/catch` in `readApiOverrides` is paired with an `eslint-disable no-restricted-syntax` comment and Stryker mutation-testing disable/restore markers—intentional, not accidental.
-- A key that is simultaneously a leaf string and a group causes `buildMessageTree` to throw; that is the only error path caught here.
+- Inactive languages are **excluded** from `readMessages` (404) but **included** in `readApiOverrides`. This is intentional: `active` governs public visibility only; the backend overlay must keep serving draft copy so translations can be updated without a mid-flight revert.
+- `readMessages` returns a 404 (not 403) for non-frontend tenants and for inactive languages to avoid leaking that a draft translation exists.
+- The `try/catch` around `buildMessageTree` in `readApiOverrides` is scoped per-locale with an explicit `// eslint-disable-next-line no-restricted-syntax` and Stryker mutation-testing disable/restore guards — one bad dictionary must not sink the rest.
+- `readApiOverrides` has no HTTP response wrapper; it returns a plain `Record` because the i18n provider (not an HTTP handler) is the caller.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-reset-request.ts
-sha256: 5a6951fd31dbfab491b3860ea6f814ec8c8035deefb0f868b89c15ce62452fa8
-generated_at: 2026-09-23T18:03:49.667025+00:00
+sha256: d472ee5593ab0f1c5df247461fec2620d8274880eb00720d9fd7c5c7a3fca9b3
+generated_at: 2026-09-27T14:26:14.794613+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP controller for `POST /account/reset-request`. It is a thin adapter that validates the request body, delegates to `accountService.requestPasswordReset`, and returns the same 200 response regardless of whether the email belongs to a real account — the sole purpose being to prevent user enumeration.
+Thin HTTP adapter for `POST /account/reset-request`. It validates the request body, delegates to `accountService.requestPasswordReset`, and always returns the same `200` response regardless of whether the email belongs to a real account — the core mechanism for preventing user enumeration.
 
 ## Key elements
 
-- **`postResetRequest`** (exported) — The only export. Express controller function that:
-    - Validates `request.body` against the `RequestPasswordResetBody` Zod schema via `parseBody`.
-    - Extracts caller identity through `callerContextOf(request)`.
-    - Calls `accountService.requestPasswordReset(email, context)`, catching any rejection and coercing to `false` (fail-closed).
-    - Increments the `authPasswordResetTotal` Prometheus counter (`success` / `failure`).
-    - Emits an audit record unconditionally via `recordAudit`.
-    - Responds with `successResponse(200)` and the i18n string `account.reset.email-sent`.
+- **`postResetRequest(request, response)`** – Express handler (the sole export). Validates the body via `parseBody` + `RequestPasswordResetBody` (Zod), calls the service, records metrics and an audit event, and responds with a fixed i18n message (`t('account.reset.email-sent')`).
+- **`.catch(() => false)`** – Swallows any service error so the public response is identical to a "not found" case; the metric is tagged `status: 'failure'`.
+- **Audit block** – Calls `recordAudit` with `accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED`, actor fixed to `anonymous`, outcome always `'success'` (the *request* succeeded, not the reset).
 
 ## Relationships
 
-| Neighbor                                    | Interaction                                                                          |
-| ------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `src/infrastructure/http/controller.ts`     | Supplies `parseBody` for schema-validated body extraction.                           |
-| `src/infrastructure/http/request.ts`        | Supplies `callerContextOf` to build the audit/context object.                        |
-| `src/infrastructure/http/response.ts`       | Supplies `successResponse` helper for the 200 reply.                                 |
-| `src/infrastructure/i18n/index.ts`          | Supplies `t()` for the localized success message.                                    |
-| `src/infrastructure/i18n/context.ts`        | Part of the i18n resolution chain used by `t`.                                       |
-| `src/infrastructure/observability/audit.ts` | Supplies `recordAudit` to emit the audit event.                                      |
-| `src/modules/account/audit.ts`              | Supplies `accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED` enum value.             |
-| `src/modules/account/metrics.ts`            | Supplies `authPasswordResetTotal` counter.                                           |
-| `src/modules/account/services/index.ts`     | Supplies `accountService.requestPasswordReset` — the sole business-logic call.       |
-| `src/modules/account/routes.ts`             | Registers `postResetRequest` on the `POST /account/reset-request` route.             |
-| `src/types/index.ts`                        | Provides the `PasswordResetRequest` body type used in the Express handler signature. |
+- **`@infrastructure/http/controller`** → `parseBody` (body shape validation; short-circuits with an error response if invalid).
+- **`@infrastructure/http/request`** → `callerContextOf` (extracts caller metadata for audit/metrics scoping).
+- **`@infrastructure/http/response`** → `successResponse` (uniform 200 reply).
+- **`@infrastructure/i18n`** → `t` (localises the response message).
+- **`@infrastructure/observability/audit`** → `recordAudit` (persists the audit event).
+- **`@/modules/account/audit`** → `accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED` (action enum key).
+- **`@/modules/account/metrics`** → `authPasswordResetTotal` (Counter incremented with `status: success|failure`).
+- **`@/modules/account/services`** → `accountService.requestPasswordReset` (performs token minting, job publishing; returns a boolean only — the token never reaches this file).
+- **`@/types`** → `PasswordResetRequest` (typed body shape for the Express request generic).
+- **`@/modules/account/routes`** → imports this controller to register the `POST /account/reset-request` route.
 
 ## Notes
 
-- **Audit is unconditional by design.** It fires in the `.then` block _after_ the `.catch(() => false)`, so it records even when the email does not match an account. Moving it into the service would let a missing-account path skip the record and leak existence.
-- **Fail-closed catch.** Any exception from `requestPasswordReset` (DB down, mail provider error, etc.) is swallowed and treated as `sent = false`. The client still receives the identical 200 + "email-sent" message.
-- **Actor is always `anonymous`.** This is a pre-authentication endpoint; no session or token is expected.
-- **Token isolation.** The password-reset token is minted and published entirely inside the service. This file only ever sees a boolean (`sent`), so a token leak through the controller layer is impossible.
-- **No status-code variation.** Both success and failure produce HTTP 200 with the same body. Do not "improve" this to return 404/422 for invalid emails.
+- **Audit fires unconditionally.** The controller-level `recordAudit` runs after both success *and* failure paths. The inline comment explains this deliberately: a service-level audit would only fire when a user is found, leaking existence.
+- **Actor is hardcoded `anonymous`.** No auth middleware guards this route; the audit schema still requires `actor_user_id`/`actor_role`.
+- **Token is opaque here.** The service mints the reset token, enqueues the email job, and reports back only a `boolean`. This file never sees the token value.
+- **Fail-closed on any service error.** `.catch(() => false)` means a transient DB or mail-queue failure produces the same "email sent" response, tagged `failure` in the metric. There is no retry or error propagation to the client.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-login-2fa-send.ts
-sha256: 7a85b1d5122ad16e17e9b1319f8518ab815cd3032f61fe1d02d4ecbd13253c51
-generated_at: 2026-09-23T18:02:04.303669+00:00
+sha256: e27a4d14f1dd5051f0675f98430d05989b0b3d9c503d4687d027d1dc5a80bc56
+generated_at: 2026-09-27T14:24:32.877273+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP adapter for `POST /account/login/2fa/send`. Validates the incoming request, resolves a two-factor challenge token (from body or cookie), and delegates to `twoFactorService.sendLoginCode` to mail or text a one-time code. It is intentionally thin: no business logic beyond parsing and error mapping.
+Thin HTTP adapter for `POST /account/login/2fa/send`. Validates the request body, resolves a 2FA challenge token (from body or cookie), delegates to `twoFactorService.sendLoginCode`, and shapes the HTTP response. The endpoint is intentionally public — the challenge token itself is the credential, consistent with the rest of the login flow.
 
 ## Key elements
 
-- **`postLoginTwoFactorSend(request, response)`** – the sole export. An async Express handler (`.then/.catch` style) that:
-    - Safely parses `request.body` against the `SendTwoFactorCodeBody` Zod schema.
-    - Falls back to `readMfaChallengeCookie` when `body.challenge` is absent (mirrors the fallback in `postLoginTwoFactor`).
-    - Returns **401** if no valid challenge token is available.
-    - Calls `twoFactorService.sendLoginCode(challenge, method, callerContext)` and maps the result to a **200** (with `TwoFactorDelivery` payload) or an error status.
-    - Catches unexpected exceptions via `rejectDatabaseError`.
-    - Increments the `authTwoFactorCodeSentTotal` Prometheus counter on **every** exit path (success _and_ failure), labelled with `method` and `status`.
+- **`postLoginTwoFactorSend`** (exported) — The sole controller function. Accepts Express `Request`/`Response`. Steps:
+  1. Safe-parses the body with `SendTwoFactorCodeBody` (Zod schema); rejects with validation error on failure.
+  2. Resolves the 2FA `challenge` from the body field, falling back to `readMfaChallengeCookie(request)`. Rejects with 401 if absent.
+  3. Calls `twoFactorService.sendLoginCode(challenge, method, callerContext)`; responds 200 with `TwoFactorDelivery` payload on success.
+  4. Every terminal path increments the `authTwoFactorCodeSentTotal` Prometheus counter with `{ method, status }` labels.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** – imports `twoFactorService`; the only domain call made.
-- **`src/modules/account/oauth/mfa-redirect.ts`** – imports `readMfaChallengeCookie` for the cookie-based challenge fallback.
-- **`src/modules/account/metrics.ts`** – imports `authTwoFactorCodeSentTotal` counter.
-- **`src/infrastructure/http/response.ts`** – uses `successResponse` / `rejectResponse` for consistent JSON envelopes.
-- **`src/infrastructure/http/errors.ts`** – uses `rejectDatabaseError` for unexpected exceptions.
-- **`src/infrastructure/http/controller.ts`** – uses `rejectValidation` for Zod parse failures.
-- **`src/infrastructure/http/request.ts`** – uses `callerContextOf` to extract client metadata for the service call.
-- **`src/infrastructure/i18n/index.ts`** – uses `t()` for user-facing error/success messages.
-- **`src/types/index.ts`** – imports `TwoFactorSendRequest` (request body type) and `TwoFactorDelivery` (response payload type).
-- **`src/modules/account/routes.ts`** – registers this handler on the `POST /account/login/2fa/send` route (implied by module placement and JSDoc).
+- **`src/modules/account/services/index.ts`** — Calls `twoFactorService.sendLoginCode`, the actual business-logic unit.
+- **`src/modules/account/oauth/mfa-redirect.ts`** — Imports `readMfaChallengeCookie` as the cookie-based fallback for the challenge token (mirrors the same fallback used in `postLoginTwoFactor`).
+- **`src/modules/account/metrics.ts`** — Imports `authTwoFactorCodeSentTotal` counter; incremented on every success/failure branch.
+- **`src/infrastructure/http/controller.ts`** — Provides `rejectValidation` (Zod parse failure) and `refused` (service-level refusal check).
+- **`src/infrastructure/http/errors.ts`** — Provides `rejectDatabaseError` for the catch-all error path.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` and `rejectResponse` helpers.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to extract caller metadata from the request.
+- **`src/infrastructure/i18n/index.ts`** — Provides the `t()` translation function for user-facing messages.
+- **`src/types/index.ts`** — Source of `TwoFactorSendRequest` and `TwoFactorDelivery` type contracts.
+- **`src/modules/account/routes.ts`** — Wires this controller to the `POST /account/login/2fa/send` route.
 
 ## Notes
 
-- The route is **public**; the challenge token itself is the authentication credential. There is no session or bearer-token check.
-- The challenge fallback (`body.challenge ?? readMfaChallengeCookie(request)`) is duplicated from `postLoginTwoFactor` in `oauth/mfa-redirect.ts`. Keep the two in sync if the cookie-reading logic changes.
-- The handler is **not** `async`; it returns the Promise chain directly. Express 4 handles it, but middleware that expects a resolved Promise (e.g. Express 5 async error handling) should be verified.
-- Metric labels use `method: 'unknown'` for validation-failure paths where `method` hasn't been parsed yet.
+- The `challenge` field is **optional** in the request body; the cookie fallback means a client that omits it still works, as long as the `mfa-redirect` cookie was set upstream. If neither is present, the response is a 401, not a 400.
+- When the body fails Zod parsing, the metric label uses `method: 'unknown'` because the `method` field cannot be trusted yet.
+- The controller is synchronous in signature but returns a `Promise` (from `.then/.catch`); it is not declared `async`. Ensure the route handler does not double-wrap in a Promise.
+- The file's JSDoc and inline comments reference `postLoginTwoFactor` (the verify endpoint) as the sibling that makes the same cookie fallback — useful context when modifying either file.

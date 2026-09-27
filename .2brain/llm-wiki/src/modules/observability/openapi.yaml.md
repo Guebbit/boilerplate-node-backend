@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/openapi.yaml
-sha256: d97f237417bf171372ef84c4ca2c7bccc3daafc6c2371edc2c4403a3de221be2
-generated_at: 2026-09-23T18:56:39.220097+00:00
+sha256: 034db9e1c4a0655b56083b684688f43a69a81c15719d471e1eae3308754a9aa2
+generated_at: 2026-09-27T15:04:41.342651+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.0.3 contract for the observability module. Defines the five endpoints (SSE event stream, readiness health, raw Prometheus metrics, JSON metrics overview, and audit log) along with their request/response schemas. Serves as the single source of truth for what the observability surface exposes, its auth requirements, and its error shapes.
+OpenAPI 3.0.3 contract for the observability module. It documents the five read-only endpoints that expose operational state (SSE event stream, detailed health, Prometheus metrics, JSON metrics summary, and audit logs) and pins the response schemas so clients and generated SDKs have a single source of truth for what the module returns.
 
 ## Key elements
 
-- **`GET /observability/events`** (`getObservabilityEvents`) — SSE stream; emits `metrics.snapshot` on connect, then periodic `metrics.updated` and `heartbeat` events. Authenticated via HttpOnly refresh cookie (EventSource cannot send an `Authorization` header).
-- **`GET /observability/health`** (`getObservabilityHealth`) — Readiness snapshot (not the container liveness probe). Reports per-dependency status, uptime, memory, and telemetry wiring. Requires admin bearer. Performs no I/O; reads state already held by adapters.
-- **`GET /observability/metrics`** (`getObservabilityMetrics`) — Raw Prometheus exposition text (format 0.0.4). Guarded by a static scraper bearer token (`isMetricsScraper`), not the admin JWT. Returns `503` if no token is configured rather than falling open.
-- **`GET /observability/metrics/overview`** (`getObservabilityMetricsOverview`) — Structured JSON derived from the same Prometheus counters/histograms, intended for dashboard KPI cards. Requires admin bearer.
-- **`GET /observability/audit`** (`getObservabilityAuditLogs`) — Paginated, filterable (actor, action, outcome, `since`) list of persisted audit events. Requires admin bearer. `since` is an exclusive lower bound.
-- **Schemas** — `ObservabilityHealthResponseEnvelope`, `ObservabilityMetricsSummaryResponseEnvelope`, `AuditLogsResponseEnvelope` (all follow the shared `success/status/message/data` envelope); `ObservabilityHealthTelemetry` (boolean per sink + analytics provider object); `DependencyStatus` enum (`ready | connecting | unavailable | disabled`).
+- **`/observability/events` (GET)** — SSE stream (`text/event-stream`). Sends `metrics.snapshot` on connect, then periodic `metrics.updated` and `heartbeat` events. Authenticated via HttpOnly refresh cookie (`requireUnrestrictedViaCookie`) because `EventSource` cannot set an `Authorization` header.
+- **`/observability/health` (GET)** — Detailed readiness snapshot for the dashboard card. Reports which backing dependency is down, uptime, memory, and telemetry-wiring status. Explicitly *not* the liveness (`GET /`) or container HEALTHCHECK (`GET /readyz`) probe. Requires admin bearer token.
+- **`/observability/metrics` (GET)** — Raw Prometheus exposition (0.0.4) for scrapers. Authenticated by a static bearer credential checked via `isMetricsScraper`; returns **503** (deny-by-default) if the token env var is unset.
+- **`/observability/metrics/overview` (GET)** — Same counters/histograms reshaped into structured JSON for KPI cards. Requires admin bearer token.
+- **`/observability/audit` (GET)** — Paginated, filterable (`actor`, `action`, `outcome`, `since`) audit trail. Events retained ~90 days. `meta.totalItems` reflects all matching rows, not just the page. Requires admin bearer token.
+- **Schemas** — `ObservabilityHealthResponseEnvelope`, `ObservabilityMetricsSummaryResponseEnvelope`, `AuditLogsResponseEnvelope` (all wrap data in the shared `{ success, status, message, data }` envelope); `ObservabilityHealthTelemetry` (boolean wiring flags for loki/otel/umami/faro + analytics provider/configured pair); `DependencyStatus` (`ready | connecting | unavailable | disabled`).
 
 ## Relationships
 
-- **`src/infrastructure/adapters/queue.ts`** — The health endpoint reports the queue adapter's connection state as one of its `DependencyStatus` entries. The adapter maintains the state in-process; this file merely documents the shape of the response.
-- **`src/infrastructure/persistence/lease.ts`** — Same pattern: the lease persistence layer's readiness appears in the health response's dependency list.
-- **`src/modules/orders/openapi.yaml`** — Audit events include actions originating from the orders module (e.g. `order.created`). The audit endpoint is the read surface for those cross-module events; the orders module is a producer.
+- **`src/infrastructure/adapters/queue.ts`** — The queue adapter is one of the backing services whose `DependencyStatus` is surfaced inside the health endpoint's `data`. The spec describes it as a read from connection state the adapter already maintains (no I/O on the health call).
+- **`src/infrastructure/persistence/lease.ts`** — Similarly appears as a backing-service entry in the health snapshot; its readiness/availability status is reported without probing.
+- **`src/modules/orders/openapi.yaml`** — Audit-log `action` values (e.g. `order.created`) originate from the orders module's event emission. This spec documents the *shape* of those entries; the orders spec documents the *emission* side.
 
 ## Notes
 
-- **Auth differs per endpoint.** SSE uses the refresh cookie; Prometheus uses a static bearer; the rest use admin JWT. Do not assume one mechanism applies to all.
-- **Telemetry wiring ≠ readiness.** `ObservabilityHealthTelemetry` booleans (loki, otel, umami, faro, analytics) are deliberately excluded from the `status` field so an unreachable sink does not flip the health dot to "unavailable."
-- **Analytics is an object, not a boolean.** It must distinguish "provider selected but credentials missing" from "provider is `none` (intentionally collecting nothing)."
-- **`503` on `/metrics` is a design choice:** missing token → deny-by-default, not a transient error.
-- **`GET /` is the liveness probe**, not `/observability/health`. The health endpoint is a richer readiness snapshot for dashboards.
-- Shared response/parameter schemas are `$ref`'d from `shared/contracts/openapi.root.yaml`; they are not redefined here.
+- Every non-SSE, non-metrics endpoint uses the shared envelope pattern from `../../../shared/contracts/openapi.root.yaml`. The SSE and raw-Prometheus endpoints are the exceptions (plain `text/event-stream` / `text/plain`).
+- Telemetry wiring (`ObservabilityHealthTelemetry`) is deliberately **excluded** from the readiness `status` field: an unreachable Loki degrades visibility, not serving capability, so it must not flip the dashboard dot.
+- The `analytics` sub-object uses `{ provider, configured }` instead of a bare boolean to distinguish "provider selected but unconfigured" from "deliberately collecting nothing" (`provider: "none"` always reports `configured: true`).
+- `since` on `/observability/audit` is an **exclusive** lower bound (strictly after the given timestamp).

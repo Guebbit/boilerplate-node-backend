@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/delete-2fa.ts
-sha256: 7f76fa0aa9f710b04563b5993b7fdd12104f0732582f000431fb8940f8979ee9
-generated_at: 2026-09-23T17:58:52.101498+00:00
+sha256: cf0fd8f34ecd955e5e9069f9a42e7ae8a380775a4e87812beecd3c83d0a4743e
+generated_at: 2026-09-27T14:22:29.493451+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for `DELETE /account/2fa`. Validates the request body against the `DisableTwoFactorBody` zod schema, then delegates to `twoFactorService.disableTwoFactor` to drop all armed factors and backup codes. Emits a Prometheus counter and returns an i18n-localised success or error response.
+Single-handler controller for `DELETE /account/2fa`. Validates the incoming code (or backup code) from the request body, then delegates to `twoFactorService.disableTwoFactor` to remove all armed two-factor factors and their backup codes for the authenticated user.
 
 ## Key elements
 
-- **`delete2fa`** _(exported)_ — Express controller handler. Extracts the user id from `request.authContext`, validates the body (code or backup code), calls `twoFactorService.disableTwoFactor`, and maps the result to an HTTP response. Increments `authTwoFactorDisableTotal` on both success and failure paths.
-- **`DisableTwoFactorBody.safeParse`** — Non-throwing zod validation of the JSON body; failures short-circuit via `rejectValidation`.
-- **`authTwoFactorDisableTotal.inc`** — Metrics counter labelled `{ method: 'all', status: 'success' | 'failure' }`, incremented before every response return.
-- **`t('account.two-factor.disabled')`** — i18n message returned as the success body.
+- **`delete2fa`** (exported) — Express handler. Parses the body with the `DisableTwoFactorBody` Zod schema, calls `twoFactorService.disableTwoFactor(id, code, callerContext)`, and responds with a 200 + i18n message on success, a 4xx on validation/business refusal, or a 5xx via the `catchAs` fallback. Increments `authTwoFactorDisableTotal` with `status: 'success'` or `'failure'` on every path.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — Source of `twoFactorService.disableTwoFactor`, the business-logic call this controller wraps.
-- **`src/modules/account/routes.ts`** — Wires this controller to the `DELETE /account/2fa` path and enforces the critical-auth guard (not present in this file).
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` and `rejectResponse` for building HTTP replies.
-- **`src/infrastructure/http/controller.ts`** — Provides `rejectValidation` for the schema-failure path.
-- **`src/infrastructure/http/errors.ts`** — Provides `rejectDatabaseError` for the `.catch` fallback.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)`, extracted and forwarded into the service call.
-- **`src/infrastructure/i18n/index.ts`** — Provides `t` for the localised success message.
-- **`src/modules/account/metrics.ts`** — Source of the `authTwoFactorDisableTotal` counter.
-- **`src/types/index.ts`** — Source of the `TwoFactorCodeRequest` type used in the Express `Request` generic.
+- **`src/infrastructure/http/controller.ts`** — supplies the `rejectValidation`, `refused`, and `catchAs` response helpers used for all three error/success branches.
+- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf(request)` to extract the caller context passed into the service.
+- **`src/infrastructure/http/response.ts`** — supplies `successResponse` for the 200 reply.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — provides `t()` for the localized `"account.two-factor.disabled"` message.
+- **`src/modules/account/services/index.ts`** — source of `twoFactorService.disableTwoFactor`, the actual business logic.
+- **`src/modules/account/metrics.ts`** — source of the `authTwoFactorDisableTotal` Prometheus counter.
+- **`src/modules/account/routes.ts`** — mounts `delete2fa` on the `DELETE /account/2fa` route (including the fresh-auth route guard mentioned in the doc comment).
+- **`src/types/index.ts`** — provides the `TwoFactorCodeRequest` type used to type the Express request body.
 
 ## Notes
 
-- `request.authContext!` uses a non-null assertion; the file trusts that the route guard in `routes.ts` has already populated it. There is no local guard here.
-- The success status code is explicitly `200` (not `204`), with a `null`-ish body (`undefined`) and an i18n string — clients should expect a 200 with a message, not an empty body.
-- The metric label `method: 'all'` is hardcoded in this controller; if other endpoints track this counter with different `method` values, this one will always appear as `'all'`.
+- Security double-gate: the doc comment states the route guard enforces fresh critical auth **and** the body must contain a valid code/backup code. Both are required; the body check is the guard against a stolen-but-still-fresh session.
+- Metrics are always tagged `method: 'all'` — there is no per-method breakdown in this handler (unlike some sibling controllers that track OTP vs. backup-code separately).
+- The success response body is `undefined`; only the i18n message string is meaningful to the client.

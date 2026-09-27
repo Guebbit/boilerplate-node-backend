@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/scope.ts
-sha256: 0120af7ae00faa2e7860c1138b3fd43fc4c6a4ee62f15c79276e225c17f7adde
-generated_at: 2026-09-23T19:08:54.350727+00:00
+sha256: 0a5b12974c6ffcc369be4aa20b274148ef807314dcc6b8887073a6fc9f5cb460
+generated_at: 2026-09-27T15:16:03.475222+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The authorization boundary for the orders module. Before any other service reads or mutates an order, this file answers two questions: _which_ orders the caller may see (`callerScope`, `ownerScope`) and _what_ the caller may do to a specific order (`actorOf`, `withActions`). It centralises the read-filter compilation and the actor/action assignment so that every read path in the module applies the same rules.
+Defines the authorization boundary for order reads and per-order actions. Every other order service calls into this file before writing: `callerScope` narrows *which* orders a caller may see, `actorOf` picks *whose* lifecycle column applies, and `withActions` attaches the resulting action set to the wire response.
 
 ## Key elements
 
-- **`callerScope(context?)`** — Returns the Mongo query fragment that restricts order reads to the caller's visibility (own vs. everyone's, soft-deleted excluded). Delegates to `accessibleFilter`; returns `{}` (not `undefined`) for fully-unrestricted roles.
-- **`ownerScope(userId)`** — Returns a filter for one account's orders _without_ the soft-delete exclusion. Intended for flows that already know whose data they are exporting (e.g. account data export). Thin pass-through to `orderRepository.ownerScope`.
-- **`actorOf(authContext?)`** — Resolves the lifecycle actor (`'admin'` | `'customer'`) for the current caller by checking whether their permission set holds the `orders.any.update` key. No request may claim the `system` actor.
-- **`withActions(order, authContext?)`** — Serialises a single order (handling both a hydrated `OrderDocument` and an already-transformed `Order`), resolves each line's live `current` images via `resolveCurrentImages`, and attaches the `actions` array computed by `orderActionsFor(status, actor)`. Returns `Promise<Order>`.
+- **`callerScope(context?)`** — Returns a query filter (`Record<string, unknown>`) limiting reads to the caller's permitted orders via `accessibleFilter`. Returns `{}` (not `undefined`) for roles that read everything.
+- **`ownerScope(userId)`** — Returns a filter for one account's orders by id, *without* excluding soft-deleted rows. Intended for callers that already know whose data they want (e.g. account data export).
+- **`actorOf(authContext?)`** — Maps an `AuthContext` to a lifecycle actor (`'system' | 'admin' | 'customer'`). Checks `isSystemActor` first, then `orders.any.update` for admin.
+- **`deliveryAndOverrideActions(status, digitalOnly, authContext)`** *(private)* — Computes the `start`/`ship`/`deliver`/`fulfill`/`override` action booleans based on the caller's own tenant-scoped keys and the order's current status.
+- **`withActions(order, authContext?)`** — Produces the single-order wire response: the serialized `OrderDocument` plus its `actions` object and each line's resolved `current` images. The only `async` export in this file.
 
 ## Relationships
 
-- **`src/kernel/access/query.ts`** — `callerScope` calls `accessibleFilter` to compile the "own AND still there" predicate from the caller's rules.
-- **`src/kernel/permissions.ts`** — `actorOf` calls `callerForSubject` to obtain the caller's permission set for the `Order` subject.
-- **`src/kernel/ability.ts`** — `actorOf` calls `holdsKey` to test for the `orders.any.update` key.
-- **`src/modules/orders/repository.ts`** — `ownerScope` delegates directly to `orderRepository.ownerScope(userId)`.
-- **`src/modules/orders/domain/index.ts`** — Provides `orderActionsFor` (maps status + actor → allowed actions) and the `OrderActor` type used by `actorOf` and `withActions`.
-- **`src/modules/orders/services/current.ts`** — `withActions` calls `resolveCurrentImages` to fetch live `current` picture data for each line item (the only async step in the serialisation path).
-- **`src/modules/orders/model.ts`** — Supplies the `OrderDocument` type so `withActions` can detect and call `.toJSON()` on a hydrated document.
-- **`src/modules/orders/services/cancel.ts`** — Shares the `orders.any.update` permission key for its operator/customer split; `actorOf` was gated on the same key to stay consistent (see the doc comment).
-- **`src/modules/orders/tests/unit/service-scope.test.ts`** — Unit tests covering the four exports above.
+- **`@kernel/permissions`** (`callerForSubject`, `isSystemActor`) — Resolves the tenant-scoped caller subject and identifies the system actor before any role-based check.
+- **`@kernel/ability`** (`holdsKey`) — Per-key permission lookups used by `actorOf` and `deliveryAndOverrideActions`.
+- **`@kernel/access/query`** (`accessibleFilter`) — Sole source of the "own AND still there" read filter; `callerScope` is a thin wrapper.
+- **`../domain`** (`orderActionsFor`, `statusesLeadingTo`, `overridableTargetsFrom`, `isDigitalOnlyOrder`, `OrderActor`) — Supplies lifecycle-table lookups and the digital-only classification that gate individual actions.
+- **`../repository`** (`orderRepository`) — Backs `ownerScope`.
+- **`../model`** (`OrderDocument`) — The Mongoose document type that `withActions` serializes.
+- **`./current`** (`resolveCurrentImages`) — Async image lookup that makes `withActions` return a `Promise`.
 
 ## Notes
 
-- `callerScope` deliberately returns `{}` rather than `undefined` for unrestricted roles; both spread identically into a Mongo query, but `{}` is the honest "no conditions" value.
-- `actorOf` checks the specific `orders.any.update` key rather than a broader capability. A broader check would have missed moderator/manager roles and silently reduced them to the customer's lifecycle column.
-- `withActions` accepts `OrderDocument | Order` because the admin read path (`findByIdScoped` with no scope) yields a hydrated Mongoose document, while the owner-scoped path has already been passed through `applyOrderTransform`. The `'toJSON' in order` guard distinguishes the two without a runtime type import.
-- The `system` actor (moves driven by external facts) is intentionally unreachable from any HTTP request; only `admin` and `customer` are returned.
+- **`actorOf` ordering is load-bearing.** `SYSTEM_ACTOR` carries `roles.tenant: 'admin'`; if the `holdsKey('orders.any.update')` check ran first, the reservation-sweep expiry would be misclassified as admin and receive the wider `cancelled` lifecycle rule (race B21). Always check `isSystemActor` before the key check.
+- **`reachesVia` ≠ `canTransition`.** The private helper uses `statusesLeadingTo` (which excludes `from === to`) to avoid a true on an echo write where the order is already at the target status.
+- **`fulfill` bypasses the lifecycle table.** For digital-only orders the `processing → delivered` move is gated directly on `status === OrderStatus.processing` because `delivery/service.ts#fulfillOrder` does not route through `ORDER_LIFECYCLE`.
+- **`withActions` cast.** `order.toJSON()` is cast to `Order` because Mongoose's `Document['toJSON']` overload doesn't match the module-level `Order` contract; the same pattern is used in `products/service.ts`.
+- **`callerScope` returns `{}`, never `undefined`.** Both spread identically into a query, but `{}` is the honest representation of "no conditions."

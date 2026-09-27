@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/services/view.ts
-sha256: 53ab240f21fdb8360a3bb6b6d892160c657b7644c839b92bd7332e5cc4f22135
-generated_at: 2026-09-23T18:33:06.882114+00:00
+sha256: d0de6d771a25ebf5b02720e43ea9b238946097d9599c504016dd7ec1693afa59
+generated_at: 2026-09-27T14:47:09.201673+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cart projection layer: turns a stored `CartDocument` into the shapes callers read (joined lines, API response). Shared by the other three cart service files (`checkout`, `items`, `reorder`); none of them owns this module.
+The cart projection layer: it turns a stored `CartDocument` into the `CartResponse` shape the API contract declares, and provides the shared product-join helper that the three sibling service files (`items`, `checkout`, `reorder`) all rely on. It is internal to `services/` — no controller or external module imports it directly.
 
 ## Key elements
 
-- **`CartLine`** – `CartItem` plus a joined `product: ProductDocument | null`. `productId` and `product` are separate fields on purpose (see Notes).
-- **`JoinedCartLine`** – `CartLine` narrowed to `product: ProductDocument` (non-null).
-- **`CartView`** – The `CartResponse` shape from `openapi.yaml`: `items` (raw `CartItem[]`) + `summary` (`itemsCount`, `totalQuantity`, `total`). Every cart endpoint returns this.
-- **`PopulatedCart`** _(internal, not exported)_ – Types what Mongoose writes into the document after `populate('items.productId')`.
-- **`isJoined(line)`** – Type guard: `CartLine → JoinedCartLine` when `product !== null`.
-- **`readCartLines(cart)`** – Populates product references in one query; returns `CartLine[]` with product docs or `null`. Returns `[]` for a null/absent cart.
-- **`toCartView(cart)`** – Builds the full `CartView` (items + summary) using `sumLineItems`. Drops the joined product from items to match the `additionalProperties: false` contract.
+- **`CartLine`** — a cart item joined with its resolved product (or `null` if the id didn't resolve). `productId` and `product` are kept as separate fields intentionally.
+- **`JoinedCartLine`** — narrowed type where `product` is guaranteed non-null; usable for building orders.
+- **`CartView`** — the response object every cart endpoint returns: `items[]`, a `summary` block (counts, totals, shipping, currency), and an optional `shippingMethodId`.
+- **`isJoined`** — type-guard predicate (`line.product !== null`) for narrowing `CartLine → JoinedCartLine`.
+- **`readCartLines(cart)`** — one `$in` lookup via `productService.findManyByIds` to join all line items to products in a single query. Returns `[]` for a null cart.
+- **`toCartView(cart)`** — the main projection: calls `readCartLines`, computes shipping cost, strips the joined product from each line, and assembles the `CartView` object.
+- **`shippingCostOf`** *(internal)* — prices the basket at the chosen method; returns `0` when no method is set, the basket is digital-only, or the method no longer fits the weight.
 
 ## Relationships
 
-- **`../model` (`src/modules/cart/model.ts`)** – Imports `CartDocument`; this file is the read-side projection of that document.
-- **`@modules/orders` (`src/modules/orders/index.ts` → `src/modules/orders/domain/totals.ts`)** – Calls `sumLineItems` to compute the `summary` block.
-- **`@modules/products` (`src/modules/products/index.ts` → `src/modules/products/model.ts`)** – Imports `ProductDocument` type for the joined field.
-- **`@types` (`src/types/index.ts`)** – Imports `CartItem` (the flat line-item shape).
-- **`checkout.ts`, `items.ts`, `reorder.ts`** – Import and call `toCartView` / `readCartLines` / `isJoined` to build or return cart responses after mutations.
+- **`@modules/products`** (`service.ts`, `model.ts`) — calls `productService.findManyByIds` to resolve product documents; imports the `ProductDocument` type.
+- **`@modules/orders`** (`domain/totals.ts`, `config.ts`) — imports `sumLineItems` for price/quantity aggregation and `shopCurrency` for the currency string.
+- **`@modules/delivery`** (`domain/rates.ts`) — imports `findShippingMethod`, `methodFitsWeight`, and `priceShipping` to compute the shipping cost in the summary.
+- **`@infrastructure/persistence/create-repository`** — imports the `Lean` type for the shape of a hydrated product document.
+- **`../model`** — imports the `CartDocument` type that is the input to every function here.
+- **`../domain`** — imports `basketWeight` and `needsShipping` to decide whether shipping applies.
+- **Sibling services** (`items.ts`, `checkout.ts`, `reorder.ts`) — consume `readCartLines`, `toCartView`, `isJoined`, and the type exports; `items.ts` (`cartShippingMethodSet`) is the counterpart that *refuses* invalid shipping choices, whereas this file only *prices* them.
 
 ## Notes
 
-- **Capture-then-populate:** `readCartLines` snapshots `productId` strings _before_ calling `populate`, because Mongoose replaces the ref field with the fetched doc or `null`. The original id is restored from the snapshot array by index.
-- **`PopulatedCart` key naming:** Typed as the whole `items` key (not `items.productId`) because `populate<T>` merges `T` over top-level document properties only.
-- **No 404 / no empty-array guard:** A missing cart document is treated as an empty cart. `cart.items` is guaranteed non-null by the Mongoose schema default, so no `|| []` fallback is needed.
-- **`toCartView` strips the product:** The joined `ProductDocument` is used for pricing but removed from the `items` array, keeping the response within the OpenAPI `additionalProperties: false` constraint. Use `readCartLines` directly when the product document is needed.
+- The product join deliberately bypasses Mongoose `populate()` in favor of a service-level lookup, keeping `productId` alongside `product` (strategic-DDD separation). See `docs/theory/strategic-ddd.md` §5.
+- `toCartView` **drops** the joined product from each line before returning — the OpenAPI `CartItem` schema is `{ productId, quantity }` with `additionalProperties: false`. Use `readCartLines` directly when the product object is actually needed (e.g. in checkout).
+- Shipping pricing here is non-refusing: an invalid or stale method silently yields cost `0`. Validation and rejection live in `items.ts` (`cartShippingMethodSet`) and `checkout.ts`.
+- A missing cart document is treated as an empty cart (`[]` items, zero totals), never as a 404.
+- The `shippingMethodId` field on `CartView` is conditionally spread (absent when `undefined`) so it is omitted from JSON rather than serialized as `null`.

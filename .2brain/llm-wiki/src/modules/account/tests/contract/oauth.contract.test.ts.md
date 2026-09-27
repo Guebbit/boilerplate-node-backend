@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/contract/oauth.contract.test.ts
-sha256: 9c29d2a64a49047c9bc2aaa1a7aede0bba0b6b4951870ecf49316074bc3493ba
-generated_at: 2026-09-23T18:12:48.940955+00:00
+sha256: e9108718ff5649c548f3c8f4c23827b9145e88628cb96f04b8cbf7bcf1f5f39b
+generated_at: 2026-09-27T14:33:46.076028+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the OAuth surface (`GET /account/oauth/providers`, `GET /account/oauth/:provider`, and the full start → callback round-trip). They exercise the real routes, real CSRF/PKCE cookies, and a real database via the `fake` provider (enabled through `enableDemoProfile()`), mirroring what a Cypress spec would verify against a browser.
+Contract tests for the OAuth account surface: the `GET /account/oauth/providers` listing and the full start → callback round trip through the `fake` provider. Exercises the real routes, CSRF cookie, PKCE verifier, and a real database in-process (no browser), mirroring what a Cypress spec would assert against a live server.
 
 ## Key elements
 
-- **`attemptCookies(start)`** — Builds a `Cookie` request header carrying both `oauth_state` and `oauth_verifier` from a start response; both are required to redeem a callback.
-- **`fakeLogin()`** — Convenience wrapper performing one complete start → callback round-trip through the fake provider.
-- **`codeFor(secret, stepsFromNow = 1)`** — Generates a TOTP code for the _next_ RFC 6238 step (the "now" step is already consumed by the confirm request).
-- **`describe('GET /account/oauth/providers')`** — Asserts the fake provider is listed under the demo profile.
-- **`describe('GET /account/oauth/:provider')`** — 404 for unknown providers; 302 redirect to the callback URL with `oauth_state` and `oauth_verifier` cookies set.
-- **`describe('GET /account/oauth/:provider/callback')`** — 404, 400 (missing/mismatched state), 400 (missing verifier), successful round-trip (session cookies, user created, redirect to frontend), idempotent second login, and admin-role audit correctness (regression B4).
-- **`describe('…deactivated/deleted account (B24)')`** — Verifies a deactivated/deleted linked identity is refused: error redirect, no session cookie, no `AUTH_LOGIN` audit event.
-- **`describe('…2FA armed (1b)')`** — Verifies the callback challenges for a TOTP code instead of minting a session, then mints one only after the code is answered.
-- **`jest.mock('@infrastructure/observability/audit', …)`** — Replaces `emitAuditEvent` with a spy and re-routes `recordAudit` (which closes over its own module's reference) through the replacement so the spy sees every call.
+- **`attemptCookies(start)`** — extracts `oauth_state` + `oauth_verifier` from a start response's `Set-Cookie` headers and formats them as a single `Cookie` request header for the callback.
+- **`fakeLogin(continueTo?)`** — helper that performs one complete start → callback round trip through the fake provider, optionally carrying a `continue` parameter.
+- **`beforeAll` / `afterAll`** — enable / disable the demo profile (`enableDemoProfile()`) so the fake provider exists only during this suite.
+- **`describe('GET /account/oauth/providers')`** — asserts the fake provider appears in the list.
+- **`describe('GET /account/oauth/:provider')`** — 404 for unknown providers; 302 redirect with state/verifier cookies; `continue` cookie validation (rejects protocol-relative, absolute, and slash-less values).
+- **`describe('GET /account/oauth/:provider/callback')`** — 404 for unknown providers; 400 on missing/mismatched state; 400 when verifier cookie is absent (PKCE fail-closed); successful round trip creating a user and setting session cookies; `continue` passthrough and cookie clearing; forged-`continue` rejection; idempotent second login (no duplicate user).
+- **`describe('... callback — 2FA armed (1b)')`** — after enrolling TOTP on the created account, a second login returns a 2FA challenge redirect (no session cookies) instead of minting a session; completing the TOTP code then mints the session.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — Imported as a side-effect; provides shared contract-test setup (likely supertest wiring, global expectations).
-- **`tests/support/http.ts`** — Supplies the `api()` HTTP client used for every request.
-- **`tests/support/cookies.ts`** — Provides `setCookie` (extract a cookie from a response) and `cookieHeader` (build a `Cookie` header from response headers).
-- **`tests/support/ports.ts`** — Provides `observePort`, used to attach a spy to `auditPort.emitAuditEvent` without breaking the mock.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the real test database before any test runs.
-- **`src/infrastructure/runtime/demo-profile.ts`** — `enableDemoProfile()` / `enableDemoProfile(false)` toggles the fake OAuth provider for the duration of the suite.
-- **`src/modules/users/tests/factories.ts`** — `createUser` and `userRepository` are used to pre-seed accounts and to assert on created/linked rows.
-- **`src/modules/users/repository.ts`** — `userRepository.findOne` / `.count` / `.linkOAuthAccount` verify persistence side-effects.
-- **`src/infrastructure/observability/audit.ts`** — Mocked; `emitAuditEvent` is spied on, `recordAudit` is re-routed to call the spy.
-- **`src/modules/account/audit.ts`** — Exports `accountAuditActions` enum used to filter audit events by action name (`AUTH_LOGIN`, `AUTH_OAUTH_LINKED`, etc.).
+- **`src/infrastructure/runtime/demo-profile.ts`** — `enableDemoProfile()` toggles the fake OAuth provider on/off for the duration of the suite.
+- **`src/modules/users/repository.ts`** — `userRepository` is used to assert that exactly one user with the demo email exists after login, and that `verifiedAt` is set.
+- **`src/modules/users/tests/factories.ts`** — re-exports / constructs the `userRepository` instance used above.
+- **`tests/support/contract.ts`** — imported for side-effect; sets up shared contract-test infrastructure (response shape expectations, etc.).
+- **`tests/support/cookies.ts`** — `setCookie()` reads a named cookie from a response; `cookieHeader()` formats multiple cookies into a request header string.
+- **`tests/support/http.ts`** — `api()` returns the in-process HTTP client used for every request in this file.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises and tears down a real database instance for the suite.
+- **`tests/support/totp.ts`** — `codeFor(secret, step)` generates a valid TOTP code for the 2FA challenge tests.
 
 ## Notes
 
-- The `recordAudit` mock must be re-routed explicitly because `recordAudit` closes over its _own_ module's `emitAuditEvent` binding; a simple property override on the module object would not be visible to it.
-- `enableDemoProfile()` is toggled in `beforeAll`/`afterAll` to prevent the fake provider from leaking into other test suites.
-- The TOTP helper defaults to `stepsFromNow = 1` because the confirm request already consumed the current 30-second window; replay protection rejects a repeated code.
-- The second-login test (`toHaveLength(1)` on `userRepository.count`) is deliberately sequential, not concurrent — it tests idempotency, not race conditions.
-- Bug-fix regressions B4 (admin role in audit) and B24 (deactivated account bypass) are encoded as dedicated test cases with explanatory comments referencing the original flaw.
+- The verifier-missing test deliberately omits only the `oauth_verifier` cookie while still sending `oauth_state`, to assert the callback **fails closed** rather than silently skipping PKCE.
+- The forged-`continue` test sends `oauth_continue=//evil.example` directly on the callback request (bypassing the start controller) to verify the callback re-validates the cookie value rather than trusting it by name.
+- The second-login idempotency test runs the two attempts **sequentially on purpose** (comment in source) so it tests the "already linked" path, not a concurrent race.
+- Tests for "deactivated / soft-deleted account refusing login" and for "admin login audited as plain user" have been moved to `login-paths.contract.test.ts`; only a comment reference remains here.

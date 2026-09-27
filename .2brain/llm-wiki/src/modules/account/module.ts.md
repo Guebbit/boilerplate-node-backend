@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/module.ts
-sha256: d8b9deb0634a352b49e4f482c9a39ff4c30aabe164ec9035907c62b996f69ac5
-generated_at: 2026-09-23T18:05:40.287565+00:00
+sha256: 4e9b64b147cc8edb8ebb4f48599cb4e4f268df168772e9c68b5595adaee68861
+generated_at: 2026-09-27T14:27:23.066830+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Entry point for the **account** module: it registers the application-wide auth resolver, declares the module's HTTP routes, rate-limit budgets, permission keys, required environment config, and event subscriptions. It orchestrates the account lifecycle (signup, login, token refresh, password reset, two-step deletion) without owning a database collection of its own — the `User` record lives in the `users` module, and this module reads/writes it through `userService`.
+Module manifest for the **account** module, which owns the full authentication and account lifecycle (signup, login, refresh, password reset, logout, two-step deletion). It deliberately holds no collection of its own — the User record remains in `users` — and acts as the second service over that shared record, mounted at `/account` rather than merged into `/users`.
 
 ## Key elements
 
-- **`resolve(verify)` (private helper)** — Builds a `fromAccessToken` / `fromRefreshToken` resolver. Verifies the JWT, looks up the user via `userService.findAuthenticatableById`, fetches roles via `rolesOf`, and returns a narrow object (id, email, username, roles, tenantId, authTime, amr, analyticsConsent) or `undefined` if the user no longer exists.
-- **`registerAuthResolver({…})` call** — Installs the two resolvers on the kernel at import time, so every downstream guard can authenticate before the first HTTP request.
-- **`export { setPersonalDataSections }`** — Re-exports the personal-data registry setter for `src/app.ts` to wire in other modules' `personalData` sections at boot.
-- **`default export` (the `AppModule` manifest)** — Declares `name: 'account'`, `basePath: '/account'`, the Hapi `router`, `rateLimits`, the single permission key `'tokens.any.delete'`, `personalData: 'none'`, `requiredConfig` (three env vars with min-length / placeholder checks), `customCheck` (`invalidTokenWindows`), `subscribe` (handles `USER_SETUP_REQUESTED`), and `locales` path.
-- **`subscribe()` callback** — On `USER_SETUP_REQUESTED`, looks up the user and calls `requestAccountSetup` to issue setup tokens / email. Silently drops if the user was deleted before the event fires.
+- **`onRegistered(modules)`** — the one-shot install hook called by the app tier after all enabled modules are known. It registers `accountAuthResolver` with the kernel and resolves every module's `personalData` section list into `./services/personal-data-registry.ts` (used by `POST /account/export`).
+- **Default export (`AppModule`)** — the manifest object describing the module's name, `basePath: '/account'`, routes, rate limits, permissions, required env config, custom boot check, event subscriptions, and locale path.
+- **`permissions`** — declares `tokens.any.delete`; the cross-cutting test enforces that the key exists in the shared permission file and is attributed to this module.
+- **`requiredConfig`** — three env vars (`NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, `NODE_TOTP_ENCRYPTION_KEY`) with `minLength: 16` and placeholder guards that refuse to boot if left as the shipped `.env-example` value.
+- **`customCheck: invalidTokenWindows`** — a cross-key validation (access window must be ≤ refresh window) that per-key checks cannot express.
+- **`subscribe()`** — wires `onDomainEvent(USER_SETUP_REQUESTED, …)` so that when `users` creates a passwordless account, this module issues the tokens and email that give it a way in.
+- **`personalData: 'none'`** — this module contributes zero data to the account export; it only assembles sections declared by other modules.
 
 ## Relationships
 
-| Neighbor                                                     | Interaction                                                                                                                                                 |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/kernel/authentication.ts`                               | `registerAuthResolver` is called once at import time to install this module's token verifiers on the kernel.                                                |
-| `src/kernel/registry.ts`                                     | `AppModule` type constrains the default export's shape.                                                                                                     |
-| `src/kernel/events.ts`                                       | `onDomainEvent` is called inside `subscribe()` to listen for `USER_SETUP_REQUESTED`.                                                                        |
-| `src/kernel/access/tenant.ts`                                | `DEPLOYMENT_TENANT_ID` is imported and used as the fixed tenant scope for every role lookup.                                                                |
-| `src/modules/access/index.ts` (→ `module.ts` / `service.ts`) | `rolesOf` is called in the resolver to resolve a user's stored membership rows into role objects.                                                           |
-| `src/modules.ts`                                             | Aggregates this module's manifest (routes, permissions, config) into the application.                                                                       |
-| `src/app.ts`                                                 | Consumes the default export at boot; calls `setPersonalDataSections` (re-exported here) to assemble the `POST /account/export` response from other modules. |
-| `src/modules/account/module.yaml`                            | Static manifest / metadata that mirrors or complements the in-code manifest.                                                                                |
-| `src/modules/account/openapi.yaml`                           | OpenAPI spec for the `/account` routes defined by `router`.                                                                                                 |
+- **`@kernel/authentication`** — calls `registerAuthResolver(accountAuthResolver)` inside `onRegistered`; the whole app's cookie guards then delegate to this resolver.
+- **`@kernel/events`** — calls `onDomainEvent` to listen for `USER_SETUP_REQUESTED`.
+- **`@kernel/registry`** — imports the `AppModule` type and `resolvePersonalDataSections` helper.
+- **`@modules/users`** — imports `userService` and the `USER_SETUP_REQUESTED` constant; both modules read/write the same User document (shared kernel, invisible to the import graph).
+- **`./session/resolver`** — supplies `accountAuthResolver`, which is the function actually registered with the kernel.
+- **`./session/config`** — supplies `invalidTokenWindows` (used as `customCheck`) and the token-ring accessors referenced in comments.
+- **`./services/authentication`** — supplies `requestAccountSetup`, invoked in the event handler.
+- **`./services/personal-data-registry`** — supplies `setPersonalDataSections`, the write target for the resolved export list.
+- **`./routes`** — supplies the `router` object mounted under `/account`.
+- **`./rate-limits`** — supplies `accountRateLimits` (credential, signup, reset, MFA, password-check budgets).
+- **`src/modules/observability/tests/unit/metrics-overview.test.ts`** — exercises the metrics surface this module contributes.
 
 ## Notes
 
-- **No own collection.** The docblock is explicit: the User document belongs to `users`. Any schema change to that document must be agreed by both modules.
-- **Auth resolver is import-time, not request-time.** It installs a function and touches no connection, but every permission guard in the app depends on it being present before the first request.
-- **`findAuthenticatableById` vs `findById`.** The resolver deliberately uses the "authenticatable" variant so that a deactivated or soft-deleted account stops authenticating on its very next request, not just its next login.
-- **Roles are not on the User document.** They live exclusively in `@modules/access` membership rows; `rolesOf` is the single authorization source. A `null` role in either scope is handled downstream by `keysInScope` in the kernel.
-- **`personalData: 'none'`.** This module contributes zero data to the export endpoint; it only assembles sections declared by other modules (wired through `setPersonalDataSections` at boot).
-- **Token key rings are comma-separated, newest-first.** The `requiredConfig` check validates each comma-separated member individually, not the joined string, so a rotated-in placeholder still blocks boot.
-- **`invalidTokenWindows` is a `customCheck`** because the access and refresh token windows have an ordering constraint that no per-key length check can express.
+- The auth resolver is registered **only** inside `onRegistered`, not at import time. Importing this file for a type or a test does not install the resolver; it activates exclusively when `registerModules` runs the hook.
+- `personalData: 'none'` is intentional: `POST /account/export` is an assembly endpoint that collects sections from *other* modules via `resolvePersonalDataSections(modules)`. This module is the assembler, not a data provider.
+- The three `requiredConfig` entries share the same failure shape: the `.env-example` placeholders are valid 16+ character strings, so the `minLength` check alone would pass. The `placeholder` check is what catches an un-rotated secret at boot.
+- Token-window ordering (access ≤ refresh) is a relational constraint; `session/config.ts#invalidTokenWindows` encodes the *why* (wrong order silently disables reuse detection without throwing).
+- A schema change to the shared User document must be agreed on by **both** `account` and `users`, since both read and write it but neither "owns" the collection in the module sense.

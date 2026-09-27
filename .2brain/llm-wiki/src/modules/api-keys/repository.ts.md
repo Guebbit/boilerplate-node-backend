@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/repository.ts
-sha256: bd09d9a588520319cb9526a2856ca6eb37b736747334d5117f158a017451df15
-generated_at: 2026-09-23T18:24:58.558596+00:00
+sha256: 1d9162311db5beee6e999478063947dae2c6110ec5fc566e0c98906a42d354cd
+generated_at: 2026-09-27T14:41:07.669157+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Repository for the `apikeys` collection. It wires the shared CRUD factory to the API-key model and adds two queries the generic factory has no shape for: an active-credential lookup by public prefix and a fire-and-forget `lastUsedAt` stamp.
+Data-access layer for the `apikeys` collection. It wraps the shared `createRepository` CRUD factory and adds three domain-specific queries that the generic factory cannot express: active-key resolution by prefix, a fire-and-forget `lastUsedAt` stamp, and bulk deletion by owner.
 
 ## Key elements
 
-- **`base`** — Result of `createRepository<ApiKeyDocument, ApiKey>(apiKeyModel, { transform: applyApiKeyTransform })`. Standard CRUD scoped to `apikeys`; intentionally omits `searchable` (no free-text filter on the admin list).
-- **`findActiveByPrefix(publicPrefix)`** — Returns the single active credential for a given public prefix, or `null`. Filters `revokedAt: null` and `expiresAt` (null or future) **inside the Mongo query**, so a revoked/expired key is indistinguishable from a non-existent one.
-- **`touchLastUsed(id)`** — `$set { lastUsedAt: new Date() }` on a single document. Returns `Promise<void>`; designed to be fire-and-forget (never awaited by callers).
-- **`apiKeyRepository`** (export) — The combined object: spread of `base` plus the two custom methods. Carries an explicit type annotation to satisfy TS7056 (same pattern as every other module's repository).
+- **`base`** (module-local) — `createRepository<ApiKeyDocument, ApiKey>(apiKeyModel, { transform: applyApiKeyTransform })`. Provides standard CRUD; deliberately omits `searchable` because the admin list has no free-text filter.
+- **`findActiveByPrefix(publicPrefix)`** — Returns the single active key for a public prefix or `null`. Filters `revokedAt`/`expiresAt` *at the query level* so a revoked/expired key fails identically to a non-existent one, with no second downstream check.
+- **`touchLastUsed(id)`** — `$set`s `lastUsedAt` to `new Date()`. Returns `Promise<void>`; intended to be fire-and-forget (never awaited by the resolve path).
+- **`deleteByUserId(userId, session?)`** — `deleteMany` on `createdByUserId`; accepts an optional Mongoose `ClientSession` for transactional account deletion.
+- **`apiKeyRepository`** (exported) — The public surface: `…base` plus the three custom methods above. Carries an explicit type annotation (`Repository<…> & { … }`) to sidestep TS 7056, same convention as other module repositories.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — Provides the `createRepository` factory and the `Repository` interface consumed here.
-- **`src/modules/api-keys/model.ts`** — Supplies `apiKeyModel` (Mongoose model), `applyApiKeyTransform`, and the `ApiKeyDocument` type used as the document generic.
-- **`src/modules/api-keys/module.ts`** — Registers/binds `apiKeyRepository` into the DI graph for this module.
-- **`src/modules/api-keys/services/api-keys.ts`** — Consumes `apiKeyRepository` (CRUD, `findActiveByPrefix`, `touchLastUsed`) in service-layer logic.
-- **`src/modules/api-keys/tests/integration/api-keys.test.ts`** — Integration tests that exercise the repository's behavior end-to-end.
+- **`src/infrastructure/persistence/create-repository.ts`** — Supplies the `createRepository` factory and the `Repository` interface that this file composes.
+- **`src/modules/api-keys/model.ts`** — Provides `apiKeyModel` (Mongoose model), `applyApiKeyTransform` (document→DTO mapper), and the `ApiKeyDocument` type used throughout.
+- **`src/types/index.ts`** — Source of the `ApiKey` DTO type parameter.
+- **`src/modules/api-keys/services/resolver.ts`** — Consumer of `findActiveByPrefix` and `touchLastUsed` on the credential-resolve path.
+- **`src/modules/api-keys/services/api-keys.ts`** — Consumer of the CRUD surface and `deleteByUserId` for admin/account operations.
+- **`src/modules/api-keys/tests/integration/api-keys.test.ts`** — Integration tests exercising these methods.
 
 ## Notes
 
-- `findActiveByPrefix` deliberately filters revoked/expired **at query time**, not post-fetch, so no downstream caller can accidentally skip the check. `{ revokedAt: null }` relies on Mongo's equality semantics: it matches both an explicitly-`null` field and an absent field, eliminating the need for a separate `$exists` clause.
-- `touchLastUsed` is expected to be called without `.await`; a lost update (crash between auth resolve and the write) is accepted as at most a stale "last used" reading.
-- The explicit type annotation on the export is a known workaround for TS7056 and is replicated in every module repository (see `webhooks/repository.ts` for the same comment).
+- `{ revokedAt: null }` in Mongo matches both an explicitly-null value *and* an absent field (native equality semantics), so no extra `$exists` clause is needed.
+- `touchLastUsed` is documented as fire-and-forget: a lost update (crash between resolve and write) only costs a stale "last used" reading.
+- `createdByUserId` is a plain string column — it is **never** run through `toObjectId`, so equality matching works as-is.
+- The explicit export annotation mirrors the pattern in `webhooks/repository.ts` and other module repositories (referenced in a code comment).

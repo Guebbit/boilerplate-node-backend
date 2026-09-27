@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/controllers/delete-locale.ts
-sha256: 8a3c6b0b2d4434940837ac3e29284386fbe3efb00653bd026cec4e14042935ec
-generated_at: 2026-09-23T18:48:13.185418+00:00
+sha256: ea885f8959b6885770fec7c8c02c145926238115a79243ac0884ceb036ad5934
+generated_at: 2026-09-27T14:58:06.058264+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for the `DELETE /locales/:locale` admin endpoint. It translates the Express request into a `localeService.deleteLanguage` call, handles the 409 refusal (active language) via a shared guard, and fires a locale-override refresh on success. All business logic and the "still active" check live in the service layer.
+Thin HTTP adapter for the `DELETE /locales/:locale` (admin) endpoint. It extracts the locale param and caller context from the request, delegates to `localeService.deleteLanguage`, and maps the service result onto an Express response. It contains no business logic.
 
 ## Key elements
 
-- **`deleteLocale`** (exported) – The sole export. Signature: `(request: Request<{ locale: string }>, response: Response) => void`.
-    - Reads `request.params.locale` and `callerContextOf(request)` as inputs to the service.
-    - On refusal (409): delegates to `refused(response, result)` and returns early.
-    - On success: fire-and-forgets `refreshLocaleOverrides()` (explicitly **not** awaited), then sends `successResponse(response, undefined)` — no response body.
-    - On error: funnels through `catchAs(response, 'deleteLocale')`.
+- **`deleteLocale(request, response)`** — sole export. Calls `localeService.deleteLanguage(locale, callerContext)`. On refusal (409) it delegates to `refused`; on success it sends `successResponse(response, undefined)` (empty body). Unhandled rejections are routed through `catchAs(response, 'deleteLocale')`.
 
 ## Relationships
 
-- **`src/modules/locales/services/index.ts`** – Provides `localeService.deleteLanguage`, the actual deletion + cascade + active-guard logic this controller delegates to.
-- **`src/modules/locales/routes.ts`** – Registers `deleteLocale` on the `DELETE /locales/:locale` route (admin-scoped).
-- **`src/infrastructure/http/controller.ts`** – Supplies the `catchAs` and `refused` helpers used for error/refusal handling.
-- **`src/infrastructure/http/request.ts`** – Supplies `callerContextOf`, which extracts the authenticated caller's identity for the audit trail.
-- **`src/infrastructure/http/response.ts`** – Supplies `successResponse` for the 200 (no-body) reply.
-- **`src/infrastructure/i18n/index.ts`** – Re-exports `refreshLocaleOverrides` (implemented in `overrides.ts`); called to make this worker stop serving the deleted locale immediately.
-- **`src/infrastructure/i18n/overrides.ts`** – The underlying implementation of `refreshLocaleOverrides`; this file does not import it directly (goes through the barrel).
+- **`@infrastructure/http/controller`** (`controller.ts`) — provides `catchAs` (unified error-to-HTTP mapping) and `refused` (checks a service result for a refusal and writes the appropriate 4xx response).
+- **`@infrastructure/http/request`** (`request.ts`) — provides `callerContextOf`, used to extract the authenticated caller's identity for the service call.
+- **`@infrastructure/http/response`** (`response.ts`) — provides `successResponse`, used to emit the 200 with no body.
+- **`../services`** (`services/index.ts`) — source of `localeService.deleteLanguage`, the actual deletion + cascade logic this controller wraps.
+- **`../routes`** (`routes.ts`) — wires `deleteLocale` onto the `DELETE /locales/:locale` route (admin guard).
 
 ## Notes
 
-- **Fire-and-forget refresh:** `void refreshLocaleOverrides()` is deliberately not awaited. The current worker stops serving the deleted locale right away; other workers catch up on their own scheduled refresh cycle. See the comment referencing `./write-locale-entries.ts` for the analogous pattern.
-- **No response body on success:** The count of removed entries is not returned to the client; it is recorded in the audit trail (via the caller context passed to the service).
-- **409 guard is in the service, not here:** The controller only _recognises_ the refusal via `refused()`; the actual "is the language still active?" check and the cascade it protects both live in `localeService.deleteLanguage`.
-- **`catchAs` label:** The string `'deleteLocale'` passed to `catchAs` is used as a log/context tag for error tracing.
+- The 409 "language still active" guard lives **in the service**, not here; this file merely forwards the refusal.
+- No body is returned on success; the number of deleted entries is recorded only in the service's audit trail.
+- The service is responsible for refreshing the overlay after a successful delete — this controller does not.

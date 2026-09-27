@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/module.ts
-sha256: f05b7a9ec456ec04f029ad7fb31fcb8a5acf9b665b048511f18e91c93f4bca51
-generated_at: 2026-09-23T18:24:36.323623+00:00
+sha256: 63d77576393bc791c951f8fa70996b8f97c34d5ffe310d24812d6b09742358fc
+generated_at: 2026-09-27T14:40:56.332046+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module entry point for machine-to-machine API keys. At import time it registers a `CredentialResolver` with the kernel so that `sk_…` bearer tokens authenticate requests, and it exports the module's `AppModule` manifest (routes, permissions, personal-data collector). It owns the `apikeys` collection exclusively and bridges kernel authentication to the module's domain logic.
+The module manifest (entry point) for the **api-keys** module. It declares the module's routes, permission keys, and personal-data lifecycle hooks, and—crucially—wires the `sk_…` bearer-token credential resolver into the kernel at registration time (not import time) so that merely importing the file does not silently enable M2M authentication app-wide.
 
 ## Key elements
 
-- **`currentCallerOf(apiKey)`** – Re-derives the minter's _current_ caller (roles → permissions via `keysInScope` → `assembleCaller`) on every request, so a key can never exceed the minter's live permissions. Uses `userService.findAuthenticatableById` so a deactivated minter immediately invalidates all their keys.
-- **`fromBearerToken(token)`** – The full verify path: `parseApiKeyToken` → `apiKeyRepository.findActiveByPrefix` → `verifyApiKey` (hash compare) → `currentCallerOf` → intersection of stored permissions with `holdsKey(currentCaller, key)`. Every failure mode resolves `undefined`; none throw.
-- **`registerCredentialResolver({ fromBearerToken })`** – Side-effectful import-time registration; no explicit wiring call needed elsewhere.
-- **`export default`** – The `AppModule` manifest: name, basePath (`/api-keys`), routes, locales path, three permission keys (`apikeys.any.read|create|delete`), and a `personalData` collector that pages through the repository via `readAll`.
+- **`onRegistered`** – Called by the kernel once the module is confirmed enabled (D15). Calls `registerCredentialResolver({ fromBearerToken })` to plug the `sk_…` resolver into `kernel/authentication.ts`.
+- **`export default { … }`** – The `AppModule` manifest:
+  - `name: 'api-keys'`, `basePath: '/api-keys'`
+  - `routes: router` (from `./routes`)
+  - `permissions` – Three keys (`apikeys.any.read/create/delete`) that are owned by this module; a cross-cutting test refuses them in the shared permission file if the module is removed.
+  - `personalData` – Declares a single section (`apiKeys`) with `collect` (fetch a user's keys via `findOwnApiKeys`) and `erase` (delete them via `apiKeysDeleteByUserId`) for GDPR account-destroyal.
 
 ## Relationships
 
-- **`src/kernel/authentication.ts`** – Imports `registerCredentialResolver` and the `ResolvedCredential` type; this file fills that kernel port.
-- **`src/kernel/permissions.ts`** – Imports `keysInScope` and `assembleCaller` to build the caller object from live role data.
-- **`src/kernel/ability.ts`** – Imports `holdsKey` (CASL ability check) to filter the key's stored permissions against the minter's current ability.
-- **`src/kernel/registry.ts`** – Imports the `AppModule` type that the default export satisfies.
-- **`src/infrastructure/adapters/logger.ts`** – Imports `logger` to catch-and-log the fire-and-forget `touchLastUsed` rejection.
-- **`src/infrastructure/persistence/search.ts`** – Imports `readAll` and `MAX_CONFIGURED_PAGE_SIZE` for the personal-data paging loop.
-- **`src/modules/access/index.ts`** – Imports `rolesOf` to fetch the minter's current roles.
-- **`src/modules/api-keys/credentials.ts`** – Imports `verifyApiKey`, `parseApiKeyToken`, `displayIdOf` for token parsing, hash verification, and credential-ID formatting.
-- **`src/modules/api-keys/repository.ts`** – Imports `apiKeyRepository` for `findActiveByPrefix`, `touchLastUsed`, and `search`.
-- **`src/modules/api-keys/model.ts`** – Imports the `ApiKeyDocument` type.
-- **`src/modules/api-keys/routes.ts`** – Imports `router` for inclusion in the manifest.
-- **`src/modules.ts`** – Aggregates this module's default export into the application's module list.
+- **`src/kernel/authentication.ts`** – Consumes `registerCredentialResolver` to install the bearer-token resolver into the shared auth pipeline.
+- **`src/kernel/registry.ts`** – Imports the `AppModule` type to satisfy the manifest shape.
+- **`src/modules/api-keys/routes.ts`** – Provides the `router` instance mounted under `/api-keys`.
+- **`src/modules/api-keys/services/resolver.ts`** – Provides `fromBearerToken`, the actual token-validation logic handed to the kernel.
+- **`src/modules/api-keys/services/api-keys.ts`** – Provides `findOwnApiKeys` (personal-data collection) and `apiKeysDeleteByUserId` (account-erasure hook).
 
 ## Notes
 
-- **Import-time side effect:** `registerCredentialResolver` runs when this file is first imported. There is no explicit "init" call; module loading _is_ the registration.
-- **Permissions are re-derived, never trusted:** The stored `apiKey.permissions` array is intersected with the minter's _live_ ability (`holdsKey`) on every request. A demoted or deactivated minter loses access to all their keys on the very next request, without any key document being modified.
-- **`touchLastUsed` is fire-and-forget:** The `.catch` is attached inline to convert the rejection into a `logger.warn`, preventing an unhandled-rejection crash. It is deliberately not awaited.
-- **All failures resolve `undefined`:** Malformed token, unknown prefix, wrong hash, revoked/expired key, and missing minter all produce the same `undefined` outcome the kernel expects. No error type leaks across the boundary.
-- **Manifest permissions are cross-cutting:** `tests/cross-cutting/module-permissions.test.ts` refuses a permission key in the shared contract whose owning module no longer exists—deleting this module must delete its three permission keys.
+- The resolver is registered inside `onRegistered`, **not** at top-level module scope. This is deliberate (D15): a type-only import or a test that imports the file must not activate `sk_…` auth for the whole process.
+- The `personalData.erase` hook is the same DDD-D6 pattern used by `addresses`, `cart`, `wishlist`, and `payments`. Without it, a deleted user's credential rows would persist even though the resolver would reject them.
+- Permission keys are tightly coupled to module existence—see `tests/cross-cutting/module-permissions.test.ts`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/module.ts
-sha256: 168d4b0108e080ecd91d42719cb60a8447fd05de9604244968b88dda2dec80a9
-generated_at: 2026-09-23T18:20:29.634517+00:00
+sha256: b759a1802c4e8338d5e427d4cb1d1064e76fc619c4de841ad84c8e4db6f58d04
+generated_at: 2026-09-27T14:38:47.431976+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the address book. Declares the routes, event subscriptions, personal-data collection hook, and locale path so the kernel can mount the module without the rest of the codebase importing the `account` module. Only `cart`'s checkout consumes addresses directly; `users` interacts solely via the event bus.
+Registers the **addresses** module with the application kernel: declares its HTTP routes, personal-data lifecycle hooks, and locale path. It exists as a standalone module so that `cart` (the only sibling consumer) and `users` (via the `personalData.erase` hook) never need to import `account` to reach address data.
 
 ## Key elements
 
-- **`export default { … } satisfies AppModule`** — The manifest object the kernel reads to wire the module.
-- **`basePath: '/account'`** — Mount prefix; shared with the `account` module.
-- **`routes: router`** — Re-exports the Express router defined in `./routes.ts`.
-- **`personalData.collect`** — Returns the user's address list for data-export / GDPR requests.
-- **`subscribe`** — Calls `onDomainEvent(USER_DELETED, …)` to cascade-delete a user's addresses when their account is destroyed.
-- **`locales`** — Absolute path (`path.join(__dirname, 'locales')`) to the i18n directory.
+- **`default export`** — an object typed `satisfies AppModule` (from `@kernel/registry`) that the kernel discovers at bootstrap.
+  - `name: 'addresses'`
+  - `basePath: '/account'` — shared URL prefix with the `account` module.
+  - `routes` — the Express/Router instance imported from `./routes`.
+  - `personalData` — a single section (`'addresses'`) providing:
+    - `collect(subject)` — calls `addressesGet` and returns the user's address list.
+    - `erase` — `addressesDeleteByUserId` from `./service`; runs inside the same transaction as the account deletion (DDD-D6).
+  - `locales` — filesystem path to `./locales` for i18n strings.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — Supplies the `AppModule` type that the manifest satisfies; the kernel consumes the exported object during boot.
-- **`src/kernel/events.ts`** — Provides `onDomainEvent`, the subscription helper used inside `subscribe`.
-- **`src/modules/users/index.ts`** — Exports the `USER_DELETED` domain-event constant that this module listens for.
-- **`src/modules/addresses/service.ts`** — Source of `addressesGet` (data collection) and `addressesDeleteByUserId` (event handler).
-- **`src/modules/addresses/routes.ts`** — Source of the `router` mounted under `/account`.
-- **`src/modules/account/module.yaml`** — Co-occupies the `/account` URL prefix; see below for the auth-cost note.
-- **`src/modules.ts`** — Aggregator that imports this default export alongside other module manifests.
+- **`src/kernel/registry.ts`** — supplies the `AppModule` type this file satisfies; the kernel consumes the default export to wire routes and hooks.
+- **`src/modules.ts`** — aggregates module exports (this file is one of the entries it re-exports).
+- **`src/modules/account/module.yaml`** — sibling module that shares the `/account` prefix; no import dependency between the two.
+- **`src/modules/addresses/routes.ts`** — provides the `router` object mounted under `basePath`.
+- **`src/modules/addresses/service.ts`** — provides `addressesGet` and `addressesDeleteByUserId` used by the `personalData` hooks.
 
 ## Notes
 
-- **Shared `/account` prefix with `account`.** Two routers can mount there because `getAuth` (in `kernel/middlewares/authorizations.ts`) early-returns after one resolution, so mounting both routers costs a single auth check rather than two. Don't assume one module "owns" the prefix exclusively.
-- **No direct import from `users`.** The `USER_DELETED` import is a constant (event name), not a service call — the actual dependency is the event bus, keeping the two modules decoupled.
-- **`cart` is the only sibling that imports `addresses` directly.** If a new consumer appears, prefer the event bus or a service-level import rather than reaching into this module.
+- **Shared prefix, single auth pass:** Both `addresses` and `account` mount under `/account`. The doc comment and `kernel/middlewares/authorizations.ts` (`getAuth` early-return) ensure mounting two routers there resolves auth once, not twice.
+- **No import of `account`:** `users` erases addresses exclusively through the `personalData.erase` hook declared here; there is no direct module-to-module import. The same "hook-not-import" pattern is used by `cart`, `wishlist`, `payments`, and `orders`.
+- **DDD-D6:** The `erase` function is documented as transactional with the parent account deletion — do not call `addressesDeleteByUserId` outside that flow without ensuring the same guarantee.

@@ -1,37 +1,38 @@
 ---
 source: src/modules/cart/routes.ts
-sha256: 56480da3c9afbfa62b3b896835961a6364c5933ce320f24f55cc7885084a4fb4
-generated_at: 2026-09-23T18:31:53.929143+00:00
+sha256: a568a06e9cfbedf463b77f44e6efd0af6a08a4946325eee2be25ddfb3af8efa4
+generated_at: 2026-09-27T14:45:38.146679+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/cart/routes.ts
 
 ## Purpose
-
-Express route table for all cart operations (view, add, update, remove, clear, checkout, reorder). It wires every route to its controller handler and applies the authentication/authorization middleware chain. The entire router sits behind `isAuth`; the checkout route adds step-up re-authentication, a module-specific permission, and response-cache invalidation.
+Defines the Express route table for the cart module. Every route is behind authentication; `POST /checkout` additionally enforces a fresh re-auth session, a specific permission, idempotency, and cache invalidation. The file exists to declare route paths, mount ordering, and middleware chains in one place, delegating all business logic to individual controllers.
 
 ## Key elements
-
-- **`router`** (exported `Router`) — the single public export; mounted under `/cart` by the cart module.
-- **`router.use(getAuth, isAuth)`** — blanket authentication for every route in this table.
-- **`POST /checkout`** — the only route with an extended middleware chain: `requireFreshAuth(REAUTH_TIME_CRITICAL)` → `requirePermission('cart.self.checkout')` → `invalidateCache(['orders','products'])` → `postCheckout`.
-- **Route registrations** — eight endpoints (`GET /summary`, `GET /`, `POST /`, `PUT /:productId`, `DELETE /:productId`, `DELETE /all`, `DELETE /`, `POST /checkout`, `POST /reorder/:orderId`) each bound to a controller import from `./controllers/*`.
-- **`DELETE /`** and **`DELETE /:productId`** both delegate to the same handler (`deleteCartItem`); the former is an alias where `productId` is supplied in the request body.
+- **`router`** (exported `Router`) — the single public export; mounted by the cart module.
+- **`router.use(getAuth, isAuth)`** — blanket auth guard applied to every cart route.
+- **`POST /cart/checkout`** — the only route with extra middleware: `requireFreshAuth(REAUTH_TIME_CRITICAL)`, `requirePermission('cart.self.checkout')`, `idempotencyKey`, `invalidateCache(['products'])`, then delegates to `postCheckout`.
+- **`DELETE /cart/all`** → `clearCart` — clears the entire cart.
+- **`PUT /cart/shipping-method`** → `putCartShippingMethod` — sets shipping method.
+- **`PUT /cart/:productId`** → `putCartItem` — sets quantity for a product.
+- **`DELETE /cart/:productId`** → `deleteCartItem` — canonical single-item removal.
+- **`DELETE /cart/`** → `deleteCartItem` — x-alias of the parametric delete (productId passed in body instead).
+- **`GET /cart`** → `getCart`; **`GET /cart/summary`** → `getCartSummary`.
+- **`POST /cart`** → `postCart`; **`POST /cart/reorder/:orderId`** → `postReorder`.
 
 ## Relationships
-
-- **`src/kernel/middlewares/authorizations.ts`** — supplies `getAuth`, `isAuth`, `requireFreshAuth`, `requirePermission`, and the `REAUTH_TIME_CRITICAL` constant applied on the checkout route.
-- **`src/infrastructure/http/middlewares/cache.ts`** — supplies `invalidateCache`, called on `POST /checkout` to purge the `orders` and `products` response caches after stock is spent.
-- **`src/modules/cart/controllers/*`** (eight files) — each exports the handler function that the corresponding route line invokes.
-- **`src/modules/cart/module.ts`** — consumes the `router` export and mounts it at the `/cart` path.
-- **`src/modules/cart/tests/unit/routes.test.ts`** — unit-tests the route wiring (paths, methods, middleware order).
-- **`tests/cross-cutting/step-up-auth-routes.test.ts`** — integration-test that the checkout route enforces fresh-auth + permission.
-- **`tests/support/routed-modules.ts`** — registers this router in the shared test-app harness.
+- **Controllers** (`get-cart`, `post-cart`, `put-cart-item`, `delete-cart-item`, `delete-cart-all`, `put-cart-shipping-method`, `post-checkout`, `post-reorder`, `get-cart-summary`) — imported as the terminal handler for each route.
+- **`src/kernel/middlewares/authorizations.ts`** — source of `getAuth`, `isAuth`, `requireFreshAuth`, `requirePermission`, `REAUTH_TIME_CRITICAL`; the auth chain that protects every route and the checkout-specific re-auth/permission checks.
+- **`src/infrastructure/http/middlewares/cache.ts`** — `invalidateCache(['products'])` is applied to the checkout route so that product/stock caches are flushed after an order spends inventory.
+- **`src/infrastructure/http/middlewares/idempotency.ts`** — `idempotencyKey` is applied to the checkout route to guarantee a retried request replays the same order.
+- **`src/modules/cart/module.ts`** — mounts the exported `router` into the application's route tree.
+- **`src/modules/cart/tests/unit/routes.test.ts`** — unit-tests the route definitions and middleware ordering in this file.
+- **`tests/cross-cutting/step-up-auth-routes.test.ts`** — cross-cutting test verifying the `requireFreshAuth` + `requirePermission` chain on `POST /checkout`.
 
 ## Notes
-
-- **Mount order is load-bearing.** `DELETE /all` is registered _before_ `DELETE /:productId`. Express matches in registration order, so if `/:productId` came first, the literal string `"all"` would be captured as a product id.
-- **`cart.self.checkout`** is the only authorization key this module declares (see `shared/authorization-keys.yaml`). No other cart route requires a permission beyond basic auth.
-- **Cache invalidation is checkout-only.** Adding, removing, or reordering items does _not_ invalidate the `orders`/`products` caches; only a completed checkout does.
-- `REAUTH_TIME_CRITICAL` is a shared constant (not a literal time value); it signals to the auth middleware that this endpoint demands the shortest possible session-freshness window.
+- **Mount order is load-bearing.** `/all` and `/shipping-method` are registered *before* `/:productId`. Because Express matches in registration order, placing the parameterised route first would treat the literal strings `"all"` or `"shipping-method"` as a product ID.
+- **Two DELETE spellings, one handler.** `DELETE /cart/` (body-carried productId) and `DELETE /cart/:productId` (path param) both call `deleteCartItem`. The former is documented as an x-alias.
+- **`invalidateCache(['products'])`** is passed only the `'products'` tag here (the module comment mentions `orders` and `products`); the actual tag list is whatever is in the array literal — verify against `cache.ts` if you need the full set.
+- The `cart.self.checkout` permission is the **only** permission key this module declares (per the module doc comment referencing `shared/authorization-keys.yaml`).

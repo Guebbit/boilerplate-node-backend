@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/module.ts
-sha256: 5e0b22095eacbd32b660ac09fb2b4a29f09270a3c497e38858987ee7758ddd94
-generated_at: 2026-09-23T18:36:39.828067+00:00
+sha256: 450be03e1056e78201c1146faa5df5187d8ca9574f0d66ddc6f5ea04deb1f2fc
+generated_at: 2026-09-27T14:50:09.552172+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest (entry point) for the delivery module. It declares the module's identity, permission keys, route table, personal-data collection contract, and locale directory to the kernel registry. It exists so the rest of the application can discover and mount the delivery feature without knowing its internals.
+Module manifest (entry point) for the **delivery** module. It declares the module's identity, HTTP routes, permission keys, personal-data collection entry, and locale path, then exports the whole thing as an `AppModule` so the kernel can register it. The file is a wiring file — no business logic lives here.
 
 ## Key elements
 
-- **`default` export** — An `AppModule` object satisfying the kernel's manifest shape.
-    - `name` / `basePath` — `'delivery'` / `'/delivery'`; used for routing and module identification.
-    - `permissions` — `['delivery.any.read', 'delivery.any.update']`. Tied to module lifecycle: removing this module removes these keys (enforced by `tests/cross-cutting/module-permissions.test.ts`).
-    - `routes` — The Hono/router instance re-exported from `./routes`.
-    - `personalData` — Declares a `shipments` section whose `collect` callback resolves the subject's own order IDs via `ownOrderIds` (from `@modules/orders`), then fetches matching shipments via `findShipmentsForOrders` (from `./service`).
-    - `locales` — Resolves to the `./locales` directory.
+- **Default export** — an object `satisfies AppModule` with:
+  - `name: 'delivery'`, `basePath: '/delivery'`
+  - `permissions` — the three keys this module owns (`delivery.any.read`, `delivery.any.update`, `delivery.any.start`). Removing the module removes these keys (enforced by a cross-cutting test).
+  - `routes` — re-exported `router` from `./routes`.
+  - `personalData` — a single `shipments` section whose `collect` closure calls `ownOrderIds(userId)` then `findShipmentsForOrders(orderIds)`.
+  - `locales` — resolved path to `./locales`.
+- **`ownOrderIds`** (imported from `@modules/orders`) — used inside `personalData.collect` to resolve the caller's own order IDs before fetching shipments, avoiding a full-document page-through of orders.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — Provides the `AppModule` type that this manifest must satisfy.
-- **`src/modules.ts`** — Aggregates module manifests (this file is one of the entries it collects).
-- **`src/modules/delivery/routes.ts`** — Source of the `router` instance mounted at the module's `basePath`.
-- **`src/modules/delivery/service.ts`** — Provides `findShipmentsForOrders`, used in the personal-data collection callback.
-- **`src/modules/orders/index.ts`** — Publishes `ownOrderIds`, which this module calls to resolve the subject's order IDs before fetching shipments.
+- **`src/kernel/registry.ts`** — provides the `AppModule` type that the default export satisfies; the registry consumes this manifest to mount routes and permissions.
+- **`src/modules/orders/index.ts`** — exports `ownOrderIds`, which this file calls to obtain the subject's order IDs without reading full order documents.
+- **`src/modules/delivery/routes.ts`** — exports `router`, wired into the manifest's `routes` field.
+- **`src/modules/delivery/service.ts`** — exports `findShipmentsForOrders`, called inside the `personalData.collect` closure.
+- **`src/modules.ts`** — imports this file's default export as one of the registered app modules.
 
 ## Notes
 
-- The personal-data `collect` intentionally goes through `ownOrderIds` rather than querying order documents directly; the inline comment calls out that this avoids paging through full order docs and sidesteps the `_id`/`id` normalization trap in `.search()`.
-- Permission keys are **module-owned**: a cross-cutting test fails the suite if a key exists in the shared permission file but its declaring module is gone, or vice-versa. Add/remove keys here in lockstep with the shared file.
-- The module docblock notes that shipping-rate logic lives in `./domain` as pure functions so the cart's checkout can price a method without touching this module's HTTP surface.
+- The design docblock states that shipping-rate logic lives in `./domain` as **pure functions** so the cart/checkout flow can price a method without invoking this module's HTTP layer. Shipping is intentionally *not* an aggregate.
+- The `personalData.collect` closure deliberately uses `ownOrderIds` (a thin ID-only query) rather than navigating order `.search()` results, which the inline comment notes has an `_id`/`id` normalization pitfall.
+- Permission keys are contractually tied to module existence: `tests/cross-cutting/module-permissions.test.ts` fails if a key is left in the shared file after its module is deleted, or if a module claims a key the file does not attribute to it.

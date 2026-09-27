@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/audit.ts
-sha256: 5ffda18c48cf5a146c324d6d65643b3c0659a19d3bae273a3c4f3f86337e8b1f
-generated_at: 2026-09-23T19:25:13.361466+00:00
+sha256: 7d094371857854a78a8f8d62f0bb3ece42b8f46b9c7e74ee44422b07edec6799
+generated_at: 2026-09-27T15:30:16.226252+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the audit-action vocabulary owned by the products module (three admin write events) and registers those actions into the app-wide `AuditActionMap` via TypeScript module augmentation. It exists so that compliance/audit consumers can query product-mutation events by a stable, typed identifier without importing a shared enum.
+Declares the audit-action vocabulary for the products module and registers it into the app-wide `AuditActionMap` via TypeScript declaration merging. Only write operations (create, update, delete, restore) are audited; catalogue reads are public and unauthenticated, so there is no actor to record.
 
 ## Key elements
 
-- **`productsAuditActions`** (const object) — The three action strings this module can emit: `admin.product.created`, `admin.product.updated`, `admin.product.deleted`. Exposed as a read-only `as const` record so consumers get literal types.
-- **`declare module '@infrastructure/observability/audit'`** — Augments the shared `AuditActionMap` interface with a `products` key whose type is the union of all values in `productsAuditActions`. This is the mechanism that makes the actions visible to the observability layer without a central registry file.
+- **`productsAuditActions`** (const, exported) — Four string literal actions: `admin.product.created`, `admin.product.updated`, `admin.product.deleted`, `admin.product.restored`. Serves as the single source of truth for products audit event names.
+- **`declare module '@infrastructure/observability/audit'`** — Augments the `AuditActionMap` interface with a `products` key typed to the values of `productsAuditActions`, making the actions available app-wide through the shared audit infrastructure.
 
 ## Relationships
 
-- **`src/modules/products/service.ts`** and **`src/modules/products/controllers/delete-products.ts`** — The product service/controller layer is the emission source for these actions; they import `productsAuditActions` when recording audit entries for create, update, and delete operations.
-- **`src/modules/products/tests/unit/audit.test.ts`** — Unit test covering this file's exports.
-- **`tests/cross-cutting/audit-actions-registered.test.ts`** — Cross-cutting test that verifies every module (including this one) has correctly registered its actions into `AuditActionMap`.
+- **`src/modules/products/controllers/delete-products.ts`** — Emits `ADMIN_PRODUCT_DELETED` when a product is soft-deleted.
+- **`src/modules/products/controllers/restore-products.ts`** — Emits `ADMIN_PRODUCT_RESTORED` when a soft-deleted product is restored.
+- **`src/modules/products/service.ts`** — Emits `ADMIN_PRODUCT_CREATED` and `ADMIN_PRODUCT_UPDATED` during write operations.
+- **`tests/cross-cutting/audit-actions-registered.test.ts`** — Verifies that the declaration-merging augmentation actually lands in `AuditActionMap` and that the four product actions are present.
 
 ## Notes
 
-- Only **write** actions are defined. The file's header comment explicitly states that reads are public/unauthenticated, so there is no actor to record and no compliance query would target them. Do not add a read action here.
-- The module-augmentation pattern (rather than a shared enum) is deliberate; see `modules/account/audit.ts` for the stated rationale. Follow the same pattern if adding actions.
+- Actions are declared via **module augmentation**, not a shared enum. The rationale (referenced in the doc comment) is documented in `modules/account/audit.ts`; follow the same pattern when adding a new module's actions.
+- The `as const` on `productsAuditActions` is load-bearing: it gives the augmented interface a literal-string union rather than a plain `string`, enabling exhaustive checks downstream.
+- No read actions exist by design. If a future change introduces an authenticated read endpoint, an action should be added here *and* the `AuditActionMap` augmentation updated in the same commit.

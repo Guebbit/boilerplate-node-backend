@@ -1,45 +1,35 @@
 ---
 source: src/modules/account/controllers/post-login-2fa.ts
-sha256: d1c3428b5073bffb8b744a6cd536a8f6b9158a4a5cd3f89dd35930ac29958134
-generated_at: 2026-09-23T18:02:17.658336+00:00
+sha256: 597dd5f022b5778242d7f99bfe1b0df428360bfc854c98cab85780700de440c3
+generated_at: 2026-09-27T14:24:45.052278+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/controllers/post-login-2fa.ts
 
 ## Purpose
-
-Second step of the 2FA login flow. Receives the `challenge` + `code` pair returned by `POST /account/login` when `mfaRequired` is true, delegates verification to the two-factor service, and on success mints a full session with `amr` augmented by `'otp'`.
+HTTP adapter for `POST /account/login/2fa` — the second step of a two-factor login. It validates the request, resolves the pending challenge (from the body or an OAuth-originated cookie), delegates code verification to the two-factor service, and on success mints a session with `amr: [...amr, 'otp']` so downstream guards can see a second factor was satisfied.
 
 ## Key elements
-
-- **`postLoginTwoFactor`** (exported function) — The sole export. An Express handler that:
-    1. Zod-validates the body via `LoginTwoFactorBody.safeParse`.
-    2. Resolves the challenge from the request body **or** falls back to the MFA challenge cookie (OAuth-originated challenges are never sent to the client in-band; see `oauth/mfa-redirect.ts`).
-    3. Calls `twoFactorService.verifyLoginChallenge(challenge, code, callerContextOf(request))`.
-    4. On success, calls `issueSession` with `[...amr, 'otp']`, reads the user's tenant roles fresh via `rolesOf`, records the metric and observability event, destroys the MFA cookie, and returns `{ token }` (200).
-    5. On any failure path, increments `authTwoFactorChallengeTotal` with `status: 'failure'` and returns an appropriate error response.
+- **`postLoginTwoFactor`** (exported) — The sole handler. Accepts an Express `Request`/`Response`, parses the body with `LoginTwoFactorBody`, resolves the `challenge` field (body value or `readMfaChallengeCookie` fallback), calls `twoFactorService.verifyLoginChallenge`, then calls `issueSession` with an appended `'otp'` AMR entry, records metrics/observability, destroys the MFA challenge cookie, and returns `{ token }` (200) or an error response.
 
 ## Relationships
-
-| Neighbor                                       | Interaction                                                                                                   |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `@infrastructure/http/response`                | `successResponse` / `rejectResponse` for all HTTP replies.                                                    |
-| `@infrastructure/http/errors`                  | `rejectDatabaseError` in the `.catch` handler.                                                                |
-| `@infrastructure/http/controller`              | `rejectValidation` when Zod parsing fails.                                                                    |
-| `@infrastructure/http/request`                 | `callerContextOf` to extract tenant/user context for the service call.                                        |
-| `@infrastructure/i18n`                         | `t()` for the "challenge invalid" error message.                                                              |
-| `@kernel/permissions`                          | `isUnrestrictedRole` to feed the observability record.                                                        |
-| `@modules/access`                              | `rolesOf(userId, DEPLOYMENT_TENANT_ID)` — reads the user's tenant membership roles at response time.          |
-| `@kernel/access/tenant`                        | `DEPLOYMENT_TENANT_ID` constant for the membership lookup.                                                    |
-| `@modules/account/metrics`                     | `authTwoFactorChallengeTotal` counter (success/failure).                                                      |
-| `@modules/account/session/login-observability` | `recordLoginSuccess` for post-auth audit/telemetry.                                                           |
-| `@modules/account/oauth/mfa-redirect`          | `readMfaChallengeCookie` (fallback challenge source) and `destroyMfaChallengeCookie` (cleanup after success). |
-| `@modules/account/services/index.ts`           | `twoFactorService.verifyLoginChallenge` — the actual code/backup-code verification.                           |
+- **`src/infrastructure/http/controller.ts`** — Provides `rejectValidation` (bad body) and `refused` (service-level denial) used to short-circuit error paths.
+- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseError` catches unexpected async errors in the `.catch` block.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf` extracts caller metadata (IP, user-agent, etc.) passed into the service call.
+- **`src/infrastructure/http/response.ts`** — `successResponse` and `rejectResponse` shape the HTTP reply.
+- **`src/infrastructure/i18n/context.ts` / `index.ts`** — `t` supplies localised error strings (e.g. `account.two-factor.challenge-invalid`).
+- **`src/modules/account/services/index.ts`** — `twoFactorService.verifyLoginChallenge` performs the actual code/backup-code check.
+- **`src/modules/account/session/session.ts`** — `issueSession` creates the token and session record with the extended AMR array.
+- **`src/modules/account/session/login-observability.ts`** — `recordLoginSuccess` logs the successful login event.
+- **`src/modules/account/metrics.ts`** — `authTwoFactorChallengeTotal` incremented on every success/failure branch.
+- **`src/modules/account/roles.ts`** — `isUnrestrictedCaller` checks membership-based role after the session is issued (used only for the observability record).
+- **`src/modules/account/oauth/mfa-redirect.ts`** — `readMfaChallengeCookie` / `destroyMfaChallengeCookie` handle the OAuth-originated challenge that was never sent to the client in a response body.
+- **`src/types/index.ts`** — `LoginTwoFactorRequest`, `AuthTokens` type imports.
+- **`src/modules/account/routes.ts`** — Registers this handler at the `POST /account/login/2fa` route.
 
 ## Notes
-
-- **Challenge source is dual-path.** A password-originated challenge is always in the request body; an OAuth-originated one is stored only in a cookie (never sent to the client). The `??` fallback handles both. If neither is present, the handler 401s before any service call.
-- **`amr` is an array by design.** The `'otp'` value is appended to whatever `amr` the service returns. Downstream guards that require a second factor check for `'otp'` in that array — no separate flag is stored.
-- **Roles are read fresh, not from the user document.** `rolesOf` hits the membership collection at response time because the user document itself carries no role field.
-- **Code-vs-backup-code ambiguity is intentionally not resolved here.** The controller passes the raw `code` string to the service and treats the result opaquely.
+- The `challenge` field is **optional** in the request body. When the 2FA challenge originated from an OAuth redirect flow it was stored in a cookie (never exposed to the client); the controller falls back to `readMfaChallengeCookie`. A missing challenge from both sources is a 401, not a 400.
+- The AMR array is built as `[...amr, 'otp']` — the service returns the existing AMR entries (e.g. `['pwd']`) and this controller appends the OTP marker. Downstream role/permission guards read this array to confirm a second factor was satisfied.
+- `isUnrestrictedCaller` is called **after** the session is issued solely to enrich the `recordLoginSuccess` observability event; it does not gate the response.
+- The handler is synchronous in signature (returns a Promise implicitly) and relies on the `.then`/`.catch` chain rather than `async/await`.

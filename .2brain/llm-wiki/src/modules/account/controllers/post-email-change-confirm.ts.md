@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-email-change-confirm.ts
-sha256: c5672c140f6497fdc16a9815c81a2a6dca1f3b22106502ca5ecc3ba4bb3c3fe1
-generated_at: 2026-09-23T18:01:53.464393+00:00
+sha256: 7dc7f5e171887aa7523e6e1b207ef472320a53419c69390d9b712334b28d3c97
+generated_at: 2026-09-27T14:24:21.086906+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP controller for `POST /account/email-change-confirm`. It validates a one-time email-change token from the request body, spends it atomically (find-then-spend to avoid races), and promotes the caller's `pendingEmail` to `email`. The endpoint is intentionally public—the token itself is the credential, mirroring the design of the email-verify-confirm endpoint.
+Handles `POST /account/email-change-confirm`. It validates a one-time `email-change` token in the body, spends it via `accountService.redeemLiveToken`, and then commits the pending email to the user's `email` field via `accountService.completeEmailChange`. The endpoint is deliberately public: the token itself is the credential, not an authenticated session.
 
 ## Key elements
 
-- **`postEmailChangeConfirm`** (exported function) — The sole handler. Parses the body against `ConfirmEmailChangeBody`, looks up a live `EMAIL_CHANGE_TOKEN_TYPE` token via `accountService.findLiveToken`, spends it with `accountService.spendLiveToken`, then calls `accountService.completeEmailChange`. Every refusal path returns a uniform `422` with a generic i18n message to prevent token enumeration.
-- **`refuse()`** (local closure) — Centralised failure path: increments the failure metric and sends a `422` with the shared `account.email-change.token-not-found` message. Used for both "token not found" and "token already spent" cases so responses are indistinguishable.
-- **`catchAs(response, 'postEmailChangeConfirm')`** — Catches downstream errors and derives the correct HTTP status (e.g. `409` for a unique-index collision when the new address is already claimed) instead of blanket-500'ing.
+- **`postEmailChangeConfirm`** (exported const) — the sole controller. Accepts `Request<unknown, unknown, VerifyEmailConfirmRequest>` / `Response`, parses the body with `ConfirmEmailChangeBody.safeParse`, then chains `redeemLiveToken` → `completeEmailChange`, emitting `authEmailChangeConfirmTotal` metrics (`success` / `failure`) at each terminal path.
+- **`ConfirmEmailChangeBody`** (imported from `@api/schemas.zod`) — Zod schema for `{ token }`. Shared with the verify-confirm endpoint; the request *type* is therefore the shared `VerifyEmailConfirmRequest`, not a separate one.
+- **`EMAIL_CHANGE_TOKEN_TYPE`** (imported from `../services`) — the token-type discriminator passed to `redeemLiveToken`. A `verify`-type token will never match this filter, so the two confirm endpoints cannot cross-contaminate.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Provides `rejectValidation` (Zod parse failures) and `catchAs` (error-to-status mapping).
-- **`@infrastructure/http/request`** — Provides `callerContextOf` to pass the authenticated caller's identity into `completeEmailChange`.
-- **`@infrastructure/http/response`** — Provides `successResponse` / `rejectResponse` for the two response shapes.
-- **`@infrastructure/i18n`** — `t()` translates the success and refusal messages.
-- **`@types`** — Imports `VerifyEmailConfirmRequest` as the typed request-body type (shared schema with the verify-confirm endpoint; Orval names the type after the shared Zod schema).
-- **`../metrics`** — Increments `authEmailChangeConfirmTotal` on success, failure, and validation rejection.
-- **`../services`** — Calls `accountService.findLiveToken`, `spendLiveToken`, and `completeEmailChange`; imports the `EMAIL_CHANGE_TOKEN_TYPE` constant.
-- **`../routes`** — Registers this handler on the `POST /account/email-change-confirm` route.
+- **`src/infrastructure/http/controller.ts`** — supplies `rejectValidation` (400 on Zod failure) and `catchAs` (error-dispatching helper that logs and maps errors to the correct HTTP status).
+- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf(request)`, forwarded into `completeEmailChange` so the service can record the acting identity.
+- **`src/infrastructure/http/response.ts`** — supplies `successResponse` and `rejectResponse` for the 200 / 422 paths.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — supplies the `t()` translator used for all user-facing messages (`account.email-change.token-not-found`, `account.email-change.success`).
+- **`src/modules/account/metrics.ts`** — supplies `authEmailChangeConfirmTotal`, an OpenMetrics counter incremented on every terminal outcome.
+- **`src/modules/account/services/index.ts`** — supplies `accountService` (the domain service performing the actual token redemption and email swap) and the `EMAIL_CHANGE_TOKEN_TYPE` constant.
+- **`src/modules/account/routes.ts`** — wires this controller to the `POST /account/email-change-confirm` path.
+- **`src/types/index.ts`** — source of the `VerifyEmailConfirmRequest` type (the shared body shape).
 
 ## Notes
 
-- **Token-type isolation:** A `verify`-type token will never match here because `findLiveToken` filters by `EMAIL_CHANGE_TOKEN_TYPE`. The two endpoints prove different things (old vs. new address) and must not cross-serve.
-- **Race protection:** The find-then-spend sequence mirrors `postVerifyConfirm`; `spendLiveToken` returns a boolean so a concurrent duplicate request gets `refuse()` rather than a double-swap.
-- **Derived status codes:** The `catch` block does _not_ hardcode 500. If the new address was claimed by another account between token issuance and confirmation, the DB unique-index rejection surfaces as a `409` via `catchAs`.
-- **Shared request type:** The body shape (`{ token }`) is identical to the verify-confirm endpoint; the TypeScript type is imported as `VerifyEmailConfirmRequest` rather than a locally minted alias.
+- **Public by design.** No auth middleware; the body token *is* the credential. Do not add a session/auth guard.
+- **Shared schema, shared type.** `ConfirmEmailChangeBody` and `VerifyEmailConfirmRequest` are also used by the verify-confirm controller. Changing the schema here affects that endpoint too.
+- **Race-safety pattern.** `redeemLiveToken` does find-then-spend atomically (see `services/tokens.ts`). Do not split it into a separate SELECT + UPDATE in this controller.
+- **Error mapping is not a blanket 500.** `catchAs` distinguishes a unique-index rejection (409, e.g. the new address was claimed by another account between the request and the confirm) from a true server error (500) and logs accordingly. Avoid replacing `catchAs` with a generic `.catch` that hard-codes 500.
+- **Metric label is binary.** Only `'success'` and `'failure'` are used; there is no `'invalid'` label. A Zod parse failure and a token-not-found both increment `'failure'`.

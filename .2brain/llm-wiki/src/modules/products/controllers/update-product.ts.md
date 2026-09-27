@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/controllers/update-product.ts
-sha256: 0db000553c91b8e2bfb6ce81f39ccfbed157c61f37ba6a089e9a2c6a71c2eac2
-generated_at: 2026-09-23T19:26:24.766611+00:00
+sha256: 175dd7e5da088606cdf340a41400885bea29215d13552af1fe6c07128338686a
+generated_at: 2026-09-27T15:31:32.663281+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Admin handler for `PATCH /products/:id`. It decodes a multipart or JSON request body (including a JSON-encoded `translations` string) and an uploaded image, then delegates to `productService.writeUpdate` for validation and merge. The controller is purely a transport/decoding layer; all business logic lives in the service.
+Handler pair for `PUT /products/:id` (full replace) and `PATCH /products/:id` (partial merge), built on the shared `createUpdateController` factory. All actual writing delegates to `productService.writeUpdate`; the controller's job is body validation (via product-specific Zod schemas), multipart input decoding, and image-upload handling before the service call.
 
 ## Key elements
 
-- **`updateProduct`** (exported function) — The sole export. Accepts an Express `Request`/`Response` pair, decodes input, manages upload cleanup, and maps the service result to an HTTP response. No class or module-level state.
+- **`replaceProduct`** – exported `PUT` handler. Validates body against `zodProductReplaceSchema`; omitted clearable fields (`taxClass`, `weight`, `imageUrl`) are cleared.
+- **`updateProduct`** – exported `PATCH` handler. Validates against `zodProductUpdateSchema`; omitted clearable fields are left untouched. `translations` keeps the same per-locale upsert/delete semantics in both verbs.
+- **`input` config** (passed to the factory) – declares which body fields are booleans, numbers, string arrays, or JSON so `readInput` can decode a multipart form before schema validation. `imageUpload` is intentionally outside the schema.
+- **`update` callback** – wraps the write in `writeWithUploadedImage`. Server-derived `thumbnailUrl`/`pendingImageKey` are passed as `imageExtras` to `writeUpdate` rather than merged into `changes` (they would fail the factory's `strictObject` check). Only `imageUrl` is a contract field and joins `changes`.
+- **`present` callback** – maps a product row through `productService.toProduct` for the response shape.
 
 ## Relationships
 
-- **`src/modules/products/service.ts`** — Calls `productService.writeUpdate(id, payload, callerContext, uploadOpts)` and maps the result with `productService.toProduct(result.data)`.
-- **`src/modules/products/routes.ts`** — Registers this handler as the `PATCH /products/:id` route (implied by the module doc and route path in the JSDoc).
-- **`src/infrastructure/http/request.ts`** — Uses `readInput` for typed field extraction (ids, booleans, numbers, stringArrays, jsonFields) and `callerContextOf` to build the auth/context argument.
-- **`src/infrastructure/http/uploads.ts`** — Uses `readUploadedImage` to obtain `imageUrl`, `thumbnailUrl`, `pendingImageKey`, and the `deleteUpload` cleanup callback.
-- **`src/infrastructure/http/response.ts`** — Sends the final `successResponse` or `rejectResponse`.
-- **`src/infrastructure/http/errors.ts`** — Falls back to `rejectDatabaseError(response, 'updateProduct', error)` in the `.catch` branch.
-- **`src/infrastructure/i18n/index.ts`** — Imports `t` for the missing-`id` error message (`generic.error-missing-data`).
-- **`src/types/index.ts`** — Imports `UpdateProductRequest`, `UpdateProductRequestMultipart`, and `Product` for typing the request body and success payload.
+- **`create-update-controller`** – provides the `createUpdateController` factory that wires schema validation, 404 handling, and the PUT/PATCH split around the `update`/`present` callbacks defined here.
+- **`productService`** – supplies `zodProductReplaceSchema`, `zodProductUpdateSchema`, `writeUpdate`, and `toProduct`. All writes, the 404 check, and audit emission live in the service, not this file.
+- **`uploads`** – `writeWithUploadedImage` reads an optional multipart image upload from the request, returns derived `imageUrl`/`thumbnailUrl`/`pendingImageKey`, and invokes the callback.
+- **`request`** – `callerContextOf` extracts the authenticated caller's context from the incoming request and forwards it to `writeUpdate`.
+- **`routes.ts`** – registers `replaceProduct` and `updateProduct` on the `PUT` and `PATCH /products/:id` routes respectively.
 
 ## Notes
 
-- **`translations` is a JSON string, not an object.** In multipart form-data a nested object has no representation, so the client sends a JSON-encoded string under the `translations` part. `readInput`'s `jsonFields: ['translations']` option handles the decode before validation. Don't remove or "fix" this without coordinating with the client.
-- **Upload cleanup is fail-safe.** Every failure path (missing `id`, service rejection, database error) calls `deleteUpload().catch(() => undefined)` _before_ sending the HTTP response. The `.catch(() => undefined)` prevents an unhandled promise rejection from corrupting an already-sent response.
-- **`request.body` is spread into the payload.** In addition to the individually decoded fields, the raw `request.body` is spread first, so any extra keys present on the body are forwarded to the service. The explicitly decoded fields (`price`, `active`, etc.) override the spread.
-- **No async/await.** The function returns a promise chain (`.then`/`.catch`) rather than using `async`. The early-return path for missing `id` returns the `deleteUpload()` promise directly.
+- Validation happens **here** (at the controller) with product-specific schemas that carry `products.field-price-*` messages and the fallback-locale guard. The service does **not** re-validate the body.
+- `thumbnailUrl` and `pendingImageKey` are never in the client contract. They are threaded through `writeWithUploadedImage`'s callback and passed as the `imageExtras` parameter to avoid tripping the factory's `strictObject` schema check.
+- Because multipart fields arrive as strings, the `input` config list is the single source of truth for coercion. Adding a new numeric/boolean/array/JSON field to the body requires adding it here as well as in the Zod schema.

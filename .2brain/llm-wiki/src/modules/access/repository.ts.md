@@ -1,7 +1,7 @@
 ---
 source: src/modules/access/repository.ts
-sha256: c939d592be4f6c05b76bca72c9bfc4cd3689ca18033a46f50474554d91b6680f
-generated_at: 2026-09-23T17:57:32.188199+00:00
+sha256: 72852b90ce51f5f94bbe12d17772b57b17b284b437857e06604974fab1bf70d9
+generated_at: 2026-09-27T14:20:53.995432+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The sole query-shaping layer for the tenant and membership collections. All authorization invariants live in `./service.ts`; this file only translates intent into Mongoose operations, giving the service a narrow, predictable API surface.
+Thin data-access layer that shapes Mongoose queries for the tenant and membership collections. It deliberately contains no business invariants—those live in `./service.ts`—so the repository is swappable and testable in isolation.
 
 ## Key elements
 
-- **`tenantRepository`** – single-method object exposing the tenant collection's only write path.
-    - `upsertBySlug(slug, name, id?)` – `findOneAndUpdate` with `$setOnInsert`; creates a tenant on first sight, returns the existing one on subsequent calls. `id` is honored only at insert time, so reseeding with a fixed ObjectId is idempotent.
-- **`membershipRepository`** – read/write object for the membership collection.
-    - `findByUserId(userId)` – all roles a person holds, across every scope.
-    - `findOne(userId, tenantId, scope)` – the single membership row for a person in a specific place/scope; returns `null` when absent.
-    - `upsertRole(userId, tenantId, scope, role)` – create-or-overwrite a role assignment; always resolves a document.
-    - `deleteById(id)` – removes one membership row by its `_id`.
-    - `findByUserIds(userIds, tenantId, scope)` – batched version of `findOne`; returns all rows for a set of users in one place.
+- **`tenantRepository`** – namespace object for the tenant collection.
+  - `upsertBySlug(slug, name, id?)` – `findOneAndUpdate` with `$setOnInsert`; creates a tenant on first call, returns the existing one otherwise. A fixed `_id` survives reseeding because it is only set on insert.
+- **`membershipRepository`** – namespace object for the membership collection.
+  - `findByUserId(userId)` – all role rows a person holds across every scope/tenant.
+  - `findOne(userId, tenantId, scope)` – a single row; resolves `null` if absent.
+  - `upsertRole(userId, tenantId, scope, role)` – create-or-overwrite the role for a given (user, tenant, scope) triple.
+  - `deleteById(id)` – removes one row by its `_id`.
+  - `findByUserIds(userIds, tenantId, scope)` – batched sibling of `findOne`; returns all rows for a set of users in one scope.
 
 ## Relationships
 
-- **`./model.ts`** – imports `tenantModel`, `membershipModel` (Mongoose models) and the `TenantDocument` / `MembershipDocument` types.
-- **`./service.ts`** – the caller; service enforces invariants then delegates raw queries here.
-- **`src/types/index.ts`** (`@types`) – source of the `AuthorizationScope` type used in every membership query.
-- **`src/modules/access/tests/integration/access.test.ts`** – integration tests exercise both repository objects end-to-end.
+- **`src/modules/access/model.ts`** – imports the two Mongoose models (`tenantModel`, `membershipModel`) and the document types (`TenantDocument`, `MembershipDocument`) that every method returns.
+- **`src/modules/access/service.ts`** – sole consumer; the repository exposes raw query shapes, and the service layer enforces all authorization invariants before/after calling these methods.
+- **`src/types/index.ts`** – provides the `AuthorizationScope` type used as a query filter in every membership method.
+- **`src/modules/access/tests/integration/access.test.ts`** – integration tests that exercise these repository methods through the service.
 
 ## Notes
 
-- `tenantId` is typed `string | null` throughout the membership methods; `null` represents a non-tenant (e.g. workspace-level) scope. Do not omit it—passing `undefined` would match differently in MongoDB.
-- Both upsert methods cast the Mongoose result to the non-null document type. This is safe because `upsert: true` + `returnDocument: 'after'` guarantee a returned document, but the cast is necessary to silence Mongoose's `T | null` signature.
-- `upsertBySlug` intentionally uses `$setOnInsert` rather than `$set`/`$setOnUpdate`; passing a different `name` on a repeat call will **not** rename an existing tenant.
+- Every `upsert` path (`upsertBySlug`, `upsertRole`) pairs `upsert: true` with `returnDocument: 'after'`, so the promise always resolves to a document and never `null`. Callers can skip null-checking on those two methods only.
+- `tenantRepository.upsertBySlug` writes *only* on insert (`$setOnInsert`); a subsequent call with a different `name` or `id` will **not** mutate the existing tenant.
+- `tenantId` is nullable in membership queries to support a global/organizational scope where no single tenant applies.

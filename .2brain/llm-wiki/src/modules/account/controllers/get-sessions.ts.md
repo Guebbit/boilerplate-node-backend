@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/get-sessions.ts
-sha256: aaf3da86eab189faed79c941b78633132354f36d8eca62170dcdc3ec46652ced
-generated_at: 2026-09-23T18:01:02.072114+00:00
+sha256: 7028593b8db871cdab9316ca7b72bfe28bad65fb84e3a633e8d45f4951756bfb
+generated_at: 2026-09-27T14:23:35.735771+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for the `GET /account/sessions` endpoint. It extracts the authenticated user ID and the current refresh-token cookie from the request, delegates to `accountService.sessionsList`, and shapes the result into a standard JSON response. All business logic (which token types count as a session, marking the current token, suppressing token values) lives in the service layer.
+Thin HTTP adapter for `GET /account/sessions`. Reads the caller's refresh cookie, delegates to `accountService.sessionsList`, and shapes the result into a JSON response. All token-classification and redaction logic lives in the service layer.
 
 ## Key elements
 
-- **`getSessions`** (exported function) — Express request handler. Reads `request.authContext.id` and the `jwt` cookie, calls `accountService.sessionsList(id, cookieToken)`, then either sends a `successResponse<SessionsResponse>` or short-circuits via `refused`. Errors are funneled through `catchAs(response, 'getSessions')`.
+- **`getSessions(request, response)`** – The sole export. Reads `request.authContext!.id` (set by upstream `isAuth` middleware) and the refresh cookie, calls `accountService.sessionsList(id, cookieToken)`, and either returns a `403` (via `refused`) or a `200` with a `SessionsResponse` body (via `successResponse`).
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — supplies `catchAs` (unified error-to-HTTP mapping) and `refused` (early-return guard for rejected results).
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse`, the standard 200 JSON envelope.
-- **`src/modules/account/services/index.ts`** — provides `accountService`, whose `sessionsList` method contains the actual session-query logic.
-- **`src/modules/account/routes.ts`** — registers `getSessions` as the handler for the `GET /account/sessions` route (behind the `isAuth` middleware).
-- **`src/types/index.ts`** — exports the `SessionsResponse` shape used to type the success payload.
+- **`src/infrastructure/http/response.ts`** – Imports `successResponse` to emit the standard 200 JSON envelope.
+- **`src/infrastructure/http/controller.ts`** – Imports `refused` (short-circuits with 403 when the service signals rejection) and `catchAs` (maps unhandled rejections to a structured error response tagged `'getSessions'`).
+- **`src/kernel/cookies.ts`** – Imports `readRefreshCookie` to extract the current refresh token from the incoming request.
+- **`src/modules/account/services/index.ts`** – Imports `accountService` and calls its `sessionsList` method; the service owns the business logic.
+- **`src/modules/account/routes.ts`** – Registers `getSessions` on the `GET /account/sessions` route (implied by the file's stated purpose).
+- **`src/types/index.ts`** – Imports the `SessionsResponse` type used as the generic parameter of `successResponse`.
 
 ## Notes
 
-- Auth is assumed, not checked here; the `isAuth` middleware upstream guarantees `request.authContext` is populated. The non-null assertion (`!`) is safe by contract, not by runtime guard.
-- The cookie name is hardcoded as `'jwt'` in this file. If the cookie name changes, it must be updated here **and** wherever the cookie is set.
-- `catchAs` receives the string `'getSessions'` purely as a log/context label; it does not affect routing or status codes.
+- `request.authContext!` uses a non-null assertion; correctness depends entirely on the `isAuth` middleware running first. There is no defensive check here.
+- The refresh cookie is read **in the controller** and passed as a plain string into the service. The service uses it only to mark which session is `current`; it does not authenticate with it.
+- Which token types count as a "session" and how token values are kept off the wire are explicitly delegated to `services/tokens.ts` (referenced in the docblock, not imported here).

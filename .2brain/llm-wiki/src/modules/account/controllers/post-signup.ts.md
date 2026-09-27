@@ -1,41 +1,34 @@
 ---
 source: src/modules/account/controllers/post-signup.ts
-sha256: a71330a4218857fe8124aa6b209dc62f791e00f6c85fd378411441b26dc12e7f
-generated_at: 2026-09-23T18:04:05.883886+00:00
+sha256: 8b05c30bf6259d7c0c58d21708ebb72cdbbef4988e43b8630e382778dfa41bc5
+generated_at: 2026-09-27T14:26:28.660236+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/controllers/post-signup.ts
 
 ## Purpose
-
-Thin HTTP controller for `POST /account/signup`. Delegates business logic to `accountService.signup`, then shapes the three possible outcomes (genuine success, rung-2 antibot refusal, or validation/DB failure) into consistent HTTP responses, ensuring uploaded images are cleaned up on every path where no account is persisted.
+Thin HTTP adapter for `POST /account/signup`. It extracts and defaults the request body, reads any uploaded image metadata, delegates validation and registration to `accountService.signup`, then handles the three distinct outcome paths (genuine 201, rung-2 antibot refusal that must be byte-identical to a real 201, and failure) including uploaded-image cleanup, session issuance, and metrics on every path.
 
 ## Key elements
-
-- **`postSignup(request, response)`** — the sole export. Destructures the request body (with empty-string defaults so `zodUserSchema` yields a translated 422 instead of a throw), reads the optional uploaded image, calls `accountService.signup`, then branches:
-    - **Failure** (`!result.success`): deletes the upload, increments `authSignupTotal{status:"failure"}`, sends `rejectResponse`.
-    - **Rung 2 refusal** (`data.isNew === true`): the service returned an unsaved Mongoose document; logs an antibot refusal, deletes the upload, and returns a **fabricated 201** byte-identical to a real signup (no `Set-Cookie`, no verification email).
-    - **Success**: fires the verification email (fire-and-forget), issues a session via `issueSession`, and returns `successResponse<User>` with `SIGNUP_DEFAULT_ROLE`.
+- **`postSignup`** — The sole export; the Express route handler. Destructures body fields with deliberate defaults (`''` for strings, `false` for `termsAccepted`, `undefined` for `analyticsConsent`), calls `readUploadedImage`, passes the assembled input to `accountService.signup`, and branches on `result.success` / `data.isNew` to determine whether a real account was created, a rung-2 refusal fabricated, or a hard failure occurred.
 
 ## Relationships
-
-- **`@modules/account/services` (`accountService`, `sendVerificationEmail`)** — core business logic and post-signup email.
-- **`@modules/account/session/session` (`issueSession`)** — mints the HTTP-only session cookie on success.
-- **`@modules/account/metrics` (`authSignupTotal`)** — Prometheus counter incremented on every path (success / refusal / failure).
-- **`@modules/access` (`SIGNUP_DEFAULT_ROLE`)** — hard-coded role placed in the response; avoids a DB lookup because self-service signup can only ever grant this one role.
-- **`@modules/users` (`userService`)** — `toUser` mapper that shapes the Mongoose document into the public `User` shape.
-- **`@infrastructure/http/uploads` (`readUploadedImage`)** — extracts `imageUrl`, `thumbnailUrl`, `pendingImageKey`, and the `deleteUpload` cleanup callback from the request.
-- **`@infrastructure/http/response` (`successResponse`, `rejectResponse`)** — standard response helpers.
-- **`@infrastructure/http/errors` (`rejectDatabaseError`)** — maps unexpected thrown errors to a safe 500 in the `.catch` branch.
-- **`@infrastructure/http/request` (`callerContextOf`)** — derives caller metadata (IP, locale, etc.) passed to the service and email.
-- **`@infrastructure/http/middlewares/antibot-log` (`logAntibotRefusal`)** — structured log entry for rung-2 fabrications.
-- **`@types`** — `SignupRequest`, `SignupRequestMultipart`, `User` type definitions.
+- **`src/modules/account/services/index.ts`** — Calls `accountService.signup` (core registration logic) and `sendVerificationEmail` (fire-and-forget email queue).
+- **`src/infrastructure/http/response.ts`** — Emits all HTTP responses via `successResponse` (201) and `rejectResponse` (4xx).
+- **`src/infrastructure/http/uploads.ts`** — `readUploadedImage` extracts `imageUrl`, `thumbnailUrl`, `pendingImageKey`, and the `deleteUpload` cleanup callback from the raw request.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` supplies locale/geo context to `signup` and `sendVerificationEmail`.
+- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseError` formats unexpected thrown errors into a safe 500.
+- **`src/modules/account/session/session.ts`** — `issueSession` sets the session cookie on a successful (non-rung-2) signup.
+- **`src/modules/access/index.ts`** — `SIGNUP_DEFAULT_ROLE` is stamped onto the response `User` object rather than read from a persisted membership.
+- **`src/modules/users/index.ts`** — `userService.toUser` serialises the Mongoose document into the API `User` shape.
+- **`src/modules/account/metrics.ts`** — `authSignupTotal` Prometheus counter incremented with `status: 'success' | 'failure' | 'refused'`.
+- **`src/infrastructure/http/middlewares/antibot-log.ts`** — `logAntibotRefusal` records the rung-2 refusal for audit.
+- **`src/types/index.ts`** — `SignupRequest`, `SignupRequestMultipart`, and `User` type the request body and response payload.
 
 ## Notes
-
-- **Rung 2 indistinguishability:** the fabricated 201 uses `SIGNUP_DEFAULT_ROLE` (not a membership lookup, since the document was never saved) and omits `Set-Cookie`; the body is otherwise identical to a real signup. This prevents email-existence enumeration. Rung 2 is off by default; a 409 for an already-registered address already leaks existence.
-- **Upload cleanup is best-effort:** `deleteUpload().catch(() => undefined)` appears on every non-success path so a rejected cleanup never becomes an unhandled rejection after the response is already sent.
-- **Body defaults are deliberate:** `email`, `username`, `password`, `passwordConfirm`, `imageUrl` default to `''` and `termsAccepted` to `false` so that a missing body (Express 5 leaves `request.body` undefined when no parser matched) produces the same translated 422 as an empty-field body, rather than a crash.
-- **No token in the body:** the response is `User`-shaped with cookies only; the frontend mints an access token via `GET /account/refresh`, same as after OAuth. This keeps rung 2's body byte-identical.
-- **`data.isNew`** is the Mongoose flag distinguishing rung 2 (unsaved document) from a real registration; it is only meaningful because `signup` returns the document before `.save()` on the refusal path.
+- **Rung-2 indistinguishability**: When `data.isNew` is true (Mongoose doc never `.save()`-d), the handler fabricates a 201 that is byte-identical in body to a real signup. The only differentiator is the absence of `Set-Cookie` headers (no `issueSession` call). `SIGNUP_DEFAULT_ROLE` is hardcoded rather than looked up because no membership row exists.
+- **No controller-level schema validation is intentional**: `accountService.signup` validates via `zodUserSchema` with translated error messages. Parsing here first would let Zod's English messages leak (asserted by `tests/integration/locale.test.ts`).
+- **`imageUrl` is coalesced to `undefined`, not `''`**: `ImageUrl` has `minLength: 1`, so an empty string would fail; `undefined` is the `.optional()` "absent" signal.
+- **Uploaded-image cleanup runs on every non-success path** and is always `.catch(() => undefined)`-wrapped to avoid unhandled rejections after the response has already been sent.
+- **Session is cookies-only**; the access token is minted later by the frontend's `GET /account/refresh`, keeping the signup response body identical to the OAuth callback shape.

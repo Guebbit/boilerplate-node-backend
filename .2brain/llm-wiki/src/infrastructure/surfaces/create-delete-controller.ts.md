@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/surfaces/create-delete-controller.ts
-sha256: 4920abcdf07d5673babac4df688fc0b145909e7ee64c8af5c9f80cdc7b9ce165
-generated_at: 2026-09-23T17:53:26.844866+00:00
+sha256: c78c37bbdbdd7c1bc069eb773f8fa45c2b005a3c4457f492e3ae8bc7ce823639
+generated_at: 2026-09-27T14:16:59.717656+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared factory that builds the Express handler for a module's `DELETE /:id` and `DELETE /:id/hard` endpoints. Each module (orders, products, users) supplies a four-field spec describing what differs per entity; the factory returns a named handler that parses the id, resolves the `hardDelete` flag, calls the entity's service, records an audit entry, and responds. This keeps the per-module controller files to a single call rather than duplicating parse/audit/response plumbing.
+Factory that produces the shared `DELETE /x/:id` / `DELETE /x/:id/hard` controller for any entity. Each module keeps a thin `delete-<entity>.ts` file that calls this factory with a four-field spec (entity name, service call, audit action, not-found key), so the common id-extraction, `hardDelete` flag merging, validation, audit recording, and error-envelope logic lives in one place.
 
 ## Key elements
 
-- **`DeleteControllerSpec`** (interface) — the four per-entity knobs: `entity` (singular lower-case name used for logging and audit `target_type`), `remove(id, hardDelete)` (the service call), `auditAction` (fixed string _or_ a function of `hardDelete`), and `notFoundKey` (i18n key for 404).
-- **`createDeleteController(spec)`** (function, default export of the module) — returns an Express handler wrapped in `namedHandler` so the handler is visible as `delete<entity>` (e.g. `deleteOrder`) in stack traces and log lines.
+- **`DeleteControllerSpec`** (interface) — the per-entity differences: `entity` (lower-case singular, e.g. `'order'`), `remove` (service call taking `id` + `hardDelete`), `auditAction` (fixed string or `(hardDelete) => string`), `notFoundKey` (i18n key for 404).
+- **`createDeleteController`** (exported const) — accepts a `DeleteControllerSpec`, returns an Express handler named `delete<Entity>` (e.g. `deleteOrder`). Internally: validates `:id`, merges `hardDelete` from path/query/body (any-true-wins OR), validates via `hardDeleteSchema`, calls `remove`, records audit on success, maps the service's not-found error to a 404 envelope.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — provides `namedHandler`, `operationName`, `refused`, `rejectValidation`, `catchAsNotFound`, and the `ServiceResult` type used for the service-call contract.
-- **`@infrastructure/http/request`** — provides `extractAndValidateId` (pulls `:id` off the route, 422s if malformed), `readInput` (merges `hardDelete` across path/query/body with OR semantics), and `callerContextOf` (extracts caller metadata for the audit record).
-- **`@infrastructure/http/response`** — provides `successResponse` for the 200 reply.
-- **`@infrastructure/http/schemas`** — provides `hardDeleteSchema`, the Zod schema the merged `hardDelete` value is validated against before the service call.
-- **`@infrastructure/observability/audit`** — provides `recordAudit` and the `AuditAction` type; called on successful deletion with the resolved action string, entity name, id, and `{ hardDelete }` in metadata.
-- **`src/modules/orders/controllers/delete-orders.ts`**, **`…/delete-products.ts`**, **`…/delete-users.ts`** — consuming module controllers; each is a one-line call to `createDeleteController` with its own spec. `delete-users.ts` is the only consumer that passes `auditAction` as a function (soft vs. hard are distinct audit facts).
+- **`src/infrastructure/http/controller.ts`** — provides the handler scaffolding utilities used throughout: `namedHandler`, `operationName`, `refused`, `rejectValidation`, `catchAsNotFound`, and the `ServiceResult` type.
+- **`src/infrastructure/http/request.ts`** — provides `extractAndValidateId` (422 on missing/malformed `:id`), `readInput` (multi-surface flag reading), and `callerContextOf` (audit context extraction).
+- **`src/infrastructure/http/response.ts`** — provides `successResponse` for the 200 envelope.
+- **`src/infrastructure/http/schemas.ts`** — provides `hardDeleteSchema` for validating the merged `hardDelete` value.
+- **`src/infrastructure/observability/audit.ts`** — provides `recordAudit` and the `AuditAction` type for the post-success audit entry.
+- **`src/modules/orders/controllers/delete-orders.ts`**, **`src/modules/products/controllers/delete-products.ts`**, **`src/modules/users/controllers/delete-users.ts`** — consumer modules; each calls `createDeleteController` with its own spec. The `users` module uses the function form of `auditAction` to emit different action strings for soft vs. hard delete.
 
 ## Notes
 
-- The `hardDelete` flag is **OR'd** across all transport surfaces (path segment, query param, body). Any `true` wins regardless of source; all-false/absent defaults to `false`. This avoids the default `false` outvoting a deliberate `true` sent on a different surface.
-- `auditAction` is polymorphic: a plain `AuditAction` string, or a `(hardDelete: boolean) => AuditAction` function. The factory checks `typeof` at call time. The `users` module uses the function form because soft delete is reversible and hard delete scrubs the record — the audit trail must distinguish them.
-- On a 404 the handler delegates to `catchAsNotFound`, which looks up `notFoundKey` for the i18n message. The handler name passed there is the same `delete<entity>` string used in logs, so trace and response naming stay consistent.
-- `remove` returns `ServiceResult<unknown>`; a `refused` result short-circuits before any audit record is written (audit fires only on success).
+- `hardDelete` is **OR'd** across all surfaces (path segment, query, body) rather than following a single-surface precedence rule. Rationale: `false` is the default nobody types, so letting it override an explicit `true` on another transport would be surprising.
+- The handler's function name is set via `namedHandler` with a computed key (`deleteOrder`, `deleteProduct`, …) so stack traces, request logs, and generated `docs/modules/` tables all show the entity-specific name.
+- `entity` is used for both the audit `target_type` and the operation log name; keeping them derived from the same string prevents drift.
+- The `remove` service call returns a `ServiceResult`; the controller only inspects `result.message` on success and delegates all failure-shape mapping to `refused` / `catchAsNotFound`.

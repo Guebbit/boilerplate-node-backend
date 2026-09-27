@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/repository.ts
-sha256: 51a712c64164b4858b8f1b8911001edd1dc71ac070360d7a4a762612ddf7ec2d
-generated_at: 2026-09-23T19:20:23.333314+00:00
+sha256: d1ae8d68865c3d3649a97dd3eae54c2b640f4118b25caa02afa5f42dc10160d2
+generated_at: 2026-09-27T15:25:30.799745+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,46 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the payment repository: the standard CRUD layer (via the shared factory) plus the two scoped reads and the guarded writes that payment services actually perform. It centralises concurrency safety (status-`$in` filters, conditional writes, unique-index collisions) so that service code can rely on a single atomic `findOneAndUpdate` rather than a read-then-write sequence.
+Data-access layer for the payments aggregate. Wraps the shared `createRepository` factory with domain-specific lookups and guarded writes (intent upsert, offline upsert, status transitions, retention sweeps). Exists so service-layer code never touches Mongoose directly and all ownership scoping, idempotency, and duplicate-key semantics live in one place.
 
 ## Key elements
 
-- **`PaymentWire`** – Wire DTO type; `Omit<Wire<PaymentDocument>, 'providerRef'>` because `providerRef` is a provider-internal id, never part of the API contract.
-- **`paymentRepository`** – The main export. Spreads `createRepository(paymentModel, { transform: applyPaymentTransform })` and adds:
-    - `ownerScope(userId)` – returns a filter fragment (`{ userId: ObjectId }`) to spread into a query; `undefined` means admin.
-    - `findByIdScoped` / `findByOrderId` – scoped reads (scope merged into the filter, not checked post-read).
-    - `findByProviderRef` – the only **unscoped** read; called by webhook handlers where no user identity exists.
-    - `attachProviderRef` – conditional `$set` guarded by `providerRef: { $exists: false }`; a losing racer reads back the winner's value.
-    - `upsertIntent` – upsert keyed on `orderId`; filter restricts to `requires_confirmation | declined`; duplicate-key is caught and surfaced as `null` (meaning "money already moved").
-    - `upsertOffline` – same guard shape for manual/offline payments; `$unset` clears `providerRef`/`cardLast4`; leaves status at `requires_confirmation` (settlement is a separate step).
-    - `updateStatusIfIn` – the status-machine primitive; `$in` in the filter makes exactly one of two racing writes match.
-    - `detachUserId` – `$unset: userId` on all rows for an erased account; `{ timestamps: false }` so `updatedAt` is not bumped.
-    - `deleteAbandonedBefore` – retention sweep; deletes rows not in `succeeded|refunded` whose `updatedAt ≤ cutoff`.
-- **`claimWebhookEvent(eventId)`** – insert-into-`paymentWebhookEventModel` as an idempotency check; duplicate-key → `false` (retry, answer 2xx and do nothing).
-- **`releaseWebhookEvent(eventId)`** – compensating delete so a failed settlement's next redelivery is acted on.
+- **`PaymentWire`** (exported type) – The wire shape for payment documents; omits `providerRef` and `pendingEffects` (internal bookkeeping never part of the external contract).
+- **`paymentRepository`** (main export) – A `Repository<PaymentDocument, PaymentWire>` augmented with:
+  - `ownerScope(userId)` – Returns a filter fragment `{ userId }` for scoping queries to one user's rows.
+  - `findByIdScoped` / `findByOrderId` – Single-document reads with optional caller scope spread into the filter (not a post-read check).
+  - `findByProviderRef` – The **only unscoped** read in the repository; used by the webhook path where no logged-in caller exists.
+  - `attachProviderRef` – Conditionally sets `providerRef` only if it is still absent (makes re-preparation idempotent).
+  - `upsertIntent(orderId, userId, data)` – Creates or refreshes a card-intent row; resets to `requires_confirmation`. Returns `null` on duplicate-key (order already paid).
+  - `upsertOffline(orderId, userId, data)` – Same mechanics as `upsertIntent` but for manual/offline payments; unsets `providerRef` and `cardLast4`.
+  - `updateStatusIfIn(orderId, from[], to, extra?)` – Status-machine transition guarded by `$in` on current status; exactly one of two racing writes matches.
+  - `detachUserId(userId, session?)` – `$unset`s `userId` on all of an account's payments (PII erasure); returns count.
+  - `deleteAbandonedBefore(cutoff)` – Deletes non-settled payments untouched since before `cutoff`; `succeeded`/`refunded` are never deleted.
+  - `clearPendingEffects(orderId)` – Unsets the `pendingEffects` marker (effect ran or order cancelled).
+  - `findWithPendingEffects(updatedBefore, limit)` – Returns payments still owing an effect, oldest first, excluding those touched in the current sweep tick.
+- **`upsertConfirmable`** (private helper) – Shared `findOneAndUpdate` + upsert logic for `upsertIntent` and `upsertOffline`; filters to `CONFIRMABLE_PAYMENT_STATUSES` and maps duplicate-key errors to `null`.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** – supplies `createRepository`, `toObjectId`, `Repository`, and `Wire`; the base CRUD is spread into `paymentRepository`.
-- **`src/infrastructure/persistence/mongo-errors.ts`** – `isDuplicateKey` is used to convert duplicate-key exceptions into domain answers (`null` / `false`) instead of rethrowing.
-- **`src/modules/payments/model.ts`** – provides `paymentModel`, `paymentWebhookEventModel`, `applyPaymentTransform`, and the `PaymentDocument` type.
-- **`src/types/index.ts`** – `PaymentStatus` and `PaymentMethod` enums used in filters and writes.
-- **Services** (`intent.ts`, `offline.ts`, `refunds.ts`, `retention.ts`, `settlement.ts`, `view.ts`) – the primary consumers; each calls a subset of the domain methods above.
-- **Tests** (`api.contract.test.ts`, `retention.test.ts`, `service.test.ts`) – exercise the repository contract and integration behaviour.
+- **`create-repository.ts`** – Supplies the `createRepository` factory (base CRUD, `findById`, `findAll`, `create`, `update`, `delete`), `toObjectId`, and the `Repository`/`Wire` generic types that `paymentRepository` extends.
+- **`mongo-errors.ts`** – Provides `isDuplicateKey`; the repository catches duplicate-key errors on the unique `orderId` index and returns `null` instead of throwing.
+- **`model.ts`** – Provides `paymentModel`, `paymentWebhookEventModel`, `applyPaymentTransform` (wired as the repository's transform), `CONFIRMABLE_PAYMENT_STATUSES`, and the `PaymentDocument` interface.
+- **`services/intent.ts`** – Calls `upsertIntent` and `attachProviderRef` when preparing a card payment.
+- **`services/offline.ts`** – Calls `upsertOffline` when recording a manual payment.
+- **`services/settlement.ts`** – Calls `updateStatusIfIn` to move a payment to `succeeded` and `clearPendingEffects` once the effect lands.
+- **`services/effects.ts`** – Calls `findWithPendingEffects` to scan for stuck settlements and `clearPendingEffects` on completion.
+- **`services/retention.ts`** – Calls `deleteAbandonedBefore` as part of its scheduled sweep.
+- **`services/refunds.ts`** – Calls `updateStatusIfIn` to transition a payment to `refunded`.
+- **`services/view.ts`** – Calls `findByIdScoped` / `findByOrderId` to read payment data for API responses.
+- **`@types` (`types/index.ts`)** – Source of `PaymentStatus` and `PaymentMethod` enum values used in filters and payloads.
+- **Tests** – `api.contract.test.ts`, `retention.test.ts`, `service.test.ts`, and `refunds.test.ts` exercise the repository's methods (directly or via their calling services).
 
 ## Notes
 
-- **Scope-in-the-filter, not post-read.** `findByIdScoped`/`findByOrderId` merge the user scope into the Mongo filter. Checking ownership after the read would create an information-leak window.
-- **Duplicate-key as answer, not error.** `upsertIntent`/`upsertOffline`/`claimWebhookEvent` catch `isDuplicateKey` and return a domain value (`null`/`false`). Callers should not wrap these in `try/catch` expecting an exception for the "already settled" case.
-- **Status guard is the concurrency mechanism.** The `$in: ['requires_confirmation', 'declined']` filter (not an application-level lock) is what prevents overwriting a confirmed/refunded payment.
-- **`providerRef` is invisible to the wire type.** Any code that serialises a payment for the API will not see it; webhook code accesses it via `findByProviderRef` or the document directly.
-- **`detachUserId` skips `timestamps`.** Omitting the timestamp update keeps `updatedAt` stable so the retention sweep (`deleteAbandonedBefore`) can still find old abandoned rows.
-- **`succeeded`/`refunded` are never deleted by the retention sweep.** They are treated as invoices, distinct from abandoned attempts.
-- **Explicit return type on `paymentRepository`.** Written out by hand because Mongoose's generic inference exceeds TypeScript's limits at an export boundary (TS7056).
+- **Duplicate key = meaningful `null`.** The unique index on `orderId` makes "one payment per order" a database fact. A duplicate-key error in `upsertIntent`/`upsertOffline` is caught and returned as `null`—it signals "this order's money already moved," not a failure.
+- **Scoping is in the filter, never post-read.** `findByIdScoped` and `findByOrderId` spread the caller's scope into the `findOne` filter. Checking ownership after the read would create a TOCTOU window.
+- **`findByProviderRef` is deliberately unscoped.** Webhook deliveries have no logged-in user; authentication is the signature check performed before this method is reached.
+- **`attachProviderRef` is idempotent.** The filter includes `providerRef: { $exists: false }`, so a racing second request finds nothing to write and reads back the already-attached reference.
+- **`upsertOffline` clears card fields.** It unsets `providerRef` and `cardLast4`, ensuring a manual payment record carries no stale card metadata.
+- **`detachUserId` ≠ deletion.** Settled payments (`succeeded`, `refunded`) are kept forever as invoices; this method only strips the user link. `deleteAbandonedBefore` is the separate path that removes non-settled attempts.
+- **Explicit return type annotation.** The `paymentRepository` type is written out by hand because Mongoose's generic inference exceeds TypeScript's ability at an export boundary (TS7056).

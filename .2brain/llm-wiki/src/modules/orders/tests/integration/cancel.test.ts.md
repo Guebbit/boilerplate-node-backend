@@ -1,43 +1,43 @@
 ---
 source: src/modules/orders/tests/integration/cancel.test.ts
-sha256: 69ac3ea79e8b8435e485e0e8e9eeb0e8e98c923e2a8bac425e5d095fa016b5dd
-generated_at: 2026-09-23T19:10:04.212710+00:00
+sha256: 5eb45ad8bdb96292ac2df90dbb4d08c35107e00b7bfe17b57275cb31e4962465
+generated_at: 2026-09-27T15:17:18.533366+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/orders/tests/integration/cancel.test.ts
 
 ## Purpose
-
-Integration tests for `orderService.cancelById`. Verifies the status-gate invariant (only `pending`/`processing` orders are cancellable), the scope gate (a stranger's order is indistinguishable from a missing one), the refund semantics per role, and that cancellation emits the correct domain event, audit entry, and analytics signal — all against a real test database.
+Integration tests for `orderService.cancelById`. Verifies the status gate, permission scoping, refund semantics, and observability side-effects (audit, analytics, email, domain events) that make the single cancel operation safe to expose to callers.
 
 ## Key elements
 
-- **`seedOrder(user)`** — creates a product and a single-item order owned by `user`; returns the persisted order.
-- **`describe('cancelById')`** — core permission/status tests: owner cancel, stranger 404, shipped 409 with `ORDER_NOT_CANCELLABLE`, admin cancels foreign order, operator-only `processing → cancelled` edge, soft-deleted 404.
-- **`describe('cancelById — who gets their money back')`** — pins refund behaviour: customer refund is forced (`refund: false` is ignored), operator/moderator may opt out, default is `true`; the `ORDER_CANCELLED` event fires regardless of refund.
-- **`describe('cancelById — audit and analytics')`** — asserts audit action/outcome/actor fields and that a no-context (system) cancellation is audited as `actor_user_id: 'system'` and reports `ORDER_RESERVATION_EXPIRED` in analytics rather than `ORDER_CANCELLED`.
-- **`jest.mock` for `@infrastructure/adapters/mailer`** — replaces `enqueueEmail` with a stub; email _content_ is pinned elsewhere (`mail-copy.test.ts`).
-- **`jest.mock` for audit & analytics ports** — full module replacement (not `jest.spyOn`) to work around CommonJS non-configurable getters under SWC/Stryker; the audit mock re-routes `recordAudit` through the replaced `emitAuditEvent` so `observePort` sees both direct and indirect calls.
-- **`cancellations` array + `onDomainEvent(ORDER_CANCELLED, …)`** — captures the domain-event payload for refund assertions; cleaned up via `resetDomainEvents()` in `afterEach`.
+- **`describe('cancelById')`** — Core permission/status matrix: owner cancels pending, stranger gets 404 (indistinguishable from absence), shipped order gets 409 with code `ORDER_NOT_CANCELLABLE`, admin bypasses ownership, `processing → cancelled` is admin-only, system actor (`SYSTEM_ACTOR`) cannot cancel a `paid` order (closes B21 race), soft-deleted order is 404.
+- **`describe('cancelById — who gets their money back')`** — Refund semantics: customer refund is forced to `true` regardless of caller's `refund: false` request; admin and moderator may waive; event always fires with the actual refund flag.
+- **`describe('cancelById — audit and analytics')`** — Asserts that `emitAuditEvent` and `emitAnalyticsEvent` are called with the correct action code, outcome, and actor role.
+- **`seedOrder` / `seedDigitalOrder`** — Local helpers that create a product + order via the shared test factories.
+- **`jest.mock` for mailer, audit, analytics** — Replaces ports (not spies) to work around CommonJS namespace-import constraints under Stryker/swc transforms. The audit mock re-routes `recordAudit` through the replaced `emitAuditEvent` so both direct and wrapped calls are observable.
 
 ## Relationships
 
-- **`src/modules/orders/services/index.ts`** — the system under test; every assertion targets the return shape and side-effects of `orderService.cancelById`.
-- **`src/modules/orders/repository.ts`** — used to read back persisted state (`findById`), force status transitions (`updateStatusIfIn`), and apply soft-delete (`save`).
-- **`src/modules/orders/events.ts`** — supplies the `ORDER_CANCELLED` event constant used in subscription and assertion.
-- **`src/modules/orders/audit.ts` / `analytics.ts`** — export `ordersAuditActions` / `ordersAnalyticsEvents` used as expected values in port-call assertions.
-- **`src/kernel/events.ts`** — `onDomainEvent` / `resetDomainEvents` lifecycle for event-capture tests.
-- **`src/infrastructure/adapters/mailer.ts`** — mocked to isolate the queue from the test.
-- **`src/infrastructure/observability/audit.ts` / `analytics/index.ts`** — replaced wholesale so `observePort` (from `tests/support/ports.ts`) can intercept emitted events.
-- **`tests/support/callers.ts`** — `asCustomer`, `asAdmin`, `asModerator`, `testCallerContext` build the caller scopes passed to the service.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` provisions the in-memory DB before the suite.
-- **`tests/support/ports.ts`** — `observePort` wraps a replaced port function to produce a callable spy without `jest.spyOn`.
-- **Module factories** (`users`, `products`, `orders`) — seed realistic entities without hand-rolling Mongoose docs.
+- **`@modules/orders/services`** — SUT: `orderService.cancelById` is the only method under test.
+- **`@modules/orders/repository`** — Used to force status transitions (`updateStatusIfIn`), read back stored state, and save soft-delete markers.
+- **`@modules/orders/events`** — `ORDER_CANCELLED` subscription via `onDomainEvent` to capture event payloads.
+- **`@kernel/events`** — `onDomainEvent` / `resetDomainEvents` lifecycle around refund tests.
+- **`@kernel/permissions`** — `SYSTEM_ACTOR` constant for the B21 race test.
+- **`@infrastructure/adapters/mailer`** — Mocked (`enqueueEmail`); email content is pinned separately in `mail-copy.test.ts`.
+- **`@infrastructure/observability/audit`** / **`analytics`** — Replaced ports; `ordersAuditActions` and `ordersAnalyticsEvents` supply expected action/event codes.
+- **`@modules/orders/audit`** / **`analytics`** — Provide the action/event name constants asserted in observability tests.
+- **`@modules/users`** (index + service) — `createUser` factory and `userService` used to seed actors with roles.
+- **`@modules/orders/tests/factories`** — `createOrder`, `toOrderItem` for order fixtures.
+- **`@modules/products/tests/factories`** — `createProduct` for product fixtures.
+- **`@tests/ports`** — `observePort` helper to assert on the replaced port functions.
+- **`@tests/callers`** — `asCustomer`, `asAdmin`, `asModerator`, `asWarehouse`, `testCallerContext` permission-scoped caller contexts.
 
 ## Notes
 
-- The audit and analytics ports are **replaced** (`jest.mock`), not spied on. `jest.spyOn` fails on the non-configurable getter that a CommonJS namespace import exposes under the SWC transform and Stryker's sandbox. See `tests/support/ports.ts` for the full rationale.
-- The audit mock explicitly re-wires `recordAudit` because that function closes over its own module's real `emitAuditEvent`; without the redirect, spies on the replaced `emitAuditEvent` would miss calls that go through `recordAudit`.
-- The `processing → cancelled` transition test is the **only** path that exercises that edge end-to-end; `update()` elsewhere refuses to run it, so removing this test would leave the transition untested.
-- Refund semantics are role-locked: the test "refunds a customer whatever they ask for" pins that a customer's `refund: false` is silently overridden to `true` — this is intentional domain behaviour, not a test artifact.
+- The audit/analytics ports are **replaced** (full module mock) rather than spied on. `jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes; this breaks under `jest.config.mutation.js` (swc) and Stryker's sandbox. See `tests/support/ports.ts` for the full rationale.
+- The audit mock manually re-wires `recordAudit` to call the replaced `emitAuditEvent`, because `recordAudit` closes over its own module's real `emitAuditEvent` and would otherwise bypass the spy.
+- `afterEach` calls `jest.restoreAllMocks()`; the mailer mock is a plain `jest.fn()` (restored), while audit/analytics are replaced per-test-file.
+- Email content is intentionally **not** asserted here — that contract lives in `mail-copy.test.ts`. This file only confirms `enqueueEmail` was called.
+- The B21 race test (system actor vs. paid order) exists because the system actor holds only the `pending → cancelled` edge, unlike admin's wider transition set; the test guards against a future permission broadening silently opening that path.

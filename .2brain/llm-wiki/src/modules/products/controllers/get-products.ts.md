@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/controllers/get-products.ts
-sha256: d74dd4428a78e1e701f4f4739847c0daecf3e80ad9a9554b667f9f25fcf2be8d
-generated_at: 2026-09-23T19:26:13.708379+00:00
+sha256: 8dcb953c6ea103cf573a7148852c959687f15218b976a180e361da019e06e6e4
+generated_at: 2026-09-27T15:31:12.074459+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Builds the shared query schema and cache-key parameters for the product catalogue, then hands both to the `createSearchController` factory so that `GET /products` and `POST /products/search` validate against identical rules and share one cached response.
+Defines the list/search controller for the products catalogue. It builds a Zod query-validation schema (shared by `GET /products` and `POST /products/search`), derives the cache-key parameter list from that schema, and wires both routes onto the shared `createSearchController` factory.
 
 ## Key elements
 
-- **`searchProductsQuerySchema`** — Extends the orval-generated `SearchProductsBody` with `page`/`pageSize` (shared schemas), `z.coerce.number` for `minPrice`/`maxPrice` (since GET carries them as query text), and `optionalBooleanSchema` for `active`. Uses `blankToUndefined` preprocess so empty query strings become `undefined` rather than `NaN`.
-- **`searchProductsKeyParameters`** — `Object.keys(schema.shape)`, exported so the cache key is always in sync with what the controller actually reads.
-- **`getProducts`** — The exported controller (via `createSearchController`). Accepts `entity: 'products'`, the schema above, an `extendInput` that collapses `category`/`tag` arrays to their first element, and a `runSearch` that delegates to `productService.searchViewed` with a caller scope and caller context.
+- **`searchProductsQuerySchema`** – Extends the orval-generated `SearchProductsBody` (kept in sync with `openapi.yaml`) with string-to-number coercion for `page`, `pageSize`, `minPrice`, `maxPrice` and text-to-boolean parsing for `active`/`deleted`. Shared `pageSchema`/`pageSizeSchema` ensure consistency across all four search endpoints.
+- **`searchProductsKeyParameters`** – Exported array of parameter names, derived via `Object.keys(schema.shape)`. Serves as the set of query params that must appear in the cache key so two differing requests can't collide on one cached response.
+- **`getProducts`** – The exported controller (a `createSearchController` instance). Configures entity name, schema, an `extendInput` step, and a `runSearch` callback that delegates to `productService.searchViewed`.
 
 ## Relationships
 
-- **`@infrastructure/surfaces/create-search-controller`** — Factory that wires schema, `extendInput`, and `runSearch` into both the GET and POST handlers, including cache-key assembly.
-- **`@modules/products/service`** — `productService.searchViewed` performs the actual query; `productService.callerScope(request.authContext)` decides admin-vs-public visibility.
-- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts the downstream call context passed into the service.
-- **`@infrastructure/http/schemas`** — Provides `pageSchema`, `pageSizeSchema`, `optionalBooleanSchema`, and `blankToUndefined` so all search endpoints agree on pagination and type-coercion semantics.
-- **`@modules/products/routes`** — Maps `GET /products` and `POST /products/search` to the `getProducts` export.
+- **`src/modules/products/service.ts`** – Calls `productService.searchViewed(parsed, scope, ctx)` and `productService.callerScope(authContext)` inside the `runSearch` callback.
+- **`src/infrastructure/http/request.ts`** – Imports `callerContextOf` to extract per-request caller context passed into the service.
+- **`src/infrastructure/http/schemas.ts`** – Imports shared helpers: `blankToUndefined`, `optionalBooleanSchema`, `pageSchema`, `pageSizeSchema`.
+- **`src/infrastructure/surfaces/create-search-controller.ts`** – The factory that wraps schema validation, caching, and HTTP dispatch; `getProducts` is a configured instance of it.
+- **`src/modules/products/routes.ts`** – Registers `getProducts` as the handler for `GET /products` and `POST /products/search`.
 
 ## Notes
 
-- The schema extends an **orval-generated** `SearchProductsBody`; hand-editing the generated file will be overwritten. The only additions here are the GET-specific coercions and the shared pagination fields.
-- `category` and `tag` are modelled as single-value in OpenAPI. If a client sends an array or CSV, `coerceStringArray(...)[0]` silently drops everything after the first element.
-- `searchProductsKeyParameters` is intentionally derived from the schema shape — do **not** hard-code the parameter list; a new field added to the schema automatically enters the cache key.
-- Default pagination values are owned by `normalizePagination` (downstream in the factory/service), not by this file. The schema marks `page`/`pageSize` as optional.
+- `category` and `tag` may arrive as arrays or CSV strings; `extendInput` coerces them to a single value via `coerceStringArray(...)[0]` because the OpenAPI spec models them as single-value filters.
+- The schema extends an **orval-generated** type (`@api/schemas.zod`). Regenerating that client can overwrite local edits—keep custom logic in the `.extend()` block only.
+- Visibility (admin sees inactive/deleted, public sees active only) is decided inside `productService.callerScope` based on `request.authContext`; the controller itself does no role checks.

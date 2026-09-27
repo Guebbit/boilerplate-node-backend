@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/tests/integration/translations.test.ts
-sha256: a4bee1b67d0dddb5f425f09f6424132f32cb96a4836d629ecb31f77ffaf1bcd3
-generated_at: 2026-09-23T18:53:59.192244+00:00
+sha256: d46a2a682102110278c3f526bb728478b6f347f4e62e7ffa08f333238dadb405
+generated_at: 2026-09-27T15:03:24.570804+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for `localeService.getEntityTranslations` and `localeService.upsertEntityTranslations` — the two methods a translator uses to read and write per-locale content. Every case runs against a real Mongo database (not mocks) to exercise the full write path: registry validation, locale-existence checks, derived-index-column writes on `products`, and the `sourceDigest` stamping between sibling rows.
+Integration tests for `localeService.getEntityTranslations` and `localeService.upsertEntityTranslations`, run against a real MongoDB instance. Covers the full translation write/read path: registry validation, `locales` collection checks, derived-index-column writes on the `products` entity, and source-digest stamping on sibling rows.
 
 ## Key elements
 
-- **`setupTestDb()`** — boots a real Mongo instance for the suite (from `@tests/setup-test-db`).
-- **`beforeAll` / `afterAll`** — registers and clears the translatable-entity registry so only `product` (collection `products`, fields `title` + `description`, cacheTag `products`) is available during the tests.
-- **`FALLBACK = 'en'`** — the fallback locale tag; created via `givenLocale` in `beforeEach` so it exists as a regular row before every case.
-- **`givenLocale(tag, overrides?)`** — helper that creates a locale document through `localeRepository.create` + `makeLocale`, optionally setting `active: false`.
-- **`describe('getEntityTranslations')`** — three cases: unregistered entity → 422; entity with no rows → empty list; multiple rows returned sorted by locale tag.
-- **`describe('upsertEntityTranslations')`** — twelve cases covering:
-    - Validation rejections (unregistered entity, missing/inactive locale, undeclared field, empty `fields`, `null` on fallback).
-    - `null` on a non-fallback locale deletes that row.
-    - Locales not named in the request body are left untouched.
-    - Batch atomicity: one bad entry in the payload rejects the whole write (nothing persisted).
-    - Derived-index-column sync: fallback write updates `products.title`/`description`; non-fallback write does not.
-    - `sourceDigest` stamping: set on non-fallback rows at write time, absent on the fallback row, and **not** re-stamped when the fallback is later rewritten in a separate request.
-    - `origin` defaults to `'human'`.
+- **`setupTestDb()`** — spins up a real Mongo connection before the suite runs.
+- **`beforeAll` / `afterAll`** — registers translatables via `resolveTranslatables(enabledModules)` and clears them on teardown.
+- **`beforeEach`** — seeds the fallback locale `en` (constant `FALLBACK`) as a regular active row.
+- **`describe('getEntityTranslations')`** — three cases: unregistered entity type → 422, no rows → empty array, multiple rows sorted by locale tag.
+- **`describe('upsertEntityTranslations')`** — the bulk of the file. Validates:
+  - Input rejection (unregistered entity, non-existent/inactive locale, nonexistent entity 404, malformed ObjectId, undeclared field, empty `fields`, `null` on fallback).
+  - Delete semantics (`null` on a non-fallback locale removes the row).
+  - Partial-update semantics (unmentioned locales are left untouched).
+  - Batch atomicity (one bad locale in the body → whole batch rejected, zero rows written).
+  - Derived-index-column write (only on fallback; non-fallback leaves the target entity column unchanged).
+  - Source-digest stamping (sibling rows carry `deriveSourceDigest` of the fallback row; the fallback row itself has none; re-writing the fallback does not re-stamp siblings).
+- **Assertions via repositories** — `translationRepository.findEntityTranslations` and `localeRepository` are used directly to verify side-effects (row count, absence of writes, digest values).
 
 ## Relationships
 
-| Neighbor                                  | Interaction                                                                                                                                                                                      |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/modules/locales/services/index.ts`   | System under test. `localeService.setTranslatables` configures the registry; `getEntityTranslations` / `upsertEntityTranslations` are the methods exercised in every case.                       |
-| `src/modules/locales/repository.ts`       | `localeRepository.create` (via `givenLocale`) seeds locale rows; `translationRepository.findEntityTranslations` reads persisted rows directly for assertions (digest, origin, empty-set checks). |
-| `src/modules/locales/factories.ts`        | `makeLocale` builds the locale document shape passed to `localeRepository.create`.                                                                                                               |
-| `src/modules/products/tests/factories.ts` | `createProduct` seeds a product row; `readProduct` reads it back to verify the derived-index-column write (or its absence).                                                                      |
-| `tests/support/setup-test-db.ts`          | `setupTestDb` initialises the real Mongo connection the suite depends on.                                                                                                                        |
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/locales/services/index.ts` | **SUT.** Provides `localeService`; all tested calls go through it. |
+| `src/modules/locales/repository.ts` | Provides `localeRepository`, `translationRepository`, and `deriveSourceDigest`, used in setup, assertions, and the D-LO5 row-deletion test. |
+| `src/kernel/registry.ts` | `resolveTranslatables` is called in `beforeAll` to register the real translatable targets. |
+| `src/modules.ts` | `enabledModules` is passed into `resolveTranslatables` so the registry sees the same modules the app uses. |
+| `src/modules/locales/tests/factories.ts` | `givenLocale` seeds locale rows (active or inactive) per test. |
+| `src/modules/products/tests/factories.ts` | `createProduct` / `readProduct` create and verify the target entity and its derived index columns. |
+| `tests/support/setup-test-db.ts` | `setupTestDb` provisions the in-memory/real Mongo instance for the whole suite. |
 
 ## Notes
 
-- The fallback locale (`en`) receives **no** special-casing in the write path — it is validated and stored exactly like any other locale. Tests assert this explicitly.
-- The `sourceDigest` on a non-fallback row is a point-in-time snapshot of the fallback row **at the moment the non-fallback row is written**. Rewriting the fallback in a later request does not update already-stamped siblings (dedicated test confirms this).
-- Registry state is suite-scoped (`beforeAll`/`afterAll`), not per-case. If another suite in the same process registers a different entity, it will conflict; the registry is a single `localeService` instance.
-- "Validates the whole batch before writing anything" is a critical contract: a single invalid locale in the payload must leave the `locales` collection completely unchanged.
+- **No hand-rolled translatable registration.** The `beforeAll` deliberately uses `resolveTranslatables(enabledModules)` (the same path as `tests/cross-cutting/translatable-targets.test.ts`) to avoid the hidden cross-module coupling removed by decision SD-09. Do not replace it with a literal object.
+- **Fallback is a regular row.** The write path does not special-case `en`; it checks existence and activity exactly as it would any locale. The D-LO5 test proves this by *deleting* the seeded `en` row and still writing successfully.
+- **Order matters for malformed IDs.** The "rejects rather than writing" test asserts the rejection lands *before* any row write — `target.exists` throws a `BSONError` that the controller's `catchAs` maps to 422.
+- **Batch validation is all-or-nothing.** A single unregistered locale in the body fails the entire upsert; no partial rows may appear.
+- **Digest is of the fallback row specifically.** `expect(itRow?.sourceDigest).toBe(deriveSourceDigest({ title: 'Bed' }))` pins the exact expected value rather than just checking presence.
+- **File uses `mongoose.Types.ObjectId`** to generate a guaranteed-nonexistent ID for the 404 test.
+- The file content was truncated in the source provided; the last visible test ("does not re-stamp a sibling row…") is incomplete.

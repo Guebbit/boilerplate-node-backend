@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/cookies.ts
-sha256: f98d927733ebb16cb62f7bb678c82f0f46925c20affe62c82c4dc0b72e8baa16
-generated_at: 2026-09-23T18:11:09.869335+00:00
+sha256: 33d1c4857944e582232ffb84b80d1533cf3da9afe7a30f193642a7909fcbddca
+generated_at: 2026-09-27T14:32:04.772735+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Creates and destroys the two HTTP session cookies — `jwt` (httpOnly credential carrying the refresh token) and `isAuth` (a readable UI hint so the client shell can render logged-in chrome before its first network round-trip). Kept separate from JWT validation/signing logic so cookie mechanics have one owner.
+Encapsulates HTTP cookie creation and destruction for the two session cookies the app uses: `jwt` (the refresh-token credential, httpOnly) and `isAuth` (a non-secret flag the client shell reads to render auth chrome before its first API response). Deliberately decoupled from JWT parsing/validation so any layer that needs to set or clear cookies does so through one place.
 
 ## Key elements
 
-- **`createRefreshCookie(response, token, remember?)`** — Sets the `jwt` cookie. Flags: `httpOnly`, `secure` (production only), `sameSite: 'lax'`, `path: '/'`. The `remember` param accepts a tier name (`RefreshTokenExpiryTime`) **or** a raw ms number (used when a rotated token must carry forward its own remaining lifetime).
-- **`destroyRefreshCookie(response)`** — Clears `jwt`. Must mirror the exact attribute set from `createRefreshCookie` for the browser to match and delete the cookie.
-- **`createLoggedCookie(response, remember?)`** — Sets the `isAuth` cookie to `'true'`. Deliberately **not** `httpOnly` and **not** `secure`; it holds no credential, only a boolean hint readable by client JS.
-- **`destroyLoggedCookie(response)`** — Clears `isAuth`.
-- **Imports** — `RefreshTokenExpiryTime` (type) and `getExpiryTimeMilliseconds` (fn) from `./config`.
+- **`secureCookieOptions()`** – Returns the shared flag set for credential cookies (`httpOnly`, `secure` gated on `NODE_ENV`, `sameSite: 'lax'`, `path: '/'`). Exported as a function (not a constant) so `NODE_ENV` is re-read on every call.
+- **`createRefreshCookie(response, token, remember?)`** – Sets the `jwt` cookie. `remember` accepts either a `RefreshTokenExpiryTime` tier (resolved via `getExpiryTimeMilliseconds`) or a raw `maxAge` in milliseconds (used when a rotated token carries its own remaining lifetime).
+- **`destroyRefreshCookie(response)`** – Clears the `jwt` cookie using the same attributes set at creation (browsers match on path/domain/flags, not name alone).
+- **`createLoggedCookie(response, remember?)`** – Sets the `isAuth` cookie to `'true'`. Intentionally omits `httpOnly` and `secure` because it holds no credential; the client JS may read it.
+- **`destroyLoggedCookie(response)`** – Clears `isAuth` with `path: '/'` (no other attributes needed since it was never set with them).
 
 ## Relationships
 
-- **`./config.ts`** — Source of the `RefreshTokenExpiryTime` union and the tier→ms resolver used for cookie `maxAge`.
-- **Controllers (`post-logout`, `post-logout-everywhere`, `get-refresh-token`, `post-reset-confirm`, `delete-account-confirm`)** — Call the create/destroy functions with the Express `Response` to set or clear cookies during their respective flows.
-- **`session.ts`** — Sibling module handling the higher-level session lifecycle; this file is the cookie-transport layer it delegates to.
-- **`tests/unit/cookies.test.ts`** — Unit tests covering the cookie-setting/clearing behavior.
+- **`session/config.ts`** – Imports the `RefreshTokenExpiryTime` type and `getExpiryTimeMilliseconds` helper used to resolve tier-based expiry values.
+- **`oauth/state.ts` / `oauth/mfa-redirect.ts`** – Import `secureCookieOptions` to apply the same security flags to OAuth state, verifier, and MFA-challenge cookies.
+- **Controllers** (`post-logout`, `post-logout-everywhere`, `get-refresh-token`, `delete-account-confirm`, `post-reset-confirm`) – Call the create/destroy functions when issuing, rotating, or tearing down a session.
+- **`tests/unit/cookies.test.ts`** – Unit-tests the cookie helpers in isolation.
 
 ## Notes
 
-- `secure` is gated on `NODE_ENV === 'production'` so local `http://` development still works; in any non-production env the cookie is sent over plain HTTP.
-- The `remember` parameter is **polymorphic**: a string tier or a number. Callers that rotate a token pass the remaining ms directly rather than a tier, so the new cookie doesn't outlive the token it replaces.
-- `path: '/'` is required on both create and destroy because the refresh and logout endpoints live on different paths; a narrower path would prevent the browser from sending/clearing the cookie at the other endpoint.
-- `isAuth` has no `httpOnly` flag by design — it exists specifically so client-side code can read it without a network request.
+- `secureCookieOptions` is a **function**, not a frozen object. Do not destructure or cache it at module top-level in consuming code; call it at the point of use so environment changes (e.g. in tests) are picked up.
+- When clearing a cookie, the flags passed to `clearCookie` must match those set at creation time or the browser will silently ignore the clear. `destroyRefreshCookie` and `destroyLoggedCookie` already handle this; don't clear these cookies with bare `response.clearCookie('jwt')`.
+- The dual type of the `remember` parameter (tier string **or** raw ms) is intentional: rotated refresh tokens must forward their *existing* remaining lifetime rather than snapping to a configured tier. Callers that pass a tier are starting a fresh session; callers that pass a number are mid-rotation.

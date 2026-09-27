@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/oauth.ts
-sha256: 2a450d2bff0d9356adc28e2e92ceb2928e17d07c5c5b4ce6cd7c642d1f9e660f
-generated_at: 2026-09-23T18:09:10.116848+00:00
+sha256: 96da8f59cb2318525f99bd95ebe9e5cc6e0ccd94c19ddcd956acd6792b8fb24a
+generated_at: 2026-09-27T14:29:57.229078+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for OAuth login/signup. Resolves a provider-issued `OAuthIdentity` into a `UserDocument` via exactly three outcomes — **login** (identity already linked), **link** (email matches an existing account that both sides have verified), or **signup** (fresh, password-less account). It sits one layer above the provider mechanics in `../oauth/` and below the callback controller, handling audit, analytics, role assignment, and the two email-verification security checks.
+Resolves an `OAuthIdentity` (provider + providerId) to a `UserDocument` via one of three mutually exclusive outcomes: **login** (identity already linked), **link** (email matches an existing verified account, new provider attached), or **signup** (fresh password-less account created). Sits one layer above the provider mechanics in `../oauth/` and handles the account-level decisions: security checks, role assignment, audit, and analytics. It does **not** mint sessions or issue 2FA challenges — that is the callback controller's job.
 
 ## Key elements
 
-- **`loginOrCreateFromOAuth(provider, identity, context)`** — Main entry point. Looks up by `providerId` first (unique identity key), then falls back to email match. Returns `{ user, outcome: OAuthOutcome }`. Throws `OAuthEmailUnverifiedError` or `OAuthAccountUnverifiedError` on security refusal.
-- **`recordOAuthFailure(context, provider, reason)`** — Emits an `AUTH_OAUTH_FAILED` audit for attempts that never resolved to a user (bad state, denied consent, provider error). Called only by the callback controller.
-- **`OAuthOutcome`** (`'login' | 'link' | 'signup'`) — Tells the controller whether _it_ still owes an `AUTH_LOGIN` audit/analytics (only for `'login'`); the link and signup branches already record their own events here.
-- **`OAuthEmailUnverifiedError`** — Thrown when the provider does not vouch for the email; prevents account takeover via a registered OAuth app under a victim's address.
-- **`OAuthAccountUnverifiedError`** — Thrown when the existing account never self-verified its own address; prevents a pre-registered squatter from absorbing the victim's OAuth login.
-- **`linkToExistingAccount`** (internal) — Calls `userService.linkOAuthAccount`, then reads roles fresh via `rolesOf`, records `AUTH_OAUTH_LINKED` audit, and conditionally emits `USER_LOGGED_IN` analytics (suppressed when 2FA is armed, since no session is minted yet).
-- **`signupFromOAuth`** (internal) — Creates a verified, active, password-less user via `userService.registerFromOAuth`, assigns `VERIFIED_CUSTOMER_ROLE` (with compensation via `discardFailedSignup` on grant failure), then records `AUTH_SIGNED_UP` audit and analytics.
+- **`loginOrCreateFromOAuth(provider, identity, context)`** — main entry point. Looks up by `providerId` first; falls back to email lookup for the link path. Returns `{ user, outcome }` where `outcome: OAuthOutcome` tells the caller which branch fired.
+- **`recordOAuthFailure(context, provider, reason)`** — audits OAuth attempts that never reached the identity resolution (bad `state`, declined consent, provider error). No user is involved.
+- **`OAuthOutcome`** — `'login' | 'link' | 'signup'` union, consumed by the controller to decide whether *it* still owes an `AUTH_LOGIN` audit record.
+- **`OAuthEmailUnverifiedError`** — thrown when an email match exists but the provider did not vouch for it (blocks account takeover via unverified email).
+- **`OAuthAccountUnverifiedError`** — thrown when the matching account itself never proved its address (blocks squatter takeover).
+- **`linkToExistingAccount`** (module-private) — case-2 tail: writes the OAuth link, audits `AUTH_OAUTH_LINKED`, emits `USER_LOGGED_IN` analytics *only if 2FA is not armed*.
+- **`signupFromOAuth`** (module-private) — case-3 tail: creates the user, assigns `VERIFIED_CUSTOMER_ROLE`, audits `AUTH_SIGNED_UP`, emits `USER_SIGNED_UP`. Compensates by discarding the row if role assignment is refused.
 
 ## Relationships
 
-- **`get-oauth-callback.ts`** — The sole controller caller. It interprets `OAuthOutcome` to decide whether to mint a session, issue a 2FA challenge, or record its own `AUTH_LOGIN`. It translates the two error classes into `?error=email_unverified` / `?error=account_unverified` redirects.
-- **`oauth/providers/port.ts`** — Supplies the `OAuthIdentity` type consumed here.
-- **`users/index.ts`** — All user CRUD (`findByOAuthIdentity`, `findByEmail`, `linkOAuthAccount`, `registerFromOAuth`, `discardFailedSignup`) goes through `userService` from this module.
-- **`access/index.ts` / `access/service.ts`** — `assignRole`, `rolesOf`, and `VERIFIED_CUSTOMER_ROLE` for the signup and link paths.
-- **`kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` scopes role reads/writes.
-- **`kernel/permissions.ts`** — `isUnrestrictedRole` determines the `actor_role` label in audit entries.
-- **`infrastructure/observability/audit.ts`** — `recordAudit` for link, signup, and failure events.
-- **`infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` / `buildAnalyticsBase` for login and signup analytics.
-- **`infrastructure/i18n`** — `getCurrentLocale` sets the locale on newly created accounts.
-- **`modules/account/analytics.ts` / `audit.ts`** — Provide the `accountAnalyticsEvents` and `accountAuditActions` constant names used in the calls above.
-- **`services/index.ts`** — Re-exports this module's public API.
-- **`tests/integration/oauth-link.test.ts`** — Integration tests exercising the link path.
+- **`src/modules/account/controllers/get-oauth-callback.ts`** — sole caller of `loginOrCreateFromOAuth` and `recordOAuthFailure`. Converts the two error types into `?error=email_unverified` / `?error=account_unverified` redirects. Mints the session and records `AUTH_LOGIN` for the `'login'` outcome; issues a 2FA challenge when `twoFactorMethods` is present.
+- **`src/modules/account/oauth/providers/port.ts`** — supplies the `OAuthIdentity` type that flows into this module.
+- **`src/modules/users/index.ts`** — `userService` provides all data access (`findByOAuthIdentity`, `findByEmail`, `linkOAuthAccount`, `registerFromOAuth`, `discardFailedSignup`); also exports `UserDocument` and `DEFAULT_USER_IMAGE_URL`.
+- **`src/modules/access/index.ts`** — `assignRole` and `VERIFIED_CUSTOMER_ROLE` used in the signup path.
+- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` passed to `assignRole`.
+- **`src/modules/account/roles.ts`** — `isUnrestrictedCaller` used to determine the actor role for the link audit.
+- **`src/modules/account/analytics.ts` / `src/modules/account/audit.ts`** — `accountAnalyticsEvents` and `accountAuditActions` enums that name the specific events/actions.
+- **`src/infrastructure/observability/analytics/index.ts` / `audit.ts`** — `emitAnalyticsEvent`, `buildAnalyticsBase`, `recordAudit` primitives.
+- **`src/infrastructure/i18n/index.ts`** — `getCurrentLocale` stamped onto new accounts at signup.
+- **`src/modules/account/services/index.ts`** — barrel re-export.
+- **`src/modules/account/tests/integration/oauth-link.test.ts`** — integration tests for the link path.
 
 ## Notes
 
-- **Case 1 (login) records nothing here.** The `AUTH_LOGIN` audit and analytics are deferred to the controller, which is the only place that knows whether a session actually materialized (vs. a 2FA challenge). Emitting it unconditionally in this file was a prior double-count bug.
-- **Two independent verification gates.** The provider must vouch for the email (`identity.emailVerified`) _and_ the account must have self-verified (`verifiedAt`). Either check failing produces a distinct, specific error — never a generic failure — so the frontend can present the correct remediation.
-- **Concurrency on signup.** A simultaneous signup for the same identity is resolved by the `users_oauth_identity` unique index; the loser's insert rejects with E11000, which the controller surfaces as `?error=provider_error`. The retry then hits case 1.
-- **`findByOAuthIdentity` is called with credentials** (unlike other lookups in this file) because the controller may need `twoFactorMethods` to build a login challenge.
+- **`providerId` is the primary key, email is not.** An email match never silently logs in; it only triggers the link path after both verification checks pass. This is the core anti-takeover invariant.
+- **The `'login'` outcome records nothing here.** Audit and analytics for a completed login are the controller's responsibility (`recordLoginSuccess`), because this function cannot know the caller's resolved role or whether a session was actually minted. Link and signup, by contrast, audit themselves in-file.
+- **`findByOAuthIdentity` is called with credentials** (to expose `twoFactorMethods`, which is `select: false`) — a deliberate exception to the file's otherwise credential-free lookups, needed by the controller for 2FA challenge construction.
+- **Signup skips the `unverified` state entirely.** The provider's vouching substitutes for an email-verification loop; the `verifiedAt` timestamp is set at creation. If `assignRole` is refused, the row is discarded as compensation.
+- **2FA suppression on link:** when `twoFactorEnabledAt` is set, the `USER_LOGGED_IN` analytics event is *not* emitted during the link, because the callback will issue a challenge rather than mint a session — the login is not yet complete.
