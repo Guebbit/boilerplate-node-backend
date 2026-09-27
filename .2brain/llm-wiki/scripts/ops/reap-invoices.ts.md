@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/reap-invoices.ts
-sha256: 32983b98b2025bc7db047ee6bb68e059469017290272c98c2c47342bb743c1f1
-generated_at: 2026-09-23T17:29:46.362845+00:00
+sha256: 39425197e76540d5a119eb39bd08dceea522ebc30612dfdbde0b4c1b7e6e6009
+generated_at: 2026-09-27T13:57:22.550024+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Operational script (npm script `reap:invoices`) that sweeps the on-disk invoice PDF cache by running two independent cleanup passes — orphaned and expired invoices — in parallel. Intended for scheduled execution (cron, container task) rather than interactive use.
+Ops script (invoked via `npm run reap:invoices`) that sweeps the invoice cache by running two independent cleanup sweeps from `orderService`—orphaned PDFs and expired PDFs—in a single pass. Designed to be executed periodically (cron, scheduled container task) rather than manually.
 
 ## Key elements
 
-- **`main`** (not exported) — Connects to the database, then calls `orderService.reapOrphanedInvoices()` and `orderService.reapExpiredInvoices()` concurrently via `Promise.all`. Logs a line only when a count is non-zero.
-- **`void runScript(main, stopDatabase)`** — Entry point. Wraps `main` with the shared script lifecycle (startup, error handling, graceful `stopDatabase` teardown).
-
-The file has no public exports; it is a standalone `tsx` script.
+- **`main`** — Connects to the database, fires `orderService.reapOrphanedInvoices()` and `orderService.reapExpiredInvoices()` concurrently via `Promise.all`, then logs the reap count for each (only when > 0). Returns `Promise<void>`.
+- **`void runScript('reap:invoices', main, stopDatabase)`** — Entry-point call that wraps `main` with the shared script lifecycle (error handling, graceful DB shutdown on completion or failure).
 
 ## Relationships
 
-- **`scripts/db/run-script.ts`** — Provides `runScript`, which orchestrates the connect → run → cleanup lifecycle around `main` and ensures `stopDatabase` is called even on failure.
-- **`src/infrastructure/runtime/database.ts`** — Supplies `start()` (DB connection) and `stopDatabase` (disconnect), both consumed by this script and the `runScript` wrapper.
-- **`src/infrastructure/adapters/logger.ts`** — Supplies the structured `logger` used for the two info-level result messages.
-- **`src/modules/orders/index.ts`** — Barrel re-export that exposes `orderService`; the script imports from here.
-- **`src/modules/orders/services/index.ts`** — Where `orderService` (and its `reapOrphanedInvoices` / `reapExpiredInvoices` methods) is actually implemented.
+- **`scripts/run-script.ts`** — Provides `runScript`, which wraps `main` with try/catch, structured error logging, and a post-hook (`stopDatabase`).
+- **`src/infrastructure/adapters/logger.ts`** — Supplies the `logger` used to emit structured info messages with the reap counts.
+- **`src/infrastructure/runtime/database.ts`** — Provides `start()` (DB connection before sweeps) and `stopDatabase` (passed as the cleanup hook to `runScript`).
+- **`src/modules/orders/index.ts`** — Re-exports `orderService`, the concrete object whose methods perform the actual reaping.
+- **`src/modules/orders/services/index.ts`** — Upstream definition barrel for `orderService` (the `reapOrphanedInvoices` / `reapExpiredInvoices` methods live here).
 
 ## Notes
 
-- Both sweeps are **independent and stateless with respect to each other**; they run in parallel and each returns a count of files removed.
-- Logging is intentionally quiet: a count of `0` produces no log line, keeping cron output clean on no-op runs.
-- The script loads `.env` via `import 'dotenv/config'` at the top; any required env vars must be present in the execution environment.
-- Referenced by `docs/reference/ops.md` for operational context.
+- Both sweeps run **concurrently** (`Promise.all`), not sequentially.
+- Logging is **conditional**: if a sweep reaps 0 files, no log line is emitted for it—useful to keep cron logs quiet during no-op runs.
+- Requires `.env` to be loaded (`import 'dotenv/config'` at top) before any DB connection is attempted.
+- The file has a `#!/usr/bin/env tsx` shebang, so it can be executed directly without a separate `ts-node`/`tsx` wrapper in `package.json` scripts.

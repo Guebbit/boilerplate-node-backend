@@ -1,31 +1,28 @@
 ---
 source: scripts/ops/reap-payments.ts
-sha256: 2ea8af383ca37fcf7215565a8ad3dffbc0dcd049aad0e2c9f6d9e241efd84aa3
-generated_at: 2026-09-23T17:30:11.460059+00:00
+sha256: 49522785ffeba4d4661b2c9caa05b87b668fbca8af26b45299043c7d61693528
+generated_at: 2026-09-27T13:57:51.604976+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # scripts/ops/reap-payments.ts
 
 ## Purpose
-
-Standalone ops script (`npm run reap:payments`) that hard-deletes abandoned payment attempts — i.e., payments that never reached `succeeded` or `refunded` — once they exceed the `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` window (default 30 days). Because these payments never represented settled money, no invoice or other record is preserved. Intended to run on a recurring cron schedule, never on container boot.
+Cron-driven cleanup script (`npm run reap:payments`) that permanently deletes payment attempts which never reached `succeeded` or `refunded` and have been untouched for longer than the retention window (`NODE_PAYMENT_ABANDONED_RETENTION_DAYS`, default 30 days). Unlike `reap-orders.ts`, there is no invoice to preserve—an abandoned payment is simply an open checkout the customer walked away from.
 
 ## Key elements
-
-- **`main`** — Promise chain: starts the database, calls `paymentService.reapAbandonedPayments()`, and resolves with `undefined`.
-- **`void runScript(main, stopDatabase)`** — Module-level entry point. Wraps `main` with the shared script lifecycle (env load, connect, execute, cleanup on exit).
+- **`main`** — Connects the database, calls `paymentService.reapAbandonedPayments()`, and resolves. No return value; the script's sole job is the deletion side-effect.
+- **`void runScript('reap:payments', main, stopDatabase)`** — Entry point. Wraps `main` with the shared script runner (logging, error handling) and registers `stopDatabase` as the cleanup callback.
+- **`#!/usr/bin/env tsx`** — Shebang indicating direct execution via `tsx`; in practice it is invoked through the npm script, not called directly.
 
 ## Relationships
-
-- **`scripts/db/run-script.ts`** — Supplies `runScript`, the shared wrapper that manages connect → execute → `stopDatabase` ordering and error propagation for all `scripts/db` and `scripts/ops` entry points.
-- **`src/infrastructure/runtime/database.ts`** — Supplies `start` (connect pool) and `stopDatabase` (teardown) used inside `main` and passed to `runScript`.
-- **`src/modules/payments/index.ts`** — Exports `paymentService`, the facade whose `reapAbandonedPayments()` performs the actual deletion query.
-- **`src/modules/payments/services/index.ts`** — Houses the concrete service implementation behind the `paymentService` facade; the retention-window logic lives here.
+- **`scripts/run-script.ts`** — Provides `runScript`, the shared wrapper that manages lifecycle (startup, error reporting, graceful shutdown) for all `reap:*` scripts.
+- **`src/infrastructure/runtime/database.ts`** — Supplies `start` (opens the connection before the query) and `stopDatabase` (passed to `runScript` as the teardown hook).
+- **`src/modules/payments/index.ts`** — Exports the `paymentService` singleton that this script delegates to.
+- **`src/modules/payments/services/index.ts`** — Implementation home of `reapAbandonedPayments()`, the actual deletion query.
 
 ## Notes
-
-- **Delete vs. retain:** Unlike `reap-orders.ts` (which keeps invoices), this script issues a hard `DELETE`. The rationale: an unsettled payment is an abandoned checkout, not a financial record.
-- **Settled payments are excluded:** Any payment that ever reached `succeeded` or `refunded` is never a candidate, regardless of age. See `docs/modules/payments.md` (retention section) for the full policy.
-- **Cron-only:** Do not wire this into container startup; it is designed for the same periodic cron container as other `reap:*` scripts.
-- **Removal path:** If the payments module is removed, delete this file, the `reap:payments` npm script, and its `docker/crontab` entry together.
+- **Settled payments are never touched.** Any payment that reached `succeeded` or `refunded` is excluded by design; see `docs/modules/payments.md` retention section for the policy rationale.
+- **Cron, not boot.** Intended to run in the same cron container as the other `reap:*` scripts. Do not add it to a startup sequence.
+- **Removal contract.** Deleting this file requires also removing the `reap:payments` npm script entry and its `docker/crontab` line, plus the owning module code.
+- **`dotenv/config`** is imported first, so `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (and DB credentials) must be available in the environment before the script executes.

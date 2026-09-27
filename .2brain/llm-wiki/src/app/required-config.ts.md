@@ -1,7 +1,7 @@
 ---
 source: src/app/required-config.ts
-sha256: 8f964ce5947255a1643b732d58556975a125689c1c103c70e49adddef0f633a4
-generated_at: 2026-09-23T17:35:44.385576+00:00
+sha256: ee2434f6823457834f8e68312ce6e2befb8d2ee35f2a4597eb9fad68592b2088
+generated_at: 2026-09-27T14:02:36.885462+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Holds boot-time configuration checks that belong to the application itself rather than to any single module or adapter. Because the kernel is forbidden from naming a module or adapter by name, these "orphan" checks cannot live in a module manifest or in the kernel; they are collected here and handed to `registerModules` as the `NonModuleChecks` argument the kernel expects.
+Collects the boot-time configuration checks that belong to the application itself—neither to the kernel nor to any module. Because the kernel is forbidden from naming a specific module or adapter, these "app-level" gates live here and are handed to `registerModules` as the `NonModuleChecks` argument the kernel's `assertRequiredConfig` expects.
 
 ## Key elements
 
-- **`APP_REQUIRED_CONFIG`** — `readonly RequiredConfig[]` listing the two env vars that are the app's own business: `NODE_URL` (unconditional) and `NODE_CORS_ORIGIN` (production-only).
-- **`APP_NON_MODULE_CHECKS`** (export) — the single `NonModuleChecks` object consumed by `src/app.ts`. Bundles `required: APP_REQUIRED_CONFIG` with four `customChecks`:
-    - `missingSmtpCompanions` (imported from the mailer adapter)
-    - `checkSelector('NODE_ANALYTICS_PROVIDER', resolveAnalyticsProvider)`
-    - `checkSelector('NODE_MAIL_TRANSPORT', resolveMailTransport)`
-    - `checkSelector('NODE_LOG_PERSONAL_FIELDS', resolvePersonalFieldMode)`
-- **`checkSelector`** (imported from `@kernel/required-config`) — normalises a resolver's throw into the same failure shape every other check produces, so a wrong provider name fails at boot rather than on first use.
+- **`APP_REQUIRED_CONFIG`** (internal `const`, not exported) — a `readonly RequiredConfig[]` declaring three env-var gates: `NODE_URL` (always), `NODE_CORS_ORIGIN` (production only), `NODE_LOG_HASH_KEY` (production only, min 16 chars, placeholder provided).
+- **`APP_NON_MODULE_CHECKS`** (exported, type `NonModuleChecks`) — the single object `src/app.ts` passes to `registerModules`. Combines the above `required` array with four `customChecks`:
+  - `missingSmtpCompanions` (delegated to `adapters/mailer.ts`)
+  - `checkSelector('NODE_ANALYTICS_PROVIDER', resolveAnalyticsProvider)`
+  - `checkSelector('NODE_MAIL_TRANSPORT', resolveMailTransport)`
+  - `checkSelector('NODE_LOG_PERSONAL_FIELDS', resolvePersonalFieldMode)`
 
 ## Relationships
 
-- **`src/app.ts`** — imports `APP_NON_MODULE_CHECKS` and passes it as the `NonModuleChecks` parameter to `registerModules`.
-- **`src/kernel/required-config.ts`** — source of the `NonModuleChecks` type and the `checkSelector` helper used here.
-- **`src/kernel/registry.ts`** — source of the `RequiredConfig` type used by `APP_REQUIRED_CONFIG`.
-- **`src/infrastructure/adapters/mailer.ts`** — provides `missingSmtpCompanions` and `resolveMailTransport`, both wired into the `customChecks` array.
-- **`src/infrastructure/adapters/logger.ts`** — provides `resolvePersonalFieldMode`, wired in the same way.
-- **`src/infrastructure/observability/analytics/index.ts`** — provides `resolveAnalyticsProvider`, wired in the same way.
-- **`tests/unit/app/required-config.test.ts`** — unit-tests the checks defined in this file.
+- **`src/app.ts`** — imports `APP_NON_MODULE_CHECKS` and forwards it to `registerModules` as the non-module checks argument.
+- **`src/kernel/required-config.ts`** — source of the `checkSelector` helper and the `NonModuleChecks` type that shapes this file's export; its `assertRequiredConfig` is the consumer of the data produced here.
+- **`src/kernel/registry.ts`** — defines the `RequiredConfig` type used for each entry in `APP_REQUIRED_CONFIG`; also codifies the rule (kernel must not name a module/adapter) that justifies this file's existence.
+- **`src/infrastructure/adapters/mailer.ts`** — provides `missingSmtpCompanions` and `resolveMailTransport`, both referenced directly in `customChecks`.
+- **`src/infrastructure/adapters/logger.ts`** — provides `resolvePersonalFieldMode`, used via `checkSelector`.
+- **`src/infrastructure/observability/analytics/index.ts`** — provides `resolveAnalyticsProvider`, used via `checkSelector`.
+- **`scripts/setup/required-keys.ts`** — mirrors the same env-var keys for the first-run/setup script; keeping them in sync with `APP_REQUIRED_CONFIG` is a manual obligation.
+- **`tests/unit/app/required-config.test.ts`** — unit-tests this file's exports.
+- **`tests/unit/scripts/setup/first-run.test.ts`** — exercises the setup path that depends on the same key list.
 
 ## Notes
 
-- This file is a **wiring layer only**. The actual probe logic for SMTP companions lives in `adapters/mailer.ts`; the selector resolvers live in their respective infrastructure modules. This file just calls them.
-- Do **not** add checks here for `NODE_PAYMENT_PROVIDER` or `NODE_ANTIBOT_PROVIDER` — those are real modules with their own manifests and `customCheck` entries. Adding them here would duplicate the check and violate the kernel's naming rule in the opposite direction.
-- `NODE_CORS_ORIGIN` is `productionOnly: true`; it is intentionally skipped in dev/test where the `http://localhost:8080` fallback in `app/security.ts` is acceptable.
-- The file's header comment documents _why_ each check lives here rather than in a module manifest. Preserve that reasoning when adding or moving checks.
+- `NODE_PAYMENT_PROVIDER` and `NODE_ANTIBOT_PROVIDER` are deliberately **absent** here; those selectors are probed by their respective modules' own `customCheck` in `payments/module.ts` and `antibot/module.ts`. Adding them here would violate the module-ownership boundary.
+- `NODE_CORS_ORIGIN` and `NODE_LOG_HASH_KEY` carry `productionOnly: true`—they are skipped in dev/test. `NODE_URL` is unconditional because an unset value silently produces a broken OAuth redirect rather than a loud error.
+- The file contains no runtime logic beyond the object literal; all "checking" is delegated to the imported helpers. Modifying a gate means editing the array/selector list here, not writing new validation code.

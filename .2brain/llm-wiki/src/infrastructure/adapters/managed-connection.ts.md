@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/managed-connection.ts
-sha256: dfdbfafb037c4e6055e000e848639a4861cf0849b64d8372c58b5e2718e52971
-generated_at: 2026-09-23T17:41:03.891694+00:00
+sha256: 79f884caedd836ceb4a89ac794af1d9d0c0ed1f0ee0902e2d8bb0f65d9ba4495
+generated_at: 2026-09-27T14:07:21.573227+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralises the shared lifecycle of an optional external dependency (Redis, RabbitMQ channel): a single memoised handle, thunder-herd-free connect, warn-once outage logging, fail-open retrieval, health reporting, and clean shutdown. Adapters like the cache and rate-limit store supply only their own `connect`/`isReady`/`close` logic; the connect-reuse-latch-status-close rules live here once.
+Centralises the lifecycle of a single optional external dependency (Redis, etc.): connection memoisation, shared in-flight connect, warn-once outage logging, a fail-open getter, a `DependencyStatus` reader, and a safe shutdown. Exists so that `cache.ts` and `rate-limit-store.ts` stop duplicating six pieces of identical boilerplate and instead supply only what is genuinely their own (the connect/check/close calls and the human-readable outage message).
 
 ## Key elements
 
-- **`unavailabilityLatch(log)`** — Returns `{ report, clear }`. `report` logs the first failure in a run; `clear` resets and returns whether a warning was previously logged (used to gate a recovery announcement).
-- **`DependencyStatus`** — Union type `'ready' | 'connecting' | 'unavailable' | 'disabled'`, consumed by the health endpoint.
-- **`ManagedConnectionOptions<THandle>`** — Interface an adapter implements: `unavailableMessage`, `isEnabled()`, `connect()`, `isReady(handle)`, `close(handle)`, plus optional `unavailableLevel` and `onRecovered`.
-- **`ManagedConnection<THandle>`** — Interface returned by the factory: `get()` (fail-open), `getOrThrow()` (fail-closed), `state()`, `forget()`, `reportUnavailable()`, `stop()`.
-- **`manageConnection(options)`** — Factory that wires the options into a single-connection lifecycle with an in-flight `connectPromise` deduplicator and a private `NotConfigured` sentinel (a `connect()` resolving `undefined` is treated as "not configured", not a failure).
+- **`unavailabilityLatch(log)`** – Returns `{ report, clear }`. `report` logs the first error in a run and stays silent thereafter; `clear` resets and returns whether a warning was ever logged (so callers can decide whether a recovery is worth announcing). Shared by `queue.ts` as well.
+- **`DependencyStatus`** – Union type `'ready' | 'connecting' | 'unavailable' | 'disabled'`. The four values consumed by `GET /observability/health`.
+- **`ManagedConnectionOptions<THandle>`** – The contract an adapter supplies: `unavailableMessage`, `isEnabled`, `connect`, `isReady`, `close`, plus optional `unavailableLevel` and `onRecovered`.
+- **`ManagedConnection<THandle>`** – The lifecycle surface returned by the factory: `get`, `getOrThrow`, `state`, `forget`, `reportUnavailable`, `stop`.
+- **`manageConnection(options)`** – The factory. Owns the memoised handle, the shared `connectPromise`, the latch, and an internal `NotConfigured` sentinel. Returns a `ManagedConnection` instance closed over private module-level state.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** — Imported; the only external dependency. Used to emit the warn/error log inside the latch callback.
-- **`src/infrastructure/adapters/cache.ts`** — Calls `manageConnection` to get a fail-open Redis handle for cache reads/writes and `clearCache`.
-- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** — Consumes the `getOrThrow()` path, the sole caller that requires fail-closed behaviour (rejects instead of resolving `undefined`).
-- **`src/infrastructure/adapters/queue.ts`** — Uses only `unavailabilityLatch` (shared warn-once logging); does **not** use `manageConnection` because amqplib's built-in recovery has no equivalent "attempt" seam.
-- **`src/modules/observability/services/dependency-health.ts`** — Reads `state()` to populate `GET /observability/health` without performing I/O.
-- **`tests/unit/infrastructure/adapters/managed-connection.test.ts`** — Unit tests covering the latch, connect deduplication, fail-open/fail-closed paths, `stop()` ordering, and `state()` transitions.
+- **`cache.ts`** – Calls `manageConnection` to get its Redis handle lifecycle; supplies `connect`, `isReady`, `close`, and its own outage message.
+- **`rate-limit-store.ts`** – Calls `manageConnection` as well, but uses `getOrThrow` (fail-closed) instead of `get` (fail-open) because a rate limiter that silently skips defeats its purpose.
+- **`logger.ts`** – Imported; the latch's `log` callback routes through `logger.warn` or `logger.error` depending on the `unavailableLevel` option.
+- **`queue.ts`** – Does **not** call `manageConnection` (amqplib's built-in `recovery` replaces the reconnect logic). Imports only `unavailabilityLatch` to share the warn-once pattern for RabbitMQ outages.
+- **`dependency-health.ts`** – Reads `state()` / `DependencyStatus` to populate the observability health endpoint.
+- **`tests/unit/infrastructure/adapters/managed-connection.test.ts`** – Unit-tests the factory, latch, and edge cases (disabled, not-configured, thundering-herd, shutdown ordering).
 
 ## Notes
 
-- **No timer-based retry.** Recovery is demand-driven: the next `get()` call re-attempts. A stale handle is detected via `isReady` and replaced lazily.
-- **`connect()` resolving `undefined`** is a distinct code path from rejecting: it means "configuration could not be built" and suppresses the warning latch entirely.
-- **`get()` never rejects.** All three "unavailable" sub-states (disabled, unconfigured, unreachable) resolve to `undefined`. Only `getOrThrow` rejects.
-- **`stop()` is the only path that may suppress a rejection** (`.catch(() => undefined)`), because an already-dead socket rejecting its own close during shutdown is the ordinary case.
-- **`forget()` does not close the handle.** It exists for adapters (e.g. `queue.ts`) whose handle emits a `close`/`error` event; the adapter calls `forget()` from that listener so the next `get()` opens a fresh connection.
-- **`onRecovered` fires only if the latch was actually set** (i.e. a warning was logged), avoiding a "recovered" log line for a dependency that never went down.
+- **`get` never rejects.** A failed or missing connection resolves to `undefined`. The only path that rejects is `getOrThrow`, used exclusively by the rate limiter.
+- **`connect()` resolving `undefined` ≠ failure.** It means "cannot be built at all" (configuration that `isEnabled` couldn't rule out). It is treated as unavailable *without* tripping the latch, because nothing actually broke.
+- **No timer-based retry.** Recovery is purely demand-driven: the next `get()` call re-attempts. The `isReady` check before reuse is what detects a handle that died since the last call.
+- **`forget()` drops the handle without closing it.** Intended for adapters whose handle announces its own death (e.g. a `close` event listener calls `forget`, then the next `get` opens a fresh handle). Do not confuse with `stop()`.
+- **`stop()` swallows all errors.** Shutdown must never raise; a dead socket rejecting its own close is the expected case.
+- **Stryker markers** wrap the log-level branch (`warn` vs `error`) to exclude it from mutation testing.

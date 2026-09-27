@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/i18n/context.ts
-sha256: 64b074229b7fe35f8b0c389fc3853fa65480f26e2aa721e5805f8f7f45723af3
-generated_at: 2026-09-23T17:47:03.145443+00:00
+sha256: c0b482440bf3acefb16f3dcc7e96bb7ae6606ecf86eb29a07497f6f9311643b7
+generated_at: 2026-09-27T14:11:49.720625+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides request-scoped translation by binding an `i18next` `t` function to a specific locale via `AsyncLocalStorage`. This prevents concurrent requests in different languages from interleaving on `i18next`'s single global instance, and gives out-of-band code (queues, boot callbacks) a way to opt in explicitly.
+Provides request-scoped translations so that concurrent requests in different languages don't interleave on i18next's single global instance. It uses `AsyncLocalStorage` to carry a locale-bound `t` function down each request's async call chain, and exposes a drop-in `t` that resolves to the per-request binding (or falls back to the global instance).
 
 ## Key elements
 
-- **`LocaleContext`** (interface) — pairs a BCP-47 `locale` string with a `t` already bound to that locale.
-- **`translator(locale)`** — returns a `TFunction` via `i18next.getFixedT(locale)`. The lowest-level primitive; no ambient state involved.
-- **`createLocaleContext(locale)`** — builds a `LocaleContext` object from a locale string.
-- **`runWithLocaleContext(context, callback)`** — executes `callback` (and everything it awaits) with `context` as the ambient store value.
-- **`runWithLocale(locale, callback)`** — convenience wrapper: creates a context from a locale string, then delegates to `runWithLocaleContext`. Intended for workers, jobs, and tests.
-- **`getLocaleContext()`** — returns the ambient `LocaleContext` or `undefined` if outside a request.
-- **`getCurrentLocale()`** — resolves the active locale: ambient context → `i18next.language` → `getDefaultLocale()`.
-- **`t`** — the ambient translation function. Resolves from the `AsyncLocalStorage` store first, falling back to `i18next.t`. Signature-compatible with `i18next`'s own `t` for drop-in import replacement.
+- **`LocaleContext`** (interface) — pairs a BCP-47 `locale` string with a `t` already bound to it.
+- **`translator(locale)`** — returns `i18next.getFixedT(locale)`; the primitive for getting a `t` in a known language without touching the global instance or the ambient store.
+- **`createLocaleContext(locale)`** — builds a `LocaleContext` from a locale string.
+- **`runWithLocaleContext(context, callback)`** — runs `callback` (and everything it awaits) with `context` as the ambient locale via `AsyncLocalStorage.run`.
+- **`runWithLocale(locale, callback)`** — convenience wrapper over the above for callers that only have a locale string (workers, jobs, tests).
+- **`getLocaleContext()`** — returns the current ambient `LocaleContext` or `undefined` outside a request.
+- **`getCurrentLocale()`** — resolves the active locale: request context → `i18next.language` → `getDefaultLocale()`.
+- **`t`** — the ambient translation function. Delegates to the stored context's `t` if present, otherwise to `i18next.t`. Typed as `TFunction` so it can replace an i18next import with no signature change.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/catalog.ts`** — imports `getDefaultLocale` for the final fallback in `getCurrentLocale`.
-- **`src/infrastructure/i18n/index.ts`** — barrel that re-exports this module's public API to consumers.
-- **`src/infrastructure/http/middlewares/locale.ts`** — the entry point that negotiates the locale and calls `runWithLocaleContext` to bind the context for the duration of the request.
-- **`src/kernel/translation.ts`** — kernel-level helper that consumes `t` / `getLocaleContext` for translation-aware logic.
-- **`src/infrastructure/http/validation-messages.ts`**, **`src/infrastructure/http/controller.ts`**, **`src/infrastructure/http/request.ts`**, **`src/app/error-handling.ts`**, **`src/infrastructure/surfaces/create-item-controller.ts`**, **`src/kernel/middlewares/authorizations.ts`**, and the HTTP middlewares (`human-challenge`, `idempotency`, `rate-limit`, `upload`) — all consume the ambient `t` (or `getLocaleContext`) to produce localized user-facing strings within the request chain.
-- **`src/infrastructure/security/breached-passwords/index.ts`** — may call `runWithLocale` for out-of-band notifications or `t` within a request.
+- **`src/infrastructure/i18n/catalog.ts`** — imported for `getDefaultLocale()` used as the final fallback in `getCurrentLocale()`.
+- **`src/infrastructure/i18n/index.ts`** — barrel file that re-exports this module's public API.
+- **`src/infrastructure/http/middlewares/locale.ts`** — the middleware that negotiates the incoming request's locale and calls `runWithLocaleContext` (or `runWithLocale`) to bind the context for the rest of the request.
+- **`src/infrastructure/http/validation-messages.ts`**, **`src/infrastructure/http/errors.ts`**, **`src/app/error-handling.ts`**, and the various HTTP middlewares (`rate-limit`, `idempotency`, `human-challenge`, `upload`) — consume the exported `t` to render localized messages.
+- **`src/infrastructure/surfaces/create-item-controller.ts`**, **`src/kernel/middlewares/authorizations.ts`**, **`src/infrastructure/security/breached-passwords/index.ts`** — call `t` (or `translator`) for user-facing strings outside the core HTTP middleware layer.
 
 ## Notes
 
-- The `t` export is cast to `TFunction` because `TFunction`'s overloads cannot be satisfied by a single arrow-function signature. This is an unavoidable type-level compromise.
-- Code outside the request async chain (queue workers, boot-time callbacks, tests) will see `getLocaleContext()` return `undefined` and must call `runWithLocale` explicitly; there is no implicit fallback to a "current" locale.
-- Migration from a global `i18next.t` import to this module's `t` is a one-line import swap — the call-site signature is identical.
+- `t` is cast to `TFunction` because `TFunction`'s overloads cannot be satisfied by a plain arrow function; the cast is unavoidable and intentional.
+- Out-of-band work (queues, boot-time callbacks) is **not** inside any request's async chain, so it must explicitly wrap its body in `runWithLocale` or call `translator` directly — the ambient `t` will fall back to `i18next.t` (the boot language) otherwise.
+- The `localeStorage` `AsyncLocalStorage` instance is module-private; all entry/exit goes through the exported run/get helpers.

@@ -1,7 +1,7 @@
 ---
 source: docker/observability/prometheus.alert-rules.yaml
-sha256: 91455026c690d9e36b0d84a055203f17b87e5f506e17b5f019d4ec43c38d1913
-generated_at: 2026-09-23T17:13:42.535050+00:00
+sha256: 9faefb9cbab00b7c99b9cff385e7b7b32698fa28f4ec988da6dd5b408c08365d
+generated_at: 2026-09-27T13:47:41.859828+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Prometheus alert-rule set for the local API stack. While dashboards give a visual picture, this file encodes the actionable SRE thresholds (availability, error rate, latency, saturation, memory, queue, and webhook delivery) that trigger paging or operator attention when the system crosses a known-bad boundary.
+Defines the full set of Prometheus alert rules for the local API stack. While dashboards provide visual context, this file encodes the actionable SRE thresholds — availability, error rate, latency, saturation, memory, queue health, webhook delivery, and scheduled-job liveness — into alerts with explicit severity and annotations.
 
 ## Key elements
 
-- **`groups[0]` — `api.rules`**: Single rule group containing all alerts; Prometheus evaluates them together.
-- **`ApiDown`** (critical): Fires when `up{job="api"}` drops to 0 for 1 min — the scrape target is unreachable.
-- **`HighErrorRate`** (warning): 5-minute 4xx/5xx ratio exceeds 5 %; 5 min sustained.
-- **`HighP95Latency`** (warning): `histogram_quantile(0.95, …)` on `http_request_duration_milliseconds_bucket` exceeds 2 000 ms; 5 min sustained.
-- **`HighInFlightRequests`** (warning): `http_requests_in_flight` > 100 for 2 min.
-- **`HighHeapUsage`** (warning): `nodejs_heap_size_used_bytes / nodejs_heap_size_limit_bytes` > 0.90 for 5 min. Denominator is the V8 ceiling (`--max-old-space-size`), **not** `nodejs_heap_size_total_bytes` (see Notes).
-- **`QueueJobsParked`** (warning): `increase(queue_jobs_dead_lettered_total[15m]) > 0`, `for: 0m` — any single dead-letter event alerts immediately.
-- **`WebhookDeliveriesFailingEverywhere`** (critical): Zero successful deliveries in 30 min **and** > 10 failures in the same window — signals a platform-side outage (egress, DNS, signing), not a single bad subscriber.
-- **`WebhookRetriesStalled`** (warning): `webhook_deliveries_overdue` stays > 0 for 15 min — the sweep cron itself has stopped.
+All rules live in a single group, `api.rules`:
+
+- **ApiDown** (`critical`) — `up{job="api"} == 0` for 1 min. The metrics endpoint is unreachable.
+- **HighErrorRate** (`warning`) — 4xx/5xx ratio above 5 % over a 5-min window, sustained 5 min.
+- **HighP95Latency** (`warning`) — `histogram_quantile(0.95, …)` over `http_request_duration_milliseconds_bucket` exceeds 2 000 ms for 5 min.
+- **HighInFlightRequests** (`warning`) — `http_requests_in_flight > 100` for 2 min.
+- **HighHeapUsage** (`warning`) — `nodejs_heap_size_used_bytes / nodejs_heap_size_limit_bytes > 0.90` for 5 min. Denominator is V8's fixed ceiling (`nodejs_heap_size_limit_bytes`), not the dynamically-growing `total`.
+- **QueueJobsParked** (`warning`) — `increase(queue_jobs_dead_lettered_total[15m]) > 0`. Fires on the first dead-lettered job; no higher threshold is meaningful.
+- **WebhookDeliveriesFailingEverywhere** (`critical`) — zero successes and > 10 failures in 30 min. Signals a platform-side outage (egress, DNS, signing), not a single subscriber issue.
+- **WebhookRetriesStalled** (`warning`) — `webhook_deliveries_overdue > 0` for 15 min. Indicates the retry-sweep cron itself has stopped running.
+- **ScheduledJobStale** (`warning`) — `time() - job_last_success_timestamp_seconds > 48 h` for nightly jobs (excludes the three high-frequency sweeps).
+- **FrequentSweepStale** (`warning`) — same metric but a 30-min threshold for `sweep:payment-effects` and `sweep:reservations`, which run every 5 minutes.
 
 ## Relationships
 
-- **`docker/observability/prometheus.config.yaml`** — The Prometheus server config that loads this file via its `rule_files` directive and defines the `api` scrape job that `ApiDown` depends on.
-- **`infrastructure/observability/metrics-registry.ts`** — Registers `nodejs_heap_size_limit_bytes`, the denominator for `HighHeapUsage`.
-- **`infrastructure/observability/metrics-queue.ts`** — Registers `queue_jobs_dead_lettered_total`, the only metric that surfaces dead-letter parking (no other component reads that queue).
-- **`scripts/ops/sweep-webhook-retries.ts`** — The per-minute cron that re-enqueues pending webhook retries. `WebhookRetriesStalled` exists to detect when _this_ script stops executing.
-- **`docs/modules/webhooks.md`** — Documents the design decision that a single subscriber's endpoint failure stays silent (reschedules on its own row); `WebhookDeliveriesFailingEverywhere` complements that by catching fleet-wide egress/signing outages.
+- **docker/observability/prometheus.config.yaml** — The Prometheus server configuration that references this file (via `rule_files`) so the rules are evaluated and exposed for alerting.
+- **docs/modules/webhooks.md** — Cited in annotations for the webhook alerts; documents why individual subscriber failures stay silent by design and how the dead-letter / reschedule flow works.
+- **scripts/ops/sweep-webhook-retries.ts** — The cron job whose liveness `WebhookRetriesStalled` monitors. It republishes overdue `pending` webhook rows back onto the queue; if it stops, `webhook_deliveries_overdue` grows and this alert fires.
 
 ## Notes
 
-- **Heap denominator matters.** `HighHeapUsage` deliberately divides by `nodejs_heap_size_limit_bytes`, not `nodejs_heap_size_total_bytes`. Against `total`, a healthy idle Node process already sits at ~0.97 and the alert fires permanently, training operators to ignore it.
-- **`QueueJobsParked` uses `for: 0m`.** There is no meaningful threshold above "at least one job was parked"; any increment in 15 min is actionable.
-- **Webhook failure vs. parking.** Failed webhook deliveries _reschedule on their own row_ and are republished by the sweep — they never land in a dead-letter queue. Therefore `QueueJobsParked` will **not** fire for the webhook queue; `WebhookDeliveriesFailingEverywhere` is the alert that covers that path.
-- **Severity is binary.** Alerts are labelled `critical` (ApiDown, WebhookDeliveriesFailingEverywhere) or `warning` (all others). No intermediate tier exists.
+- **Heap alert denominator** — Using `nodejs_heap_size_total_bytes` instead of `nodejs_heap_size_limit_bytes` makes the ratio sit near 0.97 on an idle process and fires permanently. The `limit` metric is registered by `infrastructure/observability/metrics-registry`.
+- **Webhook vs. queue alerting** — Failed webhook deliveries reschedule on their own row and are republished by the sweep; they never reach the dead-letter queue. So `QueueJobsParked` will *not* fire for webhook failures — `WebhookDeliveriesFailingEverywhere` is the correct signal.
+- **Scheduled-job thresholds are tiered** — Nightly jobs get a 48 h window; the 5-minute sweeps (`payment-effects`, `reservations`) get 30 min. A single shared threshold would either page constantly on the fast jobs or let nightly failures go unnoticed for 48 h.
+- **`for: 0m`** on `QueueJobsParked`, `WebhookDeliveriesFailingEverywhere`, `WebhookRetriesStalled`, `ScheduledJobStale`, and `FrequentSweepStale` means the alert fires immediately when the expression is true — there is no "sustained" window because a single occurrence (or one missed run) is already significant.

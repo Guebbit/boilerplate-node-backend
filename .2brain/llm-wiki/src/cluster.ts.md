@@ -1,7 +1,7 @@
 ---
 source: src/cluster.ts
-sha256: 7f193d131f4f8f409cb8508afe2f6bf847d631b394f27c0addb5ab8129d9ab73
-generated_at: 2026-09-23T17:36:49.156926+00:00
+sha256: 9e6439b95fa1922e317bdac3f356d33aea4c6417cf6b238e569881de3bcf05fb
+generated_at: 2026-09-27T14:03:40.200545+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Entry point of the repository (set as `main` in `package.json`). It bootstraps OpenTelemetry tracing, then either forks a configurable number of `node:cluster` workers (primary role) or delegates to `./app` (worker role). It exists so the application can scale across CPU cores and survive transient worker crashes without manual restart.
+The repository's production entry point (per `package.json`). It guarantees OTel tracing initializes before the application module loads, then either runs as a **cluster primary** (forking workers, managing respawn with backoff, and coordinating graceful shutdown) or as a **cluster worker** (dynamically importing `./serve` to boot the HTTP app).
 
 ## Key elements
 
-- **`startTracing()` call** — imported and invoked at the very top, before any other module loads, to ensure OTel context is available process-wide.
-- **`CLUSTER_ENABLED`** — resolved from `NODE_ENABLE_CLUSTERING` (default `false`); gates the entire primary/worker branching.
-- **`getWorkerTarget()`** — reads `NODE_CLUSTER_WORKERS` (default `os.cpus().length`) and clamps the result to ≥ 1.
-- **Crash-loop backoff logic** (`cluster.on('exit')`) — tracks crash timestamps in a sliding window (`NODE_CLUSTER_CRASH_WINDOW_MS`, default 60 s) and respawns with exponential backoff (`NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` → `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`).
-- **`startPrimaryShutdown(signal)`** — sends `SIGTERM` to all workers, waits `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS` (default 15 s), then force-kills stragglers with `SIGKILL`.
-- **Worker branch** — the `else` path simply `void import('./app')`, so workers run the same application code the primary would.
+- **`startTracing()`** — called immediately after `dotenv/config` and the `otel-sdk` import; must precede any other module side-effects.
+- **`CLUSTER_ENABLED`** — `environmentFlag('NODE_ENABLE_CLUSTERING', false)`; gates the primary branch.
+- **Primary block** (`cluster.isPrimary && CLUSTER_ENABLED`):
+  - Forks `workerTarget(...)` workers (resolved from `NODE_CLUSTER_WORKERS` + `os.availableParallelism()`).
+  - On worker `exit`: decides whether to respawn via `shouldRespawn` + `crashVerdict` (exponential backoff, crash-window limit). Gives up after `DEFAULT_CRASH_LIMIT` crashes in the window.
+  - `startPrimaryShutdown(signal)` — SIGTERM all workers, force-KILL after `shutdownTimeoutMs`, sets `process.exitCode`.
+  - Listens for `SIGTERM` / `SIGINT` to trigger coordinated shutdown.
+- **Worker branch** (`else`): `void import('./serve')` — side-effect-only dynamic import that builds and starts the Express + Mongoose app.
+- **Constants** (`DEFAULT_CRASH_WINDOW_MS`, `DEFAULT_CRASH_BACKOFF_BASE_MS`, `DEFAULT_CRASH_BACKOFF_MAX_MS`, `DEFAULT_SHUTDOWN_TIMEOUT_MS`, `DEFAULT_CRASH_LIMIT`) — fallbacks for the corresponding `NODE_CLUSTER_*` env vars.
 
 ## Relationships
 
-- **`@infrastructure/runtime/otel-sdk`** — `startTracing()` is called immediately on module load; this is a hard ordering dependency (tracing must be active before the cluster or app code runs).
-- **`@infrastructure/adapters/logger`** — all structured log output (info/warn) in the primary process goes through the shared `logger` instance.
-- **`@infrastructure/runtime/environment`** — `environmentFlag` and `environmentNumber` are the sole accessors for every `NODE_*` tuning knob in this file; no direct `process.env` reads.
+- **`src/infrastructure/runtime/otel-sdk.ts`** — imports `startTracing`; called before any app module loads so OTel can intercept subsequent requires.
+- **`src/infrastructure/runtime/environment.ts`** — imports `environmentFlag` and `environmentNumber` to read all `NODE_CLUSTER_*` and `NODE_ENABLE_CLUSTERING` settings.
+- **`src/infrastructure/runtime/cluster-policy.ts`** — imports `workerTarget` (how many workers to fork) and `crashVerdict` (backoff / give-up decision on crash).
+- **`src/infrastructure/adapters/logger.ts`** — imports `logger` for structured info/warn/error logging of fork, exit, shutdown, and crash-loop events.
 
 ## Notes
 
-- The OTel import is intentionally placed above all other imports. Reordering will silently break tracing context for the rest of the module.
-- `scheduleRespawn` uses `timer.unref()` so pending respawn timers don't keep the primary process alive after an intentional shutdown.
-- The Stryker mutation-testing disable/restore comments around log lines are intentional — those lines are expected to be "trivial" for mutation scoring; do not remove them when refactoring.
-- If you don't need multi-core scaling, swap the `main` field in `package.json` to `app.ts` (as noted in the file header comment) and skip this module entirely.
-- `crashHistory` is a plain in-memory array; it does not survive a primary restart.
+- **Import-order is load-bearing.** `dotenv/config` must be the *first* import so `.env` is in `process.env` before `environmentNumber`/`environmentFlag` are called. `startTracing()` must run before any static import of the app, because ES module hoisting would otherwise execute `app`'s top-level code (Express, Mongoose) before tracing is active. The worker therefore uses a **dynamic** `import('./serve')` to avoid hoisting.
+- **`process.exitCode ??= 0`** on the last-worker-exited path: a crash-loop or forced shutdown may already have set the code to `1`; `??=` prevents the clean-exit from overwriting that failure signal.
+- The file is heavily annotated with `// Stryker disable next-line all` comments, indicating it is covered by mutation testing; do not remove those markers when editing.
+- `respawnTimers` are `.unref()`'d so they don't keep the event loop alive during shutdown.

@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/reap-mail-spool.ts
-sha256: 71b7b4381e84acdef322f09b0625d2f96f9495e08ed82cd0111367af96f870cc
-generated_at: 2026-09-23T17:29:54.253097+00:00
+sha256: 9b3f76749f5ab5a22de6b02714a72034c77607760d9b7a2fa9951943ceeb3be9
+generated_at: 2026-09-27T13:57:32.207698+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI backstop job (`npm run reap:mail-spool`) that deletes mail-spool files abandoned by a crashed or lost mail job. It is filesystem-only, idempotent, and designed to run as a periodic scheduled task (cron, container schedule) rather than interactively.
+A scheduled (cron / container-task) script that sweeps abandoned spooled mail attachments from the filesystem. A spooled file outlives its mail job only when something went wrong (job died between `spoolAttachment()` and send, or was lost). This is the backstop cleanup; it is not intended for manual invocation.
 
 ## Key elements
 
-- **`retentionMs()`** — Reads `NODE_MAIL_SPOOL_RETENTION_HOURS` (default 1) via `environmentNumber` and returns the retention window in milliseconds.
-- **`main()`** — Calls `reapSpooled(retentionMs())`, logs an info message only when `reaped > 0`.
-- **Entry point** — `void runScript(main, () => Promise.resolve())` wires the script through the standard runner; the second argument is a no-op teardown (no DB or resources to release).
+- **`retentionMs()`** — Reads `NODE_MAIL_SPOOL_RETENTION_HOURS` (default `1`) via `environmentNumber` and returns the threshold in milliseconds. Files older than this are considered abandoned.
+- **`main`** — Calls `reapSpooled(retentionMs())`, logs an info line if any files were reaped, then calls `start()` to connect Mongo. The sweep itself never touches Mongo.
+- **`runScript('reap:mail-spool', main, stopDatabase)`** — Entry-point wrapper: records the job outcome in the `leases` collection, and calls `stopDatabase` on exit.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mail-spool.ts`** — Source of `reapSpooled()`, the function that actually walks the spool directory and deletes files older than the retention window.
-- **`src/infrastructure/runtime/environment.ts`** — Source of `environmentNumber()`, used to parse the retention-hours env var with a default.
-- **`src/infrastructure/adapters/logger.ts`** — Source of `logger`; the script logs only a single info line when files are actually reaped.
-- **`scripts/db/run-script.ts`** — Source of `runScript()`, the standard entry-point wrapper that handles signal handling and lifecycle for scripts in this repo.
+- **`src/infrastructure/adapters/mail-spool.ts`** — Supplies `reapSpooled`, the actual filesystem sweep. This is the only function that touches the spool directory.
+- **`scripts/run-script.ts`** — Supplies `runScript`, which manages the Mongo connection lifecycle for the outcome record and the `stopDatabase` teardown callback.
+- **`src/infrastructure/runtime/database.ts`** — Provides `start()` (deferred Mongo connect) and `stopDatabase()` (cleanup).
+- **`src/infrastructure/runtime/environment.ts`** — Provides `environmentNumber` used to read the retention-hours setting.
+- **`src/infrastructure/adapters/logger.ts`** — Provides `logger` for the single info-level log emitted when attachments are reaped.
 
 ## Notes
 
-- Safe to run concurrently with live sends: `NODE_MAIL_SPOOL_PATH` is only ever read by `mailer.ts`, and the sweep only touches files older than the retention window (default 1 h), far beyond the seconds a mail job needs.
-- A spooled file outliving its job means the mail job died between `spoolAttachment()` and the actual send — this script is the cleanup path for that failure mode.
-- See `docs/tools/email-and-rendering.md` for the broader mail pipeline context.
+- **Sweep before connect (PL-28).** `reapSpooled` runs *before* `start()` is called. A Mongo outage must not block a purely-filesystem cleanup that doesn't need the database.
+- **Concurrency-safe.** `NODE_MAIL_SPOOL_PATH` is never served to clients and is only read/written by `mailer.ts` (the spool) and this script (the reap). A concurrent in-flight send cannot depend on a file past the retention window.
+- **Idempotent / repeatable.** Safe to run multiple times; it only deletes files older than the retention threshold.
+- **Invocation.** `npm run reap:mail-spool`. Intended as a periodic job, not a one-shot debug tool.

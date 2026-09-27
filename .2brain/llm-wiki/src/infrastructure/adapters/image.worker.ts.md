@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/image.worker.ts
-sha256: a395e2a1a7194aab395d17678a33ddc1fd41c2c0b8118040c6d8d0623c3e91a6
-generated_at: 2026-09-23T17:40:00.297144+00:00
+sha256: 04db65472cacc752300c8f1ebdd89caac17651d01ec620ab4e86cdd6b1f75004
+generated_at: 2026-09-27T14:06:17.145115+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the single image-digest pipeline that turns a quarantined upload into a promoted original + thumbnail, then writes the resulting URLs back onto the target document. Serves both the queued worker path (`handleImageDigestJob`) and the no-broker inline path (`enqueueImageDigest`) so the two cannot drift apart. Because this file lives below `@kernel`/`@modules` in the dependency hierarchy, it cannot import module services directly; instead it receives a writeback function via an inverted port registered at boot.
+Implements the single image-digest pipeline that turns a quarantined upload into a promoted original plus thumbnail, then writes the resulting URLs back onto the waiting document. Because this file lives in `infrastructure/adapters` (below `@kernel`/`@modules`), it cannot import module code directly; the writeback is an **inverted port** (`ImageWriteback`) registered at boot by `app/workers.ts`. Both the queued worker path and the no-broker inline path share the same `digestQuarantinedImage` function so the two can never drift apart.
 
 ## Key elements
 
-- **`UnsupportedImageFormatError`** — the sole _permanent_ failure type. Thrown when bytes will never decode as PNG/JPEG/WebP. Callers dead-letter the job and remove the quarantine file.
-- **`contentStem(owner, digested)`** _(internal)_ — derives the shared file identity (owner + first 24 hex chars of SHA-256 of re-encoded bytes). Owner salting prevents a stale-run cleanup from deleting a different owner's live file.
-- **`DigestedImageUrls`** — interface: `{ imageUrl, thumbnailUrl }`, the two URLs a finished digest produces.
-- **`ImageWriteback`** — type alias for the per-collection writeback function `(documentId, key, urls) => Promise<boolean>`. Structurally identical to `ImageTarget` in the kernel registry but declared here to avoid the upward import.
-- **`registerImageWritebackResolver(resolver)`** — boot-time registration of the collection→writeback lookup. Called once from `app/workers.ts`.
-- **`digestQuarantinedImage(key, owner)`** — the core pipeline: read quarantine → identify mime → re-encode original + thumbnail → promote both under `contentStem` → best-effort remove quarantine file. Returns `DigestedImageUrls`.
-- **`settleWriteback(...)`** _(internal)_ — invokes the module writeback; on no-match (stale job / deleted doc) removes the promoted files; on match invalidates the collection's cache tag.
-- **`handleImageDigestJob(job)`** — queue worker handler. Validates payload, resolves writeback, runs `digestQuarantinedImage` + `settleWriteback`. Returns `false` for permanent failures (malformed payload, unregistered collection, `UnsupportedImageFormatError`); rethrows transient errors for retry.
-- **`enqueueImageDigest`** _(truncated in source)_ — queue-aware dispatch entry point called by module services; falls back to inline `digestQuarantinedImage` when the broker is disabled.
-- **`IMAGE_QUEUE`** — re-exported from `queue.ts` for the worker registry in `app/workers.ts`.
+- **`IMAGE_QUEUE`** (re-export) — the queue name for digest jobs, owned by `queue.ts`, re-exported here for the worker registry.
+- **`UnsupportedImageFormatError`** — the *only* permanent failure class. Thrown when bytes will never decode as PNG/JPEG/WebP. Callers dead-letter the job and remove the quarantine file. Every other throw is treated as transient and retried.
+- **`contentStem(owner, digested)`** (internal) — builds the storage key: `${owner}-${sha256(digested).slice(0,24)}`. The `owner` salt prevents a stale run's cleanup from deleting a different document's live file.
+- **`DigestedImageUrls`** — `{ imageUrl, thumbnailUrl }`, the pair a finished digest produces.
+- **`ImageWriteback`** (type) — `(documentId, key, urls) => Promise<boolean>`. The boolean indicates whether the document matched; `false` triggers promoted-file cleanup. Structurally identical to `ImageTarget` in the kernel registry but re-declared here to avoid the import.
+- **`registerImageWritebackResolver(resolver)`** — boot-time hook (called from `app/workers.ts`) that installs the collection→writeback lookup. `undefined` until called.
+- **`digestQuarantinedImage(key, owner)`** — the shared pipeline: `readQuarantined` → `identifyImage` → `digestImage` + `thumbnailImage` → `promote` + `putDerivative`. Leaves the quarantine file in place; the caller removes it after durable writeback.
+- **`settleWriteback(...)`** (internal) — calls the module writeback, then either cleans up promoted files (no match) or invalidates the collection's cache tag (match). Also removes the quarantine file.
+- **`handleImageDigestJob(job)`** — queue consumer. Validates payload, resolves the collection's writeback, runs `digestQuarantinedImage` + `settleWriteback`. Returns `false` (dead-letter) for malformed payload, unregistered collection, or `UnsupportedImageFormatError`; rethrows other errors so `consumeFromQueue` retries.
 
 ## Relationships
 
-- **`src/app/workers.ts`** — calls `registerImageWritebackResolver` at boot, wiring the collection→writeback map built from enabled modules.
-- **`src/infrastructure/adapters/image-store.ts`** — provides `imageStore` (quarantine read/write, `promote`, `putDerivative`, `removeQuarantined`, `remove`).
-- **`src/infrastructure/adapters/image.ts`** — provides `digestImage`, `thumbnailImage`, and the `ReencodableImageMime` type.
-- **`src/infrastructure/adapters/image-signatures.ts`** — provides `identifyImage` to sniff the real mime from raw bytes.
-- **`src/infrastructure/adapters/queue.ts`** — source of `IMAGE_QUEUE`, `isQueueEnabled`, `publishToQueue`; this file re-exports `IMAGE_QUEUE`.
-- **`src/infrastructure/adapters/cache.ts`** — `invalidateCacheTagsLogged` called by `settleWriteback` after a successful writeback.
-- **`src/infrastructure/adapters/logger.ts`** — structured logging throughout.
-- **`src/infrastructure/http/middlewares/upload.ts`** — calls `enqueueImageDigest` inline (no-broker path) with the quarantine key as `owner` (no document id exists yet).
-- **`src/modules/products/service.ts` / `src/modules/users/service.ts`** — call `enqueueImageDigest` after persisting an upload; their repositories supply the `ImageWriteback` implementation registered via `registerImageWritebackResolver`.
-- **`src/types/index.ts`** — defines `ImageDigestJobPayload` used by the queue handler.
-- **`tests/unit/infrastructure/adapters/image.worker.test.ts`** — unit tests for this module.
+| Neighbor | Interaction |
+|---|---|
+| `app/workers.ts` | Calls `registerImageWritebackResolver` once at boot to inject the collection→writeback map. |
+| `adapters/image.ts` | Imports `digestImage`, `thumbnailImage`, and the `ReencodableImageMime` type for re-encoding and MIME narrowing. |
+| `adapters/image-signatures.ts` | Imports `identifyImage` to sniff the real MIME from raw bytes before re-encoding. |
+| `adapters/image-store.ts` | Imports `imageStore` for `readQuarantined`, `promote`, `putDerivative`, `remove`, and `removeQuarantined`. |
+| `adapters/queue.ts` | Imports `IMAGE_QUEUE` (re-exported) and `publishToQueue` (available to callers like `upload.ts` that enqueue a job instead of running inline). |
+| `adapters/cache.ts` | Imports `invalidateCacheTagsLogged`; called in `settleWriteback` after a successful writeback to make the finished digest visible. |
+| `adapters/logger.ts` | Imports `logger` for structured warn/info messages on discard and cleanup paths. |
+| `types/index.ts` | Imports `ImageDigestJobPayload` for the queue job shape. |
+| `http/middlewares/upload.ts` | The no-broker inline path: calls `digestQuarantinedImage(key, key)` directly (no document id yet) and handles the result synchronously. |
+| `modules/products/*`, `modules/users/*` | Their repositories provide the `ImageWriteback` implementations resolved at boot; their services enqueue `IMAGE_QUEUE` jobs on upload. |
+| `tests/…/image.worker.test.ts` | Unit tests exercise `digestQuarantinedImage`, `handleImageDigestJob`, and the writeback/cleanup paths. |
 
 ## Notes
 
-- **Permanent vs. transient failure distinction is load-bearing.** `UnsupportedImageFormatError` → dead-letter + quarantine removal. Any other thrown error → rethrown for broker nack/retry, and the quarantine file is intentionally _left in place_ so the retry can re-read it. Do not broaden the `catch` in `handleImageDigestJob`.
-- **Cache invalidation in `settleWriteback` is the only visibility point.** The write that enqueued the job already cleared the tag, but the response that re-warmed it still carries placeholder URLs. Without the second invalidation, a cached response serves stale placeholders for the tag's full TTL.
-- **`resolveWriteback` is `undefined` until boot wiring completes.** Any test that imports this module without calling `registerImageWritebackResolver` will hit the "unregistered collection" branch.
-- **Owner salting semantics differ by call site:** `handleImageDigestJob` passes `documentId`; `upload.ts`'s inline path passes the quarantine `key`. Retries of the same document converge on the same stem (idempotency); the upload path never retries the same key, so uniqueness is safe there.
-- **Stryker mutation-testing annotations** (`// Stryker disable … all`) guard the log-only branches to prevent dead-code mutation.
+- **Inverted dependency:** this file deliberately cannot import from `@kernel` or `@modules`. The writeback is injected via `registerImageWritebackResolver`; until that call, `resolveWriteback` is `undefined` and any arriving job is discarded with a warning. Tests that import this module start in that unregistered state.
+- **Permanent vs. transient failure is binary:** only `UnsupportedImageFormatError` is permanent (same bytes, same result on every retry). A storage write failure, disk-full, or a DB call in the writeback is all treated as transient and rethrown so the broker retries.
+- **Quarantine file lifecycle:** the file is *not* deleted during `digestQuarantinedImage`. It is removed in `settleWriteback` only after the writeback returns (or in the `UnsupportedImageFormatError` catch in `handleImageDigestJob`). A leftover is swept by `scripts/ops/reap-quarantine.ts` as a safety net.
+- **Double cache invalidation:** the write that enqueued the job already cleared the collection tag. `settleWriteback` clears it a *second* time after the digest completes, because the first clear re-warmed a response that still carried placeholder URLs. Without the second clear, the placeholder persists for the tag's full TTL.
+- **`owner` parameter:** pass the target document's id when one exists (queue path, inline retry); pass the quarantine key itself when no document id exists yet (`upload.ts` pre-write path). This is what makes idempotent re-runs converge on the same file while keeping cross-document files isolated.

@@ -1,7 +1,7 @@
 ---
 source: src/app/telemetry.ts
-sha256: 04819b1040048eb70bc6d4cf3480ad182a5758d03f1474a83e72410ef753ca49
-generated_at: 2026-09-23T17:36:28.141312+00:00
+sha256: f6b2fc8e19d6f6928171784abebb9cf089e5559f7b9e67cfd0db68e8aadcd196
+generated_at: 2026-09-27T14:03:26.919434+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Installs a single Express middleware that records per-request latency and in-flight request counts as Prometheus metrics. It exists to provide HTTP observability without coupling metric logic to any individual route handler.
+Installs a single Express middleware that records per-request latency (histogram) and in-flight request count (gauge) as Prometheus metrics. It is mounted *before* the route table so the timer wraps the entire handler chain rather than just the matched handler.
 
 ## Key elements
 
-- **`installTelemetry(app: Express): void`** — The sole export. Registers a `next`-style middleware that:
-    - Calls `incrementInflight()` on request start.
-    - Captures a `process.hrtime.bigint()` timestamp.
-    - On the response `finish` event, calls `decrementInflight()` and `recordRequestMetric()` with `method`, `route` (via `getRouteLabel`), `statusCode`, and `durationMs`.
+- **`installTelemetry(app: Express): void`** — The sole export. Registers one `app.use` middleware that:
+  - Calls `incrementInflight()` on request entry and wires `decrementInflight` to the response `close` event.
+  - Captures a `process.hrtime.bigint()` start time; on the response `finish` event computes elapsed ms and calls `recordRequestMetric` with `method`, `route` (via `getRouteLabel`), `statusCode`, and `durationMs`.
 
 ## Relationships
 
-- **`src/infrastructure/observability/metrics-http.ts`** — Source of all four metric primitives imported here (`getRouteLabel`, `recordRequestMetric`, `incrementInflight`, `decrementInflight`). This file is a thin wiring layer; the actual Prometheus gauge/histogram definitions live in that module.
-- **`src/app.ts`** — Expected caller that invokes `installTelemetry(app)` during Express app setup, placing the middleware ahead of route definitions.
-- **`package.json`** — Provides the `express` runtime dependency from which the `Express` type is imported.
+- **`src/app.ts`** — Calls `installTelemetry(app)` during application setup, placing this middleware ahead of all route registrations.
+- **`src/infrastructure/observability/metrics-http.ts`** — Supplies the four metric primitives this file consumes: `getRouteLabel`, `recordRequestMetric`, `incrementInflight`, `decrementInflight`.
+- **`tests/unit/app/telemetry.test.ts`** — Unit-tests the middleware behavior (in-flight gauge transitions, metric recording on finish).
+- **`package.json`** — Declares the `express` and `@infrastructure/observability` dependencies this file imports.
 
 ## Notes
 
-- **Mount order matters.** The module doc comment states this middleware must be mounted _before_ routes so the timer wraps the handler execution rather than measuring only post-handler work.
-- **Route label timing.** `getRouteLabel(request)` is called inside the `finish` listener, not in the middleware body. `request.route` is only populated once Express has completed routing; reading it earlier would require parsing the raw path and would produce unbounded label cardinality for unmatched paths.
-- **Single-fire guarantee.** The `finish` handler is attached with `response.once`, so the metric is recorded exactly once per request even if `finish` were (hypothetically) re-emitted.
+- **`close` vs `finish` for the gauge:** `decrementInflight` is bound to the response `close` event, not `finish`. Aborted or streamed (SSE) responses never fire `finish`; `close` always fires, preventing the in-flight gauge from leaking.
+- **Route label deferred to `finish`:** `request.route` is populated only after routing completes. Reading it in the middleware body would require guessing a template from the raw path, producing unbounded label cardinality for unmatched paths. Reading it in the `finish` callback sidesteps that.
+- **Single-`once` wiring:** Both `close` and `finish` listeners use `.once()` so repeated emissions (e.g. `close` after `finish`) don't double-decrement the gauge.

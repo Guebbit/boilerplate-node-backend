@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/openapi-bundle.ts
-sha256: b31c04e5d6596e0280e1787b557717cc8c610bfcffb81b4b96d3a40ee77edf14
-generated_at: 2026-09-23T17:23:04.099447+00:00
+sha256: c383709051453e4519a825c62e89f24dbe76c0104dd0b45078de35225874effc
+generated_at: 2026-09-27T13:53:30.849929+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Compiles the project's REST OpenAPI contract from per-module standalone YAML documents into a single `openapi.yaml`. It shells out to `redocly bundle` to resolve cross-file `$ref`s, then post-processes the result to inject shared default responses (429, 400/413/415) into every operation that hasn't declared its own. The output is a committed, generated artefact consumed by Spectral, Orval, and the client-collections generator.
+Compiles the project's REST API contract into a single `openapi.yaml` by running `redocly bundle` over the root document (`shared/contracts/openapi.root.yaml`) and every module's standalone `openapi.yaml`, then post-processes the result to merge app-level default responses (429, body-size errors) into every operation that doesn't declare its own. Exports the result as a `CompiledBundle` so the shared bundle registry and downstream consumers (client collections, tests) get one canonical contract.
 
 ## Key elements
 
-- **`MODULE_SECTIONS`** — Ordered list of the 17 modules that each own a standalone `src/modules/<name>/openapi.yaml`. Order is the narrative order a caller meets paths and the order client collections group requests.
-- **`SECTION_ORDER`** — `['system', ...MODULE_SECTIONS]`; adds the shell (`GET /`) which lives in the root document rather than a module folder.
+- **`MODULE_SECTIONS`** — Ordered list of the 16 modules that each own a standalone `openapi.yaml` under `src/modules/<name>/`. Order is the narrative/customer-flow order and also the order client collections group requests in.
+- **`SECTION_ORDER` / `SectionName`** — `MODULE_SECTIONS` prefixed with `'system'` (the shell's own paths, written directly in the root doc). Used by anything that groups paths by owner.
 - **`moduleSpec(section)`** — Resolves the filesystem path to a module's `openapi.yaml`.
-- **`sectionPaths(section)`** — Returns all paths a section declares. For modules this is a textual regex (`^ {4}(\/\S*):\s*$`); for `system` it parses the root YAML and filters out `$ref` entries.
-- **`withAppLevelResponses(bundled: string): string`** — Parses the bundled YAML, merges the root's `x-app-level-responses` map into every operation's `responses` (never overwriting an existing status code), deletes the `x-app-level-responses` key, and re-serialises with `lineWidth: 0`.
-- **`compile()`** (internal) — Memoised. Runs `redocly bundle` against `openapi.root.yaml`, reads the output file, prepends a "DO NOT EDIT" marker, and applies `withAppLevelResponses`.
-- **`openapiBundle`** — The `CompiledBundle` record (name, label, output path, `content: compile`, `sources`) exported for the bundle registry.
+- **`sectionPaths(section)`** — Returns every path a section declares, in declaration order. For `'system'` it parses the root and keeps only non-`$ref` entries; for modules it uses a fast regex (`PATH_LINE`) on raw text.
+- **`withAppLevelResponses(bundled)`** — Parses the bundled YAML, walks every operation, injects missing responses from the root's `x-app-level-responses` map (never overwriting existing ones), deletes the map from the output, and re-stringifies with `lineWidth: 0`.
+- **`compile()`** — Memoized. Shells out to `@redocly/cli bundle` writing to `node_modules/.cache/openapi.bundle.yaml`, reads it back, prepends a generated-file marker comment, and applies `withAppLevelResponses`.
+- **`openapiBundle`** — The exported `CompiledBundle` descriptor (`name`, `output` path, `compiled: true`, `content: compile`, `sources()`).
 
 ## Relationships
 
-- **`scripts/contracts/bundle-kinds.ts`** — Provides the `REPO_ROOT` constant and the `CompiledBundle` type that `openapiBundle` conforms to.
-- **`scripts/contracts/bundle-registry.ts`** — Consumes the `openapiBundle` export to register the contract in the project-wide bundle pipeline.
-- **`scripts/contracts/client-collections-bundle.ts`** — Calls `sectionPaths` and `SECTION_ORDER` to group generated HTTP client requests by owning section.
-- **`shared/contracts/openapi.root.yaml`** — The input to `redocly bundle`; source of the shared `components`, the `GET /` shell path, and the `x-app-level-responses` map that `withAppLevelResponses` reads and then strips.
-- **`tests/unit/scripts/contracts/openapi-bundle.test.ts`** — Unit tests for `withAppLevelResponses`, `sectionPaths`, and the compile flow.
-- **`tests/cross-cutting/contract-bundles.test.ts`** — Exercises all registered bundles (including this one) for consistency invariants.
-- **`src/modules/account/tests/unit/two-factor.test.ts`** — Exercises account-module API paths whose contract is defined in `src/modules/account/openapi.yaml`, a source this file bundles.
+- **`scripts/contracts/bundle-kinds.ts`** — Provides `REPO_ROOT` and the `CompiledBundle` type that `openapiBundle` conforms to.
+- **`scripts/contracts/bundle-registry.ts`** — Consumes `openapiBundle` (and the other bundle descriptors) to coordinate generation and staleness checks across all contract artifacts.
+- **`scripts/contracts/client-collections-bundle.ts`** — Runs after the OpenAPI bundle; calls `compile()` (via the registry) to read a current contract and to use `SECTION_ORDER` / `sectionPaths` when grouping and ordering requests.
+- **`shared/contracts/openapi.root.yaml`** — The root document that `redocly bundle` resolves `$ref`s against; also the source of `x-app-level-responses` and the `system` section's paths.
+- **`tests/unit/scripts/contracts/openapi-bundle.test.ts`** — Unit tests exercising `sectionPaths`, `withAppLevelResponses`, and the bundle output shape.
+- **`tests/cross-cutting/contract-bundles.test.ts`** — Cross-cutting tests that validate all registered bundles together (including this one) for consistency.
+- **`src/modules/account/tests/unit/two-factor.test.ts`** — Lives in the `account` module, one of the `MODULE_SECTIONS`; its module's `openapi.yaml` is a source that `compile()` bundles.
 
 ## Notes
 
-- `compile()` is memoised in a module-level `let compiled`. A single process run (which may call `content` two or three times) triggers `redocly` exactly once.
-- `withAppLevelResponses` never overwrites a status code the operation already declares — it only fills gaps. An operation with its own `429` (e.g. a per-route rate-limit with custom `Retry-After`) is left untouched.
-- `appliesTo: 'requestBody'` checks for the presence of the `requestBody` field on the operation, not the HTTP method. A `DELETE` with a body gets the size-error defaults; a `GET` does not.
-- The "DO NOT EDIT" marker is prepended _after_ bundling because `redocly` strips comments from source files during parsing.
-- `lineWidth: 0` in the YAML re-serialisation prevents unstable line-wrapping from producing noisy diffs on every regeneration.
-- `sectionPaths` for modules uses a regex on raw text rather than YAML parsing — deliberately, since it is called for every path on every collection regeneration and only needs the path-key strings.
+- `compile()` is memoised at module level (`let compiled`). All callers in a single process get the same string; re-running requires a fresh process.
+- The "do not edit" marker is **prepended** after bundling, not authored in a source file, because `redocly` parses (and discards) comments.
+- `lineWidth: 0` in the final `stringifyYaml` call prevents line-folding, which would cause noisy diffs on unrelated changes.
+- `withAppLevelResponses` is **additive only**: an operation that already declares a given status code (e.g. a route-specific 429 with custom `Retry-After`) is never overwritten.
+- `appliesToOperation` checks for the presence of `requestBody` on the operation rather than inferring from the HTTP method, because `DELETE` (and other methods) can legitimately carry a body.
+- The temporary bundle file lands in `node_modules/.cache/` and is read back via `readFileSync` rather than captured from stdout, to avoid redocly's progress text corrupting the YAML.
+- `PATH_LINE` is a raw-text regex (not a YAML parse) deliberately: `sectionPaths` is called on every collection regeneration for every path, and the answer is a property of *which file* contains the line, not of the parsed document.

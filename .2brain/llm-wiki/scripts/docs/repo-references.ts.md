@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/repo-references.ts
-sha256: 3f374c05a9f208d65e3105c978d6d044235816f5b667a0952bde9718dcfe6049
-generated_at: 2026-09-23T17:26:24.317920+00:00
+sha256: 55113b0dbd09ce29300073feb36afc5fb0bc785525119490e6206e39092f8a7f
+generated_at: 2026-09-27T13:56:32.135987+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared path-resolution primitives so the two reference checkers — `check-references.ts` (markdown docs) and `comment-links.ts` (source comments) — agree on what counts as a real, in-repo path. Each caller keeps its own policy layer (VitePress routing, paired-repo tokens, etc.) on top of the primitives exported here.
+Shared path-validation primitives that let two different checkers — `check-references.ts` (markdown doc pages) and `comment-links.ts` (source-code comments) — agree on whether a cited path actually exists in this repo. Each caller still applies its own resolution policy (VitePress routing, paired-repo lookup, etc.) on top of the primitives defined here, so the "what counts as a real path" question has exactly one answer.
 
 ## Key elements
 
 - **`ROOT`** — repo root, resolved two levels up from `scripts/docs/`.
-- **`ALLOWED`** — prefix-matched list of paths that legitimately don't exist in a clean checkout (generated files, `node_modules/`, `tmp/`, build output, etc.), each with a stated reason.
-- **`allowed(token)`** — returns true if the token matches an `ALLOWED` entry (the directory itself _or_ anything beneath it).
-- **`FILENAME`** — regex identifying a real filename (non-empty stem + known extension). Applied to the _last_ segment only, so suffix conventions like `.visual.cy.ts` are not misread as filenames.
-- **`NOT_A_PATH`** — regex of characters (whitespace, quotes, globs, `…`, `<placeholder>`) that mark a span as prose, a glob, or a type rather than a concrete path.
-- **`trackedTargets(root)`** — shells out to `git ls-files` and precomputes two `Set`s: `targets` (every tail of every tracked file _and_ every intermediate directory) and `roots` (top-level segments actually present at the repo root). Set lookup replaces what would otherwise be tens of millions of `endsWith` comparisons.
-- **`SPELLINGS`** — ordered suffixes (`'', '.ts', '/index.ts', …`) tried when an extensionless token is resolved.
-- **`resolves(targets, token)`** — true if any spelling of the token is a member of the `targets` set.
-- **`claimsAPath(roots, token)`** — gatekeeper: true only if the last segment matches `FILENAME` **or** the first segment is a known root-level entry. Prevents MIME types, container images, lint rules, etc. from being treated as repo paths.
-- **`readAliases()`** — parses `tsconfig.json` (stripping JSONC comments first) and returns `{ prefix, target }[]` for `paths` aliases.
-- **`throughAliases(aliases, token)`** — rewrites an `@alias/…` token to its concrete path; returns `undefined` when no alias claims the token (e.g. an npm scope like `@typescript-eslint/…`).
+- **`ALLOWED`** — array of `{ prefix, reason }` entries for paths that legitimately are absent in a clean checkout (generated files, build output, throwaway dirs). Each entry must carry a justification.
+- **`allowed(token)`** — prefix-matches a token against `ALLOWED` (directory itself or anything under it).
+- **`FILENAME`** — anchored regex for a valid filename (non-empty stem + known extension).
+- **`NOT_A_PATH`** — regex of characters (whitespace, quotes, `<…>`, `…`, etc.) that mark a span as prose, a glob, a type, or a command rather than a real path.
+- **`trackedTargets(root)`** — runs `git ls-files` and returns two `Set<string>`s: every path *tail* (file and intermediate directory) and the set of top-level segment names. Precomputed for O(1) lookup.
+- **`SPELLINGS`** — list of extension/index suffixes (`'', '.ts', '/index.ts', …`) tried when resolving an extensionless module-specifier token.
+- **`resolves(targets, token)`** — true if any spelling of the token is a tracked target.
+- **`claimsAPath(roots, token)`** — true if the token's last segment is a valid filename *or* its first segment is a real root-level directory. Prevents false positives from MIME types, lint-rule names, `try/catch`, etc.
+- **`readAliases()`** — parses `tsconfig.json` (stripping JSONC comments first) and returns the `paths` table as `{ prefix, target }[]`.
+- **`throughAliases(aliases, token)`** — rewrites a `@alias/…` token to its concrete path; returns `undefined` for unclaimed `@scope/name` tokens (i.e. npm packages).
+- **`gitEnvironment`** — re-exported from `../git-base` for callers that need it alongside the other primitives.
 
 ## Relationships
 
-- **`scripts/docs/check-references.ts`** — consumes `ROOT`, `ALLOWED`, `allowed`, `trackedTargets`, `resolves`, `claimsAPath`, `readAliases`, and `throughAliases` to validate path tokens in every `docs/*.md` page. Adds its own policy on top: `./relative` tokens resolve via VitePress routing, bare `boilerplate-vue-frontend/…` tokens resolve against the paired repo.
-- **`scripts/eslint/comment-links.ts`** — consumes the same primitives to validate path tokens in `.ts`/`.tsx` source comments. Its policy layer is the ESLint rule wrapper; the "is this a real path?" question is delegated entirely to this module.
+- **`scripts/docs/check-references.ts`** — primary consumer; imports the primitives (or re-exports them) and layers its markdown-specific resolution policies on top.
+- **`scripts/eslint/comment-links.ts`** — secondary consumer; imports the same primitives for its `.ts`/`.tsx` comment-link checking, with a different set of resolution rules.
+- **`scripts/git-base.ts`** — provides `gitEnvironment`, which this module imports and re-exports so callers can `import { gitEnvironment }` from here.
+- **`tests/unit/scripts/docs/repo-references.test.ts`** — unit tests exercising the exported predicates and helpers.
 
 ## Notes
 
-- `ALLOWED` is deliberately an _argument_, not a mute button: every entry carries a `reason`, and a path with no reason to be absent should appear as a finding.
-- `trackedTargets` includes intermediate directories (e.g. `src/infrastructure/`) as valid tails, so citing a directory name without a trailing file is still resolvable.
-- `FILENAME` and `claimsAPath` are anchored on the **last** segment to avoid reading multi-part suffix conventions (`.visual.cy.ts`, `.test.tsx`) as filenames.
-- `readAliases` manually strips `//` comment lines before `JSON.parse` because `tsconfig.json` is JSONC and the built-in parser rejects it.
-- `throughAliases` distinguishes wildcard aliases (`@modules/*` → prefix match with trailing `/`) from bare aliases (`@types` → exact match) so that `@types` does not accidentally claim `@typescript-eslint/parser`.
+- `ALLOWED` is explicitly documented as "an argument, not a mute button": adding an entry without a `reason` defeats the purpose.
+- `trackedTargets` builds a `Set` rather than using `endsWith` per query — a sweep asks thousands of questions against thousands of files, and the set makes each lookup a single hash hit.
+- `readAliases` strips `//` comments before `JSON.parse` because `tsconfig.json` is JSONC; a naive `JSON.parse` on the raw file throws.
+- `claimsAPath` tests `FILENAME` against the **last** segment only, so a suffix convention like `.visual.cy.ts` embedded in a longer token is not misread as a filename.
+- The root-segment set in `claimsAPath` is read from the actual tree (via `trackedTargets`), not hardcoded — adding a new top-level directory requires no change here.
+- The two callers intentionally disagree on edge-case policies (e.g. `./relative` vs. `boilerplate-vue-frontend/…`); those policies live in each caller, not in this file.

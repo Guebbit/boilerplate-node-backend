@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/logger.ts
-sha256: e5f73296187dff124929a81990db1ba421e7a9fdd1a703c3102a141fb8ac99de
-generated_at: 2026-09-23T17:40:18.628782+00:00
+sha256: 515d9f24e0a500db1d88cf1c601d5978f29cfa0940a1e9abe027510699c2e619
+generated_at: 2026-09-27T14:06:37.796661+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central structured-logging module built on Winston. It defines the redaction policy (sensitive credentials are dropped, personal data is hashed or redacted per config), error serialization, and environment-aware output formatting (JSON for pipes/prod, ANSI-pretty for interactive terminals). Every application module, script, and scenario gets its logger from here.
+Structured logging built on Winston, with a redaction/pseudonymisation layer that sanitises every log record **before** it reaches any transport. It enforces two distinct data policies—credential redaction (irreversible `[REDACTED]` replacement) and personal-data handling (keyed HMAC, full redaction, or passthrough, configurable via `NODE_LOG_PERSONAL_FIELDS`)—so that no secret or PII leaves the process in plaintext.
 
 ## Key elements
 
-- **`SENSITIVE_FIELDS`** – `Set<string>` of field names (lowercased) that must never appear in clear text (passwords, tokens, API keys, card numbers, SSN, etc.). Redacted to `[REDACTED]`.
-- **`PERSONAL_FIELDS`** – Separate `Set<string>` of PII fields (email, ip, phone, etc.) governed by a _different_ policy: hashed (default), redacted, or left plain via `NODE_LOG_PERSONAL_FIELDS`.
-- **`resolvePersonalFieldMode()`** – Reads the env var, returns `'hash' | 'redact' | 'plain'`. Throws on unrecognised values (vs. falling back on unset).
-- **`redactSensitiveFields(input)`** – Recursively walks objects/arrays; replaces sensitive keys with `[REDACTED]`, applies the personal-field mode to string values, returns copies (no mutation).
-- **`serializeError(error)`** – Flattens an `Error` (or any thrown value) into a plain object; omits `stack` in production.
-- **`redactFormat`** – Winston format _factory_ (call it: `redactFormat()`) that serialises errors then redacts all metadata before a transport sees it.
-- **`resolveLogLevel()`** – Returns the active Winston level: `NODE_LOG_LEVEL` if set, else `debug` (non-prod) / `info` (prod).
-- **`resolveConsoleFormat()`** – Chooses `prettyFormat` (ANSI + human layout) when `stdout.isTTY` and non-prod; `baseFormat` (ISO timestamp → redact → JSON) otherwise.
-- **`logger`** – The shared `winston.Logger` instance. Call as `logger.info('msg', { meta })` or `logger.error('msg', { error })`.
+- **`SENSITIVE_FIELDS`** (exported `Set`) — Canonical list of credential/secret key names (passwords, tokens, API keys, card numbers, etc.). Exported so unit tests can assert every entry individually.
+- **`PERSONAL_FIELDS`** (exported `Set`) — PII field names (email, ip, phone, …) treated with a *separate* policy (hash/redact/plain) rather than credential redaction.
+- **`resolvePersonalFieldMode()`** — Reads `NODE_LOG_PERSONAL_FIELDS` (default `hash`); throws on unrecognised values. Exported for the boot-time gate in `required-config.ts`.
+- **`applyPersonalFieldMode(value)`** — Applies the resolved mode to one PII string: HMAC-SHA256 (truncated to 12 hex chars, `hmac:`-prefixed), `[REDACTED]`, or passthrough.
+- **`redactSensitiveFields(input)`** — Recursive, copy-producing walker that redacts sensitive keys, applies the personal-field mode, and guards against circular references (via a `WeakSet` ancestor path) and `Error` instances.
+- **`serializeError(error)`** — Converts an `Error` (or thrown non-object) into a plain serialisable object; omits `stack` in production.
+- **`redactFormat`** (exported Winston format factory) — The pipeline wiring: serialises `Error` values, runs the redaction walk over all metadata, and returns the same `info` object with reserved fields (`level`, `message`) restored.
+- **`normalizeKey`** — Lowercases and strips `_`/`-` so one entry in the redaction set covers every spelling variant (camelCase, kebab-case, snake_case).
+- **`resolveLogLevel`** *(truncated in source)* — Resolves the Winston log level per environment (`debug` locally, `info` in production).
 
 ## Relationships
 
-- **`scenarios/support/ephemeral-mongo.ts`** – Appears in this file's import chain (via `global-setup.ts`). The relative import of `environmentChoice` (rather than the `@infrastructure` alias) exists specifically because jest's `globalSetup` loads this path outside normal module resolution.
-- **`src/app.ts`, `src/app/demo.ts`, `scenarios/apply.ts`** – Application/scenario entry points that import `logger` for request-lifecycle and scenario logging.
-- **`scripts/db/*`, `scripts/ops/*`** – Operational and database scripts that import `logger` for structured output when run standalone (outside an HTTP request).
+- **`../runtime/environment`** (sibling import) — Provides `environmentChoice`, used by `resolvePersonalFieldMode`. Imported via a *relative* path (not the `@infrastructure` alias) because this file sits on jest's `globalSetup` import chain through `scenarios/support/ephemeral-mongo.ts`, where alias resolution is unavailable.
+- **`scenarios/support/ephemeral-mongo.ts`** — Loads this module indirectly via the `globalSetup` chain; the relative-import decision in this file is driven by that path.
+- **`src/app.ts`, `src/app/demo.ts`** — Application entry points that configure the Winston logger with `redactFormat` and the resolved log level.
+- **`scripts/run-script.ts`, `scripts/db/*`, `scripts/ops/*`** — Operational and database scripts that import the logger for structured, redacted output during runs.
+- **`scenarios/apply.ts`** — Scenario runner that logs through this module.
 
 ## Notes
 
-- **Import path is deliberately relative.** `environmentChoice` is imported from `../runtime/environment`, not the `@infrastructure` alias, because this file sits on jest's `globalSetup` chain where alias resolution fails at runtime (see the inline comment).
-- **Two redaction policies, kept separate on purpose.** Credentials → always `[REDACTED]`. Personal data → configurable (hash/redact/plain). Merging the sets would blur "must destroy" vs. "must minimise" and risks a credential being merely hashed.
-- **`redactFormat` is a factory.** You must call `redactFormat()` to obtain a format instance for `winston.format.combine`. Forgetting the call is a silent no-op.
-- **Hash truncation is a correlation aid, not a security boundary.** 12 hex chars (48 bits) of SHA-256, prefixed `sha256:` so parsers can distinguish it from a raw value.
-- **`resolveConsoleFormat` keys off `stdout.isTTY`, not `NODE_ENV`.** A piped or container log is JSON even in dev; a local terminal gets ANSI. This prevents breaking downstream log shippers when output is redirected.
-- **Error stacks are omitted in production** to avoid leaking absolute paths and dependency internals into aggregated logs.
+- **Import style matters here.** The `environmentChoice` import must remain relative (`../runtime/environment`). Switching it to the `@infrastructure` alias will compile fine under `tsc`/`eslint` but **crash at jest's `globalSetup` runtime**, because that phase runs outside jest's normal module-resolver.
+- **`redactFormat` returns `Object.assign(info, …)`.** Winston requires the transform to return the *same* object identity; returning a new object silently drops the record.
+- **`SENSITIVE_FIELDS` always wins.** If a key name ever appeared on both lists, the credential path (hard redact) takes precedence over the personal-data path (hash/passthrough). This is intentional and should stay that way.
+- **HMAC key fallback.** Outside production, `NODE_LOG_HASH_KEY` is optional; the code falls back to the fixed string `'dev-log-hash-key'` so dev logs remain correlatable without requiring a secret.
+- **Stack traces are suppressed in production** (`NODE_ENV === 'production'`) to avoid leaking absolute file paths and dependency internals into aggregated logs.
+- **`applyPersonalFieldMode` calls `resolvePersonalFieldMode()` on every invocation**, which re-reads `process.env` each time. This is correct (env can change at boot) but means the mode is not cached—relevant if profiling hot logging paths.

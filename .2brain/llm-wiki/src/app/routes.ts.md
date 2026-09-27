@@ -1,7 +1,7 @@
 ---
 source: src/app/routes.ts
-sha256: f3a49038c42eef4ad0a6650d928404d291ca0be21edc09c4adade6b3bc7fec43
-generated_at: 2026-09-23T17:35:52.522878+00:00
+sha256: 90e8d2aa7b1d2a8c3c9847d54891f8c6f76f7a344cd57930e91a5e928c3de2d0
+generated_at: 2026-09-27T14:02:46.980573+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central route-mounting step for the Express app. It walks the registry of enabled modules, mounts each at the `basePath` declared in that module's own manifest, mounts the non-domain system routes, and closes with a 404 catch-all. The file is deliberately domain-agnostic: it knows no business-domain names and imports only the one non-domain router (`system-routes`).
+Single entry point for wiring all HTTP routes onto the Express app. It mounts each domain module's router at the base path that module's own manifest declares, adds the system-level root ping, and closes with a 404 catch-all — all without importing or referencing any specific domain by name.
 
 ## Key elements
 
-- **`installRoutes(app: Express): void`** (the sole export)
-    - Iterates `enabledModules`; for each entry where both `basePath` and `routes` are present, calls `app.use(basePath, routes)`. Modules that own a collection but no URL (e.g. `audit-logs`) are silently skipped.
-    - Mounts `systemRoutes` at `/` (serves the API contract, docs, and root redirect).
-    - Registers a final middleware that calls `rejectResponse(response, 404)` for any unmatched request.
+- **`installRoutes(app: Express): void`** — the sole export. Called once during app setup. Performs three steps in order:
+  1. Iterates `enabledModules` and calls `app.use(basePath, routes)` for each module that provides both a `basePath` and a `routes` router. Modules missing either are silently skipped (e.g. `access`, which holds data but exposes no URLs).
+  2. Mounts `systemRoutes` at `'/'` for the root ping.
+  3. Registers an inline 404 handler that calls `rejectResponse(response, 404)`.
 
 ## Relationships
 
-- **`src/modules.ts`** — provides `enabledModules`, the array of manifests this function iterates.
-- **`src/app/system-routes.ts`** — provides the `router` (re-exported as `systemRoutes`) for non-domain endpoints.
-- **`src/infrastructure/http/response.ts`** — provides `rejectResponse`, used by the 404 handler.
-- **`src/app.ts`** — calls `installRoutes(app)` during app bootstrap.
-- **`tests/integration/app/demo-routes.test.ts`** — integration test that exercises the mounted routes end-to-end.
-- **`package.json`** — supplies the `express` types imported here.
+- **`src/modules.ts`** — provides the `enabledModules` array that drives the loop. This file is domain-agnostic; it knows nothing about which modules are enabled.
+- **`src/app/system-routes.ts`** — supplies the `systemRoutes` router for the root ping. The only explicitly imported route source (as opposed to being discovered via the module manifest).
+- **`src/infrastructure/http/response.ts`** — source of `rejectResponse`, used by the 404 catch-all.
+- **`src/app.ts`** — the caller that invokes `installRoutes(app)` during Express app construction.
+- **`tests/integration/app/demo-routes.test.ts`** — integration tests that exercise the mounted routes end-to-end.
 
 ## Notes
 
-- The 404 catch-all lives _here_, not in the error-handling layer, because it must be the last route registered. Placing it elsewhere would risk a later `app.use` call being shadowed and unreachable.
-- The guard `if (basePath && routes)` is intentional: a manifest with one but not the other is treated as a no-op, not an error.
-- Only `system-routes` is imported by name. All domain routers arrive through the `enabledModules` array, keeping this file decoupled from individual modules.
+- The 404 handler lives here (not in a separate error-handling install) deliberately: it must be the **last** route registered. If it were installed independently, a later module mount could be registered after it and become unreachable.
+- A module manifest that carries `basePath` but no `routes` (or vice versa) is skipped, not errored — the file treats a half-configured manifest as "nothing to mount."
+- The system-routes import is the one hard-coded, domain-specific dependency in an otherwise fully data-driven install. Everything else flows from the `enabledModules` manifest.

@@ -1,7 +1,7 @@
 ---
 source: scripts/git-base.ts
-sha256: d2fa20491fb37f8e21befb359ac838abfc838ffa614a27f463110d02ffd01561
-generated_at: 2026-09-23T17:27:34.707974+00:00
+sha256: b0ef16a1dc9b18aecb4a5206312ebe0248079641bc0cca312e55939e02b85435
+generated_at: 2026-09-27T13:56:45.734514+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides shared git plumbing for analysis scripts that need to compare the current branch against a target ref. It centralises the repo-root resolution and the merge-base lookup so that each consuming script doesn't repeat path setup or error handling.
+Shared git utilities for repository-level scripts that need to compute a merge-base between `HEAD` and a target ref. It centralises the repo-root path, a safe environment for nested `git` invocations, and a fallback-aware merge-base resolver so that individual scripts (diff, checks, pairing) don't each re-implement the same logic.
 
 ## Key elements
 
-- **`REPO_ROOT`** – Absolute path to the repository root (one level up from `scripts/`). All `git` subprocess calls use this as `cwd`, independent of the caller's working directory.
-- **`mergeBase(base, scriptName)`** – Runs `git merge-base HEAD <base>` and returns the common-ancestor SHA. Accepts a `scriptName` string solely for error-message context. Calls `process.exit(2)` (not a thrown exception) when the ref cannot be resolved.
+- **`REPO_ROOT`** – Constant pointing to the repository root (parent of `scripts/`). Every `git` call in this file uses it as `cwd`, so callers don't need to worry about their own working directory.
+- **`gitEnvironment()`** – Returns a copy of `process.env` with `GIT_DIR`, `GIT_WORK_TREE`, and `GIT_INDEX_FILE` removed. Required whenever a nested `git` call targets a checkout *other than* `REPO_ROOT` (e.g. a linked worktree), because those inherited variables silently redirect the command to the outer hook's repo.
+- **`resolveRef(ref)`** *(private)* – Runs `git merge-base HEAD <ref>` at `REPO_ROOT`; returns the SHA or `undefined` on failure.
+- **`mergeBase(base, scriptName, resolve?)`** – Public resolver. Tries `base` directly; if it is the default `'origin/main'` and that fails, falls back to `'origin/HEAD'`. Returns `undefined` (caller should skip) when neither resolves, or calls `process.exit(2)` when a caller-supplied explicit ref is unresolvable. The `resolve` parameter is injectable for unit tests.
 
 ## Relationships
 
-- **`scripts/contracts/check-asyncapi-breaking.ts`** – Consumes `REPO_ROOT` and `mergeBase` to scope its AsyncAPI-breaking-change diff to the correct commit range.
-- **`scripts/mutation/run-diff.ts`** – Consumes `REPO_ROOT` and `mergeBase` to compute the baseline SHA before generating a mutation diff.
+- **`scripts/pairing/linked-worktree.ts`** – Consumes `gitEnvironment()` so its `git` commands targeting a sibling worktree aren't silently redirected by the outer hook's `GIT_DIR` / `GIT_WORK_TREE`.
+- **`scripts/contracts/check-asyncapi-breaking.ts`**, **`scripts/docs/check-references.ts`**, **`scripts/mutation/run-diff.ts`** – Call `mergeBase()` to obtain the base SHA against which to diff or compare.
+- **`scripts/docs/repo-references.ts`** – Uses `REPO_ROOT` (and/or `mergeBase`) to anchor file-path resolution relative to the repo.
+- **`tests/unit/scripts/git-base.test.ts`** – Direct unit tests; injects a stub `resolve` to exercise the fallback and exit paths without a real git binary.
+- **`tests/unit/scripts/pairing/linked-worktree.test.ts`**, **`tests/unit/scripts/docs/repo-references.test.ts`** – Transitively exercise `gitEnvironment` / `REPO_ROOT` through the scripts under test.
 
 ## Notes
 
-- `mergeBase` does **not** return on failure; it terminates the process with exit code 2. Callers should treat it as a guard, not a fallible function they need to wrap in `try/catch`.
-- The function deliberately uses `merge-base` rather than a plain `diff HEAD..<base>` so that unpushed local commits on the target branch do not silently widen the comparison set.
-- `REPO_ROOT` is derived from `__dirname`, so it is only correct when the file lives directly under `scripts/`. Relocating the file would require updating the path join.
+- `gitEnvironment()` is not a convenience wrapper — it is a **correctness requirement**. Omitting it when `cwd` ≠ `REPO_ROOT` causes the nested git call to silently operate on the wrong repository while still exiting 0.
+- The `origin/main` → `origin/HEAD` fallback exists only for the *default* base. If a script passes `--base=release/1.0`, an unresolvable ref is a hard error (`exit 2`), never a silent swap.
+- A return value of `undefined` from `mergeBase` is a **skip signal**, not a failure: the caller should log and exit 0 (e.g. fresh clone, no remote fetched yet).
+- `resolveRef` is intentionally module-private; all public callers go through `mergeBase`, which is the only entry point that knows the fallback policy.

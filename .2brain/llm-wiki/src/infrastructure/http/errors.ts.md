@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/errors.ts
-sha256: 0517619ece36ed7cfda81110c776289194daebb27754104e5683b14d1f4057e3
-generated_at: 2026-09-23T17:42:31.518920+00:00
+sha256: 5ddd002bc300b8d0375a88503daf52ec7eb64654a2a5761da6a9797f869a88f9
+generated_at: 2026-09-27T14:08:45.891634+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single mapping point from raw Mongo/Mongoose driver failures to an HTTP status code. It exists so that all twelve models (and any service) resolve a duplicate key, a bad ObjectId, a schema validation failure, or an access-invariant breach to the _same_ status and message, rather than each controller re-deriving the logic inline.
+Single-point database-error interpreter that maps any driver failure (Mongo, Mongoose, Redis outage) to a deterministic HTTP status and message tuple, so all twelve models answer the same failure identically. Also provides the two reject helpers (`rejectDatabaseError`, `rejectDatabaseEnvelope`) that controllers and services call in their `.catch()` blocks, and the `ConflictError` base class that module-level invariant violations extend.
 
 ## Key elements
 
-- **`databaseErrorInterpreter(error: unknown): [number, string]`** — Pure classifier. Inspects the error object's shape (property `kind`, `name`, `message`) and returns the appropriate `[httpCode, message]` tuple. Handles: CastError → 422, duplicate-key → 409, BSONError → 422, ValidationError → 422, AccessInvariantError → 409, anything else object-shaped → 500, non-object → 500.
-- **`rejectDatabaseError(response, context, error)`** — Controller-level `.catch` entry point. Calls the interpreter, logs the driver message (with request/trace id) via `logger.error`, then delegates to `rejectResponse`. The driver's internal message is **never** sent to the client.
-- **`rejectDatabaseEnvelope(context, error)`** — Service-level equivalent for code that has no `Express Response`. Returns a `generateReject(status)` envelope instead of writing one, so services don't re-derive the status inline.
+- **`ConflictError`** — abstract base for 409-level domain invariants. Modules subclass it (e.g. `access`'s `AccessInvariantError`); the interpreter recognises the family via `instanceof`.
+- **`isInfrastructureError(error)`** — predicate: `true` when Mongo or Redis is unreachable (i.e. 503, not 4xx/500).
+- **`databaseErrorInterpreter(error): [number, string]`** — the core mapping. Branches: CastError → 422, duplicate key → 409, BSONError → 422, ValidationError → 422, `ConflictError` subclass → 409, connection error → 503, everything else → 500.
+- **`rejectServiceUnavailable(response)`** — sends 503 with `Retry-After: 5` and a localised `SERVICE_UNAVAILABLE` item.
+- **`rejectDatabaseError(response, context, error)`** — primary controller entry: logs the driver detail + context, then delegates to `rejectServiceUnavailable` or `rejectResponse` with the interpreted status.
+- **`rejectDatabaseEnvelope(context, error)`** — same logic for services that return an envelope object instead of writing to an Express `Response` (no `Retry-After` header possible).
+- **`RETRY_AFTER_SECONDS`** / **`serviceUnavailableError()`** — internal constants/factory for the 503 payload.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — Provides `rejectResponse` (sends a pre-shaped HTTP error) and `generateReject` (returns an error envelope object). Both are called by the two reject helpers in this file.
-- **`src/infrastructure/persistence/mongo-errors.ts`** — Provides `isDuplicateKey`, the predicate this file uses to detect unique-index violations.
-- **`src/infrastructure/adapters/logger.ts`** — Provides `logger`; both reject helpers call `logger.error` with the operation context, derived detail, status, and the raw error (which the logger's serializer expands into a stack trace).
-- **`src/infrastructure/http/controller.ts`** / account module controllers — Consumers. Their `.catch()` handlers call `rejectDatabaseError` (when they hold a `Response`) or `rejectDatabaseEnvelope` (services that return an envelope). This file is the shared "what status does this failure deserve" answer for all of them.
-- **`src/app/error-handling.ts`** — Sits in the same error-handling path; this file handles the _database_ branch specifically, while the broader middleware handles transport-level and non-DB failures.
+- **`src/infrastructure/persistence/mongo-errors.ts`** — supplies `isDuplicateKey` and `isConnectionError` predicates consumed by the interpreter.
+- **`src/infrastructure/adapters/redis.ts`** — supplies `isRedisConnectionError` predicate.
+- **`src/infrastructure/http/response.ts`** — supplies `rejectResponse` and `generateReject`; this file is the decision layer *above* the response writer.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.error` is called in both reject helpers with the context, interpreted detail, status, and raw error for stack-trace serialisation.
+- **`src/infrastructure/i18n/index.ts`** — `t()` localises the `SERVICE_UNAVAILABLE` message.
+- **`src/modules/access/service.ts`** — defines `AccessInvariantError extends ConflictError`; the interpreter's `instanceof ConflictError` branch catches it.
+- **`src/app/error-handling.ts`** — the global Express error middleware; uses the same `rejectServiceUnavailable` / interpreter path so uncaught rejections produce identical 503s.
+- **Account controllers** (`post-login`, `get-refresh-token`, `delete-account-confirm`, 2FA endpoints) — call `rejectDatabaseError` in their `.catch()` blocks as the sole error-exit.
 
 ## Notes
 
-- **No `instanceof` anywhere.** BSONError and ValidationError are matched by `name` string because `bson`/`mongoose` can exist as duplicate transitive dependencies; `instanceof` against the wrong copy silently returns `false`.
-- **`Object.prototype.hasOwnProperty.call`** is used for the CastError `kind` check so it still works on null-prototype objects (e.g. `Object.create(null)` fixtures).
-- **`AccessInvariantError` is matched by name string, not imported.** The layering rule prevents `infrastructure` from reaching up into a module; the status decision (409, request-shape conflict) belongs here, but the class cannot be a dependency.
-- **Deliberately absent:** a "throw an error carrying an HTTP status" helper. The module doc states that if a genuine need arises, the answer is the existing `http-errors` package, not a bespoke class.
-- **`context` parameter** is developer-facing only (e.g. `'postLogin2fa'`); it appears in the log line for traceability but is never serialized into the client response.
+- **`instanceof` vs `name` detection is deliberate and inconsistent on purpose.** `BSONError` and `ValidationError` are matched by `error.name` because `bson` is a transitive dependency of two packages and `instanceof` against the wrong copy silently returns `false`. `ConflictError` is safe with `instanceof` because it is defined exactly once in this file.
+- **The driver's message is logged, never sent to the client.** The `context` string (e.g. `'getProducts'`) and the interpreted `detail` go to the log; the client only sees the fixed status + generic message.
+- **`rejectDatabaseEnvelope` omits `Retry-After`** because it returns a data envelope, not an Express response — there is no header surface.
+- **Non-object rejections** (`null`, a thrown string/number) fall straight to `[500, 'Unknown error']`; the interpreter guards with `typeof === 'object'` before reading any property.
+- The file explicitly **does not** export a "throw-with-status" helper. If that need arises, the documented answer is the `http-errors` package already in the dependency tree.

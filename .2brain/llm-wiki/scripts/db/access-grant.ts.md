@@ -1,7 +1,7 @@
 ---
 source: scripts/db/access-grant.ts
-sha256: 493de5e922ff40310673f257caa23fe5ba8f9fa629d28d4a7a077a27c7479542
-generated_at: 2026-09-23T17:23:20.884192+00:00
+sha256: 3ecb87a34d4e149cdde2027cf7ab0c5f9b239eb2aa7623cd57b9ea7dc6bc8364
+generated_at: 2026-09-27T13:53:39.749369+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Connection-free logic for granting a role to an existing account. It is extracted from the CLI entry point `grant-access.ts` so that tests can drive the grant flow per case without a live database connection or `process.argv` parsing on import (same split pattern as `index-sync.ts` / `sync-indexes.ts`).
+The connection-free core logic for granting a role to an **existing** account by email. It is split out of `grant-access.ts` (the CLI wrapper) so that integration tests can import and drive it per-case without the wrapper's side-effects (opening a DB connection, parsing `process.argv`) firing on import.
 
 ## Key elements
 
-- **`GrantAccessError`** — lightweight error subclass; the CLI wrapper in `grant-access.ts` catches it to produce a clean, non-zero exit.
-- **`grantAccess(email, roleName, scope)`** — the single exported function. Resolves a user by email via `userService.findByEmail`, then delegates to `assignRole`. Passes `null` as the tenant when `scope` is `'platform'`, otherwise `DEPLOYMENT_TENANT_ID`. Rejects (throws `GrantAccessError`) if no account matches the email rather than creating one. Does not accept a `granter` argument — `assignRole`'s contract reserves the no-granter path for console operators.
+- **`GrantAccessError`** (exported class) — thrown for any caller misuse (unknown email, undeclared role). The CLI wrapper catches it and produces a clean exit message.
+- **`grantAccess(email, roleName, scope)`** (exported function) — looks up the account via `userService.findByEmail`, throws `GrantAccessError` if none exists, then calls `assignRole` with the resolved tenant id. Returns `Promise<void>`.
 
 ## Relationships
 
-- **`scripts/db/grant-access.ts`** — the CLI wrapper that imports `grantAccess` and `GrantAccessError`, opens a DB connection, and parses `process.argv` before calling into this module.
-- **`src/modules/access/index.ts`** → **`src/modules/access/service.ts`** — provides `assignRole`, the actual role-assignment operation. This file is one of the three callers `assignRole`'s docblock names (console operator).
+- **`scripts/db/grant-access.ts`** — the CLI wrapper that imports `grantAccess` and `GrantAccessError`, opens a connection, parses argv, and translates the error into a process exit.
+- **`src/modules/access/index.ts`** → **`src/modules/access/service.ts`** — provides `assignRole`, the actual role-mutation primitive.
 - **`src/modules/users/index.ts`** → **`src/modules/users/service.ts`** — provides `userService.findByEmail` for the account lookup.
-- **`src/kernel/access/tenant.ts`** — exports `DEPLOYMENT_TENANT_ID`, used as the tenant when the scope is deployment-level.
-- **`src/types/auth-context.ts`** (re-exported via **`src/types/index.ts`**) — source of the `AuthorizationScope` type parameter.
-- **`tests/integration/scripts/db/access-grant.test.ts`** — integration tests that exercise `grantAccess` directly, relying on the fact that this file does not open its own connection.
+- **`src/kernel/access/tenant.ts`** — supplies `DEPLOYMENT_TENANT_ID`, used when scope is not `'platform'`.
+- **`src/types/index.ts`** → **`src/types/auth-context.ts`** — source of the `AuthorizationScope` type used in the signature.
+- **`tests/integration/scripts/db/access-grant.test.ts`** — integration tests that import `grantAccess` directly, bypassing the CLI wrapper.
 
 ## Notes
 
-- This file intentionally has **no** `granter` parameter. Passing one would violate `assignRole`'s caller contract; the "console operator" path is the only one that omits it.
-- The function is strict about the pre-existing-account requirement: it never calls a user-creation path. If the email is unknown, the only outcome is `GrantAccessError`.
-- `scope` is a simple discriminating value (`'platform'` vs. deployment); it is not a full object. The ternary on `'platform'` is the only branching logic in the file.
+- No `granter` argument is passed to `assignRole`. The docblock on `assignRole` names "an operator on the console" as the caller permitted to grant without escalating from an existing role; this file is that caller.
+- Tenant resolution is binary: `'platform'` scope → `null`; everything else → `DEPLOYMENT_TENANT_ID`.
+- The function **refuses to create accounts**. If the email is unknown, the caller must sign up first.
+- The split pattern mirrors `index-sync.ts` / `sync-indexes.ts`: pure logic in one file, connection + argv handling in its CLI twin.

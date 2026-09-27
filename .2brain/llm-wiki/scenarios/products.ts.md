@@ -1,7 +1,7 @@
 ---
 source: scenarios/products.ts
-sha256: 0b76a41d9b3591f01c67b3c49a8b43966c039ef73b45d206117c38301833767c
-generated_at: 2026-09-23T17:19:17.715798+00:00
+sha256: 9d1314d4b5cf1bbb482b38d50ac07085710ba7a5dc0bf5ba60a35104750bdc12
+generated_at: 2026-09-27T13:50:41.490618+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the full product catalogue for the demo/seed dataset: six hand-written "named" products that cover the branch scenarios the storefront and repositories exercise (soft-deleted, out-of-stock, inactive, minimal), plus 126 combinatorially-generated filler rows that make the catalogue resemble a real pet-supply shop. A `seedProductsCollection` function (truncated) writes these rows and their per-locale translations into a target database.
+Seeds the product catalogue for demo and integration-test scenarios. It defines seven named products that collectively cover the branch paths the storefront and repositories exercise (soft-deleted, out-of-stock, inactive, minimal, digital), then appends 126 combinatorial filler rows so the catalogue resembles a real pet-supply store. It also plans and writes per-locale translations (`en` required, `it` optional) for every named row.
 
 ## Key elements
 
-- **`NAMED_PRODUCT_COPY`** – Record keyed by `SEED_PRODUCT_IDS` holding `{ en, it? }` title/description for each of the six named products. Single source for both the product document's derived index column and the translation batch.
-- **`makeUnstockedProduct(overrides)`** – Thin wrapper over `makeProduct` that forces `onHand: 0`. Stated once here rather than repeated on every row; stock is never seeded directly (see Notes).
-- **`namedProducts`** – The six products: `dogFoodStandard` (rich baseline), `heaterSoftDeleted` (`deletedAt` set), `scratchPostOutOfStock` (zero stock, no receipt), `dogBedPremium` (rich), `bundleInactive` (`active: false`), `barebones` (title + price only).
-- **`fillerProductRows`** – Maps `FILLER_PRODUCTS` through `makeUnstockedProduct`, assigning ids via `fillerProductId(index)` and cycling images through the 20-image pool (`FILLER_IMAGE_ROLE_KEYS`). The `translations` field is stripped from the spread (not a product-schema path).
-- **`productFixtures`** – Exported: `[...namedProducts, ...fillerProductRows]`, the complete product list for seeding.
-- **`fillerProductId`** – Re-exported from `./products-filler` so other scenario files (`wishlist`, `shop-history`) can reference filler rows without importing the filler module directly.
-- **`OPENING_STOCK`** (truncated) – Map of product-id → unit count consumed by `shop-history.ts` to create the opening inventory receipt. Deliberately omits `scratchPostOutOfStock`.
+- **`NAMED_PRODUCT_COPY`** — Single source of truth for title/description in both locales; feeds both the flat `title`/`description` index columns and the translation batch.
+- **`makeUnstockedProduct(overrides)`** — Thin wrapper around `makeProduct` that pins `onHand: 0`. All product rows pass through it, encoding the invariant that stock arrives exclusively via the opening receipt in `shop-history.ts`, never by direct seeding.
+- **`namedProducts`** — Array of seven product documents (dogFoodStandard, heaterSoftDeleted, scratchPostOutOfStock, dogBedPremium, bundleInactive, barebones, puppyCourseDigital). Each targets a specific branch or absence pattern.
+- **Filler rows** — Built from `FILLER_PRODUCTS` (126 rows) in `./products-filler`, each assigned an id via `fillerProductId` and an image cycled from a fixed 20-image pool (`FILLER_IMAGE_ROLE_KEYS`).
+- **`fillerProductId`** (re-export) — Made available through this module so `./wishlist` and `scenarios/flows/shop-history.ts` can reference a filler row without importing `products-filler` directly.
+- **Translation seeding** — Uses `planTranslations` / `writeTranslations` from `@kernel/translation` and `isTranslationAvailable` / `isTranslationPlan` to batch-write locale rows per product.
+- **`SEED_PRODUCT_IDS`** (from `./subjects`) — Stable string identifiers keyed per product, used for cross-scenario addressing.
 
 ## Relationships
 
-- **`scenarios/products-filler.ts`** – Provides `FILLER_PRODUCTS`, `fillerProductId`, `FILLER_IMAGE_ROLE_KEYS`; supplies the 126 generated rows and the image-cycling key.
-- **`scenarios/subjects.ts`** – Exports `SEED_PRODUCT_IDS`, the stable identifiers for the six named products.
-- **`scenarios/seed.ts`** – Exports `insertIfAbsent` / `SeedOutcome` used by `seedProductsCollection` to upsert rows idempotently.
-- **`scenarios/flows/shop-history.ts`** – Reads `OPENING_STOCK` from this file to `POST /inventory/receipts` before the first checkout, so every unit on the shelf has a movement row.
-- **`src/modules/products/factories.ts`** – Provides `makeProduct` and `ProductOverrides`; all rows here are built through it (or the `makeUnstockedProduct` wrapper).
-- **`src/modules/products/repository.ts`** – `productRepository` is used by the seed function to write/verify product rows.
-- **`src/infrastructure/i18n/index.ts`** – `getFallbackLocale` determines the required locale for translation plans.
-- **`src/kernel/translation.ts`** – `isTranslationPlan`, `planTranslations`, `writeTranslations` drive the per-locale translation batch.
-- **`src/types/index.ts`** – `ProductTranslationFields` and `UpsertTranslationsRequest` shape the translation payload.
-- **`scenarios/index.ts`** – Likely re-exports or orchestrates the product seed as part of the full scenario pipeline.
+- **`scenarios/flows/shop-history.ts`** — Consumes the seeded products; its opening receipt is what moves `onHand` off zero. Re-exports of `fillerProductId` let it target specific filler rows.
+- **`scenarios/products-filler.ts`** — Supplies `FILLER_PRODUCTS`, `fillerProductId`, and `FILLER_IMAGE_ROLE_KEYS`; this file assembles those rows into full product documents.
+- **`scenarios/seed.ts`** — Provides `insertIfAbsent` and the `SeedOutcome` type used to track whether a row was actually inserted.
+- **`scenarios/shop-modules.ts`** / **`scenarios/subjects.ts`** — `subjects.ts` exports `SEED_PRODUCT_IDS`; `shop-modules.ts` is a sibling scenario file in the same dependency cluster.
+- **`src/modules/products/factories.ts`** — Source of `makeProduct` and `ProductOverrides`, the canonical product-document constructor.
+- **`src/modules/products/repository.ts`** — `productRepository` is imported (used by the seeding/verification path).
+- **`src/infrastructure/i18n/catalog.ts`** / **`src/infrastructure/i18n/index.ts`** — Locale and catalogue metadata consumed during translation planning.
+- **`src/kernel/translation.ts`** — Translation planning, availability checks, and batch-write helpers.
+- **`src/types/index.ts`** — `ProductTranslationFields` shape used in `NAMED_PRODUCT_COPY`.
 
 ## Notes
 
-- **Stock is never seeded directly.** Every row ships with `onHand: 0`; actual inventory arrives via the opening-receipt flow in `shop-history.ts`. This guarantees every unit is backed by a movement record.
-- **`scratchPostOutOfStock` has no entry in `OPENING_STOCK`.** It stays at zero after all flows run, which is the state the storefront's out-of-stock badge and checkout refusal depend on.
-- **`barebones` is intentionally minimal** (no description, categories, tags, or image). It exercises code paths that must tolerate absent optional fields.
-- **`deletedAt` and `active: false` are independent.** Both are invisible to external callers via `publicScope()`, but the dataset keeps them on separate rows so tests can distinguish the two states.
-- **Images are never hand-placed.** Named-product images come from `products-images.generated.json`; filler rows cycle through a fixed pool of 20.
-- **`en` is mandatory, `it` is optional** in `ProductCopy`. A product with only an English translation is a valid catalogue state; the seeder writes exactly what is present.
+- Every named row seeds at `onHand: 0`. The out-of-stock row (`scratchPostOutOfStock`) is the one that *never* receives an opening receipt; all others are restocked by the `shop-history` flow. Confusing "seeded at zero" with "permanently out of stock" is a common misread.
+- `barebones` deliberately omits `description`, `categories`, `tags`, and `imageUrl` to exercise UI branches that must not assume those fields are present. It is the only named row with no image.
+- `heaterSoftDeleted` (soft-deleted) and `bundleInactive` (inactive) are independent states: `publicScope()` requires active AND not-deleted, so externally they look the same, but the dataset keeps them distinct for filter tests.
+- Images are never hand-placed; they come from `products-images.generated.json` (generated via `npm run scenario:images`). The filler rows cycle a fixed 20-image pool, so adding rows never requires new assets.
+- `en` translations are mandatory and are also the source for the flat `title`/`description` index columns on the product document. `it` is optional; a product can legitimately exist in English alone.
+- The file is consumed in two contexts: `scenarios/apply.ts` (live demo DB) and `tests/integration/scenarios/shop.test.ts` (throwaway test DB). Behavior must be idempotent for both.

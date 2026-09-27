@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/sweep-webhook-retries.ts
-sha256: a532627f987b0147ff1386d7c555989de486b2dd6072be7cfda4e9329ef26717
-generated_at: 2026-09-23T17:30:51.437358+00:00
+sha256: 1183edbe2bdd496c34354ef20fdb1807111305f16985972c1dda5eff5732f5b3
+generated_at: 2026-09-27T13:58:56.035534+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Per-minute cron job that re-enqueues webhook deliveries whose retry window has arrived. Implements decision (c) of the delayed-retry design: a failed attempt with remaining retries is set back to `pending` with a future `nextAttemptAt` instead of being parked in a broker delay queue, and this sweep is what picks up those "due" rows and publishes them again.
+Per-minute cron job that enqueues all webhook deliveries whose `nextAttemptAt` has passed, turning them from "pending with a future timestamp" into active retry attempts. It exists because the delayed-retry strategy (decision (c) in `docs/modules/webhooks.md`) stores retries as a database timestamp rather than a broker-side delay queue, so something must periodically pick up due rows.
 
 ## Key elements
 
-- **`main`** – Calls `start()` (DB connection) then `sweepDueWebhookDeliveries()`; resolves `void`.
-- **`runScript(main, stopDatabase)`** – Bootstrap wrapper (from `../db/run-script`) that runs `main` and guarantees `stopDatabase` on exit.
-- **`sweepDueWebhookDeliveries`** (imported from `@modules/webhooks`) – Atomically claims each due row before publishing, so overlapping runs cannot double-enqueue.
+- **`main`** (internal) — calls `start()` to open the DB connection, then `sweepDueWebhookDeliveries()`; returns `Promise<void>`.
+- **`runScript('sweep:webhook-retries', main, stopDatabase)`** — the single entry-point invocation; registers the script name, wires `stopDatabase` as the teardown, and handles process lifecycle (signal trapping, error reporting).
+- **`sweepDueWebhookDeliveries`** (imported from `@modules/webhooks`) — the actual sweep logic; atomically claims each due row before publishing so overlapping runs cannot double-enqueue.
 
 ## Relationships
 
-- **`scripts/db/run-script.ts`** – Provides the `runScript` helper that orchestrates the script's lifecycle (setup → run → teardown).
-- **`src/infrastructure/runtime/database.ts`** – Supplies `start()` to open the DB connection and `stopDatabase` for clean shutdown.
-- **`src/modules/webhooks/index.ts`** – Re-exports `sweepDueWebhookDeliveries`, the function this script calls.
-- **`src/modules/webhooks/services/sweep.ts`** – Contains the actual implementation of `sweepDueWebhookDeliveries` (atomic claim + publish).
+- **`scripts/run-script.ts`** — provides the `runScript` helper that wraps `main` with signal handling, a human-readable script label, and the `stopDatabase` teardown callback.
+- **`src/infrastructure/runtime/database.ts`** — supplies `start` (opens the connection) and `stopDatabase` (closes it); the script does not use the connection directly beyond handing it to the sweep function.
+- **`src/modules/webhooks/index.ts`** — re-exports `sweepDueWebhookDeliveries`, the one function this script actually calls.
+- **`src/modules/webhooks/services/sweep.ts`** — implements `sweepDueWebhookDeliveries` (atomic claim-then-publish per due row).
+- **`docker/observability/prometheus.alert-rules.yaml`** — no direct code interaction; listed in the dependency graph likely because this script's failure/success metrics are what those alert rules monitor.
 
 ## Notes
 
-- Scheduled **every minute** (unlike the nightly `reap:*` / `sweep:order-effects` jobs). The schedule is in `docker/crontab`.
-- **Idempotent by design**: the atomic claim in the sweep service means a missed or overlapping run is a no-op, not a bug.
-- **No domain event** is emitted here (contrast with `sweep-order-effects.ts`), so no module listener registration is required.
-- **Removal** is coupled to the `webhooks` module: deleting that module also removes this script, the `sweep:webhook-retries` npm alias, and its crontab entry.
-- Lives in the shared **cron container** alongside other scheduled jobs (see `docs/reference/ops.md#scheduled-jobs`).
+- Runs every minute inside the shared cron container (see `docs/reference/ops.md#scheduled-jobs`), unlike the nightly `reap:*` / `sweep:order-effects` jobs.
+- Idempotent by design: the atomic claim in `sweepDueWebhookDeliveries` means a missed or overlapping run is a no-op, not a duplicate.
+- Emits **no** domain event (contrast with `sweep-order-effects.ts`), so there is no listener registration step for other modules.
+- Removal is owned by the `webhooks` module: delete this file, the `sweep:webhook-retries` npm script, and its `docker/crontab` line together.

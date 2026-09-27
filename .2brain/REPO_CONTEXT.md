@@ -3,7 +3,6 @@
 _Canonical 2brain context source for AI editors._
 
 ## Core Artifacts
-
 - `.2brain/graphify-out/GRAPH_REPORT.md` — structural and semantic code graph report
 - `.2brain/EXECUTION.md` — runnable build/test/CI/migration knowledge
 - `.2brain/llm-wiki/` — per-file machine-oriented pages, one per source file (page path = source path + `.md`)
@@ -12,22 +11,79 @@ _Canonical 2brain context source for AI editors._
 
 ## Where to look
 
+- **First contact with an unfamiliar codebase** → `.2brain/llm-wiki/OVERVIEW.md` for orientation, then `.2brain/modules/boilerplate-node-backend_INDEX.md` for the module map.
 - **Editing or reading a source file** → read `.2brain/llm-wiki/<path>.md` first (page path = source path + `.md`). It carries the file's purpose, key elements, graph neighbours, and gotchas not in the source.
 - **"How do I run / build / test / deploy this?"** → `.2brain/EXECUTION.md`.
-- **First contact with an unfamiliar large codebase** → `.2brain/graphify-out/GRAPH_REPORT.md` for structural orientation.
 - **Anything else, or you don't know which file** → `2brain query <repo-path> "question"`.
 
-Artifacts generated from commit `d0616e30614e1bdb4e61496b55da33c1441b07e0`. If `git rev-parse HEAD` differs, prefer the source over these artifacts and say so.
+Artifacts describe commit `276e096a53f53cf6f38fc8c880a0c2829b63be88`. Before relying on a wiki page, check its source: `git diff --quiet 276e096a53f53cf6f38fc8c880a0c2829b63be88 -- <file>` (and `git status` for uncommitted edits). Changed → prefer the source for that file and say so. Unchanged → trust the page.
+
+## Most-used code
+Change these with care — widely depended on:
+- `t` (234 edges)
+- `successResponse()` (208 edges)
+- `catchAs()` (172 edges)
+- `generateReject()` (150 edges)
+- `callerContextOf()` (145 edges)
+- `refused()` (130 edges)
+- `setupTestDb()` (121 edges)
+- `generateSuccess()` (118 edges)
+- `recordAudit()` (105 edges)
+- `asStub()` (104 edges)
+
+## Cross-cutting flows
+- Contract Fragmentation → Bundle → Generate → Sync Pipeline
+- AsyncAPI Event Channels (SSE + Webhooks)
+- Layered Architecture (kernel / infrastructure / modules / app)
+- SSE Observability Event Flow
+- Webhook Delivery Pipeline (Event to Subscriber)
+- Production Service Dependency Mesh
+- Observability Stack (Traces, Metrics, Logs)
+- CI Merge Gate Jobs
+- Contract Validation Pipeline (OpenAPI + AsyncAPI)
+- Local Observability Stack (Traces, Metrics, Logs, Alerts)
+- Weekly Mutation Testing Pipeline
+- Grafana Traces-to-Logs Correlation Chain
+- Favicon Set (Multi-Platform Brand Icons)
+- Seed Thumbnails v1 Image Collection
+- Seed Thumbnail Collection v1
+- System UI Placeholder Image Set
+- Seed Content Thumbnail Collection (v1)
+- Authorization Definition Triple (Keys, Roles, Conformance)
+- Dual-Backend Conformance Pair
+- Tenant Scope Role Set
+- Contract Bundling and Linting System
+- Worker Queue Publish/Consume Flow
+- OpenAPI Shared Schemas and Security
+- Account Authentication & Credential Management Flow
+- Supporting Subdomain Module Cluster
+- Account Module REST API Surface
+- Address Book CRUD Operations
+- Antibot Challenge Provider Flow
+- API Key Mint-Use-Revoke Lifecycle
+- Cart CRUD Operations (all return CartResponseEnvelope)
+- Delivery Order Lifecycle (ship → deliver state transitions)
+- Feedback Admin CRUD Operations
+- Inventory Stock Counter Write Operations
+- Observability SSE Event Stream
+- Locales Two-Tier Dictionary Architecture
+- Order Lifecycle and State Transitions
+- Payment Confirmation Flow (intent → confirm → sync)
+- Admin Payment Management (offline, refund, reference lookup)
+- Product CRUD Operations
+- Webhook Event Fan-out Catalogue
+- Webhook Delivery Pipeline (Publish → Queue → Consume)
+- Users CRUD Operation Set
+- Wishlist-Cart-Product Dependency Triangle
 
 ## Index Metadata
-
 - Provider: `ollama`
 - Model: `qwen3.8:27b`
-- Index revision: `108dc8e1b2c67f13d4e3f994e910d3d22643201bf28cc35218cd2109147a1fe3`
-- Indexed chunks: `5434`
+- Index revision: `6327b00cc34b1ef7f0b945fd03a4f9b319c1c751587e148b8ae877319524aae0`
+- Indexed chunks: `5482`
 - Memory entries: `0`
 
 ## Query
-
 - Semantic query: `2brain query <repo-path> "your question" --top-k 5`
 - Add durable memory: `2brain remember <repo-path> "fact/decision/runbook" --kind fact`
+
