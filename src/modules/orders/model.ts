@@ -75,10 +75,12 @@ export interface OrderDocumentItem {
 /**
  * A consequence of a cancel that the cancel itself could not guarantee.
  *
- * One member, deliberately. The stock half of a cancel heals on its own — the hold keeps its
- * `expiresAt` and the reservation sweep releases it — so it is not written down. The money half
- * does not heal: the domain event bus has no retry, so a refund that throws is lost unless the
- * intent to make it survives the failure.
+ * One member, not because the stock half always heals — it does not. The reservation sweep
+ * (`inventory/repository.ts`) only matches `held` reservations; a paid order's `committed` hold,
+ * restocked by the cancel rather than released, is never retried if that restock throws, and those
+ * units are lost from sale for good. The money half is tracked here because the domain event bus
+ * has no retry of its own: a refund that throws is lost unless the intent to make it survives the
+ * failure.
  */
 export type OrderPendingEffect = 'refund';
 

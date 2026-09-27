@@ -184,10 +184,13 @@ this sweep re-announces for whatever is still owed past `NODE_ORDER_EFFECT_RETRY
 (default 5). Run it on the same schedule as the `reap:*` jobs; it is safe to repeat, since a second
 pass over a settled order refunds nothing.
 
-The stock half of a cancel is deliberately NOT covered here — a hold keeps its `expiresAt` and
-`npm run sweep:reservations` (below) reclaims it, so it heals on its own.
+The stock half of a cancel is NOT covered here, and only partly heals on its own. A `held`
+reservation keeps its `expiresAt`, and `npm run sweep:reservations` (below) reclaims it. A PAID
+order's hold is `committed`, not `held`: `cancelById` restocks it directly instead of releasing it,
+and if that restock throws, nothing — not this sweep, not `sweep:reservations` — ever retries it.
+Those units are lost from sale for good, and `ORDER_CANCELLED` never fires for that cancel.
 
-`npm run sweep:reservations` is what makes that healing actually happen: it expires every hold
+`npm run sweep:reservations` is what heals a `held` hold's own expiry: it expires every hold
 past its `expiresAt` and, through `orders`' own `RESERVATION_EXPIRED` listener, cancels the order
 behind it — the same work `POST /inventory/reservations/sweep` does on demand, on a schedule
 instead. Without it, an abandoned checkout would hold its units forever and a bank-transfer hold

@@ -1,9 +1,10 @@
 /**
  * @module
  * Cancelling an order, and making its consequences stick. The status move is one conditional
- * write; the hold and the refund follow it. Stock heals on its own if the release is missed — the
- * reservation TTL sees to it — so only the refund's intent is written down, and
- * `retryPendingEffects` is what discharges it when the announcement was not enough.
+ * write; the hold and the refund follow it. A `held` reservation heals on its own if its release
+ * is missed — the TTL sees to it — but a paid order's `committed` hold does not: if its restock
+ * throws here, those units are lost from sale, with no retry. Only the refund's intent is written
+ * down; `retryPendingEffects` is what discharges it when the announcement was not enough.
  */
 
 import { callerForSubject, SYSTEM_ACTOR } from '@kernel/permissions';
