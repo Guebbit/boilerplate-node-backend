@@ -33,7 +33,6 @@ flowchart LR
     orders --> products
     orders --> users
     inventory -. "inventory.reservation_expired" .-> orders
-    products -. "product.deactivated" .-> orders
     products -. "product.deleted" .-> orders
     orders -. "order.status_changed" .-> invoicing
     orders -. "order.cancelled" .-> payments

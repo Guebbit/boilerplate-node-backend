@@ -26,9 +26,10 @@ declare module '@kernel/events' {
          * A product's `active` flag flipped from `true` to `false` — never fired for any other
          * edit, including one that repeats `active: false` unchanged (see `products/service.ts`'s
          * `updateById`, the same "flip, not every write" shape `users`' `ADMIN_USER_BANNED` uses).
-         * `orders` is the one subscriber today: a pending order holding this product is cancelled
-         * at once, the same as a hard delete — deactivation means "gone for a long time", unlike a
-         * product merely out of stock (`onHand: 0`, still `active`).
+         * No subscriber today — `orders` deliberately does NOT cancel a pending order over this:
+         * only a hard delete does (`product.deleted`, `hardDelete: true`). A deactivated product
+         * still refuses anything NEW against it, through `orders/services/availability.ts`'s own
+         * fresh `productService` read, not this event.
          */
         'product.deactivated': { productId: string };
 
