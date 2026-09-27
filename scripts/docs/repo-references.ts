@@ -19,6 +19,21 @@ import path from 'node:path';
 export const ROOT = path.join(__dirname, '..', '..');
 
 /**
+ * `process.env`, minus the three vars git exports into a hook's own process
+ * (`GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`). The pre-commit hook runs this very check, so every
+ * `execFileSync('git', …)` below must pass this instead of inheriting the ambient env: left in
+ * place, a nested `git` call resolves against the HOOK's repo/tree rather than its own `cwd` —
+ * silently the wrong repo whenever `cwd` is the paired frontend.
+ */
+export const gitEnvironment = (): NodeJS.ProcessEnv => {
+    const environment = { ...process.env };
+    delete environment.GIT_DIR;
+    delete environment.GIT_WORK_TREE;
+    delete environment.GIT_INDEX_FILE;
+    return environment;
+};
+
+/**
  * Paths that legitimately do not exist in a clean checkout, each with the reason it is exempt.
  * Prefix match. An entry here is an argument, not a mute button — a path with no reason to be
  * absent belongs in the findings.
@@ -89,7 +104,11 @@ export const NOT_A_PATH = /[\s!"'()*,<=>?[\]`{|}…]/;
  * from tens of millions of string comparisons into one hash per question.
  */
 export const trackedTargets = (root: string): { targets: Set<string>; roots: Set<string> } => {
-    const files = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' })
+    const files = execFileSync('git', ['ls-files'], {
+        cwd: root,
+        encoding: 'utf8',
+        env: gitEnvironment()
+    })
         .split('\n')
         .filter(Boolean);
     const targets = new Set<string>();

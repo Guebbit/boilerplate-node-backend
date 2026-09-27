@@ -48,7 +48,8 @@ import {
     resolves,
     claimsAPath,
     readAliases,
-    throughAliases
+    throughAliases,
+    gitEnvironment
 } from './repo-references';
 
 /** The paired repo, addressed in prose by the directory it actually sits in. */
@@ -245,7 +246,11 @@ const run = (): number => {
         ? trackedTargets(peerRoot).targets
         : undefined;
 
-    const pages = execFileSync('git', ['ls-files', 'docs'], { cwd: ROOT, encoding: 'utf8' })
+    const pages = execFileSync('git', ['ls-files', 'docs'], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        env: gitEnvironment()
+    })
         .split('\n')
         .filter((file) => file.endsWith('.md'));
 
