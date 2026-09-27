@@ -13,6 +13,7 @@
 
 import { generateReject } from '@infrastructure/http/response';
 import type { ResponseReject } from '@infrastructure/http/response';
+import type { ErrorCode } from '@api/error-codes';
 
 /**
  * Seconds still to wait before the same thing may be sent again, or 0 when a send may go ahead.
@@ -46,7 +47,7 @@ export const cooldownRemaining = (
  * @param message - already translated; this module holds no i18n keys
  * @param seconds - what {@link cooldownRemaining} returned
  */
-export const resendTooSoon = (code: string, message: string, seconds: number): ResponseReject =>
+export const resendTooSoon = (code: ErrorCode, message: string, seconds: number): ResponseReject =>
     generateReject(429, [
         {
             code,

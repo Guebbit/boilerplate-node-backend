@@ -32,6 +32,7 @@ import { paymentRepository } from '../repository';
 import { PAYMENT_REFUNDED } from '../events';
 import type { PaymentDocument } from '../model';
 import { callerScope } from './scope';
+import { ERROR_CODES } from '@api/error-codes';
 
 /** The only status money can come back from: it has to have arrived first. */
 export const REFUNDABLE_PAYMENT_STATUS: PaymentStatus = 'succeeded';
@@ -185,7 +186,7 @@ export const refundByOrder = (
             payment
                 ? generateReject(409, [
                       {
-                          code: 'PAYMENT_NOT_REFUNDABLE',
+                          code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE,
                           message: t('payments.not-refundable')
                       }
                   ])

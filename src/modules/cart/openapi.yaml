@@ -3,6 +3,25 @@ info:
     title: cart — module contract
     version: '2.0.0'
 
+x-error-codes:
+    CART_ADDRESS_NOT_APPLICABLE: { status: 409, description: 'The cart is all-digital and needs no shipping address.' }
+    CART_ADDRESS_NOT_FOUND: { status: 404, description: 'The named address does not exist, or does not belong to the caller.' }
+    CART_ADDRESS_REQUIRED: { status: 422, description: 'A shipping address is required and none was supplied or found on file.' }
+    CART_BANK_TRANSFER_LIMIT: { status: 409, description: 'This order total exceeds the bank-transfer payment method''s configured ceiling.' }
+    CART_CHANGED: { status: 409, description: 'The cart changed between the request that read it and this write — reload and retry.' }
+    CART_EMPTY: { status: 409, description: 'Checkout was attempted on a cart with no lines.' }
+    CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines exceed the product''s available stock — see `errors[].details.lines`.' }
+    CART_PAYMENT_METHOD_NOT_AVAILABLE: { status: 409, description: 'The chosen payment method is not enabled for this deployment or this cart.' }
+    CART_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line references a product that was deleted or deactivated since it was added.' }
+    CART_QUANTITY_LIMIT: { status: 422, description: 'The requested quantity exceeds the per-line limit.' }
+    CART_SHIPPING_METHOD_NOT_FOUND: { status: 404, description: 'The named shipping method does not exist or is not offered.' }
+    CART_SHIPPING_METHOD_REQUIRED: { status: 422, description: 'A shipping method is required and none is set on the cart.' }
+    CART_SHIPPING_METHOD_WEIGHT: { status: 409, description: 'The cart''s total weight falls outside the chosen shipping method''s configured range.' }
+    CART_SHIPPING_NOT_APPLICABLE: { status: 409, description: 'The chosen shipping method does not apply to an all-digital cart.' }
+    CART_SHIP_TO_COUNTRY_NOT_SUPPORTED: { status: 422, description: 'The address''s country is outside this deployment''s configured ship-to list.' }
+    EMAIL_NOT_VERIFIED: { status: 403, description: 'Checkout requires a verified email address — see `POST /account/verify-email`.' }
+    REORDER_UNAVAILABLE: { status: 409, description: 'The past order named for reorder no longer has any purchasable lines.' }
+
 paths:
     /cart:
         get:

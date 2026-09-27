@@ -25,6 +25,7 @@ import type { MintApiKeyRequest, ApiKeyCreated, ApiKey } from '@types';
 import { apiKeyRepository } from '../repository';
 import { mintApiKey, displayIdOf } from '../credentials';
 import { apiKeysAuditActions } from '../audit';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * Is `key` something `caller` may hand out on a credential?
@@ -96,7 +97,7 @@ export const mint = (
         return Promise.resolve(
             generateReject(422, [
                 {
-                    code: 'VALIDATION_ERROR',
+                    code: ERROR_CODES.VALIDATION_ERROR,
                     message: t('api-keys.permission-not-mintable'),
                     details: { permissions: invalid }
                 }

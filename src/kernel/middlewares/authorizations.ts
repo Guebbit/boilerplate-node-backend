@@ -36,6 +36,7 @@ import {
 import { t } from '@infrastructure/i18n';
 import { isInfrastructureError } from '@infrastructure/http/errors';
 import { rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
+import { ERROR_CODES } from '@api/error-codes';
 import { callerContextOf } from '@infrastructure/http/request';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { apiKeyLimiter } from '@infrastructure/http/middlewares/rate-limit';
@@ -304,7 +305,7 @@ const challengeForFreshAuth = (response: Response, maxAgeSeconds: number): void 
     );
     rejectResponse(response, 401, [
         {
-            code: 'REAUTH_REQUIRED',
+            code: ERROR_CODES.REAUTH_REQUIRED,
             message: t('generic.error-reauth-required'),
             details: { maxAge: maxAgeSeconds }
         }
@@ -329,7 +330,7 @@ export const requirePermission = (key: string) => {
     // `'tenant'` and would misreport every platform-key refusal as a tenant one.
     const scope = scopeOfKey(key);
     // `FORBIDDEN` unless the key names its own — see `PermissionKey.deniedCode`'s docblock.
-    const deniedCode = declared?.deniedCode ?? 'FORBIDDEN';
+    const deniedCode = declared?.deniedCode ?? ERROR_CODES.FORBIDDEN;
     const deniedMessageKey = errorLocaleKeyFor(deniedCode);
 
     // Named, not anonymous: `tests/cross-cutting/write-routes-are-guarded.test.ts` and each

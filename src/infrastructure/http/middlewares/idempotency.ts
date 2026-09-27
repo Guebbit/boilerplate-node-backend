@@ -28,6 +28,7 @@ import {
     idempotencyRecordModel,
     type IdempotencyRecordDocument
 } from '@infrastructure/http/middlewares/idempotency-model';
+import { ERROR_CODES } from '@api/error-codes';
 
 /** The header this middleware reads. Express lower-cases header names on `request.header()`. */
 const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
@@ -147,7 +148,10 @@ const reclaimAbandoned = (
                 return;
             }
             rejectResponse(response, 409, [
-                { code: 'IDEMPOTENCY_IN_FLIGHT', message: t('generic.error-idempotency-in-flight') }
+                {
+                    code: ERROR_CODES.IDEMPOTENCY_IN_FLIGHT,
+                    message: t('generic.error-idempotency-in-flight')
+                }
             ]);
         });
 
@@ -204,13 +208,16 @@ const respondToCollision = (
 ): Response => {
     if (existing.state === 'in-flight')
         return rejectResponse(response, 409, [
-            { code: 'IDEMPOTENCY_IN_FLIGHT', message: t('generic.error-idempotency-in-flight') }
+            {
+                code: ERROR_CODES.IDEMPOTENCY_IN_FLIGHT,
+                message: t('generic.error-idempotency-in-flight')
+            }
         ]);
 
     if (existing.fingerprint !== fingerprint)
         return rejectResponse(response, 422, [
             {
-                code: 'IDEMPOTENCY_KEY_MISMATCH',
+                code: ERROR_CODES.IDEMPOTENCY_KEY_MISMATCH,
                 message: t('generic.error-idempotency-key-mismatch')
             }
         ]);
@@ -320,14 +327,20 @@ export const idempotencyKey: RequestHandler = (
 
     if (!KEY_PATTERN.test(raw)) {
         rejectResponse(response, 422, [
-            { code: 'VALIDATION_ERROR', message: t('generic.error-idempotency-key-invalid') }
+            {
+                code: ERROR_CODES.VALIDATION_ERROR,
+                message: t('generic.error-idempotency-key-invalid')
+            }
         ]);
         return;
     }
 
     if (hasProtoKey(request.body)) {
         rejectResponse(response, 422, [
-            { code: 'VALIDATION_ERROR', message: t('generic.error-idempotency-body-unsafe') }
+            {
+                code: ERROR_CODES.VALIDATION_ERROR,
+                message: t('generic.error-idempotency-body-unsafe')
+            }
         ]);
         return;
     }

@@ -11,6 +11,7 @@
 import { stringify as stringifyYaml, parse as parseYaml } from 'yaml';
 import {
     withAppLevelResponses,
+    withErrorCodes,
     withModuleStamps
 } from '../../../../scripts/contracts/openapi-bundle';
 
@@ -157,6 +158,54 @@ describe('withModuleStamps', () => {
 
     it('throws when the bundled document does not parse to an object', () => {
         expect(() => withModuleStamps(stringifyYaml('not an object'), {})).toThrow(
+            /did not parse to an object/
+        );
+    });
+});
+
+/** A bundled document small enough to read in one glance, for `withErrorCodes`' own tests. */
+const errorCodesBundle = () =>
+    stringifyYaml({
+        openapi: '3.0.3',
+        components: { schemas: { ErrorItem: { type: 'object' } } }
+    });
+
+/** Parsed-back result of publishing `errorCodesBundle`'s output against a small catalogue. */
+const errorCodesResult = (
+    yaml: string,
+    errorCodes: Record<string, { status: number; description: string }>
+) =>
+    parseYaml(withErrorCodes(yaml, errorCodes)) as {
+        'x-error-codes'?: Record<string, unknown>;
+    };
+
+/**
+ * `withErrorCodes` — publishes the collected error-code catalogue as the bundled document's own
+ * `x-error-codes` (CT-D5). Driven with a small map rather than the real contract, same split as
+ * the other two suites above.
+ */
+describe('withErrorCodes', () => {
+    it('publishes every collected code, sorted', () => {
+        const result = errorCodesResult(errorCodesBundle(), {
+            CART_EMPTY: { status: 409, description: 'The cart has no lines.' },
+            BAD_REQUEST: { status: 400, description: 'Malformed request.' }
+        });
+
+        expect(Object.keys(result['x-error-codes'] ?? {})).toEqual(['BAD_REQUEST', 'CART_EMPTY']);
+        expect(result['x-error-codes']?.CART_EMPTY).toEqual({
+            status: 409,
+            description: 'The cart has no lines.'
+        });
+    });
+
+    it('throws when the bundle has no ErrorItem schema to publish alongside', () => {
+        expect(() =>
+            withErrorCodes(stringifyYaml({ openapi: '3.0.3', components: { schemas: {} } }), {})
+        ).toThrow(/ErrorItem/);
+    });
+
+    it('throws when the bundled document does not parse to an object', () => {
+        expect(() => withErrorCodes(stringifyYaml('not an object'), {})).toThrow(
             /did not parse to an object/
         );
     });

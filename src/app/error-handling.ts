@@ -16,6 +16,7 @@ import {
     recordErrorOnActiveSpan
 } from '@infrastructure/observability/tracer';
 import { t } from '@infrastructure/i18n';
+import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 
 /**
  * A client error thrown by a library that follows the `http-errors` contract.
@@ -53,10 +54,13 @@ const clientErrorStatus = (error: Error): number | undefined => {
  *
  * See: docs/theory/request-flow.md#the-500-branch-says-nothing
  */
-const CLIENT_ERROR_COPY: Record<number, { code: string; messageKey: string }> = {
-    400: { code: 'BAD_REQUEST', messageKey: 'generic.error-bad-request' },
-    413: { code: 'PAYLOAD_TOO_LARGE', messageKey: 'generic.error-payload-too-large' },
-    415: { code: 'UNSUPPORTED_MEDIA_TYPE', messageKey: 'generic.error-unsupported-media-type' }
+const CLIENT_ERROR_COPY: Record<number, { code: ErrorCode; messageKey: string }> = {
+    400: { code: ERROR_CODES.BAD_REQUEST, messageKey: 'generic.error-bad-request' },
+    413: { code: ERROR_CODES.PAYLOAD_TOO_LARGE, messageKey: 'generic.error-payload-too-large' },
+    415: {
+        code: ERROR_CODES.UNSUPPORTED_MEDIA_TYPE,
+        messageKey: 'generic.error-unsupported-media-type'
+    }
 };
 
 /**
@@ -138,7 +142,7 @@ export const handleUncaughtError = (
     if (status >= 500)
         return rejectResponse(response, 500, [
             {
-                code: 'INTERNAL_ERROR',
+                code: ERROR_CODES.INTERNAL_ERROR,
                 message: t('generic.error-internal')
             }
         ]);
@@ -152,7 +156,7 @@ export const handleUncaughtError = (
      * See: docs/theory/request-flow.md#the-database-branch-is-a-safety-net-not-a-substitute
      */
     const copy = CLIENT_ERROR_COPY[status] ?? {
-        code: 'INVALID_REQUEST',
+        code: ERROR_CODES.INVALID_REQUEST,
         messageKey: 'generic.error-unknown'
     };
 

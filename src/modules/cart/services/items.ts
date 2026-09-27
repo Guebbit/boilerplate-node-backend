@@ -25,6 +25,7 @@ import { cartAuditActions } from '../audit';
 import { basketWeight, needsShipping } from '../domain';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
 import { readCartLines, toCartView, isJoined, type CartLine, type CartView } from './view';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * Get user cart, each line joined with its product.
@@ -79,7 +80,7 @@ const upsertCartItem = (
         return cartRepository.upsertLine(userId, id, quantity, mode).then((result) => {
             if (result === QUANTITY_LIMIT)
                 return generateReject(422, [
-                    { code: 'CART_QUANTITY_LIMIT', message: t('cart.quantity-limit') }
+                    { code: ERROR_CODES.CART_QUANTITY_LIMIT, message: t('cart.quantity-limit') }
                 ]);
 
             return toCartView(result).then((view) => generateSuccess(view));
@@ -224,7 +225,7 @@ export const cartShippingMethodSet = (
         return Promise.resolve(
             generateReject(404, [
                 {
-                    code: 'CART_SHIPPING_METHOD_NOT_FOUND',
+                    code: ERROR_CODES.CART_SHIPPING_METHOD_NOT_FOUND,
                     message: t('cart.shipping-method-not-found')
                 }
             ])
@@ -237,7 +238,7 @@ export const cartShippingMethodSet = (
             if (!needsShipping(joined))
                 return generateReject(409, [
                     {
-                        code: 'CART_SHIPPING_NOT_APPLICABLE',
+                        code: ERROR_CODES.CART_SHIPPING_NOT_APPLICABLE,
                         message: t('cart.shipping-not-applicable')
                     }
                 ]);
@@ -245,7 +246,7 @@ export const cartShippingMethodSet = (
             if (!methodFitsWeight(method, basketWeight(joined)))
                 return generateReject(409, [
                     {
-                        code: 'CART_SHIPPING_METHOD_WEIGHT',
+                        code: ERROR_CODES.CART_SHIPPING_METHOD_WEIGHT,
                         message: t('cart.shipping-method-weight')
                     }
                 ]);

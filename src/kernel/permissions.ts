@@ -29,6 +29,7 @@ import type {
     TenantCaller
 } from '@types';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 
 /**
  * The prefix that marks a platform key.
@@ -111,7 +112,7 @@ export interface PermissionKey {
      * email", not a permissions error. The message is looked up as `generic.error-<code,
      * kebab-cased>` — the same locale key `FORBIDDEN` itself resolves to via that same rule.
      */
-    deniedCode?: string;
+    deniedCode?: ErrorCode;
 }
 
 /** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `keys` list. */
@@ -124,7 +125,15 @@ const permissionKeySchema = z.object({
     description: z.string(),
     stepUp: stepUpTierSchema.optional(),
     conditions: z.record(z.string(), z.unknown()).optional(),
-    deniedCode: z.string().optional()
+    // Refined rather than `z.enum(...)`: the generated catalogue is a plain
+    // `Record<string, string>`, not the non-empty tuple `z.enum` needs, and a `.refine` states the
+    // real rule anyway — every `deniedCode` must be a code the contract actually declares.
+    deniedCode: z
+        .string()
+        .refine((value): value is ErrorCode => Object.hasOwn(ERROR_CODES, value), {
+            message: "deniedCode must be a code declared in some module's x-error-codes"
+        })
+        .optional()
 }) satisfies z.ZodType<PermissionKey>;
 
 /** A role the seeders create, and the keys it holds. Roles are data; the keys they name are not. */

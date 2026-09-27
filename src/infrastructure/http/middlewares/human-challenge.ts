@@ -13,6 +13,7 @@ import {
     isHumanChallengeEnabled,
     resolveHumanChallengeProvider
 } from '@infrastructure/adapters/antibot-providers';
+import { ERROR_CODES } from '@api/error-codes';
 
 /** The header a provider token travels in — a header, so one gate fits any request shape. */
 const TOKEN_HEADER = 'x-antibot-challenge-token';
@@ -21,7 +22,7 @@ const TOKEN_HEADER = 'x-antibot-challenge-token';
 const refuse = (request: Request, response: Response): void => {
     refuseAntibot('human-challenge', request, response, 401, [
         {
-            code: 'ANTIBOT_VERIFICATION_FAILED',
+            code: ERROR_CODES.ANTIBOT_VERIFICATION_FAILED,
             message: t('generic.error-antibot-verification-failed')
         }
     ]);

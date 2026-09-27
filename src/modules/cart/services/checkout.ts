@@ -47,6 +47,7 @@ import {
     type UnavailableCartLine
 } from '../domain';
 import { isJoined, readCartLines } from './view';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * The snapshot an order embeds, from a book entry: the shipment's fields, none of the book's.
@@ -90,7 +91,7 @@ const resolvePaymentMethod = async (
             ok: false,
             reject: generateReject(409, [
                 {
-                    code: 'CART_PAYMENT_METHOD_NOT_AVAILABLE',
+                    code: ERROR_CODES.CART_PAYMENT_METHOD_NOT_AVAILABLE,
                     message: t('cart.payment-method-not-available')
                 }
             ])
@@ -102,7 +103,10 @@ const resolvePaymentMethod = async (
             return {
                 ok: false,
                 reject: generateReject(409, [
-                    { code: 'CART_BANK_TRANSFER_LIMIT', message: t('cart.bank-transfer-limit') }
+                    {
+                        code: ERROR_CODES.CART_BANK_TRANSFER_LIMIT,
+                        message: t('cart.bank-transfer-limit')
+                    }
                 ])
             };
     }
@@ -147,7 +151,7 @@ const resolveShipping = async (
             ok: false,
             reject: generateReject(404, [
                 {
-                    code: 'CART_SHIPPING_METHOD_NOT_FOUND',
+                    code: ERROR_CODES.CART_SHIPPING_METHOD_NOT_FOUND,
                     message: t('cart.shipping-method-not-found')
                 }
             ])
@@ -159,7 +163,7 @@ const resolveShipping = async (
                 ok: false,
                 reject: generateReject(409, [
                     {
-                        code: 'CART_ADDRESS_NOT_APPLICABLE',
+                        code: ERROR_CODES.CART_ADDRESS_NOT_APPLICABLE,
                         message: t('cart.address-not-applicable')
                     }
                 ])
@@ -173,7 +177,7 @@ const resolveShipping = async (
             ok: false,
             reject: generateReject(404, [
                 {
-                    code: 'CART_ADDRESS_NOT_FOUND',
+                    code: ERROR_CODES.CART_ADDRESS_NOT_FOUND,
                     message: t('cart.address-not-found')
                 }
             ])
@@ -191,7 +195,7 @@ const resolveShipping = async (
             ok: false,
             reject: generateReject(422, [
                 {
-                    code: 'CART_SHIP_TO_COUNTRY_NOT_SUPPORTED',
+                    code: ERROR_CODES.CART_SHIP_TO_COUNTRY_NOT_SUPPORTED,
                     message: t('cart.ship-to-country-not-supported')
                 }
             ])
@@ -218,7 +222,7 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
     if (refusal.type === 'insufficient-stock')
         return generateReject(409, [
             {
-                code: 'CART_INSUFFICIENT_STOCK',
+                code: ERROR_CODES.CART_INSUFFICIENT_STOCK,
                 message: t('cart.insufficient-stock'),
                 // Every short line, so the customer fixes the basket in one pass instead of one
                 // refusal per line.
@@ -227,7 +231,7 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
         ]);
     return generateReject(refusal.status, [
         {
-            code: 'CART_PRODUCT_UNAVAILABLE',
+            code: ERROR_CODES.CART_PRODUCT_UNAVAILABLE,
             message: t('cart.product-unavailable'),
             // Absent for the placeOrder-side refusal: only the pre-flight verdict has per-line
             // detail to report.
@@ -310,7 +314,9 @@ const runCheckout = async (
     );
     if (!verdict.ok) {
         if (verdict.reason === 'empty')
-            return generateReject(409, [{ code: 'CART_EMPTY', message: t('cart.empty') }]);
+            return generateReject(409, [
+                { code: ERROR_CODES.CART_EMPTY, message: t('cart.empty') }
+            ]);
         if (verdict.reason === 'insufficient-stock')
             return buildStockRefusal({
                 type: 'insufficient-stock',
@@ -329,7 +335,7 @@ const runCheckout = async (
     if (shippingMethod && !needsShipping(joined))
         return generateReject(409, [
             {
-                code: 'CART_SHIPPING_NOT_APPLICABLE',
+                code: ERROR_CODES.CART_SHIPPING_NOT_APPLICABLE,
                 message: t('cart.shipping-not-applicable')
             }
         ]);
@@ -348,10 +354,10 @@ const runCheckout = async (
         return generateReject(422, [
             shippingRequirement.reason === 'method-required'
                 ? {
-                      code: 'CART_SHIPPING_METHOD_REQUIRED',
+                      code: ERROR_CODES.CART_SHIPPING_METHOD_REQUIRED,
                       message: t('cart.shipping-method-required')
                   }
-                : { code: 'CART_ADDRESS_REQUIRED', message: t('cart.address-required') }
+                : { code: ERROR_CODES.CART_ADDRESS_REQUIRED, message: t('cart.address-required') }
         ]);
 
     /*
@@ -362,7 +368,7 @@ const runCheckout = async (
     if (shippingMethod && !methodFitsWeight(shippingMethod, basketWeight(joined)))
         return generateReject(409, [
             {
-                code: 'CART_SHIPPING_METHOD_WEIGHT',
+                code: ERROR_CODES.CART_SHIPPING_METHOD_WEIGHT,
                 message: t('cart.shipping-method-weight')
             }
         ]);
@@ -433,7 +439,7 @@ const runCheckout = async (
     // Lost the race: hand the units back and retract the order this request
     // wrote, so the cart's contents end up on exactly one of the two.
     await retractOrder(order);
-    return generateReject(409, [{ code: 'CART_CHANGED', message: t('cart.changed') }]);
+    return generateReject(409, [{ code: ERROR_CODES.CART_CHANGED, message: t('cart.changed') }]);
 };
 
 /**

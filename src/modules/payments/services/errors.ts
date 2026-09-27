@@ -7,6 +7,7 @@
 
 import { t } from '@infrastructure/i18n';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * The order failed `@modules/orders`' `isPayable` check before any write, or it moved out from
@@ -16,5 +17,5 @@ import { generateReject, type ResponseReject } from '@infrastructure/http/respon
  */
 export const notPayable = (): ResponseReject =>
     generateReject(409, [
-        { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
+        { code: ERROR_CODES.PAYMENT_ORDER_NOT_PAYABLE, message: t('payments.order-not-payable') }
     ]);

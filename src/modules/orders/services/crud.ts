@@ -34,6 +34,7 @@ import {
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
 import { ownerScope } from './scope';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI. `productId` filters
@@ -223,7 +224,7 @@ export const create = async (
             return generateReject(404, [t('products.not-found')]);
         return generateReject(409, [
             {
-                code: 'ORDER_INSUFFICIENT_STOCK',
+                code: ERROR_CODES.ORDER_INSUFFICIENT_STOCK,
                 message: t('orders.insufficient-stock'),
                 // Which line blocked it, and what is actually on the shelf.
                 details: { lines: outcome.shortfalls }
@@ -304,7 +305,9 @@ export const remove = (
 ): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     if (hardDelete && order.paidAt)
         return Promise.resolve(
-            generateReject(409, [{ code: 'ORDER_INVOICED', message: t('orders.invoiced') }])
+            generateReject(409, [
+                { code: ERROR_CODES.ORDER_INVOICED, message: t('orders.invoiced') }
+            ])
         );
 
     // HARD delete

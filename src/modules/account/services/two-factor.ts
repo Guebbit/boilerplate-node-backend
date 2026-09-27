@@ -40,6 +40,7 @@ import type {
 import { accountAuditActions } from '../audit';
 import { findLiveTokenEntry, findLiveToken, spendLiveToken } from './tokens';
 import { resendTooSoon } from '../cooldown';
+import { ERROR_CODES } from '@api/error-codes';
 import {
     DELIVERED_CODE_RESEND_SECONDS,
     availableTwoFactorMethods,
@@ -59,7 +60,7 @@ import {
  * Module-private like every other code in this app: a client reads it off the response, not off
  * an exported constant.
  */
-const RESEND_TOO_SOON_CODE = 'TWO_FACTOR_RESEND_TOO_SOON';
+const RESEND_TOO_SOON_CODE = ERROR_CODES.TWO_FACTOR_RESEND_TOO_SOON;
 
 /**
  * Record one method-scoped 2FA action and pass the outcome through untouched. Both halves are

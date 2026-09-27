@@ -19,6 +19,94 @@ info:
     contact:
         name: API Team
 
+# Error codes that belong to no module — an HTTP-status-derived default (CT-D5), or a check that
+# runs in front of every route rather than inside one. A module's OWN codes are declared the same
+# way in its own openapi.yaml; the bundler collects every fragment's x-error-codes into one
+# catalogue and publishes it as `errors[].code`'s `examples` — never as an `enum`, so a new code is
+# additive, not a breaking response change (Zalando API guideline #112).
+x-error-codes:
+    BAD_REQUEST:
+        {
+            status: 400,
+            description: 'A malformed request the body parser or a library refused before any route ran.'
+        }
+    UNAUTHORIZED: { status: 401, description: 'No valid session — log in and retry.' }
+    FORBIDDEN:
+        {
+            status: 403,
+            description: "The caller is authenticated but lacks the permission this route requires. A key's own `deniedCode` can replace this default with a more specific one."
+        }
+    NOT_FOUND:
+        {
+            status: 404,
+            description: 'The addressed resource does not exist, or the caller may not be told that it does.'
+        }
+    CONFLICT:
+        {
+            status: 409,
+            description: "The request is well-formed but conflicts with the resource's current state."
+        }
+    VALIDATION_ERROR:
+        {
+            status: 422,
+            description: 'One or more fields failed schema validation — see `errors[].details.field`.'
+        }
+    REQUEST_ERROR: { status: 400, description: 'A 4xx with no more specific code of its own.' }
+    INVALID_REQUEST:
+        {
+            status: 400,
+            description: 'A driver-level failure that is really about the request — a malformed id, a duplicate key — with no dedicated code of its own.'
+        }
+    INTERNAL_ERROR:
+        {
+            status: 500,
+            description: 'An unexpected server-side failure. Never carries library or stack detail.'
+        }
+    PAYLOAD_TOO_LARGE:
+        { status: 413, description: "The request body exceeds this deployment's size limit." }
+    UNSUPPORTED_MEDIA_TYPE:
+        {
+            status: 415,
+            description: "The request's `Content-Type` is not one this operation accepts."
+        }
+    LIMIT_PART_COUNT: { status: 400, description: 'A multipart upload carries too many parts (multer).' }
+    LIMIT_FILE_SIZE: { status: 400, description: 'An uploaded file exceeds this deployment''s size limit (multer).' }
+    LIMIT_FILE_COUNT: { status: 400, description: 'A multipart upload carries too many files (multer).' }
+    LIMIT_FIELD_KEY: { status: 400, description: 'A multipart field name is too long (multer).' }
+    LIMIT_FIELD_VALUE: { status: 400, description: 'A multipart field value is too long (multer).' }
+    LIMIT_FIELD_COUNT: { status: 400, description: 'A multipart upload carries too many non-file fields (multer).' }
+    LIMIT_UNEXPECTED_FILE:
+        {
+            status: 400,
+            description: 'A multipart upload carries a file under a field name this operation does not accept (multer).'
+        }
+    MISSING_FIELD_NAME: { status: 400, description: 'A multipart file part carries no field name (multer).' }
+    SERVICE_UNAVAILABLE:
+        {
+            status: 503,
+            description: 'A dependency (database, broker) is unreachable. Carries a `Retry-After` hint.'
+        }
+    RATE_LIMITED:
+        {
+            status: 429,
+            description: 'The caller exceeded a rate-limit budget. Carries a `Retry-After` hint.'
+        }
+    IDEMPOTENCY_IN_FLIGHT:
+        {
+            status: 409,
+            description: 'Another request already carries this `Idempotency-Key` and has not finished yet.'
+        }
+    IDEMPOTENCY_KEY_MISMATCH:
+        {
+            status: 422,
+            description: 'This `Idempotency-Key` was already used with a different request body.'
+        }
+    REAUTH_REQUIRED:
+        {
+            status: 401,
+            description: "This action requires a session fresher than the caller's current one — see `POST /account/reauth`."
+        }
+
 servers:
     - url: http://localhost:3000
       description: Local

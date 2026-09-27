@@ -24,6 +24,7 @@ import {
     rejectResponse
 } from '@infrastructure/http/response';
 import { makeResponseStub } from '@tests/express';
+import type { ErrorCode } from '@api/error-codes';
 
 /** Express response stub with a chainable status().json(). */
 
@@ -202,7 +203,9 @@ describe('generateReject', () => {
     it('normalises a mixed list of strings and structured items', () => {
         const response = generateReject(422, [
             'Email is required',
-            { code: 'TOO_SHORT', message: 'Password too short' }
+            // The merge rule is generic over WHATEVER code a caller supplies — this value's only
+            // job is to prove it passes through untouched, not to name a real catalogue entry.
+            { code: 'TOO_SHORT' as ErrorCode, message: 'Password too short' }
         ]);
 
         expect(response.errors).toEqual([
@@ -212,13 +215,18 @@ describe('generateReject', () => {
     });
 
     it('fills a structured item missing its code from the status', () => {
-        const response = generateReject(409, [{ code: '', message: 'Email already used' }]);
+        // `''` is deliberately not a real code: it exercises the `error.code || fallback` branch,
+        // which only fires on a falsy value — the type does not forbid an empty string arriving
+        // this way, since it can still come from an un-narrowed external source at runtime.
+        const response = generateReject(409, [
+            { code: '' as ErrorCode, message: 'Email already used' }
+        ]);
 
         expect(response.errors[0].code).toBe('CONFLICT');
     });
 
     it('fills a structured item missing its message from the envelope message', () => {
-        const response = generateReject(409, [{ code: 'DUPLICATE', message: '' }]);
+        const response = generateReject(409, [{ code: 'DUPLICATE' as ErrorCode, message: '' }]);
 
         expect(response.errors[0]).toEqual({ code: 'DUPLICATE', message: 'Conflict' });
     });
@@ -226,14 +234,14 @@ describe('generateReject', () => {
     it('omits details entirely rather than serialising it as undefined', () => {
         // A `"details": undefined` key survives some serialisers as `null` and shows up in
         // contract validation as an undeclared field.
-        const response = generateReject(422, [{ code: 'X', message: 'Y' }]);
+        const response = generateReject(422, [{ code: 'X' as ErrorCode, message: 'Y' }]);
 
         expect(response.errors[0]).not.toHaveProperty('details');
     });
 
     it('keeps details when provided', () => {
         const response = generateReject(422, [
-            { code: 'X', message: 'Y', details: { field: 'email' } }
+            { code: 'X' as ErrorCode, message: 'Y', details: { field: 'email' } }
         ]);
 
         expect(response.errors[0].details).toEqual({ field: 'email' });

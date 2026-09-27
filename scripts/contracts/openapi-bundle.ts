@@ -7,11 +7,12 @@
  * boundary, never by assuming a neighbour's text is concatenated above.
  *
  * Compiled by `redocly bundle` rather than concatenated, because the comments that matter are in
- * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Two steps
+ * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Three steps
  * run after it, on the bundle: {@link withAppLevelResponses} merges the root's
  * `x-app-level-responses` (429, and 400/413/415 for a body-carrying operation) into every
- * operation that doesn't already declare its own, and {@link withModuleStamps} tags every operation
- * with the `x-module` its owning fragment names — never hand-written per operation.
+ * operation that doesn't already declare its own; {@link withModuleStamps} tags every operation
+ * with the `x-module` its owning fragment names — never hand-written per operation; and
+ * {@link withErrorCodes} publishes every fragment's own `x-error-codes` as one collected catalogue.
  *
  * Deleting a module is `rm -rf` of its folder plus its block in the root's path index; forgetting
  * the second half is a bundle failure naming the exact line.
@@ -162,10 +163,19 @@ interface Operation {
     responses?: Record<string, unknown>;
 }
 
+/** One error code's declaration, as a fragment's `x-error-codes` map holds it (CT-D5). */
+interface ErrorCodeEntry {
+    status: number;
+    description: string;
+}
+
 /** The shape this step reads out of the bundled document, and writes back into. */
 interface BundledDocument {
     'x-app-level-responses'?: Record<string, AppLevelResponse>;
+    'x-error-codes'?: Record<string, ErrorCodeEntry>;
     paths?: Record<string, Record<string, unknown>>;
+    /** Only checked for presence — a sanity guard that the bundle still has the schema this catalogue documents. */
+    components?: { schemas?: { ErrorItem?: unknown } };
 }
 
 /**
@@ -254,6 +264,85 @@ export const withAppLevelResponses = (bundled: string): string => {
      * parses to the same string, but it rewraps whenever unrelated text shifts, which turns every
      * regeneration into a diff nobody can read.
      */
+    return stringifyYaml(document_, { lineWidth: 0 });
+};
+
+/** Narrows a fragment's `x-error-codes` entry to the shape this step requires. */
+const isErrorCodeEntry = (value: unknown): value is ErrorCodeEntry =>
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { status?: unknown }).status === 'number' &&
+    typeof (value as { description?: unknown }).description === 'string';
+
+/** A fragment's own `x-error-codes:` map, or none if it declares no error codes at all. */
+interface FragmentWithErrorCodes {
+    'x-error-codes'?: Record<string, unknown>;
+}
+
+/**
+ * Every error code the contract declares, collected straight off the root and every module
+ * fragment's OWN file — never through `redocly bundle`, which only resolves `$ref` chains
+ * reachable from the root's `paths`/`components` and has no way to see a top-level key nothing
+ * ever points at. The same reason {@link moduleOfPath} reads `sectionPaths` off disk instead.
+ *
+ * @throws Error if two fragments declare the same code, or an entry is missing its status or description
+ */
+const collectErrorCodes = (): Record<string, ErrorCodeEntry> => {
+    const collected: Record<string, ErrorCodeEntry> = {};
+
+    const collectFrom = (file: string, owner: string): void => {
+        const parsed = parseYaml(readFileSync(file, 'utf8')) as FragmentWithErrorCodes;
+        for (const [code, entry] of Object.entries(parsed['x-error-codes'] ?? {})) {
+            if (!isErrorCodeEntry(entry))
+                throw new Error(
+                    `[openapi] ${owner}'s x-error-codes.${code} needs a numeric status and a string description.`
+                );
+            if (Object.hasOwn(collected, code))
+                throw new Error(
+                    `[openapi] two fragments declare the error code ${code} — the second is ${owner}.`
+                );
+            collected[code] = entry;
+        }
+    };
+
+    collectFrom(ROOT_SPEC, 'the root');
+    for (const section of MODULE_SECTIONS) collectFrom(moduleSpec(section), section);
+
+    return collected;
+};
+
+/**
+ * Publishes the collected error-code catalogue as the bundled document's own `x-error-codes` —
+ * `ErrorItem.code` itself stays `type: string` with its one illustrative `example`, deliberately
+ * NEVER an `enum`, which could never gain a code later without being a breaking response change
+ * (Zalando API guideline #112, CT-D5). OpenAPI 3.0 (this contract's version) has no schema-level
+ * `examples` LIST the way 3.1 does — `oas3-schema` refuses one — so the full, documented set lives
+ * in this vendor extension instead, which also carries each code's status and description,
+ * strictly more than a bare list of names would.
+ *
+ * Unlike {@link withAppLevelResponses}'s instruction key, `x-error-codes` is NOT deleted once
+ * applied: it is real documentation a published contract benefits from keeping, and the generated
+ * TypeScript catalogue (`npm run gen:api`) reads it straight off this file.
+ *
+ * @throws Error if the bundle has no `components.schemas.ErrorItem` to publish alongside
+ */
+export const withErrorCodes = (
+    bundled: string,
+    errorCodes: Record<string, ErrorCodeEntry>
+): string => {
+    const parsed: unknown = parseYaml(bundled);
+    if (!isBundledDocument(parsed))
+        throw new Error('[openapi] the bundled document did not parse to an object.');
+
+    const document_ = parsed;
+    if (!document_.components?.schemas?.ErrorItem)
+        throw new Error(
+            '[openapi] the bundled document has no components.schemas.ErrorItem to publish x-error-codes alongside.'
+        );
+
+    const codes = Object.keys(errorCodes).toSorted();
+    document_['x-error-codes'] = Object.fromEntries(codes.map((code) => [code, errorCodes[code]]));
+
     return stringifyYaml(document_, { lineWidth: 0 });
 };
 
@@ -359,7 +448,13 @@ const compile = (): string => {
      */
     compiled =
         MARKER +
-        withModuleStamps(withAppLevelResponses(readFileSync(temporary, 'utf8')), moduleOfPath());
+        withErrorCodes(
+            withModuleStamps(
+                withAppLevelResponses(readFileSync(temporary, 'utf8')),
+                moduleOfPath()
+            ),
+            collectErrorCodes()
+        );
     return compiled;
 };
 

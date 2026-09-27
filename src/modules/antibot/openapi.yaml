@@ -3,6 +3,10 @@ info:
     title: antibot — module contract
     version: '1.0.0'
 
+x-error-codes:
+    ANTIBOT_NO_CHALLENGE: { status: 404, description: 'No challenge is currently active for this session.' }
+    ANTIBOT_VERIFICATION_FAILED: { status: 401, description: 'The human-challenge token is missing, expired, or the provider rejected it.' }
+
 paths:
     /antibot/config:
         get:

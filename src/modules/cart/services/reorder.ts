@@ -29,6 +29,7 @@ import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
 import { toCartView, type CartView } from './view';
+import { ERROR_CODES } from '@api/error-codes';
 
 /** A line the order asks for, resolved against today's catalogue. */
 interface ReorderLine {
@@ -123,7 +124,7 @@ export const reorderIntoCart = (
                 if (addable.length === 0)
                     return generateReject(409, [
                         {
-                            code: 'REORDER_UNAVAILABLE',
+                            code: ERROR_CODES.REORDER_UNAVAILABLE,
                             message: t('cart.reorder.unavailable')
                         }
                     ]);

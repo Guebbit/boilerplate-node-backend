@@ -38,6 +38,7 @@ import type { PaymentDocument } from '../model';
 import { callerScope } from './scope';
 import { performRefund } from './refunds';
 import { notPayable } from './errors';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * The statuses a settlement may move a payment away from — every non-terminal one. `succeeded` and
@@ -246,7 +247,9 @@ export const settlementResponse = ({
     if (orderLost) return notPayable();
 
     if (payment.status === 'declined')
-        return generateReject(409, [{ code: 'PAYMENT_DECLINED', message: t('payments.declined') }]);
+        return generateReject(409, [
+            { code: ERROR_CODES.PAYMENT_DECLINED, message: t('payments.declined') }
+        ]);
 
     // In flight is a success on the wire, not a refusal: the browser has a next step to take and
     // a 4xx would tell it to stop. The message says which of the two it is looking at.
@@ -308,7 +311,7 @@ const findConfirmable = (
     // to create the intent again either way.
     if (!payment.providerRef || !allowed.includes(payment.status))
         return generateReject(409, [
-            { code: 'PAYMENT_NOT_CONFIRMABLE', message: t('payments.not-confirmable') }
+            { code: ERROR_CODES.PAYMENT_NOT_CONFIRMABLE, message: t('payments.not-confirmable') }
         ]);
     // The guard above proves `providerRef` is present, but narrowing a property does not narrow
     // the object it lives on — TS has no way to fold that back into `payment`'s own type here.
