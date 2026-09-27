@@ -333,8 +333,8 @@ export const applyProductTransform = applySerialization(productSchema, {
 /**
  * Maps a document straight onto the `Product` contract: `id` from the Mongoose getter, `available`
  * derived from the two stock counters (never stored), `currency` read live from
- * `NODE_DEFAULT_CURRENCY`, the three dates ISO-stringified. Same reasoning as `users/model.ts`'s
- * `toUser`.
+ * `NODE_DEFAULT_CURRENCY`, the three dates ISO-stringified. Same reasoning as `users/presenter.ts`'s
+ * `presentUser`.
  */
 export const toProduct = (document: ProductDocument): Product => {
     const onHand = document.onHand ?? 0;

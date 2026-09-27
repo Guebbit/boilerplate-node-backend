@@ -15,7 +15,6 @@ import { t } from '@infrastructure/i18n';
 import { CreateUserBody, createUserBodyPasswordMin } from '@api/schemas.zod';
 import { type User } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { decryptPii } from '@infrastructure/security/pii-encryption';
 
 /**
  * Token types used in jwt-auth
@@ -117,7 +116,7 @@ export const isLiveRefreshSession = (token: Token): boolean =>
  * as `Date` below — the contract carries ISO strings, the document carries real dates. `role` is
  * omitted outright: the document holds no role of its own — `@modules/access`'s membership rows
  * are the only place one is stored — so nothing here may read or write it.
- * {@link toUser} takes the caller's current role as an explicit parameter instead.
+ * `./presenter`'s `presentUser` takes the caller's current role as an explicit parameter instead.
  */
 export interface UserRecord extends Omit<
     User,
@@ -745,8 +744,9 @@ userSchema.methods.tokenRemoveAll = function (this: UserDocument, type: Token['t
 /**
  * What `search()` actually hands back: {@link UserRecord}, minus the same secrets and
  * document-only bookkeeping {@link applyUserTransform}'s `omit` strips. Real `Date`s, not the
- * ISO strings the `User` contract carries — `toUser` is what narrows those, and it accepts this
- * shape (or a hydrated {@link UserDocument}, a superset of it) rather than the document alone.
+ * ISO strings the `User` contract carries — `./presenter`'s `presentUser` is what narrows those,
+ * and it accepts this shape (or a hydrated {@link UserDocument}, a superset of it) rather than the
+ * document alone.
  */
 export type UserWire = Omit<
     UserRecord,
@@ -767,6 +767,9 @@ export type UserWire = Omit<
  * lean results (which bypass `toJSON`) can be mapped through the same logic — see `./service`
  * `search()`. `active` and `deletedAt` pass through untouched: both are in the `User` contract,
  * and every route serving a `User` list requires `users.any.read`.
+ *
+ * This is schema plumbing (a Mongoose-level omit), not the `User` contract itself — `./presenter`
+ * is where a document becomes the wire shape; see `presentUser` there.
  */
 export const applyUserTransform = applySerialization(userSchema, {
     // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
@@ -786,45 +789,6 @@ export const applyUserTransform = applySerialization(userSchema, {
         'twoFactorBackupCodeSalt',
         'oauthAccounts'
     ]
-});
-
-/**
- * Maps a loaded account straight onto the `User` contract, ISO-stringifying the four fields
- * {@link UserRecord} redeclares as `Date`. Takes {@link UserWire} rather than {@link UserDocument}:
- * a hydrated document satisfies it too (a superset), and `search()`'s already-normalized rows
- * — which never carry `password`/`tokens`/2FA credential material to begin with — need no
- * document methods this only ever reads plain fields off anyway.
- *
- * @param role - the caller's CURRENT tenant role, read from the membership store by whoever calls
- *   this — never off the document, which holds no role of its own. `null` prints as absent, the
- *   same as every other optional field below.
- */
-export const toUser = (document: UserWire, role: string | null): User => ({
-    id: document.id,
-    email: document.email,
-    username: document.username,
-    ...(role === null ? {} : { role }),
-    ...(document.active === undefined ? {} : { active: document.active }),
-    ...(document.verifiedAt ? { verifiedAt: document.verifiedAt.toISOString() } : {}),
-    ...(document.pendingEmail === undefined ? {} : { pendingEmail: document.pendingEmail }),
-    ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
-    ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
-    ...(document.locale === undefined ? {} : { locale: document.locale }),
-    // Stored encrypted (`./service`'s `update`, under `NODE_PII_ENCRYPTION_KEY`) — this is the
-    // one place a document's `phone` reaches the wire, hydrated or lean/searched alike, so it's
-    // the one place that decrypts it.
-    ...(document.phone === undefined ? {} : { phone: decryptPii(document.phone, 'user phone') }),
-    ...(document.website === undefined ? {} : { website: document.website }),
-    ...(document.analyticsConsent === undefined
-        ? {}
-        : { analyticsConsent: document.analyticsConsent }),
-    ...(document.termsAccepted === undefined ? {} : { termsAccepted: document.termsAccepted }),
-    ...(document.twoFactorEnabledAt
-        ? { twoFactorEnabledAt: document.twoFactorEnabledAt.toISOString() }
-        : {}),
-    ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
-    ...(document.updatedAt ? { updatedAt: document.updatedAt.toISOString() } : {}),
-    ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {})
 });
 
 /** The compiled Mongoose model. */

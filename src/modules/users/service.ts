@@ -24,11 +24,12 @@ import {
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
-import { zodUserSchema, TokenType, hashToken, toUser, DEFAULT_USER_IMAGE_URL } from './model';
+import { zodUserSchema, TokenType, hashToken, DEFAULT_USER_IMAGE_URL } from './model';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import type { UserDocument, Token, UserWire } from './model';
-import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest, User } from '@types';
+import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
 import { userRepository } from './repository';
+import { presentUser, presentUserWithCurrentRole } from './presenter';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import { withTransaction } from '@infrastructure/runtime/database';
@@ -41,13 +42,7 @@ import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import {
-    assignRole,
-    assertCanGrant,
-    revokeAllOf,
-    rolesOf,
-    VERIFIED_CUSTOMER_ROLE
-} from '@modules/access';
+import { assignRole, assertCanGrant, revokeAllOf, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
@@ -87,15 +82,6 @@ export const getById = (id?: string): Promise<UserDocument | undefined> => {
     if (!id) return Promise.resolve(undefined);
     return userRepository.findById(id).then((user) => user ?? undefined);
 };
-
-/**
- * The contract `User` for an already-loaded document — resolves its CURRENT role fresh from the
- * membership store (the document holds none of its own) and applies `toUser` in one call, so a
- * controller does not chain the two itself. Single-document counterpart to `rolesOfMany` (see
- * `GET /users`'s own list read).
- */
-const toUserContract = (user: UserDocument): Promise<User> =>
-    rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then((roles) => toUser(user, roles.tenant));
 
 /**
  * Enqueue the digest job for a just-persisted user, when its write carried a pending upload.
@@ -873,8 +859,8 @@ export const userService = {
     findReaperSoftDeletedPastGrace,
     consumeToken,
     enqueueIfPending,
-    // A controller may not reach `./model` directly (the persistence wall), so the shaping
+    // A controller may not reach `./presenter` directly (the persistence wall), so the shaping
     // helper it needs to build a response rides through the service instead.
-    toUser,
-    toUserContract
+    toUser: presentUser,
+    toUserContract: presentUserWithCurrentRole
 };
