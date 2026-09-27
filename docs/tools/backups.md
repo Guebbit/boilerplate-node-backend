@@ -8,12 +8,14 @@ app ships and forgets.
 flowchart LR
     Cron["systemd timer\n(resticprofile schedule)"] --> RP["resticprofile"]
     RP -->|"stdin-command"| Dump["docker compose exec database\nmongodump --oplog --archive --gzip"]
+    RP -->|"stdin-command"| Files["docker compose exec app\ntar public/images + storage/mail-spool"]
     Dump -->|"stdout"| RP
+    Files -->|"stdout"| RP
     RP -->|"restic backup --stdin"| Repo[("restic repository\nS3 / B2 / SFTP / disk")]
 
     classDef proc fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef store fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class Cron,RP,Dump proc;
+    class Cron,RP,Dump,Files proc;
     class Repo store;
 ```
 
@@ -75,6 +77,30 @@ Install the schedule once, per host, after adding every client's section:
 ```bash
 resticprofile schedule --all
 ```
+
+## Uploaded images and the mail spool
+
+The `mongodump` above backs up the database only. Two named volumes hold durable state of their
+own — `uploads` (uploaded images, `image-store.ts`) and the `mail-spool/` subdirectory of `storage`
+(queued outbound mail a restart must not lose) — and a restore that skips them brings back rows
+pointing at files that no longer exist.
+
+Each client gets a **second** resticprofile section for this, `[<client>-uploads]` in the example
+file: restic snapshots one stdin stream per backup run, so a second source is a second profile
+sharing the same repository, not a second entry under the mongo profile's own `[<client>.backup]`.
+It tars both trees straight out of the `app` container (`docker compose exec app tar`) and pipes
+the result to `restic backup --stdin`, the same shape the mongo dump already uses.
+
+**`storage/invoices/` is deliberately left out.** It is a render cache, not durable state — the PDF
+is a receipt now, rendered on demand, so losing the cache costs a re-render, never data. Only
+`mail-spool/` inside that volume is backed up.
+
+**Moving to a new host:** carry `uploads` and `storage` across the same way `mongo-data` already
+has to — a `docker run --rm -v <volume>:/from -v /dest:/to alpine cp -a /from/. /to/` per volume
+(or a restic restore of the `-uploads` snapshot straight onto the new host) before the new stack's
+first boot. Skipping this is the same class of mistake as forgetting the database dump: the new
+host starts empty and looks fine until a customer clicks a broken image or the reaper finds no
+mail queued that a customer swears was sent.
 
 ## Why `--oplog`, and the restriction it comes with
 
