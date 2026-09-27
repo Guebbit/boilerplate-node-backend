@@ -8,7 +8,8 @@
  * what it has to do.
  */
 
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac } from 'node:crypto';
+import { constantTimeEqual } from '@infrastructure/security/constant-time';
 
 /** Where the signature travels. Lower-case: Node normalises incoming header names. */
 export const WEBHOOK_SIGNATURE_HEADER = 'x-payment-signature';
@@ -87,10 +88,10 @@ export const verifyWebhookSignature = (rawBody: Buffer, header: string | undefin
     if (Math.abs(Math.floor(Date.now() / 1000) - timestamp) > TOLERANCE_SECONDS)
         throw new WebhookRejected('Signature timestamp outside tolerance');
 
-    const expected = Buffer.from(digest(timestamp, rawBody), 'hex');
-    const actual = Buffer.from(provided, 'hex');
-    // Length is checked first because `timingSafeEqual` throws on a mismatch rather than
-    // answering false — and a wrong length is already a wrong signature.
-    if (actual.length !== expected.length || !timingSafeEqual(actual, expected))
+    const expected = digest(timestamp, rawBody);
+    // Lower-cased before the compare: a provider may send uppercase hex, and `expected` never is
+    // (`.digest('hex')` always lower-cases) — comparing the raw strings would refuse a valid
+    // uppercase delivery instead of matching it byte-for-byte.
+    if (!constantTimeEqual(expected, provided.toLowerCase()))
         throw new WebhookRejected('Signature does not match');
 };
