@@ -26,6 +26,7 @@ import type {
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
+import { presentLocaleEntry } from '../presenters';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
@@ -44,9 +45,7 @@ export const createLocaleEntry = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the
-            // document is typed as stored, not as the wire shape `LocaleEntry` promises.
-            return successResponse<LocaleEntry>(response, result.data.toJSON() as LocaleEntry, 201);
+            return successResponse<LocaleEntry>(response, presentLocaleEntry(result.data), 201);
         })
         .catch(catchAs(response, 'createLocaleEntry'));
 };
@@ -73,8 +72,7 @@ export const updateLocaleEntry = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
-            return successResponse<LocaleEntry>(response, result.data.toJSON() as LocaleEntry);
+            return successResponse<LocaleEntry>(response, presentLocaleEntry(result.data));
         })
         .catch(catchAs(response, 'updateLocaleEntry'));
 };

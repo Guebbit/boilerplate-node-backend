@@ -10,7 +10,7 @@ import { ReplaceLocaleBody, UpdateLocaleBody } from '@api/schemas.zod';
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
-import type { Language } from '@types';
+import { presentLocale } from '../presenters';
 
 /**
  * `PUT` and `PATCH /locales/:locale` — one handler pair over `updateLanguage`, which audits the
@@ -32,7 +32,5 @@ export const { replace: replaceLocale, update: updateLocale } = createUpdateCont
     idFrom: (request) => String(request.params.locale),
     update: (tag, changes, request) =>
         localeService.updateLanguage(tag, changes, callerContextOf(request)),
-    // `.toJSON()` applies the model's `_id` → `id` transform; the document is typed as stored, not
-    // as the wire shape `Language` promises.
-    present: (row) => row.toJSON() as Language
+    present: (row) => presentLocale(row)
 });

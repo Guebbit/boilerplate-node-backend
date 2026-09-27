@@ -15,6 +15,7 @@ import type { CreateLocaleRequest, Language } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
+import { presentLocale } from '../presenters';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
@@ -36,9 +37,7 @@ export const createLocale = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the
-            // document is typed as stored, not as the wire shape `Language` promises.
-            return successResponse<Language>(response, result.data.toJSON() as Language, 201);
+            return successResponse<Language>(response, presentLocale(result.data), 201);
         })
         .catch(catchAs(response, 'createLocale'));
 };
