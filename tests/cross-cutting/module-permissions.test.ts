@@ -18,14 +18,23 @@
 
 import { enabledModules } from '../../src/modules';
 import { PERMISSION_KEYS } from '@kernel/permissions';
+import { CORE_PERMISSION_KEYS } from '@kernel/translation';
 
-/** What each module claims, from its own manifest. */
-const claimed = new Map(
-    enabledModules.map((appModule) => [
-        appModule.name,
-        [...(appModule.permissions ?? [])].toSorted()
-    ])
-);
+/**
+ * What each module claims, from its own manifest, plus `core` — the kernel's own claim on the
+ * keys that guard a port rather than a module (`translations.any.*`; see `CORE_PERMISSION_KEYS`'s
+ * own docblock). `core` names no `AppModule`, so it is added here rather than found by walking
+ * `enabledModules`.
+ */
+const claimed = new Map([
+    ...enabledModules.map(
+        (appModule): [string, string[]] => [
+            appModule.name,
+            [...(appModule.permissions ?? [])].toSorted()
+        ]
+    ),
+    ['core', [...CORE_PERMISSION_KEYS].toSorted()] as [string, string[]]
+]);
 
 /** What the shared file attributes to each module. */
 const attributed = new Map<string, string[]>();

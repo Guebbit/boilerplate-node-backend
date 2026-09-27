@@ -66,15 +66,17 @@ export default {
      * The permission keys this module introduces. Deleting the module deletes them:
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
+     *
+     * `translations.any.*` is NOT here — `shared/authorization-keys.yaml` attributes those to
+     * `core` (LOCALES_OPTIONAL_0925 D-LO2): the port they guard survives this module's deletion,
+     * so the keys do too.
      */
     permissions: [
         'locales.self.read',
         'locales.any.read',
         'locales.any.create',
         'locales.any.update',
-        'locales.any.delete',
-        'translations.any.read',
-        'translations.any.update'
+        'locales.any.delete'
     ],
     routes: router,
     onRegistered,
