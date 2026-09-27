@@ -446,6 +446,55 @@ describe('POST /cart/checkout', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    // E12: `NODE_SHIP_TO_COUNTRIES` defaults to the shop's own country alone (`IT` in tests) — a
+    // courier method resolving to an address outside it is refused before anything is written.
+    it('matches the error contract for an address outside the configured ship-to list', async () => {
+        const { bearer } = await authenticateWithCart();
+        const address = await api().post('/account/addresses').set('Authorization', bearer).send({
+            fullName: 'Ada Lovelace',
+            street: '1 Kings Road',
+            city: 'London',
+            zip: 'SW1A 1AA',
+            country: 'GB'
+        });
+        const addressId = address.body.data.addresses[0].id as string;
+
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'standard' });
+        const response = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .send({ addressId });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].code).toBe('CART_SHIP_TO_COUNTRY_NOT_SUPPORTED');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('a pickup method needing no address is never blocked by the shopper own country', async () => {
+        const { bearer } = await authenticateWithCart();
+        // The caller's only (default) address is outside the ship-to list — irrelevant to pickup,
+        // which resolves no address at all.
+        await api().post('/account/addresses').set('Authorization', bearer).send({
+            fullName: 'Ada Lovelace',
+            street: '1 Kings Road',
+            city: 'London',
+            zip: 'SW1A 1AA',
+            country: 'GB'
+        });
+
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
+        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+
+        expect(response.status).toBe(201);
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('empties the cart on success', async () => {
         const { bearer } = await authenticateWithCart();
         await api()

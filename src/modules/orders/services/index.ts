@@ -77,7 +77,8 @@ export {
     bankTransferIban,
     bankTransferIbanFriendly,
     bankTransferMaxOpenPerAccount,
-    shopCurrency
+    shopCurrency,
+    shipToCountries
 } from '../config';
 
 /** The service's public surface — every controller and cross-module caller goes through this. */

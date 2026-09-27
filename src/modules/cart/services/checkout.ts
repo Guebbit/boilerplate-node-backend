@@ -7,7 +7,7 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { bankTransferMaxOpenPerAccount } from '@modules/orders';
+import { bankTransferMaxOpenPerAccount, shipToCountries } from '@modules/orders';
 import {
     generateSuccess,
     generateReject,
@@ -171,6 +171,24 @@ const resolveShipping = async (
                 {
                     code: 'CART_ADDRESS_NOT_FOUND',
                     message: t('cart.address-not-found')
+                }
+            ])
+        };
+
+    /*
+     * Only once a method that actually `requiresAddress` resolved one — a digital-only basket
+     * with no method chosen may still resolve the caller's default address (it rides on the
+     * order unused), and that must never block on where the shopper happens to live. No default
+     * address on file leaves `address` `undefined` here too; `evaluateShippingRequirement` further
+     * down is what refuses THAT case (`CART_ADDRESS_REQUIRED`).
+     */
+    if (shippingMethod && address && !shipToCountries().includes(address.country))
+        return {
+            ok: false,
+            reject: generateReject(422, [
+                {
+                    code: 'CART_SHIP_TO_COUNTRY_NOT_SUPPORTED',
+                    message: t('cart.ship-to-country-not-supported')
                 }
             ])
         };

@@ -248,9 +248,10 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 # A basket holding any `requiresShipping: true` line with no shipping method chosen
                 # on the cart (`CART_SHIPPING_METHOD_REQUIRED` — see `PUT /cart/shipping-method`),
-                # or a chosen method whose `requiresAddress` is true with no `addressId` and no
+                # a chosen method whose `requiresAddress` is true with no `addressId` and no
                 # default address on file (`CART_ADDRESS_REQUIRED`) — nobody would know how or
-                # where to send the order.
+                # where to send the order — or that method's resolved address naming a country
+                # outside `NODE_SHIP_TO_COUNTRIES` (`CART_SHIP_TO_COUNTRY_NOT_SUPPORTED`).
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 

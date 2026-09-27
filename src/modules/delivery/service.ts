@@ -27,7 +27,8 @@ import {
     canOverrideTo,
     mailBuyer,
     isForceMoveRefusal,
-    isDigitalOnlyOrder
+    isDigitalOnlyOrder,
+    shipToCountries
 } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { holdsKey } from '@kernel/ability';
@@ -40,10 +41,17 @@ import type { ShipmentDocument } from './model';
  * The full methods list, for the checkout page's selector. Static, so always a success.
  * Unfiltered — `cart`'s `PUT /cart/shipping-method` and checkout are what check a method against
  * the caller's real basket, server-side.
+ *
+ * `shipToCountries` is read fresh per call, not baked into `SHIPPING_METHODS` itself — it's live
+ * deployment config (`NODE_SHIP_TO_COUNTRIES`), and a static array would freeze whichever value
+ * happened to be set at import time.
  */
 const listMethods = (): ResponseSuccess<ShippingMethodsResponse> =>
-    // Spread: `SHIPPING_METHODS` itself is `readonly`, and the response type isn't.
-    generateSuccess({ methods: [...SHIPPING_METHODS] });
+    generateSuccess({
+        // Spread: `SHIPPING_METHODS` itself is `readonly`, and the response type isn't.
+        methods: [...SHIPPING_METHODS],
+        shipToCountries: shipToCountries()
+    });
 
 /** The shipment as `openapi.yaml` declares it: `Shipment`, built rather than serialized. */
 const toShipmentResponse = (shipment: ShipmentDocument): Shipment => ({

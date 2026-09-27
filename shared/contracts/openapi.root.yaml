@@ -370,6 +370,15 @@ components:
                 is a runtime fact, not a contract one — ask `GET /locales`.
             pattern: '^[a-z]{2}(-[A-Za-z0-9]+)*$'
             example: it
+        CountryCode:
+            type: string
+            description: >-
+                ISO 3166-1 alpha-2 country code, e.g. `IT`. Shape-checked here; which codes a
+                deployment actually ships to is a runtime fact, not a contract one — see
+                `GET /delivery/methods`' `shipToCountries`, the same split `Locale` makes for
+                which language tags a deployment supports.
+            pattern: '^[A-Z]{2}$'
+            example: IT
         ImageUrl:
             type: string
             format: uri-reference
@@ -850,7 +859,7 @@ components:
                 zip:
                     type: string
                 country:
-                    type: string
+                    $ref: '#/components/schemas/CountryCode'
                 phone:
                     type: string
 
@@ -1207,8 +1216,9 @@ components:
                 notes:
                     type: string
                     description: Optional order notes
-                # Both absent on orders that predate delivery and on checkouts that chose no
-                # method — shipping is not required to buy, exactly like the address.
+                # Absent on an order that predates delivery, an admin-created order (no
+                # checkout), or an all-digital basket — nothing ships, so no method applies.
+                # Present on every other order: a physical line makes a shipping method required.
                 shippingMethod:
                     type: string
                     description: The shipping method's id as the checkout froze it (e.g. standard, express, pickup).
@@ -1217,8 +1227,9 @@ components:
                     format: double
                     minimum: 0
                     description: What that method cost at checkout time — a later rate change cannot re-price history.
-                # Absent on orders placed before the address book existed, and on checkouts by
-                # users who keep no addresses — an address is not (yet) required to buy.
+                # Absent under the same conditions as `shippingMethod` above, or when the chosen
+                # method itself needs no address (`requiresAddress: false`, e.g. pickup) — present
+                # whenever a shipment actually needs somewhere to go.
                 shippingAddress:
                     $ref: '#/components/schemas/OrderAddress'
                 # Absent on orders placed before this existed, and on order creation that isn't a

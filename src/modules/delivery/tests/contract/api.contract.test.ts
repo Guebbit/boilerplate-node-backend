@@ -51,6 +51,16 @@ describe('GET /delivery/methods', () => {
         expect(ids).toContain('express');
         expect(response).toSatisfyApiSpec();
     });
+
+    // E12: the answer names which countries this deployment ships to — the frontend reads it here
+    // rather than guessing.
+    it('lists the configured ship-to countries', async () => {
+        const response = await api().get('/delivery/methods');
+
+        // `tests/support/setup.ts` sets `NODE_SHOP_COUNTRY=IT`; `NODE_SHIP_TO_COUNTRIES` is unset.
+        expect(response.body.data.shipToCountries).toEqual(['IT']);
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('GET /delivery/order/{orderId}', () => {

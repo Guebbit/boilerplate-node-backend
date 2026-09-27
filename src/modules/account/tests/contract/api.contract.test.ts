@@ -1098,6 +1098,23 @@ describe('the address book: /account/addresses', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    // E12: `country` is an ISO 3166-1 alpha-2 code, not free text — a full name or a lowercase
+    // code both fail the contract's `CountryCode` pattern.
+    it.each([
+        ['a full country name', 'Italy'],
+        ['a lowercase code', 'it'],
+        ['a 3-letter code', 'ITA']
+    ])('matches the error contract for %s as the country', async (_label, country) => {
+        const { bearer } = await authenticateAs('user');
+        const response = await api()
+            .post('/account/addresses')
+            .set('Authorization', bearer)
+            .send({ ...HOME, country });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('matches the error contract for an entry the caller does not hold', async () => {
         const { bearer } = await authenticateAs('user');
         const response = await api()
