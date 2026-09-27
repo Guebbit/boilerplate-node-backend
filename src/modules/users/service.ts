@@ -540,6 +540,7 @@ export const adminDisableTwoFactor = (
             user.twoFactorMethods = [];
             user.twoFactorEnabledAt = undefined;
             user.twoFactorBackupCodes = [];
+            user.twoFactorBackupCodeSalt = undefined;
             // Emptying an array Mongoose loaded is a change it sees; the field-level unsets the
             // 2FA services have to mark by hand do not apply here.
             return userRepository.save(user).then((saved) => generateSuccess(saved));

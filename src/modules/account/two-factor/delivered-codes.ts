@@ -5,8 +5,9 @@
  * database, so the TTL/attempt/cooldown rules can be tested against a fixed clock.
  */
 
-import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomInt } from 'node:crypto';
 import type { TwoFactorMethodRecord } from '@modules/users';
+import { constantTimeEqual } from '@infrastructure/security/constant-time';
 import { getTotpEncryptionKeyRing } from '../session/config';
 import { cooldownRemaining } from '../cooldown';
 
@@ -104,13 +105,8 @@ export const consumeDeliveredCode = (
         return false;
     }
 
-    // Constant-time compare. `timingSafeEqual` throws on a length mismatch, which cannot happen
-    // between two hex digests of the same algorithm — the length guard makes that explicit.
     const typed = hashDeliveredCode(code);
-    if (
-        entry.codeHash.length === typed.length &&
-        timingSafeEqual(Buffer.from(entry.codeHash), Buffer.from(typed))
-    ) {
+    if (constantTimeEqual(entry.codeHash, typed)) {
         clearDeliveredCode(entry);
         return true;
     }

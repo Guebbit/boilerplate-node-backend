@@ -11,7 +11,13 @@ export {
     type MethodEligibility,
     type TwoFactorMethodHandler
 } from './registry';
-export { BACKUP_CODE_COUNT, generateBackupCodes, hashBackupCode } from './backup-codes';
+export {
+    BACKUP_CODE_COUNT,
+    generateBackupCodes,
+    generateBackupCodeSalt,
+    hashBackupCode,
+    hashBackupCodes
+} from './backup-codes';
 export {
     DELIVERED_CODE_MAX_ATTEMPTS,
     DELIVERED_CODE_RESEND_SECONDS,

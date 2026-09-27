@@ -2,8 +2,8 @@
  * @module
  * `account/two-factor/` — the pure layers, no database in the loop. Encryption round-trips against
  * a real key, TOTP codes are generated and verified against fixed clocks (never wall time), backup
- * codes hash the same way `hashToken` always has, and a delivered code's TTL, cooldown and attempt
- * ceiling are driven against an injected clock rather than a timer.
+ * codes hash under a per-user salt rather than a bare digest, and a delivered code's TTL, cooldown
+ * and attempt ceiling are driven against an injected clock rather than a timer.
  */
 
 import { createHash } from 'node:crypto';
@@ -23,6 +23,7 @@ import {
     buildOtpauthUri,
     verifyTotpCode,
     generateBackupCodes,
+    generateBackupCodeSalt,
     hashBackupCode,
     BACKUP_CODE_COUNT
 } from '../../two-factor';
@@ -103,16 +104,30 @@ describe('backup codes', () => {
         expect(new Set(codes).size).toBe(BACKUP_CODE_COUNT);
     });
 
-    it('hashes deterministically, so a stored digest can be matched against a re-hash', () => {
-        const [code] = generateBackupCodes();
-
-        expect(hashBackupCode(code)).toBe(hashBackupCode(code));
+    it('mints a fresh salt each call', () => {
+        expect(generateBackupCodeSalt()).not.toBe(generateBackupCodeSalt());
     });
 
-    it('hashes two different codes to two different digests', () => {
-        const [first, second] = generateBackupCodes();
+    it('hashes deterministically under the same salt, so a stored digest can be matched against a re-hash', () => {
+        const [code] = generateBackupCodes();
+        const salt = generateBackupCodeSalt();
 
-        expect(hashBackupCode(first)).not.toBe(hashBackupCode(second));
+        expect(hashBackupCode(code, salt)).toBe(hashBackupCode(code, salt));
+    });
+
+    it('hashes two different codes, under the same salt, to two different digests', () => {
+        const [first, second] = generateBackupCodes();
+        const salt = generateBackupCodeSalt();
+
+        expect(hashBackupCode(first, salt)).not.toBe(hashBackupCode(second, salt));
+    });
+
+    it('hashes the same code under two different salts to two different digests', () => {
+        const [code] = generateBackupCodes();
+
+        expect(hashBackupCode(code, generateBackupCodeSalt())).not.toBe(
+            hashBackupCode(code, generateBackupCodeSalt())
+        );
     });
 });
 
