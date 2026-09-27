@@ -108,6 +108,7 @@ export interface OrderDocument
             | 'deletedAt'
             | 'payBy'
             | 'orderNumber'
+            | 'currency'
             | 'transferInstructions'
         >,
         Document {
@@ -132,6 +133,12 @@ export interface OrderDocument
      * order's actual place in the sequence.
      */
     orderNumber?: string;
+    /**
+     * ISO-4217, frozen from `shopCurrency()` the moment `placeOrder` writes the row — never
+     * re-read from config later, so a deployment's currency change cannot rewrite what an old
+     * order actually charged. Absent on an order that predates this field.
+     */
+    currency?: string;
     /**
      * Set alongside `userId` being unset, to `max(now, createdAt + NODE_ORDER_PII_RETENTION_DAYS)`
      * — an order already past its own window at erasure time is due almost immediately, not given
@@ -334,6 +341,14 @@ export const orderSchema = new Schema<OrderDocument>(
          * never assigned retroactively.
          */
         orderNumber: {
+            type: String
+        },
+        /*
+         * ISO-4217, frozen from `shopCurrency()` at the same moment `orderNumber` is minted —
+         * never re-read from config later, so a deployment's currency change cannot rewrite what
+         * an old order actually charged. Absent on an order that predates this field.
+         */
+        currency: {
             type: String
         },
         /*

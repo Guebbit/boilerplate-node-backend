@@ -5,3 +5,4 @@
  */
 
 export { SHIPPING_METHODS, findShippingMethod, priceShipping, methodFitsWeight } from './rates';
+export type { StaticShippingMethod } from './rates';

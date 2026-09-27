@@ -370,6 +370,15 @@ components:
                 is a runtime fact, not a contract one — ask `GET /locales`.
             pattern: '^[a-z]{2}(-[A-Za-z0-9]+)*$'
             example: it
+        CountryCode:
+            type: string
+            description: >-
+                ISO 3166-1 alpha-2 country code, e.g. `IT`. Shape-checked here; which codes a
+                deployment actually ships to is a runtime fact, not a contract one — see
+                `GET /delivery/methods`' `shipToCountries`, the same split `Locale` makes for
+                which language tags a deployment supports.
+            pattern: '^[A-Z]{2}$'
+            example: IT
         ImageUrl:
             type: string
             format: uri-reference
@@ -739,7 +748,7 @@ components:
         Product:
             type: object
             additionalProperties: false
-            required: [id, title, price]
+            required: [id, title, price, currency]
             properties:
                 id:
                     $ref: '#/components/schemas/Id'
@@ -753,6 +762,14 @@ components:
                         Gross — what the customer pays, VAT included. Never net-of-tax: the invoice
                         derives the net amount and the VAT amount FROM this, at whatever rate
                         applies, rather than the other way around.
+                currency:
+                    type: string
+                    readOnly: true
+                    description: >-
+                        ISO-4217 currency code (e.g. EUR) — this deployment's own
+                        `NODE_DEFAULT_CURRENCY`, read live, never stored on the product itself. An
+                        order freezes it onto its own `currency` at checkout; this field always
+                        reports the shop's CURRENT setting.
                 taxClass:
                     $ref: '#/components/schemas/TaxClass'
                 # ── The two counters and the number derived from them ──────────────────────
@@ -850,7 +867,7 @@ components:
                 zip:
                     type: string
                 country:
-                    type: string
+                    $ref: '#/components/schemas/CountryCode'
                 phone:
                     type: string
 
@@ -1155,6 +1172,13 @@ components:
                     minimum: 0
                     description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
                     example: 149.97
+                # Frozen from `NODE_DEFAULT_CURRENCY` the moment the order was placed — a later
+                # change to the shop's own setting must not rewrite what an old order actually
+                # charged. Absent on an order that predates this field.
+                currency:
+                    type: string
+                    readOnly: true
+                    description: ISO-4217 currency code this order was priced in (e.g. EUR).
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.
                 # See `src/modules/orders/domain/tax.ts`.
                 netTotal:
@@ -1207,8 +1231,9 @@ components:
                 notes:
                     type: string
                     description: Optional order notes
-                # Both absent on orders that predate delivery and on checkouts that chose no
-                # method — shipping is not required to buy, exactly like the address.
+                # Absent on an order that predates delivery, an admin-created order (no
+                # checkout), or an all-digital basket — nothing ships, so no method applies.
+                # Present on every other order: a physical line makes a shipping method required.
                 shippingMethod:
                     type: string
                     description: The shipping method's id as the checkout froze it (e.g. standard, express, pickup).
@@ -1217,8 +1242,9 @@ components:
                     format: double
                     minimum: 0
                     description: What that method cost at checkout time — a later rate change cannot re-price history.
-                # Absent on orders placed before the address book existed, and on checkouts by
-                # users who keep no addresses — an address is not (yet) required to buy.
+                # Absent under the same conditions as `shippingMethod` above, or when the chosen
+                # method itself needs no address (`requiresAddress: false`, e.g. pickup) — present
+                # whenever a shipment actually needs somewhere to go.
                 shippingAddress:
                     $ref: '#/components/schemas/OrderAddress'
                 # Absent on orders placed before this existed, and on order creation that isn't a

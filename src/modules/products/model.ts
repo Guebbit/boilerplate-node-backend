@@ -14,6 +14,7 @@ import { getFallbackLocale, t } from '@infrastructure/i18n';
 import { CreateProductBody, ReplaceProductByIdBody, UpdateProductByIdBody } from '@api/schemas.zod';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { availableStock } from './domain/stock';
+import { productCurrency } from './config';
 import type { Product } from '@types';
 
 /**
@@ -24,7 +25,7 @@ import type { Product } from '@types';
  */
 export interface ProductRecord extends Omit<
     Product,
-    'id' | 'available' | 'createdAt' | 'updatedAt' | 'deletedAt'
+    'id' | 'available' | 'currency' | 'createdAt' | 'updatedAt' | 'deletedAt'
 > {
     /** Spelled exactly as Mongoose spells it on a document, so `ProductDocument` can extend this. */
     _id: Types.ObjectId;
@@ -288,11 +289,17 @@ productSchema.index({ createdAt: -1 }, { name: 'products_createdAt' });
 /* Storefront filters: active + not soft-deleted (`publicScope` in `./repository`). */
 productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_deletedAt' });
 
-/** Derives `available`, at the single serialization point every product response passes through — listing, detail, both write paths and an order's embedded snapshots all agree. */
+/**
+ * Derives `available` and stamps the live `currency`, at the single serialization point every
+ * product response passes through — listing, detail, both write paths and an order's embedded
+ * snapshots all agree. Neither is stored: `currency` is this deployment's CURRENT
+ * `NODE_DEFAULT_CURRENCY`, read fresh rather than frozen onto the catalogue row.
+ */
 const applyProductAvailability = (serialized: Record<string, unknown>) => {
     const onHand = typeof serialized.onHand === 'number' ? serialized.onHand : 0;
     const reserved = typeof serialized.reserved === 'number' ? serialized.reserved : 0;
     serialized.available = availableStock(onHand, reserved);
+    serialized.currency = productCurrency();
 };
 
 /**
@@ -310,8 +317,9 @@ export const applyProductTransform = applySerialization(productSchema, {
 
 /**
  * Maps a document straight onto the `Product` contract: `id` from the Mongoose getter, `available`
- * derived from the two stock counters (never stored), the three dates ISO-stringified. Same
- * reasoning as `users/model.ts`'s `toUser`.
+ * derived from the two stock counters (never stored), `currency` read live from
+ * `NODE_DEFAULT_CURRENCY`, the three dates ISO-stringified. Same reasoning as `users/model.ts`'s
+ * `toUser`.
  */
 export const toProduct = (document: ProductDocument): Product => {
     const onHand = document.onHand ?? 0;
@@ -322,6 +330,7 @@ export const toProduct = (document: ProductDocument): Product => {
         title: document.title,
         price: document.price,
         available: availableStock(onHand, reserved),
+        currency: productCurrency(),
         ...(document.taxClass === undefined ? {} : { taxClass: document.taxClass }),
         ...(document.onHand === undefined ? {} : { onHand: document.onHand }),
         ...(document.reserved === undefined ? {} : { reserved: document.reserved }),

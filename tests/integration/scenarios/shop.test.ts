@@ -17,10 +17,10 @@
  * Not every collection has a schema to check against. `scenarios/locales.ts` publishes a STORED
  * shape, by its own docblock — no endpoint serves a raw locale entry, the locale tier-merge builds
  * the response instead. Parsing a stored row against an unrelated response schema would be a false
- * guardrail, not a true one. Address books are the one STORED shape checked anyway:
- * `@modules/addresses/model.ts` says each entry already serializes as the contract's `Address`,
- * through the same `applySerialization` a real response path would use if one read a raw book —
- * so it is that guarantee under test, not the entry point's absence.
+ * guardrail, not a true one. Address books are the one STORED shape checked anyway: once its PII
+ * fields are decrypted the same way `addresses/repository.ts`'s own readers do (`decryptAddressItem`
+ * — `applySerialization` alone never touches ciphertext), an entry serializes as the contract's
+ * `Address` — so it is that guarantee under test, not the entry point's absence.
  */
 
 import { connect, disconnect } from '@tests/database';
@@ -34,6 +34,7 @@ import { paymentModel } from '@modules/payments/model';
 import { userModel } from '@modules/users/model';
 import { auditLogModel } from '@modules/audit-logs/model';
 import { addressBookModel } from '@modules/addresses/model';
+import { decryptAddressItem } from '@modules/addresses/pii';
 import { reservationModel, stockMovementModel } from '@modules/inventory/model';
 import { Types } from 'mongoose';
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
@@ -304,6 +305,10 @@ describe('conformance: a produced row parses as the response the API would serve
 
         const addressSchema = GetAddressesResponse.shape.data.shape.addresses.element;
         for (const book of books) {
+            // Decrypted first, same as every real reader (`addresses/repository.ts`'s
+            // `decryptBook`) — `.toJSON()` alone would parse ciphertext, not what `GET
+            // /account/addresses` actually serves.
+            for (const item of book.items) Object.assign(item, decryptAddressItem(item));
             const { items } = wireShape(book.toJSON());
             expect(items.length).toBeGreaterThan(0);
             for (const address of items) expect(() => addressSchema.parse(address)).not.toThrow();

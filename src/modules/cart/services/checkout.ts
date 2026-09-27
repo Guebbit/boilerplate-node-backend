@@ -7,7 +7,7 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { bankTransferMaxOpenPerAccount } from '@modules/orders';
+import { bankTransferMaxOpenPerAccount, shipToCountries } from '@modules/orders';
 import {
     generateSuccess,
     generateReject,
@@ -28,9 +28,14 @@ import {
 import { availableStock, type ProductDocument } from '@modules/products';
 import { userService } from '@modules/users';
 import { addressForCheckout, type AddressItem } from '@modules/addresses';
-import { findShippingMethod, methodFitsWeight, priceShipping } from '@modules/delivery';
+import {
+    findShippingMethod,
+    methodFitsWeight,
+    priceShipping,
+    type StaticShippingMethod
+} from '@modules/delivery';
 import { paymentService, type PaymentMethodInfo } from '@modules/payments';
-import type { CallerContext, ShippingMethod } from '@types';
+import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
@@ -132,7 +137,7 @@ const resolveShipping = async (
     shippingMethodId: string | undefined
 ): Promise<
     PreflightOutcome<{
-        shippingMethod: ShippingMethod | undefined;
+        shippingMethod: StaticShippingMethod | undefined;
         address: AddressItem | undefined;
     }>
 > => {
@@ -171,6 +176,24 @@ const resolveShipping = async (
                 {
                     code: 'CART_ADDRESS_NOT_FOUND',
                     message: t('cart.address-not-found')
+                }
+            ])
+        };
+
+    /*
+     * Only once a method that actually `requiresAddress` resolved one — a digital-only basket
+     * with no method chosen may still resolve the caller's default address (it rides on the
+     * order unused), and that must never block on where the shopper happens to live. No default
+     * address on file leaves `address` `undefined` here too; `evaluateShippingRequirement` further
+     * down is what refuses THAT case (`CART_ADDRESS_REQUIRED`).
+     */
+    if (shippingMethod && address && !shipToCountries().includes(address.country))
+        return {
+            ok: false,
+            reject: generateReject(422, [
+                {
+                    code: 'CART_SHIP_TO_COUNTRY_NOT_SUPPORTED',
+                    message: t('cart.ship-to-country-not-supported')
                 }
             ])
         };
@@ -347,13 +370,11 @@ const runCheckout = async (
 
     /*
      * `bank_transfer`'s hold is `methodInfo.holdHours`, converted to the unit
-     * `reserveForOrder` and `payBy` both want; `card` passes `undefined` through and gets
-     * `reserveForOrder`'s own default (`NODE_RESERVATION_TTL_MINUTES`) — nothing about the
-     * existing card flow's timing changes.
+     * `reserveForOrder` wants; `card` passes `undefined` through and gets its own default
+     * (`NODE_RESERVATION_TTL_MINUTES`). `placeOrder` freezes `payBy` from the hold it actually
+     * takes at this length — never a second, separately-computed guess.
      */
     const holdMinutes = methodInfo.holdHours === undefined ? undefined : methodInfo.holdHours * 60;
-    const payBy =
-        holdMinutes === undefined ? undefined : new Date(Date.now() + holdMinutes * 60_000);
 
     /*
      * The write itself — freezing the lines, allocating the invoice number, minting a
@@ -376,7 +397,6 @@ const runCheckout = async (
             product: line.product.toObject() as Lean<ProductDocument>
         })),
         paymentMethod: requestedMethod,
-        payBy,
         shipping: {
             ...(address ? { address: toShippingAddress(address) } : {}),
             ...(shippingMethod

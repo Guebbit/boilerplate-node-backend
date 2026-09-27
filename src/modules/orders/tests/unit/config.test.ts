@@ -21,6 +21,7 @@ import {
     bankTransferMaxOpenPerAccount,
     invoiceCacheTtlMinutes,
     orderFrontendLink,
+    shipToCountries,
     shopCountry,
     shopLegalName,
     shopVatNumber
@@ -34,6 +35,7 @@ const TOUCHED = [
     'NODE_ENV',
     'NODE_URL',
     'NODE_SHOP_COUNTRY',
+    'NODE_SHIP_TO_COUNTRIES',
     'NODE_SHOP_VAT_NUMBER',
     'NODE_SHOP_LEGAL_NAME',
     'NODE_BANK_TRANSFER_BENEFICIARY',
@@ -89,6 +91,27 @@ describe('reading the identity', () => {
 
         // The invoice template omits the row entirely on `undefined`; `''` would render a blank one.
         expect(read()).toBeUndefined();
+    });
+});
+
+describe('shipToCountries', () => {
+    it("defaults to the shop's own country alone", () => {
+        process.env.NODE_SHOP_COUNTRY = 'IT';
+
+        expect(shipToCountries()).toEqual(['IT']);
+    });
+
+    it('is empty when neither variable is set', () => {
+        delete process.env.NODE_SHOP_COUNTRY;
+
+        expect(shipToCountries()).toEqual([]);
+    });
+
+    it('reads the configured list over the shop country, upper-cased and trimmed', () => {
+        process.env.NODE_SHOP_COUNTRY = 'IT';
+        process.env.NODE_SHIP_TO_COUNTRIES = 'it, fr ,de';
+
+        expect(shipToCountries()).toEqual(['IT', 'FR', 'DE']);
     });
 });
 

@@ -328,6 +328,17 @@ describe('GET /cart/summary', () => {
         expect(response.body.data.itemsCount).toBe(1);
         expect(response).toSatisfyApiSpec();
     });
+
+    // FA37: `currency` is now required on the summary, empty cart included — `toSatisfyApiSpec`
+    // already enforces this; asserted directly too, since a required-but-empty string would still
+    // satisfy the schema.
+    it('always carries the shop currency, even on an empty cart', async () => {
+        const { bearer } = await authenticateAs('user');
+        const response = await api().get('/cart/summary').set('Authorization', bearer);
+
+        expect(response.body.data.currency).toBe('EUR');
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('POST /cart/checkout', () => {
@@ -341,6 +352,51 @@ describe('POST /cart/checkout', () => {
 
         expect(response.status).toBe(201);
         expect(response).toSatisfyApiSpec();
+    });
+
+    /*
+     * B19: before the checkout route carried `idempotencyKey`, a retry after a lost response saw
+     * the (by-then-empty) cart and answered `CART_EMPTY` instead of the order the first attempt
+     * actually placed — the buyer's own cart write cost them the order. The stock read pins the
+     * other half: a replayed request must not reserve the basket a second time.
+     */
+    it('replays the same order for a checkout retried with the same Idempotency-Key', async () => {
+        const { bearer, product } = await authenticateWithCart(2);
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
+
+        const before = await api().get(`/products/${String(product._id)}`);
+        const requestBody = {};
+
+        const first = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', 'checkout-replay-key-1')
+            .send(requestBody);
+        expect(first.status).toBe(201);
+        expect(first).toSatisfyApiSpec();
+
+        // Without `idempotencyKey`, this second call would hit the now-empty cart and answer
+        // `CART_EMPTY` instead of replaying — see this test's own docblock.
+        const second = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', 'checkout-replay-key-1')
+            .send(requestBody);
+
+        expect(second.status).toBe(201);
+        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.body).toEqual(first.body);
+
+        // One order, not two.
+        const orders = await api().get('/orders').set('Authorization', bearer);
+        expect(orders.body.data.items).toHaveLength(1);
+
+        // The basket's stock was reserved once, not twice, by the replay.
+        const after = await api().get(`/products/${String(product._id)}`);
+        expect(after.body.data.available).toBe(before.body.data.available - 2);
     });
 
     /*
@@ -398,6 +454,55 @@ describe('POST /cart/checkout', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // E12: `NODE_SHIP_TO_COUNTRIES` defaults to the shop's own country alone (`IT` in tests) — a
+    // courier method resolving to an address outside it is refused before anything is written.
+    it('matches the error contract for an address outside the configured ship-to list', async () => {
+        const { bearer } = await authenticateWithCart();
+        const address = await api().post('/account/addresses').set('Authorization', bearer).send({
+            fullName: 'Ada Lovelace',
+            street: '1 Kings Road',
+            city: 'London',
+            zip: 'SW1A 1AA',
+            country: 'GB'
+        });
+        const addressId = address.body.data.addresses[0].id as string;
+
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'standard' });
+        const response = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .send({ addressId });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].code).toBe('CART_SHIP_TO_COUNTRY_NOT_SUPPORTED');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('a pickup method needing no address is never blocked by the shopper own country', async () => {
+        const { bearer } = await authenticateWithCart();
+        // The caller's only (default) address is outside the ship-to list — irrelevant to pickup,
+        // which resolves no address at all.
+        await api().post('/account/addresses').set('Authorization', bearer).send({
+            fullName: 'Ada Lovelace',
+            street: '1 Kings Road',
+            city: 'London',
+            zip: 'SW1A 1AA',
+            country: 'GB'
+        });
+
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
+        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+
+        expect(response.status).toBe(201);
         expect(response).toSatisfyApiSpec();
     });
 

@@ -133,13 +133,17 @@ describe('reserveForOrder', () => {
         ]);
     });
 
-    it('is idempotent on the order id — a retried checkout holds once', async () => {
+    it('is idempotent on the order id — a retried checkout holds once, reporting the same expiry', async () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
         const lines = [{ productId: String(product._id), quantity: 3 }];
 
-        expect(await reserveForOrder(orderId, lines)).toEqual({ held: true });
-        expect(await reserveForOrder(orderId, lines)).toEqual({ held: true });
+        const first = await reserveForOrder(orderId, lines);
+        const second = await reserveForOrder(orderId, lines);
+
+        expect(first).toEqual({ held: true, expiresAt: expect.any(Date) });
+        // The retry reports the FIRST call's own expiry, never a fresh guess it never wrote.
+        expect(second).toEqual(first);
 
         // Three, not six: the unique `orderId` is what makes the second call a no-op.
         expect(await countersOf(String(product._id))).toEqual({

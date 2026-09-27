@@ -72,7 +72,14 @@ setupTestDb();
 /** What every read answers for a user with nothing in their cart. */
 const EMPTY_CART = {
     items: [],
-    summary: { itemsCount: 0, totalQuantity: 0, itemsTotal: 0, shippingCost: 0, totalPrice: 0 }
+    summary: {
+        itemsCount: 0,
+        totalQuantity: 0,
+        itemsTotal: 0,
+        shippingCost: 0,
+        totalPrice: 0,
+        currency: 'EUR'
+    }
 };
 
 /** Reads the persisted quantity for a product, so assertions survive the round trip to Mongo. */
@@ -238,7 +245,8 @@ describe('cartGetForBadge', () => {
             totalQuantity: 5,
             itemsTotal: 80,
             shippingCost: 0,
-            totalPrice: 80
+            totalPrice: 80,
+            currency: 'EUR'
         });
     });
 
@@ -305,7 +313,8 @@ describe('cartItemSetById', () => {
                 totalQuantity: 2,
                 itemsTotal: 50,
                 shippingCost: 0,
-                totalPrice: 50
+                totalPrice: 50,
+                currency: 'EUR'
             }
         });
     });
@@ -1011,17 +1020,26 @@ const withBankTransferConfigured = (body: () => Promise<void>) =>
     );
 
 describe('orderConfirm — paymentMethod', () => {
-    it('defaults to card, with no payBy', async () => {
+    // FA32c: `payBy` comes from the SAME hold `inventoryService.reserveForOrder` actually took,
+    // never a second, separately-computed guess — so the deadline shown to the buyer and the
+    // sweep's own timeout can never disagree.
+    it('defaults to card, with payBy from the reservation hold', async () => {
         const user = await createUser();
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
+        const before = Date.now();
         await orderConfirm(user.id, testCallerContext, undefined);
 
         const order = await findOrder({ userId: user._id });
         expect(order!.paymentMethod).toBe('card');
-        expect(order!.payBy).toBeUndefined();
+        // NODE_RESERVATION_TTL_MINUTES' default (30) away — a window, not an exact millisecond,
+        // for the same reason the bank_transfer case below allows one.
+        const expected = before + 30 * 60_000;
+        expect(order!.payBy).toBeDefined();
+        expect(order!.payBy!.getTime()).toBeGreaterThanOrEqual(expected - 5000);
+        expect(order!.payBy!.getTime()).toBeLessThanOrEqual(expected + 5000);
     });
 
     it('refuses bank_transfer when this deployment has not configured it', () =>

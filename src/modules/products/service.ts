@@ -271,7 +271,9 @@ const enqueueIfPending = (product: ProductDocument): Promise<ProductDocument> =>
  * listener succeeded; a throw there leaves `onHand` at the honest `0` it started from, not a lie.
  */
 export const create = (
-    data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'> & {
+    // `currency` omitted: it's never stored, always read live at serialization — see `./model`'s
+    // `applyProductAvailability`.
+    data: Omit<Product, 'id' | 'currency' | 'createdAt' | 'updatedAt' | 'deletedAt'> & {
         /** Set alongside the pending-image placeholder — see `readUploadedImage`. */
         pendingImageKey?: string;
     },

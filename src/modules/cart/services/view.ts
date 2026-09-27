@@ -9,7 +9,7 @@
  * cart, never a 404.
  */
 
-import { sumLineItems } from '@modules/orders';
+import { sumLineItems, shopCurrency } from '@modules/orders';
 import type { ProductDocument } from '@modules/products';
 import type { CartItem } from '@types';
 import { findShippingMethod, methodFitsWeight, priceShipping } from '@modules/delivery';
@@ -44,6 +44,7 @@ export interface CartView {
         itemsTotal: number;
         shippingCost: number;
         totalPrice: number;
+        currency: string;
     };
     /** The cart's chosen shipping method (`PUT /cart/shipping-method`), or `undefined` for none. */
     shippingMethodId?: string;
@@ -126,7 +127,8 @@ export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
                 totalQuantity: quantity,
                 itemsTotal: price,
                 shippingCost,
-                totalPrice: price + shippingCost
+                totalPrice: price + shippingCost,
+                currency: shopCurrency()
             },
             ...(cart?.shippingMethodId === undefined
                 ? {}

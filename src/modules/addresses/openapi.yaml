@@ -164,7 +164,7 @@ components:
                 zip:
                     type: string
                 country:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
                     type: string
                 default:
@@ -190,8 +190,7 @@ components:
                     type: string
                     minLength: 1
                 country:
-                    type: string
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
                     type: string
                 # On create: `true` claims the default slot, absent means "first entry becomes
@@ -227,8 +226,7 @@ components:
                     type: string
                     minLength: 1
                 country:
-                    type: string
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
                     type: string
                     minLength: 1
@@ -263,8 +261,7 @@ components:
                     type: string
                     minLength: 1
                 country:
-                    type: string
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
                     type: string
                     minLength: 1

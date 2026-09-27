@@ -35,6 +35,25 @@ import type { OrderTransferInstructions } from '@types';
 export const shopCountry = (): string | undefined => process.env.NODE_SHOP_COUNTRY || undefined;
 
 /**
+ * Which ISO-3166 countries this deployment will ship a physical order to — checkout refuses
+ * (422) any method that `requiresAddress` once the resolved address's country falls outside it.
+ * Comma-separated; each code is upper-cased so a deployment typing `it` still matches an address
+ * stored as `IT`. Defaults to the shop's own country alone: ship only where the VAT assumption in
+ * this file's own docblock already holds, until a deployment explicitly widens it.
+ * @returns the configured list, upper-cased; empty when neither this nor `NODE_SHOP_COUNTRY` is set
+ */
+export const shipToCountries = (): string[] => {
+    const raw = process.env.NODE_SHIP_TO_COUNTRIES;
+    if (raw)
+        return raw
+            .split(',')
+            .map((code) => code.trim().toUpperCase())
+            .filter(Boolean);
+    const shop = shopCountry();
+    return shop ? [shop] : [];
+};
+
+/**
  * The shop's VAT identification number, printed on the invoice. Optional: a deployment below the
  * registration threshold, or not yet registered, prints no VAT number rather than a fake one.
  * @returns the configured VAT number, or `undefined`

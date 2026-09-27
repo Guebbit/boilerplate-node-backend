@@ -26,6 +26,7 @@ import { freezeOrderLines } from './snapshot';
 import { allocateOrderNumber } from './order-numbering';
 import { orderRepository } from '../repository';
 import { ORDER_CREATED } from '../events';
+import { shopCurrency } from '../config';
 // `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
 // follows for its own writes.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -71,8 +72,6 @@ export interface PlaceOrderInput {
     lines: readonly PlaceOrderLine[];
     /** `undefined` behaves exactly like `'card'` — no reference is minted, no hold-length override. */
     paymentMethod?: string;
-    /** When a `bank_transfer` order's hold should expire — the email needs this alongside the order. */
-    payBy?: Date;
     shipping?: PlaceOrderShipping;
     /** Free-text notes the buyer left at checkout — `undefined` writes no `notes` field at all. */
     notes?: string;
@@ -134,6 +133,10 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
     );
     if (!outcome.held)
         return { ok: false, reason: 'insufficient-stock', shortfalls: outcome.shortfalls };
+    // The hold's OWN expiry, whatever payment method this is — a card order gets one exactly like
+    // a bank-transfer order, so the deadline shown to the buyer and the sweep's own timeout can
+    // never disagree. See `PlaceOrderShipping.holdMinutes`' own docblock for who chooses the length.
+    const { expiresAt: payBy } = outcome;
 
     // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: the hold is already taken by this point, so a failed order-number allocation or order write must give it back rather than leave it standing on a row that was never created
     try {
@@ -148,9 +151,10 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
             email: input.email,
             items: orderItems,
             orderNumber,
+            currency: shopCurrency(),
+            payBy,
             ...(input.notes ? { notes: input.notes } : {}),
             ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
-            ...(input.payBy ? { payBy: input.payBy } : {}),
             ...(transferReference ? { transferReference } : {}),
             ...(input.shipping?.address ? { shippingAddress: input.shipping.address } : {}),
             // Priced off THESE frozen lines' total — the free-above rule prices the basket being
