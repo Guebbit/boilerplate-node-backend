@@ -58,4 +58,6 @@ export const presentUser = (document: UserWire, role: string | null): User => ({
  * `rolesOfMany` (see `GET /users`'s own list read).
  */
 export const presentUserWithCurrentRole = (user: UserDocument): Promise<User> =>
-    rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then((roles) => presentUser(user, roles.tenant));
+    rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then((roles) =>
+        presentUser(user, roles.tenant)
+    );
