@@ -13,36 +13,14 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import type { Address, AddressInput, UpdateAddressRequest } from '@types';
+import type { AddressInput, UpdateAddressRequest } from '@types';
 import { addressBookRepository } from './repository';
-import type { AddressBookDocument, AddressItem } from './model';
-
-/** The book as `openapi.yaml` declares it: `AddressesResponse`, built rather than serialized. */
-export interface AddressesView {
-    addresses: Address[];
-}
-
-/** One stored entry, mapped to the contract's `Address` — `_id` becomes `id`, optionals omitted rather than `undefined`. */
-const toAddress = (item: AddressItem): Address => ({
-    id: String(item._id),
-    ...(item.label === undefined ? {} : { label: item.label }),
-    fullName: item.fullName,
-    street: item.street,
-    city: item.city,
-    zip: item.zip,
-    country: item.country,
-    ...(item.phone === undefined ? {} : { phone: item.phone }),
-    default: item.default
-});
-
-/** A whole book, mapped to the wire view — absence and an empty book both answer `{ addresses: [] }`. */
-const toView = (book: AddressBookDocument | null): AddressesView => ({
-    addresses: (book?.items ?? []).map((item) => toAddress(item))
-});
+import type { AddressItem } from './model';
+import { presentAddresses, type AddressesView } from './presenter';
 
 /** Get the user's book. Absence and emptiness are the same state — an empty view, never 404. */
 export const addressesGet = (userId: string): Promise<AddressesView> =>
-    addressBookRepository.findByUserId(userId).then((book) => toView(book));
+    addressBookRepository.findByUserId(userId).then((book) => presentAddresses(book));
 
 /** Add an entry. The repository decides the default slot — see `addEntry`. */
 export const addressAdd = (
@@ -51,7 +29,7 @@ export const addressAdd = (
 ): Promise<ResponseSuccess<AddressesView> | ResponseReject> =>
     addressBookRepository
         .addEntry(userId, entry)
-        .then((book) => generateSuccess(toView(book), 200, t('addresses.added')));
+        .then((book) => generateSuccess(presentAddresses(book), 200, t('addresses.added')));
 
 /** Update one entry of the caller's own book; someone else's id is the same 404 as a bogus one. */
 export const addressUpdate = (
@@ -61,7 +39,7 @@ export const addressUpdate = (
 ): Promise<ResponseSuccess<AddressesView> | ResponseReject> =>
     addressBookRepository.updateEntry(userId, addressId, changes).then((book) => {
         if (!book) return generateReject(404, [t('addresses.not-found')]);
-        return generateSuccess(toView(book), 200, t('addresses.updated'));
+        return generateSuccess(presentAddresses(book), 200, t('addresses.updated'));
     });
 
 /** Remove one entry; the repository keeps the one-default invariant. */
@@ -71,7 +49,7 @@ export const addressRemove = (
 ): Promise<ResponseSuccess<AddressesView> | ResponseReject> =>
     addressBookRepository.removeEntry(userId, addressId).then((book) => {
         if (!book) return generateReject(404, [t('addresses.not-found')]);
-        return generateSuccess(toView(book), 200, t('addresses.removed'));
+        return generateSuccess(presentAddresses(book), 200, t('addresses.removed'));
     });
 
 /**

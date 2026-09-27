@@ -17,28 +17,17 @@ import {
 } from '@infrastructure/http/response';
 import { productService } from '@modules/products';
 import { cartService } from '@modules/cart';
-import type { WishlistItem } from '@types';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { wishlistAnalyticsEvents } from './analytics';
 import { wishlistRepository } from './repository';
-import type { WishlistDocument } from './model';
-
-/** The wishlist as `openapi.yaml` declares it: `WishlistResponse`, built rather than serialized. */
-export interface WishlistView {
-    items: WishlistItem[];
-}
-
-/** Turn a wishlist document (or its absence) into the response the contract declares. */
-const toWishlistView = (wishlist: WishlistDocument | null): WishlistView => ({
-    items: (wishlist?.items ?? []).map(({ productId }) => ({ productId: String(productId) }))
-});
+import { presentWishlist, type WishlistView } from './presenter';
 
 /**
  * Get the user's wishlist. Absence and emptiness are the same state — an empty view, never 404.
  */
 const wishlistGet = (userId: string): Promise<WishlistView> =>
-    wishlistRepository.findByUserId(userId).then((wishlist) => toWishlistView(wishlist));
+    wishlistRepository.findByUserId(userId).then((wishlist) => presentWishlist(wishlist));
 
 /**
  * Save a product.
@@ -60,7 +49,7 @@ const wishlistAdd = (
                 event: wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED,
                 properties: { product_id: productId }
             });
-            return generateSuccess(toWishlistView(wishlist), 200, t('wishlist.added'));
+            return generateSuccess(presentWishlist(wishlist), 200, t('wishlist.added'));
         });
     });
 
@@ -82,7 +71,7 @@ const wishlistRemove = (
             event: wishlistAnalyticsEvents.WISHLIST_ITEM_REMOVED,
             properties: { product_id: productId }
         });
-        return generateSuccess(toWishlistView(wishlist), 200, t('wishlist.removed'));
+        return generateSuccess(presentWishlist(wishlist), 200, t('wishlist.removed'));
     });
 
 /**
@@ -125,7 +114,7 @@ const wishlistMoveToCart = (
                     event: wishlistAnalyticsEvents.WISHLIST_MOVED_TO_CART,
                     properties: { product_id: productId }
                 });
-                return generateSuccess(toWishlistView(updated), 200, t('wishlist.moved-to-cart'));
+                return generateSuccess(presentWishlist(updated), 200, t('wishlist.moved-to-cart'));
             });
         });
     });

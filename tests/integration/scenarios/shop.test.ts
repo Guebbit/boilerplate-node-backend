@@ -27,7 +27,8 @@ import { connect, disconnect } from '@tests/database';
 import { createApp } from '../../../src/app';
 import { buildScenario } from '@scenarios/index';
 import { assertScenarioGuarantees } from '@scenarios/check';
-import { productModel, toProduct } from '@modules/products/model';
+import { productModel } from '@modules/products/model';
+import { presentProduct } from '@modules/products/presenter';
 import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
 import { paymentModel } from '@modules/payments/model';
@@ -110,10 +111,10 @@ describe('each subject names a row that really has the property', () => {
 
         /*
          * `available`, not `onHand`: the storefront's badge reads the derived counter, which a row
-         * held entirely in reservations would also be zero on. `toProduct` is the mapping a
+         * held entirely in reservations would also be zero on. `presentProduct` is the mapping a
          * response goes through, so this reads it exactly where the consumer does.
          */
-        expect(toProduct(product!).available).toBe(0);
+        expect(presentProduct(product!).available).toBe(0);
         // Public: an out-of-stock row nobody can reach demonstrates no badge at all.
         expect(product?.active).toBe(true);
         expect(product?.deletedAt).toBeUndefined();
@@ -126,13 +127,13 @@ describe('each subject names a row that really has the property', () => {
 
     it('product.inStock is buyable once the flows have finished shopping', async () => {
         const product = await productModel.findById(subjects['product.inStock']).exec();
-        expect(toProduct(product!).available).toBeGreaterThan(0);
+        expect(presentProduct(product!).available).toBeGreaterThan(0);
         expect(product?.active).toBe(true);
     });
 
     it('product.rich populates every optional field a detail page renders', async () => {
         const product = await productModel.findById(subjects['product.rich']).exec();
-        expect(toProduct(product!).available).toBeGreaterThan(0);
+        expect(presentProduct(product!).available).toBeGreaterThan(0);
         expect(product?.description).toBeTruthy();
         expect(product?.categories?.length).toBeGreaterThan(0);
         expect(product?.tags?.length).toBeGreaterThan(0);
@@ -142,7 +143,7 @@ describe('each subject names a row that really has the property', () => {
     it('product.digital needs no shipping method — E16 has something real to check against', async () => {
         const product = await productModel.findById(subjects['product.digital']).exec();
         expect(product?.requiresShipping).toBe(false);
-        expect(toProduct(product!).available).toBeGreaterThan(0);
+        expect(presentProduct(product!).available).toBeGreaterThan(0);
         expect(product?.active).toBe(true);
     });
 

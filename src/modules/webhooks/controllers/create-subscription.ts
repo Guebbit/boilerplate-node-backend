@@ -10,6 +10,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { webhooksService } from '../services';
+import { presentWebhookSubscription } from '../presenters';
 
 /**
  * POST /webhooks/subscriptions
@@ -32,7 +33,7 @@ export const createWebhookSubscription = (
             return successResponse<WebhookSubscriptionCreated>(
                 response,
                 {
-                    ...(result.data.subscription.toJSON() as WebhookSubscriptionCreated),
+                    ...presentWebhookSubscription(result.data.subscription),
                     secret: result.data.secret
                 },
                 201

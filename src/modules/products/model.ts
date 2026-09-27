@@ -331,42 +331,6 @@ export const applyProductTransform = applySerialization(productSchema, {
 });
 
 /**
- * Maps a document straight onto the `Product` contract: `id` from the Mongoose getter, `available`
- * derived from the two stock counters (never stored), `currency` read live from
- * `NODE_DEFAULT_CURRENCY`, the three dates ISO-stringified. Same reasoning as `users/model.ts`'s
- * `toUser`.
- */
-export const toProduct = (document: ProductDocument): Product => {
-    const onHand = document.onHand ?? 0;
-    const reserved = document.reserved ?? 0;
-
-    return {
-        id: document.id,
-        title: document.title,
-        price: document.price,
-        available: availableStock(onHand, reserved),
-        currency: productCurrency(),
-        ...(document.taxClass === undefined ? {} : { taxClass: document.taxClass }),
-        ...(document.sku === undefined ? {} : { sku: document.sku }),
-        ...(document.onHand === undefined ? {} : { onHand: document.onHand }),
-        ...(document.reserved === undefined ? {} : { reserved: document.reserved }),
-        ...(document.description === undefined ? {} : { description: document.description }),
-        ...(document.active === undefined ? {} : { active: document.active }),
-        ...(document.requiresShipping === undefined
-            ? {}
-            : { requiresShipping: document.requiresShipping }),
-        ...(document.weight === undefined ? {} : { weight: document.weight }),
-        ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
-        ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
-        ...(document.categories === undefined ? {} : { categories: document.categories }),
-        ...(document.tags === undefined ? {} : { tags: document.tags }),
-        ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
-        ...(document.updatedAt ? { updatedAt: document.updatedAt.toISOString() } : {}),
-        ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {})
-    };
-};
-
-/**
  * Mongoose model for product CRUD operations.
  */
 export const productModel = model<ProductDocument, ProductModel>('Product', productSchema);

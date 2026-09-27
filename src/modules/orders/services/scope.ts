@@ -20,6 +20,7 @@ import {
 } from '../domain';
 import type { OrderActor } from '../domain';
 import { resolveCurrentImages } from './current';
+import { presentOrder } from '../presenter';
 
 /**
  * Which orders a caller is allowed to read — the authorization boundary for order reads: own
@@ -114,10 +115,7 @@ const deliveryAndOverrideActions = (
  * @returns the serialized order carrying its `actions` and each line's live `current` picture
  */
 export const withActions = (order: OrderDocument, authContext?: AuthContext): Promise<Order> => {
-    // One cast: `.toJSON()`'s return type is the schema's own `Document['toJSON']` overload, not
-    // this module's `Order` contract — the same reasoning `products/service.ts`'s `getById` cast
-    // uses.
-    const serialized = order.toJSON() as Order;
+    const serialized = presentOrder(order);
 
     return resolveCurrentImages([serialized]).then(([resolved]) => ({
         ...resolved,

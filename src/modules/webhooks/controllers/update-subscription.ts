@@ -7,9 +7,9 @@
 
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
 import { ReplaceWebhookSubscriptionBody, UpdateWebhookSubscriptionBody } from '@api/schemas.zod';
-import type { WebhookSubscription } from '@types';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { webhooksService } from '../services';
+import { presentWebhookSubscription } from '../presenters';
 
 /**
  * `PUT` and `PATCH /webhooks/subscriptions/:id` — one handler pair over
@@ -22,7 +22,5 @@ export const { replace: replaceWebhookSubscription, update: updateWebhookSubscri
         patchSchema: UpdateWebhookSubscriptionBody,
         update: (id, changes, request) =>
             webhooksService.updateSubscription(id, changes, tenantCallerContextOf(request)),
-        // `.toJSON()` applies the model's `_id` → `id` transform; the document is typed as stored,
-        // not as the wire shape `WebhookSubscription` promises.
-        present: (subscription) => subscription.toJSON() as WebhookSubscription
+        present: (subscription) => presentWebhookSubscription(subscription)
     });

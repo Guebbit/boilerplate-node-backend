@@ -272,6 +272,7 @@ flowchart TD
 | `routes.ts` + `controllers/`                         | only if the domain serves HTTP        | `audit-logs` has neither                                                            |
 | `service.ts` · `repository.ts` · `model.ts`          | only if it owns data                  | `observability` owns none — it serves URLs over other domains' data                 |
 | `services/`                                          | when `service.ts` outgrows one file   | see [Layers](./layers.md#when-service-ts-becomes-services)                          |
+| `presenter.ts` (`presenters.ts` for >1 resource)     | if it serves HTTP and owns a model    | the one place a document becomes wire shape — see [below](#the-module-template)     |
 | `domain/`                                            | only if the module has rules to prove | see [Domain Layer](./domain-layer.md)                                               |
 | `openapi.yaml`                                       | if it serves HTTP                     | its standalone slice of the REST contract                                           |
 | `asyncapi.yaml`                                      | if it owns a channel                  | the same, for the async contract, server included — `observability` is the only one |
@@ -329,6 +330,78 @@ resolves its own copy while the request is alive: `emails.ts` returns an `IEmail
 name, subject, and every string the template interpolates), the controller hands it to
 `enqueueEmail`, and the job that reaches the worker is finished text. The workers import no i18n
 at all, and the templates interpolate rather than translate.
+
+## The module template
+
+The table above lists what a module MAY have; this is the same shape as one block, with the
+question that decides each optional row attached to it directly, and the house rule each row is
+downstream of:
+
+```
+src/modules/<name>/
+  module.ts module.yaml index.ts tests/        ALWAYS
+  openapi.yaml routes.ts controllers/          IF it serves HTTP (surfaces/* factory first)
+  service.ts                                   DEFAULT
+  services/<use-case>.ts                       REPLACES it past ~300 lines, ~12 members, or two audiences
+  model.ts repository.ts                       IF it owns a collection; every conditional write is a named repository method
+  domain/                                      IF a rule is worth a unit test; MANDATORY for a 3+-state status or money/quantity maths
+  events.ts                                    IF it emits: past tense, emitted AFTER the write, with an id
+  audit/analytics/metrics/probes/rate-limits/config/emails.ts   IF there is something to declare
+  providers/                                   IF it owns a port to an outside service (an ACL)
+  presenter.ts                                 IF it serves HTTP and owns a model — see T9 below
+  factories.ts locales/ asyncapi.yaml          IF needed
+```
+
+`routes.ts` and `controllers/` say "IF it serves HTTP", not "write them by hand": a controller is a
+short spec against one of the five shared factories in `infrastructure/surfaces/` (list, item,
+search, update, delete/restore) before it is anything else — see
+[Request Flow](./request-flow.md) for what each factory owns, so that a new endpoint states its
+differences from the shape instead of re-deriving it. `service.ts` REPLACES itself with `services/`
+past a size the module itself measures, not a line this page enforces twice —
+[Layers](./layers.md#when-service-ts-becomes-services) has the actual thresholds and the split this
+repo has used every time.
+
+Four rules the table above cannot show, because each is about how a file BEHAVES rather than
+whether it exists:
+
+1. **Effects live in the service.** A controller reads input and calls one service method; a
+   repository issues one query. Neither may decide to send an email, emit an event or record audit
+   — a rule enforced at both ends would drift the moment one side changed alone, and a controller
+   or repository is exactly the layer a future edit reaches for first because it is where the
+   request or the query already is. The service is the one place that has BOTH the business
+   decision and the authority to act on it, so it is the only place a side effect is written down
+   once.
+2. **Every multi-document write sequence names how it survives failure.** A write that touches two
+   collections (or a collection and a queue) can be interrupted between them by nothing more exotic
+   than a process restart — and "it usually finishes" is not a survival strategy, it is an untested
+   one. Name which of the three this sequence uses: one atomic write (a single `updateOne`, or a
+   Mongo transaction across the two), OR a durable marker plus a **scheduled** sweep that finishes
+   what the request started (`inventory`'s reservation-expiry sweep is this shape). A retry loop
+   inside the request is not a fourth option — it still leaves the marker-less gap if the process
+   dies mid-loop.
+3. **A version guard moves on every write.** `updateOne({ _id, version }, { $set: ..., $inc: {
+version: 1 } })`, never a plain `findByIdAndUpdate` — a version that does not move on every write
+   is a version field that only decorates the document, since two concurrent writers reading the
+   same version and racing to save would otherwise both "succeed", the second silently discarding
+   the first's write with no error either side can see. Moving it inside the SAME filtered write
+   (not a separate check-then-write) is what makes the race impossible rather than merely unlikely.
+4. **One presenter per module (T9).** Before this rule, a controller reached for its own
+   `document.toJSON() as SomeResponse` cast, ad hoc, once per call site — the compiler enforced the
+   OUTPUT type but nothing enforced that two call sites for the same resource agreed on how they
+   got there, and a sibling wanting the same shape found it cheaper to import the raw Mongoose
+   `Document` type than to ask. `presenter.ts` is the fix: one pure function per resource
+   (`presentProduct(document): Product`), the single place a Mongoose document becomes the wire
+   shape, replacing every ad hoc cast in that module's own controllers. A sibling reaches the
+   transform through the owning module's SERVICE, the same door it already uses for a repository
+   read — never the presenter file directly, and never the raw `Document` type, which is exactly
+   the model-runtime leak
+   [barrel rule](./strategic-ddd.md#_5-published-language-—-the-barrel) already refuses for a
+   repository. Only the presenter's OUTPUT TYPE may leave the barrel, as
+   `export type *`, the same treatment `model.ts` already gets — `barrel-allowed-sources` checks
+   both. A module presenting more than one resource shape (webhooks: subscriptions AND deliveries;
+   locales: a language AND its entries) uses `presenters.ts`, plural, one function per resource
+   inside it; a module whose only shaping is a handful of identical call sites still gets the file
+   — the point is one canonical transform, not a line-count minimum.
 
 ## Libraries a module owns
 

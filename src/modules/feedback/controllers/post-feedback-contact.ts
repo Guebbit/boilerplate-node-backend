@@ -17,6 +17,7 @@ import {
 import { successResponse } from '@infrastructure/http/response';
 import type { CreateFeedbackRequest, FeedbackRequest } from '@types';
 import { feedbackRequestService } from '../service';
+import { presentFeedbackRequest } from '../presenter';
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /**
@@ -52,11 +53,9 @@ export const postFeedbackContact = (
     return feedbackRequestService
         .create(body)
         .then((createdFeedbackRequest) => {
-            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the
-            // document itself is typed as stored, not as the wire shape `FeedbackRequest` promises.
             successResponse<FeedbackRequest>(
                 response,
-                createdFeedbackRequest.toJSON() as FeedbackRequest,
+                presentFeedbackRequest(createdFeedbackRequest),
                 201
             );
         })

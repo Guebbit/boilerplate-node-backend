@@ -9,6 +9,7 @@ import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/htt
 import { catchAs, refused } from '@infrastructure/http/controller';
 import type { WebhookSubscription } from '@types';
 import { webhooksService } from '../services';
+import { presentWebhookSubscription } from '../presenters';
 
 /**
  * DELETE /webhooks/subscriptions/:id/secrets/:secretId
@@ -27,11 +28,9 @@ export const removeWebhookSubscriptionSecret = (
         .removeSubscriptionSecret(id, request.params.secretId, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            // `.toJSON()` applies the model's `_id` → `id` transform; the document is typed as
-            // stored, not as the wire shape `WebhookSubscription` promises.
             return successResponse<WebhookSubscription>(
                 response,
-                result.data.toJSON() as WebhookSubscription
+                presentWebhookSubscription(result.data)
             );
         })
         .catch(catchAs(response, 'removeWebhookSubscriptionSecret'));
