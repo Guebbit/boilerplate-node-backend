@@ -1,4 +1,4 @@
-subdomain: supporting
+subdomain: generic
 group: foundation
 dependsOn:
     - access # assignRole/revokeRole/promoteVerifiedCustomer/rolesOf, the role half of a user's write ops

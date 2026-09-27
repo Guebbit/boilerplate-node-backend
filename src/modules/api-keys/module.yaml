@@ -1,4 +1,4 @@
-subdomain: supporting
+subdomain: generic
 group: foundation
 dependsOn:
     - access # rolesOf, to re-derive the minter's current role at check time

@@ -1,4 +1,4 @@
-subdomain: supporting
+subdomain: generic
 group: foundation
 dependsOn:
     - access # rolesOf/assignRole/assignDefaultRole/promoteVerifiedCustomer

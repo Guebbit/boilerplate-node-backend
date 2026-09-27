@@ -157,11 +157,11 @@ prose moved to the glossary page; the constraints belong on the symbols.
 DDD's own advice is the part most often skipped: tactical patterns belong in the **core** domain, and
 everything else should use the simplest thing that works.
 
-| Subdomain    | Meaning                                                         | Here                                                                |
-| ------------ | --------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `core`       | the reason the product exists — worth entities and invariants   | `products`, `orders`, `cart`                                        |
-| `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`, `users`, `account` |
-| `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `observability`, `feedback`     |
+| Subdomain    | Meaning                                                         | Here                                                                                                      |
+| ------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `core`       | the reason the product exists — worth entities and invariants   | `products`, `orders`, `cart`                                                                              |
+| `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`, `invoicing`                                              |
+| `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `observability`, `feedback`, `access`, `users`, `account`, `api-keys` |
 
 The rule of thumb that follows: **a `generic` module should not carry a `domain/` folder.** A
 pure-rules layer inside authentication or i18n is effort spent on the part of the system that should
