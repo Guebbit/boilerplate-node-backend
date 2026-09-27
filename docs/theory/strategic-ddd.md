@@ -157,11 +157,11 @@ prose moved to the glossary page; the constraints belong on the symbols.
 DDD's own advice is the part most often skipped: tactical patterns belong in the **core** domain, and
 everything else should use the simplest thing that works.
 
-| Subdomain    | Meaning                                                         | Here                                                                |
-| ------------ | --------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `core`       | the reason the product exists — worth entities and invariants   | `products`, `orders`, `cart`                                        |
-| `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`, `users`, `account` |
-| `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `observability`, `feedback`     |
+| Subdomain    | Meaning                                                         | Here                                                                                                      |
+| ------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `core`       | the reason the product exists — worth entities and invariants   | `products`, `orders`, `cart`                                                                              |
+| `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`, `invoicing`                                              |
+| `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `observability`, `feedback`, `access`, `users`, `account`, `api-keys` |
 
 The rule of thumb that follows: **a `generic` module should not carry a `domain/` folder.** A
 pure-rules layer inside authentication or i18n is effort spent on the part of the system that should
@@ -185,6 +185,32 @@ reason, could not either — check that a classification stays HONEST (nothing s
 drifting to `core`), or that a `generic` module carries no `domain/` folder. Placing the value with
 the module it describes is still worth doing, since a doc table can go stale the moment a new module
 lands and nothing points back at it; it is not a claim that the label is enforced beyond its spelling.
+
+## 4a. Foundation and shop — an enforced fact, not a naming convention
+
+Subdomain distillation (§4) asks "how much modelling effort does this deserve". A second, separate
+question asks "does this module ship with every deployment, or is it the demo shop's own worked
+example" — `module.yaml#group`, `foundation | shop`.
+
+The two axes are independent: `access` is `generic` (§4) AND `foundation` (this section);
+`payments` is `supporting` AND `shop`. Neither implies the other.
+
+| Group        | Meaning                                                                            |
+| ------------ | ---------------------------------------------------------------------------------- |
+| `foundation` | ships with every deployment, whatever the next project turns this boilerplate into |
+| `shop`       | the demo e-commerce domain's own worked example — deletable on its own             |
+
+Unlike `subdomain`, this line is **enforced, not aspirational**:
+`.dependency-cruiser.cjs`'s `foundation-cannot-reach-shop` rule fails closed on a `foundation`
+module importing a `shop` one, the same way `module-coupling-<name>` fails closed on an
+undeclared sibling import. `webhooks` is labelled `shop` for now — its own event catalogue is the
+demo's worked example (`orders`/`payments` events), not because delivery, retries and signing are
+themselves shop-specific. A later change may move it once modules declare their own public events
+generically.
+
+This is also the axis a CI job measures "is the demo shop removable" against: deleting every
+`group: shop` folder and seeing what still compiles and passes is a checked experiment now, not a
+manual walkthrough — see `npm run measure:demo-strip`.
 
 ## 5. Published language — the barrel
 

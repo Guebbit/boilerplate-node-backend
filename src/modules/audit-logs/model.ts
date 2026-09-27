@@ -53,7 +53,7 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         },
         actor_role: {
             type: String,
-            enum: ['admin', 'user', 'anonymous'],
+            enum: ['admin', 'user', 'anonymous', 'system'],
             required: true
         },
         // Open where `actor_role` is closed — no enum, so a renamed or newly added preset role

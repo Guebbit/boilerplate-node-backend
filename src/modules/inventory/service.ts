@@ -361,13 +361,13 @@ export const commitForOrder = async (orderId: string): Promise<boolean> => {
     recordAudit(
         // No CallerContext exists on this path — the caller is a payment settlement, which may
         // itself be running from a provider webhook with no human behind it. Same fallback
-        // `orders/services/cancel.ts` uses for its own no-context case.
+        // `orders/services/cancel.ts` uses for its own no-context case. No `actor_role`/
+        // `actor_user_id` override needed either: `buildAuditEvent`'s defaults already read them
+        // off `SYSTEM_ACTOR`'s own caller (B21).
         { caller: callerForSubject(SYSTEM_ACTOR, 'Order'), analyticsConsent: false },
         {
             action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
             outcome: 'failure',
-            actor_role: 'admin',
-            actor_user_id: 'system',
             target_type: 'order',
             target_id: orderId,
             metadata: { reservationStatus }

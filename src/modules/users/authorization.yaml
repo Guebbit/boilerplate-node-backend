@@ -1,0 +1,29 @@
+keys:
+    # -- users ---------------------------------------------------------------------------------
+    - key: users.any.read
+      module: users
+      subject: User
+      action: read
+      scope: tenant
+      description: Read other people's accounts. Reading your own is `account`, not a key.
+    - key: users.any.create
+      module: users
+      subject: User
+      action: create
+      scope: tenant
+      description: Create an account for someone else.
+    - key: users.any.update
+      module: users
+      subject: User
+      action: update
+      scope: tenant
+      description: Change someone else's account, including clearing their second factor.
+    - key: users.any.delete
+      module: users
+      subject: User
+      action: delete
+      scope: tenant
+      description: Erase someone else's account.
+      # Irreversible and about somebody else. A stolen session should not be able to reach it on
+      # the strength of a login that happened this morning.
+      stepUp: critical

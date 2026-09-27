@@ -1,0 +1,26 @@
+keys:
+    # A translation is its own subject, deliberately apart from `Locale`: a translator writes
+    # WORDS for an entity a locale is already active for, never the locale's own row. It is also
+    # apart from `Product`/whatever entity is translated, which is the whole point — a
+    # mistranslation can never become a mischanged price. Unconditional either way, so `any` is
+    # its only reading — there is no narrower one to make explicit.
+    #
+    # Owned by `core`, not `locales` (LOCALES_OPTIONAL_0925 D-LO2): the subject these keys guard
+    # is `kernel/translation.ts`'s port, which every module writing translatable content reaches
+    # regardless of whether `locales` is installed to answer it. Deleting `locales` deletes its
+    # own module and keys; it must not also delete the ability to gate a rewording on this key.
+    - key: translations.any.read
+      module: core
+      subject: Translation
+      action: read
+      scope: tenant
+      description: Read an entity's translated fields, in the admin shape (every locale at once).
+    - key: translations.any.update
+      module: core
+      subject: Translation
+      action: update
+      scope: tenant
+      description: >-
+          Write an entity's translated fields. Never grants a write on the entity itself — that is
+          `products.any.update`, and the two are stacked on the product write route precisely so
+          one alone cannot turn a rewording into a repricing.

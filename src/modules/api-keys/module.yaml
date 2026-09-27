@@ -1,4 +1,5 @@
-subdomain: supporting
+subdomain: generic
+group: foundation
 dependsOn:
     - access # rolesOf, to re-derive the minter's current role at check time
     - users # hashToken, re-deriving the minter's current permissions at check time, and USER_DELETED

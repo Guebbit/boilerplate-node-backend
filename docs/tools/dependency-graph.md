@@ -15,27 +15,54 @@ file's own imports and nothing further.
 
 ### Reachability
 
-> The domain layer may not **import** mongoose
+> `infrastructure` may not **import** a module
 
 is a lint rule.
 
-> The domain layer may not **reach** mongoose
+> `infrastructure` may not **reach** a module
 
 is a question about the whole graph, and it is the one that survives a refactor. Nobody adds
-`import mongoose` to a domain file — they add a helper that already had it, and the direct rule
-stays green while the tier stops being pure. `reachable: true` asks for the path rather than the
-edge:
+`import '@modules/orders'` to an infrastructure file — they add a helper that already had it, and
+the direct rule stays green while the tier stops being pure. `reachable: true` asks for the path
+rather than the edge:
 
 ```js
 {
-    name: 'domain-cannot-reach-persistence',
-    from: { path: '^src/modules/[^/]+/domain/' },
-    to: { path: 'node_modules/(mongoose|mongodb)', reachable: true }
+    name: 'infrastructure-cannot-reach-domains',
+    from: { path: '^src/infrastructure/' },
+    to: { path: '^src/(modules|app)/', reachable: true }
 }
 ```
 
-Three rules use it: the domain layer against persistence and against HTTP, and `infrastructure`
-against the domains above it.
+Four rules use it: `infrastructure` against the domains above it, `src-cannot-reach-scenarios`,
+`unit-layer-stays-database-free`, and `foundation-cannot-reach-shop` (DDD-D1).
+
+### Domain purity — an allow-list, not a deny-list (T11)
+
+`domain/` is a different shape of the same question, and it used to be answered the wrong way
+round: naming what `domain/` may NOT reach (`mongoose`, `express`) let anything else — `redis`,
+`amqplib`, `node:fs` — straight through uncaught. One rule per module states the opposite instead,
+generated from which module folders actually carry a `domain/`:
+
+```js
+{
+    name: 'domain-purity-orders',
+    from: { path: '^src/modules/orders/domain/' },
+    to: { pathNot: '^src/modules/orders/domain/|^src/types' }
+}
+```
+
+A `domain/` file may reach its own module's domain siblings and `@types` — every import a
+`domain/` file in this repo makes today — and nothing else. A rule reporting `mongoose` unresolved
+would have said nothing about `node:fs`; this one reports anything not on the list, by construction.
+
+### Unresolvable imports (DDD-D1)
+
+Nothing used to catch a specifier dependency-cruiser cannot resolve to a file on disk at all —
+`not-to-unresolvable` does, so a deleted module or package left behind by an incomplete rename
+fails here instead of quietly compiling until someone hits the missing file at runtime.
+`tests/load/*.js` is exempted: k6 injects its own `k6`/`k6/http` globals at run time, and
+dependency-cruiser has no way to see them.
 
 ### Module coupling
 
@@ -116,10 +143,11 @@ the domain event bus (`kernel/events.ts`) instead — see any module already lis
 Both were wrong in the first working version, and both failed **open** — the run went green while
 checking nothing. They are worth knowing before editing the config.
 
-| Setting                                                  | Why it is what it is                                                                                                                                                                                                    |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tsConfig: { fileName: 'tsconfig.json' }`                | The aliases (`@modules`, `@kernel`, `@infrastructure`, `@app`, `@types`) live there. Without it every alias is an unresolvable specifier, the graph is a set of disconnected files, and every rule passes over nothing. |
-| `node_modules` is in `doNotFollow`, **not** in `exclude` | `doNotFollow` records the module and does not cruise into it. `exclude` drops it from the graph entirely — and a rule whose `to` names `node_modules/mongoose` then matches nothing and reports success.                |
+| Setting                                                  | Why it is what it is                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsConfig: { fileName: 'tsconfig.json' }`                | The aliases (`@modules`, `@kernel`, `@infrastructure`, `@app`, `@types`) live there. Without it every alias is an unresolvable specifier, the graph is a set of disconnected files, and every rule passes over nothing.                                                                                                                       |
+| `node_modules` is in `doNotFollow`, **not** in `exclude` | `doNotFollow` records the module and does not cruise into it. `exclude` drops it from the graph entirely — and a rule whose `to` names `node_modules/mongoose` then matches nothing and reports success.                                                                                                                                      |
+| `enhancedResolveOptions.exportsFields`/`conditionNames`  | Without reading a package's own `exports` map, `not-to-unresolvable` (below) reports six false alarms — `altcha-lib`'s deep imports, `@casl/ability/extra`, `@opentelemetry/semantic-conventions/incubating`, and `@typescript-eslint/utils`'s own bare `.` entry — every one of them a package that only ships its real files under `dist/`. |
 
 `tsPreCompilationDeps` is deliberately **off**, so the graph is the one that exists at runtime.
 Turned on it also carries `import type` edges, which TypeScript erases: it reported eight "cycles"

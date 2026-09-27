@@ -71,13 +71,6 @@ export default {
      * `core` (LOCALES_OPTIONAL_0925 D-LO2): the port they guard survives this module's deletion,
      * so the keys do too.
      */
-    permissions: [
-        'locales.self.read',
-        'locales.any.read',
-        'locales.any.create',
-        'locales.any.update',
-        'locales.any.delete'
-    ],
     routes: router,
     onRegistered,
     /*

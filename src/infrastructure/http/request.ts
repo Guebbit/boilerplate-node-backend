@@ -288,7 +288,8 @@ const STRANGER: Caller = {
     tenantId: null,
     scope: 'platform',
     permissions: [],
-    unrestricted: false
+    unrestricted: false,
+    system: false
 };
 
 /**

@@ -71,14 +71,6 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
-    permissions: [
-        'orders.self.read',
-        'orders.any.read',
-        'orders.any.create',
-        'orders.any.update',
-        'orders.any.delete',
-        'orders.any.override'
-    ],
     routes: router,
     publicEvents,
     // The invoice prints the shop's own jurisdiction, and an invoice with no country on it is not

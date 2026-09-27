@@ -33,7 +33,6 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
-    permissions: ['inventory.any.read', 'inventory.any.create', 'inventory.any.sweep'],
     routes: router,
     /*
      * `products` cannot call this module back (it already imports `products`, and the graph must

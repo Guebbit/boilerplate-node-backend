@@ -200,7 +200,7 @@ roles:
           about the platform. One role cannot reach both scopes, which is the point. Every tenant
           key below is held by name; the conformance suite refuses a declared tenant key this list
           omits, so adding a key here can never again be optional.
-      permissions:
+      permissions: &admin_permissions
           - products.self.read
           - products.any.read
           - products.any.create
@@ -246,6 +246,26 @@ roles:
           - apikeys.any.read
           - apikeys.any.create
           - apikeys.any.delete
+
+    # DDD-D5 part B (bug B21): the principal background/scheduled work runs as — a reservation
+    # sweep, a reaper — never `admin` itself, so an audit row can say "a sweep did this" and never
+    # "an admin did this" for a request nobody made. `permissions` is a YAML alias of `admin`'s own
+    # list, `&admin_permissions` above: the two can never drift apart by hand, because they are the
+    # same parsed array, not two lists somebody has to keep matching.
+    #
+    # Assigning it to a real account is possible (nothing here refuses the name) but pointless: the
+    # audit trail's `system` label comes from the CALLER'S ID being the literal string `system`
+    # (`Caller.system` in `kernel/permissions.ts`), never from holding this role, so a real account
+    # granted it would read as an ordinary unrestricted `admin`, not as the system actor. Nothing in
+    # this codebase ever assigns it — `SYSTEM_ACTOR` is its only caller.
+    - name: system
+      scope: tenant
+      title: The system actor
+      description: >-
+          Background and scheduled work acting on nobody's behalf — a reservation-expiry sweep, a
+          reaper. Unrestricted within this shop, exactly like `admin`. Nothing in this codebase
+          assigns it to a real account.
+      permissions: *admin_permissions
 
     # -- platform scope ------------------------------------------------------------------------
     - name: operator

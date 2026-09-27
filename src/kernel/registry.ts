@@ -281,20 +281,6 @@ export interface AppModule {
     locales?: string;
 
     /**
-     * The permission keys this module INTRODUCES, next to the routes that check them.
-     *
-     * Declared here rather than only in `shared/authorization-keys.yaml` so that deleting a module
-     * deletes its keys: the shared file says which module owns each key, this says which keys each
-     * module claims, and `tests/cross-cutting/module-permissions.test.ts` refuses any disagreement.
-     * A key whose module is gone would otherwise sit in the file forever, grantable by a role
-     * editor and checked by nothing.
-     *
-     * Absent for a module with no keys, which is a decision rather than an omission: `cart` and
-     * `wishlist` are *your own things*, and what you may do with them follows from being signed in.
-     */
-    permissions?: readonly string[];
-
-    /**
      * This module's {@link ImageTarget}s, keyed by the `collection` string an
      * `ImageDigestJobPayload` names. Most modules have none; a module whose documents can carry an
      * uploaded image registers one entry per such collection.
@@ -365,7 +351,8 @@ export interface AppModule {
      * only `shop`). Each name resolves to one row id — pinned in `scenarios/subjects.ts` or
      * recorded by the flow runner — and `scenarios/check.ts` holds the two lists equal in both
      * directions. Declared here rather than only inside `scenarios/` so deleting a module deletes
-     * its guarantees the same way {@link permissions} does.
+     * its guarantees the same way deleting its own `authorization.yaml` deletes its permission
+     * keys — see `scripts/contracts/authorization-bundle.ts`.
      *
      * Absent for a module with nothing to guarantee, which is most of them, on purpose.
      */

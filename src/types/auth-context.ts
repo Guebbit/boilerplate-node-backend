@@ -111,6 +111,14 @@ export interface TenantCaller {
      * permission check, e.g. the audit trail's `actor_role`.
      */
     unrestricted: boolean;
+    /**
+     * Is this `SYSTEM_ACTOR` — the application acting on nobody's behalf — rather than a real
+     * account, computed once alongside {@link unrestricted} and for the identical reason: the
+     * audit trail's `actor_role` needs to tell "a background job did this" from "an admin did
+     * this" without importing `kernel/permissions`' `SYSTEM_ACTOR` past the infrastructure
+     * boundary (`infrastructure` may not reach `kernel` — see `eslint.config.ts`).
+     */
+    system: boolean;
 }
 
 /** A caller acting over the installation itself, which has no shop to be scoped to. */
@@ -124,6 +132,8 @@ export interface PlatformCaller {
     permissions: readonly string[];
     /** Same as {@link TenantCaller.unrestricted}, for the platform scope. */
     unrestricted: boolean;
+    /** Same as {@link TenantCaller.system} — `SYSTEM_ACTOR` never actually resolves to this arm (it holds no platform role), but the field stays on both so a `Caller` read never has to narrow first. */
+    system: boolean;
 }
 
 /**

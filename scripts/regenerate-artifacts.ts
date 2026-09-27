@@ -44,6 +44,11 @@ interface Step {
  */
 const STEPS: readonly Step[] = [
     {
+        script: 'authorization:bundle',
+        because:
+            'shared/authorization-keys.yaml, from one fragment per module — read by kernel/permissions.ts at boot, so this runs before anything below that boots the app to read docs off it'
+    },
+    {
         script: 'contracts:bundle',
         because: 'openapi.yaml and the two asyncapi bundles, from the per-module sources'
     },

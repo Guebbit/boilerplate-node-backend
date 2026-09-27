@@ -1,0 +1,22 @@
+keys:
+    # -- api-keys --------------------------------------------------------------------------------
+    - key: apikeys.any.read
+      module: api-keys
+      subject: ApiKey
+      action: read
+      scope: tenant
+      description: List this shop's machine-to-machine credentials. Never returns a key's secret.
+    - key: apikeys.any.create
+      module: api-keys
+      subject: ApiKey
+      action: create
+      scope: tenant
+      description: >-
+          Mint a credential. Carries its own floor on top of this key: a credential can never hold
+          a permission the minter lacks.
+    - key: apikeys.any.delete
+      module: api-keys
+      subject: ApiKey
+      action: delete
+      scope: tenant
+      description: Revoke a credential. Soft and immediate; the row stays readable.

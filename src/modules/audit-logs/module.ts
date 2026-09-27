@@ -41,13 +41,5 @@ export default {
             section: 'auditLog',
             collect: (subject) => findOwnAuditEntries(subject.userId)
         }
-    ],
-    /**
-     * The permission key this module introduces. Read only, and deliberately: nothing edits an
-     * audit row, so no module declares a key that would let anything try.
-     *
-     * Deleting the module deletes it — `tests/cross-cutting/module-permissions.test.ts` refuses a
-     * key in the shared file whose module is gone.
-     */
-    permissions: ['audit.any.read']
+    ]
 } satisfies AppModule;

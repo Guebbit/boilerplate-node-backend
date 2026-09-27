@@ -91,8 +91,8 @@ flowchart TD
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
-    class access,account,addresses,api_keys,delivery,inventory,invoicing,payments,users,webhooks,wishlist supporting;
-    class audit_logs,observability generic;
+    class addresses,delivery,inventory,invoicing,payments,webhooks,wishlist supporting;
+    class access,account,api_keys,audit_logs,observability,users generic;
     class antibot,feedback,locales isolated;
 ```
 

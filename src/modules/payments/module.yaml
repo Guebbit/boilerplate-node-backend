@@ -1,4 +1,5 @@
 subdomain: supporting
+group: shop
 dependsOn:
     - inventory # confirm commits an order's held stock into a sale
     - orders # a payment freezes an order's total; refunds answer ORDER_REFUND_OWED

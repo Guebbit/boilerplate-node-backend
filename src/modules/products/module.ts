@@ -29,13 +29,6 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
-    permissions: [
-        'products.self.read',
-        'products.any.read',
-        'products.any.create',
-        'products.any.update',
-        'products.any.delete'
-    ],
     routes: router,
     // The catalogue resolves a product's tax class into a rate, so the rates are this module's
     // config — `orders` only freezes the number `resolveTaxRate` hands it.

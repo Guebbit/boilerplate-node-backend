@@ -61,12 +61,6 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
-    permissions: [
-        'payments.self.read',
-        'payments.any.read',
-        'payments.any.create',
-        'payments.any.update'
-    ],
     routes: router,
     publicEvents,
     /** The webhook and card-testing budgets — see `./rate-limits.ts`. */

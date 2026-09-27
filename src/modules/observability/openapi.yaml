@@ -460,7 +460,7 @@ components:
                 actor_user_id: { type: string }
                 actor_role:
                     type: string
-                    enum: [admin, user, anonymous]
+                    enum: [admin, user, anonymous, system]
                 actor_role_name:
                     {
                         type: string,

@@ -1,0 +1,20 @@
+keys:
+    # -- feedback ------------------------------------------------------------------------------
+    - key: feedback.any.read
+      module: feedback
+      subject: Feedback
+      action: read
+      scope: tenant
+      description: Read messages sent through the contact form.
+    - key: feedback.any.update
+      module: feedback
+      subject: Feedback
+      action: update
+      scope: tenant
+      description: Change a message's handling status.
+    - key: feedback.any.delete
+      module: feedback
+      subject: Feedback
+      action: delete
+      scope: tenant
+      description: Remove a message.

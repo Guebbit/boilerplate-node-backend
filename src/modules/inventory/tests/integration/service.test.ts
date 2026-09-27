@@ -341,7 +341,8 @@ describe('commitForOrder', () => {
             expect.objectContaining({
                 action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
                 outcome: 'failure',
-                actor_role: 'admin',
+                // B21: SYSTEM_ACTOR's own role now, not admin's.
+                actor_role: 'system',
                 actor_user_id: 'system',
                 target_type: 'order',
                 target_id: orderId,

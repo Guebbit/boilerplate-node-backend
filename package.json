@@ -24,6 +24,8 @@
         "prettier:fix": "prettier . --write",
         "contracts:bundle": "tsx scripts/contracts/build-bundles.ts",
         "check:contracts-bundle": "tsx scripts/contracts/build-bundles.ts --check",
+        "authorization:bundle": "tsx scripts/contracts/authorization-bundle.ts",
+        "check:authorization-bundle": "tsx scripts/contracts/authorization-bundle.ts --check",
         "check:asyncapi-breaking": "tsx scripts/contracts/check-asyncapi-breaking.ts",
         "check:spec-identity": "tsx scripts/pairing/check-spec-identity.ts",
         "check:dependencies": "depcruise src tests --output-type err && depcruise src/modules --config .dependency-cruiser.modules.cjs --output-type err",
@@ -47,6 +49,7 @@
         "test": "npm run test:unit && npm run test:cross-cutting && npm run test:integration && npm run test:contract && npm run test:fuzz",
         "test:unit": "tsx scripts/testing/run-suite.ts unit",
         "test:cross-cutting": "tsx scripts/testing/run-suite.ts cross-cutting",
+        "measure:demo-strip": "tsx scripts/testing/measure-demo-strip.ts",
         "test:unit:coverage": "cross-env NODE_OPTIONS=--max-old-space-size=4096 tsx scripts/testing/run-suite.ts unit cross-cutting --unsharded --coverage --runInBand",
         "test:integration": "tsx scripts/testing/run-suite.ts integration",
         "test:contract": "tsx scripts/testing/run-suite.ts contract",
@@ -88,7 +91,7 @@
         "docs:build": "vitepress build docs",
         "docs:preview": "vitepress preview docs",
         "update:all": "npm-check-updates -u",
-        "complete": "npm run ts-check && npm run lint && npm run lint:openapi && npm run lint:openapi:modules && npm run lint:asyncapi && npm run lint:asyncapi:modules && npm run prettier:check && npm run check:contracts-bundle && npm run check:asyncapi-breaking && npm run check:spec-identity && npm run check:dependencies && npm run check:docs-graph && npm run check:docs-roles && npm run check:docs-dependencies && npm run check:docs-rate-limits && npm run check:docs-audit-actions && npm run check:docs-references && npm run check:docker-dockerignore && npm run docs:build && npm run test",
+        "complete": "npm run ts-check && npm run lint && npm run lint:openapi && npm run lint:openapi:modules && npm run lint:asyncapi && npm run lint:asyncapi:modules && npm run prettier:check && npm run check:contracts-bundle && npm run check:authorization-bundle && npm run check:asyncapi-breaking && npm run check:spec-identity && npm run check:dependencies && npm run check:docs-graph && npm run check:docs-roles && npm run check:docs-dependencies && npm run check:docs-rate-limits && npm run check:docs-audit-actions && npm run check:docs-references && npm run check:docker-dockerignore && npm run docs:build && npm run test",
         "complete:fix": "npm run lint:fix && npm run prettier:fix && npm run complete",
         "complete:manual": "npm run test:prism && npm run test:cluster",
         "postinstall": "npm run contracts:bundle && npm run gen:api && npm run gen:asyncapi",
@@ -222,5 +225,21 @@
     },
     "engines": {
         "node": "^24"
+    },
+    "allowScripts": {
+        "bcrypt@6.0.0": true,
+        "mongodb-memory-server@11.0.1": true,
+        "protobufjs@7.6.6": true,
+        "protobufjs@8.8.0": true,
+        "unrs-resolver@1.11.1": true,
+        "@hyperjump/json-pointer@0.9.8": true,
+        "@hyperjump/json-schema@0.23.5": true,
+        "@hyperjump/json-schema-core@0.28.5": true,
+        "@hyperjump/pact@0.2.5": true,
+        "@scarf/scarf@1.4.0": true,
+        "@swc/core@1.15.47": true,
+        "esbuild@0.27.3": true,
+        "esbuild@0.21.5": true,
+        "esbuild@0.28.2": true
     }
 }

@@ -1,0 +1,24 @@
+keys:
+    # -- delivery ------------------------------------------------------------------------------
+    - key: delivery.any.read
+      module: delivery
+      subject: Shipment
+      action: read
+      scope: tenant
+      description: Read shipping methods and a shipment's progress.
+    - key: delivery.any.update
+      module: delivery
+      subject: Shipment
+      action: update
+      scope: tenant
+      description: Advance a consignment through the courier's steps.
+    # Narrower than `orders.any.update` on purpose: the warehouse may begin work on a paid order
+    # without being handed the run of the order record. `paid → processing` is `system`-only in
+    # `orders/domain/lifecycle.ts` — this key gates `POST /delivery/order/{id}/start`, the door
+    # that calls `orders/services/status.ts`'s `markProcessing`.
+    - key: delivery.any.start
+      module: delivery
+      subject: Shipment
+      action: start
+      scope: tenant
+      description: Begin fulfilling a paid order — the move into `processing`, before any parcel exists to record.

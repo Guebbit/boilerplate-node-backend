@@ -32,7 +32,7 @@ flowchart LR
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class account,api_keys,users supporting;
+    class account,api_keys,users generic;
     class access centre;
 ```
 

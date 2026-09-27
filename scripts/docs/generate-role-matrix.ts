@@ -51,7 +51,10 @@ const END = '<!-- role-matrix:end -->';
  * measured against, and a reader comparing a role to "logged out" needs the comparison in the
  * same table.
  */
-const roles = [ANONYMOUS_ROLE, ...PRESET_ROLES];
+// `system` is excluded: it is `admin`'s own permission list under an alias (see
+// `authorization-roles.yaml`), so its row would repeat `admin`'s exactly, and this page documents
+// roles an OPERATOR assigns — `system` is never one of them.
+const roles = [ANONYMOUS_ROLE, ...PRESET_ROLES.filter((role) => role.name !== 'system')];
 
 /** Every module that declares a key, in declaration order — the table's columns. */
 const modules = [...new Set(PERMISSION_KEYS.map((key) => key.module))];
@@ -76,9 +79,11 @@ const callerFor = (name: string, scope: AuthorizationScope): Caller => {
 
     const unrestricted = isUnrestricted({ scope, permissions });
 
+    // Never `system` — this generates the DOCUMENTED role matrix, and `system` is not a role a
+    // deployment assigns or a reader looks up by name.
     return scope === 'platform'
-        ? { id, tenantId: null, scope, permissions, unrestricted }
-        : { id, tenantId: 'generated', scope, permissions, unrestricted };
+        ? { id, tenantId: null, scope, permissions, unrestricted, system: false }
+        : { id, tenantId: 'generated', scope, permissions, unrestricted, system: false };
 };
 
 /** One-letter action codes, so a ten-column table still fits a page. */

@@ -193,16 +193,6 @@ export const searchTranslatedEntityIds = (
 export const isTranslationAvailable = (): boolean => translationPort !== undefined;
 
 /**
- * The permission keys this port's callers check, owned by `core` in
- * `shared/authorization-keys.yaml` rather than by `modules/locales` (LOCALES_OPTIONAL_0925
- * D-LO2) — this port, and the route guard stacked on top of a product write to keep a rewording
- * from also being a repricing, both survive `locales` being uninstalled.
- * `tests/cross-cutting/module-permissions.test.ts` merges this into `locales`' own claimed list
- * so "every declared key is claimed by something" still holds with no module named `core`.
- */
-export const CORE_PERMISSION_KEYS = ['translations.any.read', 'translations.any.update'] as const;
-
-/**
  * The validate half of a write, for a caller with its own entity to write alongside the
  * translations — see {@link TranslationPort.plan}.
  *

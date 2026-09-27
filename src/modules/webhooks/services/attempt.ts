@@ -49,9 +49,11 @@ const notifyOwnerOfAutoDisable = (subscription: WebhookSubscriptionDocument | nu
 
     // No `CallerContext` behind this — see `../audit.ts`'s own note on why `actor_user_id` is the
     // literal string `'system'` rather than attributing it to whichever worker process ran this.
+    // `actor_role: 'system'` for the same reason (B21): this is a background job, not an admin's
+    // own action, and there is no `Caller` here for `resolveActorRole` to read that off of.
     emitAuditEvent({
         actor_user_id: 'system',
-        actor_role: 'admin',
+        actor_role: 'system',
         actor_scope: 'tenant',
         action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
         outcome: 'success',

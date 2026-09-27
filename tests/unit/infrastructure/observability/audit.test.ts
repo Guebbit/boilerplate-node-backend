@@ -224,4 +224,16 @@ describe('buildAuditEvent — default actor_role', () => {
 
         expect(event.actor_role).toBe('admin');
     });
+
+    // B21: `SYSTEM_ACTOR` is unrestricted too, exactly like `admin` — this must be checked FIRST,
+    // or a background job's own action reads as an admin's. `id: 'system'` is what `Caller.system`
+    // is computed from (`kernel/permissions.ts`'s `assembleCaller`).
+    it('reports system for the system actor, never admin, though both are unrestricted', () => {
+        const event = buildAuditEvent(callerContextAs('system', 'system'), {
+            action: 'order.cancelled',
+            outcome: 'success'
+        });
+
+        expect(event.actor_role).toBe('system');
+    });
 });
