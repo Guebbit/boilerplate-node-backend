@@ -1,7 +1,7 @@
 ---
 source: tests/support/global-setup.ts
-sha256: 5ffec44bf7d0f1c1ab5d88b13dc6a23d1dec24da9f8533c1efe344e6bc277b3d
-generated_at: 2026-09-23T20:11:16.755332+00:00
+sha256: 14162cb6c1bf3a4189c634339eac8bd07bfb82bfe482293e33b095ae187c5643
+generated_at: 2026-09-27T16:00:07.745654+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Jest `globalSetup` hook that runs once per jest instance before any worker starts. It starts a **single** ephemeral `mongod` process shared by all test suites, publishes the connection URI and per-instance data roots via `process.env`, and claims a file-sandbox directory. It also sweeps data directories left behind by previously SIGKILLed instances (Stryker's normal shutdown mode) to prevent unbounded disk growth in the repo's `tmp/test/`.
+Jest `globalSetup` hook that runs once per jest instance in the main process before any worker starts. It starts a single shared ephemeral MongoDB server (so every test suite gets its own database on one `mongod` rather than spawning per-suite servers), claims per-instance directories for that server's data and for the file sandbox, and publishes the connection URI and sandbox root to workers via `process.env`.
 
 ## Key elements
 
-- **`globalSetup` (default export)** — The entry point. Sets `FILE_SANDBOX_ROOT_VARIABLE`, `NODE_TEST_MONGO_ROOT`, and `NODE_TEST_MONGO_URI` on `process.env`; stores the `EphemeralMongo` handle on `globalThis.__testMongoServer` for `globalTeardown`.
-- **`TestGlobals` (interface)** — Type for the `globalThis` slot carrying the Mongo server handle. Exists because `process.env` only carries strings, but teardown needs the actual handle to call `stop()`.
-- **`TEST_TMP_ROOT`** — Base directory for all per-instance test data. Defaults to `<repo>/tmp/test/` (overridable via `NODE_TEST_TMP_BASE`). Chosen over `os.tmpdir()` so stranded data is gitignored, repo-scoped, and sweepable without touching `tmp/reports/` (Stryker's incremental cache).
-- **`instanceDataRoot()`** — Returns `TEST_TMP_ROOT/mongo/<pid>` — this instance's Mongo `dbpath`.
-- **`instanceFilesRoot()`** — Returns `TEST_TMP_ROOT/files/<pid>` — this instance's file-sandbox root.
-- **`isAlive(pid)`** — Sends signal `0`; returns `true` on success or `EPERM`, `false` on `ESRCH`. Distinguishes "no such process" from "not mine".
-- **`sweepDeadInstances(mongoRoot)`** — Reads the sibling directory, removes subdirectories named for pids that no longer exist (skips own pid). Prevents accumulation under repeated Stryker restarts.
-- **`claimInstanceRoot(root)`** — Sweeps dead siblings, `rm -rf` the target, `mkdir -p` it. Guarantees a fresh, empty, exclusively-owned directory.
+- **`globalSetup` (default export)** — async entry point. Sets `FILE_SANDBOX_ROOT_VARIABLE` and `NODE_TEST_MONGO_ROOT` on `process.env`, creates the `dbPath` directory, calls `startEphemeralMongo` to launch the server, publishes `NODE_TEST_MONGO_URI`, and stashes the server handle on `globalThis.__testMongoServer` for teardown.
+- **`TEST_TMP_ROOT`** — base directory for all test-instance data. Defaults to `<repo>/tmp/test/`; overridable via `NODE_TEST_TMP_BASE`.
+- **`instanceDataRoot()` / `instanceFilesRoot()`** — return `<TEST_TMP_ROOT>/{mongo,files}/<pid>`, giving each jest instance an isolated slice.
+- **`isAlive(pid)`** — `process.kill(pid, 0)` check; treats `EPERM` as alive.
+- **`sweepDeadInstances(root)`** — deletes pid-named subdirectories whose owner pid no longer exists (cleanup after Stryker's SIGKILLed workers).
+- **`claimInstanceRoot(root)`** — sweeps dead siblings, removes and re-creates the instance's own directory, returns the path.
+- **`TestGlobals`** — interface for the `globalThis` shape that carries the `EphemeralMongo` handle to `global-teardown`.
 
 ## Relationships
 
-- **`scenarios/support/ephemeral-mongo.ts`** — Imports `startEphemeralMongo` and the `EphemeralMongo` type. The returned server object is stored on `globalThis` and its `uri` published via `process.env`.
-- **`scenarios/support/ephemeral-mongod.ts`** — Imports `startInProcessMongod`, passed as the `startInProcess` strategy to `startEphemeralMongo` so the binary runs in-process rather than spawning a detached OS process.
-- **`tests/support/file-sandbox.ts`** — Imports `FILE_SANDBOX_ROOT_VARIABLE`. This file sets that env var to the claimed `instanceFilesRoot()`; `file-sandbox.ts` reads it in workers to redirect test-file writes.
-- **`tests/support/global-teardown.ts`** — Consumes `globalThis.__testMongoServer` (set here) to call `stop()` on the shared server after all workers finish.
-- **`src/modules/account/tests/unit/two-factor.test.ts`** — An end consumer of the `NODE_TEST_MONGO_URI` env var published here; does not import this file directly.
+- **`scenarios/support/ephemeral-mongo.ts`** — provides `startEphemeralMongo` and the `EphemeralMongo` type; this file calls it to obtain the running server.
+- **`scenarios/support/ephemeral-mongod.ts`** — provides `startInProcessMongod`, passed as the `startInProcess` option to control how the `mongod` process is spawned.
+- **`tests/support/file-sandbox.ts`** — exports `FILE_SANDBOX_ROOT_VARIABLE`, the env-var name this file writes the sandbox root into.
+- **`tests/support/global-teardown.ts`** — runs after all workers finish in the same process; reads `globalThis.__testMongoServer` to stop the server and removes the instance's data directory.
+- Test suites (e.g. `src/modules/account/tests/unit/two-factor.test.ts`) consume the server URI from `process.env.NODE_TEST_MONGO_URI` and the sandbox root from the published variable; they do not import this file directly.
 
 ## Notes
 
-- **Relative imports are intentional.** Jest loads `globalSetup` outside its normal module-resolution pipeline, so `moduleNameMapper` aliases (`@infrastructure`, `@tests`) resolve at `tsc`/`eslint` time but **fail at jest runtime**. This file must keep `../../` relative paths.
-- **Two channels for cross-boundary data.** `process.env` crosses the main-process → worker-process boundary; `globalThis` only works because Jest runs `globalSetup` and `globalTeardown` in the _same_ process. Don't add a worker-facing value to `globalThis` expecting workers to see it.
-- **`dbPath` must pre-exist.** `mongodb-memory-server` reads the directory before spawning `mongod`; `globalSetup` creates `root/server/` before calling `startEphemeralMongo`.
-- **`NODE_TEST_MONGO_URI` short-circuit.** If already set in the environment (e.g. an external DB), `startEphemeralMongo` skips starting a server entirely. The `dbPath` `mkdir` is harmless but unused in that case.
-- **Sweep is best-effort.** Individual `rm` failures are swallowed (`.catch(() => {})`); a permission error on one dead instance's directory will not block the run.
+- **Relative imports, not aliases.** `globalSetup` is loaded outside Jest's normal module resolution where `moduleNameMapper` does not apply. Aliases resolve at `tsc`/`eslint` time but fail at Jest's own runtime, so this file uses `../../scenarios/...` and `./file-sandbox`.
+- **`globalThis` is the only channel to teardown.** Jest runs `globalSetup` and `globalTeardown` as separate modules in the same process; `process.env` carries strings only, so the non-serializable server handle must ride on `globalThis`.
+- **`NODE_TEST_MONGO_URI` short-circuit.** If that env var is already set, `startEphemeralMongo` skips starting a server entirely — the `dbPath` directory creation is still performed but is harmless.
+- **Stryker interaction.** Stryker SIGKILLs a worker per timed-out mutant; teardown never runs, leaving ~200 MB of `dbpath` behind. `sweepDeadInstances` on the *next* instance start reclaims those directories by checking pid liveness, avoiding unbounded growth in `tmp/test/mongo/`.

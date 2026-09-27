@@ -1,7 +1,7 @@
 ---
 source: tests/support/http.ts
-sha256: c1f5cdf14f19112410b72dcbdb3552a5bd75f6e2f26a2e99bad035520c89c184
-generated_at: 2026-09-23T20:11:35.917614+00:00
+sha256: 75b1ebc502c1ba77634726ec0cac00cfaf1c5e60442c8c19b77857dcfd2bf976
+generated_at: 2026-09-27T16:00:20.569805+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP-level test harness that drives the mounted Express app through its full request pipeline (routing, middleware, auth, serialization, error handling) via **supertest**. This is the only layer where a response can be compared against `openapi.yaml`, complementing the unit suites that call services and repositories directly.
+HTTP-level test harness that drives the Express app the same way a real client would — through routing, middleware, auth, serialization, and the error handler. This is the layer where a response can be compared to `openapi.yaml`, filling the gap that unit suites (which call services/repositories directly) cannot cover.
 
 ## Key elements
 
-- **`api()`** — Returns a fresh `supertest` agent bound to the app. Every HTTP call in a contract test starts here.
-- **`AuthenticatedTestUser`** — Interface: `{ user, token, bearer }` where `bearer` is a template-literal-typed `` `Bearer ${string}` `` string ready to drop into an `Authorization` header.
-- **`authenticateAs(role: 'admin' | 'user' = 'user')`** — Creates a verified user (or admin) via the users factories, then performs a real `POST /account/login` round-trip. Returns the `AuthenticatedTestUser`. Default profile is a verified **customer** (can checkout, pay, use the full app).
-- **`authenticateAsRole(role: string)`** — Same login flow, but accepts any TENANT role name (`manager`, `warehouse`, `editor`, etc.). Uses a distinct `email`/`username` per role (`${role}@example.com`) to avoid duplicate-key collisions when a single test authenticates several roles.
-- **`authenticateUser(user, role)`** _(internal)_ — Shared login round-trip: posts credentials to `/account/login`, asserts 200 + token presence, throws descriptive errors on failure.
+- **`app`** (module-level, not exported) — the single Express instance built by `createApp()` from `src/app.ts`. Shared across every test in the process; no server, no Mongo, no Redis, no queue are started.
+- **`api()`** — returns a fresh `supertest` agent against the shared `app`, for a single request.
+- **`AuthenticatedTestUser`** (interface) — the shape every auth helper resolves to: `{ user: UserDocument; token: string; bearer: `Bearer ${string}` }`.
+- **`authenticateAs(role?: 'admin' | 'user')`** — creates a user (admin or customer, both pre-verified) via the user factories, then logs in through the real `POST /account/login` route and returns the token. The default path most tests reach for.
+- **`authenticateAsRole(role: string)`** — same flow but for arbitrary TENANT role names (`manager`, `warehouse`, `support`, etc.). Uses a distinct email/username per role so multiple roles can coexist in one test without duplicate-key errors.
+- **`authenticateUser`** (internal) — shared login round-trip: POSTs credentials, asserts 200, extracts `body.data.token`, throws a descriptive error otherwise.
 
 ## Relationships
 
-- **`src/app.ts`** — Imports the fully mounted Express app. In `NODE_ENV === 'test'` the app skips auto-start (no HTTP server, no Mongo connection, no Redis, no queue), so importing here is side-effect-free.
-- **All listed contract / integration test files** (account, antibot, api-keys, audit-logs, cart, delivery, feedback, inventory, locales, probes, identity-rate-limit, contact-identity-rate-limit) — Import `api`, `authenticateAs`, and/or `authenticateAsRole` as their sole HTTP entry point. They never construct supertest agents or hit `/account/login` themselves.
-- **`@modules/users/tests/factories`** — Provides `createUser`, `createAdminUser`, and the shared `PLAIN_PASSWORD` constant used to seed accounts before the login call.
+- **`src/app.ts`** — sole production-code import; `createApp()` is called once at module load to produce the shared `app`.
+- **`@modules/users/tests/factories`** — provides `createUser`, `createAdminUser`, and `PLAIN_PASSWORD` used to seed accounts before login.
+- **Consumer test files** (account contract tests, account integration tests, antibot, api-keys, audit-logs contract tests) — all import `api()` and/or `authenticateAs`/`authenticateAsRole` to issue authenticated HTTP requests and assert on the response body.
 
 ## Notes
 
-- **Redis is genuinely optional in tests.** `getCacheValue` resolves `undefined` on any connection failure, which the app treats as a cache miss — no test needs a live Redis instance.
-- **Tests that need an UNVERIFIED account** should build their own user with `createUser({}, 'unverified')` rather than reusing `authenticateAs`, which always sets `verifiedAt`.
-- **`authenticateAsRole` must not be merged into `authenticateAs`.** It exists for contract sweeps that drive every preset role through the HTTP surface in a single test; the distinct email/username per role prevents duplicate-key errors that a shared default address would cause.
-- **Login goes through the real endpoint**, not a hand-signed JWT. If the login route stops issuing usable tokens, every contract test that depends on auth fails immediately.
+- **One app per process.** There is no per-test teardown or re-creation; tests share the same Express instance and the same in-memory Mongo (set up elsewhere via `setupTestDb()`). State isolation between tests is the test's responsibility.
+- **Redis is a no-op in tests.** `getCacheValue` resolves `undefined` on any failure, so every request behaves as a cache miss. No Redis server is needed.
+- **Login is always via the real endpoint.** Tokens are never hand-signed in tests; if login regresses, every contract test fails loudly.
+- **`authenticateAs` defaults to a verified customer.** Tests that need UNVERIFIED behaviour must build their own user (e.g., `createUser({}, 'unverified')`) rather than relying on this helper.
+- **`authenticateAsRole` is for the contract sweep.** It exists so a single test can exercise every preset role through the HTTP surface; the distinct-per-role email prevents the "duplicate-key" error that would occur with the factory's shared default address.
