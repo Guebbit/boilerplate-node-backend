@@ -29,16 +29,16 @@ flowchart TD
 
 ## Configuration
 
-| Env var                              | Effect                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------- |
+| Env var                              | Effect                                                                                                                            |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_ENABLE_CLUSTERING`             | `1` enables the primary/worker mode. Anything else imports `src/serve.ts` straight from `src/cluster.ts`'s own process — no fork. |
-| `NODE_CLUSTER_WORKERS`               | Number of workers; 0 or unset = one per available CPU (minimum 1).              |
-| `NODE_CLUSTER_CRASH_WINDOW_MS`       | Sliding window for counting crashes (default 60 000 ms).                        |
-| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` | Base delay before respawning after a crash (default 500 ms, doubled per crash). |
-| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`  | Maximum respawn delay (default 30 000 ms).                                      |
-| `NODE_CLUSTER_CRASH_LIMIT`           | Crashes in one window before the primary gives up and exits 1 (default 10).     |
-| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | Hard kill timeout during shutdown (default 15 000 ms).                          |
-| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side hard exit timeout used by `src/app.ts`.                             |
+| `NODE_CLUSTER_WORKERS`               | Number of workers; 0 or unset = one per available CPU (minimum 1).                                                                |
+| `NODE_CLUSTER_CRASH_WINDOW_MS`       | Sliding window for counting crashes (default 60 000 ms).                                                                          |
+| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` | Base delay before respawning after a crash (default 500 ms, doubled per crash).                                                   |
+| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`  | Maximum respawn delay (default 30 000 ms).                                                                                        |
+| `NODE_CLUSTER_CRASH_LIMIT`           | Crashes in one window before the primary gives up and exits 1 (default 10).                                                       |
+| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | Hard kill timeout during shutdown (default 15 000 ms).                                                                            |
+| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side hard exit timeout used by `src/app.ts`.                                                                               |
 
 ## Crash backoff
 
