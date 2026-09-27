@@ -19,6 +19,7 @@ import {
     scopeOfKey,
     type RoleLookup
 } from '@kernel/permissions';
+import { ERROR_CODES } from '@api/error-codes';
 
 const declared = new Set(PERMISSION_KEYS.map((key) => key.key));
 const roles: RoleLookup[] = [...PRESET_ROLES, ANONYMOUS_ROLE];
@@ -43,6 +44,12 @@ describe('the declared keys', () => {
     it('are lower-case and dotted, because they are stored and renaming one is a migration', () => {
         for (const key of PERMISSION_KEYS) {
             expect(key.key).toMatch(/^[a-z][.a-z]*[a-z]$/);
+        }
+    });
+
+    it('name a deniedCode some module actually declares (CT-D5)', () => {
+        for (const key of PERMISSION_KEYS) {
+            if (key.deniedCode) expect(ERROR_CODES).toHaveProperty(key.deniedCode);
         }
     });
 });

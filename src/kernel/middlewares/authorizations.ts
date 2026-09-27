@@ -36,7 +36,7 @@ import {
 import { t } from '@infrastructure/i18n';
 import { isInfrastructureError } from '@infrastructure/http/errors';
 import { rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
-import { ERROR_CODES } from '@api/error-codes';
+import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 import { callerContextOf } from '@infrastructure/http/request';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { apiKeyLimiter } from '@infrastructure/http/middlewares/rate-limit';
@@ -330,7 +330,11 @@ export const requirePermission = (key: string) => {
     // `'tenant'` and would misreport every platform-key refusal as a tenant one.
     const scope = scopeOfKey(key);
     // `FORBIDDEN` unless the key names its own — see `PermissionKey.deniedCode`'s docblock.
-    const deniedCode = declared?.deniedCode ?? ERROR_CODES.FORBIDDEN;
+    // `deniedCode` is a plain `string` on `PermissionKey` (not `ErrorCode`) so that
+    // `kernel/permissions.ts` never needs the generated catalogue at boot; the cast is safe
+    // because `tests/cross-cutting/authorization-keys.test.ts` proves every declared `deniedCode`
+    // is a real one.
+    const deniedCode = (declared?.deniedCode as ErrorCode | undefined) ?? ERROR_CODES.FORBIDDEN;
     const deniedMessageKey = errorLocaleKeyFor(deniedCode);
 
     // Named, not anonymous: `tests/cross-cutting/write-routes-are-guarded.test.ts` and each

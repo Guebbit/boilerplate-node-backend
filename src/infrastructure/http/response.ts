@@ -9,7 +9,12 @@
 
 import type { Response } from 'express';
 import type { ZodError } from 'zod';
-import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
+// Type-only: this file sits on `contracts:bundle`'s own incidental module-load path (it loads a
+// scenario, which loads `access`, which reaches this for every response), and that step runs
+// BEFORE `gen:api` produces `@api/error-codes` — a value import here would make a fresh
+// `npm run regenerate` unable to take its own second step. `satisfies ErrorCode` below still gets
+// the compiler's check, just at `ts-check` time, by which point the file exists.
+import type { ErrorCode } from '@api/error-codes';
 
 /** Fields shared by both outcomes — the discriminant plus human/machine status. */
 export interface ResponseNeutral {
@@ -104,26 +109,26 @@ export const successResponse = <T>(response: Response, data: T, status = 200, me
  * "the request was wrong", not on which flavour of wrong.
  */
 const STATUS_ENVELOPE: Readonly<Partial<Record<number, { code?: ErrorCode; message: string }>>> = {
-    400: { code: ERROR_CODES.BAD_REQUEST, message: 'Bad Request' },
-    401: { code: ERROR_CODES.UNAUTHORIZED, message: 'Unauthorized' },
-    403: { code: ERROR_CODES.FORBIDDEN, message: 'Forbidden' },
-    404: { code: ERROR_CODES.NOT_FOUND, message: 'Not Found' },
-    409: { code: ERROR_CODES.CONFLICT, message: 'Conflict' },
+    400: { code: 'BAD_REQUEST', message: 'Bad Request' },
+    401: { code: 'UNAUTHORIZED', message: 'Unauthorized' },
+    403: { code: 'FORBIDDEN', message: 'Forbidden' },
+    404: { code: 'NOT_FOUND', message: 'Not Found' },
+    409: { code: 'CONFLICT', message: 'Conflict' },
     422: { message: 'Unprocessable Entity' },
     429: { message: 'Too Many Requests' }
 };
 
 /** What every 5xx answers with. One code and one phrase: the flavour would leak internals. */
 const SERVER_FAULT = {
-    code: ERROR_CODES.INTERNAL_ERROR,
+    code: 'INTERNAL_ERROR',
     message: 'Internal Server Error'
-} as const;
+} as const satisfies { code: ErrorCode; message: string };
 
 /** What an unmapped 4xx answers with. */
 const UNMAPPED_REQUEST_FAULT = {
-    code: ERROR_CODES.REQUEST_ERROR,
+    code: 'REQUEST_ERROR',
     message: 'Request Error'
-} as const;
+} as const satisfies { code: ErrorCode; message: string };
 
 /**
  * Maps HTTP status codes to stable machine-readable error codes.
@@ -236,7 +241,7 @@ export const validationErrors = (error: ZodError): ResponseErrorItem[] =>
     error.issues.map((issue) => {
         const field = issue.path.join('.');
         return {
-            code: ERROR_CODES.VALIDATION_ERROR,
+            code: 'VALIDATION_ERROR',
             message: issue.message,
             ...(field ? { details: { field } } : {})
         };

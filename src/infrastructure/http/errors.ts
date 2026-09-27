@@ -15,7 +15,9 @@ import { t } from '@infrastructure/i18n';
 import { isDuplicateKey, isConnectionError } from '@infrastructure/persistence/mongo-errors';
 import { isRedisConnectionError } from '@infrastructure/adapters/redis';
 import { generateReject, rejectResponse } from './response';
-import { ERROR_CODES } from '@api/error-codes';
+// Type-only — see `response.ts`'s own import for why: this file sits on `contracts:bundle`'s
+// incidental module-load path, which runs before `@api/error-codes` exists.
+import type { ErrorCode } from '@api/error-codes';
 import type { Response } from 'express';
 
 /**
@@ -101,8 +103,8 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
 const RETRY_AFTER_SECONDS = 5;
 
 /** The one error item every 503 carries, whichever path noticed the outage. */
-const serviceUnavailableError = () => ({
-    code: ERROR_CODES.SERVICE_UNAVAILABLE,
+const serviceUnavailableError = (): { code: ErrorCode; message: string } => ({
+    code: 'SERVICE_UNAVAILABLE',
     message: t('generic.error-service-unavailable')
 });
 
