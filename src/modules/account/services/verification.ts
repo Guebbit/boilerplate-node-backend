@@ -17,6 +17,7 @@ import { verifyRequestEmail, recipientLocale } from '../emails';
 import { sendAccountMail } from './mail';
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
 import { cooldownRemaining, resendTooSoon } from '../cooldown';
+import { ERROR_CODES } from '@api/error-codes';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { CallerContext } from '@types';
 import type { EmailVerificationRequested } from '@types';
@@ -72,7 +73,7 @@ export const VERIFY_RESEND_SECONDS = 60;
  * Module-private, like `services/two-factor.ts`'s equivalent: a client reads it off the response,
  * not off an exported constant.
  */
-const VERIFY_RESEND_TOO_SOON_CODE = 'EMAIL_VERIFY_RESEND_TOO_SOON';
+const VERIFY_RESEND_TOO_SOON_CODE = ERROR_CODES.EMAIL_VERIFY_RESEND_TOO_SOON;
 
 /** The two kinds a token may be. A union of the constants, so a third one cannot be passed. */
 type VerificationTokenType = typeof EMAIL_VERIFY_TOKEN_TYPE | typeof EMAIL_CHANGE_TOKEN_TYPE;

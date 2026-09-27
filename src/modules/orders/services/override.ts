@@ -31,6 +31,7 @@ import { ORDER_STATUS_CHANGED } from '../events';
 import { ordersAuditActions } from '../audit';
 import { canOverrideTo, statusesOverridableInto } from '../domain';
 import { inventoryService } from '@modules/inventory';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * Write one override, whichever door asked for it — the conditional write, the history entry, the
@@ -116,7 +117,7 @@ const applyOverride = (
 const notAllowed = (from: OrderStatus, to: OrderStatus): ResponseReject =>
     generateReject(409, [
         {
-            code: 'ORDER_OVERRIDE_NOT_ALLOWED',
+            code: ERROR_CODES.ORDER_OVERRIDE_NOT_ALLOWED,
             message: t('orders.override.not-allowed'),
             details: { from, to }
         }
@@ -128,7 +129,7 @@ const notAllowed = (from: OrderStatus, to: OrderStatus): ResponseReject =>
  * doors, and must read identically to a client either way.
  */
 const notEarned = (): ResponseReject =>
-    generateReject(403, [{ code: 'FORBIDDEN', message: t('generic.error-forbidden') }]);
+    generateReject(403, [{ code: ERROR_CODES.FORBIDDEN, message: t('generic.error-forbidden') }]);
 
 /**
  * `true` only for {@link forceMove}'s own 403 — never for `null`, which stays the ordinary

@@ -4,9 +4,9 @@
  * one line here; removing one is `rm -rf` plus deleting its line, and any resulting break is real
  * coupling worth seeing. Order is alphabetical only to keep diffs boring — mount order, import
  * resolution and `subscribe` timing don't depend on it. A module shipping its own `openapi.yaml`
- * needs a matching line in `MODULE_SECTIONS` (`scripts/contracts/openapi-bundle.ts`) — checked
- * against this list by `tests/cross-cutting/contract-bundles.test.ts`, not at import time: the
- * bundler reads `openapi.yaml` from disk only, so it can run before `enabledModules` is even
+ * needs a matching line in `MODULE_ORDER` (`scripts/contracts/openapi-bundle.ts`) — that bundler
+ * discovers membership from disk and throws, naming the module, if a line is missing; it can't
+ * read this list itself to check that, since it has to run before `enabledModules` is even
  * importable (its modules import the generated `@api/` client the bundler produces).
  */
 

@@ -37,6 +37,7 @@ import { findShippingMethod, SHIPPING_METHODS } from './domain';
 import { shipmentShippedEmail } from './emails';
 import { shipmentRepository } from './repository';
 import type { ShipmentDocument } from './model';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * The full methods list, for the checkout page's selector. Static, so always a success.
@@ -87,7 +88,7 @@ export const getForOrder = (
 
 /** The refusal {@link startFulfilment} answers when the order is not `paid`. */
 const notPaid = (): ResponseReject =>
-    generateReject(409, [{ code: 'ORDER_NOT_PAID', message: t('delivery.not-paid') }]);
+    generateReject(409, [{ code: ERROR_CODES.ORDER_NOT_PAID, message: t('delivery.not-paid') }]);
 
 /**
  * Report that fulfilment has started on a paid order — the `paid → processing` door, before any
@@ -133,11 +134,13 @@ const refuseUnearnedForce = (
 ): ResponseReject | undefined => {
     if (!forced) return undefined;
     if (!holdsKey(context.caller, 'orders.any.override'))
-        return generateReject(403, [{ code: 'FORBIDDEN', message: t('generic.error-forbidden') }]);
+        return generateReject(403, [
+            { code: ERROR_CODES.FORBIDDEN, message: t('generic.error-forbidden') }
+        ]);
     if (!reason)
         return generateReject(422, [
             {
-                code: 'DELIVERY_OVERRIDE_REASON_REQUIRED',
+                code: ERROR_CODES.DELIVERY_OVERRIDE_REASON_REQUIRED,
                 message: t('delivery.override-reason-required')
             }
         ]);
@@ -185,18 +188,20 @@ const auditOrderEvent = (
 
 /** The refusal shared by both {@link recordShipment} gates: forced or not, this order isn't `processing`. */
 const notProcessing = (): ResponseReject =>
-    generateReject(409, [{ code: 'ORDER_NOT_PROCESSING', message: t('delivery.not-processing') }]);
+    generateReject(409, [
+        { code: ERROR_CODES.ORDER_NOT_PROCESSING, message: t('delivery.not-processing') }
+    ]);
 
 /** {@link recordShipment}'s refusal for a digital-only order — {@link fulfillOrder} is its door instead. */
 const nothingToShip = (): ResponseReject =>
     generateReject(409, [
-        { code: 'ORDER_NOTHING_TO_SHIP', message: t('delivery.nothing-to-ship') }
+        { code: ERROR_CODES.ORDER_NOTHING_TO_SHIP, message: t('delivery.nothing-to-ship') }
     ]);
 
 /** {@link fulfillOrder}'s refusal for an order that still has a physical line — `ship` is its door instead. */
 const notDigitalOnly = (): ResponseReject =>
     generateReject(409, [
-        { code: 'ORDER_NOT_DIGITAL_ONLY', message: t('delivery.not-digital-only') }
+        { code: ERROR_CODES.ORDER_NOT_DIGITAL_ONLY, message: t('delivery.not-digital-only') }
     ]);
 
 /**
@@ -304,7 +309,7 @@ export const recordShipment = (
         if (method?.tracked && !trackingCode)
             return generateReject(422, [
                 {
-                    code: 'DELIVERY_TRACKING_CODE_REQUIRED',
+                    code: ERROR_CODES.DELIVERY_TRACKING_CODE_REQUIRED,
                     message: t('delivery.tracking-code-required')
                 }
             ]);
@@ -320,7 +325,7 @@ export const recordShipment = (
 /** The refusal every {@link recordDelivery} gate answers alike — one shape, one place. */
 const notShipped = (): ResponseReject =>
     generateReject(409, [
-        { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
+        { code: ERROR_CODES.ORDER_NOT_SHIPPED, message: t('delivery.not-shippable-for-delivery') }
     ]);
 
 /**

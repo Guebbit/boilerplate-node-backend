@@ -25,6 +25,7 @@ import { resolvePaymentProvider, providerNamed } from '../providers';
 import type { PaymentDocument } from '../model';
 import { paymentRepository } from '../repository';
 import { notPayable } from './errors';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * Who is paying, resolved against `users` rather than copied off the order — a payment history
@@ -97,7 +98,7 @@ export const createIntent = async (
     if (unavailable.length > 0)
         return generateReject(409, [
             {
-                code: 'ORDER_PRODUCT_UNAVAILABLE',
+                code: ERROR_CODES.ORDER_PRODUCT_UNAVAILABLE,
                 message: t('payments.order-product-unavailable'),
                 details: { lines: unavailable }
             }

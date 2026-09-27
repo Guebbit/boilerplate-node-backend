@@ -20,6 +20,7 @@
 
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { t, getCurrentLocale, getFallbackLocale, localeCandidatesFor } from '@infrastructure/i18n';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * One entity's translated field values, keyed by field name — `{ title, description }` for a
@@ -213,7 +214,7 @@ export const planTranslations = (
         return Promise.resolve(
             generateReject(422, [
                 {
-                    code: 'VALIDATION_ERROR',
+                    code: ERROR_CODES.VALIDATION_ERROR,
                     message: t('translation.error-locale-unavailable', { locale: otherLocale }),
                     details: { field: otherLocale }
                 }
@@ -225,7 +226,7 @@ export const planTranslations = (
         return Promise.resolve(
             generateReject(422, [
                 {
-                    code: 'VALIDATION_ERROR',
+                    code: ERROR_CODES.VALIDATION_ERROR,
                     message: t('translation.error-fallback-required', { locale: fallbackLocale }),
                     details: { field: fallbackLocale }
                 }

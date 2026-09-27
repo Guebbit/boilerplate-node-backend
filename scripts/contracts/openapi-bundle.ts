@@ -7,10 +7,12 @@
  * boundary, never by assuming a neighbour's text is concatenated above.
  *
  * Compiled by `redocly bundle` rather than concatenated, because the comments that matter are in
- * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. One step
- * runs after it, on the bundle: {@link withAppLevelResponses} merges the root's
+ * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Three steps
+ * run after it, on the bundle: {@link withAppLevelResponses} merges the root's
  * `x-app-level-responses` (429, and 400/413/415 for a body-carrying operation) into every
- * operation that doesn't already declare its own.
+ * operation that doesn't already declare its own; {@link withModuleStamps} tags every operation
+ * with the `x-module` its owning fragment names — never hand-written per operation; and
+ * {@link withErrorCodes} publishes every fragment's own `x-error-codes` as one collected catalogue.
  *
  * Deleting a module is `rm -rf` of its folder plus its block in the root's path index; forgetting
  * the second half is a bundle failure naming the exact line.
@@ -19,19 +21,22 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import path from 'node:path';
 import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
 
 /**
- * The modules contributing a standalone document, in the order the contract is assembled in.
+ * The narrative order the contract has always had — what a caller meets first, then the path a
+ * customer walks through the shop — and the order the client collections group their requests in.
  *
- * The order is the narrative one the contract has always had — what a caller meets first, then the
- * path a customer walks through the shop — and it is the order the client collections group their
- * requests in.
+ * The ONLY hand-kept list left for this bundle: it says nothing about which modules exist, only
+ * where a module that does goes. {@link MODULE_SECTIONS} discovers MEMBERSHIP from disk and throws
+ * if a module ships an `openapi.yaml` this array hasn't placed yet — the same "one line, or a
+ * named failure" shape `authorization-bundle.ts`'s `SECTION_ORDER` already uses for its own
+ * fragments.
  */
-export const MODULE_SECTIONS = [
+const MODULE_ORDER = [
     'locales',
     'observability',
     'audit-logs',
@@ -52,7 +57,39 @@ export const MODULE_SECTIONS = [
     'api-keys'
 ] as const;
 
-type ModuleSection = (typeof MODULE_SECTIONS)[number];
+type ModuleSection = (typeof MODULE_ORDER)[number];
+
+/** Every module folder that ships its own standalone `openapi.yaml`, discovered from disk. */
+const modulesWithOpenapi = (): string[] =>
+    readdirSync(path.join(REPO_ROOT, 'src', 'modules'), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .filter((name) => existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'openapi.yaml')));
+
+/**
+ * Which modules contribute to the bundle, in {@link MODULE_ORDER}'s order.
+ *
+ * Membership is discovery, not a second hand list a completeness test would have to reconcile
+ * against the first — adding a module folder with an `openapi.yaml` needs exactly one line here,
+ * naming where it sits in the narrative; forgetting that line fails the bundle immediately, naming
+ * the module. Removing a module's folder without removing its line here fails just as loudly,
+ * further down, the moment this list's owner tries to read a file that is no longer there.
+ * @throws Error if a module ships an `openapi.yaml` that MODULE_ORDER does not know about
+ */
+const resolveModuleSections = (): readonly ModuleSection[] => {
+    const forgotten = modulesWithOpenapi().filter(
+        (name) => !(MODULE_ORDER as readonly string[]).includes(name)
+    );
+    if (forgotten.length > 0)
+        throw new Error(
+            `[openapi] add to MODULE_ORDER in openapi-bundle.ts: ${forgotten.join(', ')}`
+        );
+
+    return MODULE_ORDER;
+};
+
+/** The modules contributing a standalone document, in the order the contract is assembled in. */
+export const MODULE_SECTIONS: readonly ModuleSection[] = resolveModuleSections();
 
 /**
  * Every section a path can be filed under: the modules, plus the shell.
@@ -126,10 +163,19 @@ interface Operation {
     responses?: Record<string, unknown>;
 }
 
+/** One error code's declaration, as a fragment's `x-error-codes` map holds it (CT-D5). */
+interface ErrorCodeEntry {
+    status: number;
+    description: string;
+}
+
 /** The shape this step reads out of the bundled document, and writes back into. */
 interface BundledDocument {
     'x-app-level-responses'?: Record<string, AppLevelResponse>;
+    'x-error-codes'?: Record<string, ErrorCodeEntry>;
     paths?: Record<string, Record<string, unknown>>;
+    /** Only checked for presence — a sanity guard that the bundle still has the schema this catalogue documents. */
+    components?: { schemas?: { ErrorItem?: unknown } };
 }
 
 /**
@@ -221,6 +267,132 @@ export const withAppLevelResponses = (bundled: string): string => {
     return stringifyYaml(document_, { lineWidth: 0 });
 };
 
+/** Narrows a fragment's `x-error-codes` entry to the shape this step requires. */
+const isErrorCodeEntry = (value: unknown): value is ErrorCodeEntry =>
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { status?: unknown }).status === 'number' &&
+    typeof (value as { description?: unknown }).description === 'string';
+
+/** A fragment's own `x-error-codes:` map, or none if it declares no error codes at all. */
+interface FragmentWithErrorCodes {
+    'x-error-codes'?: Record<string, unknown>;
+}
+
+/**
+ * Every error code the contract declares, collected straight off the root and every module
+ * fragment's OWN file — never through `redocly bundle`, which only resolves `$ref` chains
+ * reachable from the root's `paths`/`components` and has no way to see a top-level key nothing
+ * ever points at. The same reason {@link moduleOfPath} reads `sectionPaths` off disk instead.
+ *
+ * @throws Error if two fragments declare the same code, or an entry is missing its status or description
+ */
+const collectErrorCodes = (): Record<string, ErrorCodeEntry> => {
+    const collected: Record<string, ErrorCodeEntry> = {};
+
+    const collectFrom = (file: string, owner: string): void => {
+        const parsed = parseYaml(readFileSync(file, 'utf8')) as FragmentWithErrorCodes;
+        for (const [code, entry] of Object.entries(parsed['x-error-codes'] ?? {})) {
+            if (!isErrorCodeEntry(entry))
+                throw new Error(
+                    `[openapi] ${owner}'s x-error-codes.${code} needs a numeric status and a string description.`
+                );
+            if (Object.hasOwn(collected, code))
+                throw new Error(
+                    `[openapi] two fragments declare the error code ${code} — the second is ${owner}.`
+                );
+            collected[code] = entry;
+        }
+    };
+
+    collectFrom(ROOT_SPEC, 'the root');
+    for (const section of MODULE_SECTIONS) collectFrom(moduleSpec(section), section);
+
+    return collected;
+};
+
+/**
+ * Publishes the collected error-code catalogue as the bundled document's own `x-error-codes` —
+ * `ErrorItem.code` itself stays `type: string` with its one illustrative `example`, deliberately
+ * NEVER an `enum`, which could never gain a code later without being a breaking response change
+ * (Zalando API guideline #112, CT-D5). OpenAPI 3.0 (this contract's version) has no schema-level
+ * `examples` LIST the way 3.1 does — `oas3-schema` refuses one — so the full, documented set lives
+ * in this vendor extension instead, which also carries each code's status and description,
+ * strictly more than a bare list of names would.
+ *
+ * Unlike {@link withAppLevelResponses}'s instruction key, `x-error-codes` is NOT deleted once
+ * applied: it is real documentation a published contract benefits from keeping, and the generated
+ * TypeScript catalogue (`npm run gen:api`) reads it straight off this file.
+ *
+ * @throws Error if the bundle has no `components.schemas.ErrorItem` to publish alongside
+ */
+export const withErrorCodes = (
+    bundled: string,
+    errorCodes: Record<string, ErrorCodeEntry>
+): string => {
+    const parsed: unknown = parseYaml(bundled);
+    if (!isBundledDocument(parsed))
+        throw new Error('[openapi] the bundled document did not parse to an object.');
+
+    const document_ = parsed;
+    if (!document_.components?.schemas?.ErrorItem)
+        throw new Error(
+            '[openapi] the bundled document has no components.schemas.ErrorItem to publish x-error-codes alongside.'
+        );
+
+    const codes = Object.keys(errorCodes).toSorted();
+    document_['x-error-codes'] = Object.fromEntries(codes.map((code) => [code, errorCodes[code]]));
+
+    return stringifyYaml(document_, { lineWidth: 0 });
+};
+
+/** Every documented path, mapped to the module fragment that declared it. A `system` path is absent — it is written into the root document directly, so it belongs to no module. */
+const moduleOfPath = (): Record<string, string> => {
+    const map: Record<string, string> = {};
+    for (const section of MODULE_SECTIONS)
+        for (const path of sectionPaths(section)) map[path] = section;
+    return map;
+};
+
+/**
+ * Stamps `x-module: <fragment directory>` on every operation a path maps to a module — the
+ * contract-side answer to which module owns an operation, derived from the same per-module
+ * fragment files the bundle is assembled from rather than written by hand per operation.
+ *
+ * Takes the map as a parameter instead of reading disk itself, the same split
+ * {@link withAppLevelResponses} keeps between the merge RULE and the data it runs against — this
+ * lets a test drive it with a small map rather than the whole contract.
+ *
+ * @param bundled - the bundled OpenAPI document, as YAML text
+ * @param moduleByPath - which module fragment declared each documented path — see {@link moduleOfPath}
+ * @throws Error if the bundled document does not parse to an object
+ */
+export const withModuleStamps = (bundled: string, moduleByPath: Record<string, string>): string => {
+    // `yaml`: parse the bundled document into a plain object graph.
+    // https://eemeli.org/yaml/#parse-yaml-to-json-value
+    const parsed: unknown = parseYaml(bundled);
+    if (!isBundledDocument(parsed))
+        throw new Error('[openapi] the bundled document did not parse to an object.');
+
+    const document_ = parsed;
+
+    for (const [path, pathItem] of Object.entries(document_.paths ?? {})) {
+        // `Object.hasOwn`, not a nullish check on the value: `Record<string, string>` promises a
+        // value for every key, so an index access reads as always-present to TypeScript even
+        // though a `system` path is never in this map at all — see `moduleOfPath`.
+        if (!Object.hasOwn(moduleByPath, path)) continue;
+        const moduleName = moduleByPath[path];
+
+        for (const method of OPERATION_METHODS) {
+            const operation = pathItem[method];
+            if (isOperation(operation))
+                (operation as Record<string, unknown>)['x-module'] = moduleName;
+        }
+    }
+
+    return stringifyYaml(document_, { lineWidth: 0 });
+};
+
 /** What the committed contract opens with, so the file says what it is. */
 const MARKER =
     '# Code generated by `npm run contracts:bundle`. DO NOT EDIT.\n' +
@@ -274,7 +446,15 @@ const compile = (): string => {
      * viewers all read past them — the alternative is the one artefact in the repo that cannot say
      * what it is.
      */
-    compiled = MARKER + withAppLevelResponses(readFileSync(temporary, 'utf8'));
+    compiled =
+        MARKER +
+        withErrorCodes(
+            withModuleStamps(
+                withAppLevelResponses(readFileSync(temporary, 'utf8')),
+                moduleOfPath()
+            ),
+            collectErrorCodes()
+        );
     return compiled;
 };
 

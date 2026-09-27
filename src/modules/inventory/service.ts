@@ -34,6 +34,7 @@ import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import { inventoryAuditActions } from './audit';
+import { ERROR_CODES } from '@api/error-codes';
 
 /** A line being held or given back. Ids as strings — the repository converts. */
 export interface StockLine {
@@ -654,7 +655,7 @@ export const adjust = (
 
                 return generateReject(409, [
                     {
-                        code: 'INVENTORY_BELOW_RESERVED',
+                        code: ERROR_CODES.INVENTORY_BELOW_RESERVED,
                         message: t('inventory.below-reserved')
                     }
                 ]);

@@ -3,6 +3,9 @@ info:
     title: webhooks — module contract
     version: '1.0.0'
 
+x-error-codes:
+    WEBHOOK_DELIVERY_IN_PROGRESS: { status: 409, description: 'A retry of this delivery is already in flight.' }
+
 paths:
     /webhooks/subscriptions:
         get:

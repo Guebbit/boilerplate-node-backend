@@ -21,6 +21,7 @@ import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
 import type { ResponseErrorItem } from '@infrastructure/http/response';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * The bundled list, loaded once at import time. Exact match, case-sensitive — breach corpora are,
@@ -126,7 +127,7 @@ export const assertPasswordNotBreached = (password: string): Promise<ResponseErr
         breached
             ? [
                   {
-                      code: 'VALIDATION_ERROR',
+                      code: ERROR_CODES.VALIDATION_ERROR,
                       message: t('validation.password-breached'),
                       details: { field: 'password' }
                   }

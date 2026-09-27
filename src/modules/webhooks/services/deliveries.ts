@@ -23,6 +23,7 @@ import type { WebhookDelivery } from '@types';
 import type { WebhookDeliveryDocument } from '../model';
 import { attemptDelivery } from './attempt';
 import { webhooksAuditActions } from '../audit';
+import { ERROR_CODES } from '@api/error-codes';
 
 /** What `GET /webhooks/deliveries` accepts, mirroring the query parameters `openapi.yaml` declares. */
 export interface DeliveryListFilters {
@@ -58,7 +59,10 @@ export const list = (
 /** The 409 both "somebody else holds the lease" cases below answer with. */
 const rejectInProgress = (): ResponseReject =>
     generateReject(409, [
-        { code: 'WEBHOOK_DELIVERY_IN_PROGRESS', message: t('webhooks.delivery-in-progress') }
+        {
+            code: ERROR_CODES.WEBHOOK_DELIVERY_IN_PROGRESS,
+            message: t('webhooks.delivery-in-progress')
+        }
     ]);
 
 /**

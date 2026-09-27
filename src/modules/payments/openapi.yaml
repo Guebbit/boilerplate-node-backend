@@ -3,6 +3,14 @@ info:
     title: payments — module contract
     version: '3.0.0'
 
+x-error-codes:
+    ORDER_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line on this order references a product that was deleted or deactivated since the intent was created.' }
+    PAYMENT_DECLINED: { status: 409, description: 'The card issuer or gateway declined the charge.' }
+    PAYMENT_IN_FLIGHT: { status: 409, description: 'Another payment attempt for this order is already being recorded.' }
+    PAYMENT_NOT_CONFIRMABLE: { status: 409, description: 'The payment is not in a state this confirmation can apply to.' }
+    PAYMENT_NOT_REFUNDABLE: { status: 409, description: 'The payment is not in a state that can still be refunded.' }
+    PAYMENT_ORDER_NOT_PAYABLE: { status: 409, description: 'The order is not in a state that can still accept a payment.' }
+
 paths:
     /payments/methods:
         get:

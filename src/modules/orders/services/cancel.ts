@@ -35,6 +35,7 @@ import { bankTransferExpiredEmail, cardHoldExpiredEmail } from '../emails';
 import { getById } from './crud';
 import { mailBuyer } from './notify';
 import { callerScope, actorOf } from './scope';
+import { ERROR_CODES } from '@api/error-codes';
 
 /** The effect set a refunding cancel writes down. Frozen, since it rides into a `$set`. */
 const PENDING_REFUND = Object.freeze(['refund'] as const);
@@ -197,7 +198,7 @@ export const cancelById = (
                       existing
                           ? generateReject(409, [
                                 {
-                                    code: 'ORDER_NOT_CANCELLABLE',
+                                    code: ERROR_CODES.ORDER_NOT_CANCELLABLE,
                                     message: t('orders.cancel.not-cancellable')
                                 }
                             ])

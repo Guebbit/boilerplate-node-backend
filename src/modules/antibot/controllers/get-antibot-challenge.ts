@@ -10,6 +10,7 @@ import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import { t } from '@infrastructure/i18n';
 import type { AntibotChallenge } from '@types';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * GET /antibot/challenge (public)
@@ -23,7 +24,7 @@ export const getAntibotChallenge = (_request: Request, response: Response) =>
             if (!provider.issueChallenge) {
                 rejectResponse(response, 404, [
                     {
-                        code: 'ANTIBOT_NO_CHALLENGE',
+                        code: ERROR_CODES.ANTIBOT_NO_CHALLENGE,
                         message: t('generic.error-antibot-no-challenge')
                     }
                 ]);

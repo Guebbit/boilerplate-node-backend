@@ -3,6 +3,12 @@ info:
     title: orders — module contract
     version: '2.0.0'
 
+x-error-codes:
+    ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock.' }
+    ORDER_INVOICED: { status: 409, description: 'This action is not allowed once an order has been invoiced.' }
+    ORDER_NOT_CANCELLABLE: { status: 409, description: 'The order is not in a state that can still be cancelled.' }
+    ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
+
 paths:
     /orders:
         get:

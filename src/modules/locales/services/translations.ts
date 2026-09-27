@@ -26,6 +26,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
 import { deriveSourceDigest, localeRepository, translationRepository } from '../repository';
 import { translatableTarget } from './translatables';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * The GET/PUT/PATCH admin shape: `translations` is already wire-shaped, `translationRepository`'s
@@ -59,7 +60,7 @@ const slotRejection = (
 ): ResponseReject =>
     generateReject(422, [
         {
-            code: 'VALIDATION_ERROR',
+            code: ERROR_CODES.VALIDATION_ERROR,
             message: t(messageKey, parameters),
             details: { field }
         }

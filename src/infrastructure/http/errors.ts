@@ -15,6 +15,7 @@ import { t } from '@infrastructure/i18n';
 import { isDuplicateKey, isConnectionError } from '@infrastructure/persistence/mongo-errors';
 import { isRedisConnectionError } from '@infrastructure/adapters/redis';
 import { generateReject, rejectResponse } from './response';
+import { ERROR_CODES } from '@api/error-codes';
 import type { Response } from 'express';
 
 /**
@@ -101,7 +102,7 @@ const RETRY_AFTER_SECONDS = 5;
 
 /** The one error item every 503 carries, whichever path noticed the outage. */
 const serviceUnavailableError = () => ({
-    code: 'SERVICE_UNAVAILABLE',
+    code: ERROR_CODES.SERVICE_UNAVAILABLE,
     message: t('generic.error-service-unavailable')
 });
 

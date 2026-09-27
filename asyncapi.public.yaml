@@ -57,18 +57,24 @@ channels:
     observability.metrics.snapshot:
         address: observability.metrics.snapshot
         description: Initial metrics snapshot sent on SSE connect.
+        # `scripts/contracts/generate-asyncapi-types.ts` reads this to pick the SSE channels — not
+        # the `observability.` name prefix, which a channel outside this namespace could share
+        # without being SSE at all.
+        x-transport: sse
         messages:
             MetricsSnapshotEvent:
                 $ref: '#/components/messages/MetricsSnapshotEvent'
     observability.metrics.updated:
         address: observability.metrics.updated
         description: Periodic SSE metrics update.
+        x-transport: sse
         messages:
             MetricsUpdatedEvent:
                 $ref: '#/components/messages/MetricsUpdatedEvent'
     observability.heartbeat:
         address: observability.heartbeat
         description: SSE heartbeat event.
+        x-transport: sse
         messages:
             HeartbeatEvent:
                 $ref: '#/components/messages/HeartbeatEvent'
@@ -272,6 +278,9 @@ components:
                     type: integer
                     minimum: 0
                 memory:
+                    # `title` names the generated TypeScript model — omitting it left Modelina to
+                    # invent `AnonymousSchemaN`, renumbered on every unrelated schema addition.
+                    title: MemoryUsage
                     type: object
                     required:
                         - rss
@@ -293,6 +302,7 @@ components:
                             minimum: 0
                     additionalProperties: false
                 http:
+                    title: HttpMetrics
                     type: object
                     required:
                         - totalRequests
@@ -306,6 +316,7 @@ components:
                             minimum: 0
                     additionalProperties: false
                 realtime:
+                    title: RealtimeMetrics
                     type: object
                     required:
                         - sseClients
@@ -374,6 +385,9 @@ components:
                 - data
             properties:
                 type:
+                    # `title` names the generated model — a bare inline enum-of-one otherwise
+                    # becomes Modelina's `AnonymousSchemaN`, renumbered on every unrelated addition.
+                    title: OrderCreatedEventType
                     type: string
                     enum:
                         - order.created
@@ -391,6 +405,7 @@ components:
                 - data
             properties:
                 type:
+                    title: OrderPaidEventType
                     type: string
                     enum:
                         - order.paid
@@ -408,6 +423,7 @@ components:
                 - data
             properties:
                 type:
+                    title: OrderShippedEventType
                     type: string
                     enum:
                         - order.shipped
@@ -425,6 +441,7 @@ components:
                 - data
             properties:
                 type:
+                    title: OrderCancelledEventType
                     type: string
                     enum:
                         - order.cancelled
@@ -442,6 +459,7 @@ components:
                 - data
             properties:
                 type:
+                    title: PaymentSucceededEventType
                     type: string
                     enum:
                         - payment.succeeded
@@ -459,6 +477,7 @@ components:
                 - data
             properties:
                 type:
+                    title: PaymentFailedEventType
                     type: string
                     enum:
                         - payment.failed

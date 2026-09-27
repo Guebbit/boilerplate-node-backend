@@ -26,6 +26,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { refuseAntibot } from '@infrastructure/http/middlewares/antibot-log';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import type { RateLimitBudget } from '@types';
+import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * Default window, in ms, used when `NODE_RATE_LIMIT_WINDOW_MS` is unset: one minute.
@@ -85,7 +86,7 @@ const refuse =
          * anything else would record it, leaving the global brake with no trace at all.
          */
         return refuseAntibot('rate-limit', request, response, 429, [
-            { code: 'RATE_LIMITED', message: t('generic.error-rate-limited') }
+            { code: ERROR_CODES.RATE_LIMITED, message: t('generic.error-rate-limited') }
         ]);
     };
 

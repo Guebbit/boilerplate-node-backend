@@ -13,6 +13,7 @@ import { invoicingService } from '../services';
 import { rejectResponse } from '@infrastructure/http/response';
 import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
+import { ERROR_CODES } from '@api/error-codes';
 
 /** GET /orders/:id/credit-note — the credit-note PDF; non-admin callers see only their own order's. */
 export const getOrderCreditNote = (request: Request<{ id?: string }>, response: Response) => {
@@ -33,7 +34,7 @@ export const getOrderCreditNote = (request: Request<{ id?: string }>, response: 
                 if (!creditNote) {
                     rejectResponse(response, 404, [
                         {
-                            code: 'ORDER_CREDIT_NOTE_NOT_ISSUED',
+                            code: ERROR_CODES.ORDER_CREDIT_NOTE_NOT_ISSUED,
                             message: t('invoicing.credit-note-not-issued')
                         }
                     ]);

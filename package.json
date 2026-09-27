@@ -44,7 +44,7 @@
         "check:docker-dockerignore": "tsx scripts/docker/generate-dockerfile-dockerignore.ts --check",
         "sync:frontend": "tsx scripts/pairing/sync-to-frontend.ts",
         "regenerate": "tsx scripts/regenerate-artifacts.ts",
-        "gen:api": "rm -rf ./api && orval --config orval.config.ts",
+        "gen:api": "rm -rf ./api && orval --config orval.config.ts && tsx scripts/contracts/generate-error-codes.ts --out api/error-codes.ts",
         "gen:asyncapi": "tsx scripts/contracts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts",
         "test": "npm run test:unit && npm run test:cross-cutting && npm run test:integration && npm run test:contract && npm run test:fuzz",
         "test:unit": "tsx scripts/testing/run-suite.ts unit",

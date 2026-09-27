@@ -24,17 +24,20 @@ The async contract is published twice, from one set of sources:
 
 The queues are backend-only because a browser can neither publish to nor consume from RabbitMQ. A
 frontend holding `EmailJobPayload` would carry the shape of a message it cannot send, and read as a
-contract it is expected to honour. So the split is by SECTION, one field in
-`scripts/contracts/asyncapi-bundles.ts`:
+contract it is expected to honour. So the split is by SECTION — and by 2026-09, `SHARED_SECTIONS`
+in `scripts/contracts/asyncapi-bundles.ts` is no longer a hand-picked list, but derived from the
+file NAME a module chose:
 
 ```ts
-const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(['observability', 'webhooks']);
+const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(resolveModuleAsyncSections());
 ```
 
-`webhooks` is shared for a different reason than `observability`: its channels ARE the module's
-public event catalogue, not a queue — see below. A module's OWN queue, by contrast, stays out of
-`SHARED_SECTIONS` the same way `workers` does; `webhooks-internal` (`worker.webhook.deliver`) is
-the one example today, in `src/modules/webhooks/asyncapi.internal.yaml`.
+A module's top-level `asyncapi.yaml` IS its public event catalogue, by convention, and is shared
+automatically — `observability` and `webhooks` both qualify today, `webhooks`' the same way
+`observability`'s SSE channels do. A module's OWN queue, by contrast, lives in
+`asyncapi.internal.yaml` and never joins `SHARED_SECTIONS`, the same way `workers` does;
+`webhooks-internal` (`worker.webhook.deliver`) is the one example today, in
+`src/modules/webhooks/asyncapi.internal.yaml`.
 
 Both bundles merge the same section documents, so neither can describe a shared channel differently
 — `tests/cross-cutting/contract-bundles.test.ts` asserts the public one is a strict subset. Only

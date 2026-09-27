@@ -3,6 +3,15 @@ info:
     title: delivery — module contract
     version: '2.0.0'
 
+x-error-codes:
+    DELIVERY_OVERRIDE_REASON_REQUIRED: { status: 422, description: 'An admin status override requires a reason and none was supplied.' }
+    DELIVERY_TRACKING_CODE_REQUIRED: { status: 422, description: 'Marking a shipment shipped requires a tracking code and none was supplied.' }
+    ORDER_NOT_DIGITAL_ONLY: { status: 409, description: 'This action only applies to an order with no physical lines.' }
+    ORDER_NOTHING_TO_SHIP: { status: 409, description: 'The order has no physical lines left to ship.' }
+    ORDER_NOT_PAID: { status: 409, description: 'The order must be paid before this delivery action.' }
+    ORDER_NOT_PROCESSING: { status: 409, description: 'The order is not in a state this delivery action can run from.' }
+    ORDER_NOT_SHIPPED: { status: 409, description: 'The order must be shipped before this delivery action.' }
+
 paths:
     /delivery/methods:
         get:

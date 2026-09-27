@@ -13,6 +13,7 @@ import { invoicingService } from '../services';
 import { rejectResponse } from '@infrastructure/http/response';
 import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
+import { ERROR_CODES } from '@api/error-codes';
 
 /** GET /orders/:id/invoice — the invoice PDF; non-admin callers see only their own order's. */
 export const getOrderInvoice = (request: Request<{ id?: string }>, response: Response) => {
@@ -35,7 +36,10 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
             return invoicingService.findInvoiceForOrder(String(order._id)).then((invoice) => {
                 if (!invoice) {
                     rejectResponse(response, 404, [
-                        { code: 'ORDER_INVOICE_NOT_ISSUED', message: t('invoicing.not-issued') }
+                        {
+                            code: ERROR_CODES.ORDER_INVOICE_NOT_ISSUED,
+                            message: t('invoicing.not-issued')
+                        }
                     ]);
                     return undefined;
                 }

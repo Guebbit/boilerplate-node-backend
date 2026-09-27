@@ -9,6 +9,7 @@
 
 import type { Response } from 'express';
 import type { ZodError } from 'zod';
+import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 
 /** Fields shared by both outcomes — the discriminant plus human/machine status. */
 export interface ResponseNeutral {
@@ -34,8 +35,13 @@ export interface ResponseSuccess<T> extends ResponseNeutral {
 
 /** One machine-readable failure. Endpoints can return several (e.g. per-field validation). */
 export interface ResponseErrorItem {
-    /** Stable code for client logic — clients must branch on this, never on `message`. */
-    code: string;
+    /**
+     * Stable code for client logic — clients must branch on this, never on `message`. Typed
+     * against the generated catalogue (CT-D5) so a typo or a removed code fails at compile time;
+     * the contract's own `code: string` stays open-ended, since {@link ErrorCode} is a union of
+     * KNOWN codes, not an exhaustive `enum` — see `api/error-codes.ts`.
+     */
+    code: ErrorCode;
     /** Human-readable, translatable text safe to show a user. */
     message: string;
     /** Optional structured context (offending field, constraint, limit, ...). */
@@ -97,29 +103,35 @@ export const successResponse = <T>(response: Response, data: T, status = 200, me
  * deliberate: 422 and 429 get a reason phrase and the generic code, because a client branches on
  * "the request was wrong", not on which flavour of wrong.
  */
-const STATUS_ENVELOPE: Readonly<Partial<Record<number, { code?: string; message: string }>>> = {
-    400: { code: 'BAD_REQUEST', message: 'Bad Request' },
-    401: { code: 'UNAUTHORIZED', message: 'Unauthorized' },
-    403: { code: 'FORBIDDEN', message: 'Forbidden' },
-    404: { code: 'NOT_FOUND', message: 'Not Found' },
-    409: { code: 'CONFLICT', message: 'Conflict' },
+const STATUS_ENVELOPE: Readonly<Partial<Record<number, { code?: ErrorCode; message: string }>>> = {
+    400: { code: ERROR_CODES.BAD_REQUEST, message: 'Bad Request' },
+    401: { code: ERROR_CODES.UNAUTHORIZED, message: 'Unauthorized' },
+    403: { code: ERROR_CODES.FORBIDDEN, message: 'Forbidden' },
+    404: { code: ERROR_CODES.NOT_FOUND, message: 'Not Found' },
+    409: { code: ERROR_CODES.CONFLICT, message: 'Conflict' },
     422: { message: 'Unprocessable Entity' },
     429: { message: 'Too Many Requests' }
 };
 
 /** What every 5xx answers with. One code and one phrase: the flavour would leak internals. */
-const SERVER_FAULT = { code: 'INTERNAL_ERROR', message: 'Internal Server Error' } as const;
+const SERVER_FAULT = {
+    code: ERROR_CODES.INTERNAL_ERROR,
+    message: 'Internal Server Error'
+} as const;
 
 /** What an unmapped 4xx answers with. */
-const UNMAPPED_REQUEST_FAULT = { code: 'REQUEST_ERROR', message: 'Request Error' } as const;
+const UNMAPPED_REQUEST_FAULT = {
+    code: ERROR_CODES.REQUEST_ERROR,
+    message: 'Request Error'
+} as const;
 
 /**
  * Maps HTTP status codes to stable machine-readable error codes.
  *
  * @param status - HTTP status code
- * @returns an uppercase, stable code string
+ * @returns a code from the generated catalogue
  */
-const resolveErrorCode = (status: number): string => {
+const resolveErrorCode = (status: number): ErrorCode => {
     if (status >= 500) return SERVER_FAULT.code;
     // An entry with no `code` of its own is the deliberate asymmetry above, not a gap.
     return STATUS_ENVELOPE[status]?.code ?? UNMAPPED_REQUEST_FAULT.code;
@@ -170,6 +182,7 @@ const normalizeErrors = (
 
         // Structured form: honour what the caller set, fill the gaps.
         return {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- `ErrorCode` has no empty-string member, but `error` crossed a call boundary the type system cannot enforce (a caller building one dynamically); this is the fallback for that case, not dead code.
             code: error.code || resolveErrorCode(status),
             message: error.message || fallbackMessage,
             // Conditional spread so `details` is omitted entirely rather than serialized as
@@ -223,7 +236,7 @@ export const validationErrors = (error: ZodError): ResponseErrorItem[] =>
     error.issues.map((issue) => {
         const field = issue.path.join('.');
         return {
-            code: 'VALIDATION_ERROR',
+            code: ERROR_CODES.VALIDATION_ERROR,
             message: issue.message,
             ...(field ? { details: { field } } : {})
         };

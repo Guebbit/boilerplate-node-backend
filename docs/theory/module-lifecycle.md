@@ -13,18 +13,29 @@ That claim is not aspirational — `wishlist` was added under it, and three doma
 it. What each one actually cost is recorded below, honestly, including the parts that are more than
 one line.
 
-## The registries, all five of them
+## The registries, all three of them
 
-A module is named in exactly five places, and three of them are conditional. Knowing which ones
-apply to your domain is most of both procedures:
+A module is named in exactly three places. Knowing which ones apply to your domain is most of both
+procedures:
 
-| Registry              | File                                           | Applies when                       |
-| --------------------- | ---------------------------------------------- | ---------------------------------- |
-| `enabledModules`      | `src/modules.ts`                               | **always**                         |
-| `MODULE_SECTIONS`     | `scripts/contracts/openapi-bundle.ts`          | the domain serves HTTP             |
-| `ASYNC_SECTION_ORDER` | `scripts/contracts/asyncapi-bundles.ts`        | the domain owns an `asyncapi.yaml` |
-| `SHARED_SECTIONS`     | `scripts/contracts/asyncapi-bundles.ts`        | …and an API client can reach it    |
-| `FRONTEND_PAIRING`    | `tests/cross-cutting/frontend-pairing.test.ts` | **always**                         |
+| Registry             | File                                           | Applies when                                 |
+| -------------------- | ---------------------------------------------- | -------------------------------------------- |
+| `enabledModules`     | `src/modules.ts`                               | **always**                                   |
+| `MODULE_ORDER`       | `scripts/contracts/openapi-bundle.ts`          | the domain serves HTTP                       |
+| `MODULE_ASYNC_ORDER` | `scripts/contracts/asyncapi-bundles.ts`        | the domain ships a top-level `asyncapi.yaml` |
+| `FRONTEND_PAIRING`   | `tests/cross-cutting/frontend-pairing.test.ts` | **always**                                   |
+
+Each of the two contract registries decides ORDER only — the narrative position a module's paths or
+channels appear in the published bundle. MEMBERSHIP is discovered from disk: a module folder either
+ships an `openapi.yaml` (or `asyncapi.yaml`) or it doesn't, and the bundler throws, naming the
+module, the moment one exists that isn't placed in its registry yet. That keeps this a one-line
+cost in both directions rather than a census a completeness test has to reconcile: forget the line
+on ADDITION and the bundle refuses to build; forget to delete it on REMOVAL and the bundle refuses
+just as loudly, the next line down, trying to read a file that is no longer there.
+
+An `asyncapi.internal.yaml` (a queue nothing outside this service reaches) and whether a module's
+public `asyncapi.yaml` is frontend-visible are both fully automatic — see step 3 below — so neither
+needs a registry line at all.
 
 An `analytics.ts` needs no entry anywhere: `tests/cross-cutting/analytics-events.test.ts` sweeps the
 module folders for one.
@@ -200,21 +211,21 @@ already — nothing below applies.
 
 ### 3 · The fragments and their section entries
 
-Write `openapi.yaml`, add the domain to `MODULE_SECTIONS`, and add its paths to the root's index. Do
-the same for `ASYNC_SECTION_ORDER` if you wrote an `asyncapi.yaml`. An `analytics.ts` needs no entry
-anywhere — the name is swept off disk. A `scenarios/<name>.ts`, if the domain has demo data, needs
-one line in `scenarios/index.ts`'s table — the rows themselves are produced by seeding the catalogue
-and driving the real endpoints at boot, not assembled from a committed list.
+Write `openapi.yaml`, add the domain to `MODULE_ORDER`, and add its paths to the root's index. Do
+the same for `MODULE_ASYNC_ORDER` if you wrote a top-level `asyncapi.yaml` (not `asyncapi.internal.yaml`
+— see below). An `analytics.ts` needs no entry anywhere — the name is swept off disk. A
+`scenarios/<name>.ts`, if the domain has demo data, needs one line in `scenarios/index.ts`'s table —
+the rows themselves are produced by seeding the catalogue and driving the real endpoints at boot,
+not assembled from a committed list.
 
-An `asyncapi.yaml` costs one decision the others do not: whether the domain also belongs in
-`SHARED_SECTIONS`. It does if a browser can reach the channels — an SSE stream, a websocket — and it
-does not if they cross a broker the frontend cannot open. Shared sections land in
-`asyncapi.public.yaml` and are copied to the paired frontend; the rest stay in `asyncapi.yaml` here.
-Leaving a browser-facing section out is the quiet failure: the frontend generates types that do not
-mention the channel, and nothing says why.
+Whether the channels reach a browser is a naming choice, not a registry entry: `asyncapi.yaml` IS
+the module's public event catalogue — an SSE stream, a websocket — and lands in `asyncapi.public.yaml`,
+copied to the paired frontend. `asyncapi.internal.yaml` is a queue crossing a broker the frontend
+cannot open, and never leaves this bundle. A domain can own either, both, or neither.
 
 A section entry with no fragment on disk is the hard error shown above. A fragment on disk with no
-section entry is worse — it is silently ignored, and the endpoint ships undocumented.
+section entry fails just as loudly now — `MODULE_ORDER` and `MODULE_ASYNC_ORDER` both throw, naming
+the module, the moment discovery finds one they haven't placed.
 
 ### 4 · Bundle
 
@@ -310,7 +321,7 @@ flowchart LR
 ```bash
 rm -rf src/modules/<name>
 # delete the import and the array entry in src/modules.ts
-# delete its entry from MODULE_SECTIONS / ASYNC_SECTION_ORDER
+# delete its entry from MODULE_ORDER / MODULE_ASYNC_ORDER, if it had one
 # and, if it declared probes, from scripts/contracts/client-collections-bundle.ts
 ```
 
@@ -443,7 +454,7 @@ npx tsc --noEmit                                  # THE assertion: 0 errors in s
                                                   # in src/** from a module that did not DECLARE
                                                   # the dependency in its manifest
 
-# drop them from MODULE_SECTIONS, ASYNC_SECTION_ORDER,
+# drop them from MODULE_ORDER, MODULE_ASYNC_ORDER,
 # and from generate-collections.ts if any of them declared probes
 npm run contracts:bundle
 npx spectral lint openapi.yaml --ruleset shared/contracts/spectral.yaml
