@@ -75,6 +75,12 @@ const seedOrder = async (user: Awaited<ReturnType<typeof createUser>>) => {
     return createOrder(user, [toOrderItem(product, 1)]);
 };
 
+/** A digital-only order — `requiresShipping: false` — for `fulfill`'s own action tests below. */
+const seedDigitalOrder = async (user: Awaited<ReturnType<typeof createUser>>) => {
+    const product = await createProduct({ requiresShipping: false });
+    return createOrder(user, [toOrderItem(product, 1)]);
+};
+
 const asUser = (user: { id: string }) => asCustomer(user.id);
 
 describe('cancelById', () => {
@@ -310,8 +316,8 @@ describe('cancelById — audit and analytics', () => {
     });
 });
 
-describe('cancelById — the bank-transfer-expired email', () => {
-    it('sends it when a bank_transfer order times out with no context', async () => {
+describe('cancelById — the payment-window-expired email', () => {
+    it('sends the transfer-expired email when a bank_transfer order times out with no context', async () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
         const product = await createProduct();
@@ -319,8 +325,9 @@ describe('cancelById — the bank-transfer-expired email', () => {
             paymentMethod: 'bank_transfer'
         });
 
-        // Mirrors module.ts's RESERVATION_EXPIRED handler: the real system actor, no CallerContext.
-        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+        // Mirrors module.ts's RESERVATION_EXPIRED handler: the real system actor, no CallerContext,
+        // and the flag only that handler sets.
+        await orderService.cancelById(String(order._id), SYSTEM_ACTOR, {}, undefined, true);
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
@@ -328,15 +335,23 @@ describe('cancelById — the bank-transfer-expired email', () => {
         expect(template).toBe('orders.order-transfer-expired');
     });
 
-    it('never sends it for a card order timing out — that hold is thirty minutes', async () => {
+    /*
+     * E5's leftover: this used to send nothing at all — "that hold is thirty minutes and nobody
+     * has read a confirmation email by then" was the reasoning, but thirty minutes is still long
+     * enough to abandon a checkout tab and wonder later where the order went.
+     */
+    it('sends the card-expired email when a card order times out with no context', async () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], { paymentMethod: 'card' });
 
-        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+        await orderService.cancelById(String(order._id), SYSTEM_ACTOR, {}, undefined, true);
 
-        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        const [envelope, template] = mockEnqueueEmail.mock.calls[0];
+        expect(envelope.to).toBe(user.email);
+        expect(template).toBe('orders.order-card-expired');
     });
 
     it("never sends it for the customer's own cancel, even of a bank_transfer order", async () => {
@@ -362,10 +377,16 @@ describe('cancelById — the bank-transfer-expired email', () => {
         });
         jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('lookup unavailable'));
 
-        // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext. Before
-        // the fix, this `await` threw straight out of `afterCancel` — the cancel itself never
-        // committed.
-        const result = await orderService.cancelById(String(order._id), asAdmin());
+        // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext, and the
+        // flag only that handler sets. Before the fix, this `await` threw straight out of
+        // `afterCancel` — the cancel itself never committed.
+        const result = await orderService.cancelById(
+            String(order._id),
+            asAdmin(),
+            {},
+            undefined,
+            true
+        );
 
         expect(result.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
@@ -380,6 +401,21 @@ describe('cancelById — the bank-transfer-expired email', () => {
                 orderId: String(order._id)
             })
         );
+    });
+
+    it('does not send the expiry email for a system cancel that is not the reservation sweep', async () => {
+        mockEnqueueEmail.mockClear();
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer'
+        });
+
+        // Same shape `availability.ts` calls with: a system actor, no context, no reservation
+        // flag — its own listener sends its own explanation instead.
+        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
 });
 
@@ -397,6 +433,7 @@ describe('withActions', () => {
             start: false,
             ship: false,
             deliver: false,
+            fulfill: false,
             override: []
         });
     });
@@ -416,6 +453,7 @@ describe('withActions', () => {
             start: false,
             ship: false,
             deliver: false,
+            fulfill: false,
             override: []
         });
     });
@@ -442,6 +480,7 @@ describe('withActions', () => {
         expect(body.actions!.start).toBe(true);
         expect(body.actions!.ship).toBe(false);
         expect(body.actions!.deliver).toBe(false);
+        expect(body.actions!.fulfill).toBe(false);
         expect(body.actions!.override).toEqual([]);
     });
 
@@ -492,6 +531,49 @@ describe('withActions', () => {
         );
         const whileDelivered = await orderService.withActions(delivered!, asWarehouse());
         expect(whileDelivered.actions!.deliver).toBe(false);
+    });
+
+    /*
+     * E16(3): `fulfill` and `ship` are mutually exclusive doors for the same `processing` status —
+     * which one a client offers depends entirely on whether the order has anything to ship.
+     */
+    it('gives the warehouse `fulfill` instead of `ship` for a digital-only order once processing', async () => {
+        const user = await createUser();
+        const digitalOrder = await seedDigitalOrder(user);
+        const physicalOrder = await seedOrder(user);
+
+        const digitalProcessing = await orderRepository.updateStatusIfIn(
+            String(digitalOrder._id),
+            ['pending'],
+            'processing'
+        );
+        const physicalProcessing = await orderRepository.updateStatusIfIn(
+            String(physicalOrder._id),
+            ['pending'],
+            'processing'
+        );
+
+        const digitalBody = await orderService.withActions(digitalProcessing!, asWarehouse());
+        const physicalBody = await orderService.withActions(physicalProcessing!, asWarehouse());
+
+        expect(digitalBody.actions!.fulfill).toBe(true);
+        expect(digitalBody.actions!.ship).toBe(false);
+        expect(physicalBody.actions!.fulfill).toBe(false);
+        expect(physicalBody.actions!.ship).toBe(true);
+    });
+
+    it('never offers `fulfill` for a digital-only order still `paid` — `start` must run first', async () => {
+        const user = await createUser();
+        const digitalOrder = await seedDigitalOrder(user);
+        const paid = await orderRepository.updateStatusIfIn(
+            String(digitalOrder._id),
+            ['pending'],
+            'paid'
+        );
+
+        const body = await orderService.withActions(paid!, asWarehouse());
+
+        expect(body.actions!.fulfill).toBe(false);
     });
 
     it('offers an override holder every forward destination, on a customer-only status too', async () => {

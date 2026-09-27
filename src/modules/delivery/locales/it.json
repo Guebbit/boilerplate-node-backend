@@ -5,6 +5,8 @@
         "not-shipped": "Per questo ordine non è ancora partito nulla",
         "not-processing": "Questo ordine non è pronto per la spedizione",
         "not-shippable-for-delivery": "Questo ordine non è ancora stato spedito",
+        "nothing-to-ship": "Questo ordine non ha nulla da spedire — contrassegnalo come evaso",
+        "not-digital-only": "Questo ordine contiene articoli fisici — spediscilo invece di contrassegnarlo come evaso",
         "tracking-code-required": "Per questo metodo di spedizione è richiesto un codice di tracciamento",
         "override-reason-required": "Per forzare questo spostamento è richiesto un motivo",
         "email-shipped": {

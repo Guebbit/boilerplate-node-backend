@@ -149,6 +149,20 @@ describe('orderConfirmEmail', () => {
         expect(english[0]).toContain(collidingTitle);
         expect(italian[0]).toContain(collidingTitle);
     });
+
+    /*
+     * SH2 = C: every order this builder mails is still `pending` — the payment either hasn't been
+     * asked for yet (`card`) or a `bank_transfer` order gets `bankTransferInstructionsEmail`
+     * instead. Nothing here may claim the money already moved.
+     */
+    it('says the order is received and awaiting payment, never that it is confirmed', () => {
+        const { subject, data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
+        const body = String(data.body);
+
+        expect(`${subject} ${body}`).toMatch(/awaiting payment/i);
+        expect(subject).not.toMatch(/confirmed/i);
+        expect(body).not.toMatch(/confirmed/i);
+    });
 });
 
 describe('invoiceDocument', () => {
@@ -202,6 +216,26 @@ describe('invoiceDocument', () => {
 
         expect(english[0]).toContain(collidingTitle);
         expect(italian[0]).toContain(collidingTitle);
+    });
+
+    /*
+     * SH2 = C: the PDF is a receipt, not a tax invoice — no national e-invoicing system is
+     * involved, so it must never claim to be one, in either language.
+     */
+    it('titles itself an order confirmation / receipt, never an invoice', () => {
+        const english = invoiceDocument('en', { ...ORDER, id: 'x' }).title as string;
+        const italian = invoiceDocument('it', { ...ORDER, id: 'x' }).title as string;
+
+        expect(english).not.toMatch(/invoice/i);
+        expect(italian).not.toMatch(/fattura/i);
+    });
+
+    it('carries a disclaimer that this is not a tax invoice', () => {
+        const english = invoiceDocument('en', { ...ORDER, id: 'x' }).disclaimer as string;
+        const italian = invoiceDocument('it', { ...ORDER, id: 'x' }).disclaimer as string;
+
+        expect(english).toMatch(/not a tax invoice/i);
+        expect(italian).toMatch(/non è una fattura fiscale/i);
     });
 });
 

@@ -159,6 +159,133 @@ describe('POST /delivery/order/{orderId}/ship', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
+
+    it('matches the error contract for a digital-only order — nothing here would ever ride in a parcel', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const digital = await createProduct({ requiresShipping: false });
+        const order = await createOrder(user, [toOrderItem(digital, 1)], {
+            status: OrderStatus.processing
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/ship`)
+            .set('Authorization', bearer)
+            .send({});
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('ORDER_NOTHING_TO_SHIP');
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /delivery/order/{orderId}/fulfill', () => {
+    it('matches the contract and moves a digital-only order straight to delivered', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const digital = await createProduct({ requiresShipping: false });
+        const order = await createOrder(user, [toOrderItem(digital, 1)], {
+            status: OrderStatus.processing
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/fulfill`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('delivered');
+        expect(response).toSatisfyApiSpec();
+        // No parcel is created by this door — `GET /delivery/order/{orderId}` still answers 404.
+        const shipment = await api()
+            .get(`/delivery/order/${String(order._id)}`)
+            .set('Authorization', bearer);
+        expect(shipment.status).toBe(404);
+    });
+
+    it('matches the error contract for an order that still has a physical line', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const physical = await createProduct();
+        const order = await createOrder(user, [toOrderItem(physical, 1)], {
+            status: OrderStatus.processing
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/fulfill`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('ORDER_NOT_DIGITAL_ONLY');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a digital-only order that is not processing yet', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const digital = await createProduct({ requiresShipping: false });
+        const order = await createOrder(user, [toOrderItem(digital, 1)], {
+            status: OrderStatus.paid
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/fulfill`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('ORDER_NOT_PROCESSING');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a customer, who holds no delivery.any.update', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const digital = await createProduct({ requiresShipping: false });
+        const order = await createOrder(user, [toOrderItem(digital, 1)], {
+            status: OrderStatus.processing
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/fulfill`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    /*
+     * E16(3): the digital-only alternative and the ordinary ship door are mutually exclusive on
+     * the wire, not just enforced server-side — a client renders exactly one of the two controls.
+     */
+    it('offers fulfill instead of ship for a digital-only order, and the reverse for a physical one', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const digital = await createProduct({ requiresShipping: false });
+        const physical = await createProduct();
+        const digitalOrder = await createOrder(user, [toOrderItem(digital, 1)], {
+            status: OrderStatus.processing
+        });
+        const physicalOrder = await createOrder(user, [toOrderItem(physical, 1)], {
+            status: OrderStatus.processing
+        });
+
+        const digitalRead = await api()
+            .get(`/orders/${String(digitalOrder._id)}`)
+            .set('Authorization', bearer);
+        const physicalRead = await api()
+            .get(`/orders/${String(physicalOrder._id)}`)
+            .set('Authorization', bearer);
+
+        expect(digitalRead.body.data.actions).toMatchObject({ fulfill: true, ship: false });
+        expect(physicalRead.body.data.actions).toMatchObject({ fulfill: false, ship: true });
+    });
+
+    it('offers neither fulfill nor ship for a digital-only order still awaiting `start`', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const digital = await createProduct({ requiresShipping: false });
+        const order = await createOrder(user, [toOrderItem(digital, 1)], {
+            status: OrderStatus.paid
+        });
+
+        const response = await api()
+            .get(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.body.data.actions).toMatchObject({ fulfill: false, ship: false });
+    });
 });
 
 describe('POST /delivery/order/{orderId}/deliver', () => {

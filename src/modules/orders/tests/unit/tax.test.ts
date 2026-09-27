@@ -11,6 +11,12 @@ const line = (price: number, quantity: number, taxRate: number): TaxableLineItem
     product: { price, taxRate }
 });
 
+/** A digital line — `requiresShipping: false`, so it carries none of the shipping apportionment. */
+const digitalLine = (price: number, quantity: number, taxRate: number): TaxableLineItem => ({
+    quantity,
+    product: { price, taxRate, requiresShipping: false }
+});
+
 describe('orderTaxBreakdown — an order with no lines', () => {
     it('is zero on every axis for an order with no lines at all', () => {
         expect(orderTaxBreakdown({ items: [] })).toEqual({
@@ -122,6 +128,37 @@ describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value', (
         const withZero = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)], shippingCost: 0 });
 
         expect(withUndefined).toEqual(withZero);
+    });
+
+    /*
+     * E16(1): shipping is ancillary to the goods it delivers — a digital line never carries any of
+     * it, so a physical line on the same order absorbs the WHOLE shipping cost rather than only
+     * its own pro-rata share.
+     */
+    it('spreads shipping over the physical lines only, never onto a digital one', () => {
+        // Equal-value lines, one physical one digital: without the fix, shipping would split
+        // 50/50; with it, the physical line alone carries all of it, taxed as if it were the
+        // order's only line, while the digital line is taxed on its own goods alone.
+        const breakdown = orderTaxBreakdown({
+            items: [line(10, 1, 0.22), digitalLine(10, 1, 0.22)],
+            shippingCost: 10
+        });
+        const physicalAlone = orderTaxBreakdown({ items: [line(10, 1, 0.22)], shippingCost: 10 });
+        const digitalAlone = orderTaxBreakdown({ items: [digitalLine(10, 1, 0.22)] });
+
+        expect(breakdown.lines[0]).toEqual(physicalAlone.lines[0]);
+        expect(breakdown.lines[1]).toEqual(digitalAlone.lines[0]);
+        expect(breakdown.taxTotal).toBeCloseTo(physicalAlone.taxTotal + digitalAlone.taxTotal, 6);
+    });
+
+    it('apportions nothing at all onto a digital-only order — there is no line to carry it', () => {
+        const breakdown = orderTaxBreakdown({
+            items: [digitalLine(10, 1, 0.22)],
+            shippingCost: 10
+        });
+
+        expect(breakdown.shippingNetAmount).toBe(0);
+        expect(breakdown.shippingTaxAmount).toBe(0);
     });
 });
 

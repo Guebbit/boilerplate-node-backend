@@ -59,7 +59,7 @@ describe('sendOrderPlacedEmail — attaching the invoice', () => {
         const { sendOrderPlacedEmail } = await import('../../services/notify');
 
         sendOrderPlacedEmail(
-            orderFixture({ invoiceNumber: '2026-000041' }),
+            orderFixture({ orderNumber: '2026-000041' }),
             'en',
             'Ada',
             'ada@example.com'

@@ -67,7 +67,9 @@ export default {
      *
      * Four are the hidden or empty ones; `inStock` and `rich` are the two ORDINARY rows a screen
      * needs a subject for — anything buyable, and one with every optional field populated, which
-     * is what a detail page and a product form have to render to be worth auditing.
+     * is what a detail page and a product form have to render to be worth auditing. `digital` is
+     * the one row `requiresShipping: false` — E16's "digital = never shipped" needs a real product
+     * to check `orders`/`delivery`'s digital-only branches against.
      * `scenarios/subjects.ts` pins the row behind each, and
      * `tests/integration/scenarios/shop.test.ts` checks each really has the property.
      */
@@ -78,7 +80,8 @@ export default {
             'product.outOfStock',
             'product.barebones',
             'product.inStock',
-            'product.rich'
+            'product.rich',
+            'product.digital'
         ]
     },
     // The catalogue — nothing here is scoped to a person. An order's line embeds its own frozen

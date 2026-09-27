@@ -3,7 +3,7 @@
  * The placed-order email — confirmation or transfer instructions, picked from the order's own
  * `paymentMethod` rather than by the caller, so `create` and `@modules/cart`'s checkout can never
  * pick the wrong one for what {@link import('./place').placeOrder} actually wrote. Both mails
- * carry the invoice, spooled as an attachment: the invoice number is allocated at creation, so it
+ * carry the receipt, spooled as an attachment: the order number is allocated at creation, so it
  * does not wait on payment any more than the email itself does.
  */
 
@@ -28,28 +28,28 @@ interface MailAttachment {
 }
 
 /**
- * Renders and spools the invoice for `sendOrderPlacedEmail` to attach. A render failure must
+ * Renders and spools the receipt for `sendOrderPlacedEmail` to attach. A render failure must
  * never lose the email itself — the confirmation is what the customer needs, the attachment is
  * what they'd like — so this resolves to no attachment at all rather than rejecting.
  *
  * @param orderId - the order to render
- * @param invoiceNumber - printed in the filename when present, the order id otherwise
+ * @param orderNumber - printed in the filename when present, the order id otherwise
  */
 const invoiceAttachment = (
     orderId: string,
-    invoiceNumber: string | undefined
+    orderNumber: string | undefined
 ): Promise<MailAttachment[]> =>
     renderInvoicePdf(orderId)
         .then((pdf) => {
             if (!pdf) return [];
             return spoolAttachment(pdf, 'pdf').then((key) => [
-                { filename: `invoice-${invoiceNumber ?? orderId}.pdf`, key }
+                { filename: `invoice-${orderNumber ?? orderId}.pdf`, key }
             ]);
         })
         .catch((error: unknown) => {
             // Stryker disable all
             logger.error({
-                message: 'Invoice render failed; sending the placed-order email without it.',
+                message: 'Receipt render failed; sending the placed-order email without it.',
                 orderId,
                 error
             });
@@ -99,7 +99,7 @@ export const sendOrderPlacedEmail = (
               )
             : orderConfirmEmail(locale, name, order, orderId);
 
-    void invoiceAttachment(orderId, order.invoiceNumber).then((attachments) =>
+    void invoiceAttachment(orderId, order.orderNumber).then((attachments) =>
         enqueueEmail(
             { to: recipientEmail, subject: mail.subject, attachments },
             mail.template,

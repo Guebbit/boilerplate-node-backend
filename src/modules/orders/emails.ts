@@ -37,12 +37,14 @@ export interface OrderLines {
 }
 
 /**
- * Order confirmation, sent to the customer. The bought lines are resolved here, one translated
- * string each, since per-line copy interpolates per-line values and can't be a single string
- * decided up front. The total is `orderTotal`'s arithmetic, not a fresh sum — the email quotes
- * what the order stands for, shipping included.
+ * The placed-order email, sent to the customer — "order received, awaiting payment", never
+ * "confirmed": every order this builds for is still `pending` at send time (a `bank_transfer`
+ * order gets {@link bankTransferInstructionsEmail} instead, the only other placed-order mail).
+ * The bought lines are resolved here, one translated string each, since per-line copy interpolates
+ * per-line values and can't be a single string decided up front. The total is `orderTotal`'s
+ * arithmetic, not a fresh sum — the email quotes what the order stands for, shipping included.
  *
- * Sent immediately at order creation, never held for anything the invoice needs: it renders on
+ * Sent immediately at order creation, never held for anything the receipt needs: it renders on
  * demand, the moment someone actually asks for it. `linkUrl` points at the order's page, where
  * the download button is always live.
  */
@@ -71,6 +73,43 @@ export const orderConfirmEmail = (
             ),
             total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             linkLabel: t('orders.email-confirm.link-label'),
+            linkUrl: orderFrontendLink({ locale, id: orderId }),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * Payment received, sent once `payments`' settlement actually commits the stock —
+ * `services/settlement.ts`'s `settlePayment` is the one caller. The customer's answer to "did my
+ * card go through": {@link orderConfirmEmail} only ever said the order was received, never that
+ * it was paid.
+ */
+export const paymentSucceededEmail = (
+    locale: string,
+    name: string,
+    order: OrderLines,
+    orderId: string
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'orders.order-paid',
+        subject: t('orders.email-paid.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('orders.email-paid.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('orders.email-paid.greeting', { name }),
+            body: t('orders.email-paid.body'),
+            lines: order.items.map((item) =>
+                t('orders.email-paid.line', {
+                    title: item.product.title,
+                    quantity: item.quantity,
+                    price: item.product.price
+                })
+            ),
+            total: t('orders.email-paid.total', { total: orderTotal(order) }),
+            linkLabel: t('orders.email-paid.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
             footer: t('email.footer')
         }
@@ -116,8 +155,8 @@ export const bankTransferInstructionsEmail = (
                 }).format(payBy)
             }),
             total: t('orders.email-confirm.total', { total: orderTotal(order) }),
-            // Invoice number allocation doesn't wait on payment (see `invoice-numbering.ts`), so
-            // the same link, rendering the same invoice on demand, applies here as on the paid path.
+            // Order-number allocation doesn't wait on payment (see `order-numbering.ts`), so the
+            // same link, rendering the same receipt on demand, applies here as on the paid path.
             linkLabel: t('orders.email-transfer.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
             footer: t('email.footer')
@@ -127,8 +166,7 @@ export const bankTransferInstructionsEmail = (
 
 /**
  * The sweep cancelling a `bank_transfer` order whose deadline passed with no money — the
- * customer's answer to "what happened to my order". Never sent for a `card` order timing out:
- * that hold is thirty minutes and nobody has read a confirmation email by then.
+ * customer's answer to "what happened to my order".
  */
 export const bankTransferExpiredEmail = (locale: string, order: OrderLines): EmailContent => {
     const t = translator(locale);
@@ -141,6 +179,28 @@ export const bankTransferExpiredEmail = (locale: string, order: OrderLines): Ema
             pageMetaLinks: [],
             greeting: t('orders.email-transfer-expired.greeting'),
             body: t('orders.email-transfer-expired.body'),
+            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * {@link bankTransferExpiredEmail}'s twin for a `card` hold — a customer who never finished
+ * checkout gets the same explanation once the thirty-minute reservation lapses, its own template
+ * since the wording differs (a hold, not a deadline sent up front).
+ */
+export const cardHoldExpiredEmail = (locale: string, order: OrderLines): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'orders.order-card-expired',
+        subject: t('orders.email-card-expired.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('orders.email-card-expired.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('orders.email-card-expired.greeting'),
+            body: t('orders.email-card-expired.body'),
             total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             footer: t('email.footer')
         }
@@ -178,10 +238,10 @@ export const productUnavailableCancelledEmail = (
 };
 
 /**
- * What the invoice needs beyond the lines: the order's id, for the document title, each line's
+ * What the receipt needs beyond the lines: the order's id, for the document title, each line's
  * frozen `taxRate` — the VAT figures themselves are recomputed fresh by {@link buildVatBlock},
- * same reasoning as `orderTotal` below — and the two fields Art. 226 requires, `invoiceNumber`
- * and `createdAt`, printed together by {@link buildInvoiceMeta}.
+ * same reasoning as `orderTotal` below — and the order number plus `createdAt`, printed together
+ * by {@link buildInvoiceMeta}. Not a tax document: see `docs/modules/orders.md`.
  *
  * `id`, not `_id`. The only build site is `services/invoice.ts`'s `renderInvoicePdf`, off
  * `orderRepository.findByIdRaw` — a hydrated Mongoose document, never run through
@@ -194,38 +254,37 @@ export interface InvoiceOrder extends OrderLines {
         quantity: number;
         product: { title: string; price: number; taxRate: number };
     }[];
-    /** Absent on an order that predates sequential invoice numbering. */
-    invoiceNumber?: string;
-    /** This invoice's date of supply — the moment `invoiceNumber` was assigned. */
+    /** Absent on an order that predates sequential order numbering. */
+    orderNumber?: string;
+    /** This receipt's date — the moment `orderNumber` was assigned. */
     createdAt?: Date;
 }
 
-/** The invoice number and its date of supply, printed together or not at all. */
+/** The order number and its date, printed together or not at all. */
 export interface InvoiceMeta {
     numberLabel: string;
     dateLabel: string;
 }
 
 /**
- * The invoice-number-and-date block EU VAT Directive 2006/112/EC Art. 226 requires — gated as one
- * unit on `invoiceNumber` being present, same as {@link buildVatBlock} gates its own block on a
- * frozen rate: a date with no number would misrepresent an order that predates full compliance
- * metadata as if it had one. `createdAt` IS the date of supply, since the number is assigned at
- * the same moment — see `OrderDocument.invoiceNumber`.
+ * The order-number-and-date block — gated as one unit on `orderNumber` being present, same as
+ * {@link buildVatBlock} gates its own block on a frozen rate: a date with no number would
+ * misrepresent an order that predates the field as if it had one. `createdAt` is the date printed
+ * alongside it, since the number is assigned at the same moment — see `OrderDocument.orderNumber`.
  * @param locale - the document's language, for formatting the date
  * @param t - this document's translator, already fixed to `locale`
- * @param order - the order the invoice is for
- * @returns the meta block, or `undefined` on an order with no invoice number
+ * @param order - the order the receipt is for
+ * @returns the meta block, or `undefined` on an order with no order number
  */
 const buildInvoiceMeta = (
     locale: string,
     t: TFunction,
     order: InvoiceOrder
 ): InvoiceMeta | undefined => {
-    if (!order.invoiceNumber || !order.createdAt) return undefined;
+    if (!order.orderNumber || !order.createdAt) return undefined;
 
     return {
-        numberLabel: t('orders.invoice.number', { number: order.invoiceNumber }),
+        numberLabel: t('orders.invoice.number', { number: order.orderNumber }),
         // `Intl.DateTimeFormat`, not a hand-rolled date string — same standard-library-first rule
         // `bankTransferInstructionsEmail`'s `deadline` above already follows.
         dateLabel: t('orders.invoice.date', {
@@ -414,6 +473,9 @@ export const invoiceDocument = (locale: string, order: InvoiceOrder): Record<str
         pageMetaTitle: t('orders.invoice.meta-title', { order: String(order.id) }),
         pageMetaLinks: [],
         title: t('orders.invoice.title'),
+        // Printed under the title on every render — this document is a receipt, issued before any
+        // national e-invoicing system could see it, never a tax invoice in its own right.
+        disclaimer: t('orders.invoice.disclaimer'),
         lines: order.items.map((item) =>
             t('orders.invoice.line', {
                 title: item.product.title,

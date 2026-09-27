@@ -25,9 +25,11 @@ import {
 import { contactRequestEmail } from '@modules/feedback/emails';
 import {
     orderConfirmEmail,
+    paymentSucceededEmail,
     invoiceDocument,
     bankTransferInstructionsEmail,
     bankTransferExpiredEmail,
+    cardHoldExpiredEmail,
     productUnavailableCancelledEmail
 } from '@modules/orders/emails';
 import { shipmentShippedEmail } from '@modules/delivery/emails';
@@ -88,7 +90,16 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         new Date('2026-09-19T12:00:00.000Z'),
         'an-order-id'
     ),
+    'orders.order-paid.ejs': paymentSucceededEmail(
+        locale,
+        'Ada',
+        { items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }] },
+        'an-order-id'
+    ),
     'orders.order-transfer-expired.ejs': bankTransferExpiredEmail(locale, {
+        items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }]
+    }),
+    'orders.order-card-expired.ejs': cardHoldExpiredEmail(locale, {
         items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }]
     }),
     'orders.order-product-unavailable.ejs': productUnavailableCancelledEmail(locale, [

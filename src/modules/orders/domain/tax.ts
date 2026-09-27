@@ -18,12 +18,13 @@ import {
     type Money,
     NO_MONEY
 } from './money';
+import { isShippedItem } from './rules';
 
 /** A priced, taxed line — what `orderTaxBreakdown` needs from each order item. */
 export interface TaxableLineItem {
     quantity?: unknown;
     /** `unknown` because it is raw aggregate output; `null` is an unpopulated ref. */
-    product?: { price?: unknown; taxRate?: unknown } | null;
+    product?: { price?: unknown; taxRate?: unknown; requiresShipping?: unknown } | null;
 }
 
 /**
@@ -148,7 +149,12 @@ export const orderTaxBreakdown = ({ items, shippingCost }: OrderTaxInput): Order
     const grossAmounts = items.map((item) =>
         scaleMoney(toMinorUnits(item.product?.price), wholeCount(item.quantity))
     );
-    const shippingShares = apportion(toMinorUnits(shippingCost), grossAmounts);
+    // Shipping is ancillary to the goods it delivers (see the module docblock) — a digital line
+    // carries none of it, so its weight in the apportionment is zero rather than its gross value.
+    const shippingWeights = items.map((item, index) =>
+        isShippedItem(item) ? grossAmounts[index] : NO_MONEY
+    );
+    const shippingShares = apportion(toMinorUnits(shippingCost), shippingWeights);
 
     let netTotal: Money = NO_MONEY;
     let taxTotal: Money = NO_MONEY;

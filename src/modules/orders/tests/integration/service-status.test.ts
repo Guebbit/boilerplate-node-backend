@@ -7,7 +7,13 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { seedOrder, readOrder } from '@modules/orders/tests/factories';
-import { markPaid, markProcessing, markShipped, markDelivered } from '../../services/status';
+import {
+    markPaid,
+    markProcessing,
+    markShipped,
+    markDelivered,
+    markFulfilled
+} from '../../services/status';
 import { orderService } from '../../services';
 import { ORDER_STATUS_CHANGED } from '../../events';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
@@ -121,6 +127,40 @@ describe('markDelivered', () => {
         const updated = await markDelivered(String(order._id));
 
         expect(updated).toBeNull();
+    });
+});
+
+describe('markFulfilled', () => {
+    it('moves a processing order straight to delivered and announces it once', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+        const events: unknown[] = [];
+        onDomainEvent(ORDER_STATUS_CHANGED, (payload) => events.push(payload));
+
+        const updated = await markFulfilled(String(order._id));
+
+        expect(updated?.status).toBe(OrderStatus.delivered);
+        expect(events).toEqual([
+            { orderId: String(order._id), from: OrderStatus.processing, to: OrderStatus.delivered }
+        ]);
+    });
+
+    it('refuses from paid — the digital-only door still needs `start` first', async () => {
+        const order = await seedOrder(OrderStatus.paid);
+
+        const updated = await markFulfilled(String(order._id));
+
+        expect(updated).toBeNull();
+    });
+
+    // `markDelivered`'s own edge into `delivered` is `shipped`, not `processing` — the two must
+    // stay independent, or one door's move would silently also satisfy the other's gate.
+    it("never satisfies markDelivered's own gate — the two edges into `delivered` stay independent", async () => {
+        const order = await seedOrder(OrderStatus.processing);
+
+        await markFulfilled(String(order._id));
+        const viaShippedDoor = await markDelivered(String(order._id));
+
+        expect(viaShippedDoor).toBeNull();
     });
 });
 

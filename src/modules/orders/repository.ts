@@ -6,7 +6,7 @@
  * below.
  */
 
-import { orderModel, applyOrderTransform, invoiceCounterModel } from './model';
+import { orderModel, applyOrderTransform, orderNumberCounterModel } from './model';
 import type { OrderDocument, OrderPendingEffect, OrderStatusOverride } from './model';
 import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
 import { OrderStatus } from '@types';
@@ -410,21 +410,21 @@ const scrubDueForAnonymization = (cutoff: Date): Promise<number> => {
 };
 
 /**
- * Atomically bumps the invoice sequence for `year` and returns the new value — one
+ * Atomically bumps the order-number sequence for `year` and returns the new value — one
  * `findOneAndUpdate` upsert with `$inc`, so two callers racing the same year still get distinct,
  * contiguous numbers. Mongo serializes concurrent writes to the same document; this is what makes
  * that guarantee do the work instead of a read-then-increment in application code.
  * https://www.mongodb.com/docs/manual/reference/method/db.collection.findOneAndUpdate/
  *
  * @param year - the UTC calendar year the sequence belongs to
- * @returns the sequence number just allocated (1 for the year's first invoice)
+ * @returns the sequence number just allocated (1 for the year's first order)
  */
-const incrementInvoiceCounter = (year: number): Promise<number> =>
-    invoiceCounterModel
+const incrementOrderNumberCounter = (year: number): Promise<number> =>
+    orderNumberCounterModel
         .findOneAndUpdate(
             { _id: year },
             { $inc: { seq: 1 } },
-            // Upsert creates the year's row on its first invoice; `returnDocument: 'after'` hands
+            // Upsert creates the year's row on its first order; `returnDocument: 'after'` hands
             // back the incremented value rather than the pre-update one.
             { upsert: true, returnDocument: 'after' }
         )
@@ -474,7 +474,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         session?: ClientSession
     ) => Promise<number>;
     scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
-    incrementInvoiceCounter: (year: number) => Promise<number>;
+    incrementOrderNumberCounter: (year: number) => Promise<number>;
 } = {
     ...base,
     aggregate,
@@ -491,5 +491,5 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     existingIds,
     detachUserId,
     scrubDueForAnonymization,
-    incrementInvoiceCounter
+    incrementOrderNumberCounter
 };

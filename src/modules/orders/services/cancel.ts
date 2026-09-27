@@ -31,7 +31,7 @@ import { ORDER_CANCELLED, ORDER_REFUND_OWED } from '../events';
 import { orderRepository } from '../repository';
 import { statusesLeadingTo } from '../domain';
 import { orderEffectRetryMinutes } from '../config';
-import { bankTransferExpiredEmail } from '../emails';
+import { bankTransferExpiredEmail, cardHoldExpiredEmail } from '../emails';
 import { getById } from './crud';
 import { mailBuyer } from './notify';
 import { callerScope, actorOf } from './scope';
@@ -44,15 +44,21 @@ const SWEEP_BATCH_SIZE = 200;
 
 /**
  * Everything a successful cancel unlocks: give back the hold, announce it, discharge the refund
- * marker once every listener heard it — then the audit row, the analytics event, and — only for a
- * sweep-driven bank-transfer timeout — the customer's own explanation by mail.
- * @param context - the caller's context; absent for the reservation-sweep's own expiry, still
- *   audited as a system actor and reported under its own analytics name
+ * marker once every listener heard it — then the audit row, the analytics event, and — only for
+ * the reservation-expiry sweep itself — the customer's own explanation by mail.
+ * @param context - the caller's context; absent for a system-initiated cancel (the reservation
+ *   sweep, or `availability.ts`'s own product-removed cancel), still audited as a system actor and
+ *   reported under its own analytics name
+ * @param viaReservationExpiry - true only for the `RESERVATION_EXPIRED` listener. A missing
+ *   `context` alone cannot tell "the hold timed out" apart from "the product it held became
+ *   unavailable" — `availability.ts` cancels with no context too, and sends its OWN explanation
+ *   (`productUnavailableCancelledEmail`), never this one
  */
 const afterCancel = async (
     order: OrderDocument,
     refund: boolean,
-    context?: CallerContext
+    context?: CallerContext,
+    viaReservationExpiry = false
 ): Promise<ResponseSuccess<OrderDocument>> => {
     /*
      * The hold is given back after the status write, deliberately: the conditional
@@ -97,14 +103,19 @@ const afterCancel = async (
     };
 
     /*
-     * The customer's answer to "what happened to my order" — sent only for the
-     * sweep's own expiry, and only for a transfer: a `card` hold is thirty minutes,
-     * over before anyone has read a confirmation email, and a customer's own cancel
-     * needs no explanation of itself.
+     * The customer's answer to "what happened to my order" — sent only for the reservation
+     * sweep's own expiry, never for `availability.ts`'s product-removed cancel (that one mails its
+     * own explanation) and never for a customer's own cancel, which needs no explanation of
+     * itself. Both payment methods get one: a `card` hold is thirty minutes, short but no shorter
+     * than the time it takes to abandon a checkout tab and wonder later where the order went.
      */
-    if (isSystemExpiry && order.paymentMethod === 'bank_transfer') {
+    if (viaReservationExpiry) {
+        const build =
+            order.paymentMethod === 'bank_transfer'
+                ? bankTransferExpiredEmail
+                : cardHoldExpiredEmail;
         await mailBuyer(order, (locale) => {
-            const mail = bankTransferExpiredEmail(locale, order);
+            const mail = build(locale, order);
             void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
         });
     }
@@ -133,14 +144,18 @@ const afterCancel = async (
  * caller's scope AND the `pending` requirement, so a racing admin "shipped" (or a double-click)
  * resolves at the storage layer — exactly one write matches. The follow-up read on `null` only
  * tells 404 from 409; the decision is already made.
- * @param context - omitted by the reservation-sweep expiry, which is not a request; still
- *   audited as a system actor and reported under its own analytics name
+ * @param context - omitted by every system-initiated caller (the reservation sweep,
+ *   `availability.ts`'s product-removed cancel), which is not a request; still audited as a
+ *   system actor and reported under its own analytics name
+ * @param viaReservationExpiry - see {@link afterCancel} — set only by the `RESERVATION_EXPIRED`
+ *   listener, so its own explanation mail never reaches a different system cancel's customer
  */
 export const cancelById = (
     id: string,
     authContext?: AuthContext,
     options: { refund?: boolean } = {},
-    context?: CallerContext
+    context?: CallerContext,
+    viaReservationExpiry = false
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     /*
      * A customer is always refunded — that is the promise `paid` is cancellable on, and it is not
@@ -173,7 +188,7 @@ export const cancelById = (
         )
         .then((order) =>
             order
-                ? afterCancel(order, refund, context)
+                ? afterCancel(order, refund, context, viaReservationExpiry)
                 : // Which refusal was it? This read only informs the message — the write above
                   // already decided nothing changes.
                   getById(id, callerScope(authContext)).then((existing) =>

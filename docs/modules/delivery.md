@@ -83,6 +83,7 @@ flowchart LR
     SH --> EM["shipped email<br/><i>in the recipient's language — users</i>"]
     S2["staff<br/>POST .../deliver"] --> DV["arrival recorded"]
     DV --> MD["orders.markDelivered"]
+    S3["staff<br/>POST .../fulfill<br/><i>digital-only order</i>"] --> MF["orders.markFulfilled<br/><i>no parcel written</i>"]
     OV["admin override<br/><i>forced: true, reason</i>"] -.->|"skips the ordinary gate"| S1
     OV -.-> S2
 
@@ -92,7 +93,7 @@ flowchart LR
     classDef override fill:#fef3c7,stroke:#d97706,color:#111827;
     class RA pure;
     class SH,EM,DV own;
-    class CA,S1,S2,MS,MD peer;
+    class CA,S1,S2,S3,MS,MD,MF peer;
     class OV override;
 ```
 
@@ -101,6 +102,13 @@ regular operation still runs — the parcel record, the tracking code if the met
 email — but the status write skips the ordinary gate ("processing only", "shipped only") the way an
 uncorrected shipment cannot. See [orders](./orders.md#the-admin-override) for the two override
 modes in full; this module only ever runs the "forced" one, since it always creates a real parcel.
+
+`POST /delivery/order/{orderId}/fulfill` is a third door beside `ship`/`deliver`, not a variant of
+either — a digital-only order (every line `requiresShipping: false`) has nothing to hand a carrier,
+so staff move it `processing → delivered` directly, with no parcel record at all. Refused for any
+order with even one physical line (`ORDER_NOT_DIGITAL_ONLY`); `ship` itself refuses a digital-only
+order the other way (`ORDER_NOTHING_TO_SHIP`), so the two doors never overlap on what they accept.
+No `forced` variant: there is no ordinary gate here for an override to skip past.
 
 ## Related pages
 

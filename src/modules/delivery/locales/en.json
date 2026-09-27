@@ -5,6 +5,8 @@
         "not-shipped": "Nothing has shipped for this order yet",
         "not-processing": "This order is not ready to ship",
         "not-shippable-for-delivery": "This order has not shipped yet",
+        "nothing-to-ship": "This order has nothing to ship — mark it fulfilled instead",
+        "not-digital-only": "This order has physical items — ship it instead of marking it fulfilled",
         "tracking-code-required": "A tracking code is required for this shipping method",
         "override-reason-required": "A reason is required to force this move",
         "email-shipped": {

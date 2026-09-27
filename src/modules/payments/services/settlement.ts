@@ -7,6 +7,7 @@
 
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import {
     generateSuccess,
     generateReject,
@@ -16,7 +17,13 @@ import {
 import { emitDomainEvent } from '@kernel/events';
 import { OrderStatus } from '@types';
 import type { PaymentStatus, AuthContext } from '@types';
-import { orderService, bankTransferHoldHours, isPayable } from '@modules/orders';
+import {
+    orderService,
+    bankTransferHoldHours,
+    isPayable,
+    mailBuyer,
+    paymentSucceededEmail
+} from '@modules/orders';
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '../events';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
@@ -207,6 +214,19 @@ export const settlePayment = (
         // `subscribe()` hook, and a slow or failing listener there must not delay the response
         // this settlement's callers (confirm, sync, the provider webhook) are already sending.
         void emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: String(succeeded._id), orderId });
+
+        // The customer's answer to "did my card go through" — `orderConfirmEmail` at checkout
+        // only ever said the order was received, never that it was paid. Fire-and-forget, same
+        // reasoning as the domain event just above: a slow mail send must not hold up this
+        // settlement's own caller.
+        void mailBuyer(orderNow, (locale, name) => {
+            const mail = paymentSucceededEmail(locale, name, orderNow, orderId);
+            void enqueueEmail(
+                { to: orderNow.email, subject: mail.subject },
+                mail.template,
+                mail.data
+            );
+        });
 
         return { payment: succeeded, orderLost: false };
     });

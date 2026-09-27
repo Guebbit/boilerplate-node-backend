@@ -44,9 +44,9 @@ describe('orderSchema — what an order must carry', () => {
             expect(requiredPaths(orderSchema)).not.toContain(path);
     });
 
-    it('leaves the invoice number optional — absent means a pre-feature order', () => {
-        expect(requiredPaths(orderSchema)).not.toContain('invoiceNumber');
-        expect(typeOf(orderSchema, 'invoiceNumber')).toBe('String');
+    it('leaves the order number optional — absent means a pre-feature order', () => {
+        expect(requiredPaths(orderSchema)).not.toContain('orderNumber');
+        expect(typeOf(orderSchema, 'orderNumber')).toBe('String');
     });
 
     it('leaves the transfer reference optional — absent means card, or a pre-feature order', () => {

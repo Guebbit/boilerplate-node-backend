@@ -729,6 +729,28 @@ describe('orderConfirm', () => {
         expect(order!.shippingCost).toBe(0);
     });
 
+    /*
+     * E16(1): the free-above threshold prices only what ships — a digital line's price must not
+     * count toward "spend enough for free shipping" when it never needed shipping at all.
+     */
+    it('never counts a digital line toward the free-above-a-threshold rule', async () => {
+        const user = await createUser();
+        await giveUserAnAddress(user.id); // `standard` requires one
+        // The digital line alone (150) would clear `standard`'s 100 threshold; the physical
+        // line alone (10) does not. Only the physical line may count.
+        const digital = await createProduct({ price: 150, requiresShipping: false });
+        const physical = await createProduct({ price: 10 });
+        await cartItemSetById(user.id, String(digital._id), 1);
+        await cartItemSetById(user.id, String(physical._id), 1);
+
+        await cartRepository.setShippingMethod(user.id, 'standard');
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
+
+        expect(result.success).toBe(true);
+        const order = await findOrder({ userId: user._id });
+        expect(order!.shippingCost).toBe(5);
+    });
+
     it('refuses an unknown shipping method before anything is written', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5 });
