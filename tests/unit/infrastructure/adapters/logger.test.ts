@@ -84,6 +84,21 @@ describe('redactSensitiveFields', () => {
         });
     });
 
+    it('redacts the credential fields the API itself sends, as it spells them', () => {
+        // Contract names, not list entries: an exact-match list misses these unless it carries them.
+        const redacted = redactSensitiveFields({
+            passwordConfirm: 'a',
+            newSecret: 'b',
+            'x-antibot-challenge-token': 'c'
+        });
+
+        expect(redacted).toEqual({
+            passwordConfirm: '[REDACTED]',
+            newSecret: '[REDACTED]',
+            'x-antibot-challenge-token': '[REDACTED]'
+        });
+    });
+
     it('marks a cycle instead of recursing until the stack overflows', () => {
         const input: Record<string, unknown> = { name: 'carol' };
         input.self = input;
@@ -325,7 +340,7 @@ describe('the sensitive-field policy, entry by entry', () => {
     it('covers the whole policy, so a shrinking list cannot pass unnoticed', () => {
         // Deliberately a floor, not an exact count: adding a field should not fail a test, and
         // removing one should.
-        expect(SENSITIVE_FIELDS.size).toBeGreaterThanOrEqual(20);
+        expect(SENSITIVE_FIELDS.size).toBeGreaterThanOrEqual(27);
     });
 
     it('does not redact an ordinary field that merely contains a sensitive word', () => {
