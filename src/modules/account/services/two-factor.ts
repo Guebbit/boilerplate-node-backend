@@ -27,6 +27,7 @@ import {
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import type { CallerContext } from '@types';
 import { recordAudit, type AuditAction } from '@infrastructure/observability/audit';
+import { constantTimeEqual } from '@infrastructure/security/constant-time';
 import type {
     MfaChallenge,
     TwoFactorBackupCodesRegenerated,
@@ -45,7 +46,9 @@ import {
     clearDeliveredCode,
     deliveryCooldownRemaining,
     generateBackupCodes,
+    generateBackupCodeSalt,
     hashBackupCode,
+    hashBackupCodes,
     orderedEntries,
     twoFactorMethod,
     type TwoFactorMethodHandler
@@ -105,11 +108,21 @@ const entryFor = (user: UserDocument, method: string): TwoFactorMethodRecord => 
  * Spend a backup code, if the digits are one. Backup codes recover the ACCOUNT, so they are
  * tried after every armed factor has declined — never before, or a stolen list would shadow a
  * working authenticator.
+ *
+ * `code` is scrypt'd once, under the account's own salt, then checked against EVERY stored digest
+ * — never returning as soon as one matches — so the loop's own running time never says which
+ * position (if any) matched. Which code was spent is still recorded, in the write that follows.
  */
 const consumeBackupCode = (user: UserDocument, code: string): boolean => {
-    const index = user.twoFactorBackupCodes.indexOf(hashBackupCode(code));
-    if (index === -1) return false;
-    user.twoFactorBackupCodes.splice(index, 1);
+    if (!user.twoFactorBackupCodeSalt) return false;
+
+    const digest = hashBackupCode(code, user.twoFactorBackupCodeSalt);
+    let matchIndex = -1;
+    for (const [index, stored] of user.twoFactorBackupCodes.entries())
+        if (constantTimeEqual(stored, digest)) matchIndex = index;
+    if (matchIndex === -1) return false;
+
+    user.twoFactorBackupCodes.splice(matchIndex, 1);
     return true;
 };
 
@@ -192,7 +205,10 @@ const syncArmedState = (user: UserDocument): void => {
  */
 const discardIfDisarmed = (user: UserDocument): void => {
     syncArmedState(user);
-    if (!user.twoFactorEnabledAt) user.twoFactorBackupCodes = [];
+    if (!user.twoFactorEnabledAt) {
+        user.twoFactorBackupCodes = [];
+        user.twoFactorBackupCodeSalt = undefined;
+    }
 };
 
 /**
@@ -404,7 +420,11 @@ const armMethod = (
     const backupCodes = user.twoFactorBackupCodes.length === 0 ? generateBackupCodes() : undefined;
 
     entry.enrolledAt = new Date();
-    if (backupCodes) user.twoFactorBackupCodes = backupCodes.map((code) => hashBackupCode(code));
+    if (backupCodes) {
+        const salt = generateBackupCodeSalt();
+        user.twoFactorBackupCodeSalt = salt;
+        user.twoFactorBackupCodes = hashBackupCodes(backupCodes, salt);
+    }
     syncArmedState(user);
 
     return userService.persistTwoFactorMethods(user).then(() =>
@@ -513,7 +533,9 @@ export const regenerateBackupCodes = (
                 : generateReject(422, [t('account.two-factor.not-enabled')]),
         (user) => {
             const backupCodes = generateBackupCodes();
-            user.twoFactorBackupCodes = backupCodes.map((freshCode) => hashBackupCode(freshCode));
+            const salt = generateBackupCodeSalt();
+            user.twoFactorBackupCodeSalt = salt;
+            user.twoFactorBackupCodes = hashBackupCodes(backupCodes, salt);
             return userService.persistTwoFactorMethods(user).then(() =>
                 generateSuccess({
                     backupCodes,

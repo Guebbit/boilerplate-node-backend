@@ -82,11 +82,12 @@ longer exists, and keeping it would refuse the first valid code.
 The fields live on [`users`](./users.md)' `User`, because that is the account record. This module
 is the only writer.
 
-| Field                    | Holds                                  | On the contract?                          |
-| ------------------------ | -------------------------------------- | ----------------------------------------- |
-| `twoFactorMethods[]`     | one `TwoFactorMethodRecord` per method | no — `select: false` credential material  |
-| `twoFactorBackupCodes[]` | sha256 of ten one-time codes           | no — same                                 |
-| `twoFactorEnabledAt`     | when the account first armed anything  | **yes**, the only 2FA field a client sees |
+| Field                        | Holds                                    | On the contract?                          |
+| ---------------------------- | ----------------------------------------- | ----------------------------------------- |
+| `twoFactorMethods[]`         | one `TwoFactorMethodRecord` per method    | no — `select: false` credential material  |
+| `twoFactorBackupCodes[]`     | salted scrypt of ten one-time codes       | no — same                                 |
+| `twoFactorBackupCodeSalt`    | the one salt every entry above is scrypt'd under | no — same                          |
+| `twoFactorEnabledAt`         | when the account first armed anything     | **yes**, the only 2FA field a client sees |
 
 One record shape serves every method, rather than a collection per channel: a deployment that
 gains a channel adds a handler, not a migration. Device fields (`secret`, `lastUsedStep`) and

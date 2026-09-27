@@ -143,8 +143,11 @@ export interface UserRecord extends Omit<
     /** Every second factor this account has enrolled or half-enrolled — see {@link TwoFactorMethodRecord}. */
     twoFactorMethods: TwoFactorMethodRecord[];
 
-    /** sha256 digests of unused backup codes — see `account/two-factor/backup-codes.ts`. */
+    /** Salted-scrypt digests of unused backup codes — see `account/two-factor/backup-codes.ts`. */
     twoFactorBackupCodes: string[];
+
+    /** The salt `twoFactorBackupCodes` is scrypt'd under — one per account, not one per code. */
+    twoFactorBackupCodeSalt?: string;
 
     /*
      * Redeclared as `Date`, like `ProductDocument` and `OrderDocument`: the contract carries ISO
@@ -555,13 +558,19 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             type: Date
         },
         /*
-         * Recovery codes for a lost authenticator — sha256 digests, same reasoning as `tokens`:
-         * high-entropy and one-time, so there is no low-entropy secret to stretch.
+         * Recovery codes for a lost authenticator — salted-scrypt digests, not a bare hash: at 40
+         * bits each they are short enough for an offline dump to brute-force, so storage carries
+         * the strength instead. See `account/two-factor/backup-codes.ts#hashBackupCode`.
          */
         twoFactorBackupCodes: {
             type: [String],
             select: false,
             default: []
+        },
+        /* The salt every entry in `twoFactorBackupCodes` is scrypt'd under — one per account. */
+        twoFactorBackupCodeSalt: {
+            type: String,
+            select: false
         },
         /*
          * Linked provider identities — `select: false` like `tokens`, same reasoning: not secret
@@ -747,6 +756,7 @@ export type UserWire = Omit<
     | 'inactivityWarnedAt'
     | 'twoFactorMethods'
     | 'twoFactorBackupCodes'
+    | 'twoFactorBackupCodeSalt'
     | 'oauthAccounts'
 >;
 
@@ -762,7 +772,7 @@ export const applyUserTransform = applySerialization(userSchema, {
     // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
     // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
     // `inactivityWarnedAt` is the reaper's own bookkeeping, same treatment.
-    // `twoFactorMethods`/`twoFactorBackupCodes` are 2FA credential material —
+    // `twoFactorMethods`/`twoFactorBackupCodes`/`twoFactorBackupCodeSalt` are 2FA credential material —
     // `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
     // the schema's own `select: false` split above. `oauthAccounts` gets the same treatment: not
     // part of the `User` contract, `select: false` on the schema already, this is defense in depth.
@@ -773,6 +783,7 @@ export const applyUserTransform = applySerialization(userSchema, {
         'inactivityWarnedAt',
         'twoFactorMethods',
         'twoFactorBackupCodes',
+        'twoFactorBackupCodeSalt',
         'oauthAccounts'
     ]
 });
