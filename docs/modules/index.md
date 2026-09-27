@@ -79,8 +79,6 @@ flowchart TD
     payments --> orders
     payments --> users
     users --> access
-    webhooks --> orders
-    webhooks --> payments
     webhooks --> users
     wishlist --> cart
     wishlist --> products
@@ -98,13 +96,12 @@ flowchart TD
 |                 | Reaches                                                | Reached by                                          |
 | --------------- | ------------------------------------------------------ | --------------------------------------------------- |
 | `cart`          | addresses, delivery, orders, payments, products, users | wishlist                                            |
-| `orders`        | inventory, products, users                             | cart, delivery, payments, webhooks                  |
 | `users`         | access                                                 | account, api-keys, cart, orders, payments, webhooks |
-| `payments`      | inventory, orders, users                               | cart, webhooks                                      |
+| `orders`        | inventory, products, users                             | cart, delivery, payments                            |
+| `payments`      | inventory, orders, users                               | cart                                                |
 | `products`      | —                                                      | cart, inventory, orders, wishlist                   |
 | `access`        | —                                                      | account, api-keys, users                            |
 | `inventory`     | products                                               | orders, payments                                    |
-| `webhooks`      | orders, payments, users                                | —                                                   |
 | `account`       | access, users                                          | —                                                   |
 | `api-keys`      | access, users                                          | —                                                   |
 | `delivery`      | orders                                                 | cart                                                |
@@ -112,6 +109,7 @@ flowchart TD
 | `addresses`     | —                                                      | cart                                                |
 | `audit-logs`    | —                                                      | observability                                       |
 | `observability` | audit-logs                                             | —                                                   |
+| `webhooks`      | users                                                  | —                                                   |
 | `antibot`       | —                                                      | —                                                   |
 | `feedback`      | —                                                      | —                                                   |
 | `locales`       | —                                                      | —                                                   |

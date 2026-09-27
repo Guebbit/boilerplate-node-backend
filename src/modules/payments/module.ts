@@ -13,8 +13,8 @@
  */
 
 import path from 'node:path';
-import type { AppModule } from '@kernel/registry';
-import { onDomainEvent } from '@kernel/events';
+import type { AppModule, PublicEventTarget } from '@kernel/registry';
+import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { ORDER_REFUND_OWED, ORDER_CANCELLED } from '@modules/orders';
 import { router } from './routes';
 import {
@@ -27,8 +27,30 @@ import { validateBankTransferConfig, validateStripeSecretKey } from './config';
 import { paymentsRateLimits } from './rate-limits';
 import { checkSelector } from '@kernel/required-config';
 import { resolvePaymentProvider } from './providers';
-// Installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED).
-import './events';
+// Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED). Reached
+// directly, never through this module's own barrel — see CLAUDE.md's module-barrel rule.
+import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from './events';
+
+/**
+ * DDD-D4: this module's public (webhook-visible) events — `webhooks/services/publish.ts`
+ * subscribes to these generically, through `kernel/registry.ts`'s `resolvePublicEvents`, instead
+ * of importing `PAYMENT_SUCCEEDED`/`PAYMENT_FAILED` by name. Both are a straight rename: the
+ * public payload is exactly the domain one.
+ */
+const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
+    [PAYMENT_SUCCEEDED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof PAYMENT_SUCCEEDED]) => ({
+            eventType: 'payment.succeeded',
+            data: { paymentId: payload.paymentId, orderId: payload.orderId }
+        })
+    },
+    [PAYMENT_FAILED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof PAYMENT_FAILED]) => ({
+            eventType: 'payment.failed',
+            data: { paymentId: payload.paymentId, orderId: payload.orderId }
+        })
+    }
+};
 
 /** This module's manifest entry: routes, the cancel-refund subscription, and locales. */
 export default {
@@ -46,6 +68,7 @@ export default {
         'payments.any.update'
     ],
     routes: router,
+    publicEvents,
     /** The webhook and card-testing budgets — see `./rate-limits.ts`. */
     rateLimits: paymentsRateLimits,
     // The provider signs over the exact bytes it sent — relative to `basePath`, composed by the

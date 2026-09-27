@@ -9,12 +9,23 @@
 # file, so the catalogue a subscriber reads and the events this module can actually fire can never
 # drift apart.
 #
-# `webhooks/module.ts` subscribes to each of these on the kernel's domain-event bus
-# (`order.status_changed` filtered by `to`, `order.created`, `order.cancelled`,
-# `payment.succeeded`, `payment.failed` — see `orders/events.ts` and `payments/events.ts`) and
-# republishes the ones a subscription's filter matches, signed, to the URL it names. The SIX names
-# below are the shop's worked example; a deployment with no orders declares its own here and
-# deletes this file along with the rest of the module.
+# `webhooks/module.ts`'s `onRegistered` hook subscribes generically to every domain event a
+# registered module's manifest names a `publicEvents` entry for (`kernel/registry.ts`'s
+# `PublicEventTarget`, DDD-D4) and republishes the ones a subscription's filter matches, signed, to
+# the URL it names. `orders`/`payments` own the MAPPING — which domain event, projected how,
+# becomes which public name — on their own `module.ts`; nothing here or in `webhooks` imports the
+# other module's event constants any more.
+#
+# This file still owns the CHANNEL CATALOGUE below, though, rather than each event's owning module
+# splitting off its own channel: every one binds to the single `subscriberEndpoint` server and
+# every envelope shares the single `WebhookHeaders` schema declared once here, and the bundler's
+# merge refuses two sections declaring the same key (`asyncapi-bundles.ts`'s `mergeInto`) while a
+# section is also required to be a complete, standalone-valid document — a channel `$ref`-ing a
+# server or schema it does not itself declare fails `lint:asyncapi:modules` on that section alone.
+# Splitting the channel catalogue by owning module is therefore its own follow-up decision, not
+# assumed here. The SIX names below are the shop's worked example; a deployment with no orders
+# removes `orders`/`payments` and their `publicEvents` declarations, and deletes the now-unreachable
+# channels here by hand — this file is authored, not generated from those modules.
 #
 # Every body is the Standard Webhooks envelope, `{ type, timestamp, data }` — `type` names the
 # event (so a subscriber on more than one event type can tell them apart without inspecting

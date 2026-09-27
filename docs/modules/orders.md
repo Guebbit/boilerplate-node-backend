@@ -23,12 +23,10 @@ flowchart LR
     payments["payments"]
     products["products"]
     users["users"]
-    webhooks["webhooks"]
 
     cart --> orders
     delivery --> orders
     payments --> orders
-    webhooks --> orders
     orders --> inventory
     orders --> products
     orders --> users
@@ -37,16 +35,13 @@ flowchart LR
     products -. "product.deleted" .-> orders
     orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
-    orders -. "order.cancelled" .-> webhooks
-    orders -. "order.created" .-> webhooks
-    orders -. "order.status_changed" .-> webhooks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class delivery,inventory,payments,users,webhooks supporting;
+    class delivery,inventory,payments,users supporting;
     class orders centre;
 ```
 
