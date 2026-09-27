@@ -25,6 +25,16 @@ tester.run('barrel-allowed-sources', barrelAllowedSources as never, {
             // barrel specifically, decided off the file path the rule is actually linting.
             code: `export { resolveTaxRate } from './tax';`,
             filename: 'src/modules/products/index.ts'
+        },
+        {
+            // A presenter's OUTPUT TYPE is the one thing it may publish (T9) — the same
+            // types-only treatment `./model` gets above.
+            code: `export type * from './presenter';`
+        },
+        {
+            // `presenters.ts` (plural) is the same allowance, for a module presenting more than
+            // one resource shape — webhooks' subscription and delivery, for one.
+            code: `export type * from './presenters';`
         }
     ],
     invalid: [
@@ -69,6 +79,25 @@ tester.run('barrel-allowed-sources', barrelAllowedSources as never, {
             code: `export { resolveTaxRate } from './tax';`,
             filename: 'src/modules/delivery/index.ts',
             errors: [{ messageId: 'notAllowed' }]
+        },
+        {
+            // The presenter may leave a barrel as types only — `export *` here would also
+            // publish the transform function, which a sibling must reach through the service.
+            code: `export * from './presenter';`,
+            errors: [{ messageId: 'presenterAsValue' }]
+        },
+        {
+            // A named pick names the function itself, unlike a named TYPE pick off `./model` —
+            // there is no "genuinely pure helper" exception here, since `export type *` already
+            // covers everything worth naming.
+            code: `export { presentProduct } from './presenter';`,
+            errors: [{ messageId: 'presenterNamedValue' }]
+        },
+        {
+            // The source-less form, same as `productRepository` above: resolved through the
+            // rule's own import map since the export itself carries no `from`.
+            code: `import { presentProduct } from './presenter';\nexport { presentProduct };`,
+            errors: [{ messageId: 'presenterNamedValue' }]
         }
     ]
 });

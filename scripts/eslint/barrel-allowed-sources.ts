@@ -1,7 +1,8 @@
 /**
  * A module's barrel may only `export *` its services, domain rules, events and emails as values,
- * and its model as TYPES ONLY — never a repository, the model's runtime VALUE, or a wiring file,
- * in ANY export form. See docs/theory/strategic-ddd.md §5.
+ * and its model AND its presenter(s) as TYPES ONLY — never a repository, the model's runtime
+ * VALUE, a presenter FUNCTION, or a wiring file, in ANY export form. See
+ * docs/theory/strategic-ddd.md §5.
  *
  * Checked forms:
  * - `export * from './x'` / `export type * from './x'` — against the two allowlists below.
@@ -11,7 +12,9 @@
  *   (`no-restricted-imports` in `eslint.config.ts`) already refuses that import categorically, so
  *   this rule does not need its own allowance for it, dead or otherwise. A named pick from
  *   `./model` is checked by NAME instead: a pure helper is fine, the schema, its transform or the
- *   model object are not — see `isModelRuntimeValueName`.
+ *   model object are not — see `isModelRuntimeValueName`. A named pick from `./presenter(s)` is
+ *   simpler still: the function is never fine, since a sibling reaches it through the service
+ *   (T9) — only its OUTPUT TYPE, and only via `export type *`, ever leaves.
  * - `import { x } from './y'; export { x };` — resolved through this file's own import map,
  *   since the export itself carries no source.
  */
@@ -25,6 +28,8 @@ type MessageIds =
     | 'notAllowed'
     | 'modelAsValue'
     | 'modelNamedValue'
+    | 'presenterAsValue'
+    | 'presenterNamedValue'
     | 'repositoryExport'
     | 'wiringExport';
 
@@ -40,8 +45,11 @@ const isWiringSource = (stem: string): boolean =>
 /** Value files a barrel may `export *` from, or name-pick from `export { x } from './y'`. */
 const VALUE_SOURCES = new Set(['services', 'service', 'domain', 'events', 'emails']);
 
-/** The same, plus `model` — reachable, but types only. */
-const TYPE_SOURCES = new Set([...VALUE_SOURCES, 'model']);
+/** `presenter.ts`, or `presenters.ts` for a module presenting more than one resource shape (T9). */
+const PRESENTER_SOURCES = new Set(['presenter', 'presenters']);
+
+/** The same, plus `model` and the presenter(s) — reachable, but types only. */
+const TYPE_SOURCES = new Set([...VALUE_SOURCES, 'model', ...PRESENTER_SOURCES]);
 
 /**
  * This rule only ever lints a module's `index.ts` (see its registration in `eslint.config.ts`),
@@ -77,8 +85,8 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
         messages: {
             notAllowed:
                 '{{declaration}} is not one of the files a barrel may publish — services, domain, ' +
-                'events and emails as values, model as `export type *` only, plus (products only) ' +
-                'a named pick from tax. See docs/theory/strategic-ddd.md §5.',
+                'events and emails as values, model and the presenter(s) as `export type *` only, ' +
+                'plus (products only) a named pick from tax. See docs/theory/strategic-ddd.md §5.',
             modelAsValue:
                 "The model is published as types only — `export type * from './model'`, never " +
                 "`export * from './model'`, which would also publish the mongoose schema and " +
@@ -88,6 +96,16 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
                 'this repo’s naming convention (a mongoose schema, its `toJSON` transform, or the ' +
                 'model object) — `export type *` already publishes its structure; a named pick ' +
                 'stays to genuinely pure helpers. See docs/theory/strategic-ddd.md §5.',
+            presenterAsValue:
+                "The presenter is published as types only — `export type * from './presenter'`, " +
+                "never `export * from './presenter'`, which would also publish the transform " +
+                'function itself; a sibling reaches it through the service, never the presenter ' +
+                'file directly. See docs/theory/strategic-ddd.md §5.',
+            presenterNamedValue:
+                '{{declaration}} names a value from the presenter by hand — only its OUTPUT TYPE ' +
+                "may leave a barrel, and only via `export type * from './presenter'`. The " +
+                'function itself stays inside, reachable through the service the same as any ' +
+                'other shaping helper. See docs/theory/strategic-ddd.md §5.',
             repositoryExport:
                 '{{declaration}} publishes a repository — a write handle on a collection this ' +
                 'module does not own once published. The service is the door, in every export ' +
@@ -180,6 +198,11 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
                     return;
                 }
 
+                if (PRESENTER_SOURCES.has(stem)) {
+                    context.report({ node: node.source, messageId: 'presenterAsValue' });
+                    return;
+                }
+
                 if (!VALUE_SOURCES.has(stem))
                     context.report({
                         node: node.source,
@@ -196,6 +219,19 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
                     const isTypeOnly = node.exportKind === 'type';
                     if (stem === 'model') {
                         if (!isTypeOnly) reportModelNamedValuePicks(node, node.specifiers);
+                        return;
+                    }
+
+                    if (PRESENTER_SOURCES.has(stem)) {
+                        // Unlike a model pick, ANY named export off a presenter is the function
+                        // itself — there is no type worth naming individually when `export type *`
+                        // already publishes the whole output type.
+                        if (!isTypeOnly)
+                            context.report({
+                                node: node.source,
+                                messageId: 'presenterNamedValue',
+                                data: { declaration: declarationText(node) }
+                            });
                         return;
                     }
 
@@ -224,6 +260,15 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
                                 declaration: declarationText(node),
                                 name: specifier.local.name
                             }
+                        });
+                    // An `import { x } from './presenter'` reaching this far is always a value —
+                    // TypeScript resolves `import type` to a distinct AST node this map never
+                    // populates, so anything found here is the function itself.
+                    if (PRESENTER_SOURCES.has(stem))
+                        context.report({
+                            node: specifier,
+                            messageId: 'presenterNamedValue',
+                            data: { declaration: declarationText(node) }
                         });
                 }
             }
