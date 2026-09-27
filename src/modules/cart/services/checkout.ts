@@ -365,13 +365,11 @@ const runCheckout = async (
 
     /*
      * `bank_transfer`'s hold is `methodInfo.holdHours`, converted to the unit
-     * `reserveForOrder` and `payBy` both want; `card` passes `undefined` through and gets
-     * `reserveForOrder`'s own default (`NODE_RESERVATION_TTL_MINUTES`) — nothing about the
-     * existing card flow's timing changes.
+     * `reserveForOrder` wants; `card` passes `undefined` through and gets its own default
+     * (`NODE_RESERVATION_TTL_MINUTES`). `placeOrder` freezes `payBy` from the hold it actually
+     * takes at this length — never a second, separately-computed guess.
      */
     const holdMinutes = methodInfo.holdHours === undefined ? undefined : methodInfo.holdHours * 60;
-    const payBy =
-        holdMinutes === undefined ? undefined : new Date(Date.now() + holdMinutes * 60_000);
 
     /*
      * The write itself — freezing the lines, allocating the invoice number, minting a
@@ -394,7 +392,6 @@ const runCheckout = async (
             product: line.product.toObject() as Lean<ProductDocument>
         })),
         paymentMethod: requestedMethod,
-        payBy,
         shipping: {
             ...(address ? { address: toShippingAddress(address) } : {}),
             ...(shippingMethod

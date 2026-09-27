@@ -52,8 +52,12 @@ export interface StockShortfall {
 /**
  * What a reserve answers — a result rather than a boolean, so a refusal can name which line and
  * how many are left, read back at the moment it refused rather than a stale pre-flight figure.
+ * A hold's `expiresAt` is the SAME value the reservation itself was written with — the one real
+ * deadline, never a second figure a caller computes on its own from the same `holdMinutes`.
  */
-export type ReserveOutcome = { held: true } | { held: false; shortfalls: StockShortfall[] };
+export type ReserveOutcome =
+    | { held: true; expiresAt: Date }
+    | { held: false; shortfalls: StockShortfall[] };
 
 /** What a stock-board read accepts. */
 export interface LevelFilters extends PaginationInput {
@@ -233,8 +237,12 @@ export const reserveForOrder = async (
 ): Promise<ReserveOutcome> => {
     const expiresAt = new Date(Date.now() + holdMinutes * 60_000);
     const hold = await reservationRepository.insertHold(orderId, lines, expiresAt);
-    // Already held — a retry, or a double-clicked button. The first call did the work.
-    if (!hold) return { held: true };
+    // Already held — a retry, or a double-clicked button. The first call did the work; report
+    // ITS expiry, not the fresh guess this attempt computed but never actually wrote.
+    if (!hold) {
+        const existing = await reservationRepository.findByOrderId(orderId);
+        return { held: true, expiresAt: existing?.expiresAt ?? expiresAt };
+    }
 
     const taken: StockLine[] = [];
     // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: a thrown error partway through must give back only the lines actually taken, then rethrow, so no safe wrapper covers this
@@ -285,7 +293,7 @@ export const reserveForOrder = async (
         throw error;
     }
 
-    return { held: true };
+    return { held: true, expiresAt };
 };
 
 /**
