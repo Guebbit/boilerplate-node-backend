@@ -59,8 +59,12 @@ export type AuditAction = CoreAuditAction | AuditActionMap[keyof AuditActionMap]
 export interface AuditEvent {
     /** Who acted. 'unknown' when unresolvable — never omitted, so queries can rely on it. */
     actor_user_id: string;
-    /** Privilege level at the time of the action, so a later role change cannot rewrite history. */
-    actor_role: 'admin' | 'user' | 'anonymous';
+    /**
+     * Privilege level at the time of the action, so a later role change cannot rewrite history.
+     * `system` is `SYSTEM_ACTOR` — a background job, never a real account — kept apart from
+     * `admin` so the trail can tell "an operator did this" from "a sweep did" (B21).
+     */
+    actor_role: 'admin' | 'user' | 'anonymous' | 'system';
     /**
      * The tenant role name behind `actor_role`, e.g. `moderator` — open where `actor_role` is
      * closed, so a reader can ask "which moderator did this" without a renamed role invalidating
@@ -194,12 +198,14 @@ export const extractRequestContext = (
 /**
  * Resolve actor role from the caller context.
  *
- * `unrestricted` is computed once, in `kernel/permissions.ts`'s `callerInScope`, and carried on
- * `context.caller` — infrastructure reads it off the caller rather than re-deriving "holds every
- * key this scope declares" itself, which would need the full declared-key set that only the
- * kernel owns. A call site that wants a role NAME rather than this coarse three-way split still
- * passes `actor_role_name` alongside, and one auditing an action for a caller it already knows is
- * unrestricted may still pass `actor_role` explicitly to skip this default.
+ * `unrestricted` and `system` are both computed once, in `kernel/permissions.ts`'s
+ * `callerInScope`, and carried on `context.caller` — infrastructure reads them off the caller
+ * rather than re-deriving "holds every key this scope declares" or "is this `SYSTEM_ACTOR`"
+ * itself, either of which would need to reach past the kernel boundary (`infrastructure` may not
+ * import `@kernel/*` — see `eslint.config.ts`). A call site that wants a role NAME rather than
+ * this four-way split still passes `actor_role_name` alongside, and one auditing an action for a
+ * caller it already knows is unrestricted may still pass `actor_role` explicitly to skip this
+ * default.
  * @param context - the caller context built once in the controller
  * @returns the actor's role
  */
@@ -207,6 +213,9 @@ const resolveActorRole = (context: CallerContext): AuditEvent['actor_role'] => {
     // No caller id at all: an unauthenticated request. Still audited — failed logins and
     // blocked access attempts are exactly the events worth keeping.
     if (!context.caller.id) return 'anonymous';
+    // Checked before `unrestricted`: `SYSTEM_ACTOR` is unrestricted too (B21), and without this
+    // check first every background job would read as an admin's own action.
+    if (context.caller.system) return 'system';
     return context.caller.unrestricted ? 'admin' : 'user';
 };
 

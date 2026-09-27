@@ -48,13 +48,13 @@ const leaveForOperator = (orderId: string, payment: PaymentDocument): Promise<Pa
         `Payment for order ${orderId} was paid by hand — left \`succeeded\` for an operator to confirm the money actually went back.`
     );
     // Stryker restore all
+    // No `actor_role`/`actor_user_id` override needed: `buildAuditEvent`'s defaults already read
+    // them off `SYSTEM_ACTOR`'s own caller (B21).
     recordAudit(
         { caller: callerForSubject(SYSTEM_ACTOR, 'Payment'), analyticsConsent: false },
         {
             action: paymentsAuditActions.PAYMENT_REFUND_OWED_BY_HAND,
             outcome: 'success',
-            actor_role: 'admin',
-            actor_user_id: 'system',
             target_type: 'order',
             target_id: orderId
         }

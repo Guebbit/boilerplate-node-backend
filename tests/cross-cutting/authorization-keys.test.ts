@@ -66,12 +66,15 @@ describe('the preset roles', () => {
         }
     );
 
-    it('include exactly one unrestricted TENANT role, holding every tenant key by name', () => {
+    it('include exactly two unrestricted TENANT roles: admin, and the system actor that aliases it', () => {
         const unrestricted = PRESET_ROLES.filter(
             (role) => role.scope === 'tenant' && isUnrestrictedRole(role.name, role.scope)
         );
 
-        expect(unrestricted.map((role) => role.name)).toEqual(['admin']);
+        // `system` (B21) holds `admin`'s own permission list via a YAML alias in
+        // `authorization-roles.yaml`, so it is unrestricted for the identical reason and can never
+        // drift from it — see `kernel/permissions.ts`'s `SYSTEM_ACTOR`.
+        expect(unrestricted.map((role) => role.name)).toEqual(['admin', 'system']);
     });
 
     // "Unrestricted" is a derived fact now — holds every key its own scope currently declares —

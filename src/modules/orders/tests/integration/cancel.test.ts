@@ -287,14 +287,17 @@ describe('cancelById — audit and analytics', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext.
+        // Mirrors module.ts's RESERVATION_EXPIRED handler: no CallerContext — `afterCancel` builds
+        // its own system-actor context regardless of the `authContext` passed here.
         await orderService.cancelById(String(order._id), asAdmin());
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: ordersAuditActions.ORDER_CANCELLED,
                 outcome: 'success',
-                actor_role: 'admin',
+                // B21: the system actor, not admin — `SYSTEM_ACTOR` is its own role now, not an
+                // alias for a human admin's, and the audit trail says so.
+                actor_role: 'system',
                 actor_user_id: 'system'
             })
         );

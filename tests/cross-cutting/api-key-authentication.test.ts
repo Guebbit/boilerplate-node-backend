@@ -51,7 +51,8 @@ const credentialHolding = async (permissions: string[]): Promise<string> => {
             tenantId: DEPLOYMENT_TENANT_ID,
             scope: 'tenant',
             permissions,
-            unrestricted: false
+            unrestricted: false,
+            system: false
         },
         analyticsConsent: false
     };

@@ -120,12 +120,14 @@ const afterCancel = async (
         });
     }
 
+    // No override needed: `emitContext.caller` is `SYSTEM_ACTOR`'s own caller for a system expiry
+    // (built above), and `buildAuditEvent`'s defaults already read `actor_user_id`/`actor_role`
+    // off `context.caller.id`/`.system` — see `resolveActorRole`.
     recordAudit(emitContext, {
         action: ordersAuditActions.ORDER_CANCELLED,
         outcome: 'success',
         target_type: 'order',
-        target_id: String(order._id),
-        ...(isSystemExpiry ? { actor_role: 'admin', actor_user_id: 'system' } : {})
+        target_id: String(order._id)
     });
     emitAnalyticsEvent({
         ...buildAnalyticsBase(emitContext),

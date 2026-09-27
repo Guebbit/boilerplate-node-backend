@@ -310,7 +310,8 @@ export const anonymousCaller = (): Caller => {
         tenantId: DEPLOYMENT_TENANT_ID,
         scope: 'tenant',
         permissions: ANONYMOUS_ROLE.permissions,
-        unrestricted: holdsEveryDeclaredKey('tenant', ANONYMOUS_ROLE.permissions)
+        unrestricted: holdsEveryDeclaredKey('tenant', ANONYMOUS_ROLE.permissions),
+        system: false
     };
 };
 
@@ -386,6 +387,12 @@ export const keysInScope = (
 };
 
 /**
+ * `SYSTEM_ACTOR`'s id — hoisted above its own declaration so {@link assembleCaller} can compute
+ * `Caller.system` without forward-referencing the constant it belongs to.
+ */
+const SYSTEM_ACTOR_ID = 'system';
+
+/**
  * Assemble a `Caller` from its raw fields, `unrestricted` computed rather than trusted —
  * the one shape `callerInScope`'s two branches below, and `api-keys/module.ts`'s two
  * credential-resolution paths (the mint-time floor, then every check afterwards), each built
@@ -410,7 +417,8 @@ export const assembleCaller = (
         tenantId,
         scope,
         permissions,
-        unrestricted: holdsEveryDeclaredKey(scope, permissions)
+        unrestricted: holdsEveryDeclaredKey(scope, permissions),
+        system: id === SYSTEM_ACTOR_ID
     }) as Caller;
 
 /**
@@ -504,14 +512,19 @@ export const isUnrestricted = (caller: Pick<Caller, 'scope' | 'permissions'>): b
  * make the sweep find nothing and report success. Its id is `system` rather than a user's, which
  * is the same word the audit trail already uses for the actor on these paths.
  *
+ * B21: its role is its own, `system`, not `admin`. The two used to be the same value, which meant
+ * a background job's audit row read as an admin's — `system` in `authorization-roles.yaml` aliases
+ * `admin`'s permission list through a YAML anchor, unrestricted for the same reason and kept from
+ * drifting by construction, while staying an identity `isSystemActor` can name apart from a real one.
+ *
  * It is a value here rather than a caller assembled at each site because that is exactly the kind
  * of thing that gets assembled slightly differently the third time.
  */
 export const SYSTEM_ACTOR: AuthContext = {
-    id: 'system',
+    id: SYSTEM_ACTOR_ID,
     email: 'system@localhost',
     username: 'system',
-    roles: { tenant: 'admin', platform: null },
+    roles: { tenant: 'system', platform: null },
     tenantId: DEPLOYMENT_TENANT_ID,
     authTime: 0,
     amr: [],
@@ -519,19 +532,19 @@ export const SYSTEM_ACTOR: AuthContext = {
 };
 
 /**
- * Is this caller the application acting on nobody's behalf, rather than a real account that
- * happens to hold the admin role?
+ * Is this caller the application acting on nobody's behalf, rather than a real account?
  *
- * `SYSTEM_ACTOR` carries `roles.tenant: 'admin'` so its reads and writes pass every ordinary
- * permission check unrestricted — but a caller asking "is this a REQUEST a human made" (a
- * lifecycle rule narrower for a background job than for an admin, an audit trail distinguishing
- * "an operator did this" from "a sweep did") needs the identity question, not the scope one.
- * `id` alone: nothing else on `SYSTEM_ACTOR` is unique to it, and a real account's id never
- * collides with the literal `'system'`.
+ * `SYSTEM_ACTOR` carries `roles.tenant: 'system'`, unrestricted like `admin` — a caller asking "is
+ * this a REQUEST a human made" (a lifecycle rule narrower for a background job than for an admin,
+ * an audit trail distinguishing "an operator did this" from "a sweep did") needs the identity
+ * question, not the scope one: the `system` ROLE is only ever unrestricted the same way `admin` is,
+ * never proof of anything on its own. `id` alone: nothing
+ * else on `SYSTEM_ACTOR` is unique to it, and a real account's id never collides with the literal
+ * `'system'`.
  * @param caller - the caller to ask about, or `undefined` for an unauthenticated request
  */
 export const isSystemActor = (caller: AuthContext | undefined): boolean =>
-    caller?.id === SYSTEM_ACTOR.id;
+    caller?.id === SYSTEM_ACTOR_ID;
 
 /**
  * T6: the {@link CallerContext} a cron job hands `recordAudit` for a write nobody at the keyboard

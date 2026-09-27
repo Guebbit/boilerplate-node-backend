@@ -39,7 +39,12 @@ describe('auditLogSchema — what an entry must carry', () => {
         // These three are queried and aggregated on. A free-form value would not error; it would
         // quietly fall outside every filter an operator writes, which is indistinguishable from
         // the event never happening.
-        expect(enumOf(auditLogSchema, 'actor_role')).toEqual(['admin', 'user', 'anonymous']);
+        expect(enumOf(auditLogSchema, 'actor_role')).toEqual([
+            'admin',
+            'user',
+            'anonymous',
+            'system'
+        ]);
         expect(enumOf(auditLogSchema, 'outcome')).toEqual(['success', 'failure']);
         expect(enumOf(auditLogSchema, 'level')).toEqual(['info', 'warn']);
     });
