@@ -132,7 +132,10 @@ it('publishes the set the pair agreed on', () => {
      * far — and neither does the pending-email-change notice, nor bank transfer, which the PHP
      * twin has no equivalent feature for at all. `webhooks.subscription-disabled` is the same
      * story: the PHP twin has no webhook module yet. `orders.order-product-unavailable` (a hard
-     * delete or a deactivation cancelling a pending order) is likewise Node-only so far. The other
+     * delete or a deactivation cancelling a pending order) is likewise Node-only so far. So are
+     * `orders.order-paid` (E5: a payment settling to `succeeded` now mails the buyer) and
+     * `orders.order-card-expired` (E5: a `card` hold's own expiry notice, the twin of
+     * `orders.order-transfer-expired` for the other payment method) — both new here. The other
      * eight are the agreed, mirrored set.
      */
     const agreed = [
@@ -147,7 +150,9 @@ it('publishes the set the pair agreed on', () => {
         'account.verify-request',
         'delivery.shipment-shipped',
         'feedback.contact',
+        'orders.order-card-expired',
         'orders.order-confirm',
+        'orders.order-paid',
         'orders.order-product-unavailable',
         'orders.order-transfer-expired',
         'orders.order-transfer-instructions',

@@ -46,6 +46,15 @@
             "total": "Total: {{total}}",
             "link-label": "View your order and receipt"
         },
+        "email-paid": {
+            "subject": "Payment received",
+            "meta-title": "Payment received",
+            "greeting": "Hello, {{name}}!",
+            "body": "We've received your payment — your order is now being prepared.",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "total": "Total: {{total}}",
+            "link-label": "View your order and receipt"
+        },
         "email-transfer": {
             "subject": "Complete your order by bank transfer",
             "meta-title": "Bank transfer instructions",
@@ -59,6 +68,12 @@
             "meta-title": "Order cancelled",
             "greeting": "Hello!",
             "body": "We didn't receive your bank transfer in time, so this order has been cancelled and its items released."
+        },
+        "email-card-expired": {
+            "subject": "Your order was cancelled — payment not completed",
+            "meta-title": "Order cancelled",
+            "greeting": "Hello!",
+            "body": "We didn't receive your payment in time, so this order has been cancelled and its items released."
         },
         "email-product-unavailable": {
             "subject": "Your order was cancelled — an item is no longer available",

@@ -80,6 +80,43 @@ export const orderConfirmEmail = (
 };
 
 /**
+ * Payment received, sent once `payments`' settlement actually commits the stock —
+ * `services/settlement.ts`'s `settlePayment` is the one caller. The customer's answer to "did my
+ * card go through": {@link orderConfirmEmail} only ever said the order was received, never that
+ * it was paid.
+ */
+export const paymentSucceededEmail = (
+    locale: string,
+    name: string,
+    order: OrderLines,
+    orderId: string
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'orders.order-paid',
+        subject: t('orders.email-paid.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('orders.email-paid.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('orders.email-paid.greeting', { name }),
+            body: t('orders.email-paid.body'),
+            lines: order.items.map((item) =>
+                t('orders.email-paid.line', {
+                    title: item.product.title,
+                    quantity: item.quantity,
+                    price: item.product.price
+                })
+            ),
+            total: t('orders.email-paid.total', { total: orderTotal(order) }),
+            linkLabel: t('orders.email-paid.link-label'),
+            linkUrl: orderFrontendLink({ locale, id: orderId }),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
  * The instructions and deadline for a `bank_transfer` checkout, sent instead of
  * {@link orderConfirmEmail} — there is nothing to confirm yet, only what the customer still has
  * to do. `payBy` is formatted with `Intl.DateTimeFormat` in the recipient's own language rather
@@ -129,8 +166,7 @@ export const bankTransferInstructionsEmail = (
 
 /**
  * The sweep cancelling a `bank_transfer` order whose deadline passed with no money — the
- * customer's answer to "what happened to my order". Never sent for a `card` order timing out:
- * that hold is thirty minutes and nobody has read a confirmation email by then.
+ * customer's answer to "what happened to my order".
  */
 export const bankTransferExpiredEmail = (locale: string, order: OrderLines): EmailContent => {
     const t = translator(locale);
@@ -143,6 +179,28 @@ export const bankTransferExpiredEmail = (locale: string, order: OrderLines): Ema
             pageMetaLinks: [],
             greeting: t('orders.email-transfer-expired.greeting'),
             body: t('orders.email-transfer-expired.body'),
+            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * {@link bankTransferExpiredEmail}'s twin for a `card` hold — a customer who never finished
+ * checkout gets the same explanation once the thirty-minute reservation lapses, its own template
+ * since the wording differs (a hold, not a deadline sent up front).
+ */
+export const cardHoldExpiredEmail = (locale: string, order: OrderLines): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'orders.order-card-expired',
+        subject: t('orders.email-card-expired.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('orders.email-card-expired.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('orders.email-card-expired.greeting'),
+            body: t('orders.email-card-expired.body'),
             total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             footer: t('email.footer')
         }

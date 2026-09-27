@@ -46,6 +46,15 @@
             "total": "Totale: {{total}}",
             "link-label": "Visualizza il tuo ordine e la ricevuta"
         },
+        "email-paid": {
+            "subject": "Pagamento ricevuto",
+            "meta-title": "Pagamento ricevuto",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Abbiamo ricevuto il tuo pagamento — il tuo ordine è ora in preparazione.",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "total": "Totale: {{total}}",
+            "link-label": "Visualizza il tuo ordine e la ricevuta"
+        },
         "email-transfer": {
             "subject": "Completa il tuo ordine con un bonifico",
             "meta-title": "Istruzioni per il bonifico",
@@ -59,6 +68,12 @@
             "meta-title": "Ordine annullato",
             "greeting": "Ciao!",
             "body": "Non abbiamo ricevuto il tuo bonifico in tempo, quindi questo ordine è stato annullato e i suoi articoli sono stati rilasciati."
+        },
+        "email-card-expired": {
+            "subject": "Il tuo ordine è stato annullato — pagamento non completato",
+            "meta-title": "Ordine annullato",
+            "greeting": "Ciao!",
+            "body": "Non abbiamo ricevuto il tuo pagamento in tempo, quindi questo ordine è stato annullato e i suoi articoli sono stati rilasciati."
         },
         "email-product-unavailable": {
             "subject": "Il tuo ordine è stato annullato — un articolo non è più disponibile",

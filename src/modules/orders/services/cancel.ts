@@ -31,7 +31,7 @@ import { ORDER_CANCELLED, ORDER_REFUND_OWED } from '../events';
 import { orderRepository } from '../repository';
 import { statusesLeadingTo } from '../domain';
 import { orderEffectRetryMinutes } from '../config';
-import { bankTransferExpiredEmail } from '../emails';
+import { bankTransferExpiredEmail, cardHoldExpiredEmail } from '../emails';
 import { getById } from './crud';
 import { mailBuyer } from './notify';
 import { callerScope, actorOf } from './scope';
@@ -97,14 +97,18 @@ const afterCancel = async (
     };
 
     /*
-     * The customer's answer to "what happened to my order" — sent only for the
-     * sweep's own expiry, and only for a transfer: a `card` hold is thirty minutes,
-     * over before anyone has read a confirmation email, and a customer's own cancel
-     * needs no explanation of itself.
+     * The customer's answer to "what happened to my order" — sent only for the sweep's own
+     * expiry; a customer's own cancel needs no explanation of itself. Both payment methods get
+     * one: a `card` hold is thirty minutes, short but no shorter than the time it takes to abandon
+     * a checkout tab and wonder later where the order went.
      */
-    if (isSystemExpiry && order.paymentMethod === 'bank_transfer') {
+    if (isSystemExpiry) {
+        const build =
+            order.paymentMethod === 'bank_transfer'
+                ? bankTransferExpiredEmail
+                : cardHoldExpiredEmail;
         await mailBuyer(order, (locale) => {
-            const mail = bankTransferExpiredEmail(locale, order);
+            const mail = build(locale, order);
             void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
         });
     }

@@ -310,8 +310,8 @@ describe('cancelById — audit and analytics', () => {
     });
 });
 
-describe('cancelById — the bank-transfer-expired email', () => {
-    it('sends it when a bank_transfer order times out with no context', async () => {
+describe('cancelById — the payment-window-expired email', () => {
+    it('sends the transfer-expired email when a bank_transfer order times out with no context', async () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
         const product = await createProduct();
@@ -328,7 +328,12 @@ describe('cancelById — the bank-transfer-expired email', () => {
         expect(template).toBe('orders.order-transfer-expired');
     });
 
-    it('never sends it for a card order timing out — that hold is thirty minutes', async () => {
+    /*
+     * E5's leftover: this used to send nothing at all — "that hold is thirty minutes and nobody
+     * has read a confirmation email by then" was the reasoning, but thirty minutes is still long
+     * enough to abandon a checkout tab and wonder later where the order went.
+     */
+    it('sends the card-expired email when a card order times out with no context', async () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
         const product = await createProduct();
@@ -336,7 +341,10 @@ describe('cancelById — the bank-transfer-expired email', () => {
 
         await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
 
-        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        const [envelope, template] = mockEnqueueEmail.mock.calls[0];
+        expect(envelope.to).toBe(user.email);
+        expect(template).toBe('orders.order-card-expired');
     });
 
     it("never sends it for the customer's own cancel, even of a bank_transfer order", async () => {
