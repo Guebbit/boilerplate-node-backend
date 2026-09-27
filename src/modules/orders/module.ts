@@ -68,7 +68,9 @@ export default {
      * converge and neither can double-release.
      */
     subscribe: () => {
-        onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) => cancelById(orderId, SYSTEM_ACTOR));
+        onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) =>
+            cancelById(orderId, SYSTEM_ACTOR, {}, undefined, true)
+        );
         // Only the HARD half of a product's removal — a soft delete (or its restore) leaves a
         // pending order's line exactly as it was, the same reasoning `inventory`'s own listener
         // follows for the level row. Deactivation is unconditional: `product.deactivated` never

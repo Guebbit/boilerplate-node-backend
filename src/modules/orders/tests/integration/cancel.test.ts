@@ -325,8 +325,9 @@ describe('cancelById — the payment-window-expired email', () => {
             paymentMethod: 'bank_transfer'
         });
 
-        // Mirrors module.ts's RESERVATION_EXPIRED handler: the real system actor, no CallerContext.
-        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+        // Mirrors module.ts's RESERVATION_EXPIRED handler: the real system actor, no CallerContext,
+        // and the flag only that handler sets.
+        await orderService.cancelById(String(order._id), SYSTEM_ACTOR, {}, undefined, true);
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
@@ -345,7 +346,7 @@ describe('cancelById — the payment-window-expired email', () => {
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], { paymentMethod: 'card' });
 
-        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+        await orderService.cancelById(String(order._id), SYSTEM_ACTOR, {}, undefined, true);
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
@@ -376,10 +377,16 @@ describe('cancelById — the payment-window-expired email', () => {
         });
         jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('lookup unavailable'));
 
-        // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext. Before
-        // the fix, this `await` threw straight out of `afterCancel` — the cancel itself never
-        // committed.
-        const result = await orderService.cancelById(String(order._id), asAdmin());
+        // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext, and the
+        // flag only that handler sets. Before the fix, this `await` threw straight out of
+        // `afterCancel` — the cancel itself never committed.
+        const result = await orderService.cancelById(
+            String(order._id),
+            asAdmin(),
+            {},
+            undefined,
+            true
+        );
 
         expect(result.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
@@ -394,6 +401,21 @@ describe('cancelById — the payment-window-expired email', () => {
                 orderId: String(order._id)
             })
         );
+    });
+
+    it('does not send the expiry email for a system cancel that is not the reservation sweep', async () => {
+        mockEnqueueEmail.mockClear();
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer'
+        });
+
+        // Same shape `availability.ts` calls with: a system actor, no context, no reservation
+        // flag — its own listener sends its own explanation instead.
+        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
 });
 
