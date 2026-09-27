@@ -120,6 +120,9 @@ components:
                 - data
             properties:
                 request:
+                    # `title` names the generated model — a bare inline object otherwise becomes
+                    # Modelina's `AnonymousSchemaN`, renumbered on every unrelated schema addition.
+                    title: EmailRequest
                     type: object
                     description: Nodemailer SendMailOptions subset.
                     required:
@@ -142,6 +145,7 @@ components:
                                 resolve, closing off the arbitrary-file-read a producer-chosen path
                                 would otherwise open.
                             items:
+                                title: EmailAttachment
                                 type: object
                                 required:
                                     - filename

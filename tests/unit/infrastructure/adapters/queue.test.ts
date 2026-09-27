@@ -793,13 +793,15 @@ describe('consumeFromQueue contract validation', () => {
         );
     });
 
-    it('rejects a field the contract does not declare, rather than passing it through', async () => {
+    it('runs the handler when the payload carries a field the contract does not declare (C14)', async () => {
         const handler = jest.fn().mockResolvedValue(true);
         const onMessage = await captureConsumerCallback(handler, EmailJobPayloadSchema);
 
-        // `additionalProperties: false` in the contract becomes `.strict()` in the generated
-        // schema. Without it a producer could smuggle a field the consumer's own type never
-        // mentions, which is the whole shape of a message-injection bug.
+        // A queue payload schema reads TOLERANTLY: `additionalProperties: false` in the contract
+        // no longer becomes `.strict()` in the generated schema, because a producer adding a field
+        // is a normal, non-breaking rolling-deploy change — parking every message the moment one
+        // ships a new field would turn that into an outage for every consumer still on the old
+        // contract.
         await onMessage(
             delivery({
                 request: { to: 'a@example.com', bcc: 'attacker@example.com' },
@@ -809,14 +811,9 @@ describe('consumeFromQueue contract validation', () => {
         );
         await settle();
 
-        expect(handler).not.toHaveBeenCalled();
-        expect(mockNack).not.toHaveBeenCalled();
-        expect(mockSendToQueue).toHaveBeenCalledWith(
-            'jobs.dead',
-            expect.any(Buffer),
-            expect.objectContaining({ persistent: true }),
-            expect.any(Function)
-        );
+        expect(handler).toHaveBeenCalledTimes(1);
+        expect(mockAck).toHaveBeenCalledTimes(1);
+        expect(mockSendToQueue).not.toHaveBeenCalled();
     });
 
     it('still delivers when no schema is declared, so an unvalidated queue keeps working', async () => {

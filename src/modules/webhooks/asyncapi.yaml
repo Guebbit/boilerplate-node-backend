@@ -271,6 +271,9 @@ components:
                 - data
             properties:
                 type:
+                    # `title` names the generated model — a bare inline enum-of-one otherwise
+                    # becomes Modelina's `AnonymousSchemaN`, renumbered on every unrelated addition.
+                    title: OrderCreatedEventType
                     type: string
                     enum:
                         - order.created
@@ -288,6 +291,7 @@ components:
                 - data
             properties:
                 type:
+                    title: OrderPaidEventType
                     type: string
                     enum:
                         - order.paid
@@ -305,6 +309,7 @@ components:
                 - data
             properties:
                 type:
+                    title: OrderShippedEventType
                     type: string
                     enum:
                         - order.shipped
@@ -322,6 +327,7 @@ components:
                 - data
             properties:
                 type:
+                    title: OrderCancelledEventType
                     type: string
                     enum:
                         - order.cancelled
@@ -339,6 +345,7 @@ components:
                 - data
             properties:
                 type:
+                    title: PaymentSucceededEventType
                     type: string
                     enum:
                         - payment.succeeded
@@ -356,6 +363,7 @@ components:
                 - data
             properties:
                 type:
+                    title: PaymentFailedEventType
                     type: string
                     enum:
                         - payment.failed
