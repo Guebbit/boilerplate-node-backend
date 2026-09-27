@@ -81,7 +81,6 @@ periodically", via `scripts/run-script.ts`.
 | `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed.                                 |
 | `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                           |
 | `npm run sweep:order-effects`    | 02:20 nightly  | No     | Re-announces `ORDER_REFUND_OWED` for a refund the event bus's one delivery attempt did not carry through. |
-| `npm run reap:invoices`          | 02:25 nightly  | No     | Sweeps the invoice cache: an orphaned file with no order left to name it, and any file past its TTL.      |
 | `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.          |
 | `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.     |
 | `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing.                          |

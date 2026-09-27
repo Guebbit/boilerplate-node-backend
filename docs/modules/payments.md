@@ -19,22 +19,25 @@ flowchart LR
     payments["payments<br/><i>this module</i>"]
     cart["cart"]
     inventory["inventory"]
+    invoicing["invoicing"]
     orders["orders"]
     users["users"]
 
     cart --> payments
+    invoicing --> payments
     payments --> inventory
     payments --> orders
     payments --> users
     orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
+    payments -. "payment.refunded" .-> invoicing
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class inventory,users supporting;
+    class inventory,invoicing,users supporting;
     class payments centre;
 ```
 

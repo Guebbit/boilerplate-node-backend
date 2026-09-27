@@ -3,20 +3,20 @@
 The boilerplate ships two "outbound rendering" examples that are easy to forget about because they sit outside the request/response loop:
 
 - **Email** via [Nodemailer](https://nodemailer.com/) with [EJS](https://ejs.co/) HTML templates.
-- **PDF generation** (order invoices) via [puppeteer-core](https://pptr.dev/).
+- **PDF generation** (invoices, credit notes) via [puppeteer-core](https://pptr.dev/).
 
 Both are optional: they only activate when the relevant env vars / browser binary are configured.
 
 ## Where the code lives
 
-| Concern          | File                                                                                                                                     |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| SMTP transport   | `src/infrastructure/adapters/mailer.ts`                                                                                                  |
-| Attachment spool | `src/infrastructure/adapters/mail-spool.ts` — the Claim Check store an attachment's bytes go through; the queue carries only a key       |
-| Email triggers   | `src/modules/account/controllers/post-reset-request.ts` (password reset)                                                                 |
-| Email copy       | `src/modules/<name>/emails.ts`                                                                                                           |
-| HTML templates   | `shared/templates/**/*.ejs`                                                                                                              |
-| PDF rendering    | `src/modules/orders/services/invoice.ts` — `GET /orders/{id}/invoice` and the placed-order emails both render through `renderInvoicePdf` |
+| Concern          | File                                                                                                                                                        |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SMTP transport   | `src/infrastructure/adapters/mailer.ts`                                                                                                                     |
+| Attachment spool | `src/infrastructure/adapters/mail-spool.ts` — the Claim Check store an attachment's bytes go through; the queue carries only a key                          |
+| Email triggers   | `src/modules/account/controllers/post-reset-request.ts` (password reset)                                                                                    |
+| Email copy       | `src/modules/<name>/emails.ts`                                                                                                                              |
+| HTML templates   | `shared/templates/**/*.ejs`                                                                                                                                 |
+| PDF rendering    | `src/modules/invoicing/services/render.ts` — `GET /orders/{id}/invoice` and `/credit-note` both render through it; see [invoicing](../modules/invoicing.md) |
 
 ## Email pipeline
 
@@ -99,17 +99,18 @@ flowchart LR
     PDF --> Response[HTTP response]
 ```
 
-`puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable, two things happen, neither at boot: `GET /orders/{id}/invoice` answers `500`, and `sendOrderPlacedEmail` logs the failure and sends the order-confirmation mail anyway — with no invoice attached. The second one is silent unless something is watching the logs; see [Hosting](./hosting.md) and `docker/Dockerfile.production`'s own `INSTALL_CHROMIUM` note.
+`puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable, `GET /orders/{id}/invoice` and `/credit-note` both answer `500` — see [Hosting](./hosting.md) and `docker/Dockerfile.production`'s own `INSTALL_CHROMIUM` note. The placed-order email carries no invoice at all (nothing is invoiced yet at that point), so it is unaffected either way.
 
-**Shutdown waits for a render in flight.** A placed-order email renders its invoice
-fire-and-forget, so a process can reach its exit mid-render — a seeding script does it every time
-it places orders. Exiting there orphans the Chromium it launched, and its ~120 MB temporary profile
-stays on disk — enough repeated re-seeds fill `/tmp`. `shutdownInfra` therefore calls
-`settleRenders`, which waits for every render already started — bounded by a quarter of the
-graceful-shutdown timeout, so a hung browser cannot hold the exit hostage and the stores behind it
-still get their turn to close.
+**Shutdown waits for a render in flight.** A caller downloading an invoice or credit note can have
+a process reach its exit mid-render. Exiting there orphans the Chromium it launched, and its
+~120 MB temporary profile stays on disk. `shutdownInfra` therefore calls `settleRenders`, which
+waits for every render already started — bounded by a quarter of the graceful-shutdown timeout, so
+a hung browser cannot hold the exit hostage and the stores behind it still get their turn to close.
 
-The invoice is never a durable file — `services/invoice.ts`'s `renderInvoicePdf` renders on demand and caches the result for a short TTL (`NODE_INVOICE_CACHE_TTL_MINUTES`), never as the system of record. The copy an email carries travels through the mail spool (`mail-spool.ts`): the render is spooled to disk, the queue message carries the key, never the bytes, and `mailer.ts#resolveAttachments` resolves the key back to a path before `sendTemplatedEmail()` sends; the file is discarded once the send has settled — the Claim Check pattern, the same shape `worker.image.digest`'s quarantine store already uses for an upload too large for a message.
+Neither document is ever re-rendered from live config: `invoicing`'s own `Invoice`/`CreditNote`
+rows are the system of record, frozen once at issue, and every render reads the same row again —
+see [invoicing](../modules/invoicing.md). Nothing here rides the mail spool: unlike a password-reset
+email's attachment, an invoice download is a synchronous HTTP response, never a queued message.
 
 ## Works with
 

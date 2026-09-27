@@ -65,7 +65,7 @@ an `<img src="http://169.254.169.254/…">` inside attacker-controlled HTML does
 
 Chromium receives HTML through `setContent`, **never a URL**, and every value the invoice template
 prints goes through `<%= %>` — `infrastructure/adapters/pdf.ts`,
-`shared/templates/documents/orders.invoice.ejs`.
+`shared/templates/documents/invoicing.document.ejs`.
 
 ## What an SSRF primitive would reach
 

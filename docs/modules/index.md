@@ -50,6 +50,7 @@ flowchart TD
     delivery
     feedback
     inventory
+    invoicing
     locales
     observability
     orders
@@ -71,6 +72,8 @@ flowchart TD
     cart --> users
     delivery --> orders
     inventory --> products
+    invoicing --> orders
+    invoicing --> payments
     observability --> audit_logs
     orders --> inventory
     orders --> products
@@ -88,7 +91,7 @@ flowchart TD
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
-    class access,account,addresses,api_keys,delivery,inventory,payments,users,webhooks,wishlist supporting;
+    class access,account,addresses,api_keys,delivery,inventory,invoicing,payments,users,webhooks,wishlist supporting;
     class audit_logs,observability generic;
     class antibot,feedback,locales isolated;
 ```
@@ -96,15 +99,16 @@ flowchart TD
 |                 | Reaches                                                | Reached by                                          |
 | --------------- | ------------------------------------------------------ | --------------------------------------------------- |
 | `cart`          | addresses, delivery, orders, payments, products, users | wishlist                                            |
+| `orders`        | inventory, products, users                             | cart, delivery, invoicing, payments                 |
 | `users`         | access                                                 | account, api-keys, cart, orders, payments, webhooks |
-| `orders`        | inventory, products, users                             | cart, delivery, payments                            |
-| `payments`      | inventory, orders, users                               | cart                                                |
+| `payments`      | inventory, orders, users                               | cart, invoicing                                     |
 | `products`      | —                                                      | cart, inventory, orders, wishlist                   |
 | `access`        | —                                                      | account, api-keys, users                            |
 | `inventory`     | products                                               | orders, payments                                    |
 | `account`       | access, users                                          | —                                                   |
 | `api-keys`      | access, users                                          | —                                                   |
 | `delivery`      | orders                                                 | cart                                                |
+| `invoicing`     | orders, payments                                       | —                                                   |
 | `wishlist`      | cart, products                                         | —                                                   |
 | `addresses`     | —                                                      | cart                                                |
 | `audit-logs`    | —                                                      | observability                                       |
