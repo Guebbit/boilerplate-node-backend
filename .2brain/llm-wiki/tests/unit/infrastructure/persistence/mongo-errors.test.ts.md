@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/persistence/mongo-errors.test.ts
-sha256: bdea8faa88b25e7a8d221066669c2e460ecc8f368761863adf6367d33d90aee0
-generated_at: 2026-09-23T20:25:45.238363+00:00
+sha256: 4fbff24eac709b478c7f2bfca0ab11bf2d934c6bbfbbd62d627721a892542c6b
+generated_at: 2026-09-27T16:09:32.745303+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,20 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the two predicate helpers (`isDuplicateKey`, `isBadObjectId`) exported from `src/infrastructure/persistence/mongo-errors.ts`. They pin down the exact discrimination logic (numeric `code` property, `instanceof` check) so that callers can safely narrow a widened `unknown` catch without accidentally matching messages or duck-typed shapes.
+Unit tests for the three narrow error-detection guards in `mongo-errors.ts` (`isDuplicateKey`, `isBadObjectId`, `isConnectionError`). Each describe block pins down *how* the guard discriminates (code vs. message, `instanceof` vs. shape, `name` property vs. class) and that non-matching inputs—including `undefined`—return `false` without throwing.
 
 ## Key elements
 
-- **`makeDuplicateKeyError()`** – local helper that builds a realistic driver error: an `Error` with `code: 11000` and the typical `E11000` message.
-- **`describe('isDuplicateKey')`** – four cases:
-    - recognises a real code-11000 error.
-    - rejects an error whose _message_ says "E11000" but has no `code` property (guards against message-string matching).
-    - returns `false` for unrelated errors and `undefined`.
-    - rejects a near-miss code (`11001`).
-- **`describe('isBadObjectId')`** – four cases:
-    - accepts a real `mongoose.Error.CastError` on an `ObjectId` path.
-    - rejects a `CastError` on a non-ObjectId path (e.g. `Number` on `quantity`).
-    - returns `false` for unrelated errors and `undefined`.
-    - rejects a plain object that merely has `name: 'CastError'` and `kind: 'ObjectId'` — confirms the implementation uses `instanceof`, not duck-typing.
+- **`makeDuplicateKeyError()`** – local factory that produces a realistic `Error` with `code: 11000` attached, used to exercise `isDuplicateKey` against the driver's actual signal.
+- **`describe('isDuplicateKey', …)`** – verifies the guard reads the numeric `code` property (not the message text) and rejects near-miss codes (e.g. `11001`).
+- **`describe('isBadObjectId', …)`** – verifies the guard uses `instanceof mongoose.Error.CastError` *and* checks `kind === 'ObjectId'`; explicitly rejects plain objects that merely look like a CastError.
+- **`describe('isConnectionError', …)`** – verifies the guard matches on the `name` string across five driver/Mongoose error classes, plus the buffering-timeout `MongooseError` message; rejects unrelated `MongooseError` instances (e.g. "Aggregate has empty pipeline").
 
 ## Relationships
 
-- **`src/infrastructure/persistence/mongo-errors.ts`** – the system under test. This file imports `isDuplicateKey` and `isBadObjectId` and exercises their public contracts; it has no other dependency-graph neighbors.
-- **`mongoose`** – imported solely to construct `mongoose.Error.CastError` instances for the `isBadObjectId` tests.
+- **`src/infrastructure/persistence/mongo-errors.ts`** – the sole SUT. This file imports and exercises its three exported predicates; no other module is touched.
 
 ## Notes
 
-- The tests intentionally distinguish _structural_ checks (`.code === 11000`, `instanceof CastError`) from superficial ones (message text, property presence). If you refactor `mongo-errors.ts` to, say, match on a message regex or a `.name` field, these tests will fail by design.
-- Both predicates must be total functions safe on `undefined` — every `describe` block includes an explicit `undefined` assertion.
-- The `instanceof` requirement for `isBadObjectId` is called out in the inline comment as the motivating reason the helper exists: a hand-built rejection in a `catch (e: unknown)` block must _not_ slip through as a bad-OID error.
+- The test comments encode design rationale that is otherwise invisible in the source: `code` over message (resilient to index renames), `instanceof` over duck-typing (prevents hand-built fixtures from passing), and `name` over `instanceof` (the driver classes are not all importable as a single base). When refactoring `mongo-errors.ts`, keep the guard's discrimination mechanism aligned with these expectations.
+- `isConnectionError` also matches a specific `MongooseError` message ("buffering timed out"), so that string is effectively part of the contract—renaming it in the driver would silently break detection.

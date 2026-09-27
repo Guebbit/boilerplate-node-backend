@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/pdf.test.ts
-sha256: 007698db4d4265dab6cdb655b1b58cf5ed6cfe58b133b7a9338ed281ca0164c5
-generated_at: 2026-09-23T20:19:44.920779+00:00
+sha256: 50ed2b827d6b82dd350a74a4dc7c7b4a87cc45b3bdfa779a7f78990566214dba
+generated_at: 2026-09-27T16:05:27.673146+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `renderHtmlToPdf` from the PDF adapter. The file verifies four externally observable contracts of the adapter—call-time env-var resolution, sandbox-flag configuration, `waitUntil: 'load'` on content injection, and guaranteed browser teardown—without launching a real browser. `puppeteer-core` is fully mocked.
+Unit-test suite for the HTML → PDF adapter (`renderHtmlToPdf` and `settleRenders`). It locks down four externally observable decisions that the adapter makes on behalf of the suite: call-time binary resolution, sandbox flags, `waitUntil: 'load'`, and guaranteed browser teardown. All tests run against a `puppeteer-core` mock, so no browser binary is required.
 
 ## Key elements
 
-- **`lastLaunchOptions()`** – Helper that extracts the options object from the most recent `launch` mock call.
-- **Mock chain** (`launch → newPage → { setContent, pdf }` + `close`) – Replaces the entire `puppeteer-core` API surface with `jest.fn`s so no browser process is ever spawned.
-- **`pdfBuffer`** – A 4-byte `Uint8Array` (`%PDF` header) used as the resolved value of `page.pdf()`; tests only assert identity, not PDF validity.
-- **`describe('the browser it launches')`** – Asserts `executablePath` is read at call time, the fallback is `/usr/bin/chromium-browser`, and both `--no-sandbox` / `--disable-setuid-sandbox` args are present.
-- **`describe('the render')`** – Asserts `setContent` (not `goto`) is used, `waitUntil: 'load'` is explicit, default format is A4 portrait, caller-supplied geometry passes through, the resolved value is the raw `Uint8Array`, and concurrent calls each get their own browser/page.
-- **`describe('teardown')`** – Covers `close` being called after success and after failures at each stage (`newPage`, `setContent`, `pdf`). Also documents that a `close` rejection _replaces_ the original render error.
+- **`renderHtmlToPdf` describe block** — verifies launch options (executable path from `PUPPETEER_EXECUTABLE_PATH` or `/usr/bin/chromium-browser` fallback, `--no-sandbox` + `--disable-setuid-sandbox`), render mechanics (`setContent` with `waitUntil: 'load'`, JS disabled, A4 default, caller-supplied geometry passthrough, byte-array return value, one isolated page per call, max 2 concurrent browsers), and teardown (`close` called on success and on every failure path).
+- **`settleRenders` describe block** — confirms the function awaits an in-flight render before resolving, respects a timeout (ms) without hanging shutdown, and resolves immediately when nothing is pending.
+- **`heldPrint()`** — local helper that creates a deferred promise so a test can hold a print in flight and release it on demand.
+- **`lastLaunchOptions()`** — pulls the argument object from the most recent `launch` mock call.
+- **`jest.mock('puppeteer-core', …)`** — factory mock exposing `launch` wired to the individual jest fns (`newPage`, `setContent`, `pdf`, `close`, `setJavaScriptEnabled`).
+- **`afterEach`** — restores or deletes `PUPPETEER_EXECUTABLE_PATH` to prevent cross-test contamination.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/pdf.ts`** – The module under test. Imported as `@infrastructure/adapters/pdf`; the sole exported function exercised here is `renderHtmlToPdf(html, options?)`.
-- **`puppeteer-core`** (mocked) – The only external dependency of the adapter. The mock guarantees no real Chromium binary is needed in CI.
+- **`src/infrastructure/adapters/pdf.ts`** — the sole system under test. This file imports `renderHtmlToPdf` and `settleRenders` from it and asserts their observable contract. The mock of `puppeteer-core` is placed before that import so the adapter module resolves against the fake at load time.
 
 ## Notes
 
-- The env-var save/restore in `afterEach` is scoped to `PUPPETEER_EXECUTABLE_PATH` only; other env vars are not touched.
-- The "close failure replaces render failure" test documents a deliberate `finally`-block behavior: if both the render and the teardown reject, the caller sees the _teardown_ error. This is asserted, not treated as a bug.
-- The `puppeteer-core` package ships no browser binary; the `/usr/bin/chromium-browser` fallback path is set by the adapter itself, not by Puppeteer's default.
-- The file's header comment serves as the spec rationale—each test group maps to a bullet in that comment. If a test seems redundant (e.g., asserting `waitUntil: 'load'` when it is also Puppeteer's default), the comment explains it guards against a silent upstream default change.
+- **Error precedence in `finally`**: if both the render and `close` throw, the test asserts that the *close* error surfaces (the `finally` rejection replaces the original). This is intentional and documented inline; do not "fix" it to propagate the render error.
+- **Concurrency cap of 2**: the adapter limits simultaneous browser instances to 2. The test uses a custom `launch` mock that tracks open/close counts to verify the peak never exceeds 2 across 5 parallel renders.
+- **`waitUntil: 'load'` is asserted even though it equals the puppeteer default.** The comment explains: the assertion guards against a future puppeteer version changing its default to something that would silently print blank assets.
+- **`settleRenders` timeout is in milliseconds** (e.g. `settleRenders(50)`). The "gives up" test asserts elapsed time < 2000 ms to account for scheduling jitter.
+- **No real Chromium is ever launched.** `puppeteer-core` (not `puppeteer`) is mocked, and the fallback executable path (`/usr/bin/chromium-browser`) is never actually resolved by a real launcher.

@@ -1,7 +1,7 @@
 ---
 source: tests/unit/kernel/required-config.test.ts
-sha256: bd3a80de085a97c62e10f5a03f53a7d3ce71601a139f13563785cf4ce44d2428
-generated_at: 2026-09-23T20:28:02.274280+00:00
+sha256: 32f424bcbc4395483f5c9bbf7321c2ed9605b2b3e14848819d6632ef62d80b3a
+generated_at: 2026-09-27T16:12:11.901843+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the kernel-level boot-gate mechanism: `assertRequiredConfig` (collect-and-report required-config violations before the process can start) and `checkSelector` (validate enum-style provider selectors). The file exists to pin down the _mechanism_ the kernel owns—placeholder detection, multi-offender reporting, ring validation, environment bypasses, forbidden-in-production, and caller-supplied checks—while deliberately leaving app-tier and module-specific variable names to their own test files.
+Unit tests for the kernel-level boot-gate (`assertRequiredConfig`) and its `checkSelector` helper. The suite verifies the generic mechanism — collecting all configuration failures before throwing, validating module-declared required/forbidden variables, handling comma-separated secret rings, honoring the test/demo short-circuits, and accepting caller-supplied `nonModuleChecks`. It deliberately does **not** test any specific module's or the app tier's variable lists; those live in `tests/unit/app/required-config.test.ts` and each module's own test file.
 
 ## Key elements
 
-- **`configure()`** (local helper) — sets `NODE_ENV` to `'development'` so the gate does not short-circuit; every case that expects enforcement calls this first.
-- **`afterEach(() => enableDemoProfile(false))`** — resets the demo-profile flag so one test's bypass cannot leak into the next.
-- **"module-declared variables" group** — asserts placeholder-value detection, that _all_ offenders are named in one throw (not just the first), and that comma-separated ring values are validated member-by-member.
-- **"the environments that skip the gate" group** — confirms `NODE_ENV=test` and the demo profile both cause `assertRequiredConfig` to pass unconditionally.
-- **"module-declared forbiddenInProduction" group** — verifies a variable flagged as forbidden is rejected when set _and_ `NODE_ENV=production`, but accepted everywhere else.
-- **`checkSelector` tests** — empty result on success; the resolver's own error message is preserved verbatim; fallback to the bare key name if a non-`Error` is thrown.
-- **"nonModuleChecks" group** — exercises the second argument (`required` / `customChecks`) that a non-module caller can contribute alongside module checks.
+- **`configure()`** – local helper that sets `NODE_ENV` to `'development'` so the gate does not short-circuit.
+- **`SECRET_MODULE`** – a minimal `AppModule[]` fixture (one variable, `minLength: 16`, placeholder `'change-me'`) reused across several cases.
+- **`describe('module-declared variables')`** – covers placeholder detection, multi-offender collection, comma-ring split/validation, trailing-comma tolerance, `minLength: 0` semantics, and the "placeholder wins even at length 0" rule.
+- **`describe('the environments that skip the gate')`** – confirms the gate is a no-op under `NODE_ENV=test` and under the demo profile.
+- **`describe('module-declared forbiddenInProduction')`** – verifies that `forbiddenInProduction` entries are refused only when `NODE_ENV=production`.
+- **`describe('checkSelector')`** – tests the selector-resolver wrapper: success path, preserving the resolver's error message, and the non-`Error` fallback to the bare key.
+- **`describe('nonModuleChecks')`** – exercises the optional second argument to `assertRequiredConfig` (caller-declared `required` and `customChecks`).
 
 ## Relationships
 
-- **`src/kernel/required-config.ts`** — the SUT; provides `assertRequiredConfig` and `checkSelector`.
-- **`src/kernel/registry.ts`** — supplies the `AppModule` type used to build inline fixtures.
-- **`src/infrastructure/runtime/demo-profile.ts`** — provides `enableDemoProfile` toggled in the bypass tests and reset in `afterEach`.
-- **`tests/support/environment.ts`** — provides `withoutEnvironmentInThisFile(['NODE_ENV', 'SECRET'])` to isolate this file from ambient environment variables.
+- **`src/kernel/required-config.ts`** – the module under test; exports `assertRequiredConfig` and `checkSelector`.
+- **`src/kernel/registry.ts`** – provides the `AppModule` type used to shape every test fixture.
+- **`src/infrastructure/runtime/demo-profile.ts`** – exports `enableDemoProfile`, used to enter/exit demo mode (a gate bypass) and cleaned up in `afterEach`.
+- **`tests/support/environment.ts`** – exports `withoutEnvironmentInThisFile`, called at module scope to strip `NODE_ENV` and `SECRET` from the process environment before any test runs.
 
 ## Notes
 
-- The gate is a no-op under `NODE_ENV=test`; any test that omits the `configure()` call (or the equivalent explicit assignment) will silently pass without asserting anything. The file header calls this out explicitly.
-- Scope boundary is intentional: variables that belong to no module but are not the kernel's own (e.g. `NODE_URL`, SMTP, provider selectors) are tested in `tests/unit/app/required-config.test.ts` against `APP_NON_MODULE_CHECKS`. Module-owned variables are tested in each module's own test file.
-- Ring (comma-separated) validation is member-by-member: the joined string is never compared as a whole, and each member must individually clear `minLength` and differ from `placeholder`.
-- `checkSelector` preserves the resolver's error message verbatim; it does not collapse to the bare key. The one exception is a non-`Error` throw, where it falls back to `"Unknown <KEY>"`.
+- **Every test must set `NODE_ENV` away from `'test'`** (via `configure()`) before calling `assertRequiredConfig`; otherwise the gate short-circuits and the assertion proves nothing.
+- **Comma-separated "ring" values** are split member-by-member: a single placeholder member fails the whole value, a trailing comma is silently dropped (treated as a typo), and a value of only commas (`,,`) still fails.
+- **`minLength: 0` does not exempt a variable from the placeholder check** — it only allows the variable to be unset.
+- The file tests the **mechanism only**; app-tier variable lists (`NODE_URL`, SMTP, provider selectors) are asserted elsewhere against `APP_NON_MODULE_CHECKS`, and individual modules assert their own manifests in their own test files.
+- `afterEach(() => enableDemoProfile(false))` guards against demo-profile state leaking into subsequent test files.

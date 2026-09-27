@@ -1,7 +1,7 @@
 ---
 source: tests/support/schema.ts
-sha256: 8bbf9436854000ff73e9097412550b00800e4373b204f15b858dd5b987e85ceb
-generated_at: 2026-09-23T20:13:56.053392+00:00
+sha256: 5ad2653f85a8ad45f024d3c390904e3f44626a9d8c4b5c029834312af96d8902
+generated_at: 2026-09-27T16:01:06.760016+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A suite of pure, database-free readers that inspect a Mongoose `Schema` object's declared contract—required paths, index names/directions/options, defaults, enums, nested schemas, and schema-level flags—so that unit tests can assert the schema _as declared_ rather than inferring it from saved documents. It exists because document-shape integration tests cannot detect mutations that leave valid documents unchanged (dropped `required`, lost `_id: false`, flipped index direction, removed `timestamps`).
+Test-utility module that reads a Mongoose `Schema` object's declared contract (required flags, indexes, types, defaults, nested schemas, etc.) and exposes it through small, typed reader functions. This lets each module's `schema-contract.test.ts` assert on *what the schema declares* in milliseconds, without spinning up a database — catching silent regressions (dropped `required`, lost `_id: false`, renamed indexes) that integration tests through saved documents cannot see.
 
 ## Key elements
 
-- **`IntrospectableSchema`** (exported interface) — Structural, generic-free shape (`path()`, `indexes()`, `paths`, `options`) that any concretely-typed Mongoose `Schema` satisfies without triggering TypeScript's generic assignability failures.
-- **`pathNames(schema)`** — All declared path names (including Mongoose-added `_id`, `__v`, timestamps), sorted.
-- **`requiredPaths(schema)`** — Subset of paths with `isRequired === true`, sorted.
-- **`indexSpecs(schema)`** — Each declared index rendered as `"name: field+1, field-1"`, sorted.
-- **`indexBehaviour(schema)`** — Record mapping index name → behavioural options (uniqueness, sparseness, TTL), excluding the `name` key itself.
-- **`indexOptionSpecs(schema)`** — Same as `indexBehaviour` but rendered as sorted `"name: key=value, …"` strings; uses `"(none)"` for option-less indexes.
-- **`pathOptions(schema, path)`** — Raw `options` object for a single path (min/max, lowercase, trim, etc.).
-- **`defaultOf(schema, path)`** — Declared `default` value; invokes the function if one was supplied.
-- **`enumOf(schema, path)`** — `enumValues` array or `undefined`.
-- **`subSchema(schema, path)`** — Nested `IntrospectableSchema` for an embedded array/subdocument path; throws with a listing of valid nested paths if the path has none.
-- **`optionsOf(schema)`** — Schema-level options object (`timestamps`, `_id`, `collection`, …).
-- **`refOf(schema, path)`** — Target model name of a `ref`, or `undefined`.
-- **`typeOf(schema, path)`** — Mongoose `instance` string (`String`, `Number`, `ObjectId`, `Array`, `Embedded`, …).
-- **`indexName`** (internal) — Derives the index name the way Mongoose does at build time: uses the explicit `name` option if present, otherwise joins `field_direction` segments with `_`.
+- **`IntrospectableSchema`** (exported interface) — Minimal structural type requiring only `path()`, `indexes()`, `paths`, and `options`. Avoids Mongoose's eleven generic parameters so any concretely-typed `Schema<…>` is assignable.
+- **`pathNames`** — Sorted list of every declared path name (including Mongoose-added `_id`, `__v`, timestamps).
+- **`requiredPaths`** — Sorted list of path names whose `isRequired` flag is set.
+- **`indexSpecs`** — Sorted array of `"name: field+1, field-1"` strings capturing index name, fields, and direction.
+- **`indexBehaviour`** — Map from index name to its behavioural options (uniqueness, sparseness, TTL), excluding the `name` key.
+- **`indexOptionSpecs`** — Sorted array of `"name: key=value, …"` strings; renders `(none)` for option-less indexes.
+- **`pathOptions`** — Raw `options` object for a given path (min, max, lowercase, trim, etc.).
+- **`defaultOf`** — The `default` value for a path; calls the function if one was declared.
+- **`enumOf`** — The `enumValues` array for a string path, or `undefined`.
+- **`subSchema`** — The nested `IntrospectableSchema` on an embedded/array path; throws with a helpful listing of paths that do carry one.
+- **`optionsOf`** — The schema-level `options` object (timestamps, `_id`, collection, …).
+- **`refOf`** — The model name a path references, or `undefined`.
+- **`typeOf`** — The Mongoose `instance` type name (`String`, `Number`, `ObjectId`, `Array`, `Embedded`, …).
+- **`indexName`** (private) — Returns the declared index name or derives `field_direction` joined by `_`, matching Mongoose's build-time naming.
 
 ## Relationships
 
-Every `src/modules/*/tests/unit/schema-contract.test.ts` file (addresses, api-keys, audit-logs, cart, delivery, feedback, inventory, locales, orders, payments, products, users, webhooks, wishlist) imports the exported readers to assert its module's Mongoose schema contract in a pure unit test. No other files depend on this module.
+- **Consumed by** every `src/modules/*/tests/unit/schema-contract.test.ts` (addresses, api-keys, audit-logs, cart, delivery, feedback, inventory, locales, orders, payments, products, users, webhooks, wishlist). Each test imports the reader functions and asserts the module's `model.ts` schema contract.
+- **No runtime dependency** on Mongoose itself — it only reads from the schema object passed in, so the test file that calls it must already have constructed the `Schema`.
 
 ## Notes
 
-- **Structural typing is deliberate.** `IntrospectableSchema` avoids Mongoose's 11-parameter generic `Schema`, which is not mutually assignable across different type arguments (TS7056-class issue). Do not replace it with `Schema` or the assignability errors return.
-- **`indexName` mirrors Mongoose's build-time derivation.** For a path-level `unique: true` (no explicit `name`), the name is `field_1` (or `field_-1`). Tests should assert the _derived_ name, not the absent one, because that is what `db:sync` and `dropIndex` use.
-- **`defaultOf` calls functions.** If a schema declares `default: () => new Date()`, this helper invokes it. It is not a passive read.
-- **`subSchema` throws on a non-nested path** and includes the list of paths that _do_ carry a nested schema, to make typos self-diagnosing.
-- **All list-returning helpers use `.toSorted()`** (non-mutating). This is a project convention; do not "fix" to `.sort()`.
-- **`indexOptionSpecs` renders `"(none)"`** rather than an empty string for indexes with no behavioural options, so a test asserting the literal string can distinguish "declared plain" from a rendering bug.
+- The `IntrospectableSchema` interface deliberately types `indexes()` as `unknown[][]` and `options` as bare `object`. This is the workaround for a TypeScript structural-assignability failure: Mongoose's generic `Schema` (11 type params) is not assignable to itself with different arguments because TS walks into `ObjectId`'s members. Pinning concrete return types here would reintroduce the same error. Narrowing is done once inside each reader.
+- `defaultOf` **invokes** function defaults to match Mongoose's own behaviour — a test asserting a default sees the resolved value, not a function reference.
+- `indexName` derives the name from key directions when no explicit `name` option is given, so tests can pin the exact string that `db:sync` and `dropIndex` must use.
+- All list outputs are `.toSorted()` so assertions are stable regardless of insertion order in the schema.
+- `(none)` is rendered for indexes with zero behavioural options to visually distinguish "declared plain" from a rendering bug.

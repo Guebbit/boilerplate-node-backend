@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-27T13:45:50.887945+00:00",
+  "generated_at": "2026-09-27T16:23:28.951291+00:00",
   "head": "276e096a53f53cf6f38fc8c880a0c2829b63be88",
   "threshold": 5,
   "layers": {
@@ -15,20 +15,18 @@
     },
     "index": {
       "artifact": ".2brain/repo-index.json",
-      "revision": "6327b00cc34b1ef7f0b945fd03a4f9b319c1c751587e148b8ae877319524aae0",
-      "chunk_count": 5482,
-      "artifact_count": 1046,
-      "artifact_digest": "8e6c937f6fda4f0d68c97036a07be781bde570ee2b008a8752f624fce01e318b"
+      "revision": "7acaabb1d870f2bcf31ce2ad33b835136e908ad2dc2a853453ee272c9e95dbb0",
+      "chunk_count": 5832,
+      "artifact_count": 1133,
+      "artifact_digest": "11a03353234324d18a0b6126f5194292a4528113a09d55267148c96bdbfa1f1f"
     },
     "context": {
       "artifact": ".2brain/REPO_CONTEXT.md",
-      "injected": [
-        "/target-repo/CLAUDE.md"
-      ],
+      "injected": [],
       "ai_target": "claude",
       "provider": "ollama",
       "model": "qwen3.8:27b",
-      "mode": "update"
+      "mode": "wiki"
     }
   }
 }

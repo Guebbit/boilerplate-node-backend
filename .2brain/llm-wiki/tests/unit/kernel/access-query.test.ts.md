@@ -1,7 +1,7 @@
 ---
 source: tests/unit/kernel/access-query.test.ts
-sha256: 498712d9204ee39130c289b25b011c34f84937033855f3fe47016df8f8788b26
-generated_at: 2026-09-23T20:27:02.142432+00:00
+sha256: 302fda70d44518b7936654ef6d70b1700db69225d5b71ebe7244165a78f4a78f
+generated_at: 2026-09-27T16:11:16.699573+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `accessibleFilter` (from `@kernel/access/query`), the compiled access-control filter a Mongoose collection is actually read with. The suite pins two invariants that were previously implicit in four hand-written query fragments: an unrestricted role produces `{}` (narrows nothing), and a caller with no applicable rule produces CASL's `EMPTY_RESULT_QUERY` (matches nothing) rather than `undefined` (no restriction at all).
+Unit tests for `accessibleFilter` and `hasAnonymousReadScope` in `@kernel/access/query`. They pin down the two invariants that motivated replacing four hand-written query fragments with a single rules-compiled filter: an unrestricted role narrows nothing (`{}`), and a caller with no applicable rule gets an explicit "match nothing" filter rather than an absent one.
 
 ## Key elements
 
-- **`describe('accessibleFilter', …)`** — single test suite covering eight scenarios:
-    - **Admin / unrestricted** → returns `{}`; explicitly asserts `{}` (not `undefined`) so callers spreading the filter into a query cannot conflate "no conditions" with "no rules."
-    - **Customer reading `Product`** → `{ active: true, deletedAt: null }`.
-    - **Customer (owner-scope) reading `Order`** → `{ userId: Types.ObjectId(…), deletedAt: null }`; verifies the filter carries an `ObjectId`, not the raw hex string.
-    - **Operator with no rule for the subject** → `{ $expr: { $eq: [0, 1] } }` (CASL `EMPTY_RESULT_QUERY`).
-    - **Anonymous (`undefined`) caller reading `Order`** → same empty-result sentinel.
-    - **Anonymous caller reading `Product`** → still gets the public `{ active: true, deletedAt: null }` catalogue filter.
-    - **Manager reading `Product`** → asserts `tenantId` is _absent_ from the serialized filter.
-    - **Write action (`'update'`)** → same rules engine; manager gets `{}`, customer gets the empty-result sentinel.
+- **`describe('accessibleFilter')`** — eight cases covering:
+  - Admin / unrestricted role → `{}` (not `undefined`).
+  - Customer on `Product` → `{ active: true, deletedAt: null }`.
+  - Customer (owner-scope) on `Order` → `{ userId: <ObjectId>, deletedAt: null }`; asserts the string ID is converted to a `Types.ObjectId`.
+  - Operator (no rule for `Order`) → `{ $expr: { $eq: [0, 1] } }` (CASL `EMPTY_RESULT_QUERY`).
+  - Anonymous (`undefined`) on `Order` → same empty-result filter.
+  - Anonymous on `Product` → guest catalogue filter.
+  - Manager on `Product` → filter does **not** contain `tenantId` (single-tenant deployment).
+  - Write action (`'update'`) → same compiled filter shape as the read; customer update on `Product` yields the empty-result filter.
+- **`productScope` / `orderScope`** — thin wrappers around `accessibleFilter` matching the `(context?) => Filter` signature that `hasAnonymousReadScope` expects from a module's own scope function.
+- **`describe('hasAnonymousReadScope')`** — four cases asserting the comparison logic used by `infrastructure/http/middlewares/cache.ts`:
+  - Anonymous vs. anonymous → `true`.
+  - Customer (identical guest filter on `Product`) → `true`.
+  - Admin (strictly wider) → `false`.
+  - Customer with a specific `userId` on `Order` vs. anonymous (neither is a superset) → `false`.
 
 ## Relationships
 
-- **`src/kernel/access/query.ts`** — provides the sole function under test, `accessibleFilter(caller, subject, action?)`.
-- **`tests/support/callers.ts`** — supplies the `asAdmin()`, `asManager()`, `asCustomer(id?)`, and `asOperator()` fixture factories used to construct typed caller objects for each scenario.
+- **`src/kernel/access/query.ts`** — the module under test. Provides `accessibleFilter` (rules → MongoDB filter) and `hasAnonymousReadScope` (filter-equality comparison for cache sharing).
+- **`tests/support/callers.ts`** — supplies `asCustomer`, `asManager`, `asAdmin`, `asOperator` fixtures that build CASL ability contexts for the test cases.
 
 ## Notes
 
-- `{}` and `{ $expr: { $eq: [0, 1] } }` are **semantically opposite** to a Mongoose query (match-all vs. match-none) but look similarly "empty." The tests exist precisely to keep those two outcomes from being swapped.
-- Owner-scope filtering requires a `Types.ObjectId` in the filter; passing the caller's hex string instead would silently match zero rows. The test asserts the concrete `ObjectId` instance.
-- The `tenantId` absence check uses `JSON.stringify(…).not.toContain('tenantId')` rather than a structural assertion, because the field must not appear _at all_—an explicit `tenantId: undefined` would serialize to `{}` and pass a naive `toEqual` check while still being semantically wrong.
-- The write-action test (`'update'`) confirms `accessibleFilter` is action-aware and that a single rules artefact drives both read and write paths without separate filter logic.
+- The "unrestricted" case asserts `{}`, not `undefined`, because the caller spreads the result into a Mongo query; the two must be distinguishable.
+- The owner-scope test exists specifically to catch the silent-failure mode where a raw string ID in the filter matches zero rows.
+- The `tenantId` absence test is deployment-specific: the boilerplate ships a single shop, so compiling a discriminator over a non-partitioned collection would lock everyone out.
+- `hasAnonymousReadScope` tests deliberately do **not** re-prove individual role rules; they assume `accessibleFilter` is correct (verified above) and isolate the comparison semantics.

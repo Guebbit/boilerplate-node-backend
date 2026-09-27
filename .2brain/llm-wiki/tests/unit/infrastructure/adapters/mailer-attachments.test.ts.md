@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/mailer-attachments.test.ts
-sha256: 9dfe58499f9c86d2216292cf832fc762e7946986cc7c7563e15c6b17c28b9815
-generated_at: 2026-09-23T20:18:34.297325+00:00
+sha256: 0b3f2c76f99e60a87e741ad9a54b0bacfcd2b1c6e2e9feabed3d212aadf6d359
+generated_at: 2026-09-27T16:04:19.015421+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the attachment-resolving half of `nodemailer()` in the mailer adapter. Verifies that `{ filename, key }` attachment references are resolved to `{ filename, path }` via the mail spool, that absent/unresolvable attachments are omitted rather than passed as broken paths, and that `nodemailer()` itself never deletes the spooled file after a send.
+Verifies that `sendTemplatedEmail()` correctly resolves `{ filename, key }` attachment references from the mail spool into nodemailer-ready `{ filename, path }` objects, and that the spooled file is never deleted by the send path itself (only the job-finished caller may discard it). This is the dedicated end-to-end test for the attachment-resolving half; `mailer-dispatch.test.ts` covers queue/inline routing without attachments.
 
 ## Key elements
 
-- **`sendMailMock`** — `jest.fn()` standing in for nodemailer's `sendMail`; used to inspect the exact payload handed to the transport.
-- **`jest.mock('nodemailer', …)`** — replaces the real transport with a single object exposing `sendMail`.
-- **`DATA`** — dummy template variables satisfying the `orders.order-confirm` render signature; not asserted on.
-- **`fileExists(target)`** — tiny `stat`-based helper returning a boolean for disk-existence checks.
-- **`beforeEach` / `afterEach`** — creates a per-test temp spool directory (`mkdtemp`), sets `NODE_MAIL_SPOOL_PATH`, clears mocks, calls `resetTransporter()`, and restores the original env var / removes the temp dir on teardown.
-- **`describe('nodemailer — resolving attachments')`** — three tests:
-    - resolved path is `path.join(spoolRoot, key)`, never the raw key
-    - no `attachments` property is present when the request has none
-    - an unresolvable key (path-traversal string) results in no `attachments` property rather than a broken path
-- **`describe('nodemailer — never discards its own attachment')`** — asserts the spooled file still exists on disk after a successful send; guards the invariant that only a job-finished caller may delete.
+- **`sendMailMock`** – Jest mock standing in for `nodemailer.createTransport().sendMail`; used to inspect exactly what nodemailer receives.
+- **`DATA`** – Static shape satisfying the `orders.order-confirm.ejs` template; values are irrelevant to assertions.
+- **`spoolRoot` / `beforeEach` / `afterEach`** – Creates a per-test temp dir under `tmpdir()`, points `NODE_MAIL_SPOOL_PATH` at it, and cleans up (restoring the original env value).
+- **`describe('resolveAttachments — resolving attachments')`** – Three cases: (1) resolved `path` is the spool-joined key, never the raw key; (2) no `attachments` property when the request names none; (3) an unresolvable/traversal key (`../../etc/passwd`) is dropped entirely rather than passed to nodemailer.
+- **`describe('sendTemplatedEmail — never discards its own attachment')`** – After a successful send, the spooled file still exists on disk. Guards against a retry chain resolving a key the first attempt already deleted.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — source under test. Imports `nodemailer` (the function) and `resetTransporter` (test-utility for re-creating the mocked transport).
-- **`src/infrastructure/adapters/mail-spool.ts`** — imports `spoolAttachment` to write real bytes into the temp spool so the resolver has a valid file to find.
+- **`src/infrastructure/adapters/mailer.ts`** – Under test. `sendTemplatedEmail` is the entry point; `resetTransporter` is called in `beforeEach` to reset the mocked transport between tests.
+- **`src/infrastructure/adapters/mail-spool.ts`** – `spoolAttachment` writes a buffer to the spool dir and returns the key that the test then passes into the attachment request.
+- **`tests/support/file-sandbox.ts`** – `fileExists` is used in the "never discards" assertion to confirm the spooled file is still on disk after the send resolves.
 
 ## Notes
 
-- This file deliberately does **not** test spool-file deletion. That responsibility belongs to the dispatch/worker layer; the complementary coverage lives in `mailer-dispatch.test.ts` and `email.worker.test.ts`.
-- The unresolvable-key test uses `'../../etc/passwd'` as the key — it exercises the spool's path-resolution rejection, not an actual filesystem attack vector.
-- `nodemailer` is mocked at module level; `resetTransporter()` in the SUT re-invokes `createTransport`, so every test gets a clean `sendMail` call history.
+- The nodemailer mock is registered via `jest.mock` *before* importing the module under test; the mock transport's `sendMail` is cleared and re-resolved to `{ messageId: 'smtp-1' }` in every `beforeEach`.
+- The "unresolvable key" case uses a path-traversal string (`../../etc/passwd`); the expected behavior is silent omission (no `attachments` property), not an error thrown to the caller.
+- The file explicitly does **not** assert that the spooled file is deleted; that responsibility belongs to the queue/worker callers (see `mailer-dispatch.test.ts`, `email.worker.test.ts`).

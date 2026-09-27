@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/mailer-transport.test.ts
-sha256: 829ddc5df0b8ed2f40cd336ca856e9fe8ed053c7d3223bed5657a313dc9308f7
-generated_at: 2026-09-23T20:19:20.214857+00:00
+sha256: e60bb576a08ad3d182f6f3b6de2cb50c7729f52a4833e7762c39a902568cd1d2
+generated_at: 2026-09-27T16:05:13.855988+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the SMTP transport configuration and transport-selection logic in the mailer adapter. The file exists to pin down security-critical invariants (TLS mode, test-environment isolation, demo-profile outbox protection) that are easy to regress silently and dangerous to get wrong.
+Unit tests for the SMTP transport configuration built in `src/infrastructure/adapters/mailer.ts`. Because `NODE_ENV === 'test'` always selects the `jsonTransport` branch, the production SMTP options (port, TLS mode, credentials) were otherwise untested. This file forces that branch to execute and asserts the options object passed to `nodemailer.createTransport`, as well as the guardrails around `resolveMailTransport`.
 
 ## Key elements
 
-- **`createTransportMock`** – `jest.fn()` that stands in for `nodemailer.createTransport`; every call is recorded so tests can inspect the options object without opening a socket.
-- **`transportOptions(environment)`** – helper that (1) clears the mock and resets the transporter, (2) swaps `process.env` to the given values, (3) triggers one `nodemailer(...)` send to force the memoised transport to build, (4) restores env, and returns the captured options.
-- **`SMTP_ENVIRONMENT`** – minimal production-mode env (`NODE_ENV: 'production'`, `NODE_SMTP_HOST`) shared across the TLS and credentials suites.
-- **"the test environment uses a transport that sends nothing"** – asserts `NODE_ENV=test` yields `{ jsonTransport: true }`, guaranteeing no real mail leaves the test suite.
-- **"TLS mode follows the port, which is a security decision"** – asserts `secure` is `true` only on port 465, `false` on 587/25, and the default (no port) is 587 + `secure: false`.
-- **"credentials and identity"** – verifies auth passthrough, empty-string fallbacks when user/pass are unset, and `name` defaults to `''` (not `undefined`).
-- **`describe('resolveMailTransport')`** – exercises the public `resolveMailTransport()` selector: default → smtp; explicit `smtp`/`log`/`outbox` honoured; unknown value throws; demo profile forces `outbox`; `NODE_ENV=test` forces `log` regardless of deployment setting.
+- **`createTransportMock` / `jest.mock('nodemailer', …)`** — Replaces `createTransport` so tests can inspect the options object without opening a socket.
+- **`transportOptions(env)`** — Helper that saves/restores env vars, calls `resetTransporter()`, triggers one `sendTemplatedEmail` (result discarded) to force transport construction, and returns the captured options. This is the only mechanism to vary the memoised transport.
+- **`SMTP_ENVIRONMENT`** — Shared minimal env (`NODE_ENV: 'production'`, `NODE_SMTP_HOST`) used as the base for most SMTP option tests.
+- **`describe('the test environment …')`** — Asserts `jsonTransport: true` is the sole option under `NODE_ENV=test`.
+- **`describe('TLS mode follows the port …')`** — Verifies `secure` is `true` only on port 465, `false` on 587/25/unset; verifies `requireTLS: true` on 587; verifies the default port is 587.
+- **`describe('credentials and identity')`** — Verifies `auth` passes through configured values, defaults to `{ user: '', pass: '' }` when unset, and `name` defaults to `''`.
+- **`describe('resolveMailTransport')`** — Tests the transport-selection guardrails: default is `'smtp'`; explicit values (`smtp`, `log`, `outbox`) are honoured; unknown values throw; demo profile forces `'outbox'`; production refuses `'outbox'`; test env forces `'log'`.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** – the module under test. Imports `nodemailer` (the send entry-point), `resetTransporter` (clears the memoised transport), and `resolveMailTransport` (the transport-selection function). The `nodemailer` module is mocked via `jest.mock('nodemailer', …)` before the import.
-- **`src/infrastructure/runtime/demo-profile.ts`** – `enableDemoProfile()` is toggled in `afterEach` and in one test to verify the demo-profile rail overrides any deployment-named transport.
-- **`tests/support/environment.ts`** – `withoutEnvironmentInThisFile(['NODE_MAIL_TRANSPORT', 'NODE_ENV'])` is registered at the top of the `resolveMailTransport` suite so each test starts from a clean "deployment said nothing" state.
+- **`src/infrastructure/adapters/mailer.ts`** — The module under test. Imports `sendTemplatedEmail`, `resetTransporter`, and `resolveMailTransport`; mocks its dependency `nodemailer`.
+- **`src/infrastructure/runtime/demo-profile.ts`** — Imports `enableDemoProfile` to assert that the demo-profile rail overrides the transport to `'outbox'` regardless of `NODE_MAIL_TRANSPORT`.
+- **`tests/support/environment.ts`** — Imports `withoutEnvironmentInThisFile` to clear `NODE_MAIL_TRANSPORT` and `NODE_ENV` before each test in the `resolveMailTransport` suite.
 
 ## Notes
 
-- The transport is **memoised at module scope**, so the way to reconfigure it is `resetTransporter()` followed by a send—not `jest.resetModules()` + dynamic import. The header comment explicitly calls out that the old reset-and-reimport dance is no longer needed.
-- `secure: true` on port 587 would cause a hard connection failure; `secure: false` on port 465 would leak SMTP AUTH credentials in plaintext. The tests treat this as a security invariant, not a config detail.
-- Empty-string (`''`) is used for unset `auth.user`, `auth.pass`, and `name` so that nodemailer never serialises the literal string `"undefined"` into the SMTP handshake.
-- The `resolveMailTransport` suite uses `it.each` for the three valid transport names and a separate throw-assertion for the invalid case—no silent fallback is permitted.
+- The transport is **memoised at first send**, not at import time. Varying its configuration requires `resetTransporter()` followed by a send—`jest.resetModules()` is unnecessary because the module-scope code it would re-run no longer exists.
+- `transportOptions` intentionally fires a real `sendTemplatedEmail` call (caught with `.catch(() => {})`) solely to trigger transport construction; the email envelope is irrelevant.
+- The `secure` flag is treated as a **security invariant**, not a tunable: `true` means implicit TLS (port 465 only); on 587 the connection must start plaintext and upgrade via STARTTLS, enforced by `requireTLS: true`.
+- Credentials default to **empty strings**, not `undefined`, so an unconfigured mailer does not crash at boot but fails at send time.
+- In the `resolveMailTransport` suite, `enableDemoProfile(false)` is called in `afterEach` to prevent state leaking between tests.

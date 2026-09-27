@@ -1,7 +1,7 @@
 ---
 source: tests/unit/app/error-handling.test.ts
-sha256: 01e9699f78aa84ef6bf5813fccabea1cfff3b700a768722355b08c4e7bdf7e0f
-generated_at: 2026-09-23T20:15:11.363818+00:00
+sha256: 117ba3b1fc43c2b8a65fa84e21150eb17e1e801265a141e735366f8c01f7de8c
+generated_at: 2026-09-27T16:01:53.619558+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the status-resolution branch of `handleUncaughtError`. The file drives the handler directly (no express app, no throwing route) to isolate `clientErrorStatus`'s decision logic: how it picks between `error.status` and `error.statusCode`, and when it rejects both in favor of the 500 fallback. The express-level integration (a synchronous throw actually reaching this handler) is covered separately in `tests/integration/auth-hardening.test.ts`.
+Unit-tests `handleUncaughtError` by calling it directly (bypassing the Express layer) to isolate the `resolveStatus` / `clientErrorStatus` branching: which status code is sent based on the error's `status`/`statusCode` fields, how mid-stream errors are delegated to `next()`, and how a Mongo/Redis outage yields a 503 with `Retry-After` instead of a generic 500.
 
 ## Key elements
 
-- **`requestStub()`** — builds a minimal `Request` stub (only `requestId`, `path`, `method`) via `asStub`; the sole field the handler reads for its log line.
-- **`NEXT`** — module-level `jest.fn()` standing in for `NextFunction`; not asserted on.
-- **`handleUncaughtError` describe block** — three cases:
-    - `statusCode`-only error (Node convention, no `.status`) → handler calls `res.status(416)`.
-    - Both `status` and `statusCode` present → handler prefers `status` (409 wins over 416).
-    - `statusCode: 599` (out of 4xx range) → handler falls through to 500.
+- **`requestStub()`** – returns a minimal `Request` stub (via `asStub`) carrying only `requestId`, `path`, and `method` — the single field the handler reads for its log line.
+- **`NEXT`** – module-level `jest.fn()` serving as the `NextFunction` argument in most cases.
+- **`describe('handleUncaughtError', …)`** – the sole suite. Contains six `it` blocks:
+  - *statusCode fallback*: error with only `statusCode: 416` → responds 416.
+  - *status preferred over statusCode*: both present → responds with `status` (409).
+  - *Non-4xx `statusCode` (599)*: falls through to the database interpreter → responds 500.
+  - *Mid-stream error* (`headersSent: true`): handler calls `next(error)` and does **not** call `response.status`.
+  - *`describe('a Mongo/Redis outage …')`* – three assertions for a `MongoServerSelectionError`: responds 503, sets `Retry-After` header, and does not leak the driver message into the JSON body.
+- **`responseWithHeaders()`** (local helper) – extends `makeResponseStub()` with a `setHeader` mock, needed only for the 503 branch.
 
 ## Relationships
 
-- **`src/app/error-handling.ts`** — module under test; exports `handleUncaughtError`.
-- **`tests/support/express.ts`** — provides `makeResponseStub()`, the mocked `Response` object whose `status` call is the assertion target.
-- **`tests/support/stub.ts`** — provides `asStub()`, used to cast a plain object into the `Request` type without a full express request.
+| Neighbor | Interaction |
+|---|---|
+| `src/app/error-handling.ts` | Exports `handleUncaughtError`, the sole function under test. |
+| `tests/support/express.ts` | Provides `makeResponseStub()`, which supplies the mockable `status` / `json` (and optionally `setHeader`) methods. |
+| `tests/support/stub.ts` | Provides `asStub<T>()`, used to create the minimal `Request` object without a full Express middleware chain. |
 
 ## Notes
 
-- The file is intentionally narrower than the integration test: it does **not** verify that express actually routes a thrown error into `handleUncaughtError`, nor that body-parser rejections carry the right `.status`/`.expose`. Only the `clientErrorStatus` branching is exercised here.
-- The 599 case is the guard against `clientErrorStatus` accepting any numeric `statusCode`; it must stay in 4xx or the handler must fall back to 500.
-- `asStub` is a type-level cast only (no runtime proxy), so tests rely on the handler reading exactly the fields present in the stub object.
+- The file's top docblock explicitly scopes it as the *narrower* companion to `tests/integration/auth-hardening.test.ts`, which already verifies that a synchronous throw in a route actually reaches this handler through Express.
+- Errors are constructed with `Object.assign(new Error(…), { … })` rather than `http-errors`, to exercise the raw `status` / `statusCode` field logic independently of `http-errors`'s conventions.
+- The 503-outage tests assert that `JSON.stringify(response.json.mock.calls[0][0])` does **not** contain the driver's message — a deliberate non-leak guarantee.

@@ -1,7 +1,7 @@
 ---
 source: tests/unit/scripts/db/host-scripts.test.ts
-sha256: 5fcb6318a924d9a07ec6d63d87c7708c8b22e74b7341e521ca21a5972f0f7b74
-generated_at: 2026-09-23T20:29:56.920114+00:00
+sha256: 8aa2e3a83b4c9f80a863077792ab108b2a6dfe9af75a332971559ae9525db656
+generated_at: 2026-09-27T16:13:03.512264+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Guards two invariants that make `npm run host -- <script>` work correctly: the `host` wrapper in `package.json` must redirect only the hostname (never a full URI or database name), and `getDatabaseUri()` must fall through to fragment-level env vars when `NODE_DB_URI` is empty (not merely undefined). Without these, renaming the database in `.env` silently seeds the wrong database, and on dual-stack machines the `localhost` name can resolve to IPv6 while the container only listens on IPv4.
+Guards the `npm run host -- <script>` wrapper (a thin script in `package.json`) and the `getDatabaseUri()` resolver it depends on. The wrapper lets a developer run DB/Redis scripts from the host machine against a containerised database by blanking the full-URI env vars and overriding only the hostname to `127.0.0.1`, so all other fragments (port, database name) still come from `.env`. This test file pins down the invariants that must hold for that mechanism to keep working, and prevents regressions that would silently seed the wrong database or fail to connect.
 
 ## Key elements
 
-- **`hostScript`** — reads the `host` entry from `package.json` scripts; the primary SUT for the first `describe` block.
-- **`MONGO_VARS`** — tuple of `NODE_DB_URI`, `NODE_MONGODB_HOST`, `NODE_MONGODB_PORT`, `NODE_MONGODB_NAME`; used to snapshot/restore env in the URI-resolution tests.
-- **`describe('the host script')`** — six assertions on the raw script string: no literal URI, no DB name, blanks both URIs + sets `*_HOST=127.0.0.1`, never contains `localhost`, ends with `npm run`, and is the _only_ script that redirects a hostname.
-- **`describe('database URI resolution')`** — four tests calling `getDatabaseUri()`: explicit URI wins, **empty** string falls through to fragments, a renamed DB is honoured, and defaults are `mongodb://127.0.0.1:27017/boilerplate-node-backend`.
+- **`describe('the host script')`** — seven assertions against the raw `host` script string read from `package.json` at test time:
+  - No literal MongoDB/Redis URI or hardcoded database name.
+  - Blanks `NODE_DB_URI` / `NODE_REDIS_URL` and sets `*_HOST=127.0.0.1`.
+  - Never uses the name `localhost` (must be the literal `127.0.0.1`).
+  - Ends in `npm run` so `--` arguments pass through to the delegated script.
+  - Is the **only** script in `package.json` that redirects a hostname.
+- **`describe('database URI resolution')`** — four tests for `getDatabaseUri()`:
+  - Explicit `NODE_DB_URI` wins.
+  - **Empty** `NODE_DB_URI` (the load-bearing case) falls through to `NODE_MONGODB_HOST`/`PORT`/`NAME` fragments.
+  - A renamed database name is honoured (the original bug this wrapper fixes).
+  - All-vars-unset defaults to `mongodb://127.0.0.1:27017/boilerplate-node-backend`.
+- **`MONGO_VARS`** — the four env keys saved in `beforeEach` and restored in `afterEach` so tests don't leak state.
+- **`ROOT` / `packageScripts` / `hostScript`** — resolved from `__dirname/../../../..` and read via `readFileSync` at module-load time.
 
 ## Relationships
 
-- **`src/infrastructure/runtime/database.ts`** — source of `getDatabaseUri()`, the function exercised by the second `describe` block. The tests assert its fallback semantics (empty-string vs. undefined, fragment reassembly) directly.
-- **`package.json`** (project root) — read at module-load time to extract the `host` script and all sibling scripts; the test validates the wrapper string and scans every other script for hostname-redirect patterns.
+- **`src/infrastructure/runtime/database.ts`** — exports `getDatabaseUri`, which the second `describe` block calls directly under controlled `process.env` states. The test asserts the resolver's fall-through contract (empty URI → fragments) that the `host` script relies on.
 
 ## Notes
 
-- The "empty URI falls through" test is explicitly called out as the most fragile line: a well-meaning refactor to `!== undefined` would pass type-checking but break the host-script contract. The test pins the _falsy_ path.
-- The `localhost` ban is not stylistic: on dual-stack hosts the resolver may return `::1` first, while Docker/Podman publish to `0.0.0.0` (IPv4 only), producing opaque `ECONNRESET` or hangs. `127.0.0.1` is order-independent.
-- The "only redirector" test scans _all_ scripts in `package.json`; adding any new `*_HOST=127.0.0.1` or `*_HOST=localhost` assignment to another script will fail this assertion.
-- `ROOT` is resolved four levels up from the test file (`tests/unit/scripts/db/` → repo root). If the test is moved, the `package.json` path must move with it.
+- The test reads `package.json` from the filesystem (not via a module import), so it will fail if the project root layout changes.
+- The "falls through when `NODE_DB_URI` is EMPTY" test is explicitly documented as the easiest assertion to break by "tidying" a falsy check to `!== undefined`. An empty string is a deliberate signal, not an absence.
+- The `127.0.0.1` vs `localhost` assertion is not a style preference: on dual-stack machines `localhost` can resolve to `::1` first, while Docker/Podman publish to `0.0.0.0` (IPv4 only), causing silent `ECONNRESET` or hangs.
+- The "only one redirector" test scans **all** scripts in `package.json`, so adding a new `:host` twin anywhere will fail the suite.

@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/runtime/otel-sdk.test.ts
-sha256: c64d014d527d4d251310834c7198e376aa482fdef706269a94aff58663f03606
-generated_at: 2026-09-23T20:26:19.230434+00:00
+sha256: 4ad0d3a78ccb7d18e219a6f5f48a8658dc01e8ccbdbb541a4265bb4b3d5a69c7
+generated_at: 2026-09-27T16:10:03.553286+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `buildProcessors()` specifically — deliberately excluding `startTracing()` because that function monkey-patches express, mongoose, redis, and http globally, which is unsafe inside a shared Jest worker. The tests verify the no-op path and that a finished span actually reaches a real `OTLPTraceExporter.export()` at flush time.
+Unit tests for `buildProcessors()` and `redactUrlSecrets()` from the OpenTelemetry SDK module. It deliberately excludes `startTracing()` because that function monkey-patches express/mongoose/redis/http globally and is unsafe inside a Jest worker shared with other test files.
 
 ## Key elements
 
-- **`sampledSpanStub()`** — Returns a minimal `ReadableSpan` stub (via `asStub`) with just `spanContext()` (returning `TraceFlags.SAMPLED`) and `resource.asyncAttributesPending: false`. Nothing else is read before the mocked `export()` call.
-- **Test: "is a no-op without OTEL_EXPORTER_OTLP_ENDPOINT"** — Asserts the env var is unset (suite ambient default, not a fixture) and that `buildProcessors()` returns `[]`.
-- **Test: "forwards a finished span to a real exporter at flush time"** — Spies on `OTLPTraceExporter.prototype.export` (not an instance, since `buildProcessors()` constructs its own internally), sets the endpoint via `withEnvironment`, calls `processor.onEnd(sampledSpanStub())` + `forceFlush()`, then asserts `export()` was called once.
+- **`sampledSpanStub()`** — returns a minimal `ReadableSpan` (sampled `traceFlags`, `resource.asyncAttributesPending: false`) via `asStub`, just enough to pass `onEnd`'s sampled check and `_flushOneBatch`'s resource read before `export()` is called.
+- **`describe('otel-sdk — buildProcessors')`** — three tests:
+  - No endpoint → single `NoopSpanProcessor` is returned (so the SDK still registers a tracer provider and logs keep trace ids).
+  - `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` set → processor is *not* a `NoopSpanProcessor`.
+  - `OTEL_EXPORTER_OTLP_ENDPOINT` set → a real span reaches `OTLPTraceExporter.prototype.export` at flush time (guards against the deprecated two-arg `BatchSpanProcessor` form where the exporter is silently `undefined` until `_flushAll`).
+- **`describe('otel-sdk — redactUrlSecrets')`** — two tests: `code`/`state` query params are replaced with `REDACTED`; URLs without those params are returned unchanged.
 
 ## Relationships
 
-- **`src/infrastructure/runtime/otel-sdk.ts`** — Imports `buildProcessors()` under test. Only that function is exercised; `startTracing()` is intentionally not touched.
-- **`tests/support/environment.ts`** — Imports `withEnvironment` to temporarily set `OTEL_EXPORTER_OTLP_ENDPOINT` for the duration of one `async` callback, restoring it afterward.
-- **`tests/support/stub.ts`** — Imports `asStub` to construct a typed, partial `ReadableSpan` object without implementing the full interface.
+- **`src/infrastructure/runtime/otel-sdk.ts`** — the module under test; provides `buildProcessors` and `redactUrlSecrets`.
+- **`tests/support/environment.ts`** — supplies `withEnvironment`, which sets an env var for the duration of a callback and restores it, isolating endpoint-based tests.
+- **`tests/support/stub.ts`** — supplies `asStub`, used to build the typed `ReadableSpan` fixture without a full SDK import.
 
 ## Notes
 
-- The module doc-block documents a specific API break: `BatchSpanProcessor` (from `@opentelemetry/sdk-trace`) takes a single options object `{ exporter, … }`, unlike the deprecated `sdk-trace-base` two-argument form. Passing the exporter positionally leaves `options.exporter` undefined, causing a silent failure that only surfaces inside `_flushAll()` when it calls `undefined.export(...)`. This test pins correct runtime behaviour beyond what `ts-check` enforces.
-- The `export` spy is attached to the **prototype**, because `buildProcessors()` constructs its own `OTLPTraceExporter` internally — there is no instance to pre-spy. Remember `mockRestore()` after the assertion.
-- The "no-op" test relies on `OTEL_EXPORTER_OTLP_ENDPOINT` being absent from the ambient test environment; it is not set or unset by the test itself.
+- The "no endpoint" test asserts `process.env.OTEL_EXPORTER_OTLP_ENDPOINT` is `undefined` as an *ambient* precondition of the suite, not as a fixture it sets itself.
+- The flush test spies on `OTLPTraceExporter.prototype.export` (class-level) because `buildProcessors()` constructs its own exporter instance internally; there is no pre-existing instance to spy on.
+- The `BatchSpanProcessor` positional-argument trap (old `sdk-trace-node` two-arg form) is a silent-failure mode: spans queue without error and the crash only appears inside `_flushAll()`. The third test pins correct runtime behavior; `ts-check` catches the shape at compile time.

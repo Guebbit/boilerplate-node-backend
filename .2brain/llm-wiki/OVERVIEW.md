@@ -1,62 +1,36 @@
 ---
-generated_at: 2026-09-23T20:33:05.693255+00:00
+generated_at: 2026-09-27T16:14:59.955194+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # Repository Overview
 
-## What This Is
+A Node.js / TypeScript backend for a **multi-tenant shop and account platform**. It exposes a REST API (`openapi.yaml`) and an event-driven interface (`asyncapi.yaml`), persists state in MongoDB (replica-set), and ships with a full observability stack (Prometheus, Grafana, Loki, Tempo, Alertmanager).
 
-A TypeScript/Node.js HTTP + async-messaging service with a modular domain-driven architecture (evidenced by `docs/theory/strategic-ddd.md`). It exposes a REST API (`openapi.yaml`) and publishes async events (`asyncapi.yaml`), persists to MongoDB, and ships with a full observability stack (Prometheus, Grafana, Loki, Tempo, OpenTelemetry, Alertmanager).
+## Main Areas & How They Relate
 
-Key domain concepts visible across files: **users/accounts**, **addresses**, **products**, **locales (i18n)**, **shop history**, **rate limits**, **webhooks**, and a **subject** model.
+| Area | Path | Role |
+|---|---|---|
+| **Domain modules** | `src/modules/` (e.g. `users/`) | Business logic per bounded context; each module has a `service.ts`, tests, and factories. Organized with Strategic DDD (see `docs/theory/strategic-ddd.md`). |
+| **Infrastructure** | `src/infrastructure/` | Cross-cutting plumbing: HTTP controller/request/response, i18n, logger adapter. Consumed by every module. |
+| **Core types** | `src/types/` | Shared type definitions (`index.ts` is imported by ~248 files — the vocabulary backbone). |
+| **Scenarios / E2E** | `scenarios/` | Seed data, product/account/shop fixtures, and flow scripts (backdate, loopback, shop-history, rate-limits). Backed by ephemeral MongoDB instances. |
+| **API contracts** | `openapi.yaml`, `asyncapi.yaml` (+ `.public.yaml` variants) | Single source of truth for the external surface. TypeScript clients are generated via **Orval** (`orval.config.ts`). |
+| **Testing** | `tests/`, `jest.config.*.js` | Unit, integration (`setup-test-db.ts`), cluster, and mutation suites. |
+| **DevOps / Observability** | `docker/`, `docker-compose.*.yml` | Local, test, proxy, and production compose stacks; MongoDB init scripts; supercronic for cron; full monitoring dashboards & alert rules. |
+| **Documentation** | `docs/` (VitePress) | DDD strategy, webhooks module guide, contract-fragmentation policy, mutation-testing tooling, test reference. |
+| **Tooling** | `eslint.config.ts`, `orval.config.ts`, `package.json` | Linting, codegen, dependency management. |
 
-## Main Areas
-
-| Area                        | Path / Entry                                        | Role                                                                                          |
-| --------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **Core types**              | `src/types/index.ts`                                | Central type definitions (touches ~233 files)                                                 |
-| **HTTP infrastructure**     | `src/infrastructure/http/`                          | Controller, request, response abstractions                                                    |
-| **i18n / locale**           | `src/infrastructure/i18n/`                          | Locale context and internationalisation plumbing                                              |
-| **Logging**                 | `src/infrastructure/adapters/logger.ts`             | Structured logging adapter                                                                    |
-| **Domain modules**          | `src/modules/<name>/`                               | Bounded contexts (e.g. `users` with `service.ts`)                                             |
-| **Scenarios / E2E**         | `scenarios/`                                        | Seed, flow, and integration scenarios (accounts, products, shop, backdate, rate-limits, etc.) |
-| **Test infrastructure**     | `tests/support/`, `jest.config.*`                   | Unit, cluster, and mutation-test setups                                                       |
-| **API contracts & codegen** | `openapi.yaml`, `asyncapi*.yaml`, `orval.config.ts` | Spec-driven client generation                                                                 |
-| **Documentation site**      | `docs/` (VitePress)                                 | Architecture theory, API guides, tooling docs                                                 |
-| **Docker / observability**  | `docker-compose*.yml`, `docker/observability/`      | Local, test, production, and proxy deployments; full monitoring stack                         |
-
-### How They Relate
-
-```
-openapi.yaml / asyncapi.yaml   ← specs
-        │
-   orval.config.ts            ← generated clients
-        │
-src/infrastructure/http/       ← request/response/controller layer
-        │
-src/modules/<domain>/          ← business logic (service.ts, etc.)
-        │
-   MongoDB                     ← persistence
-        │
-scenarios/ + tests/            ← integration & E2E verification
-```
-
-The i18n layer and logger adapter sit alongside the HTTP infrastructure as cross-cutting concerns used by every module.
+**Relationship in one sentence:** Scenarios drive HTTP requests through the infrastructure layer; modules implement domain rules against MongoDB; contracts in YAML describe the resulting public surface; Docker + observability configs run and monitor the whole thing.
 
 ## Where to Start Reading
 
-1. **`README.md` / `CLAUDE.md`** – project purpose and setup instructions.
-2. **`openapi.yaml`** – the full REST surface; gives the fastest map of endpoints.
-3. **`src/types/index.ts`** – shared vocabulary; understand the core domain types.
-4. **`src/modules/users/service.ts`** – a representative domain module showing the module pattern.
-5. **`docs/theory/strategic-ddd.md`** – the architectural intent behind the module boundaries.
-6. **`scenarios/index.ts`** – how end-to-end scenarios are wired together; a practical tour of feature behaviour.
-7. **`docs/reference/tests.md`** – how to run and extend the test suites.
+1. **`README.md` / `CLAUDE.md`** – project intent, quick-start, and contributor notes.
+2. **`openapi.yaml` → `asyncapi.yaml`** – understand what the service actually exposes.
+3. **`src/types/index.ts`** – the shared vocabulary everything depends on.
+4. **`src/infrastructure/http/controller.ts`** – how a request enters the system.
+5. **`src/modules/users/service.ts`** – a concrete example of module structure (service → tests → factories).
+6. **`docs/theory/strategic-ddd.md`** – the architectural rationale behind the layout.
+7. **`scenarios/seed.ts` → `scenarios/index.ts`** – how to bootstrap and drive an end-to-end flow locally.
 
-## Quick Orientation Tips
-
-- **Two API specs, two audiences:** `openapi.yaml` (REST) and `asyncapi.yaml` (events). The `.public.yaml` variants are the externally exposed contracts.
-- **Multiple Docker Compose files** target different environments: `docker-compose.yml` (dev), `.test.yml`, `.production.yml`, `.proxy.yml`.
-- **Mutation testing** is a first-class concern (`jest.config.mutation.js`, `docs/tools/mutation-testing.md`).
-- **Contract fragmentation** (`docs/api/contract-fragmentation.md`) and **regeneration** (`docs/api/regenerating.md`) describe how API specs are split and code is regenerated via Orval.
+> **Tip for AI readers:** the dependency-graph "hub" files (`src/types/index.ts`, `src/infrastructure/http/response.ts`, `src/infrastructure/i18n/index.ts`) are the safest anchors when tracing cross-cutting changes.

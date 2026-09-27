@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/persistence/create-repository.test.ts
-sha256: 88a1414c3aa0da892cf22d37acd71f422ec887a3e16553d5fd97843ee068da8c
-generated_at: 2026-09-23T20:25:26.288462+00:00
+sha256: 33005007186646b8d46c554a44966b98a28119d59585c649c0311a7253fe55cf
+generated_at: 2026-09-27T16:09:24.240079+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `buildWhere`, the pure filter-bag-to-Mongo-query compiler that every module's `search()` method relies on. The tests verify id-coercion, blank/empty handling, and per-kind compilation rules without touching a real database or Mongoose model.
+Unit tests for the `buildWhere` filter-bag-to-Mongo-query compiler and the `withScope` helper exported by `create-repository.ts`. The tests are pure and DB-free: they exercise only the specification-driven compilation rules (coercion, trimming, per-kind operators) without ever invoking a Mongoose model.
 
 ## Key elements
 
-- **`buildWhereFor(searchable)`** — helper that wires a stub model and `identityTransform` into `createRepository` and returns the `buildWhere` function under test.
-- **`stubModel`** — a cast-empty `Model<FixtureDocument>`; never called, exists only to satisfy the `createRepository` signature.
-- **`buildWhere — objectIds`** — verifies `Types.ObjectId` coercion, trimming, blank omission, malformed-id rejection, independent per-key handling, `$in` array expansion, blank-element filtering, and empty-array-as-no-filter semantics.
-- **`buildWhere — exact`** — confirms trimmed verbatim string matching and omission of absent/blank values.
-- **`buildWhere — booleans`** — asserts that only literal `true`/`false` pass through; the string `"false"` is intentionally rejected.
-- **`buildWhere — regex`** — checks case-insensitive `$regex` with special characters escaped and `$options: 'i'`.
-- **`buildWhere — arrayRegex`** — confirms the pattern is wrapped in `$elemMatch`.
-- **`buildWhere — text`** — validates `$or` expansion across all declared fields; an empty field list produces no filter even when text is supplied.
-- **`buildWhere — ranges`** — tests `$gte`/`$lte` composition, one-sided bounds, and dropping of non-numeric (NaN) bounds.
-- **`buildWhere — composing multiple kinds at once`** — ensures independently declared kinds set their paths without clobbering each other.
+- **`buildWhereFor(searchable)`** – Test helper that calls `createRepository` with a stub model, an identity transform, and the given `SearchSpec`, returning the resulting `buildWhere` closure for assertion.
+- **`stubModel`** – An empty cast to `Model<FixtureDocument>`; never called, exists only to satisfy the `createRepository` signature.
+- **`describe('buildWhere — objectIds')`** – Verifies `Types.ObjectId` coercion, trimming, blank/absent omission, array → `$in`, per-element blank filtering, and that malformed IDs throw.
+- **`describe('buildWhere — exact')`** – Verifies trimmed verbatim match and blank omission.
+- **`describe('buildWhere — booleans')`** – Verifies literal `true`/`false` pass through; non-boolean values (e.g. string `'false'`) are omitted.
+- **`describe('buildWhere — regex')`** – Verifies special-character escaping and `$options: 'i'`.
+- **`describe('buildWhere — arrayRegex')`** – Verifies `$elemMatch` wrapping.
+- **`describe('buildWhere — text')`** – Verifies `$or` across all declared fields; an empty `text` array produces no `$or`.
+- **`describe('buildWhere — ranges')`** – Verifies `$gte`/`$lte` composition, one-sided bounds, and that non-numeric bounds are dropped (no `NaN` reaches Mongo).
+- **`describe('buildWhere — composing multiple kinds')`** – Confirms independent paths don't clobber each other.
+- **`describe('withScope')`** – Confirms `$and` merging when both filter and scope contain `$or`, and passthrough when one side is empty.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — the module under test. The test imports `createRepository`, `SearchSpec`, and `Wire` from it and exercises the `buildWhere` method on the returned repository instance. No other production module is touched.
+- **`src/infrastructure/persistence/create-repository.ts`** (sibling in the dependency graph) — the sole system under test. This file imports `createRepository`, `withScope`, and the `SearchSpec`/`Wire` types from it. No other module is exercised.
+- **`mongoose`** — imported only for `Types.ObjectId` (assertions) and the `Model`/`Document` types (stub typing). No Mongoose runtime behavior is tested here.
 
 ## Notes
 
-- The model passed to `createRepository` is a stub (`{} as Model<FixtureDocument>`); `buildWhere` is documented as never invoking the model, so the stub is safe.
-- The `Wire<T>` type parameter is supplied but the test only cares about `buildWhere`; the `transform` is set to identity to avoid interference.
-- Boolean filtering is deliberately stricter than the generic "is present" check: the value must be a JavaScript boolean, not a decoded string like `"false"`.
-- Malformed ObjectId strings (both scalar and array elements) are expected to **throw** rather than silently pass a raw string to Mongo.
+- The test file deliberately avoids any database connection; if a test accidentally triggers a model method, it would fail on the empty stub rather than silently passing against a real collection.
+- `objectIds` and `booleans` are the two kinds with *type-strict* contracts (throw on bad ObjectId, require literal boolean). The other kinds are *lenient* (omit on blank/invalid). This asymmetry is intentional and worth preserving when adding new kinds.
+- `withScope` only produces `$and` when both arguments are non-empty; a single-side call is returned as-is, which matters for query-plan cardinality.

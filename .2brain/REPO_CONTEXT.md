@@ -79,8 +79,8 @@ Change these with care — widely depended on:
 ## Index Metadata
 - Provider: `ollama`
 - Model: `qwen3.8:27b`
-- Index revision: `6327b00cc34b1ef7f0b945fd03a4f9b319c1c751587e148b8ae877319524aae0`
-- Indexed chunks: `5482`
+- Index revision: `7acaabb1d870f2bcf31ce2ad33b835136e908ad2dc2a853453ee272c9e95dbb0`
+- Indexed chunks: `5832`
 - Memory entries: `0`
 
 ## Query

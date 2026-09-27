@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/observability/analytics.test.ts
-sha256: 817e51caf62f5089006a7e1f12cbee1100c7dd768bcc2efe8193f09db104a24a
-generated_at: 2026-09-23T20:24:42.612538+00:00
+sha256: 645a235860af06d401652ad022e402245dc703f697ff60ff61f15ed81aa2e553
+generated_at: 2026-09-27T16:08:36.549071+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the analytics provider port (`src/infrastructure/observability/analytics/`) and its Umami and PostHog implementations. Because the emit contract is fire-and-forget (no return value), every assertion inspects the decoded wire payload (`fetch` call or PostHog `capture` argument) rather than a return value. The file also pins non-obvious external behaviors (e.g. Umami silently dropping events without a `User-Agent` header) that are invisible from the source code.
+Unit tests for the analytics observability module (`src/infrastructure/observability/analytics/index.ts`), covering provider selection, the Umami provider's wire-level behavior, and the PostHog provider. Because the emit contract is fire-and-forget by design, every assertion targets the outgoing HTTP payload or headers rather than any return value—the wire payload is the only observable a provider exposes.
 
 ## Key elements
 
-- **`resolveAnalyticsProvider` block** — verifies default-to-umami, explicit selection via `NODE_ANALYTICS_PROVIDER`, memoization across calls, reset behavior, and rejection of unknown provider names.
-- **Umami provider block** — asserts POST URL construction (ingest host, trailing-slash tolerance, public-host fallback), body shape (`type`, `payload.website`, `payload.name`), mandatory `User-Agent` header, forwarding of caller `userAgent` / `clientIp` (`X-Forwarded-For`), omission of `X-Forwarded-For` when no IP, `user_id` / `trace_id` in `payload.data`, caller-property merging (and that it cannot overwrite `user_id`), and port stripping from `hostname`.
-- **PostHog provider block** (truncated) — exercises `posthog-node` via a `jest.mock` of the `PostHog` class; asserts `capture` arguments and `shutdown` on `shutdownAnalytics`.
-- **Helpers**
-    - `configureUmami` / `configurePostHog` — set the env vars a provider needs to send.
-    - `clearAnalyticsEnvironment` — removes all analytics env vars and pins `NODE_ANALYTICS_REQUIRE_CONSENT=false` so the consent gate does not short-circuit.
-    - `settle` — one `setImmediate` tick so the fire-and-forget `fetch` chain resolves before assertions run.
-    - `sentRequest` — decodes the single `globalThis.fetch` mock call into `{ url, headers, body }`.
-    - `mockCapture`, `mockShutdown`, `mockedPostHog` — the PostHog spies reachable through Jest's module registry.
+- **`resolveAnalyticsProvider` / `resetAnalyticsProvider`** — tested for defaulting to `umami`, honoring `NODE_ANALYTICS_PROVIDER`, memoizing across calls, re-reading env after reset, and rejecting unknown names.
+- **Umami provider tests** — verify the `fetch` URL, required `User-Agent` header (Umami silently drops events lacking one), optional `X-Forwarded-For` forwarding, `user_id` / `trace_id` placement in `payload.data`, property-merge safety (caller cannot overwrite `user_id`), trailing-slash tolerance, and request abort timeout.
+- **`configureUmami` / `configurePostHog` / `clearAnalyticsEnvironment`** — env-var helpers that set or clear the provider configuration; `clearAnalyticsEnvironment` sets `NODE_ANALYTICS_REQUIRE_CONSENT='false'` so tests exercise provider behavior, not the consent gate.
+- **`settle`** — returns a `setImmediate`-based promise to let the fire-and-forget `fetch` chain resolve before assertions run.
+- **`sentRequest`** — decodes the first mocked `fetch` call into `{ url, headers, body }` for assertions.
+- **PostHog mock** — `jest.mock('posthog-node')` replaces the SDK with a stub exposing `capture` and `shutdown` spies.
+- **Real event constants** — imports `accountAnalyticsEvents`, `productsAnalyticsEvents`, `cartAnalyticsEvents`, `ordersAnalyticsEvents` so the emitted event names are ones the app actually uses.
 
 ## Relationships
 
-- **`src/infrastructure/observability/analytics/index.ts`** — the unit under test; the file imports `resolveAnalyticsProvider`, `resetAnalyticsProvider`, `emitAnalyticsEvent`, `buildAnalyticsBase`, `shutdownAnalytics`, and the `AnalyticsEvent` / `AnalyticsEventInput` types.
-- **`src/modules/account/analytics.ts`**, **`src/modules/cart/analytics.ts`**, **`src/modules/orders/analytics.ts`**, **`src/modules/products/analytics.ts`** — supply real event-name constants (`accountAnalyticsEvents`, `cartAnalyticsEvents`, `ordersAnalyticsEvents`, `productsAnalyticsEvents`) so test fixtures exercise the same identifiers the controllers emit.
-- **`tests/support/callers.ts`** — provides `callerAs` and `strangerCaller` helpers for constructing caller-context fixtures.
-- **`tests/cross-cutting/contract-search-parity.test.ts`** — shares the analytics port contract; this file validates the provider side while the parity test validates the consumer side.
+- **`src/infrastructure/observability/analytics/index.ts`** — the module under test; the file imports its public API (`resolveAnalyticsProvider`, `emitAnalyticsEvent`, `resetAnalyticsProvider`, `buildAnalyticsBase`, `shutdownAnalytics`, types).
+- **`src/modules/account/analytics.ts`**, **`src/modules/cart/analytics.ts`**, **`src/modules/orders/analytics.ts`**, **`src/modules/products/analytics.ts`** — each contributes one or more named event constants used as the `event` field in test inputs, keeping the wire assertions tied to real app vocabulary.
+- **`tests/support/callers.ts`** — provides `callerAs` and `strangerCaller` helpers for constructing realistic caller contexts in test fixtures.
 
 ## Notes
 
-- **Consent is disabled by default in this file.** `clearAnalyticsEnvironment` sets `NODE_ANALYTICS_REQUIRE_CONSENT=false` (not `delete`) because the real default is `true`, and the intent here is to test provider behavior _after_ the gate, not the gate itself. Only a dedicated consent-gate `describe` block tests the gate.
-- **Memoization is intentional.** `resolveAnalyticsProvider` caches on first call; tests must call `resetAnalyticsProvider()` (in `beforeEach`) before changing env vars, or the stale provider is returned.
-- **`settle()` is required after `emitAnalyticsEvent`.** The Umami provider fires `fetch` without awaiting it; asserting on the same tick reads the mock before the `.then` has run.
-- **Umami `User-Agent` requirement** is pinned as a test because it was discovered against a live Umami 2.14 instance and is not documented in Umami's API. The response is still `200` even when the event is discarded.
-- **`hostname` port stripping** (`localhost:3000` → `localhost`) is asserted because Umami returns `400` on non-default-port hostnames; this is the entire local-dev case.
+- **Umami User-Agent requirement is non-obvious.** An event posted without a `User-Agent` header is discarded by Umami 2.14 and the response is still `200`. This behavior is invisible from the API and is pinned here by an explicit assertion that the header is always present.
+- **`NODE_ANALYTICS_REQUIRE_CONSENT` is set to `'false'`, not deleted.** The real default is `true`; setting it to `false` intentionally bypasses the consent gate so tests isolate provider behavior.
+- **`settle()` is required before asserting on `fetch` mock calls** because `emitAnalyticsEvent` is fire-and-forget: the `fetch` call is scheduled but not awaited within the function.
+- **`X-Forwarded-For` is omitted entirely (not sent empty)** when no client IP is available, because an empty value would cause Umami to hash an empty string as a visitor address.
+- **Provider selection is memoized.** Once resolved, changing `process.env` has no effect until `resetAnalyticsProvider()` is called—tests verify both the sticky behavior and the reset path.

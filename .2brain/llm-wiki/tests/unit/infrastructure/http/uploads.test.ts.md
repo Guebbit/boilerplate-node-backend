@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/http/uploads.test.ts
-sha256: 7dcc752f7485ccc4079ebad40e777547bae5ead0410e03f799c0906292e056d2
-generated_at: 2026-09-23T20:23:43.757822+00:00
+sha256: 8d4bf131f56818cc30f41f6fa431ad3c3f53bf185697660ebb307b0934e5a5ea
+generated_at: 2026-09-27T16:08:08.291337+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the two upload-helper functions exported by `src/infrastructure/http/uploads.ts`. The file exists to lock in two invariants: (1) `getFormFiles` collapses all three multer shapes into one uniform array-or-undefined result, and (2) `readUploadedImage` returns only store-recorded URLs and never leaks a filesystem path into `imageUrl`.
+Unit tests for the two upload-helper functions exported by `src/infrastructure/http/uploads.ts`. The tests exist to lock down two invariants: `getFormFiles` always yields a uniform array shape (or `undefined`), and `readUploadedImage` returns only the URL the store recorded—never a raw filesystem path.
 
 ## Key elements
 
-- **`uploaded(path)`** — local factory that produces a minimal `Express.Multer.File` stub carrying only `path`.
-- **`requestWith(parts)`** — local factory that spreads a partial object over `{ body: {} }` and casts to `Request`, so the `readUploadedImage` fallback branch never sees `undefined` for `body`.
-- **`describe('getFormFiles')`** — seven cases covering:
-    - `multer.single` (`req.file`) → wrapped in a one-element array.
-    - `multer.array` (`req.files[]`) → mapped to paths in order.
-    - `multer.fields` (`req.files` as keyed object) → flattened across all fields.
-    - Precedence: `req.file` wins when both `file` and `files` are present.
-    - No upload → `undefined`.
-    - Empty field-object (`{ avatar: [], gallery: [] }`) → `undefined` (not `[]`).
-    - Empty array (`files: []`) → `undefined`, asserted as a _separate_ case to prove it agrees with the fields case.
-- **`describe('readUploadedImage')`** — five cases covering:
-    - Returns the first URL from `storedImageUrls`.
-    - Absolute (remote) URLs pass through unchanged.
-    - Only the first URL is returned when multiple are present.
-    - No stored URLs → `imageUrl` is `undefined` (not `""`).
-    - A staged `req.file.path` that the store never committed is ignored; `imageUrl` stays `undefined`.
+- **`uploaded(path)`** – local helper that produces a minimal `Express.Multer.File` stub (only `path` is set).
+- **`requestWith(parts)`** – local helper that builds a partial `Request` with `body` defaulted to `{}`, preventing `readUploadedImage`'s `body.imageUrl` fallback branch from ever seeing `undefined`.
+- **`describe('getFormFiles')`** – verifies the single-file wrap (`multer.single` → `['path']`) and the no-upload case (`undefined`).
+- **`describe('readUploadedImage')`** – verifies:
+  - Stored relative URL is returned as-is.
+  - Absolute (remote/CDN) URLs pass through unchanged.
+  - Only the **first** entry in `storedImageUrls` is used; extras are ignored.
+  - `imageUrl` is `undefined` (not `''`) when nothing was uploaded.
+  - A staged `request.file` path that the store never committed is **not** used as a fallback.
 
 ## Relationships
 
-- **`src/infrastructure/http/uploads.ts`** — sole import target. The test exercises `getFormFiles` and `readUploadedImage` directly; no other module is imported.
+- **`src/infrastructure/http/uploads.ts`** – the module under test; this file imports `getFormFiles` and `readUploadedImage` from it via the `@infrastructure/http/uploads` alias.
+- **Express types** – the stubs reference `Request` and `Express.Multer.File` to shape the objects the helpers consume.
 
 ## Notes
 
-- The two "empty → undefined" tests (fields-object and array) are kept as **separate assertions** deliberately: the invariant is that both shapes agree, and a single merged assertion could not detect a regression where they diverge.
-- The `requestWith` helper defaults `body` to `{}`. This is unrelated to `getFormFiles` (which never reads `body`) but prevents a spurious `undefined` body from triggering the `readUploadedImage` fallback branch inside the `getFormFiles` tests.
-- The "ignores a staged file" test encodes a security boundary: if it ever regresses, a temp filesystem path could be persisted into a database row via `imageUrl`.
+- The `undefined`-vs-`''` distinction in `readUploadedImage` is load-bearing: downstream cleanup logic treats `undefined` as "no image, skip delete" and an empty string as "image at site root, attempt delete." The test suite pins this contract.
+- The "ignore staged path" test is a regression guard: the store (not the middleware) is responsible for constructing URLs, so `readUploadedImage` must never fall back to `request.file.path`. If it did, a filesystem path would leak into `imageUrl` and persist to the database.
+- `requestWith` defaults `body` to `{}` specifically so the `body.imageUrl` fallback branch inside `readUploadedImage` is exercised with a known value; `getFormFiles` tests are unaffected because that function never reads `body`.

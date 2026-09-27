@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/filesystem.test.ts
-sha256: a45aa1c67dec578eb66f68d4c0d0a379fbf54ffd336e14274698b96a705c0169
-generated_at: 2026-09-23T20:17:07.542681+00:00
+sha256: 0be69c837f8f9cb82fe45c66b80e439d89f1ae8a8dee1fb753aaabee22f38385
+generated_at: 2026-09-27T16:03:26.298334+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the three exports of `@infrastructure/adapters/filesystem`: `moveFile`, `toPosixPath`, and `reapDirectory`. The suite exists to lock down filesystem-adapter behavior that the upload pipeline depends on—correct cross-device moves, path normalization, and safe directory cleanup—without requiring a real multi-device host.
+Unit tests for the filesystem adapter (`@infrastructure/adapters/filesystem`), covering its three exported functions: `moveFile`, `toPosixPath`, and `reapDirectory`. The suite exists to pin down the adapter's behavioral contracts — particularly the cross-device (EXDEV) fallback path that is the *only* code path exercised on typical Linux deployments where tmpfs and disk live on separate filesystems.
 
 ## Key elements
 
-- **`stage(name, contents?)`** – Local helper that writes a file under a per-test temp root and returns its path.
-- **`moveFile` describe block**
-    - Verifies a successful move (source gone, destination has identical bytes).
-    - Verifies an existing destination is overwritten, not an error.
-    - Verifies a missing destination directory causes a rejection (the "database would record a dangling URL" contract).
-    - **`when the two paths are on different filesystems`** – Uses `jest.doMock` to force `rename` to reject with `EXDEV`, then asserts the copy-then-unlink fallback produces the same observable result. A second case confirms a non-EXDEV error (`EACCES`) is _not_ swallowed into a retry.
-- **`toPosixPath` describe block**
-    - All backslashes are replaced, not just the first.
-    - Idempotent on already-posix paths.
-    - No-op on a bare filename with no separators.
-- **`reapDirectory` describe block**
-    - Deletes only files whose mtime is at or before the cutoff; recent files survive. Returns `{ checked, reaped }` counts.
-    - Subdirectories are skipped entirely (counted in `checked`, never deleted).
-    - A non-existent directory resolves to `{ checked: 0, reaped: 0 }` rather than throwing.
-- **`afterEach`** – Removes the temp root and calls `jest.resetModules()` so each test's dynamic `import()` picks up a fresh module graph.
+- **`stage(name, contents?)`** — local helper that writes a file into the per-test temp `root` and returns its path.
+- **`beforeEach` / `afterEach`** — creates a fresh `mkdtemp` directory per test; tears it down with `rm --recursive` and calls `jest.resetModules()` to clear the dynamic `import()` cache.
+- **`describe('moveFile')`** — verifies: source is removed, destination holds identical bytes, overwrite semantics, missing-destination-directory throws, EXDEV fallback (copy-then-unlink) produces the same outcome as the fast path, and non-EXDEV errors (e.g. EACCES) propagate unmodified.
+- **`describe('toPosixPath')`** — verifies: all backslashes are replaced (not just the first), idempotency on already-POSIX paths, and no-op on extension-only strings.
+- **`describe('reapDirectory')`** — verifies: only files at or before the cutoff are deleted, subdirectories are skipped, dangling symlinks are tolerated (ENOENT on stat), and a missing directory yields `{checked: 0, reaped: 0}` rather than throwing.
 
 ## Relationships
 
-- **`tests/unit/scripts/pairing/spec-identity.test.ts`** – Listed as a graph neighbor, but no direct import, shared helper, or behavioral coupling is visible in this file. The two test files are adjacent only in the dependency graph; they exercise different modules.
+- **`tests/unit/scripts/pairing/spec-identity.test.ts`** — listed as a graph neighbor; no direct import or shared symbol is visible in this file.
 
 ## Notes
 
-- **Dynamic import pattern:** Every test does `await import('@infrastructure/adapters/filesystem')` after `jest.resetModules()` (run in `afterEach`). This is how `jest.doMock` is scoped per-test without leaking mocks. Forgetting `resetModules` between tests would let one mock bleed into the next.
-- **EXDEV is the expected path, not the edge case:** The file's own doc-comment notes that on a typical Linux deployment the temp dir is tmpfs and the target is a disk, so the copy-then-unlink branch is the _primary_ path. The mock forces it deterministically so the suite passes even on hosts where both paths happen to share a device.
-- **`reapDirectory` third argument** is a label (e.g. `'Test'`) presumably used in log messages; tests pass `'Test'` uniformly.
-- **`utimes`** is used to back-date file mtimes so the cutoff logic can be exercised without waiting in real time.
+- Every test block uses **dynamic `import()`** after `jest.resetModules()`, which is required for the `jest.doMock` calls in the EXDEV tests to take effect. Static top-level imports would bypass the mock.
+- The EXDEV tests mock `node:fs/promises.rename` to reject with a synthetic `EXDEV` error, since the test runner's host may not actually place tmpdir and the repo on different devices.
+- `reapDirectory`'s "dangling symlink" test exercises the real-world race where a file is deleted between `readdir` and `stat`; the contract is "skip, don't crash the sweep."
+- The `stage` helper writes to a **real** temp directory (not an in-memory FS), so the tests genuinely exercise the OS-level `rename` / `copy` semantics.

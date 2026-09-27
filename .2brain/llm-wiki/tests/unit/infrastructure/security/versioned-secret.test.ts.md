@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/security/versioned-secret.test.ts
-sha256: efee6b52172665facaee5418882c1396ba28ee31f65a9e91ee89c1d0e1d0578a
-generated_at: 2026-09-23T20:26:40.167594+00:00
+sha256: c767916dc6c1f3792b6061572bcd503d9ece4584e574ec72662574400875632a
+generated_at: 2026-09-27T16:10:40.253903+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the versioned AES-256-GCM secret encryption module. Validates the core crypto contract—round-trip, IV freshness, tamper detection, version stamping, and key-rotation semantics—once at the infrastructure level, so that higher-level wrappers (TOTP, webhooks) can rely on it without re-testing the crypto itself.
+Unit tests for the versioned AES-256-GCM at-rest encryption primitives. It verifies the encrypt/decrypt round-trip, ciphertext format, IV randomness, tamper detection, key-rotation semantics, and env-var parsing of the key ring in one place, so that higher-level modules (TOTP, webhooks) only need to test their own thin wrappers.
 
 ## Key elements
 
-- **`describe('encryptVersionedSecret / decryptVersionedSecret')`** — eight tests covering:
-    - Round-trip correctness
-    - Absence of plaintext in ciphertext
-    - Ciphertext shape: exactly 4 colon-delimited fields (`version:iv:tag:data`), prefixed by the key version
-    - Non-deterministic ciphertext (fresh IV) while decryption remains stable
-    - `Unknown <context> key version: <v>` thrown on version mismatch
-    - Auth-tag / data tamper detection (a single flipped hex digit causes a throw)
-    - Key rotation: encryption always uses the **first** ring entry; decryption resolves by version so older rows still work
-    - Dropped-key scenario: decrypting against a ring that no longer contains the version throws loudly
-- **`describe('parseVersionedKeyRing')`** — three tests covering:
-    - `undefined` input → `[]`
-    - Bare unversioned string → `[{ version: 'v1', key: <value> }]` (backward-compat default)
-    - Comma-separated `vN:key` pairs parsed into an array, **newest first**
-- **`KEY` / `RING`** — module-level fixtures: a single `v1` key and its one-entry ring, reused across all encryption tests.
+- **`describe('encryptVersionedSecret / decryptVersionedSecret')`** — the main block. Covers:
+  - Round-trip correctness
+  - Plaintext absence from ciphertext
+  - Ciphertext shape: exactly 4 colon-delimited segments, prefixed with the key version (`v1:`)
+  - Non-deterministic ciphertext per call (fresh IV) while both decrypt to the same plaintext
+  - Unknown-version error (tagged with the caller-supplied context label, e.g. `"widget"`)
+  - Auth-tag tamper detection (flipping a data byte)
+  - Truncated auth-tag rejection
+  - Rotation: new encryption uses the first (newest) ring entry; old ciphertexts still decrypt against their original entry
+  - Dropped-key failure: decrypting against a ring that no longer contains the row's version throws
+- **`describe('parseVersionedKeyRing')`** — env-var parsing:
+  - `undefined` → `[]`
+  - Bare unversioned string → `[{ version: 'v1', key: … }]` (backward compat)
+  - Comma-separated `vN:key` pairs parsed newest-first
+- **Constants** — `KEY` (a single `VersionedKey` with version `'v1'`) and `RING` (a one-element array) used across the encryption tests.
 
 ## Relationships
 
-- **`src/infrastructure/security/versioned-secret.ts`** — the sole import target. Provides `encryptVersionedSecret`, `decryptVersionedSecret`, `parseVersionedKeyRing`, and the `VersionedKey` type. All assertions in this file exercise that module's public API; there are no other runtime dependencies.
+- **`src/infrastructure/security/versioned-secret.ts`** — the module under test. All four imports (`encryptVersionedSecret`, `decryptVersionedSecret`, `parseVersionedKeyRing`, `VersionedKey`) come from here. This test file is the sole owner of the crypto, ring-lookup, and version-mismatch assertions; sibling wrappers (TOTP, webhooks) delegate the actual crypto to this module and are not exercised here.
 
 ## Notes
 
-- The "ring" is a plain `VersionedKey[]` where **index 0 is the newest key** (used for encryption). Decryption scans the array to match the version stamp.
-- The context word passed as the third argument to `decryptVersionedSecret` (e.g. `'test'`, `'widget'`) appears verbatim in the `Unknown … key version` error message—useful for log correlation but also means the same version-mismatch error reads differently per call-site.
-- Tamper detection is verified by flipping a single hex character in the **data** segment; the test does not exercise tag-only or IV-only tampering.
-- The file header comment states that `account/two-factor/totp.ts` and `webhooks/secrets.ts` each carry their own thin-wrapper round-trip tests; the crypto/ring/version logic is intentionally tested **only** here to avoid duplication.
+- The 4th argument to `decryptVersionedSecret` (e.g. `'test'`, `'widget'`, `'TOTP'`) is a free-form context label that appears in the error message for unknown versions. Tests assert on it via regex, so renaming the label in a test will break the expectation.
+- Key ring order is **newest first**; `parseVersionedKeyRing` preserves the input order, and `encryptVersionedSecret` always uses index 0.
+- Test key material is intentionally weak (`'test-key-material'`); the file asserts format and logic, not key strength.
+- The doc comment at the top of the file explicitly scopes the test: crypto, ring lookup, and version mismatch are tested *here*; callers test only their wrapper's round-trip.

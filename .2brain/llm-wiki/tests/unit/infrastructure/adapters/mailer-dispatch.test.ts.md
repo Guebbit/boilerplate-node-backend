@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/mailer-dispatch.test.ts
-sha256: 5c2b14d75a8c9d835f7fedf7baa6c225e12f7cfc0cc96865dcefb524d550b2f3
-generated_at: 2026-09-23T20:18:50.900581+00:00
+sha256: b12805b69837e31e2460bbfb7211b648b584990cd1457243fcdce970dc4515e5
+generated_at: 2026-09-27T16:04:38.895892+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `enqueueEmail` in `mailer.ts`, covering the three-branch dispatch decision (no broker → send inline; broker OK → enqueue only; broker publish fails → fall back to inline) plus two edge cases: a _rejecting_ publish (contract violation, not a designed path) and attachment cleanup on inline sends. The file exists because the three-branch behavior was previously unasserted and a silent drop in any branch would be invisible to callers (the function always resolves `void`).
+Unit tests for `enqueueEmail` in `mailer.ts`, pinning the queue-or-send-inline dispatch contract: when `publishToQueue` resolves `true` the email is enqueued (and **not** sent inline); when it resolves `false` the email is sent inline (and **not** enqueued). Also covers the edge case where publish rejects, mutual exclusivity of the two paths, and attachment lifecycle on each path. The file exists because `enqueueEmail` resolves `void` on every path, so a broken dispatch is invisible to callers—these tests are the only guard.
 
 ## Key elements
 
-- **`sendMailMock` / `nodemailer` mock** — stubs the SMTP transport so inline sends are observable but no real mail is sent.
-- **`publishToQueueMock` / `isQueueEnabledMock` / queue mock** — stubs the broker adapter; tests drive each branch by flipping `isQueueEnabled` and the publish return value.
-- **Logger mock (getter-based)** — `jest.mock('@infrastructure/adapters/logger', …)` uses `get logger()` / `get auditLogger()` accessors rather than a plain property, so the factory does not read `loggerMock` before its `const` is initialised under swc's ESM-hoisting transform.
-- **`beforeEach` / `afterEach` (spool lifecycle)** — creates a fresh `mkdtemp` directory, sets `NODE_MAIL_SPOOL_PATH`, and tears it down (restoring the original env value).
-- **`DATA: Data`** — full EJS template data object; templates render for real (only the SMTP layer is mocked), so a missing variable surfaces as an EJS `ReferenceError` rather than a blank line.
-- **`describe` blocks** — one per path (no-broker, publish-OK, publish-fails, publish-rejects), a mutual-exclusivity `it.each` table, and attachment-discard tests.
-- **`fileExists` helper** — thin wrapper over `stat` used by the (truncated) attachment tests.
+- **Path 1 suite** (`publish resolves true`) — asserts one `publishToQueue` call, zero `sendMail` calls, priority defaulting (`normal`) and pass-through (`high`), payload carries template name + raw data (no rendered HTML), and a `debug`-level log.
+- **Path 2 suite** (`publish resolves false`) — asserts the publish is still attempted (no `isQueueEnabled` pre-check), inline send fires, no enqueue log, and the return value is `undefined` (shared `Promise<void>` contract).
+- **Publish-rejects suite** — mock rejects with `Error('Channel closed')`; asserts `enqueueEmail` resolves (does not throw), logs an `error` with template + recipient, and does **not** attempt inline fallback.
+- **Mutual-exclusivity table** — `it.each` over both outcomes asserting `enqueued + sentInline === 1`.
+- **Attachment-discarding suite** — uses `spoolAttachment` to create a real spool file, then verifies it is deleted on both inline paths (publish-false and inline-send-reject) but left intact on the queued path (which has a downstream retry chain).
+- **`sendMailMock` / `publishToQueueMock` / `loggerMock`** — module-level jest mocks set up via `jest.mock` factories; logger uses **getter properties** to dodge a hoisting race (see Notes).
+- **`beforeEach` / `afterEach`** — create a fresh temp dir via `mkdtemp`, set `NODE_MAIL_SPOOL_PATH`, clear all mocks; `afterEach` removes the dir and restores the original env value.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — the module under test; the file imports `enqueueEmail` and exercises every branch of its dispatch logic.
-- **`src/infrastructure/adapters/mail-spool.ts`** — imports `spoolAttachment` to create a temp spool file before asserting that inline-send paths clean it up.
-- **`src/types/index.ts`** — imports the `EmailJobPayload` type used to shape the `REQUEST` fixture.
+- **`src/infrastructure/adapters/mailer.ts`** — SUT; `enqueueEmail` is the only import under test.
+- **`src/infrastructure/adapters/mail-spool.ts`** — `spoolAttachment` is called in the attachment suites to produce a real spool key that `enqueueEmail`'s inline paths are expected to delete.
+- **`src/types/index.ts`** — provides the `EmailJobPayload` type used to shape the `REQUEST` fixture.
+- **`tests/support/file-sandbox.ts`** — `fileExists` is used to assert spool-file presence/absence after each path.
+- **`@infrastructure/adapters/queue`** (mocked) — `publishToQueue` is the branch-deciding dependency; its boolean return drives which path executes.
+- **`@infrastructure/adapters/logger`** (mocked) — assertions check which log level fired on each path.
+- **`nodemailer`** (mocked) — `sendMail` is the inline-delivery sink; only the transport is mocked, EJS rendering runs for real.
 
 ## Notes
 
-- **Logger mock must stay getter-based.** Swc hoists `import` statements above the `const` declarations in this file; a plain `logger: loggerMock` property would be read at factory time (before the `const` is initialised) and throw `ReferenceError`. The queue mock is safe because each value is read from inside a function body, not at object-creation time.
-- **Templates render for real.** Only the SMTP transport is mocked. If a template variable is added or renamed, these tests will fail with an EJS `ReferenceError` rather than passing silently — treat a new `ReferenceError` in this file as a template/data contract break.
-- **Publish-reject path is distinct from publish-fail.** `publishToQueue` returning `false` (path 3) triggers an inline fallback; a _rejected_ promise (adapter contract violation) is caught, logged at `error` level with `template` and `to`, and the function still resolves `void` with **no** inline send. These are separate `describe` blocks.
-- **Mutual-exclusivity table** (`it.each`) encodes the invariant that exactly one of enqueue / inline-send fires per call. It is the fastest way to catch an inverted branch condition.
-- **File is truncated** in the provided content; the attachment-discard tests after the first `it` are incomplete. The full file likely contains additional assertions about spool cleanup on the publish-fail inline path.
+- **Logger mock uses getters, not a direct reference.** `jest.mock` factories are hoisted above all `const` declarations. Under swc (ESM-style import hoisting) the factory runs before `loggerMock` is initialised, so `logger: loggerMock` would throw a TDZ error. Getters defer access to property-read time, after the `const` is live. The `nodemailer` and `queue` mocks are safe because each accesses its variable from inside a function body, not at object-literal top level.
+- **Inline paths render templates for real.** Only the SMTP transport is mocked; EJS interpolation executes. A missing `DATA` key surfaces as an `EJS ReferenceError` rather than a silently blank line in the output—useful for catching incomplete fixtures.
+- **No `isQueueEnabled` pre-check is tested here.** The contract "unconfigured broker → `publishToQueue` resolves `false` with no I/O" is owned by `queue.test.ts`; this file only verifies the caller always calls `publishToQueue` and branches on the result.
+- **Temp-dir isolation.** Each test gets its own `mkdtemp` directory for `NODE_MAIL_SPOOL_PATH`; `afterEach` removes it and restores (or deletes) the original env value. Tests must not assume a shared spool location.
+- **Attachment test relies on `spoolAttachment` writing a real file** into the temp spool dir, so the discarding assertions are filesystem-level (`fileExists`), not mock-level.
