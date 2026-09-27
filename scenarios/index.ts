@@ -15,12 +15,8 @@
  */
 
 import type { Express } from 'express';
-import { seedAddressBooksCollection } from './addresses';
-import { seedLocalesCollection } from './locales';
-import { seedProductsCollection } from './products';
-import { seedUsersCollection } from './users';
-import { seedWebhooksCollection } from './webhooks';
-import { seedWishlistsCollection } from './wishlist';
+import { asWaveEntries, shopModules } from './shop-modules';
+import { runInWaves } from './waves';
 import { seedBlank } from './blank';
 import { seedAccessModel } from './accounts';
 import { SHOP_SUBJECTS } from './subjects';
@@ -29,62 +25,21 @@ import { driveShopHistory, type ShopHistory } from './flows/shop-history';
 import { backdateHistory } from './flows/backdate';
 import type { SeedOutcome } from '@scenarios/seed';
 
-/**
- * Every module with `shop` fixtures — the rows that exist BEFORE anybody uses the shop.
- *
- * Orders, payments, shipments, stock movements, reservations, carts and audit entries are
- * deliberately absent: those are what using the shop PRODUCES, and `./flows/shop-history.ts`
- * produces them by using it. See: docs/tools/demo-profile.md#how-a-scenario-is-built
- *
- * No type annotation, deliberately: one would widen every key to `string`, and `./check.ts`'s
- * compile-time check reads the literal keys straight off `keyof typeof shopModules`.
- */
-export const shopModules = {
-    addresses: {
-        seed: seedAddressBooksCollection
-    },
-    locales: {
-        seed: seedLocalesCollection
-    },
-    products: {
-        seed: seedProductsCollection
-    },
-    users: {
-        seed: seedUsersCollection
-    },
-    webhooks: {
-        seed: seedWebhooksCollection
-    },
-    wishlist: {
-        seed: seedWishlistsCollection
-    }
-};
+export { shopModules } from './shop-modules';
 
 /**
- * The `shop` scenario's STARTING rows: the access model, then every `shopModules` entry.
- *
- * `locales` MUST finish first, not join the concurrent batch: `products.seed()` writes its rows'
- * `translations` through `planTranslations`/`writeTranslations`, and `planSlot`
- * (`@modules/locales/services/translations.ts`) requires every locale in that write — including
- * the fallback locale itself — to already exist as an ACTIVE row. A `Promise.all` over every
- * module would race `products` against `locales` writing that row, and lose it as often as not.
- * No other module reads another module's write, which is what keeps the rest of the table
- * concurrent. Nothing can resolve a caller until there is a shop to be a member of, which is why
- * the access model runs before either.
+ * The `shop` scenario's STARTING rows: the access model, then every `shopModules` entry, in the
+ * fewest sequential waves its `after` graph allows (`./waves`) — `products` waits for `locales`,
+ * everything else runs from the first wave. Nothing can resolve a caller until there is a shop to
+ * be a member of, which is why the access model runs before any of it.
  *
  * A shop seeded and never driven has an empty catalogue shelf — every product starts at
  * `onHand: 0` and takes delivery from {@link buildScenario}'s flow run.
  */
 const seedShop = (): Promise<SeedOutcome[]> =>
-    seedAccessModel().then(() =>
-        shopModules.locales.seed().then((localeOutcomes) =>
-            Promise.all(
-                Object.entries(shopModules)
-                    .filter(([name]) => name !== 'locales')
-                    .map(([, scenarioModule]) => scenarioModule.seed())
-            ).then((restOutcomes) => [localeOutcomes, ...restOutcomes].flat())
-        )
-    );
+    seedAccessModel()
+        .then(() => runInWaves(asWaveEntries(shopModules)))
+        .then((outcomes) => outcomes.flat());
 
 /** One named, whole-database state: the rows it starts from, and the history it then lives. */
 interface Scenario {

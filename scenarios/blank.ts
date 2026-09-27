@@ -9,16 +9,21 @@
 import type { SeedOutcome } from '@scenarios/seed';
 import { seedAccessModel } from './accounts';
 import { seedNamedUsersCollection } from './users';
-import { seedLocalesCollection } from './locales';
+import { asWaveEntries, baselineShopModules } from './shop-modules';
+import { runInWaves } from './waves';
 
 /**
  * Seed `blank`. Read by `scenarios/index.ts`'s `SCENARIOS` registry; never called directly.
  *
  * Roles and the shop membership first — nothing can resolve a caller until a shop exists to be a
- * member of — then the four named accounts and the languages, concurrently: neither reads the
- * other's write.
+ * member of — then the four named accounts alongside every `shopModules` entry marked `baseline`
+ * (`locales`, today), concurrently: neither reads the other's write. Reading the baseline set off
+ * `shop-modules.ts` rather than listing it by hand here is what keeps `blank` in step with `shop`
+ * without either scenario importing the other.
  */
 export const seedBlank = (): Promise<SeedOutcome[]> =>
     seedAccessModel()
-        .then(() => Promise.all([seedNamedUsersCollection(), seedLocalesCollection()]))
-        .then(([users, locales]) => [...users, ...locales]);
+        .then(() =>
+            Promise.all([seedNamedUsersCollection(), runInWaves(asWaveEntries(baselineShopModules()))])
+        )
+        .then(([users, baseline]) => [...users, ...baseline.flat()]);
