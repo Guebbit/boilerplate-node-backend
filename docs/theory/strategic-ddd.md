@@ -228,8 +228,8 @@ barrel-of-itself), and the loading cost of pulling in a whole module (already pa
 loads every module regardless).
 
 What a barrel publishes: `export *` from its services, domain rules, events and emails files, and
-`export type *` from its model — a shape describing itself grants no power the way a handle does.
-What it never publishes, no matter how convenient:
+`export type *` from its model and its presenter(s) — a shape describing itself grants no power the
+way a handle does. What it never publishes, no matter how convenient:
 
 - **A repository.** `productRepository` leaving the barrel is a handle on a collection: whoever
   holds it can create, update and delete rows of a module it does not own, with that module's
@@ -245,6 +245,13 @@ What it never publishes, no matter how convenient:
 - **The model's runtime** — the mongoose schema, its `toJSON` transform, the model object itself.
   `export type * from './model'` still publishes every type the model declares; only the values
   that touch storage stay inside.
+- **The presenter FUNCTION.** `presenter.ts` (or `presenters.ts`, for a module presenting more than
+  one resource shape) is the one place a Mongoose document becomes a wire shape — see
+  [Modules](./modules.md#the-module-template) (T9). Its RETURN TYPE leaves the barrel the same way
+  the model's does, `export type * from './presenter'`; the function itself never does, in any
+  form. A sibling that needs the transform asks the service for it, the same door it already goes
+  through for a repository read — `orderService.withActions` is `orders/presenter.ts`'s
+  `presentOrder`, reached this way by `cart`, `delivery` and `payments` alike.
 - **Wiring** — `routes.ts`, `controllers/`, `module.ts`, `probes.ts`, `metrics.ts`, `analytics.ts`,
   `audit.ts`. The app registers these; a sibling never calls them.
 - **`factories.ts`.** A builder writes past the domain rules a service enforces — the same
