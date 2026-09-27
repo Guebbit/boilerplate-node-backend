@@ -196,7 +196,7 @@ components:
         ShippingMethod:
             type: object
             additionalProperties: false
-            required: [id, price, tracked, requiresAddress]
+            required: [id, price, currency, tracked, requiresAddress]
             properties:
                 id:
                     type: string
@@ -205,7 +205,10 @@ components:
                     type: number
                     format: double
                     minimum: 0
-                    description: Flat rate, in the shop's currency.
+                    description: Flat rate, in `currency`.
+                currency:
+                    type: string
+                    description: ISO-4217 currency code (e.g. EUR) — this deployment's `NODE_DEFAULT_CURRENCY`.
                 freeAbove:
                     type: number
                     format: double

@@ -26,6 +26,7 @@ import { freezeOrderLines } from './snapshot';
 import { allocateOrderNumber } from './order-numbering';
 import { orderRepository } from '../repository';
 import { ORDER_CREATED } from '../events';
+import { shopCurrency } from '../config';
 // `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
 // follows for its own writes.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -150,6 +151,7 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
             email: input.email,
             items: orderItems,
             orderNumber,
+            currency: shopCurrency(),
             payBy,
             ...(input.notes ? { notes: input.notes } : {}),
             ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),

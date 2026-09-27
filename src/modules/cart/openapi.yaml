@@ -424,7 +424,7 @@ components:
         CartSummaryResponse:
             type: object
             additionalProperties: false
-            required: [itemsCount, totalQuantity, itemsTotal, shippingCost, totalPrice]
+            required: [itemsCount, totalQuantity, itemsTotal, shippingCost, totalPrice, currency]
             properties:
                 itemsCount:
                     type: integer

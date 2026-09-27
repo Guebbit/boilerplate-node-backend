@@ -28,6 +28,7 @@ import {
     mailBuyer,
     isForceMoveRefusal,
     isDigitalOnlyOrder,
+    shopCurrency,
     shipToCountries
 } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
@@ -42,16 +43,18 @@ import type { ShipmentDocument } from './model';
  * Unfiltered — `cart`'s `PUT /cart/shipping-method` and checkout are what check a method against
  * the caller's real basket, server-side.
  *
- * `shipToCountries` is read fresh per call, not baked into `SHIPPING_METHODS` itself — it's live
- * deployment config (`NODE_SHIP_TO_COUNTRIES`), and a static array would freeze whichever value
- * happened to be set at import time.
+ * `currency` and `shipToCountries` are read fresh per call, not baked into `SHIPPING_METHODS`
+ * itself — both are live deployment config (`NODE_DEFAULT_CURRENCY`/`NODE_SHIP_TO_COUNTRIES`),
+ * and a static array would freeze whichever value happened to be set at import time.
  */
-const listMethods = (): ResponseSuccess<ShippingMethodsResponse> =>
-    generateSuccess({
+const listMethods = (): ResponseSuccess<ShippingMethodsResponse> => {
+    const currency = shopCurrency();
+    return generateSuccess({
         // Spread: `SHIPPING_METHODS` itself is `readonly`, and the response type isn't.
-        methods: [...SHIPPING_METHODS],
+        methods: SHIPPING_METHODS.map((method) => ({ ...method, currency })),
         shipToCountries: shipToCountries()
     });
+};
 
 /** The shipment as `openapi.yaml` declares it: `Shipment`, built rather than serialized. */
 const toShipmentResponse = (shipment: ShipmentDocument): Shipment => ({

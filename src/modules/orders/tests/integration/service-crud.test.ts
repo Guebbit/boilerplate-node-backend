@@ -10,6 +10,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { withEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, saveProduct, countersOf } from '@modules/products/tests/factories';
 import { countOrders } from '@modules/orders/tests/factories';
@@ -131,6 +132,29 @@ describe('create', () => {
         expect(secondYear).toBe(2026);
         expect(secondSeq).toBe(firstSeq + 1);
     });
+
+    // FA37: `currency` is frozen the same way `orderNumber` is — read once, at creation, never
+    // recomputed against whatever the deployment's config says later.
+    it('freezes the shop currency at creation, unaffected by a later config change', () =>
+        withEnvironment('NODE_DEFAULT_CURRENCY', 'GBP', async () => {
+            const user = await createUser();
+            const product = await createProduct({ title: 'Keyboard', price: 25 });
+
+            const order = asSuccess(
+                await create(
+                    String(user._id),
+                    user.email,
+                    [{ productId: String(product._id), quantity: 1 }],
+                    testCallerContext
+                )
+            ).data;
+            expect(order.currency).toBe('GBP');
+
+            return withEnvironment('NODE_DEFAULT_CURRENCY', 'USD', async () => {
+                const reread = await orderRepository.findById(String(order._id));
+                expect(reread!.currency).toBe('GBP');
+            });
+        }));
 
     it('stores a full product snapshot on each line', async () => {
         const { order, keyboard } = await seedOrder();

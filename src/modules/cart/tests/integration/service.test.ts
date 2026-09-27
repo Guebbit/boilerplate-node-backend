@@ -72,7 +72,14 @@ setupTestDb();
 /** What every read answers for a user with nothing in their cart. */
 const EMPTY_CART = {
     items: [],
-    summary: { itemsCount: 0, totalQuantity: 0, itemsTotal: 0, shippingCost: 0, totalPrice: 0 }
+    summary: {
+        itemsCount: 0,
+        totalQuantity: 0,
+        itemsTotal: 0,
+        shippingCost: 0,
+        totalPrice: 0,
+        currency: 'EUR'
+    }
 };
 
 /** Reads the persisted quantity for a product, so assertions survive the round trip to Mongo. */
@@ -238,7 +245,8 @@ describe('cartGetForBadge', () => {
             totalQuantity: 5,
             itemsTotal: 80,
             shippingCost: 0,
-            totalPrice: 80
+            totalPrice: 80,
+            currency: 'EUR'
         });
     });
 
@@ -305,7 +313,8 @@ describe('cartItemSetById', () => {
                 totalQuantity: 2,
                 itemsTotal: 50,
                 shippingCost: 0,
-                totalPrice: 50
+                totalPrice: 50,
+                currency: 'EUR'
             }
         });
     });

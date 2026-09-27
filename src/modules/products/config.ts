@@ -51,3 +51,12 @@ export const invalidVatRateConfig = (): string[] =>
         const raw = process.env[key];
         return !!raw && !isValidVatRate(raw);
     });
+
+/**
+ * The one ISO-4217 currency this deployment trades in, read directly rather than through
+ * `@modules/orders`'s own `shopCurrency` — `orders` already depends on `products` for VAT, and the
+ * reverse import would close a module cycle `.dependency-cruiser.modules.cjs` refuses outright.
+ * Same env var, same default, so a deployment sets it once and both readers agree.
+ * @returns the configured ISO-4217 currency code
+ */
+export const productCurrency = (): string => process.env.NODE_DEFAULT_CURRENCY ?? 'EUR';

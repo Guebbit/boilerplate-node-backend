@@ -28,9 +28,14 @@ import {
 import { availableStock, type ProductDocument } from '@modules/products';
 import { userService } from '@modules/users';
 import { addressForCheckout, type AddressItem } from '@modules/addresses';
-import { findShippingMethod, methodFitsWeight, priceShipping } from '@modules/delivery';
+import {
+    findShippingMethod,
+    methodFitsWeight,
+    priceShipping,
+    type StaticShippingMethod
+} from '@modules/delivery';
 import { paymentService, type PaymentMethodInfo } from '@modules/payments';
-import type { CallerContext, ShippingMethod } from '@types';
+import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
@@ -132,7 +137,7 @@ const resolveShipping = async (
     shippingMethodId: string | undefined
 ): Promise<
     PreflightOutcome<{
-        shippingMethod: ShippingMethod | undefined;
+        shippingMethod: StaticShippingMethod | undefined;
         address: AddressItem | undefined;
     }>
 > => {

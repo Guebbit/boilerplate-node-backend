@@ -61,6 +61,18 @@ describe('GET /delivery/methods', () => {
         expect(response.body.data.shipToCountries).toEqual(['IT']);
         expect(response).toSatisfyApiSpec();
     });
+
+    // FA37: every method carries the shop's own currency — the frontend reads it here rather
+    // than guessing a fixed default.
+    it('stamps every method with the shop currency', async () => {
+        const response = await api().get('/delivery/methods');
+
+        const currencies = (response.body.data.methods as { currency: string }[]).map(
+            ({ currency }) => currency
+        );
+        expect(currencies.every((currency) => currency === 'EUR')).toBe(true);
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('GET /delivery/order/{orderId}', () => {

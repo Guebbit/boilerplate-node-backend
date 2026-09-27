@@ -328,6 +328,17 @@ describe('GET /cart/summary', () => {
         expect(response.body.data.itemsCount).toBe(1);
         expect(response).toSatisfyApiSpec();
     });
+
+    // FA37: `currency` is now required on the summary, empty cart included — `toSatisfyApiSpec`
+    // already enforces this; asserted directly too, since a required-but-empty string would still
+    // satisfy the schema.
+    it('always carries the shop currency, even on an empty cart', async () => {
+        const { bearer } = await authenticateAs('user');
+        const response = await api().get('/cart/summary').set('Authorization', bearer);
+
+        expect(response.body.data.currency).toBe('EUR');
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('POST /cart/checkout', () => {

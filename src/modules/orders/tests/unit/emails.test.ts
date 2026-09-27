@@ -320,4 +320,21 @@ describe('invoiceDocument — the VAT block', () => {
         // Two lines at the SAME rate merge into one summary row, unlike the per-line table above.
         expect(vat.summaryRows).toHaveLength(1);
     });
+
+    // FA37/E6: the invoice is the ORDER's own record — it must print what the shop actually
+    // charged, not whatever `NODE_DEFAULT_CURRENCY` happens to say by the time someone opens it.
+    it('formats every amount in the order\'s own frozen currency, not the live shop default', () => {
+        const gbp = new Intl.NumberFormat('en', { style: 'currency', currency: 'GBP' });
+        const order = { ...VAT_ORDER, currency: 'GBP' };
+
+        const vat = invoiceDocument('en', order).vat as InvoiceVatBlock;
+
+        expect(vat.grandTotal).toBe(gbp.format(orderTotal(order)));
+    });
+
+    it('falls back to the live shop currency for an order that predates the field', () => {
+        const vat = invoiceDocument('en', VAT_ORDER).vat as InvoiceVatBlock;
+
+        expect(vat.grandTotal).toBe(eur.format(orderTotal(VAT_ORDER)));
+    });
 });

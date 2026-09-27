@@ -433,7 +433,7 @@ components:
         ProductAdmin:
             type: object
             additionalProperties: false
-            required: [id, title, price, translations]
+            required: [id, title, price, currency, translations]
             description: >-
                 A product with every language it has a row for, not just the caller's resolved
                 one — what the editor's form needs to populate its tabs. `title`/`description`
@@ -449,6 +449,10 @@ components:
                     format: double
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
+                currency:
+                    type: string
+                    readOnly: true
+                    description: ISO-4217 currency code (e.g. EUR) — see `Product.currency`.
                 taxClass:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 onHand:

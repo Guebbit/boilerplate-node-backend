@@ -748,7 +748,7 @@ components:
         Product:
             type: object
             additionalProperties: false
-            required: [id, title, price]
+            required: [id, title, price, currency]
             properties:
                 id:
                     $ref: '#/components/schemas/Id'
@@ -762,6 +762,14 @@ components:
                         Gross — what the customer pays, VAT included. Never net-of-tax: the invoice
                         derives the net amount and the VAT amount FROM this, at whatever rate
                         applies, rather than the other way around.
+                currency:
+                    type: string
+                    readOnly: true
+                    description: >-
+                        ISO-4217 currency code (e.g. EUR) — this deployment's own
+                        `NODE_DEFAULT_CURRENCY`, read live, never stored on the product itself. An
+                        order freezes it onto its own `currency` at checkout; this field always
+                        reports the shop's CURRENT setting.
                 taxClass:
                     $ref: '#/components/schemas/TaxClass'
                 # ── The two counters and the number derived from them ──────────────────────
@@ -1164,6 +1172,13 @@ components:
                     minimum: 0
                     description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
                     example: 149.97
+                # Frozen from `NODE_DEFAULT_CURRENCY` the moment the order was placed — a later
+                # change to the shop's own setting must not rewrite what an old order actually
+                # charged. Absent on an order that predates this field.
+                currency:
+                    type: string
+                    readOnly: true
+                    description: ISO-4217 currency code this order was priced in (e.g. EUR).
                 # Both derived at serialization from the lines' frozen `taxRate` — never stored.
                 # See `src/modules/orders/domain/tax.ts`.
                 netTotal:

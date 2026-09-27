@@ -258,6 +258,8 @@ export interface InvoiceOrder extends OrderLines {
     orderNumber?: string;
     /** This receipt's date — the moment `orderNumber` was assigned. */
     createdAt?: Date;
+    /** Frozen at checkout — absent on an order that predates the field, see `buildVatBlock`. */
+    currency?: string;
 }
 
 /** The order number and its date, printed together or not at all. */
@@ -372,7 +374,8 @@ export interface InvoiceVatBlock {
  * hand this an untransformed document, so nothing here may assume a derived field was already
  * computed.
  * @param locale - the document's language, for `Intl.NumberFormat` — every amount below goes
- *   through it, in `shopCurrency()`'s configured currency
+ *   through it, in the order's OWN frozen currency (falling back to `shopCurrency()`'s current
+ *   setting only for an order that predates the field)
  * @param t - this document's translator, already fixed to `locale`
  * @param order - the order the invoice is for
  * @returns the VAT block
@@ -383,7 +386,10 @@ const buildVatBlock = (locale: string, t: TFunction, order: InvoiceOrder): Invoi
     // One instance, reused for every amount on the invoice — this is a real allocation
     // (constructing a Collator/PluralRules under the hood), not worth paying once per cell.
     // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
-    const money = new Intl.NumberFormat(locale, { style: 'currency', currency: shopCurrency() });
+    const money = new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: order.currency ?? shopCurrency()
+    });
     // A decimal rate (`0.055`) as the invoice prints it (`"5.5%"`) — a naive `Math.round(rate *
     // 100)` would floor a fractional VAT rate to the nearest whole point, printing 5.5% as "6%"
     // on a legal document.
