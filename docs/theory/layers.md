@@ -106,9 +106,9 @@ Enforced from both sides. `eslint-plugin-boundaries` (element type `'scenarios'`
 policies rather than folding it into `modules`, and `.dependency-cruiser.cjs`'s
 `src-cannot-reach-scenarios` rule is the reverse direction: no file under `src/` may import
 `scenarios/` at all, with exactly one exception — `src/app/demo.ts`, which mounts
-`POST /__test/restore` and has to walk the same tables `scenarios/apply.ts` does. `src/app.ts` and
-`src/cluster.ts` are exempted too, but only because the sole way either reaches `scenarios/` is by
-composing that one file.
+`POST /__test/restore` and has to walk the same tables `scenarios/apply.ts` does. `src/app.ts`,
+`src/cluster.ts` and `src/serve.ts` are exempted too, but only because the sole way any of them
+reaches `scenarios/` is by composing that one file.
 
 See [The Flow Runner](../tools/flow-runner.md) and [Data](../reference/data.md#the-demo-records)
 for what actually lives there.

@@ -41,7 +41,7 @@ describe('start', () => {
             const setSpy = jest.spyOn(mongoose, 'set');
             const connect = jest.spyOn(mongoose, 'connect').mockImplementation(() => {
                 // Every cron process (a reaper, a sweep) shares this same guard, not only the
-                // ones that boot through `bootInfrastructure` — asserted at connect time, since
+                // ones that boot through `createApp()`'s `boot` — asserted at connect time, since
                 // that's the moment an index would otherwise build.
                 expect(setSpy).toHaveBeenCalledWith('autoIndex', false);
                 return Promise.resolve(mongoose);

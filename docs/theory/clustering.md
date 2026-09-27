@@ -1,13 +1,15 @@
 # Clustering & Graceful Shutdown
 
 This page explains how the app boots, scales across CPU cores, and shuts down cleanly.
-The relevant files are `src/cluster.ts` (process supervisor) and `src/app.ts` (HTTP app + lifecycle).
+The relevant files are `src/cluster.ts` (process supervisor), `src/app.ts` (`createApp()`: the
+HTTP app + its `boot`/`start`/`stop` lifecycle, SK-D2) and `src/serve.ts` (calls `start()`, wires
+`stop()` to the process signals — the file a worker, or `dev:docker`, actually runs).
 
 ## Why a primary + workers
 
 ```mermaid
 flowchart TD
-    Primary[Primary process<br/>src/cluster.ts] -->|fork| W1[Worker 1<br/>src/app.ts]
+    Primary[Primary process<br/>src/cluster.ts] -->|fork| W1[Worker 1<br/>src/serve.ts]
     Primary -->|fork| W2[Worker 2]
     Primary -->|fork| Wn[Worker N]
     W1 --> Mongo[(MongoDB)]
@@ -29,7 +31,7 @@ flowchart TD
 
 | Env var                              | Effect                                                                          |
 | ------------------------------------ | ------------------------------------------------------------------------------- |
-| `NODE_ENABLE_CLUSTERING`             | `1` enables the primary/worker mode. Anything else loads `src/app.ts` directly. |
+| `NODE_ENABLE_CLUSTERING`             | `1` enables the primary/worker mode. Anything else imports `src/serve.ts` straight from `src/cluster.ts`'s own process — no fork. |
 | `NODE_CLUSTER_WORKERS`               | Number of workers; 0 or unset = one per available CPU (minimum 1).              |
 | `NODE_CLUSTER_CRASH_WINDOW_MS`       | Sliding window for counting crashes (default 60 000 ms).                        |
 | `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` | Base delay before respawning after a crash (default 500 ms, doubled per crash). |
@@ -67,7 +69,8 @@ sequenceDiagram
     P-->>OS: exit 0
 ```
 
-Each worker's shutdown sequence lives in `stopServer` (`src/app.ts`):
+Each worker's shutdown sequence lives in `createApp()`'s `stop` (`src/app.ts`, wired to the
+process signals by `src/serve.ts` — see SK-D2):
 
 1. Close the HTTP server (no new connections; in-flight requests drain).
 2. `stopCache()` — disconnect Redis if it was started.
@@ -80,7 +83,7 @@ If shutdown takes longer than the timeout, the worker (or the primary) force-exi
 ## Why this matters
 
 - Workers are stateless: anything you store in memory dies on the next deploy or crash.
-- Background timers must be cleared in `stopServer`/`stopCache`/etc., otherwise the process never exits.
+- Background timers must be cleared in `stop`/`stopCache`/etc., otherwise the process never exits.
 - OTel must be initialised **before** any other import; that is why both `src/cluster.ts` and `src/app.ts` call `startTracing()` first.
 
 ## Useful links

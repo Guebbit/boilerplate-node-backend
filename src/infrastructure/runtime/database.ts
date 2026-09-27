@@ -81,7 +81,7 @@ export const getDatabaseUri = () => {
  *
  * Turns `autoIndex` off in production, before connecting — every entry point that calls this
  * (the server, every cron script) shares the guard, not only the ones that go through
- * `bootInfrastructure`. Never turns it on: `scripts/db/sync-indexes.ts` already ran `false` in
+ * `createApp()`'s `boot`. Never turns it on: `scripts/db/sync-indexes.ts` already ran `false` in
  * production, and dev/test keep Mongoose's own default (on), which is what gives the test suites
  * their constraints for free. https://mongoosejs.com/docs/guide.html#autoIndex
  */

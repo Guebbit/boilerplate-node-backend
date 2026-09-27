@@ -188,9 +188,9 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
     process.on('SIGTERM', () => startPrimaryShutdown('SIGTERM'));
     process.on('SIGINT', () => startPrimaryShutdown('SIGINT'));
 } else {
-    /**
-     * Workers execute the app module
+    /*
+     * Workers execute `./serve` — `createApp()` (SK-D2) built, started, and wired to this
+     * worker's own signal handlers. Side-effect only: nothing here needs the instance back.
      */
-
-    void import('./app');
+    void import('./serve');
 }

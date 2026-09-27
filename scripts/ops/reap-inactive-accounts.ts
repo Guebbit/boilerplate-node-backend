@@ -72,8 +72,8 @@ const LEASE_TTL_MS = 15 * 60 * 1000;
 const daysAgo = (days: number): Date => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
 /**
- * Bring up just enough of the app's own boot sequence (`app.ts`'s `startServer`) to render
- * translated email copy outside the HTTP process. Nothing else `startServer` does (cache, queue
+ * Bring up just enough of the app's own boot sequence (`app.ts`'s `createApp().boot`) to render
+ * translated email copy outside the HTTP process. Nothing else `boot`/`start` does (cache, queue
  * readiness, route mounting) is this script's concern.
  */
 const initI18n = (): Promise<unknown> => bootI18n(enabledModuleLocales());

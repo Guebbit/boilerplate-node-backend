@@ -1,11 +1,15 @@
-#!/usr/bin/env node
-
 /**
  * @module
- * The process entry point: builds the Express app, wires infrastructure (OTel, cache, queue,
- * i18n), mounts every enabled module, and owns the start/stop lifecycle. OTel initializes before
- * anything it instruments is imported — the only ordering constraint the rest of the file exists
- * to preserve.
+ * `createApp()`: builds one Express application — infrastructure (OTel, cache, queue, i18n),
+ * every enabled module mounted — and hands back its start/stop lifecycle (SK-D2). OTel
+ * initializes before anything it instruments is imported — the only ordering constraint the
+ * rest of the file exists to preserve.
+ *
+ * Calling it is the side effect (registering modules, mounting middleware), not IMPORTING it —
+ * `tests/support/http.ts` calls it once for the `app` object alone, `scenarios/apply.ts` calls
+ * `boot()` but never `start()`. Nothing here decides to serve traffic: `src/serve.ts` is the one
+ * place that calls `start()` and wires it to the process signals, for whichever entry point
+ * (`cluster.ts`'s worker branch, `dev:docker`) actually wants a listening server.
  */
 
 // OTel must initialize before express/http/mongoose are imported. That only holds when
@@ -16,20 +20,16 @@ startTracing();
 
 import 'dotenv/config';
 import express from 'express';
+import type { Express } from 'express';
 import type { Server } from 'node:http';
-import { start } from '@infrastructure/runtime/database';
+import { start as startDatabase } from '@infrastructure/runtime/database';
 import { startCache } from '@infrastructure/adapters/cache';
 import { startQueue } from '@infrastructure/adapters/queue';
 import { registerWorkers } from '@app/workers';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
-import {
-    failBoot,
-    listenOn,
-    registerSignalHandlers,
-    shutdownInfra
-} from '@infrastructure/runtime/server-lifecycle';
+import { listenOn, shutdownInfra } from '@infrastructure/runtime/server-lifecycle';
 import { markServerListening } from '@infrastructure/runtime/readiness';
 import {
     bootI18n,
@@ -52,32 +52,58 @@ import { installErrorHandling } from '@app/error-handling';
 import { installDemo, restoreScenario } from '@app/demo';
 import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 
-/**
- * Server start
- */
-export const app = express();
-
 /** Fallback port when `NODE_PORT` is unset. */
 const DEFAULT_PORT = 3000;
 
-/** The server this process is currently listening on, if any. */
-let activeServer: Server | undefined;
-
-/** In-flight shutdown, so a second call joins it instead of closing twice. */
-let shutdownPromise: Promise<void> | undefined;
+/** One built application's lifecycle — what {@link createApp} hands back (SK-D2). */
+export interface AppInstance {
+    /** The mounted Express application — a supertest agent's whole surface, no boot needed. */
+    app: Express;
+    /**
+     * The database, the cache, the queue and its workers, then i18n and the validation messages
+     * that read through it — everything a request needs answering except a socket to arrive on.
+     * Separate from {@link AppInstance.start} for one caller — `scenarios/apply.ts` drives the
+     * real flows against a loopback listener of its own and must not bind `NODE_PORT` on a
+     * container boot.
+     */
+    boot: () => Promise<void>;
+    /**
+     * {@link AppInstance.boot}, the demo profile's own data, then listen. Idempotent — a second
+     * call while the server is already listening resolves with the running instance rather than
+     * binding twice.
+     */
+    start: () => Promise<Server>;
+    /**
+     * Graceful shutdown. The in-flight promise is memoised, so concurrent callers (a signal
+     * handler and a test's `afterAll`) share one shutdown rather than racing two.
+     */
+    stop: () => Promise<void>;
+}
 
 /**
- * Everything a request needs answering except a socket to arrive on: the database, the cache, the
- * queue and its workers, then i18n and the validation messages that read through it.
+ * Builds one Express application, synchronously: validates every module's required config,
+ * attaches its domain-event handlers, lets each pull whatever cross-module lookup it needs
+ * (`locales`' `translatables`, `account`'s `personalData` sections) through its own
+ * `onRegistered` hook, then mounts the middleware stack and every route — all before the first
+ * request can arrive, and all before `boot()` or `start()` are ever called, so a caller that
+ * only wants `.app` (a supertest agent) needs neither.
  *
- * Separate from {@link startServer} for one caller — `scenarios/apply.ts` drives the real flows
- * against a loopback listener of its own and must not bind `NODE_PORT` on a container boot. It is
- * also the honest split: nothing below this line is about listening.
+ * Callable more than once — each call is an independent instance with its own `activeServer`/
+ * `shutdownPromise` closure, which is what lets `boot`/`start`/`stop` take no config of their own
+ * yet (SK-D4 adds a config parameter here once this shape exists to inject it into).
  */
-export const bootInfrastructure = () => {
-    return (
+export const createApp = (): AppInstance => {
+    const app = express();
+
+    /** The server this instance is currently listening on, if any. */
+    let activeServer: Server | undefined;
+
+    /** In-flight shutdown, so a second call joins it instead of closing twice. */
+    let shutdownPromise: Promise<void> | undefined;
+
+    const boot = (): Promise<void> =>
         Promise.resolve()
-            .then(() => start())
+            .then(() => startDatabase())
             .then(() => startCache())
             .then(() => startQueue())
             .then(() => registerWorkers())
@@ -107,123 +133,94 @@ export const bootInfrastructure = () => {
              * would install a translator with no dictionary behind it.
              */
             .then(() => registerValidationMessages())
-            .then(() => undefined)
-    );
-};
+            .then(() => undefined);
 
-/**
- * Boot sequence: {@link bootInfrastructure}, the demo profile's own data, then listen. Idempotent
- * — a second call while the server is already listening resolves with the running instance rather
- * than binding twice.
- */
-export const startServer = () => {
-    if (activeServer?.listening) return Promise.resolve(activeServer);
+    const start = (): Promise<Server> => {
+        if (activeServer?.listening) return Promise.resolve(activeServer);
 
-    return (
-        bootInfrastructure()
-            /*
-             * Only in demo mode, and only ever the initial build — `npm run demo`'s own
-             * `POST /__test/restore` replays it from memory afterwards. Before `listen`, so the
-             * paired frontend's readiness probe (`GET /`, which only resolves once listening)
-             * never observes a shop that is connected but has not lived its history yet: the
-             * flows this runs drive the app on a throwaway loopback listener of their own.
-             */
-            .then(() => (isDemoMode() ? restoreScenario() : undefined))
-            .then(() => {
-                const port = environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
-                // Unset by default, which binds every interface — the shape every profile but
-                // the demo one wants. `run-server.ts` sets it to loopback: the demo profile's
-                // tokens are signed with a public, hard-coded secret, so binding every interface
-                // would let anyone on the LAN mint one.
-                const host = process.env.NODE_HOST?.trim();
-                // Stryker disable next-line all
-                logger.info('------------- SERVER START -------------');
-                return listenOn(app, port, host || undefined).then((server) => {
-                    /*
-                     * Before the first request can arrive, because they bound how long one may
-                     * take to send. See `app/security.ts`.
-                     */
-                    applyServerTimeouts(server);
+        return (
+            boot()
+                /*
+                 * Only in demo mode, and only ever the initial build — `npm run demo`'s own
+                 * `POST /__test/restore` replays it from memory afterwards. Before `listen`, so the
+                 * paired frontend's readiness probe (`GET /`, which only resolves once listening)
+                 * never observes a shop that is connected but has not lived its history yet: the
+                 * flows this runs drive the app on a throwaway loopback listener of their own.
+                 */
+                .then(() => (isDemoMode() ? restoreScenario() : undefined))
+                .then(() => {
+                    const port = environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
+                    // Unset by default, which binds every interface — the shape every profile but
+                    // the demo one wants. `run-server.ts` sets it to loopback: the demo profile's
+                    // tokens are signed with a public, hard-coded secret, so binding every interface
+                    // would let anyone on the LAN mint one.
+                    const host = process.env.NODE_HOST?.trim();
                     // Stryker disable next-line all
-                    logger.info(`Server listening on port ${String(port)}`);
-                    activeServer = server;
-                    // `GET /readyz` starts answering 200 only from here — see `readiness.ts`.
-                    markServerListening();
-                    return server;
-                });
-            })
-    );
+                    logger.info('------------- SERVER START -------------');
+                    return listenOn(app, port, host || undefined).then((server) => {
+                        /*
+                         * Before the first request can arrive, because they bound how long one may
+                         * take to send. See `app/security.ts`.
+                         */
+                        applyServerTimeouts(server);
+                        // Stryker disable next-line all
+                        logger.info(`Server listening on port ${String(port)}`);
+                        activeServer = server;
+                        // `GET /readyz` starts answering 200 only from here — see `readiness.ts`.
+                        markServerListening();
+                        return server;
+                    });
+                })
+        );
+    };
+
+    const stop = (): Promise<void> => {
+        if (shutdownPromise) return shutdownPromise;
+
+        shutdownPromise = shutdownInfra(activeServer).finally(() => {
+            activeServer = undefined;
+            shutdownPromise = undefined;
+        });
+
+        return shutdownPromise;
+    };
+
+    registerModules(enabledModules, APP_NON_MODULE_CHECKS);
+
+    // LOCALES_OPTIONAL_0925 D-LO1: `locales` being absent is a supported deployment shape, not a
+    // misconfiguration — this is the one line that says so, once, rather than a reader inferring it
+    // from an admin screen that quietly has nothing to show.
+    if (!isTranslationAvailable())
+        logger.info('translation provider: none — content is monolingual');
+
+    /*
+     * The middleware stack, in the order a request travels it.
+     *
+     * Express applies middleware in registration order, so this sequence IS the behaviour, not a
+     * summary of it. Five dependencies are load-bearing and none of them is visible from a call site:
+     *
+     * - security precedes everything, because `trust proxy` decides what `request.ip` means and the
+     *   rate limiter keys its buckets on it;
+     * - static files come before the rate limiter, so the images a page loads do not spend the
+     *   caller's request budget — and before request context and telemetry, which they do not need;
+     * - request context precedes the routes, because every controller reads the request id, the
+     *   observability handle and the negotiated locale it attaches;
+     * - telemetry precedes the routes so its timer wraps the handler rather than following it;
+     * - error handling comes last, because an express error handler only catches what was mounted
+     *   before it.
+     *
+     * Each install owns the ordering *within* its own group and documents it there.
+     */
+    installSecurity(app);
+    installStatic(app);
+    installRequestParsing(app);
+    installRequestContext(app);
+    installTelemetry(app);
+    // Demo control surface (/__test/restore, /__test/scenario, /__test/emails) — inert outside
+    // `npm run demo`. Before installRoutes, whose 404 catch-all would swallow anything mounted after it.
+    if (isDemoMode()) installDemo(app);
+    installRoutes(app);
+    installErrorHandling(app);
+
+    return { app, boot, start, stop };
 };
-
-/**
- * Graceful shutdown. The in-flight promise is memoised, so concurrent callers (a signal handler
- * and a test's `afterAll`) share one shutdown rather than racing two.
- */
-export const stopServer = () => {
-    if (shutdownPromise) return shutdownPromise;
-
-    shutdownPromise = shutdownInfra(activeServer).finally(() => {
-        activeServer = undefined;
-        shutdownPromise = undefined;
-    });
-
-    return shutdownPromise;
-};
-
-/*
- * Validate every module's required config, attach its domain-event handlers, then let each pull
- * whatever cross-module lookup it needs (`locales`' `translatables`, `account`'s `personalData`
- * sections) through its own `onRegistered` hook — before the first route exists. A missing,
- * too-short or still-placeholder variable stops the boot here, every offending name reported at
- * once, rather than surfacing as a 500 on whichever request needs it first. Here, not inside
- * `startServer()`: every one of these facts must be validatable the moment this file is imported,
- * not only once the process actually starts listening.
- */
-registerModules(enabledModules, APP_NON_MODULE_CHECKS);
-
-// LOCALES_OPTIONAL_0925 D-LO1: `locales` being absent is a supported deployment shape, not a
-// misconfiguration — this is the one line that says so, once, rather than a reader inferring it
-// from an admin screen that quietly has nothing to show.
-if (!isTranslationAvailable()) logger.info('translation provider: none — content is monolingual');
-
-/*
- * The middleware stack, in the order a request travels it.
- *
- * Express applies middleware in registration order, so this sequence IS the behaviour, not a
- * summary of it. Five dependencies are load-bearing and none of them is visible from a call site:
- *
- * - security precedes everything, because `trust proxy` decides what `request.ip` means and the
- *   rate limiter keys its buckets on it;
- * - static files come before the rate limiter, so the images a page loads do not spend the
- *   caller's request budget — and before request context and telemetry, which they do not need;
- * - request context precedes the routes, because every controller reads the request id, the
- *   observability handle and the negotiated locale it attaches;
- * - telemetry precedes the routes so its timer wraps the handler rather than following it;
- * - error handling comes last, because an express error handler only catches what was mounted
- *   before it.
- *
- * Each install owns the ordering *within* its own group and documents it there.
- */
-installSecurity(app);
-installStatic(app);
-installRequestParsing(app);
-installRequestContext(app);
-installTelemetry(app);
-// Demo control surface (/__test/restore, /__test/scenario, /__test/emails) — inert outside
-// `npm run demo`. Before installRoutes, whose 404 catch-all would swallow anything mounted after it.
-if (isDemoMode()) installDemo(app);
-installRoutes(app);
-installErrorHandling(app);
-
-/*
- * Auto-start, for every process that imports this file wanting a SERVER.
- *
- * Two do not, and both want the `app` object alone: jest, and `scenarios/apply.ts`, which boots
- * the infrastructure itself and drives the flows on a loopback listener rather than binding
- * `NODE_PORT` on a container boot. The environment is the only channel that can carry that
- * decision — importing this file IS the side effect, so no export of it could be read in time.
- */
-if (process.env.NODE_ENV !== 'test' && process.env.NODE_APP_NO_LISTEN !== '1') {
-    registerSignalHandlers(stopServer);
-    void startServer().catch((error: unknown) => failBoot(error, stopServer));
-}

@@ -8,7 +8,7 @@ NODE_PORT=3101 npm run demo   # several run side by side; each owns its own data
 NODE_TEST_MONGO_URI=mongodb://127.0.0.1:27017 npm run demo   # a compose Mongo instead; persists
 ```
 
-One process, no Docker by default: `scenarios/run-server.ts` resolves a Mongo through `startEphemeralMongo()` — the same resolver the test suites use — points `NODE_DB_URI` at the `demo` database on it, force-disables Redis and RabbitMQ — a supported deployment shape that `/observability/health` reports as `disabled` rather than as an error — raises the rate limits to the test allowance, and boots `src/app.ts` exactly as any other profile would. Unset `NODE_TEST_MONGO_URI`, kill the process, and nothing survives it; set it, and the shop is still there on the next boot.
+One process, no Docker by default: `scenarios/run-server.ts` resolves a Mongo through `startEphemeralMongo()` — the same resolver the test suites use — points `NODE_DB_URI` at the `demo` database on it, force-disables Redis and RabbitMQ — a supported deployment shape that `/observability/health` reports as `disabled` rather than as an error — raises the rate limits to the test allowance, and calls `createApp().start()` exactly as any other profile's `src/serve.ts` would. Unset `NODE_TEST_MONGO_URI`, kill the process, and nothing survives it; set it, and the shop is still there on the next boot.
 
 The shop it serves is not a set of rows somebody wrote. It is [built by using the application](#how-a-scenario-is-built) — the catalogue is seeded, and then the orders, payments, shipments, refunds and audit entries are produced by driving the real endpoints at boot.
 
@@ -21,6 +21,7 @@ It is also the lightest way for a human to get a working API for anything — a 
 ## The control surface
 
 `npm run demo` calls `enableDemoProfile()` in-process, before `src/app.ts` is even imported — the only call site, so no environment variable can switch this on. It additionally mounts three routes, before the 404 catch-all and inert in every other profile:
+
 
 | Route                  | What it does                                                                                                                                                                                                                                                                                                                                                                                  |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

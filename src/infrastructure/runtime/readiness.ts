@@ -17,7 +17,7 @@ let phase: ServerPhase = 'booting';
 
 /**
  * Marks the process as having finished booting and started accepting connections.
- * Called once by `startServer` (`src/app.ts`), right after `listenOn` resolves.
+ * Called once by `createApp()`'s `start` (`src/app.ts`), right after `listenOn` resolves.
  */
 export const markServerListening = (): void => {
     phase = 'listening';
