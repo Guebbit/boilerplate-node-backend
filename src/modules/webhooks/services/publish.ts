@@ -1,10 +1,12 @@
 /**
  * @module
- * The domain-event subscriber: reacts to the six order/payment events over the kernel's bus — no
- * import from `webhooks` into `orders`/`payments`, the reverse edge is a domain event, exactly as
- * `docs/modules/webhooks.md` describes — matches each against
- * every enabled subscription's filter, and fans out: one delivery row plus one queue message per
- * match. `subscribeToWebhookEvents` runs once, from `../module.ts`'s `subscribe()` hook.
+ * The domain-event subscriber: reacts to every domain event a registered module's manifest names
+ * a {@link PublicEventTarget} for (`kernel/registry.ts`'s `resolvePublicEvents`) — no import from
+ * `webhooks` into `orders`/`payments`, the reverse edge is a domain event, exactly as
+ * `docs/modules/webhooks.md` describes — matches each projected public event against every enabled
+ * subscription's filter, and fans out: one delivery row plus one queue message per match.
+ * `subscribeToWebhookEvents` runs once, from `../module.ts`'s `onRegistered` hook, once every
+ * module — and therefore its `publicEvents` — is known.
  *
  * The queue publish is fire-and-forget from here on purpose: when it fails (no broker configured,
  * or a publish error), the row it already wrote stays `pending` and `scripts/ops/sweep-webhook-retries.ts`
@@ -14,25 +16,18 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { onDomainEvent } from '@kernel/events';
-import { ORDER_CREATED, ORDER_STATUS_CHANGED, ORDER_CANCELLED } from '@modules/orders';
-import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '@modules/payments';
+import { onDomainEvent, type DomainEventName } from '@kernel/events';
+import type { PublicEventProjection, PublicEventTarget } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../repository';
 import { matchesEventFilter } from '../domain';
 import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../model';
 import { enqueueDeliveryAttempt } from './enqueue';
 
-/** One public event, ready to fan out — the shape every domain-event listener below builds. */
-interface PublicEvent {
-    eventType: string;
-    data: Record<string, unknown>;
-}
-
 /** Create the delivery row for one matching subscription. `attempt` always starts at 1. */
 const createDeliveryRow = (
     subscription: WebhookSubscriptionDocument,
-    event: PublicEvent,
+    event: PublicEventProjection,
     eventId: string
 ): Promise<WebhookDeliveryDocument> =>
     webhookDeliveryRepository.create({
@@ -49,7 +44,7 @@ const createDeliveryRow = (
 /** Write the delivery row and enqueue its first attempt, for one matching subscription. */
 const deliverToOne = (
     subscription: WebhookSubscriptionDocument,
-    event: PublicEvent,
+    event: PublicEventProjection,
     eventId: string
 ): Promise<void> =>
     createDeliveryRow(subscription, event, eventId)
@@ -71,7 +66,7 @@ const deliverToOne = (
  * match — the id a consumer dedupes `webhook-id` on, per Standard Webhooks, across both retries of
  * one delivery and the several subscriptions one event fans out to.
  */
-const fanOut = (event: PublicEvent): Promise<void> => {
+const fanOut = (event: PublicEventProjection): Promise<void> => {
     const eventId = randomUUID();
 
     return webhookSubscriptionRepository.findEnabled().then((subscriptions) => {
@@ -85,30 +80,41 @@ const fanOut = (event: PublicEvent): Promise<void> => {
 };
 
 /**
- * Registers this module's five domain-event listeners — the six public events, `order.paid` and
- * `order.shipped` both derived from `order.status_changed` filtered on `to` (see `orders/events.ts`:
- * "listeners filter on `to`; the event doesn't know who cares").
+ * One domain-event listener for one {@link PublicEventTarget}: project the payload, and fan out
+ * only when the projection actually names a public event — `target.toPublicEvent` answers
+ * `undefined` for a payload that isn't one, `order.status_changed` outside `to: 'paid'`/`'shipped'`
+ * being the only case that happens today.
+ *
+ * Two casts, both narrowing something the compiler genuinely cannot see, not laundering `any`:
+ * `domainEventName` is a real `DomainEventName` because it came off a module's own manifest at
+ * boot (`kernel/registry.ts`'s `resolvePublicEvents`), just not a compile-time literal; `target`'s
+ * `toPublicEvent` is stored as `(payload: never) => …` because ONE lookup holds every module's
+ * target, so it is cast back to a callable taking whatever `onDomainEvent` actually hands this
+ * listener — the same trick `kernel/events.ts`'s own `handler as DomainEventHandler<TEventName>`
+ * plays, the other direction.
  */
-export const subscribeToWebhookEvents = (): void => {
-    onDomainEvent(ORDER_CREATED, ({ orderId }) =>
-        fanOut({ eventType: 'order.created', data: { orderId } })
-    );
+const subscribeToTarget = (domainEventName: string, target: PublicEventTarget): void => {
+    const toPublicEvent = target.toPublicEvent as (
+        payload: unknown
+    ) => PublicEventProjection | undefined;
 
-    onDomainEvent(ORDER_STATUS_CHANGED, ({ orderId, to }) => {
-        if (to === 'paid') return fanOut({ eventType: 'order.paid', data: { orderId } });
-        if (to === 'shipped') return fanOut({ eventType: 'order.shipped', data: { orderId } });
-        return undefined;
+    onDomainEvent(domainEventName as DomainEventName, (payload) => {
+        const publicEvent = toPublicEvent(payload);
+        return publicEvent ? fanOut(publicEvent) : undefined;
     });
+};
 
-    onDomainEvent(ORDER_CANCELLED, ({ orderId, refund }) =>
-        fanOut({ eventType: 'order.cancelled', data: { orderId, refund } })
-    );
-
-    onDomainEvent(PAYMENT_SUCCEEDED, ({ paymentId, orderId }) =>
-        fanOut({ eventType: 'payment.succeeded', data: { paymentId, orderId } })
-    );
-
-    onDomainEvent(PAYMENT_FAILED, ({ paymentId, orderId }) =>
-        fanOut({ eventType: 'payment.failed', data: { paymentId, orderId } })
-    );
+/**
+ * Registers one domain-event listener per {@link PublicEventTarget} every enabled module declared
+ * — no import from `webhooks` into `orders`/`payments` to know which events exist, only the
+ * lookup `../module.ts`'s `onRegistered` hook already resolved.
+ *
+ * @param publicEvents - every registered module's domain-event → public-event mapping, keyed by
+ *   domain event name (`kernel/registry.ts`'s `resolvePublicEvents`)
+ */
+export const subscribeToWebhookEvents = (
+    publicEvents: Readonly<Record<string, PublicEventTarget | undefined>>
+): void => {
+    for (const [domainEventName, target] of Object.entries(publicEvents))
+        if (target) subscribeToTarget(domainEventName, target);
 };

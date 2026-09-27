@@ -4,10 +4,14 @@
  * `asyncapi.public.yaml` publishes) has a real producer, and nothing this module's own subscriber
  * fans out ever names an event the catalogue does not declare.
  *
- * Driven from the domain-event bus, not HTTP: `subscribeToWebhookEvents` is wired, each underlying
- * domain event is emitted with a synthetic payload, and the `eventType` a delivery row was created
- * with is read back. If the SET of eventTypes this produces is exactly the catalogue's six names —
- * no more, no fewer — both directions hold at once.
+ * Driven from the domain-event bus, not HTTP, and through the REAL registry indirection (DDD-D4):
+ * `orders`, `payments` and `webhooks` are all registered for real, so `webhooks/module.ts`'s
+ * `onRegistered` hook resolves `orders`'/`payments`' own `publicEvents` declarations off
+ * `kernel/registry.ts` and wires the generic subscriber from them — nothing here hardcodes which
+ * domain events fire which public ones. Each underlying domain event is then emitted with a
+ * synthetic payload, and the `eventType` a delivery row was created with is read back. If the SET
+ * of eventTypes this produces is exactly the catalogue's six names — no more, no fewer — both
+ * directions hold at once.
  */
 
 import { readFileSync } from 'node:fs';
@@ -18,6 +22,8 @@ import { resetDomainEvents, emitDomainEvent } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
 import { ORDER_CREATED, ORDER_STATUS_CHANGED, ORDER_CANCELLED } from '@modules/orders';
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '@modules/payments';
+import ordersModule from '@modules/orders/module';
+import paymentsModule from '@modules/payments/module';
 import {
     webhookSubscriptionRepository,
     webhookDeliveryRepository
@@ -26,6 +32,12 @@ import { mintRingSecret } from '@modules/webhooks/secrets';
 import webhooksModule from '@modules/webhooks/module';
 
 setupTestDb();
+
+/** A syntactically valid Mongo id — `payments`' own `ORDER_CANCELLED` listener looks one up by it. */
+const ORDER_ID = '507f1f77bcf86cd799439011';
+
+/** Same shape, a different value — so a payment's `orderId` is never mistaken for the order's own id. */
+const PAYMENT_ID = '507f1f77bcf86cd799439012';
 
 /** Every channel name `webhooks/asyncapi.yaml` declares — the catalogue `GET /webhooks/events` serves. */
 const declaredCatalogue = (): string[] => {
@@ -53,7 +65,10 @@ const createCatchAllSubscription = () => {
 
 describe('every public webhook event has exactly one producer, and no producer names an undeclared one', () => {
     beforeEach(() => {
-        registerModules([webhooksModule]);
+        // `orders`/`payments` too, not just `webhooksModule` — their own `publicEvents` manifest
+        // entries are what `webhooks/module.ts`'s `onRegistered` hook resolves and subscribes to;
+        // registering `webhooksModule` alone would resolve an empty lookup and produce nothing.
+        registerModules([ordersModule, paymentsModule, webhooksModule]);
     });
     afterEach(() => {
         resetDomainEvents();
@@ -62,23 +77,23 @@ describe('every public webhook event has exactly one producer, and no producer n
     it('the six declared events are produced, and nothing else is', async () => {
         await createCatchAllSubscription();
 
-        // The five domain-event emits `webhooks/services/publish.ts` subscribes to —
-        // `order.paid`/`order.shipped` both derive from `ORDER_STATUS_CHANGED`, which is why five
-        // emits produce six public event types.
-        await emitDomainEvent(ORDER_CREATED, { orderId: 'order_1' });
+        // The five domain-event emits the registered modules' `publicEvents` declarations project
+        // from — `order.paid`/`order.shipped` both derive from `ORDER_STATUS_CHANGED`, which is
+        // why five emits produce six public event types.
+        await emitDomainEvent(ORDER_CREATED, { orderId: ORDER_ID });
         await emitDomainEvent(ORDER_STATUS_CHANGED, {
-            orderId: 'order_1',
+            orderId: ORDER_ID,
             from: 'pending',
             to: 'paid'
         });
         await emitDomainEvent(ORDER_STATUS_CHANGED, {
-            orderId: 'order_1',
+            orderId: ORDER_ID,
             from: 'paid',
             to: 'shipped'
         });
-        await emitDomainEvent(ORDER_CANCELLED, { orderId: 'order_1', refund: true });
-        await emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: 'payment_1', orderId: 'order_1' });
-        await emitDomainEvent(PAYMENT_FAILED, { paymentId: 'payment_1', orderId: 'order_1' });
+        await emitDomainEvent(ORDER_CANCELLED, { orderId: ORDER_ID, refund: true });
+        await emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: PAYMENT_ID, orderId: ORDER_ID });
+        await emitDomainEvent(PAYMENT_FAILED, { paymentId: PAYMENT_ID, orderId: ORDER_ID });
 
         const deliveries = await webhookDeliveryRepository.findAll({}, { limit: 100 });
         const produced = new Set(deliveries.map((delivery) => delivery.eventType));

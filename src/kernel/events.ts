@@ -20,8 +20,13 @@ import { logger } from '@infrastructure/adapters/logger';
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- a declaration-merging seam: each module augments this map with its own events
 export interface DomainEventMap {}
 
-/** The literal event names {@link DomainEventMap} declares, as a string union. */
-type DomainEventName = Extract<keyof DomainEventMap, string>;
+/**
+ * The literal event names {@link DomainEventMap} declares, as a string union. Exported so a caller
+ * that only learns a domain event's name at runtime (`kernel/registry.ts`'s `resolvePublicEvents`,
+ * collected off a module manifest rather than a compile-time literal) has a name for the cast that
+ * hands it back to {@link onDomainEvent}.
+ */
+export type DomainEventName = Extract<keyof DomainEventMap, string>;
 
 /** A subscriber for one event name, narrowed to that event's own payload type. */
 type DomainEventHandler<TEventName extends DomainEventName> = (

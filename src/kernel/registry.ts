@@ -149,6 +149,45 @@ export interface TranslatableTarget {
 }
 
 /**
+ * One domain event, turned into the public (webhook-visible) event `webhooks` should fan out —
+ * or `undefined` when this particular payload isn't one. `order.status_changed` is why this is a
+ * projection rather than a rename: it becomes `order.paid` or `order.shipped` depending on `to`,
+ * and neither for any other transition, so there is no single public name to declare up front.
+ */
+export interface PublicEventProjection {
+    /** The public event name a subscription filters on — `GET /webhooks/events`' catalogue. */
+    eventType: string;
+
+    /** The public event's payload, exactly as a subscriber receives it under the envelope's `data`. */
+    data: Record<string, unknown>;
+}
+
+/**
+ * A module's declaration that firing one of its domain events is also a public, webhook-visible
+ * integration event.
+ *
+ * `webhooks/services/publish.ts` may not import `@modules/orders`/`@modules/payments` (the
+ * foundation/shop boundary DDD-D1 draws) — the same wall {@link ImageTarget} and
+ * {@link TranslatableTarget} are built around — so it cannot know which domain events exist to
+ * listen for. A module registers this instead, keyed under `publicEvents` on its manifest by the
+ * DOMAIN event name, and `webhooks` subscribes to every one it collects generically, through
+ * {@link resolvePublicEvents}, instead of importing each event's name constant by hand.
+ *
+ * `payload` is typed `never`, the same trick `kernel/events.ts`'s own handler map uses: a
+ * registry entry is stored once per domain event and called back with whatever that event's real
+ * payload turns out to be, so nothing here can name a single concrete payload type. The OWNING
+ * module still gets full type safety at the point it writes `toPublicEvent` itself, because a
+ * function typed to take one concrete payload is assignable into a `(payload: never) => …` slot.
+ */
+export interface PublicEventTarget {
+    /**
+     * @param payload - the domain event's payload, exactly as `emitDomainEvent` published it
+     * @returns the public event to fan out, or `undefined` to fire nothing for this payload
+     */
+    toPublicEvent: (payload: never) => PublicEventProjection | undefined;
+}
+
+/**
  * Who a data-subject export is about. `email` because one module (`feedback`, tickets are not
  * tied to an account) matches its rows by address, not by id.
  */
@@ -276,6 +315,13 @@ export interface AppModule {
      * module whose documents carry user-authored content registers one entry per such collection.
      */
     translatables?: Readonly<Record<string, TranslatableTarget>>;
+
+    /**
+     * This module's {@link PublicEventTarget}s, keyed by the domain event name each one projects
+     * from — see {@link resolvePublicEvents}. Most modules have none; a module whose domain events
+     * are also part of `webhooks`' public catalogue registers one entry per such event.
+     */
+    publicEvents?: Readonly<Record<string, PublicEventTarget>>;
 
     /**
      * Paths whose callers SIGN the request body, so the JSON parser must keep the bytes verbatim.
@@ -421,6 +467,29 @@ export const resolveTranslatables = (
     uniqueEntries(
         appModules.flatMap((appModule) => Object.entries(appModule.translatables ?? {})),
         'translatable entity type'
+    );
+
+/**
+ * Every registered module's {@link PublicEventTarget}s, flattened into one lookup keyed by domain
+ * event name.
+ *
+ * Built from the passed-in list for the same reason {@link resolveImageTargets} is: this file must
+ * stay free of any `src/modules/*` import, so `webhooks/module.ts`'s own `onRegistered` hook —
+ * which needs exactly this lookup and may not import `orders`/`payments` directly — can depend on
+ * `kernel/registry` without a cycle, the same pattern `locales/module.ts` follows for
+ * `translatables`.
+ *
+ * @param appModules - the enabled module list
+ * @throws {Error} when two modules declare a `publicEvents` entry for the same domain event
+ */
+export const resolvePublicEvents = (
+    appModules: readonly AppModule[]
+    // `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
+    // this a lookup by an unregistered domain event name would type-check as always present.
+): Readonly<Record<string, PublicEventTarget | undefined>> =>
+    uniqueEntries(
+        appModules.flatMap((appModule) => Object.entries(appModule.publicEvents ?? {})),
+        'public event domain name'
     );
 
 /**
