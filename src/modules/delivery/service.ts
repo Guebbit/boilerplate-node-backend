@@ -37,6 +37,7 @@ import { findShippingMethod, SHIPPING_METHODS } from './domain';
 import { shipmentShippedEmail } from './emails';
 import { shipmentRepository } from './repository';
 import type { ShipmentDocument } from './model';
+import { presentShipment } from './presenter';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
@@ -57,17 +58,6 @@ const listMethods = (): ResponseSuccess<ShippingMethodsResponse> => {
     });
 };
 
-/** The shipment as `openapi.yaml` declares it: `Shipment`, built rather than serialized. */
-const toShipmentResponse = (shipment: ShipmentDocument): Shipment => ({
-    id: String(shipment._id),
-    orderId: String(shipment.orderId),
-    status: shipment.status,
-    ...(shipment.trackingCode ? { trackingCode: shipment.trackingCode } : {}),
-    ...(shipment.deliveredAt ? { deliveredAt: shipment.deliveredAt.toISOString() } : {}),
-    ...(shipment.createdAt ? { createdAt: shipment.createdAt.toISOString() } : {}),
-    ...(shipment.updatedAt ? { updatedAt: shipment.updatedAt.toISOString() } : {})
-});
-
 /**
  * The shipment behind one of the caller's orders. Ownership is the order's, scoped like every
  * order read; a shipment has no owner of its own.
@@ -82,7 +72,7 @@ export const getForOrder = (
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
         return shipmentRepository.findByOrderId(orderId).then((shipment) => {
             if (!shipment) return generateReject(404, [t('delivery.not-shipped')]);
-            return generateSuccess(toShipmentResponse(shipment));
+            return generateSuccess(presentShipment(shipment));
         });
     });
 
@@ -265,7 +255,7 @@ const afterShipmentRecorded = (
 
         return notifyShipped(orderId, order, shipment).then(() => {
             auditOrderEvent(context, orderId, deliveryAuditActions.ADMIN_ORDER_SHIPPED);
-            return generateSuccess(toShipmentResponse(shipment));
+            return generateSuccess(presentShipment(shipment));
         });
     });
 };
@@ -359,7 +349,7 @@ const moveAndStampDelivered = (
                 if (!updated) return notShipped();
 
                 auditOrderEvent(context, orderId, deliveryAuditActions.ADMIN_ORDER_DELIVERED);
-                return generateSuccess(toShipmentResponse(updated));
+                return generateSuccess(presentShipment(updated));
             });
     });
 };
