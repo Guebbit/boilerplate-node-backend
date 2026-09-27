@@ -184,8 +184,7 @@ registerModules(enabledModules, APP_NON_MODULE_CHECKS);
 // LOCALES_OPTIONAL_0925 D-LO1: `locales` being absent is a supported deployment shape, not a
 // misconfiguration — this is the one line that says so, once, rather than a reader inferring it
 // from an admin screen that quietly has nothing to show.
-if (!isTranslationAvailable())
-    logger.info('translation provider: none — content is monolingual');
+if (!isTranslationAvailable()) logger.info('translation provider: none — content is monolingual');
 
 /*
  * The middleware stack, in the order a request travels it.

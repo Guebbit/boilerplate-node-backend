@@ -24,6 +24,9 @@ import { runInWaves } from './waves';
 export const seedBlank = (): Promise<SeedOutcome[]> =>
     seedAccessModel()
         .then(() =>
-            Promise.all([seedNamedUsersCollection(), runInWaves(asWaveEntries(baselineShopModules()))])
+            Promise.all([
+                seedNamedUsersCollection(),
+                runInWaves(asWaveEntries(baselineShopModules()))
+            ])
         )
         .then(([users, baseline]) => [...users, ...baseline.flat()]);

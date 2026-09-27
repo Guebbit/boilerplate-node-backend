@@ -246,9 +246,7 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
  */
 export const driveLocaleEntryEdit = (owner: Caller): Promise<void> =>
     owner
-        .call(
-            'PUT',
-            `/locales/${SEED_LOCALE_TAGS.answerable}/entries/65e0200a9a7d4b2e1c0f3101`,
-            { value: 'Sessione scaduta. Effettua di nuovo l’accesso.' }
-        )
+        .call('PUT', `/locales/${SEED_LOCALE_TAGS.answerable}/entries/65e0200a9a7d4b2e1c0f3101`, {
+            value: 'Sessione scaduta. Effettua di nuovo l’accesso.'
+        })
         .then(() => undefined);

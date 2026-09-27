@@ -27,12 +27,10 @@ import { CORE_PERMISSION_KEYS } from '@kernel/translation';
  * `enabledModules`.
  */
 const claimed = new Map([
-    ...enabledModules.map(
-        (appModule): [string, string[]] => [
-            appModule.name,
-            [...(appModule.permissions ?? [])].toSorted()
-        ]
-    ),
+    ...enabledModules.map((appModule): [string, string[]] => [
+        appModule.name,
+        [...(appModule.permissions ?? [])].toSorted()
+    ]),
     ['core', [...CORE_PERMISSION_KEYS].toSorted()] as [string, string[]]
 ]);
 

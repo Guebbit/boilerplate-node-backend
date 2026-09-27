@@ -458,9 +458,9 @@ describe('removeEntityTranslations', () => {
     });
 
     it('reports zero for an entity with no rows', async () => {
-        await expect(translationRepository.removeEntityTranslations('widget', 'none')).resolves.toBe(
-            0
-        );
+        await expect(
+            translationRepository.removeEntityTranslations('widget', 'none')
+        ).resolves.toBe(0);
     });
 });
 
