@@ -61,7 +61,7 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
      *           `{ userId, 'items.productId': { $ne } }`, NOT an exact match on its unique key, so
      *           two of them can both conclude "absent" and one loses; that is the whole reason one
      *           write retries and this one does not. Measured at 25-way contention in
-     *           `tests/integration/concurrency/wishlist-races.test.ts`, the case that would go red
+     *           `./tests/integration/wishlist-races.test.ts`, the case that would go red
      *           if the filter ever stopped being an equality.
      */
     addLine: async (userId: string, productId: string) =>

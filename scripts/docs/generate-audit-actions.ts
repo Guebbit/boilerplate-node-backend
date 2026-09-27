@@ -4,10 +4,9 @@
  * `generate-role-matrix.ts`: markers in the page, prose around them untouched, `--check` in
  * `complete`.
  *
- * Replaces the 7 per-module `tests/unit/audit.test.ts` files that each pinned their own module's
- * action strings by hand, restating `audit.ts` rather than testing anything: a renamed or added
- * action now shows up as a diff in this committed, reviewed page instead — the doc IS the
- * regression guard. `tests/cross-cutting/audit-actions.test.ts` still checks the STRUCTURE
+ * A renamed or added action shows up as a diff in this committed, reviewed page — the doc IS the
+ * regression guard, rather than a per-module `<module>/tests/unit/audit.test.ts` restating
+ * `audit.ts` by hand. `tests/cross-cutting/audit-actions.test.ts` still checks the STRUCTURE
  * (uniqueness, the dotted convention, every module accounted for); this page is the vocabulary
  * itself.
  *
