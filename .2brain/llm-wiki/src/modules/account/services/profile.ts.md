@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/profile.ts
-sha256: f067ad93f0d9ff30a769f040bbbfbd7a001a0f66af17a0e5cca79bbc5ac21c97
-generated_at: 2026-09-23T18:09:36.895926+00:00
+sha256: 0d13d6e856ac58074ee007103c877b411753f670d5ff289c26a5a50239d5dc77
+generated_at: 2026-09-27T14:30:35.669693+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service-layer functions for the self-service account profile: reading one's own profile, changing the password (from a reset link or with current-password verification), and hard-deleting one's own account. It sits on the "maintaining" side of the account domain — every flow here mutates an account the caller is already authenticated as, as opposed to `./authentication` which answers "who is this". The password lives here because every write to it is a change to an existing credential, not an entry point.
+Service layer for the "maintain my own account" side of the account module: reading the caller's profile, changing the password (via reset link or with current-password verification), and self-deleting the account. It is deliberately split from `./authentication` on the proving-vs-maintaining boundary—authentication answers "who is this," this file answers "change something about the account I'm already in."
 
 ## Key elements
 
-- **`validatePasswordChange(password, passwordConfirm)`** — Zod-validated check that the two fields match and meet the user-schema password rules. Returns `ResponseErrorItem[]` (empty when valid). Split out so callers can reject _before_ spending a one-time reset token.
-- **`passwordChange(user, password, passwordConfirm, beforeSave?)`** — Core funnel. Validates → checks breached-passwords → runs optional `beforeSave` hook → `userService.setPassword` → revokes all `REFRESH` tokens (failure swallowed). Returns `ResponseSuccess<UserDocument>` or `ResponseReject`.
-- **`getOwnProfile(userId, context)`** — Emits `USER_PROFILE_VIEWED` analytics, then reads via `findByIdWithPendingEmail` (not `getById`) so the caller sees `pendingEmail` status.
-- **`passwordResetChange(user, password, passwordConfirm, context)`** — Calls `passwordChange` with `markVerified` as the `beforeSave` hook. On success: fires-and-forgets a `resetConfirmEmail`, records `AUTH_PASSWORD_RESET_COMPLETED` audit row, resolves the actor role via `rolesOf`.
-- **`removeOwnAccount(user, context)`** — Captures `email`/`username`/`locale`/`_id` before the hard delete, reads role from the membership store, calls `userService.remove(user, true)`, then on success records audit, emits analytics, and enqueues a goodbye email.
+- **`validatePasswordChange(password, passwordConfirm)`** — Zod-based check that the two fields match. Returns `ResponseErrorItem[]`. Exported so `reset-confirm` can validate *before* spending a one-time token.
+- **`passwordChange(user, password, passwordConfirm, beforeSave?)`** — The single funnel every password write flows through. Validates → checks breached-passwords → optionally runs `beforeSave` → saves → revokes all refresh tokens. Revoke failure is swallowed (defense-in-depth, not a reason to report failure). The `beforeSave` hook guarantees atomic compound writes (e.g. `markVerified` alongside the password).
+- **`getOwnProfile(userId, context)`** — Reads the caller's profile via `userService.findByIdWithPendingEmail` (exposes `pendingEmail`, which is `select: false` on the standard read). Emits a `user_profile_viewed` analytics event scoped to the user's own view, not admin lookups.
+- **`passwordResetChange(user, password, passwordConfirm, context)`** — Wraps `passwordChange` with `markVerified` as `beforeSave` (the reset token proved mailbox possession). On success: records audit, fires a confirmation email (recipient-locale first, request locale as fallback), both fire-and-forget.
+- **`removeOwnAccount(user, context)`** — Hard-deletes the account. Captures `email`, `username`, `locale`, `_id` *before* the write. On success: records audit, emits analytics, sends a goodbye email. Wraps `userService.remove` rather than emitting inside it, so the admin `DELETE /users/:id` path doesn't double-report or misattribute the event.
 
 ## Relationships
 
-- **`@infrastructure/i18n`** (`t`, `getDefaultLocale`) — localises validation error messages and picks the recipient's locale for outbound mail.
-- **`@infrastructure/adapters/mailer`** (`enqueueEmail`) — queues `resetConfirmEmail` / `deleteConfirmEmail` templates (from `../emails`) after successful mutations.
-- **`@infrastructure/http/response`** — `generateSuccess`, `generateReject`, `validationErrors` shape every return value.
-- **`@infrastructure/http/errors`** (`rejectDatabaseEnvelope`) — wraps unexpected DB failures in `passwordChange`.
-- **`@infrastructure/http/schemas`** (`optionalBooleanSchema`) — imported for schema composition (used in the broader request-parsing layer).
-- **`@infrastructure/security/breached-passwords`** (`assertPasswordNotBreached`) — consulted in `passwordChange` before the write; a hit returns a 422 reject.
-- **`@infrastructure/observability/analytics`** (`emitAnalyticsEvent`, `buildAnalyticsBase`) — self-service analytics events (`USER_PROFILE_VIEWED`, password-change, account-delete).
-- **`@infrastructure/observability/audit`** (`recordAudit`) — audit-log rows for reset and delete completions.
-- **`@infrastructure/adapters/logger`** (`logger`) — warn-level log when the post-reset audit-role lookup fails.
-- **`@modules/access`** (`rolesOf`) — resolves the caller's tenant role for the `actor_role` field on audit rows.
-- **`@kernel/permissions`** (`isUnrestrictedRole`) — maps a tenant role to the `'admin'` / `'user'` label used in audit records.
-- **`@kernel/access/tenant`** (`DEPLOYMENT_TENANT_ID`) — tenant scoping for the `rolesOf` lookup.
-- **`@modules/users`** (`userService`, `zodUserSchema`, `TokenType`, `UserDocument`) — the data-access layer that actually persists password changes, token revocations, and hard deletes.
-- **`./verification`** (`markVerified`, `sendVerificationEmail`, `EMAIL_CHANGE_TOKEN_TYPE`) — `markVerified` rides in as the `beforeSave` hook during reset.
+- **`src/modules/account/services/authentication.ts`** — Imports `verifyOwnPassword` (used by the `passwordChangeWithCurrent` flow, defined elsewhere in the service folder, to gate the "I know my current password" path before calling `passwordChange`).
+- **`src/modules/account/emails.ts`** — Imports `resetConfirmEmail`, `deleteConfirmEmail`, `emailChangeNoticeEmail`, and `recipientLocale` to compose outbound mail and resolve the recipient's language.
+- **`src/modules/account/roles.ts`** — Imports `isUnrestrictedCaller` to determine the actor's role (`admin` vs `user`) for audit-log entries.
+- **`src/modules/account/analytics.ts` / `src/modules/account/audit.ts`** — Provides the canonical event names (`accountAnalyticsEvents`) and action strings (`accountAuditActions`) used in `emitAnalyticsEvent` / `recordAudit` calls.
+- **`src/infrastructure/security/breached-passwords/index.ts`** — `assertPasswordNotBreached` is called inside `passwordChange` as a hard gate before any write.
+- **`src/infrastructure/http/response.ts`** — All return values are shaped via `generateSuccess` / `generateReject` / `validationErrors` for uniform API envelopes.
+- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseEnvelope` catches DB failures in the `passwordChange` chain.
+- **`src/infrastructure/http/schemas.ts`** — Imports `optionalBooleanSchema` (used in the file's schema definitions).
+- **`src/infrastructure/i18n/index.ts`** — `t()` localises user-facing validation messages.
+- **`src/infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` + `buildAnalyticsBase` for all analytics emissions.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` for structured audit-log entries.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.warn` for non-fatal failures (e.g. a failed role lookup during audit).
+- **`src/infrastructure/persistence/normalize-email.ts`** — `normalizeEmail` is imported via `@modules/users` and used when comparing or persisting email addresses.
 
 ## Notes
 
-- **`beforeSave` is deliberately a parameter, not a pre-mutation.** A refused password must not leave a half-applied change on the document; the hook runs only after every validation/breach check has passed and immediately before `save`.
-- **Revoke-after-save ordering in `passwordChange`.** If the revoke lands first and the save then fails, every session is logged out for nothing. Conversely, a failed revoke is swallowed (`.catch(() => undefined)`) because the password write already succeeded.
-- **`passwordResetChange` marks the address verified; `passwordChangeWithCurrent` does not.** Spending a reset token proves mailbox possession; typing a current password does not.
-- **`getOwnProfile` avoids `userService.getById`** for two reasons: (1) `getById` is shared with admin lookups that must not see `pendingEmail`, and (2) an unconditional analytics emit inside `getById` would miscount admin reads as self-views.
-- **`removeOwnAccount` captures PII before the write.** After a hard delete the document is gone; the goodbye email and audit row must be composed from the pre-delete snapshot.
-- **Fire-and-forget convention.** Post-success side effects (email enqueue, audit role lookup) use `void` or `.catch` so a transient infra failure never turns an already-committed mutation into a 500.
-- The module's service is a _folder_ (see `./index`), with `profile.ts` as one slice alongside `authentication`, `session`, `verification`, etc.
+- **Emit-in-the-wrapper, not the shared function.** Analytics and audit events live in `passwordResetChange` / `removeOwnAccount`, *not* inside `passwordChange` or `userService.remove`. The admin endpoints (`DELETE /users/:id`, `get-user-item.ts`) share those lower-level functions and would otherwise double-report or misattribute `actor_user_id` / `actor_role`.
+- **`beforeSave` ordering is contractual.** The hook runs *after* all validation/breach refusals and *before* `save`. This means a rejected password cannot leave a side-effect (like a role promotion from `markVerified`) on the document.
+- **`passwordResetChange` marks the email verified; `passwordChangeWithCurrent` does not.** The reset token was delivered to the mailbox, so it proves possession. Typing a known password does not.
+- **Fire-and-forget after the primary write.** Confirmation emails, audit lookups, and analytics in `removeOwnAccount` are all `void` / `.catch`-swallowed after the write succeeds—a queue hiccup or role-lookup failure degrades to a missing mail or audit row, never to a failed user-facing response.
+- **`removeOwnAccount` reads fields before deleting.** Because it is a hard delete, `email`, `username`, and `locale` are captured into a local const before `userService.remove` resolves; the goodbye mail is composed from that snapshot.

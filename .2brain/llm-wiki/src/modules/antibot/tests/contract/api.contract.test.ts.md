@@ -1,7 +1,7 @@
 ---
 source: src/modules/antibot/tests/contract/api.contract.test.ts
-sha256: cac8e9369d8a224cee0fad065c7837bf915e39de354b0834c5fbf04a0f40cf1f
-generated_at: 2026-09-23T18:23:10.014045+00:00
+sha256: 158619d2550d01f427eb42da96237a32c1c334fe428438909de477b87bdc300b
+generated_at: 2026-09-27T14:40:37.473082+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for `GET /antibot/config` (valid response shape, provider/policy publication, error handling) plus a single end-to-end proof that a selected provider actually gates a guarded route (`POST /feedback/contact`). This suite lives in the `antibot` module rather than `feedback`'s own because `antibot` is the only module that knows both halves of the handshake—what the client is told to render and what counts as a valid token—without importing the routes it guards.
+Contract tests for the two public `/antibot` endpoints (`/challenge`, `/config`) and an end-to-end proof that a selected provider actually gates a real guarded route (`/feedback/contact`). This file lives in the antibot module rather than the feedback module because antibot is the only place that understands both halves of the handshake—what the client is told to render and what counts as a valid token—without importing the routes it guards.
 
 ## Key elements
 
-- **`setupTestDb()`** — one-time database bootstrap for the suite.
-- **`ORIGINAL_PROVIDER` / `ORIGINAL_EMAIL_POLICY`** — snapshots of `NODE_ANTIBOT_PROVIDER` and `NODE_ANTIBOT_EMAIL_POLICY` taken at import time so `afterEach` can restore them (or delete them if they were unset).
-- **`describe('GET /antibot/config')`** — five cases: default-off shape, provider + site-key publication, email-policy publication, unknown-provider → 500, unknown-policy → 500. Each asserts status, body fields, and `toSatisfyApiSpec()`.
-- **`describe('the gate it guards, end to end…')`** — two cases against `POST /feedback/contact`: passes through (201) when provider is `none`, rejects with 401 when `turnstile` is selected and no token is supplied.
-- **`CONTACT_PAYLOAD`** — fixed body used for the guarded-route cases.
+- **`setupTestDb()`** – called at module top-level to give each test an isolated database.
+- **Env-var save/restore (`ORIGINAL_PROVIDER`, `ORIGINAL_EMAIL_POLICY`, `ORIGINAL_ALTCHA_SECRET`)** – captured before tests run and restored in `afterEach` so other suites see their own configuration.
+- **`describe('GET /antibot/challenge')`** – asserts 200 + valid contract for a self-hosted (altcha) provider, 404 when no provider is set (default), and 404 for a vendor-hosted provider (turnstile) that issues its own challenges.
+- **`describe('GET /antibot/config')`** – asserts the shape of the published config (provider name, public parameters, rung postures) and that unknown provider/policy values fail closed with 500 instead of silently defaulting.
+- **`describe('the gate it guards, end to end on one guarded route')`** – POSTs a fixed `CONTACT_PAYLOAD` to `/feedback/contact` and verifies 201 with no provider selected vs. 401 with a provider active but no token supplied.
+- **`toSatisfyApiSpec()`** – a custom matcher (from the contract support module) that validates status, headers, and body shape against the shared API contract for every assertion.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** (`@tests/contract`) — imported for side-effects; registers the `toSatisfyApiSpec()` matcher and any shared contract-test setup used by every `expect(...).toSatisfyApiSpec()` assertion.
-- **`tests/support/http.ts`** (`@tests/http`) — provides the `api()` helper that builds a supertest-style client bound to the running server; every request in this file goes through it.
-- **`tests/support/setup-test-db.ts`** (`@tests/setup-test-db`) — provides `setupTestDb()`, which creates an isolated test database before any test runs.
+- **`tests/support/contract.ts`** – imported as `@tests/contract`; registers the `toSatisfyApiSpec()` matcher and any global contract-test setup that all contract suites rely on.
+- **`tests/support/http.ts`** – imported as `@tests/http`; supplies the `api()` helper used to issue requests against the running server under test.
+- **`tests/support/setup-test-db.ts`** – imported as `@tests/setup-test-db`; provides `setupTestDb()` to create/tear down an isolated database per test run.
 
 ## Notes
 
-- The file intentionally exercises `POST /feedback/contact` as the _only_ guarded route. Adding a new guarded route does not require a parallel case here; the contract is "some route is gated," not "every route is gated."
-- Unknown provider or policy values must return **500**, not silently fall back to `none`. This is a deliberate fail-fast contract—regressing it would hide misconfiguration in production.
-- Env-var restoration in `afterEach` handles both "was previously set" and "was previously unset" (deletes the key) to avoid leaking state into other suites that run in the same process.
+- Env vars are the sole configuration surface for these tests; there is no DI or config-object injection. Always restore them in `afterEach` (including deleting the key if it was absent) to avoid cross-suite leakage.
+- The file intentionally exercises `/feedback/contact`, a route owned by a different module. This is deliberate: it proves the gate works end-to-end without duplicating the handshake knowledge that only antibot holds.
+- 404 from `/antibot/challenge` for vendor-hosted providers (e.g. turnstile) is the *expected* response, not an error—those providers issue challenges from their own CDN.
+- Unknown provider or policy names are a 500 by design (fail-closed); the tests assert this rather than a 404 or fallback, so a regression to "just default to none" will be caught here.

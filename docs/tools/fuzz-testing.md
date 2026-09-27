@@ -43,7 +43,7 @@ A hand-maintained list rots. Somebody adds `PATCH /products/{id}`, nobody adds i
 
 `listOperations()` reads the spec. Add a route to `openapi.yaml` and it is fuzzed on the next run.
 
-That auto-discovery is the main thing [`schemathesis`](https://schemathesis.readthedocs.io/) offers, and it is why choosing against it needed a reason. The reason is that this is a **boilerplate**: every project derived from it would inherit a Python toolchain alongside Node, for a capability that can be assembled from four things the repo already has — the spec, `fast-check`, `supertest`, and `jest-openapi`.
+That auto-discovery is the main thing [`schemathesis`](https://schemathesis.readthedocs.io/) offers, and it is why choosing against it needed a reason. The reason is that this is a **boilerplate**: every project derived from it would inherit a Python toolchain alongside Node, for a capability that can be assembled from four things the repo already has — the spec, `fast-check`, `supertest`, and the orval-generated, per-status Zod schemas `tests/support/response-contract.ts` judges a response against.
 
 ## Spec-valid, but hostile
 
@@ -84,7 +84,7 @@ The two refused callers run a quarter of the requests: a refusal rarely depends 
 
 **No 5xx.** A malformed request deserves a 4xx. A 5xx means a well-formed request reached an unhandled throw — a correctness bug and an availability signal at once, especially on a public endpoint.
 
-**The response matches the spec**, via `jest-openapi`'s `toSatisfyApiSpec()`. This checks the status code as well as the body, and it is sharp here because most schemas are `additionalProperties: false` — an undeclared field fails, and so does an undocumented status.
+**The response matches the spec**, via `assertResponseMatchesContract` (`tests/support/response-contract.ts`). This checks the status code as well as the body, against the ONE Zod schema orval generated for that exact operation+status, and it is sharp here because most schemas are `additionalProperties: false` — an undeclared field fails, and so does an undocumented status.
 
 ## The tripwires on itself
 
@@ -174,7 +174,7 @@ with many more requests per operation and a fresh seed — that is the hunter, a
 | `tests/support/spec-walk.ts`         | Parses `openapi.yaml`, resolves `$ref`/`allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS` |
 | `tests/support/spec-arbitraries.ts`  | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                               |
 | `tests/support/http.ts`              | The supertest harness and `authenticateAs`, shared with the integration and contract suites      |
-| `tests/support/contract.ts`          | Registers `toSatisfyApiSpec()` against `openapi.yaml` (imported for its side effect)             |
+| `tests/support/response-contract.ts` | `assertResponseMatchesContract` — judges one response against its operation+status Zod schema    |
 | `.github/workflows/fuzz.yml`         | The nightly schedule and manual dispatch                                                         |
 | `.github/workflows/schemathesis.yml` | Stateful sequence fuzzing, following `openapi.yaml`'s `links` — see above                        |
 
@@ -189,7 +189,7 @@ The run is **seeded**, so a failure is reproducible rather than a story about so
 
 ## Related pages
 
-- [Contract Testing](./contract-testing.md) — the same `toSatisfyApiSpec()` assertion, driven by hand-written cases
+- [Contract Testing](./contract-testing.md) — the same `assertResponseMatchesContract` judge, driven by hand-written cases
 - [Contract-Derived Request Data](./contract-request-data.md) — generation from the zod side rather than the spec side
 - [Property Testing](./property-testing.md) — the same generate-don't-enumerate idea, applied to pure functions
 - [Mutation Testing](./mutation-testing.md) — the other hunter, and the other nightly

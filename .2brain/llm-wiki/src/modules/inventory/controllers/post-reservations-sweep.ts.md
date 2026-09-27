@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/controllers/post-reservations-sweep.ts
-sha256: 24ec1b76c915e20d8340617456c861a9c0ee772a4f8aeb68543f654dbce6fa65
-generated_at: 2026-09-23T18:44:09.815476+00:00
+sha256: 89eda1c9ec0e300f55f145cc4124eef451db12050a8cc909f7cdcfecea10fd11
+generated_at: 2026-09-27T14:54:59.839453+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express handler for `POST /inventory/reservations/sweep`. It triggers a one-shot reservation-expiry sweep by delegating to the inventory service, then returns the count of expired reservations. The app ships no internal scheduler; this endpoint is meant to be invoked by an external cron entry, a platform scheduled job, or an operator.
+HTTP handler for `POST /inventory/reservations/sweep` — an on-demand trigger for the reservation-expiry sweep. It exists so operators or platform schedulers can invoke the sweep via HTTP; the actual recurring schedule (`npm run sweep:reservations` / crontab) calls the service directly and never hits this route.
 
 ## Key elements
 
-- **`postReservationsSweep`** (exported function) — The sole export. Receives `Request`/`Response`, calls `inventoryService.runReservationSweep(callerContextOf(request))`, and on success sends `{ expired }` with a 200 and an i18n message. Errors are routed through `catchAs(response, 'postReservationsSweep')`.
-- **`ReservationSweepResponse`** (imported type) — Shapes the success payload; carries at minimum an `expired` count.
+- **`postReservationsSweep`** (exported) — Express handler. Calls `inventoryService.runReservationSweep(callerContextOf(request))`, responds 200 with a `ReservationSweepResponse` body (`{ expired }`) and the i18n message `inventory.sweep-success`. Errors are delegated to `catchAs`.
 
 ## Relationships
 
-- **`../service`** (`inventoryService.runReservationSweep`) — Performs the actual sweep logic; the controller is a thin I/O wrapper.
-- **`src/modules/inventory/routes.ts`** — Registers this handler on the `POST /inventory/reservations/sweep` route.
-- **`@infrastructure/http/request`** — Supplies `callerContextOf(request)` so the service knows who initiated the sweep (for auditing).
-- **`@infrastructure/http/response`** — Provides `successResponse` to shape the JSON reply.
-- **`@infrastructure/http/controller`** — Provides `catchAs` for uniform error serialization.
-- **`@infrastructure/i18n`** — Provides `t()` to localise the success message (`inventory.sweep-success`).
-- **`src/types/index.ts`** — Exports the `ReservationSweepResponse` type used in the response contract.
+- **`src/modules/inventory/service.ts`** — calls `inventoryService.runReservationSweep()`, the sole business logic this file invokes.
+- **`src/modules/inventory/routes.ts`** — mounts this handler at the `/inventory/reservations/sweep` route.
+- **`src/infrastructure/http/controller.ts`** — supplies `catchAs` for uniform error serialization.
+- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf` to extract the authenticated caller's identity for audit/authorization inside the service call.
+- **`src/infrastructure/http/response.ts`** — supplies `successResponse` to shape the JSON envelope.
+- **`src/infrastructure/i18n/index.ts`** / **`context.ts`** — supplies `t()` to resolve the localized success message (`inventory.sweep-success`).
+- **`src/types/index.ts`** — defines the `ReservationSweepResponse` shape returned to the caller.
 
 ## Notes
 
-- Audit granularity is intentionally **once per sweep run**, not per individual order. The docstring states that per-order cancellations are covered by the orders' own cancel path; this run-level record exists so an operator can answer "why did this order vanish?" with a timestamped sweep event.
-- The handler is **fire-and-forget from the app's perspective**: no in-process timer or queue triggers it. If nothing external calls this endpoint, reservations are never swept.
+- The file's doc comment stresses that the crontab job **never** reaches this endpoint; this route is strictly for on-demand/manual invocation.
+- Auditing is per-run (one record), not per-expired-order. Per-order audit records are produced by each order's own cancel path, so an operator can trace *why* a specific order was cancelled.
+- The handler is a thin passthrough: no validation, no status-code branching beyond the single 200 success. All logic lives in `inventoryService.runReservationSweep`.

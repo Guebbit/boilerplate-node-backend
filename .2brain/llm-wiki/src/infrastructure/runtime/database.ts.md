@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/runtime/database.ts
-sha256: 14817a653caa5ab2aabe306ed0c7c455430ebbfb5e0e6db204d8a0d7493bbd01
-generated_at: 2026-09-23T17:51:28.265723+00:00
+sha256: d8de365961c2ac881e8aee567130ef52f4c15e54c5412f74eeeb772b86dab2d3
+generated_at: 2026-09-27T14:15:10.615519+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Manages the MongoDB connection lifecycle (connect, retry, disconnect) for the entire application and its operational scripts. It wraps the Mongoose singleton with a URI-resolution helper, exponential-backoff retry, and a safe shutdown path so that every consumer gets a single shared connection without duplicating retry logic.
+Centralises the MongoDB connection lifecycle — connecting with retry, watching for drops, and disconnecting on shutdown. Every entry point (the HTTP server, all cron/ops scripts, DB utility scripts) goes through this module so there is a single place that owns the Mongoose singleton, the retry policy, and the `autoIndex` guard.
 
 ## Key elements
 
-- **`getDatabaseUri()`** — Resolves the MongoDB connection string from env vars. A full `NODE_DB_URI` takes precedence; otherwise it assembles `mongodb://host:port/db` from `NODE_MONGODB_HOST`, `NODE_MONGODB_PORT`, and `NODE_MONGODB_NAME` (defaulting to `boilerplate-node-backend`). An _empty_ `NODE_DB_URI` intentionally falls through to fragments (enables the `npm run host` pattern).
-- **`start()`** — Connects via `mongoose.connect()` with up to 10 retries and exponential backoff (1 s → 2 s → …, clamped at 30 s). Throws after the final attempt so the boot sequence aborts. Uses explicit promise chains (no `async`/`await`). Does **not** set `autoIndex`; callers configure that before calling `start()`.
-- **`stopDatabase()`** — Calls `mongoose.disconnect()` to release pooled sockets. Logs and absorbs any rejection so it never aborts the remaining shutdown chain.
-- **`connection`** — Re-exports `mongoose.connection` for readiness probes and diagnostics (`readyState` 0–3). The object exists at import time; it is populated once `start()` resolves.
-- **`wait(ms)`** (internal) — Promisified `setTimeout` to yield the event loop during backoff delays.
+- **`isPermanentConnectError(error)`** — Returns `true` when a `mongoose.connect()` rejection is one that retrying cannot fix (bad URI parse, invalid argument, auth code 18). Used to short-circuit the retry loop and fail fast.
+- **`getDatabaseUri()`** — Builds the connection string. `NODE_DB_URI` wins if truthy; otherwise `NODE_MONGODB_HOST` / `PORT` / `NAME` are assembled (defaults: `127.0.0.1:27017/boilerplate-node-backend`).
+- **`start()`** — Disables `autoIndex` in production, then connects with exponential backoff (1 s → 2 s → … capped at 30 s, 10 attempts). Attaches disconnect/reconnect watchers. Resolves once the handshake completes.
+- **`stopDatabase()`** — Calls `mongoose.disconnect()`; logs and swallows any rejection so shutdown teardown is not aborted.
+- **`connection`** — Re-export of the live `mongoose.connection` object. Available at import time; populated after `start()` resolves. Used by readiness probes and diagnostics.
+- **`withTransaction<T>(work)`** — Delegates to `connection.transaction(work)`. `work` receives a `ClientSession` and must pass it to every write. Requires a replica set.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** — Direct import; every retry warning and disconnect failure is logged through this adapter.
-- **`src/app.ts`** — `startServer` turns `autoIndex` off in production before calling `start()`; relies on the shared `connection` for the running server.
-- **`scripts/db/sync-indexes.ts`** — Sets `autoIndex` to `false` before calling `start()` so index sync is explicit rather than automatic.
-- **`scripts/db/bootstrap-access.ts`, `scripts/db/grant-access.ts`** — Operational scripts that call `start()` / `stopDatabase()` around their work.
-- **`scripts/ops/reap-*.ts`, `scripts/ops/sweep-*.ts`** — Maintenance scripts that acquire the connection via `start()` and release it via `stopDatabase()`.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** — Orchestrates process lifecycle; invokes `stopDatabase()` during the shutdown sequence.
-- **`src/infrastructure/runtime/database-snapshot.ts`** — Explicitly a _separate_ concern (demo-profile snapshot: empty / capture / restore). Not imported here; two callers use it independently.
-- **`src/modules/account/module.ts`, `src/modules/account/services/two-factor.ts`** — Consume Mongoose models that operate over the connection established by `start()`.
+- **`src/infrastructure/adapters/logger.ts`** — Provides the `logger` instance used for retry warnings, disconnect/reconnect notices, and disconnect-failure logging.
+- **`src/app.ts`** — The server's boot sequence calls `start()` and registers `stopDatabase()` in its shutdown chain.
+- **`scripts/db/*` and `scripts/ops/*`** (bootstrap-access, grant-access, sync-indexes, reap-*, sweep-*) — Each script calls `start()` / `stopDatabase()` as its own entry-point lifecycle; they share the same retry and `autoIndex` guard without needing `createApp()`.
 
 ## Notes
 
-- **Mongoose is a singleton.** `import mongoose from 'mongoose'` everywhere returns the same instance; `start()` mutates global state as a side effect. Callers should not import `mongoose` directly to connect.
-- **Truthiness, not `!== undefined`, on `NODE_DB_URI`.** An empty string is treated as "unset" so the `host` script can blank the URI and override only the host while keeping the DB name from `.env`. Pinned by `tests/unit/scripts/db/host-scripts.test.ts`.
-- **No `autoIndex` opinion.** This module deliberately leaves it to the caller. Forgetting to set it in a new entry point will trigger automatic index creation on first connect.
-- **Promise chains, not `async`/`await`.** The codebase convention is explicit `.then()` chains; `start()` uses a recursive function rather than a `for` loop to stay within that pattern.
-- **Stryker markers** (`// Stryker disable all` / `restore all`) surround the logger calls in the retry and disconnect paths—mutation-testing exclusions for branches that are intentionally unreachable in happy-path coverage.
-- **`connection` is safe to capture at import time.** The object reference exists before `start()` runs; only its internal state (e.g. `readyState`) changes after the connection is established.
+- The truthiness check on `NODE_DB_URI` (not `!== undefined`) is intentional: an *empty* string falls through to host/port fragments, which is how the `host` npm script reaches a containerised Mongo from the host while keeping the database name in `.env`. Pinned by `tests/unit/scripts/db/host-scripts.test.ts`.
+- `start()` uses a recursive promise chain rather than `async`/`await` to match the codebase's explicit-promise style.
+- `withTransaction` requires a replica set; a standalone `mongod` rejects `startTransaction()` outright. The test environment (`mongodb-memory-server`) and `docker-compose.yml` both run a single-node replica set to satisfy this.
+- `autoIndex` is never turned *on* by this module. Dev/test rely on Mongoose's default (on); production relies on `scripts/db/sync-indexes.ts` having already run with it off.

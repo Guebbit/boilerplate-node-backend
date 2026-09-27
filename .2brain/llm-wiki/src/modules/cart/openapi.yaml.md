@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/openapi.yaml
-sha256: c943f481fc3981f03fa294a991360a4e6bf917a7443057bdc2d85cdc5b5f6cc0
-generated_at: 2026-09-23T18:31:18.417430+00:00
+sha256: 43869116225b59850bcc368b4b12363b18a3266aea45508014359ca372263c76
+generated_at: 2026-09-27T14:45:08.942842+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.0.3 contract for the cart module. Defines the full REST surface for reading, mutating, and checking out a user's cart, and serves as the single source of truth that both the server implementation and API consumers (or generated clients) agree on.
+OpenAPI 3.0.3 contract for the Cart module (v2.0.0). Defines the full REST surface for reading, mutating, and clearing a user's cart, choosing a shipping method, and converting the cart into an order at checkout. Serves as the single source of truth for client codegen and API documentation for this module.
 
 ## Key elements
 
-- **`GET /cart`** (`getCart`) – Returns the full cart plus a computed summary envelope.
-- **`POST /cart`** (`upsertCartItem`) – Adds or edits a cart line; the primary mutation endpoint.
-- **`DELETE /cart`** (`removeCartItemByBody`) – Removes a line by `productId` carried in the JSON body. Marked `x-alias-of: removeCartItem`.
-- **`DELETE /cart/all`** (`clearCart`) – Empties the entire cart; bodyless by design (see Notes).
-- **`PUT /cart/{productId}`** (`updateCartItemById`) – Sets quantity for a single line; functionally equivalent to `POST /cart`. Marked `x-alias-of: upsertCartItem`.
-- **`DELETE /cart/{productId}`** (`removeCartItem`) – Removes a line by path parameter (the canonical form).
-- **`GET /cart/summary`** (`getCartSummary`) – Lightweight cart summary (no full item list).
-- **`POST /cart/checkout`** (`checkout`) – Converts cart to an order; returns `201` with OpenAPI **links** to `createPaymentIntent` and `cancelOrderById`. Tagged `Orders` rather than `Cart`.
+- **`GET /cart`** (`getCart`) — Returns all cart items plus a computed `summary` block.
+- **`POST /cart`** (`upsertCartItem`) — Adds or edits a product line; the canonical "upsert" operation.
+- **`DELETE /cart`** (`removeCartItemByBody`, `x-alias-of: removeCartItem`) — Removes a line by `productId` carried in the JSON body. Deliberately kept separate from `DELETE /cart/all` so a stripped/malformed body 422s rather than silently clearing the cart.
+- **`DELETE /cart/all`** (`clearCart`) — Bodyless; empties the entire cart.
+- **`PUT /cart/{productId}`** (`updateCartItemById`, `x-alias-of: upsertCartItem`) — Functionally equivalent to `POST /cart`; sets a line's quantity.
+- **`DELETE /cart/{productId}`** (`removeCartItem`) — Removes a line identified by path parameter (the primary spelling; the body variant above is its alias).
+- **`PUT /cart/shipping-method`** (`setCartShippingMethod`) — Selects or clears (`null`) the planned shipping method. Priced against the current basket; checkout re-validates independently.
+- **`GET /cart/summary`** (`getCartSummary`) — Lightweight cart summary without the full item list.
+- **`POST /cart/checkout`** (`checkout`) — Converts the cart into a new order (201). Cart is cleared on success. Accepts an `Idempotency-Key` header. Account-bound: the order email is always the caller's.
 
-All operations require `bearerAuth`. Error responses (`401`, `404`, `409`, `422`, `500`) are `$ref`'d to shared definitions rather than inlined.
+Schemas defined (or expected) in this spec: `CartResponseEnvelope`, `UpsertCartItemRequest`, `RemoveCartItemRequest`, `UpdateCartItemByIdRequest`, `SetCartShippingMethodRequest`, `CartSummaryResponseEnvelope`, `CheckoutRequest`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** – Every error response (`Unauthorized`, `NotFound`, `ValidationError`, `Conflict`, `InternalError`) and the `ProductIdPathParam` parameter are pulled from this file via relative `$ref` paths. Changes to shared response shapes propagate to this contract automatically.
-- **`src/modules/delivery/openapi.yaml`** – The checkout `409` response enumerates shipping-method error codes (`CART_SHIPPING_NOT_APPLICABLE`, `CART_SHIPPING_METHOD_WEIGHT`) that correspond to validation logic living in the delivery module. The two specs are consumed together by any client that handles the full purchase flow.
-- **`src/modules/inventory/module.ts`** – The checkout `409` response includes `CART_INSUFFICIENT_STOCK`, indicating the server consults the inventory module during checkout. The cart spec documents the contract; the inventory module enforces stock.
+- **`shared/contracts/openapi.root.yaml`** — All error responses (`Unauthorized`, `InternalError`, `NotFound`, `ValidationError`, `Conflict`) and shared parameters (`ProductIdPathParam`, `IdempotencyKeyHeader`) are `$ref`-ed from this file via the relative path `../../../shared/contracts/openapi.root.yaml`. No error body is duplicated locally.
+- **`src/modules/delivery/openapi.yaml`** — `PUT /cart/shipping-method` references the delivery module's method catalogue (`GET /delivery/methods`) both in prose and semantically: a 404 is returned when the named method matches none, and a 409 is returned when the basket's weight falls outside the method's `minWeight`/`maxWeight` or when every item is `requiresShipping: false`.
+- **`src/modules/inventory/module.ts`** — The 404 on `POST /cart` and `PUT /cart/{productId}` (product id that matches no product) implies the cart controller validates product existence against the inventory module before persisting a line.
 
 ## Notes
 
-- **Body-vs-path aliasing is deliberate.** `DELETE /cart` (body) and `DELETE /cart/{productId}` (path) hit the same use case; the body variant exists so callers who can't embed an id in the URL can still remove a line. The `x-alias-of` extension makes the equivalence machine-readable.
-- **`/cart/all` exists to prevent silent cart-clearing.** If a `DELETE /cart` request's body is stripped in transit, the controller returns `422` rather than falling through to "delete everything." The destructive operation therefore has its own dedicated URL.
-- **422 vs 404 convention.** `422` means the id (path or body) is _malformed_ (e.g., not a valid ObjectId). `404` means the id is well-formed but matches no product or cart line. This split is called out in inline comments on the affected operations.
-- **Checkout is account-bound.** The order email is always the authenticated caller's; there is no `email` field in `CheckoutRequest`. A future guest-checkout extension would add one.
-- **Truncated file.** The source provided cuts off mid-way through the checkout `409` response; the `components` section (schemas, security schemes) is not visible. The full file will contain `CartResponseEnvelope`, `UpsertCartItemRequest`, `RemoveCartItemRequest`, `UpdateCartItemByIdRequest`, `CartSummaryResponseEnvelope`, `CheckoutRequest`, `CheckoutResponseEnvelope`, and the `bearerAuth` security scheme.
+- **`x-alias-of` extension** — Two operations (`removeCartItemByBody`, `updateCartItemById`) carry this vendor extension to signal they are alternate spellings of a canonical operation. Tooling that deduplicates by `operationId` should treat the alias as the same logical operation.
+- **422 vs 404 convention** — A *malformed* identifier (bad ObjectId shape) → 422; a *well-formed but unknown* identifier → 404. This distinction is called out in inline comments and is intentional.
+- **Shipping method is provisional** — `PUT /cart/shipping-method` validates against the basket *at that moment*. Checkout performs its own independent re-validation; a cart that changes after the method was chosen may hit a 409 at checkout time.
+- **Relative `$ref` depth** — Shared-contract references use a three-level `../../../` path. Moving this file in the tree will break those refs.
+- **Truncation** — The `POST /cart/checkout` 201 response schema and any `components` section were cut off in the source; the full file likely contains additional 4xx/5xx responses for checkout and the schema definitions listed above.

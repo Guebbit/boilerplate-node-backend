@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/integration/schema-contract.test.ts
-sha256: 22a339f056fd150571c14112eb21da4b50b5ac2b8518ea124bfa84a8b406cad6
-generated_at: 2026-09-23T19:29:55.461737+00:00
+sha256: 042c8c90b8d895b43d61565f730c28768765338040c35fa7c1240eaa8bcb00db
+generated_at: 2026-09-27T15:34:55.919126+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies Mongoose schema-level contracts on the Product model — `required` semantics, `toJSON` serialization shape — against a **real** Mongo instance. It exists as a separate integration spec so that Mongoose's own behaviour (not application transforms) is tested, which a mocked model could not faithfully represent.
+Verifies that the Mongoose schema *declarations* for the Product model (the `required` constraint, `select: false` on `_id`/`__v`, `toJSON` serialization) behave as intended against a real Mongo instance. It exists to pin down driver-level semantics that sibling specs (which cover application transforms) intentionally leave out.
 
 ## Key elements
 
-- **`setupTestDb()`** (from `@tests/setup-test-db`) — initialises the real in-memory Mongo test database before the suite runs.
-- **`describe('product schema')`** — the single test group containing two assertions:
-    - _accepts a price of zero_ — calls `productRepository.create` with only `title` and `price: 0` (cast `as never` to bypass TS), asserts `price` round-trips as `0`. Guards against a truthiness-based `required` guard.
-    - _serialises to id, never \_id or \_\_v_ — creates a product via the factory, inspects `product.toJSON()`, asserts `id` equals `String(_id)` and that `_id` / `__v` keys are absent from the output.
+- **`setupTestDb()`** — provisions a real in-memory (or local) Mongo connection before the suite runs.
+- **"accepts a price of zero"** — asserts that a `required: true` Number field accepts `0` (rejects only `undefined`/`null`), guarding against accidental truthiness checks.
+- **"serialises to id, never _id or __v"** — asserts `toJSON()` yields a string `id` and omits both `_id` and the `__v` version key.
 
 ## Relationships
 
-- **`src/modules/products/repository.ts`** — imports `productRepository` to create a product with a deliberately minimal (and type-unchecked) payload, exercising the schema directly.
-- **`src/modules/products/tests/factories.ts`** — imports `createProduct` for the serialization test, which needs a fully-populated document.
-- **`tests/support/setup-test-db.ts`** — imports `setupTestDb` to spin up the real Mongo connection the suite depends on.
+- **`src/modules/products/repository.ts`** — imports `productRepository.create` so the zero-price test exercises the real persistence path.
+- **`src/modules/products/tests/factories.ts`** — imports `createProduct` for the serialisation test, reusing the shared factory rather than inlining a document.
+- **`tests/support/setup-test-db.ts`** — provides the `setupTestDb` helper that spins up the real Mongo instance required for these assertions.
 
 ## Notes
 
-- The `as never` cast on the `create` call is intentional: it lets the test pass a field set that the TypeScript type does not require, proving the schema (not the type) is what enforces `required`.
-- This file lives under `tests/integration/` to signal it needs a running Mongo; do not convert it to a unit test or swap the repository for a mock.
+- The module doc comment is explicit: this file tests Mongoose's own behavior, **not** application logic. A mocked model would only assert the mock's interpretation of `default`/`required`, which is why a real connection is mandatory here.
+- The zero-price test is a regression guard: it fails if someone replaces the schema-level `required` with a truthiness check (`if (!price)` or `if (price === undefined || price === 0)`).

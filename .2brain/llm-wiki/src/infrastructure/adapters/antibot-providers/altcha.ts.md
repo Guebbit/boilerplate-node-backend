@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/antibot-providers/altcha.ts
-sha256: f2a21150b6fbe85600a2c351af6e13b766cd578aca2f7d3599c391a1580c31a2
-generated_at: 2026-09-23T17:37:20.388750+00:00
+sha256: a34cf04e54ba42362962d4427a12f8d0532ee3615871e0280ff64ff6867dfdd8
+generated_at: 2026-09-27T14:04:15.381911+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the self-hosted ALTCHA proof-of-work human-challenge provider. The server both issues and verifies challenges locally—no vendor script, no outbound traffic—making it the privacy-preserving alternative to Turnstile. The trade-off is that the proof-of-work runs on the visitor's device, which is heavier on a phone than on a rented bot server.
+Self-hosted proof-of-work anti-bot provider implementing the `HumanChallengeProvider` port. The server both issues and verifies ALTCHA challenges locally via `altcha-lib`—no vendor script, no third-party network call. Chosen as the zero-egress alternative to Turnstile, accepting that the CPU cost lands on the visitor's device.
 
 ## Key elements
 
-- **`altchaProvider`** (exported) — The `HumanChallengeProvider` object with `name`, `publicParameters`, `issueChallenge`, and `verify`. This is the single public surface.
-- **`issue()`** — Calls `altcha-lib` `createChallenge` with the configured algorithm, cost, TTL, and HMAC secret; returns an `AntibotChallenge` (`parameters` + `signature`).
-- **`check(payload)`** — Calls `altcha-lib` `verify` with `deriveKey`, the signature secret, and `altchaStore` (for single-use tracking); maps the result to `'ok'` or `'refused'`.
-- **`signatureSecret()`** — Reads `NODE_ANTIBOT_ALTCHA_SECRET` (≥ 16 chars); throws if unset or too short so an unsigned challenge can never be minted.
-- **`cost()`** — Reads `NODE_ANTIBOT_ALTCHA_COST` via `environmentNumber`, defaulting to 100 000 iterations, minimum 1.
-- **`ALGORITHM`** — `'PBKDF2/SHA-256'`, chosen for universal WebCrypto support (unlike Argon2id, which needs Node 24.7+ and is absent on Bun/Deno).
-- **`TTL_SECONDS`** — 300 s validity window for a challenge.
+- **`altchaProvider`** (exported) — the `HumanChallengeProvider` object wired into the antibot pipeline. Exposes `name`, `publicParameters(challengeUrl)`, `issueChallenge`, and `verify`.
+- **`issue()`** — calls `createChallenge` from `altcha-lib` with the configured algorithm, cost, expiry, and HMAC secret; returns an `AntibotChallenge` (`parameters` + `signature`).
+- **`check(payload)`** — calls `verify` from `altcha-lib` using `deriveKey` (PBKDF2) and `altchaStore` for single-use enforcement; maps the result to a `RungVerdict` (`'ok'` or `'refused'`).
+- **`signatureSecret()`** — reads `NODE_ANTIBOT_ALTCHA_SECRET`; throws if missing or < 16 chars. Deliberately independent of any login secret so key rotation doesn't invalidate in-flight challenges.
+- **`cost()`** — reads `NODE_ANTIBOT_ALTCHA_COST` via `environmentNumber`, defaulting to 100 000 iterations, min 1.
+- **Constants** — `ALGORITHM` (`PBKDF2/SHA-256`), `DEFAULT_COST` (100 000), `TTL_SECONDS` (300).
 
 ## Relationships
 
-- **`./altcha-store.ts`** — Supplies `altchaStore`, passed to `altcha-lib` `verify` to enforce single-use of a challenge.
-- **`./index.ts`** — Defines the `HumanChallengeProvider` interface that `altchaProvider` satisfies.
-- **`../antibot-verdict.ts`** — Exports the `RungVerdict` type (`'ok' | 'refused'`) used as the return type of `check` and `verify`.
-- **`@infrastructure/runtime/environment`** — Provides `environmentNumber` for reading `NODE_ANTIBOT_ALTCHA_COST` with a floor.
-- **`@types`** — Exports the `AntibotChallenge` shape returned by `issue()`.
-- **`tests/unit/infrastructure/adapters/antibot-providers/altcha.test.ts`** — Unit tests for this module.
+- **`antibot-store.ts`** — exports `altchaStore`, passed as the single-use store into `verify()` so each solution token can be redeemed exactly once.
+- **`index.ts`** (antibot-providers) — defines the `HumanChallengeProvider` interface that `altchaProvider` satisfies.
+- **`antibot-verdict.ts`** — defines the `RungVerdict` type returned by `check()`.
+- **`environment.ts`** — supplies `environmentNumber` used to read the cost configuration from the environment.
+- **`@types` (src/types/index.ts)** — provides the `AntibotChallenge` shape returned by `issue()`.
+- **`altcha.test.ts`** — unit tests covering challenge issuance, verification, single-use rejection, and the secret-missing error path.
 
 ## Notes
 
-- `signatureSecret()` is intentionally called **inside** `Promise.resolve().then(…)` in `check`. A synchronous throw at argument-evaluation time would escape the `.catch(() => 'refused')` wrapper and surface as an unhandled 500; deferring it into the chain lets the catch convert a misconfigured deployment into a clean `'refused'`.
-- `cost` enforces `min: 1`. A cost of 0 is not "easier"—it is no challenge at all.
-- `publicParameters` receives `challengeUrl` from its caller (the antibot module's controller) rather than hard-coding it, keeping the adapter transport-agnostic.
-- The HMAC secret is independent of any login/session secret; rotating one does not invalidate the other.
+- **PBKDF2 over Argon2id**: chosen for WebCrypto portability—Argon2id is native only on Node ≥ 24.7 and unavailable on Bun/Deno.
+- **`Promise.resolve().then(…)` in `check`**: deliberate. `signatureSecret()` throws synchronously; wrapping it inside the promise chain ensures the error is caught by `.catch(() => 'refused')` rather than escaping as an unhandled 500.
+- **`publicParameters(challengeUrl)`**: the URL is injected by the caller (the antibot controller), never hard-coded here. The widget needs no secret key—only the challenge endpoint.
+- **`min: 1` on cost**: a value of 0 would mean no work at all, defeating the purpose; the guard enforces at least one iteration.

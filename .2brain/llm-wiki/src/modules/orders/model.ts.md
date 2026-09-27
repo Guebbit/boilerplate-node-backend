@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/model.ts
-sha256: d90132e99b4931a17890cdf91024bc8eab9a96a658aa433f9664ea5221fedd74
-generated_at: 2026-09-23T19:04:02.550466+00:00
+sha256: d33417d7b9f37d8a345db3790b1e2d44a53b72640d642e0fb8385f4ee87b7728
+generated_at: 2026-09-27T15:11:28.602660+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,42 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema and TypeScript document interface for order records, plus the serialization transform that derives wire-only fields (`totalItems`, `totalQuantity`, `totalPrice`, `transferInstructions`) at read time. Orders embed a frozen product snapshot (not a `ref`) so that later catalogue edits never rewrite purchase history, and the snapshot is deliberately narrower than the live `productSchema` — no stock counters, no image URLs, and a resolved `taxRate` instead of a `taxClass`.
+Defines the Mongoose schema for the Order document and the serialization transform (`applyOrderTransform`) that derives wire-only fields (totals, transfer instructions) from embedded items at the single serialization choke-point. The schema embeds a frozen product snapshot per line rather than referencing the live catalogue, ensuring purchase history is immutable.
 
 ## Key elements
 
-- **`FrozenOrderLineProduct`** — `ProductSnapshot` minus `taxClass`, plus a resolved `taxRate: number`. The unit of what an order line freezes.
-- **`OrderDocumentItem`** — shape of one embedded line: `product` (snapshot), `quantity`, `locale` (the language `title`/`description` were resolved into at freeze time).
-- **`OrderPendingEffect`** — union type currently containing only `'refund'`; tracks post-cancel work the event bus could not guarantee.
-- **`OrderDocument`** — full document interface extending `Order` (contract type) and Mongoose `Document`; overrides `userId?`, `status`, `items`, timestamps, and adds `anonymizeAfter`, `pendingEffects`, `transferReference`, `statusOverrides`, `invoiceNumber`.
-- **`OrderStatusOverride`** — one admin override event (`from`, `to`, `mode`, `reason`, `actorUserId`, `at`); appended by `services/override.ts`, never reordered or deleted.
-- **`OrderModel`** — `Model<OrderDocument>` type alias for use in repositories/services.
-- **`orderLineProductSchema`** — embedded sub-document schema for the snapshot; no `onHand`/`reserved`, no image URLs; carries `taxRate` instead of `taxClass`. `{ timestamps: true }`.
-- **`applyOrderLineProductTransform`** — `applySerialization(orderLineProductSchema)`; maps `_id`→`id`, drops `__v`; no `available` derivation (no stock fields to compute from).
-- **`orderItemSchema`** — embedded item schema (`_id: false`); composes `orderLineProductSchema` + `quantity` + `locale`.
-- **`orderSchema`** _(truncated)_ — top-level Mongoose schema for the order collection; its companion transform uses `sumLineItems`/`orderTotal`/`orderTaxBreakdown`/`bankTransfer*` config to derive the wire fields.
+- **`FrozenOrderLineProduct`** — `ProductSnapshot` minus `taxClass`, plus the resolved decimal `taxRate`. Freezes the rate actually charged, never the class it came from.
+- **`OrderDocumentItem`** — shape of one embedded line: `product` (snapshot), `quantity`, `locale` (language the text was resolved into at purchase time).
+- **`OrderPendingEffect`** — currently `'refund'` only; tracks a cancel consequence not yet completed so it can be retried.
+- **`OrderDocument`** — full document interface. Omits `totalItems`, `totalQuantity`, `totalPrice`, `transferInstructions` (derived, not stored); redeclares `userId` as optional (absent after account erasure); adds `anonymizeAfter`, `pendingEffects`, `transferReference`, `statusOverrides`, `currency`, `orderNumber`.
+- **`OrderStatusOverride`** — one admin override entry (`from`, `to`, `mode`, `reason`, `actorUserId`, `at`). Append-only, never reordered or deleted.
+- **`OrderModel`** — `Model<OrderDocument>` type alias for use in services/repositories.
+- **`orderLineProductSchema`** — Mongoose sub-document schema for the embedded snapshot. Deliberately narrower than `productSchema`: no `onHand`/`reserved` counters, no image URLs. Has its own `{ timestamps: true }`.
+- **`applyOrderTransform`** *(truncated, referenced throughout)* — the single serialization function that computes `totalItems`, `totalQuantity`, `totalPrice`, and `transferInstructions` from `items` before every response.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, the generic mechanism used to build both the order-level and line-product-level transforms.
-- **`src/modules/orders/config.ts`** — supplies `bankTransferBeneficiary`, `bankTransferBic`, `bankTransferIbanFriendly`; consumed by the order transform to build the `transferInstructions` block on the wire.
-- **`src/modules/orders/domain/totals.ts`** — supplies `sumLineItems`, `orderTotal`, and the `LineItem` type; used at serialization to derive `totalItems`, `totalQuantity`, `totalPrice`.
-- **`src/modules/orders/domain/tax.ts`** — supplies `orderTaxBreakdown` and `TaxableLineItem`; used to compute the VAT breakdown included in the serialized response.
-- **`src/modules/orders/domain/lifecycle.ts`** — supplies `isPayable`; referenced in schema/model logic around `payBy` and status transitions.
-- **`src/modules/orders/factories.ts`** — constructs `OrderDocument` instances against this schema; explicitly sets sub-document `createdAt`/`updatedAt` because `orderLineProductSchema` carries `{ timestamps: true }`.
-- **`src/modules/orders/repository.ts`** — the sole query layer for `OrderModel`; all persistence reads/writes go through it rather than this file directly.
-- **`src/modules/orders/services/cancel.ts`** — writes `pendingEffects: ['refund']` in the same conditional write that flips status; the `retryPendingEffects` loop later empties it.
-- **`src/modules/orders/index.ts`** — public barrel re-exporting the types and schema from this module.
-- **`src/modules/cart/services/checkout.ts`** — creates new order documents (the write path that populates the embedded snapshot).
+- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, the base transform this file builds on.
+- **`src/modules/orders/domain/totals.ts`** — supplies `sumLineItems`, `orderTotal`, `LineItem` used inside the transform.
+- **`src/modules/orders/domain/tax.ts`** — supplies `orderTaxBreakdown`, `TaxableLineItem` for VAT computation in the transform.
+- **`src/modules/orders/domain/lifecycle.ts`** — supplies `isPayable` (likely gates the `transferInstructions` or refund-eligibility logic in the transform).
+- **`src/modules/orders/config.ts`** — supplies `bankTransferBeneficiary`, `bankTransferIbanFriendly`, `transferInstructionsFor` for assembling the wire `transferInstructions` block.
+- **`src/modules/orders/factories.ts`** — constructs `OrderDocument` instances; explicitly passes catalogue `createdAt`/`updatedAt` into the embedded snapshot because sub-document timestamps default independently.
+- **`src/modules/orders/repository.ts`** — consumer of `OrderModel` for all DB queries.
+- **`src/modules/orders/services/crud.ts`** — consumer of `OrderModel` for create/read/update/delete.
+- **`src/modules/orders/services/cancel.ts`** — writes `pendingEffects` in the same conditional write that transitions status; the listener later empties the array.
+- **`src/modules/cart/services/checkout.ts` / `reorder.ts`** — upstream callers that create orders (via factories) carrying the snapshot and currency freeze.
+- **`src/modules/delivery/service.ts`** — reads `isPayable`-gated state and `transferReference` to coordinate delivery against payment.
+- **`scenarios/flows/backdate.ts`** — scenario flow that exercises the schema (e.g., backdated `createdAt`).
 
 ## Notes
 
-- **No `ref`, no `populate`.** `orderItemSchema` declares `product: orderLineProductSchema` with no `ref`; there is nothing to join and no un-joined state to handle.
-- **`locale` lives on the item, not the product.** It describes the resolution context of the whole line, not a product attribute. Reading an order must not re-resolve text against the reader's ambient locale.
-- **`taxRate` is frozen, `taxClass` is not stored.** The schema makes the class unreachable; only the resolved decimal rate persists.
-- **Derived fields are never persisted.** `totalItems`, `totalQuantity`, `totalPrice`, `transferInstructions` exist only in the serialized output via the transform; declaring them on `OrderDocument` would falsely imply a stored column.
-- **`transferReference` is intentionally omitted from the wire** by `applyOrderTransform`; it is surfaced only inside `transferInstructions.reference`.
-- **`anonymizeAfter` / `pendingEffects` / `transferReference` / `statusOverrides`** are all omitted from the contract `Order` type and from the wire transform — they are operational metadata, not part of the API.
-- **`statusOverrides` is absent (not `[]`) until first written.** Same "owes nothing vs. never asked" convention as `pendingEffects`.
-- **`userId` is optional** on the document: an erased account leaves a dangling ref that is _intended_ (Art. 17(3)(b)/(e) invoice survival), not a bug.
-- **`_id: false` on `orderItemSchema`** — the OpenAPI `OrderItem` contract is `{product, quantity}` with `additionalProperties: false`, so items carry no internal id.
+- **Embedded, never referenced.** `product` on an order line is a sub-document with no `ref`; `populate()` is structurally impossible. This is intentional: an order records *what was bought*, not what the catalogue says today.
+- **`locale` lives on the item, not the product.** It records the language resolution that happened at order-creation time; reading it later must not re-resolve against the ambient locale.
+- **Totals are never persisted.** They are derived in `applyOrderTransform` every time. Declaring them on `OrderDocument` would falsely claim a stored field.
+- **`anonymizeAfter` + `userId` unset** happen atomically (same write). The order row is never deleted, only PII is scrubbed by `scripts/ops/reap-orders.ts` after the date elapses.
+- **`orderNumber` is assigned once** (`allocateOrderNumber`) and never recomputed. Orders predating the field stay without one; retroactive minting is intentionally forbidden.
+- **`currency` is frozen** from `shopCurrency()` at write time; a later config change cannot alter historical orders.
+- **`transferReference` is not part of the wire `Order` contract.** It is exposed only inside `transferInstructions.reference` and omitted by the transform from the top-level shape.
+- **`statusOverrides`** is strictly append-only and never emptied. Absent (not `[]`) means no override ever occurred.
+- **`orderLineProductSchema` has its own `{ timestamps: true }`.** Factories must explicitly pass the catalogue row's dates into the snapshot rather than relying on defaults.

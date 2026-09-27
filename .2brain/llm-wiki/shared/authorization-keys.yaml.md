@@ -1,7 +1,7 @@
 ---
 source: shared/authorization-keys.yaml
-sha256: 4e737332d981c0892323e1abb7104442426e8b697fc7838792aab3701cc653be
-generated_at: 2026-09-23T17:33:11.606233+00:00
+sha256: f935bd406ec6c416d0354dc342f86f4cd6a18b3bdee56ed52fffa122f869b14f
+generated_at: 2026-09-27T14:01:11.779999+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single, canonical registry of every permission key in the system. It is the only place a key may be introduced and the only place assignment validates against. It is committed with identical bytes in both backend boilerplates (`boilerplate-node-backend`, `boilerplate-php-laravel-backend`) and is explicitly excluded from both formatters to prevent a silent fork.
+The single canonical registry of every permission key in the system. A key may only be introduced here; deployment-time role assignment validates against this file rather than against free-form strings. The file is committed byte-identical in `boilerplate-node-backend` and `boilerplate-php-laravel-backend` and is excluded from both formatters to prevent a silent fork.
 
 ## Key elements
 
-- **`version`** — integer, currently `1`; bump on breaking schema changes.
-- **`actions`** — closed list of verbs a key may use: `read`, `create`, `update`, `delete`, `checkout`, `sweep`, `override`. `write` and `manage` are deliberately absent.
-- **`scopes`** — the two mutually exclusive caller scopes: `tenant` (bare keys) and `platform` (`platform.`-prefixed keys). A caller resolves to exactly one.
-- **`keys`** — the array of permission definitions. Each entry carries `key` (dot-shaped ID), `module`, `subject` (CASL type), `action`, `scope`, `description`, and optionally:
-    - `conditions` — ABAC filter fragment (e.g. `active: true`, `deletedAt: null`, `userId: $caller.id`) compiled into the read query; no expression language, only `$caller.<field>` substitution.
-    - `stepUp` — `critical` or `sensitive`; forces a re-authentication window before the action is permitted.
-    - `deniedCode` — i18n code used in the 403 response body instead of the generic message.
+- **`actions`** — Closed vocabulary of allowed verbs: `read`, `create`, `update`, `delete`, plus four domain-specific additions (`checkout`, `sweep`, `override`, `start`). `write` and `manage` are deliberately absent.
+- **`scopes`** — Two mutually exclusive scopes: `tenant` (bare keys, one shop's data) and `platform` (keys prefixed `platform.`, shared operational data).
+- **`keys`** — The permission entries. Each key carries `key`, `module`, `subject`, `action`, `scope`, `description`, and optionally `conditions`, `stepUp`, and `deniedCode`.
+- **Key shape** — `<family>.<breadth>.<action>` where breadth is always explicit (`self` or `any`). No wildcards of any kind.
+- **`conditions`** — ABAC filter fragments (e.g. `active: true`, `userId: $caller.id`) that must also hold of the row. Uses a single placeholder grammar (`$caller.<field>`); no expression language.
+- **`stepUp`** — Optional tier (`critical` | `sensitive`) that requires the caller to re-authenticate within a window before the action is permitted.
+- **`deniedCode`** — Optional i18n key for a specific 403 message (e.g. `EMAIL_NOT_VERIFIED` on `cart.self.checkout`).
+- **`version`** — Currently `1`; versioning bump for schema evolution.
 
 ## Relationships
 
-- **`shared/authorization-roles.yaml`** — roles reference keys defined here. A role is an assignment of keys; it cannot introduce a key that is absent from this file. Validation runs against this registry, not against free-form strings.
-- **`shared/authorization-conformance.yaml`** — conformance checks verify that every key actually used in code or in a role definition appears in this file and that the declared shape (`family.breadth.action`) is well-formed.
+- **`shared/authorization-roles.yaml`** — Roles defined there assign subsets of the keys declared here. Assignment is validated against this file's key list, so a role cannot reference a key that does not exist in this registry.
+- **`shared/authorization-conformance.yaml`** — Conformance rules that check structural invariants of the keys (e.g. scope/breadth consistency, presence of required fields). The keys file is the data those rules operate on.
 
 ## Notes
 
-- **No wildcards, no `manage`.** A key grants exactly what its name says. There is no per-family or scope-wide grant.
-- **Breadth is mandatory.** `self` or `any` always appears in the key. An omitted breadth is treated as a bug, not a default.
-- **Byte-identity is load-bearing.** The file must never be reformatted. It is excluded from `.prettierignore` and `dprint.json` for this reason.
-- **Tenancy is not in `conditions`.** `tenantId: $caller.tenantId` is injected by the resolver on every tenant-scope rule; no key can omit it and no request parameter can override it.
-- **Field names are the domain model's, not the storage schema's.** Each backend maps `userId` → `user_id` (or equivalent) when building its own query.
-- **Keyless modules are intentional.** `wishlist`, `account`, and most of `cart` have no keys because access follows from authentication (being the owner), not from a role.
-- **`checkout` vs `create` on Order.** `cart.self.checkout` is distinct from `orders.any.create`; reusing `create` would produce an identical CASL tuple once packed for the client.
-- **`deletedAt: null` appears only on `self` reads.** Soft-deleted rows remain visible to `any`-breadth staff reads. Payments have no such column and carry no such condition.
+- **No wildcards.** There is no per-family or scope-wide grant. `manage` is not an action and grants nothing.
+- **Breadth is mandatory.** An omitted breadth is treated as a bug. `self` means the key is genuinely scoped to the caller's own rows (or the default narrow reading a family gives a customer); `any` covers everything else, including keys with no owner to scope by.
+- **Tenancy is injected, not written.** Every tenant-scope rule gets `tenantId: $caller.tenantId` added by the resolver; no key declares it explicitly and no request parameter can supply it.
+- **`deletedAt: null` is asymmetric.** Present only on `self`-breadth reads of subjects that have the column (`Product`, `Locale`, `Order`). Staff (`any`-breadth) see soft-deleted rows; customers do not. `Payment` has no such column and no such condition.
+- **Keyless modules are intentional.** `wishlist`, `account`, and most of `cart` have no keys because they are the caller's own data, gated by signed-in identity rather than by role. The sole exception is `cart.self.checkout`, which protects an account-level fact (address verification).
+- **Field names are the model's, not the storage's.** Conditions use the domain vocabulary; each backend maps them to its own column names when compiling a query.
+- **The file is formatter-excluded** in both repos (`.prettierignore` / `dprint.json`) for the same reason `spectral.yaml` is excluded: two formatters over one shared artefact produces a silent fork.

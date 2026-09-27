@@ -1,7 +1,7 @@
 ---
 source: src/app/system-routes.ts
-sha256: 40393a70c8a12aba0378fd5c1a1b3f642b7208f3a0f725df0e1884b4a2b1d78e
-generated_at: 2026-09-23T17:36:19.828251+00:00
+sha256: f21fab7d0dfeb78db3fc5983375fc014acbd11439da4f86f587c58904c4d3031
+generated_at: 2026-09-27T14:03:19.088497+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,19 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines a minimal Express router for process-level "system" endpoints (a root health/ping). It lives outside `src/modules` because it has no domain ownership — it simply confirms the server process is up.
+Defines two system-level Express routes — a root ping and a Kubernetes readiness probe — that report process health rather than domain state. It is deliberately placed in `src/app/` (not `src/modules/`) so these endpoints have no business-logic owner.
 
 ## Key elements
 
-- **`router`** (exported) — an Express `Router` instance; the only export of this file.
-- **`GET /`** — a single handler that calls `successResponse` with `{ status: 'ok' }`, HTTP 200, and the message `"API is running"`. Serves as a liveness ping.
+- **`router`** (exported `express.Router`) — the route collection, mounted at `/` by the app entry point.
+- **`GET /`** — public ping; responds with `{ status: 'ok' }` and HTTP 200 via `successResponse`.
+- **`GET /readyz`** — readiness probe; returns a bare `200` or `503` with an **empty body**, based on `isServerReady()`.
 
 ## Relationships
 
-- **`src/app/routes.ts`** — imports and mounts this file's `router` at the application root path (`/`).
-- **`src/infrastructure/http/response.ts`** — provides the `successResponse` helper used to format the ping reply (JSON body, status code, message).
+- **`src/app/routes.ts`** — imports `router` from this file and mounts it at the `/` path.
+- **`src/infrastructure/http/response.ts`** — provides the `successResponse` helper used by the ping route.
+- **`src/infrastructure/runtime/readiness.ts`** — provides `isServerReady()` which the `/readyz` route calls to decide 200 vs 503.
 
 ## Notes
 
-- The doc comment mentions that contract/docs endpoints are also "mounted alongside" by `routes.ts`, but this file itself only registers the `/` ping. Any additional endpoints are defined elsewhere and attached by the mounting file.
-- The handler ignores the incoming request (`_request`), so it is stateless and safe to hit from any client for health checks.
+- `/readyz` intentionally skips the standard JSON envelope. The comment explains the contract: an orchestrator's probe reads only the status code, and omitting the body avoids allocating a response on an endpoint polled every few seconds for the container's entire lifetime.
+- Both handlers ignore the incoming request object (`_request`), indicating neither depends on query params, headers, or body.

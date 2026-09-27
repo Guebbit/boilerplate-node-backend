@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/pending-effects.test.ts
-sha256: cd835e03924117348eeeec811a56501c1969b9d6cc2550fd9f739770a1e5276a
-generated_at: 2026-09-23T19:11:11.944967+00:00
+sha256: ca3d122495194326cf575dee432288afc0546d3e7ec3e73f7b00e4ead7e931e9
+generated_at: 2026-09-27T15:18:34.174697+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the "pending effects" durability mechanism: when `cancelById` fires `ORDER_CANCELLED` and the refund handler throws, a `pendingEffects: ['refund']` marker must survive in the order document, and `retryPendingEffects` must later re-announce the event to discharge it. All assertions read back from a real Mongo instance to verify actual write semantics (conditional `$set`, conditional `$pull`, sparse-index query) rather than service return values.
+Integration test suite verifying that a failed refund during order cancellation leaves a durable `pendingEffects` marker on the order document, and that `retryPendingEffects` correctly re-announces the refund, drains the marker on success, preserves it on repeated failure, and respects a configurable grace window. Runs against real MongoDB because the guarantees under test are properties of the actual writes (conditional `$set`/`$pull`, sparse-index query), not of in-memory logic.
 
 ## Key elements
 
-- **`seedOrder()`** — Creates a fresh user (unique `buyer-N@example.com`), a product, and a `pending` order. The `seeded` counter guarantees unique emails across tests.
-- **`storedEffects(orderId)`** — Re-reads the order via `orderRepository.findById` and returns `order?.pendingEffects`. Always hits the DB; never trusts the in-memory object returned by the service.
-- **`describe('cancelById — writing the intent down')`** — Four cases: marker persists when refund throws; marker drains on success; no marker when `refund: false`; marker excluded from serialized output (`withActions`).
-- **`describe('retryPendingEffects')`** — Five cases: re-announcement settles a stuck order; second pass is a no-op (idempotence); marker retained if retry also throws; orders owing nothing are skipped; grace window defers the sweep.
-- **Hooks** — `beforeEach` sets `NODE_ORDER_EFFECT_RETRY_MINUTES=0` (zero grace) and resets the `seeded` counter; `afterEach` deletes the env var and calls `resetDomainEvents()`.
+- **`seedOrder()`** — creates a fresh user (unique email via a `seeded` counter), a product, and a pending single-item order; returns the order.
+- **`storedEffects(orderId)`** — re-reads the order from `orderRepository.findById` and returns its `pendingEffects` array (or `undefined`).
+- **`describe('cancelById — writing the intent down')`** — four tests:
+  - Marker survives when the refund handler throws.
+  - Marker is drained (→ `[]`) when the refund succeeds.
+  - No marker is written when the operator passes `{ refund: false }`.
+  - `pendingEffects` is stripped from the serialized API response via `orderService.withActions`.
+- **`describe('retryPendingEffects')`** — five tests:
+  - A stuck order is re-announced and settles on the second attempt.
+  - A second pass is a no-op (idempotent; returns `0`, no duplicate refund).
+  - Marker is preserved when the retry handler also throws.
+  - Orders that owe nothing are ignored (no announcement, returns `0`).
+  - Grace window (`NODE_ORDER_EFFECT_RETRY_MINUTES = '5'`) defers the sweep; marker remains.
+- **`beforeEach`** — zeroes the grace window env var and resets the `seeded` counter.
+- **`afterEach`** — deletes the env var and calls `resetDomainEvents()`.
 
 ## Relationships
 
-- **`src/modules/orders/services/index.ts`** — The system under test: `orderService.cancelById`, `orderService.retryPendingEffects`, `orderService.withActions`.
-- **`src/modules/orders/repository.ts`** — `orderRepository.findById` is used to verify what Mongo actually stored (the whole point of real-DB tests).
-- **`src/modules/orders/events.ts`** — Exports the `ORDER_CANCELLED` event constant that the tests subscribe to and assert on.
-- **`src/kernel/events.ts`** — `onDomainEvent` / `resetDomainEvents` provide the event bus the tests hook into; the refund handler is registered here and made to throw or succeed.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem` for order seeding.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` for seeding.
-- **`src/modules/users/tests/factories.ts`** — `createUser` for seeding.
-- **`tests/support/callers.ts`** — `asAdmin()` supplies the authenticated caller passed to service methods.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` provisions the real Mongo instance the tests run against.
+- **`@kernel/events`** — `onDomainEvent` registers per-test stub handlers for `ORDER_REFUND_OWED`; `resetDomainEvents` clears them between tests.
+- **`../../events`** — exports the `ORDER_REFUND_OWED` event constant used to subscribe and assert.
+- **`../../repository`** — `orderRepository.findById` is the read path used to verify the document's `pendingEffects` state after writes.
+- **`../../services/index`** — `orderService.cancelById` and `orderService.retryPendingEffects` are the SUTs; `orderService.withActions` is used to confirm serialization exclusion.
+- **`@modules/orders/tests/factories`** — `createOrder`, `toOrderItem` build the order fixture.
+- **`@modules/products/tests/factories`** — `createProduct` seeds the product referenced by the order item.
+- **`@modules/users/tests/factories`** — `createUser` seeds the buyer.
+- **`@tests/callers`** — `asAdmin()` provides the authorization context passed to service calls.
+- **`@tests/setup-test-db`** — `setupTestDb()` provisions and tears down a real Mongo instance for the suite.
 
 ## Notes
 
-- **Real Mongo, not stubs.** The module docblock states the rationale: a stubbed repository would only assert the stub. The guarantees under test (conditional writes, sparse index) are properties of the persistence layer.
-- **Grace window is zeroed by default.** `NODE_ORDER_EFFECT_RETRY_MINUTES=0` makes a marker written "now" immediately due. The single test that needs a non-zero window sets it to `'5'` inline and restores cleanup via `afterEach`.
-- **`storedEffects` vs. service return.** Tests deliberately re-read from the repo after each operation. The service may return a document that hasn't been flushed or that includes transient state; the DB read is the source of truth for "what survived."
-- **`seeded` counter is file-local.** It resets in `beforeEach` so each test file run starts at `buyer-1`, keeping email uniqueness within a single test run without coupling to a global counter.
+- Real MongoDB is used deliberately; a stubbed repository would make the tests tautological.
+- `NODE_ORDER_EFFECT_RETRY_MINUTES` controls the sweep's grace window; tests zero it in `beforeEach` so markers are immediately eligible, then one test overrides it to `'5'` to exercise the deferral path.
+- The `seeded` counter exists because `users_email` has a unique index — without it, sequential tests would collide.
+- `pendingEffects` is internal bookkeeping (similar to `anonymizeAfter`); it must never appear in API responses. One test explicitly asserts this via `withActions`.
+- The `retryPendingEffects` "keeps the marker when retry throws" test encodes the invariant that clearing the marker on failure would destroy the only record that the refund is still owed.

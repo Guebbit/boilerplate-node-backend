@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/metrics-registry.ts
-sha256: f98068fc7c6eeb5326f9e856f3d9d136b4fee95504d73777f09435efb6f74bd8
-generated_at: 2026-09-23T17:49:20.754786+00:00
+sha256: 28a17f7b477f334d6232a952d801e44fbfc9df004caf6af8d061ec28a286c78d
+generated_at: 2026-09-27T14:13:16.740682+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Holds the single shared `prom-client` registry instance and the process-wide metrics that describe the runtime itself (uptime, heap ceiling, default Node.js collectors). Extracted from `metrics-http.ts` so every module's `metrics.ts` file has a clearly-named import source for the registry they register against, rather than reaching into a file named for HTTP.
+Holds the single shared prom-client registry instance and the process-wide metrics that describe the runtime itself (default Node.js collectors, uptime, heap ceiling, crontab job outcomes). It exists so that every domain module's `metrics.ts` registers against one known instance, and so the `/metrics` scrape endpoint and the observability overview controller can reach all domain counters through a single, name-addressable registry rather than importing each module individually.
 
 ## Key elements
 
-- **`metricsRegistry`** – Re-export of prom-client's `register` (the library's default global registry). Every module in the project registers its metrics onto this same instance.
-- **`collectDefaultMetrics({ register: metricsRegistry })`** – One call that installs prom-client's built-in Node.js/process collectors (CPU, memory, event-loop lag, GC, etc.).
-- **`_processUptimeGauge`** – Gauge exposing `process_uptime_seconds`; prom-client does not ship this.
-- **`_heapSizeLimitGauge`** – Gauge exposing `nodejs_heap_size_limit_bytes` (the fixed V8 heap ceiling). Distinct from `nodejs_heap_size_total_bytes` (committed, grows on demand), so `used / limit` is the meaningful OOM-proximity ratio for alerting.
-- **`getPrometheusMetrics(): Promise<string>`** – Serializes the entire registry in Prometheus text-exposition format; this is the response body of the `/metrics` scrape endpoint.
+- **`metricsRegistry`** — Re-export of prom-client's default global `register`. The canonical instance every module's `metrics.ts` registers onto; also what `GET /observability/metrics/overview` queries by metric name.
+- **`collectDefaultMetrics({ register })`** — One-time call (module scope) that installs prom-client's built-in Node.js collectors (CPU, memory, event-loop lag, GC, etc.).
+- **`process_uptime_seconds` (Gauge)** — Fills a gap prom-client does not ship; `collect()` returns `process.uptime()` at scrape time.
+- **`nodejs_heap_size_limit_bytes` (Gauge)** — Exposes `getHeapStatistics().heap_size_limit`, the fixed V8 ceiling. Intended for the `used / limit` OOM alert ratio (as opposed to `used / total`, which is near 1 on a healthy process).
+- **`job_last_success_timestamp_seconds` (Gauge, labeled `job`)** — Reads `listLeaseSummaries()` at scrape time to report each crontab job's last success epoch. Skips the query when Mongo is disconnected. Jobs with no recorded success are left unset (not zero) to avoid false staleness alerts on fresh deploys.
+- **`getPrometheusMetrics()`** — Returns `registry.metrics()`, the Promise<string> body served by the `/metrics` scrape endpoint. Runs every registered `collect()` hook and renders the full registry in Prometheus text format.
 
 ## Relationships
 
-- **`metrics-http.ts`** – Historical parent; this file was split out of it. HTTP-specific metrics (request count, duration, status codes) still live there but register onto `metricsRegistry` defined here.
-- **`metrics-queue.ts`** – Registers queue-related metrics onto `metricsRegistry`.
-- **Each `src/modules/*/metrics.ts`** (account, audit-logs, cart, inventory, orders, payments, webhooks) and **`src/infrastructure/persistence/metrics.ts`** – All import `metricsRegistry` from this file so their domain counters/gauges land in the same scrape.
-- **`get-observability-metrics-overview.ts`** – Reads domain counter values _by name_ off `metricsRegistry` (rather than importing the owning module) to build the `GET /observability/metrics/overview` response.
-- **`routes.ts`** (observability) – Wires `getPrometheusMetrics` to the `/metrics` endpoint and mounts the overview route.
-- **`metrics-overview.test.ts` / `routes.test.ts`** – Unit-test the overview and scrape endpoints that depend on this registry.
+- **`src/infrastructure/persistence/lease.ts`** — Imports `listLeaseSummaries` for the `job_last_success_timestamp_seconds` gauge's `collect()` hook.
+- **`src/infrastructure/runtime/database.ts`** — Imports `connection` to gate the lease query on Mongo readiness before a scrape.
+- **`src/infrastructure/observability/metrics-http.ts`** — This file was extracted from `metrics-http.ts`; the HTTP endpoint now calls `getPrometheusMetrics()` here rather than holding the registry itself.
+- **Domain `metrics.ts` files** (`account`, `audit-logs`, `cart`, `inventory`, `orders`, `persistence`) — Each imports `metricsRegistry` and registers its own counters/gauges/histograms onto it.
+- **`src/modules/observability/controllers/get-observability-metrics-overview.ts`** — Queries domain counters by metric name off `metricsRegistry` rather than importing the owning module.
+- **`src/modules/observability/controllers/get-observability-metrics.ts`** — Serves the `/metrics` endpoint using `getPrometheusMetrics()`.
+- **`src/modules/observability/tests/unit/get-observability-metrics.test.ts`** and **`metrics-overview.test.ts`** — Unit-test the serialization and overview endpoints backed by this registry.
 
 ## Notes
 
-- The two gauge variables are intentionally underscore-prefixed (`_processUptimeGauge`, `_heapSizeLimitGauge`) solely to satisfy lint "unused variable" rules; the `new Gauge` constructor's side-effect (self-registration) is the actual purpose, not the binding.
-- Both gauges use a non-arrow `collect()` method so that `this` refers to the gauge instance at scrape time.
-- `metricsRegistry` _is_ prom-client's global default (`register`), not a custom instance. Any code that imports `register` directly from `prom-client` is implicitly using the same object.
-- Alerting on `nodejs_heap_size_used_bytes / nodejs_heap_size_total_bytes` will fire permanently on a healthy process (ratio hovers near 1). Use the `_limit` gauge for meaningful OOM thresholds (see `HighHeapUsage` in `prometheus.alert-rules.yaml`).
+- The three underscore-prefixed gauge variables (`_processUptimeGauge`, `_heapSizeLimitGauge`, `_jobLastSuccessGauge`) are assigned to satisfy lint no-unused-vars; the constructor side-effect (self-registration) is the actual purpose.
+- `job_last_success_timestamp_seconds` is the only gauge whose `collect()` performs I/O. It intentionally swallows errors (`.catch(() => undefined)`) so a lease-collection failure never delays or fails a scrape.
+- `collect()` methods are non-arrow functions so that `this` refers to the gauge instance (required by prom-client's `Gauge` API).
+- The module doc points to `docs/tools/opentelemetry.md` for broader context on how this registry fits into the project's observability stack.

@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/i18n/overrides.ts
-sha256: 9092518c23c68adfb0ad2ed133f4bf6d83d13faa3878daab6bf1e5542573e88e
-generated_at: 2026-09-23T17:47:34.026289+00:00
+sha256: f43741464b37d2911585bde2bd1a3021346d1ea13a7216d8dcc0cdfa92554b4e
+generated_at: 2026-09-27T14:12:20.743878+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Database overlay for i18n: admin-edited translation copy layered on top of the static dictionary files under `./catalog`. The module is deliberately one-directional (nothing imports back into it) so the entire feature can be removed by deleting this file plus two boot-sequence lines at the composition root.
+Implements the database overlay for i18n translations: admin-edited copy layered on top of the deployed dictionary files under `./catalog`. It is deliberately isolated — nothing in the codebase imports this module back — so the entire feature can be removed by deleting this file and its two boot-sequence call sites.
 
 ## Key elements
 
-- **`LocaleOverrideProvider`** (type) — `() => Promise<Record<string, Record<string, unknown>>>`. Returns nested override trees keyed by locale. Nested (not flat) because only the `locales` module can safely expand dotted keys; infrastructure must not redo that.
-- **`registerLocaleOverrideProvider`** — Sets (or clears) the provider. Called once at boot by the composition root. `undefined` is the valid default state (tests get deployed files only).
-- **`resetLocaleOverrides`** — Restores every supported language to its deployed file via `i18next.addResourceBundle`. Used for shutdown and tests.
-- **`applyLocaleOverrides`** — Resets all locales, then merges the given override trees with `deep: true, overwrite: true`. Skips and logs unsupported locales.
-- **`refreshLocaleOverrides`** — Pulls overrides from the registered provider and applies them. Never rejects; a failed read leaves the last good overlay in place (stale copy preferred over reverting copy).
-- **`getOverrideRefreshMs`** — Reads `NODE_LOCALE_OVERRIDE_REFRESH_MS` (default 60 000, min 1) via `environmentNumber`.
-- **`startLocaleOverrideRefresh`** / **`stopLocaleOverrideRefresh`** — Start/stop an `unref`-ed interval that calls `refreshLocaleOverrides`, so edits made on one worker reach others within the staleness window.
+- **`LocaleOverrideProvider`** (type) — A function returning `Promise<Record<string, Record<string, unknown>>>`, i.e. nested override trees keyed by locale. Nested rather than flat so the `locales` module (the only safe key-expander) stays the sole authority on dotted-key resolution.
+- **`registerLocaleOverrideProvider(provider?)`** — Sets or clears the module-level provider. Called by the composition root; passing `undefined` is the valid "no overrides" state used by unit tests.
+- **`isLocaleOverrideAvailable()`** — Returns whether a provider is registered. Used by the caller before starting the refresh timer to avoid a no-op interval.
+- **`resetLocaleOverrides()`** — Synchronously restores every supported locale to its deployed file via `i18next.addResourceBundle`. Used for shutdown and tests, **not** as the failure path.
+- **`applyLocaleOverrides(overridesByLocale)`** — Calls `resetLocaleOverrides()` first (synchronously, so no observer sees a transient file-only state), then merges each locale's nested overrides with `deep` and `overwrite` both true. Logs a warning for locales that have no deployed dictionary.
+- **`refreshLocaleOverrides()`** — Pulls overrides from the registered provider and applies them. Never rejects: a failed DB read logs a warning and keeps the last-good overlay.
+- **`getOverrideRefreshMs()`** — Reads `NODE_LOCALE_OVERRIDE_REFRESH_MS` (default 60 000) via `environmentNumber`.
+- **`startLocaleOverrideRefresh()`** — Starts a `setInterval` (unref'd) that calls `refreshLocaleOverrides` on the configured period. Idempotent.
+- **`stopLocaleOverrideRefresh()`** — Clears the interval and resets the handle. Called by shutdown and tests.
 
 ## Relationships
 
-- **`./catalog`** — Imports `listSupportedLocales` and `readLocaleDictionary` to determine supported locales and restore the file baseline.
-- **`@infrastructure/adapters/logger`** — Imports `logger` for warn-level diagnostics on skipped locales and provider failures.
-- **`@infrastructure/runtime/environment`** — Imports `environmentNumber` to read the refresh interval from the environment.
-- **`src/infrastructure/i18n/index.ts`** — Barrel file; re-exports this module (and `catalog`) for external consumers.
-- **`src/app.ts` / `src/app/demo.ts`** — Composition root: calls `registerLocaleOverrideProvider` and the two boot-sequence lines (`startLocaleOverrideRefresh` / `stopLocaleOverrideRefresh`).
-- **`src/infrastructure/runtime/server-lifecycle.ts`** — Lifecycle hooks that call `startLocaleOverrideRefresh` at boot and `stopLocaleOverrideRefresh` at shutdown.
-- **`src/modules/locales/controllers/*`** (`write-locale-entries`, `delete-locale-entry`, `delete-locale`) — Admin write paths that trigger `refreshLocaleOverrides` so the edit is visible without waiting for the next interval tick.
-- **`tests/unit/infrastructure/i18n/overrides.test.ts`** — Unit tests exercising the apply/reset/refresh logic without a live database.
+- **`./catalog`** — Imports `listSupportedLocales` and `readLocaleDictionary` to enumerate supported languages and read the file baseline for reset/apply.
+- **`@infrastructure/adapters/logger`** — Imports `logger` for the two warning paths (skipped locales, unavailable provider).
+- **`@infrastructure/runtime/environment`** — Imports `environmentNumber` to resolve the refresh interval from the environment.
+- **`src/app.ts` / `src/app/demo.ts`** — Boot-sequence callers: register the provider, start the refresh timer on startup, stop it on shutdown.
+- **`src/modules/locales/module.ts` / `src/modules/locales/services/overlay.ts`** — The composition root and the database-backed provider that gets registered here.
+- **`src/infrastructure/i18n/index.ts`** — Barrel file; re-exports (or omits) this module's API.
+- **`src/infrastructure/runtime/server-lifecycle.ts`** — Likely the shutdown hook that calls `stopLocaleOverrideRefresh`.
+- **`tests/unit/infrastructure/i18n/overrides.test.ts`** — Unit tests exercising apply/reset/refresh behaviour without a running server.
 
 ## Notes
 
-- **Per-process state.** `i18next` resource bundles live in each worker's memory. The interval refresh (not a lease) is intentional: a lease would elect one runner and starve the other N−1 workers of the update. The doc comment explicitly rejects `withLease` for this reason.
-- **Failure semantics.** A throwing provider is swallowed; the last successfully applied overlay stays. This is by design—stale copy is preferred over a bundle that reverts to file baseline on every transient DB error.
-- **`unref` on the timer.** The interval never keeps the process alive. A worker that has nothing else to do exits cleanly even with a pending refresh.
-- **Stryker pragmas.** `// Stryker disable all … // Stryker restore all` wraps the warn-only log paths so mutation testing doesn't flag the intentionally dead `throw` alternatives.
-- **No cross-module expansion of dotted keys.** The override trees are already nested. The `locales` module owns the dotted-key → nested-object expansion (with `__proto__` guard) and is the only place that logic lives.
+- **Isolation contract:** Nothing imports this module. Deleting the file plus its two boot-sequence lines removes the feature with zero refactor.
+- **Failure semantics:** A provider that throws leaves the last-good overlay intact (stale copy is preferable to a self-reverting one). `resetLocaleOverrides` is explicitly *not* the failure path.
+- **Per-process state:** The i18next resource bundle is per-worker. The refresh interval is therefore **not** behind a lease — every worker must apply its own copy, or N-1 workers stay stale indefinitely.
+- **Unref'd timer:** `startLocaleOverrideRefresh` calls `.unref()` so the interval never prevents the process from exiting.
+- **Stryker suppression:** The two `logger.warn` branches are wrapped in `// Stryker disable all` / `restore all` to keep mutation-testing coverage honest without penalising the intentional no-op catch.

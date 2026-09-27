@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/controllers/post-checkout.ts
-sha256: 074dd0c5e7859467d236e0a070599c283269a14ba73f7a9b5da42d57e6db201c
-generated_at: 2026-09-23T18:29:40.194490+00:00
+sha256: a577ba04800a71ffe186c79d8312e3d7a9fd4b76d271e21bb7de1d085be3c316
+generated_at: 2026-09-27T14:43:58.524253+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for `POST /cart/checkout`. It validates the request body, delegates to `cartService.orderConfirm`, records the `cart_checkout_total` metric on every outcome, and on success transforms the resulting order document into its wire shape before sending a `201` response.
+HTTP adapter for `POST /cart/checkout`. It validates the request body, delegates to `cartService.orderConfirm` to convert the cart into an order, records the `cart_checkout_total` metric on every outcome (success, business-rejection, or thrown error), and shapes the success response via `orderService.withActions`.
 
 ## Key elements
 
-- **`postCheckout(request, response)`** — The sole export. Orchestrates the full checkout flow:
-    1. Extracts `userId` from `request.authContext`.
-    2. Parses the body with the `CheckoutBody` Zod schema (`request.body ?? {}` guards against Express 5 leaving `body` undefined).
-    3. Calls `cartService.orderConfirm(userId, callerContext, addressId, shippingMethodId, paymentMethod, notes)`.
-    4. On success: increments `cart_checkout_total{status="success"}`, calls `orderService.withActions` to produce the wire-shaped order, and sends `201` with the i18n message `orders.creation-success`.
-    5. On failure or thrown error: increments `cart_checkout_total{status="failure"}`, then delegates to `refused()` or `catchAs()` respectively.
+- **`postCheckout`** (exported) — The sole export. Reads `request.authContext!.id`, parses the body against the `CheckoutBody` Zod schema, then chains:
+  1. `cartService.orderConfirm(userId, callerContext, addressId, paymentMethod, notes)`
+  2. On resolution: increments `cartCheckoutTotal`, returns early via `refused()` if the result is a business rejection; otherwise calls `orderService.withActions` to produce the wire-shaped `CheckoutResponse` and sends a **201** via `successResponse`.
+  3. On rejection (`.catch`): increments `cartCheckoutTotal` with `status: 'failure'`, then delegates to `catchAs(response, 'postCheckout')`.
 
 ## Relationships
 
-- **`src/modules/cart/services/index.ts`** — Calls `cartService.orderConfirm`, the core business logic for converting a cart to an order.
-- **`src/modules/orders/index.ts` / `src/modules/orders/services/index.ts`** — Calls `orderService.withActions` to transform the `OrderDocument` into the response wire shape (resolves each line's live `current` picture).
-- **`src/modules/cart/metrics.ts`** — Imports and increments `cartCheckoutTotal`.
-- **`src/infrastructure/http/controller.ts`** — Uses `parseBody`, `refused`, and `catchAs` for request validation and error short-circuiting.
-- **`src/infrastructure/http/response.ts`** — Uses `successResponse` for the `201` reply.
-- **`src/infrastructure/http/request.ts`** — Uses `callerContextOf` to extract caller metadata for the service call.
-- **`src/infrastructure/i18n/index.ts`** — Uses `t('orders.creation-success')` for the localized success message.
-- **`src/modules/cart/routes.ts`** — Presumably registers this handler on the `POST /cart/checkout` route.
-- **`src/types/index.ts`** — Imports `CheckoutResponse` as the typed response envelope.
+- **`src/infrastructure/http/controller.ts`** — provides `parseBody`, `refused`, and `catchAs` (body validation, rejection short-circuit, error serialization).
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf` to extract the authenticated caller context for the service call.
+- **`src/infrastructure/http/response.ts`** — provides `successResponse` to send the 201 payload.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — provides the `t()` translation function for the success message (`orders.creation-success`).
+- **`src/modules/cart/services/index.ts`** — source of `cartService.orderConfirm`, the actual cart→order business logic.
+- **`src/modules/cart/metrics.ts`** — source of the `cartCheckoutTotal` Prometheus counter.
+- **`src/modules/orders/index.ts` / `services/index.ts`** — source of `orderService.withActions`, which resolves the `OrderDocument` into its API wire shape.
+- **`src/types/index.ts`** — source of the `CheckoutResponse` type used in the success payload.
+- **`src/modules/cart/routes.ts`** — registers this handler on the `POST /cart/checkout` route.
 
 ## Notes
 
-- **Metric-before-refusal:** `cartCheckoutTotal.inc()` fires _before_ `refused()` is called. A refused checkout still counts as a business-level result; skipping it would undercount.
-- **`?? {}` body guard:** Express 5 can leave `request.body` as `undefined` when no body is sent. The `?? {}` is intentional, not defensive over-coding.
-- **`withActions` vs `.toJSON()`:** The response requires `orderService.withActions` (not a plain serialization) because it resolves each line-item's live `current` picture. A bare `.toJSON()` would omit those fields entirely.
-- **Single metric increment per call:** The `.then` and `.catch` branches are mutually exclusive, so the metric increments exactly once per request.
+- **Body fallback:** `request.body ?? {}` is required because Express 5 leaves `body` as `undefined` when the client sends no body; a checkout with an empty body is legal.
+- **Metric timing:** `cartCheckoutTotal.inc` fires *before* `refused()` on the business-rejection path and *before* `catchAs` on the error path, guaranteeing exactly one increment per call regardless of outcome.
+- **`withActions` vs `.toJSON()`:** The comment notes that `withActions` is the single point where an `OrderDocument` becomes the wire shape and resolves each line's live `current` picture; calling `.toJSON()` directly would omit that data from the response.
+- **Non-null assertion:** `request.authContext!` assumes the auth middleware has already populated the context; no guard exists in this file.

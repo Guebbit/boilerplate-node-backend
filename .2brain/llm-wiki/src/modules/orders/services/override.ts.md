@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/override.ts
-sha256: 9ea8e73fb290bda5ccc02675dbd33e8734d3d4aa829604ef7bb730b408085c6b
-generated_at: 2026-09-23T19:08:01.173976+00:00
+sha256: 2f2aa961cbe778547148a8763c16d61de762f68f4875b1c014be9207e366b1ee
+generated_at: 2026-09-27T15:15:05.695550+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the admin override — the sole mechanism that may move an order to a status the normal `ORDER_LIFECYCLE` would refuse, or advance status without the parcel/email side-effects of the regular delivery doors. Two public entry points (`overrideStatus`, `forceMove`) share a single internal write path (`applyOverride`) so that the history row, domain event, and audit record are always produced together and can never drift.
+The admin override service — the single sanctioned path for moving an order's status outside `ORDER_LIFECYCLE`'s normal gates. Two public entry points (`overrideStatus` for manual correction, `forceMove` for delivery's forced ship/deliver) both funnel through one private `applyOverride` so that the history row, domain event, and audit record are emitted exactly once and can never drift between callers. `orders` remains the sole status writer even here; `delivery` never touches `order.status` directly.
 
 ## Key elements
 
-- **`applyOverride`** (module-private) — The one write path. Performs the conditional repository write, optionally commits the inventory reservation (when the order was at `pending`), emits `ORDER_STATUS_CHANGED`, and records an audit entry. Returns `OrderDocument | null` (`null` = lost a race).
-- **`overrideStatus`** (exported) — Handles `POST /orders/{id}/status-override`. Reads the order, checks `canOverrideTo`, delegates to `applyOverride` with `mode: 'status'`. Returns a 404, 409, or 200 response.
-- **`forceMove`** (exported) — Called by `delivery`'s ship/deliver doors when the caller passed `forced: true`. Same shape but `mode: 'forced'`; returns `OrderDocument | null` rather than an HTTP-shaped response, so `delivery` can wrap it in its own error handling.
-- **`notAllowed`** (module-private) — Builds the shared 409 `ResponseReject` with code `ORDER_OVERRIDE_NOT_ALLOWED` and an i18n-translated message.
+- **`applyOverride`** (private) — The single write path. Performs a conditional `orderRepository.applyStatusOverride` (guarding against *all* legal `from` values, not just the observed one), then fires the `ORDER_STATUS_CHANGED` domain event, records the audit entry, and—only when `observedFrom === pending`—calls `inventoryService.commitForOrder` (idempotent; no-op if already committed). Rejects (throws) if `caller.id` is missing rather than returning `null`.
+- **`overrideStatus`** (exported) — Backs `POST /orders/{id}/status-override`. Reads the order, validates with `canOverrideTo`, delegates to `applyOverride` in `'status'` mode. Returns 404 / 409 / 200.
+- **`forceMove`** (exported) — Called by `delivery/service.ts` when the caller passes `forced: true`. Independently checks `holdsKey(…, 'orders.any.override')` (defense-in-depth beyond delivery's own `refuseUnearnedForce` gate), then delegates to `applyOverride` in `'forced'` mode. Returns `OrderDocument | null | ResponseReject`.
+- **`isForceMoveRefusal`** (exported) — Type guard distinguishing a 403 `ResponseReject` from a `null` race-lost result. Callers must check this *before* any `if (!moved)` guard, since `ResponseReject` is truthy.
+- **`notAllowed` / `notEarned`** (private) — Pre-built 409 and 403 response helpers with i18n messages.
 
 ## Relationships
 
-- **`src/modules/orders/repository.ts`** — Calls `orderRepository.findByIdScoped` and `orderRepository.applyStatusOverride` (the conditional write guarded by `allowedFrom`).
-- **`src/modules/orders/domain/index.ts`** — Calls `canOverrideTo` (gate check) and `statusesOverridableInto` (derives the legal `from` set for the conditional write).
-- **`src/modules/orders/domain/lifecycle.ts`** — The lifecycle rules this file intentionally bypasses; referenced in the module docblock as the "gate" being skipped.
-- **`src/modules/orders/events.ts`** — Emits `ORDER_STATUS_CHANGED` after a successful write.
-- **`src/modules/orders/audit.ts`** — Uses `ordersAuditActions.ORDER_STATUS_OVERRIDDEN` as the audit action identifier.
-- **`src/modules/orders/model.ts`** — Shapes `OrderDocument` and `OrderStatusOverride` used throughout.
-- **`src/kernel/events.ts`** — Calls `emitDomainEvent`.
-- **`src/infrastructure/observability/audit.ts`** — Calls `recordAudit`.
-- **`src/infrastructure/http/response.ts`** — Uses `generateSuccess` / `generateReject` to build HTTP responses.
-- **`src/infrastructure/i18n/index.ts`** — Uses `t()` for user-facing error messages.
-- **`src/modules/inventory/index.ts` → `src/modules/inventory/service.ts`** — Calls `inventoryService.commitForOrder(orderId)` when the order was at `pending`, to release a reservation that `settlement` never processed.
-- **`src/modules/orders/services/index.ts`** — Barrel that re-exports this module's public API.
-- **`src/modules/orders/tests/integration/service-override.test.ts`** — Integration test covering both doors and the race-condition path.
+- **`src/modules/orders/repository.ts`** — Calls `findByIdScoped` (read) and `applyStatusOverride` (conditional write + history entry).
+- **`src/modules/orders/domain/index.ts`** — Imports `canOverrideTo` and `statusesOverridableInto` for lifecycle validation.
+- **`src/modules/orders/domain/lifecycle.ts`** — The `ORDER_LIFECYCLE` this module intentionally bypasses.
+- **`src/modules/orders/events.ts`** — Emits the `ORDER_STATUS_CHANGED` domain event.
+- **`src/modules/orders/audit.ts`** — Supplies the `ORDER_STATUS_OVERRIDDEN` action constant for the audit record.
+- **`src/modules/orders/model.ts`** — Types `OrderDocument` and `OrderStatusOverride` (the history-entry shape).
+- **`src/kernel/events.ts`** — `emitDomainEvent` for the status-changed event.
+- **`src/kernel/ability.ts`** — `holdsKey` to verify `orders.any.override` in `forceMove`.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` for the audit trail entry.
+- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` / response types for all return shapes.
+- **`src/infrastructure/i18n/index.ts`** — `t()` for localized error messages.
+- **`src/modules/inventory/service.ts`** — `commitForOrder` called when overriding out of `pending` (idempotent settle).
+- **`src/modules/delivery/service.ts`** — The sole caller of `forceMove`; shares the identical 403 shape (`notEarned`) for its own `refuseUnearnedForce` gate.
 
 ## Notes
 
-- **Tolerated race on `observedFrom`:** The history entry records the `from` seen at read time, but the conditional write guards against _all_ legal `from` values. If the order advanced one more step between read and write (still within the allowed set), the write succeeds and the history entry's `from` may be one step stale. This is intentional — admin overrides are not hot-path enough to justify a strict read-your-write transaction.
-- **`null` vs. reject:** A `null` return from `applyOverride` means "lost a race" (order moved past every legal `from`). A missing `caller.id` is a _reject_ (invariant violation), not a `null`, so `overrideStatus` reports it as a 500 rather than a 409.
-- **Inventory commit is idempotent:** `commitForOrder` is only called when `observedFrom === 'pending'`, and it is a no-op if the reservation is already committed — safe under the race described above.
-- **`forceMove` swallows 404/409 into `null`:** Unlike `overrideStatus`, it returns `null` for both "order not found" and "override not legal from current status." The `delivery` caller is expected to inspect and re-wrap as needed.
-- **`orders` remains the sole status writer:** Even when `delivery` initiates the move via `forceMove`, the actual `order.status` write happens here. `delivery` never writes `order.status` directly.
+- `null` return from `applyOverride` means "lost a race against another write"; a thrown rejection means an invariant violation (missing caller id). `overrideStatus` maps `null` to a 409, `forceMove` passes it through—consumers must use `isForceMoveRefusal` first to avoid treating a 403 object as a successful move.
+- The `observedFrom` value is recorded as-is on the history entry, but the conditional write guards against *every* legal `from` for `to`. A benign race (order moved between read and write but stayed within the allowed set) still lands; the history entry's `from` may be one step stale. The docblock explicitly accepts this rather than requiring a strict read-your-write transaction.
+- `forceMove` re-checks `orders.any.override` even though `delivery` already checked it at its own gate—intentional defense-in-depth so a direct call bypassing delivery's route cannot force a move.
+- The inventory commit is only triggered when `observedFrom === pending` (offline-paid orders where settlement never ran). Overrides from `paid` onward skip it; settlement already committed the reservation earlier.
+- Webhooks (domain events) fire on override just as on normal transitions—subscribers care that the status moved, not which door was used.

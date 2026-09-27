@@ -1,7 +1,7 @@
 ---
 source: scenarios/blank.ts
-sha256: c31a8af7fba492ef23436b23e1c23ce46029ab3e8e4cd6b30474104205b5b893
-generated_at: 2026-09-23T17:17:00.035313+00:00
+sha256: 44d5d9e501873fcda4e917d42db3f97c208939358f5261f63ccefb2dedb0161e
+generated_at: 2026-09-27T13:49:18.118231+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The `blank` scenario seeds only the minimum harness infrastructure a SPEC needs before creating its own shop-shaped data: the access model, the four named accounts, and the fallback locale. It contains no catalogue, orders, or carts. Behaviour e2e specs that create what they assert restore into `blank` rather than into `shop`, making this the "clean slate" target.
+The `blank` scenario seeds the minimum harness infrastructure — the access model, four named accounts, and the baseline locale module — without any catalogue, orders, or carts. It exists as a lightweight starting state for behaviour e2e specs that create and assert on their own entities, so they restore into `blank` rather than the heavier `shop` scenario.
 
 ## Key elements
 
-- **`seedBlank`** (exported function) — Seeds the scenario in two phases: first `seedAccessModel()` (because nothing can resolve a caller until a shop exists), then `seedNamedUsersCollection()` and `seedLocalesCollection()` concurrently via `Promise.all` (neither reads the other's write). Returns a single `SeedOutcome[]` combining both concurrent results.
-- **Module type** — `@module` JSDoc tag; no default export, only the named `seedBlank` export.
+- **`seedBlank()`** — The sole export. A `Promise<SeedOutcome[]>` that:
+  1. Calls `seedAccessModel()` (roles + shop membership) first, since nothing can resolve a caller before a shop exists.
+  2. Then runs `seedNamedUsersCollection()` and `runInWaves(asWaveEntries(baselineShopModules()))` **concurrently** via `Promise.all` — neither reads the other's write.
+  3. Flattens and returns the combined seed outcomes.
+- **`baselineShopModules()`** (imported from `shop-modules.ts`) — Supplies the set of modules marked `baseline` (currently just `locales`). Reading it from `shop-modules.ts` rather than hardcoding keeps `blank` in step with `shop` without a cross-scenario import.
 
 ## Relationships
 
-- **`scenarios/seed.ts`** — Provides the `SeedOutcome` type used as `seedBlank`'s return type.
-- **`scenarios/accounts.ts`** — Source of `seedAccessModel`, which must complete before the concurrent phase.
-- **`scenarios/users.ts`** — Source of `seedNamedUsersCollection`, run concurrently with locales.
-- **`scenarios/locales.ts`** — Source of `seedLocalesCollection`, run concurrently with users.
-- **`scenarios/index.ts`** — Reads `seedBlank` through the `SCENARIOS` registry; this function is never called directly by specs.
+- **`scenarios/index.ts`** — Registers `seedBlank` in the `SCENARIOS` map; this file is never called directly by specs.
+- **`scenarios/accounts.ts`** — Provides `seedAccessModel`, called as the first sequential step.
+- **`scenarios/users.ts`** — Provides `seedNamedUsersCollection`, called concurrently with the baseline modules.
+- **`scenarios/shop-modules.ts`** — Provides `asWaveEntries` and `baselineShopModules`, the shared helper that defines which modules are "baseline."
+- **`scenarios/waves.ts`** — Provides `runInWaves`, the wave-execution utility for applying seed entries.
+- **`scenarios/seed.ts`** — Supplies the `SeedOutcome` type used as the return type of `seedBlank`.
 
 ## Notes
 
-- The two-phase sequencing (access model → concurrent accounts + locales) is intentional: a shop membership must exist before named accounts can be resolved, but accounts and locales have no interdependency.
-- Despite the name, `blank` is not truly empty—it always provides the four named accounts and at least one active locale. "Blank" means _no shop-shaped data_, not _no data at all_.
+- The file is a `@module` with no default export; consumers access `seedBlank` by named import.
+- The concurrency between `seedNamedUsersCollection` and the baseline modules is intentional and safe because they write to disjoint resources. Adding a baseline module that depends on named users would break this assumption.
+- `blank` deliberately omits anything "shop-shaped" (catalogue, orders, carts). If a spec needs those, it should restore into `shop` instead.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/services/languages.ts
-sha256: 5c62eaa11010a840e6f925f7a3a71ac42d713290cb9921ddbfb27da1aa6eb0f4
-generated_at: 2026-09-23T18:52:14.587264+00:00
+sha256: 35200f6417aec14434474eeeeff65af7fa745252a2fba7437ecf3423c1cb23e6
+generated_at: 2026-09-27T15:01:24.876532+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for the dynamic-tier language rows: create, update, and cascade-delete a locale. Also the single home of two cross-file guard rules — refusing writes under an unknown tenant and protecting the deployment's fallback locale from deactivation or deletion — so sibling services (entries, messages) can reuse them without duplicating the check.
+Service layer for language (locale) CRUD — creating, editing, and deleting language rows plus their cascaded entries/translations. Also the shared home for two cross-service validation rules: refusing writes under an unknown tenant and protecting the deployment's fallback locale from deactivation or deletion.
 
 ## Key elements
 
-- **`languageNotFound`** — shared 404 `ResponseReject` with the module's canonical not-found message; used by this file and importable by siblings.
-- **`rejectFallbackLocale`** (internal) — returns a 409 reject when the tag equals `getFallbackLocale()`, preventing accidental loss of the source-of-truth locale.
-- **`rejectUnknownTenant`** (exported) — returns a 422 reject when `isKnownTenant(tenant)` is false; the single enforcement point for the "no invisible copy" rule shared by other service files.
-- **`createLanguage`** — trims/normalises the tag, checks for an existing tag (advisory; the unique index catches the race), persists via `localeRepository.create`, records an `ADMIN_LOCALE_CREATED` audit, returns 201.
-- **`updateLanguage`** — per-field `undefined` guard so a partial payload leaves unset fields untouched; refuses deactivating the fallback locale; records `ADMIN_LOCALE_UPDATED` with only the `active` flag in metadata.
-- **`deleteLanguage`** — requires the locale to already be inactive (two-step safeguard), refuses if it is the fallback, cascade-deletes entries + translations via `localeRepository.deleteLocaleCascade`, records `ADMIN_LOCALE_DELETED` with removed counts.
+- **`languageNotFound`** — Exported factory returning the module-standard 404 reject response.
+- **`rejectFallbackLocale`** — Internal guard; returns a 409 reject if the tag equals the deployment's fallback locale.
+- **`rejectUnknownTenant`** — Exported guard; returns a 422 reject if the tenant is not in the known-tenant set. Shared by other service files (entries, messages) for write-path validation.
+- **`createLanguage(payload, context?)`** — Validates tag uniqueness, inserts a new `LocaleDocument`, records an `ADMIN_LOCALE_CREATED` audit entry, returns 201.
+- **`updateLanguage(tag, payload, context?)`** — Applies only fields present in the payload (per-field `!== undefined` checks), guards fallback deactivation, records `ADMIN_LOCALE_UPDATED`.
+- **`deleteLanguage(tag, context?)`** — Refuses if the language is still active (409) or is the fallback; cascades entries and translations, records `ADMIN_LOCALE_DELETED`, calls `refreshOverlay()`.
 
 ## Relationships
 
-- **`src/modules/locales/repository.ts`** — all persistence (`findByTag`, `create`, `save`, `deleteLocaleCascade`) goes through `localeRepository`; this file holds no direct DB access.
-- **`src/modules/locales/tenants.ts`** — calls `isKnownTenant` inside `rejectUnknownTenant`.
-- **`src/modules/locales/audit.ts`** — reads `localeAuditActions` enum values to tag audit records.
-- **`src/infrastructure/observability/audit.ts`** — calls `recordAudit`; when `context` is `undefined` (test callers) the emit is skipped.
-- **`src/infrastructure/i18n/index.ts`** — barrel source for `getFallbackLocale` and `t` (i18n helpers).
-- **`src/infrastructure/http/response.ts`** — all return shapes built via `generateSuccess` / `generateReject`.
-- **`src/types/index.ts`** (barrel incl. `auth-context.ts`) — `LocaleDirection`, `CreateLocaleRequest`, `UpdateLocaleRequest`, `CallerContext`.
-- **`src/modules/locales/services/index.ts`** — barrel that re-exports this module's public API to route handlers.
-- **`src/modules/locales/model.ts`** — `LocaleDocument` type used in function signatures.
+- **`@infrastructure/i18n`** — `getFallbackLocale()` identifies the protected locale; `t()` supplies human-readable error strings.
+- **`@infrastructure/http/response`** — `generateReject` / `generateSuccess` build the response envelopes.
+- **`@infrastructure/observability/audit`** — `recordAudit` emits the structured audit trail (only when `context` is provided).
+- **`src/modules/locales/audit.ts`** — `localeAuditActions` enum for action identifiers.
+- **`src/modules/locales/model.ts`** — `normalizeTag` and the `LocaleDocument` type.
+- **`src/modules/locales/repository.ts`** — `localeRepository` for all reads/writes and cascade delete.
+- **`src/modules/locales/tenants.ts`** — `isKnownTenant` backing `rejectUnknownTenant`.
+- **`src/modules/locales/services/overlay.ts`** — `refreshOverlay` invalidates the cached overlay after a language is removed.
+- **`@types`** — `LocaleDirection`, `CreateLocaleRequest`, `UpdateLocaleRequest`, `CallerContext`.
 
 ## Notes
 
-- `context` is optional on every mutation; tests call these as plain helpers and simply omit it. Production route handlers always pass a real `CallerContext`.
-- The duplicate-tag check in `createLanguage` is **advisory only** — it exists to produce a friendly 409 message. The real concurrency guard is the DB unique index (E11000 → 409 via the shared interpreter).
-- `updateLanguage` deliberately tests each field against `undefined` rather than spreading the payload; a blanket assign would null out fields the caller did not send.
-- Delete is intentionally two-step: the locale must be set `active: false` first, then deleted. This makes an accidental `DELETE` cost a deliberate toggle rather than days of translations.
-- `rejectUnknownTenant` is **exported** (not just internal) so sibling service files import it from here instead of re-implementing the check.
+- **Partial-update semantics:** `updateLanguage` tests each field against `undefined` before assignment. A blanket object-assign would wipe fields the caller did not intend to change.
+- **Optional `context`:** When omitted (e.g., in unit tests), `recordAudit` is a no-op. Production routes always pass a `CallerContext`.
+- **Two-step delete:** A language must be deactivated (`active: false`) before it can be deleted. This is the sole safeguard against accidental cascade destruction.
+- **Race on create:** The pre-check for an existing tag is for the error message; the actual concurrency guard is a DB unique index whose `E11000` is mapped to 409 by the shared response interpreter.
+- **`refreshOverlay` is only called on delete.** Create and update do not invalidate the overlay cache.

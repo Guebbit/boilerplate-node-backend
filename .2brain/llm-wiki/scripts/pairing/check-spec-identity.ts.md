@@ -1,7 +1,7 @@
 ---
 source: scripts/pairing/check-spec-identity.ts
-sha256: 5019993009445db4be04fddd991ce7c544c76b55790ea6ed5343ea6983812015
-generated_at: 2026-09-23T17:31:03.006365+00:00
+sha256: f13973f46c3982c3d78e6abc536ef86dd5dfb61529805f5862a135728513f770
+generated_at: 2026-09-27T13:59:04.748251+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI entry point (run via `npm run check:spec-identity`) that verifies the shared contract files between this repo and its paired frontend checkout are byte-identical. It exists to catch contract drift in CI and locally, acting as the backend half of a symmetric pair-check (the frontend runs the mirror against `BACKEND_PATH`).
+CLI entry point (`npm run check:spec-identity`) that verifies the shared contract files in this (backend) repo are byte-identical to those in the paired frontend repo. It exists to catch contract drift between the two checkouts during CI or local development, acting as the backend half of a symmetric pair-check.
 
 ## Key elements
 
-- **Linear CLI script** (no named exports) — resolves the sibling path, compares files, prints a result, and exits.
-- **Exit-code protocol** (the documented interface):
-    - `0` — files identical, _or_ sibling absent on a developer's machine (check skipped with a warning).
-    - `1` — one or more shared files differ, or a shared file is missing on one side.
-    - `2` — sibling checkout not found _and_ `CI` is set (environment misconfiguration, not a contract fork).
-- **Optional `.env` load** — `process.loadEnvFile()` is wrapped in a try/catch so a missing `.env` never aborts the script; `FRONTEND_PATH` may instead come from the real environment (as it does in CI).
-- **Sibling-absence branch** — if `resolveFrontendPath()` points at a path that doesn't exist, the script prints guidance and exits `0` locally or `2` under `CI`.
+- **Main flow (top-level script, no exports):** Resolves the sibling path → checks existence → runs the comparison → prints a verdict → exits with a code.
+- **`siblingRoot`** — result of `resolveFrontendPath()`, the filesystem path to the frontend checkout to compare against.
+- **`comparisons`** — array of per-file verdicts (identical / forked / missing) returned by `compareSharedFiles(siblingRoot)`.
+- **`problems`** — human-readable report string (or empty) from `formatSharedFileProblems`; printed to stderr on mismatch.
+- **Exit codes:** `0` identical or locally skipped; `1` contracts have diverged or a shared file is missing on one side; `2` sibling checkout not found while `CI` is set.
 
 ## Relationships
 
-- **`scripts/pairing/paired-frontend-path.ts`** — provides `resolveFrontendPath()` (locates the sibling checkout) and `DEFAULT_FRONTEND_PATH` (used in the error message to tell the developer where to clone).
-- **`scripts/pairing/spec-identity.ts`** — provides the domain logic: `compareSharedFiles(siblingRoot)` performs the actual file-by-file comparison; `formatSharedFileProblems(comparisons, root)` turns results into a human-readable diff summary; `SHARED_FILES` is the canonical list of contract files to check; `THIS_REPO` labels this side in output.
+- **`scripts/pairing/paired-frontend-path.ts`** — provides `resolveFrontendPath()` (locates the sibling via `FRONTEND_PATH` env, `.env`, or a default) and `DEFAULT_FRONTEND_PATH` (used in the "not found" hint message).
+- **`scripts/pairing/spec-identity.ts`** — provides all comparison logic: `SHARED_FILES` (the list of files to diff), `THIS_REPO` (label for this side), `compareSharedFiles` (per-file diff), and `formatSharedFileProblems` (rendering of mismatches).
 
 ## Notes
 
-- **Exit 2 ≠ Exit 1.** The split is intentional: `1` means "your contracts forked," `2` means "your environment is wrong." This lets CI fail differently (e.g., a workflow config bug) versus a real regression.
-- **Leniency is local-only.** A missing sibling is a `console.warn` + exit 0 outside CI, but a hard exit 2 inside CI — the one place where leniency could mask a real fork.
-- **No output on success beyond one line.** The "identical" path prints a single `[spec-identity]` line; there is no per-file listing. Consumers should rely on the exit code, not stdout parsing.
-- **Wired into `ci.yml`** (which checks out the sibling first and passes `FRONTEND_PATH`) and into `npm run complete`. The frontend repo runs the mirror-image script against `BACKEND_PATH`.
+- Exit code `2` is deliberately separate from `1`: a missing sibling is an *environment* problem, not a *contract* problem. Locally a missing sibling is lenient (warn + exit 0); under `CI` it is fatal (exit 2) because `ci.yml` is expected to have checked out the sibling and passed `FRONTEND_PATH`.
+- The frontend repo runs a mirror-image script that compares against `BACKEND_PATH` instead.
+- No functions are exported; the file is a `tsx`-run CLI (see the shebang).

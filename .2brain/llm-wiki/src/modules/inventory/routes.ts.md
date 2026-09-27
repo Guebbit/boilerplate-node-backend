@@ -1,36 +1,33 @@
 ---
 source: src/modules/inventory/routes.ts
-sha256: f76f520f0e49289d184658dc9335665b8671c159ea00b3a849743510fcc273be
-generated_at: 2026-09-23T18:45:58.834455+00:00
+sha256: 90f3eb247842ffa14d9bb707ebb0f0ce40ad62273da8478335cbe8b4df8ffaab
+generated_at: 2026-09-27T14:56:18.716580+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/inventory/routes.ts
 
 ## Purpose
-
-Defines the Express route table for the inventory module. It wires five staff-facing endpoints (stock levels, movement ledger, receipts, adjustments, and the reservation-sweep cron) to their respective controllers, applying the module's permission tier (`read` / `create` / `sweep`) and allowing both session auth and `sk_…` API keys. The customer-facing half of inventory is intentionally _not_ routed here.
+Express route table for the inventory module. Defines five staff-only endpoints (read stock levels/movements, post receipts/adjustments, trigger a reservations sweep) and wires the permission model that gates each one. No customer-facing routes exist here by design — shoppers see stock via the `available` field on products.
 
 ## Key elements
-
-- **`router`** (exported `Router`) — the single Express router instance for all inventory routes.
-- **`router.use(getAuth, isAuthOrCredential)`** — global guard for every route in the file; distinguishes this from `isAuth` so that machine-to-machine `sk_…` keys are accepted.
-- **`GET /inventory/levels`** → `getInventoryLevels` — stock board, scarcest first; requires `inventory.any.read`.
-- **`GET /inventory/movements`** → `getStockMovements` — movement ledger, newest first; requires `inventory.any.read`.
-- **`POST /inventory/receipts`** → `postReceipt` — records a supplier delivery; requires `inventory.any.create`.
-- **`POST /inventory/adjustments`** → `postAdjustment` — records a stocktake correction; requires `inventory.any.create`.
-- **`POST /inventory/reservations/sweep`** → `postReservationsSweep` — clears expired reservation holds (the expiry tick); requires `inventory.any.sweep`. Runs as `SYSTEM_ACTOR` (unrestricted).
+- **`router`** — the exported Express `Router`. Mounted at `/inventory` (by `module.ts`).
+- **Global middleware chain** — `getAuth` → `isAuthOrCredential` applied via `router.use`, meaning both session auth and `sk_…` API keys are accepted for every route.
+- **`GET /inventory/levels`** → `getInventoryLevels` — stock board, scarcest first. Requires `inventory.any.read`.
+- **`GET /inventory/movements`** → `getStockMovements` — append-only ledger, newest first. Requires `inventory.any.read`.
+- **`POST /inventory/receipts`** → `postReceipt` — records a supplier delivery (stock in). Requires `inventory.any.create`.
+- **`POST /inventory/adjustments`** → `postAdjustment` — signed stocktake correction (stock out). Requires `inventory.any.create`.
+- **`POST /inventory/reservations/sweep`** → `postReservationsSweep` — on-demand expiry of stale holds. Requires the dedicated `inventory.any.sweep` permission (no preset role holds it).
 
 ## Relationships
-
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuthOrCredential`, and `requirePermission`, which gate every route defined here.
-- **Controllers (`get-inventory-levels`, `get-stock-movements`, `post-receipt`, `post-adjustment`, `post-reservations-sweep`)** — imported as the handler functions attached to each route.
-- **`src/modules/inventory/module.ts`** — imports `router` from this file and mounts it at the `/inventory` path in the parent Express app.
-- **`src/modules/inventory/tests/unit/routes.test.ts`** — unit-tests the route definitions, permission wiring, and handler delegation in this file.
-- **`tests/support/routed-modules.ts`** — test-harness helper that registers this router so integration/e2e tests can hit the inventory endpoints.
+- **`src/kernel/middlewares/authorizations.ts`** — source of `getAuth`, `isAuthOrCredential`, and `requirePermission`; the three functions used in this file's middleware chain.
+- **`controllers/get-inventory-levels.ts`**, **`get-stock-movements.ts`**, **`post-receipt.ts`**, **`post-adjustment.ts`**, **`post-reservations-sweep.ts`** — handler functions imported and mounted as route targets.
+- **`src/modules/inventory/module.ts`** — mounts this `router` into the application's path tree.
+- **`src/modules/inventory/tests/unit/routes.test.ts`** — unit-tests the route table (status codes, permission enforcement).
+- **`tests/support/routed-modules.ts`** — test harness that boots the router in an integration context.
 
 ## Notes
-
-- The permission split is deliberate: `read` is a lower tier than `create`, so a `manager` role can view levels without the ability to move stock. The `sweep` verb exists specifically for the cron tick and is intentionally absent from any preset role (see `shared/authorization-keys.yaml`).
-- `isAuthOrCredential` is used instead of `isAuth` because warehouse/ERP systems authenticate with `sk_…` API keys; only this module is designed for that M2M surface.
-- The module-level JSDoc (`@module`) and inline comments document the _why_ behind each permission choice; treat them as the authoritative intent for any future route additions.
+- **`isAuthOrCredential`, not `isAuth`:** this is intentional — warehouse/integration systems authenticate with `sk_…` API keys and must reach every route here. Do not "simplify" to `isAuth`.
+- **Sweep route vs. cron:** `docker/crontab` (`npm run sweep:reservations`) calls `runReservationSweep` in-process and never hits this HTTP route. The route exists for operators or external schedulers that prefer HTTP over a cron container.
+- **Permission keys** (`inventory.any.read`, `inventory.any.create`, `inventory.any.sweep`) are defined in `shared/authorization-keys.yaml`; the sweep key is deliberately not assigned to any preset role.
+- **No customer-facing routes:** stock visibility for shoppers is surfaced through the product's `available` field, not through an inventory endpoint.

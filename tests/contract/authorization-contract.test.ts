@@ -71,7 +71,6 @@ describe('every route requiring a caller (contract-derived)', () => {
             const response = await request(route.method as HttpMethod, fillParams(route.path));
 
             expect(response.status).toBe(401);
-            expect(response).toSatisfyApiSpec();
         }
     );
 });
@@ -96,7 +95,6 @@ describe('every route requiring an admin (contract-derived)', () => {
             );
 
             expect(response.status).toBe(403);
-            expect(response).toSatisfyApiSpec();
         }
     );
 });
@@ -143,7 +141,6 @@ describe('every guarded route agrees with the role file, for every non-admin rol
                     expect(response.status).not.toBe(403);
                 } else {
                     expect(response.status).toBe(403);
-                    expect(response).toSatisfyApiSpec();
                 }
             }
         }

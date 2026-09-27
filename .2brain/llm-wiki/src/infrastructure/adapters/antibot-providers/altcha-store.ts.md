@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/antibot-providers/altcha-store.ts
-sha256: 82900758514265938a2139710424c7e59776bf776ededf8947dcd2aa521a8f1a
-generated_at: 2026-09-23T17:37:06.968531+00:00
+sha256: 881f8dd551ce8b75c15f9c996f639200e8862330d92773b0cb8ba7b1995147e3
+generated_at: 2026-09-27T14:04:00.201052+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the ALTCHA library's `Store` contract to enforce single-use of solved challenges, preventing a solution from being replayed. It records a "spent" flag per challenge key and is backed by the shared Redis cache with an in-process `Map` fallback so that single-use enforcement still holds when Redis is unavailable.
+Implements the ALTCHA library's `Store` interface to enforce single-use of solved challenge tokens. Ensures one solution cannot be replayed across requests or worker processes by recording each spent challenge id in a shared cache with a local in-memory fallback.
 
 ## Key elements
 
-- **`altchaStore`** (exported) — the object ALTCHA's verifier calls. `get(key)` returns `true` if the challenge was already spent; `set(key, value)` records the spend.
-- **`spentLocally`** (module-private `Map<string, number>`) — in-process fallback store. Holds a key → expiry-epoch-ms entry so a replay is caught even with no Redis.
-- **`RECORD_TTL_SECONDS`** (const, `600`) — how long a spent record lives in cache; aligned with the challenge's own expiry window.
-- **`sweepExpired()`** — removes `spentLocally` entries whose TTL has passed, preventing unbounded memory growth in long-lived processes.
-- **`keyOf(key)`** — prefixes every key with `antibot:spent:` to avoid collisions with other cache consumers.
+- **`altchaStore`** (exported) — Object conforming to ALTCHA's `Store` contract (`get` + `set`). `get` performs the actual claim (local + Redis `SET NX`) and returns a boolean indicating "already used". `set` is an intentional no-op because claiming happens during `get`.
+- **`claimLocally`** — Synchronously checks/inserts into the in-process `spentLocally` Map; returns whether this call was first.
+- **`sweepExpired`** — Prunes Map entries past their TTL to prevent unbounded growth in long-lived processes.
+- **`keyOf`** — Prefixes keys with `antibot:spent:` to namespace them in the shared cache.
+- **`RECORD_TTL_SECONDS`** (`600`) — How long a spent record lives; aligned with the challenge's own expiry window.
+- **`MAX_KEY_LENGTH`** (`256`) — Rejects (returns "used" for) keys longer than this, since the id is read from unverified attacker-controlled input.
 
 ## Relationships
 
-- **`altcha.ts`** — consumes `altchaStore` and passes it to the ALTCHA library as the `store` option, so the library calls `get`/`set` around its verification logic.
-- **`cache.ts`** — provides `getCacheValue` and `setCacheValue`, the actual Redis round-trips. This file treats those calls as an optimisation layer: if no Redis is configured, the calls silently no-op and `spentLocally` carries the enforcement within a single process.
+- **`src/infrastructure/adapters/cache.ts`** — Imports `claimCacheKey`, which performs the Redis `SET NX` half of the single-use check. When Redis is unreachable it returns `'unavailable'`, and the local Map claim becomes the authoritative answer.
+- **`src/infrastructure/adapters/antibot-providers/altcha.ts`** — The ALTCHA provider that receives this `altchaStore` as its `Store` implementation, wiring the library's `get`/`set` calls into this module.
 
 ## Notes
 
-- The local `Map` is a _floor_, not a full replacement: cross-worker replay protection only exists when Redis is reachable (consistent with `rate-limit-store.ts` and `cluster.ts`'s worker-fork model).
-- `get` returns `Promise.resolve(true)` on a local hit without touching Redis, but still calls `sweepExpired()` first—so the sweep runs on every read, not on a timer.
-- The `set` value is stored as `String(value)` in the cache; `get` only checks for presence (`!== undefined`), so the stored boolean's magnitude is irrelevant.
+- **`set` does nothing.** The claiming logic is entirely in `get`. This is deliberate: two concurrent requests with the same solution could both pass a read-only `get` before either `set` runs. By having `get` perform the atomic claim (local check → Redis `SET NX`), the first caller wins regardless of interleaving.
+- **Local Map is a floor, not a ceiling.** The codebase convention (stated in comments) is that `cache.ts` is "an optimisation, never a dependency" — it no-ops without Redis. The `spentLocally` Map guarantees single-use within one process even when Redis is down, matching the same fallback pattern used by `rate-limit-store.ts`.
+- **Memory safety.** `sweepExpired` runs on every `claimLocally` call; without it a long-lived worker would leak one Map entry per ever-seen challenge id.
+- **Key-length guard returns "used" (`true`).** A key over 256 chars is treated as already-spent, effectively rejecting the challenge without storing anything.

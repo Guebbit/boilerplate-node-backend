@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/availability.ts
-sha256: c2cc6316a839838acf3134bcec8a86d63882e1289c2967080ec59ff49b7ecd8b
-generated_at: 2026-09-23T19:06:01.426719+00:00
+sha256: 2862dd7024cc61d6469e2f96bb48648cf7635ecfa3c9ae2f43eb7abdf69b9e3b
+generated_at: 2026-09-27T15:12:54.129785+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Determines whether an order's product lines are still sellable by re-querying live product state (rather than trusting the order's frozen snapshot), and executes the consequence when a product has been hard-deleted or deactivated: cancel every still-pending order holding that product and send the buyer an explanatory email.
+Determines whether the product lines on an order are still sellable (hard-deleted, soft-deleted, or deactivated) and, when a product stops being sellable, cancels all still-pending orders that hold it and notifies each buyer. It exists because the `active`/`deletedAt` fields frozen on an order line describe purchase-time state, not current state, so a live query to the product service is required.
 
 ## Key elements
 
-- **`UnavailableLine`** (interface) — `{ productId, title }` for a line whose product is no longer purchasable.
-- **`OrderLineSource`** (interface) — Minimal structural type covering both the hydrated `OrderDocumentItem` (`product._id`) and the wire `OrderItem` (`product.id`) shapes. Exported only so `unavailableLines`'s signature can name it.
-- **`productIdOf`** (internal) — Extracts the product id from either spelling (`id ?? _id`), normalizing to `string`.
-- **`unavailableLines`** (exported) — Given an order's `items`, calls `productService.findManyByIds`, filters for products where `active && !deletedAt`, and returns the subset of lines that are _not_ in that sellable set.
-- **`cancelPendingOrdersHolding`** (exported) — Finds all `pending` orders for a product, cancels each via `cancelById` with `SYSTEM_ACTOR`, looks up the buyer's locale, and enqueues a `productUnavailableCancelledEmail`. Individual cancellations that fail are caught and logged without aborting the batch.
+- **`UnavailableLine`** (interface) — the shape of a single line whose product can no longer be purchased: `productId` and `title`.
+- **`productIdOf`** (private helper) — extracts the embedded product `_id` from an `OrderDocumentItem`; always uses the snapshot's own `_id`.
+- **`unavailableLines`** (exported function) — given an order's `items`, queries `productService.findManyByIds` (unscoped), applies the `active && !deletedAt` filter here, and returns the subset of lines whose product is gone.
+- **`cancelPendingOrdersHolding`** (exported function) — finds all pending orders containing `productId`, cancels each via `cancelById` as `SYSTEM_ACTOR`, then looks up the buyer's locale and enqueues a `productUnavailableCancelledEmail`. Failures on individual orders are caught and logged without aborting the batch.
 
 ## Relationships
 
-- **`@modules/products` (index → service)** — `productService.findManyByIds` is the single source of truth for current sellability; unscoped so hard-deleted products simply return nothing.
-- **`@modules/orders/repository`** — `orderRepository.findPendingByProductId` locates the orders to cancel.
-- **`@modules/orders/services/cancel`** — `cancelById` performs the actual state transition; this file deliberately uses its own email path (not cancel's reservation-expiry email).
-- **`@modules/orders/emails`** — `productUnavailableCancelledEmail` supplies the subject, template, and data for the buyer notification.
-- **`@modules/users` (index)** — `userService.getById` fetches the buyer's locale for i18n; falls back to `getDefaultLocale`.
-- **`@infrastructure/i18n`** — `getDefaultLocale` as the locale fallback.
-- **`@infrastructure/adapters/mailer`** — `enqueueEmail` dispatches the notification.
-- **`@infrastructure/adapters/logger`** — Logs individual cancellation failures.
-- **`@kernel/permissions`** — `SYSTEM_ACTOR` is the actor passed to `cancelById` (cancellation is system-initiated, not buyer-initiated).
-- **`@modules/orders/module`** (caller, not imported here) — The `PRODUCT_DELETED` and `PRODUCT_DEACTIVATED` event listeners invoke `cancelPendingOrdersHolding`.
-- **`@modules/orders/services/index`** — Re-exports this module for consumers.
+- **`@modules/products`** (`productService`) — `unavailableLines` calls `findManyByIds` to get the current state of the referenced products.
+- **`@modules/users`** (`userService`) — `cancelPendingOrdersHolding` calls `getById` to resolve the buyer's preferred locale for the email.
+- **`../repository`** (`orderRepository`) — `cancelPendingOrdersHolding` calls `findPendingByProductId` to discover affected orders.
+- **`./cancel`** (`cancelById`) — reused to perform the actual cancellation with `SYSTEM_ACTOR`.
+- **`../emails`** (`productUnavailableCancelledEmail`) — provides the i18n-aware subject/template/data for the buyer notification.
+- **`../model`** (`OrderDocumentItem`) — type-only import for the order line shape.
+- **`@kernel/permissions`** (`SYSTEM_ACTOR`) — the actor identity used when cancelling on the buyer's behalf.
+- **`@infrastructure/adapters/mailer`** (`enqueueEmail`) — dispatches the cancellation email.
+- **`@infrastructure/adapters/logger`** (`logger`) — logs a structured error when an individual cancellation fails.
+- **`@infrastructure/i18n`** (`getDefaultLocale`) — fallback locale when the buyer has no stored preference.
+- **`../module.ts`** — the `PRODUCT_DELETED` and `PRODUCT_DEACTIVATED` event listeners are the upstream callers of `cancelPendingOrdersHolding`.
 
 ## Notes
 
-- **Two-shapes trap:** `OrderLineSource` exists because a scoped read (`findByIdScoped` → `applyOrderTransform`) rewrites `_id` to `id`, while an unscoped/admin read keeps `_id`. `productIdOf` handles both; the same issue is noted in `cart/services/reorder.ts`.
-- **Visibility is decided locally:** `productService.findManyByIds` is unscoped (a hard-deleted product returns no row), so `unavailableLines` re-applies the `active && !deletedAt` filter itself rather than relying on scoped product queries.
-- **Email is always sent on success:** Unlike `cancel.ts`'s reservation-expiry email (card-only, `bank_transfer`-gated), this file emails every successfully cancelled order—card included—because the buyer had no prior warning.
-- **Fault isolation:** Each order cancellation runs in its own `.catch`; one failure logs and continues, never blocking the remaining orders in the batch.
+- The `active`/`deletedAt` visibility check is intentionally performed **in this file**, not via a scoped repository query. `findManyByIds` is unscoped so that a hard-deleted product (which returns no document at all) is distinguishable from a merely hidden one.
+- `cancelPendingOrdersHolding` sends a **dedicated** email (`productUnavailableCancelledEmail`), not the reservation-expiry email in `cancel.ts`, because this is an unscheduled event that always warrants an explanation regardless of payment method.
+- Each order's cancellation is wrapped in its own `.catch`; a single race or write-conflict failure is logged and skipped without blocking the remaining orders.
+- `productIdOf` reads `item.product._id` specifically — not a denormalised `productId` field — because the hydrated document always carries the embedded `_id`.

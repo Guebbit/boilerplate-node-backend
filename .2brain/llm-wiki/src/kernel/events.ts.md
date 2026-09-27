@@ -1,7 +1,7 @@
 ---
 source: src/kernel/events.ts
-sha256: cd70c536e7ebcd365417eb5db567abd2e4237df45d5b5fe3daa1e3e4e61e5468
-generated_at: 2026-09-23T17:55:04.400115+00:00
+sha256: 8f288686a2d8117ffe6acaefd7d385dc051d1c31880fc56a0436915b935dae9f
+generated_at: 2026-09-27T14:18:38.691219+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-In-memory domain-event bus that lets two modules react to each other without importing one another, keeping the dependency graph acyclic. It provides `on`/`emit`/`reset` over a declaration-merged event map. Explicitly **not** a message broker: no durability, no retry, no replay.
+A minimal in-process domain event bus that lets modules communicate without importing each other, keeping the dependency graph acyclic. It exists because some cross-module relationships are genuinely mutual (e.g. catalogue ↔ cart) and the event abstraction lets the arrow point one way. It is explicitly **not** a message broker: no durability, no retry, no replay.
 
 ## Key elements
 
-- **`DomainEventMap`** (empty interface) — the declaration-merging seam. Each module augments it with its own event-name → payload types; this file intentionally defines no members.
-- **`onDomainEvent(name, handler)`** — registers a handler for a typed event name. Intended to be called from a module's `subscribe()` hook (orchestrated by `src/modules.ts`), not at import time.
-- **`emitDomainEvent(name, payload)`** — awaits every registered handler **sequentially**. A handler that throws is caught, logged, and does not prevent later handlers from running. Returns `true` only if every handler resolved; `false` if at least one threw.
-- **`resetDomainEvents()`** — clears all subscriptions. Documented as a test seam (prevents handler accumulation across suites) but exported to production with no guard.
+- **`DomainEventMap`** — intentionally empty interface; a declaration-merging seam. Each module augments it with its own event-name → payload entries (e.g. `modules/products/events.ts`).
+- **`DomainEventName`** — `Extract<keyof DomainEventMap, string>`; a string union of all declared event names, exported for runtime-lookup callers like `kernel/registry.ts`'s `resolvePublicEvents`.
+- **`onDomainEvent(name, handler)`** — registers a handler for an event. Intended to be called from a module's `subscribe()` hook (orchestrated by `src/modules.ts`), not at import time.
+- **`emitDomainEvent(name, payload)`** — emits and **sequentially awaits** every handler. Per-handler `try/catch` ensures one subscriber's failure does not block the rest. Returns `boolean`: `true` if all handlers resolved, `false` if at least one threw.
+- **`resetDomainEvents()`** — clears all subscriptions. A test seam shipped to production (see Notes).
+- **`handlers`** (module-private) — `Map<string, handler[]>` storing subscriptions in insertion order.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** — imported for `logger.error`; the only runtime dependency of this file. Used when a handler throws.
-- **Module files (`cart`, `inventory`, `orders`, `account`, `addresses`)** — augment `DomainEventMap` via declaration merging, call `onDomainEvent` in their `subscribe()` hooks, and call `emitDomainEvent` as the sanctioned cross-module signal (e.g. product deletion → cart cleanup, order placement → stock reservation).
-- **Integration tests (`cart`, `orders`)** — call `resetDomainEvents()` between cases so repeated module registration does not cause duplicate handler invocations.
+- **`src/infrastructure/adapters/logger.ts`** — imported as `logger`; used in `emitDomainEvent` to log an error when a subscriber throws.
+- **`src/modules/orders/services/place.ts`, `cancel.ts`, `override.ts`, `status.ts`** — call `emitDomainEvent` and inspect the boolean return to discharge `orders`' `pendingEffects` (an in-module retry intention). Other emitters ignore the return.
+- **`src/modules/cart/module.ts`, `src/modules/inventory/module.ts`, `src/modules/account/module.ts`** — subscribe via `onDomainEvent` in their `subscribe()` hooks and/or emit events; each augments `DomainEventMap` in its own `events.ts`.
+- **Integration test files** (`api-keys.test.ts`, `service.test.ts`, `stock.test.ts`, `cancel.test.ts`, `pending-effects.test.ts`) — call `resetDomainEvents` between test cases to prevent handler accumulation.
 
 ## Notes
 
-- **Ordering guarantee:** handlers are awaited in subscription order. The file's docblock calls out that fire-and-forget would turn this guarantee into a race (e.g. product must leave carts before the DB row is deleted).
-- **Error semantics:** a throwing handler marks the emit as "not all settled" (`false` return) but does **not** roll back the emitter's own work. The `orders` module uses the boolean to decide whether a `pendingEffects` retry is needed; all other callers ignore it.
-- **`resetDomainEvents` is a production-visible test seam.** Nothing prevents application code from calling it and silently unsubscribing every module. Treated as an accepted cost.
-- **Subscription timing matters.** Handlers registered at import time would make the live handler set depend on import order; the convention is to defer to the `subscribe()` lifecycle hook.
+- **Sequential, awaited execution is load-bearing.** Emitters depend on the side-effect having completed (e.g. product removed from carts *before* it is deleted from the DB). Fire-and-forget would turn an ordering guarantee into a race.
+- **A throwing handler does not stop the emitter or other handlers.** The emitting module owns its own failure semantics; it cannot reason about subscriber code it has never seen.
+- **The boolean return is a contract for `orders`.** `pendingEffects` uses it to decide whether a retry intention is discharged. All other callers treat the emit as fire-and-continue.
+- **`resetDomainEvents` is a real production risk.** Nothing in the type system or runtime prevents application code from calling it and silently unsubscribing every module. It exists solely so test suites don't accumulate handlers across cases.
+- **Subscribe from `subscribe()`, not at import time.** The set of live handlers is meant to be decided by the module registry (`src/modules.ts`), not by import order.

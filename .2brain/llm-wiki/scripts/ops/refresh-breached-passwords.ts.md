@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/refresh-breached-passwords.ts
-sha256: 3c92164bbf20160bd0b4154468357275d0d6cbd8ad373c1239e9f0450abc792c
-generated_at: 2026-09-23T17:30:30.419304+00:00
+sha256: 36a8adf9f9db31490dca76b7cfb2f5561fc4bf315ff964c0047a4b6de8d2df44
+generated_at: 2026-09-27T13:58:12.775575+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-One-off operator script (`npm run refresh:breached-passwords`) that rebuilds the committed breached-password blocklist. It downloads SecLists' 10-million-entry `Pwdb_top-10000000` corpus, filters it through the `PasswordNew` regex pulled live from `openapi.yaml`, and writes the small sorted survivor set to `src/infrastructure/security/breached-passwords/list.txt`. It exists so the blocklist stays in sync with the password policy without hard-coding a duplicate pattern.
+One-shot maintenance script that rebuilds the committed breached-password blocklist. It downloads SecLists' 10 M-entry `Pwdb_top-10000000` corpus, filters it through the `PasswordNew` regex pattern read directly from the root `openapi.yaml` contract, deduplicates, sorts, and writes the small survivor set (~20 k entries, ~226 KB) to `src/infrastructure/security/breached-passwords/list.txt`. Run manually via `npm run refresh:breached-passwords`; there is no scheduler. Re-run whenever the `PasswordNew` pattern changes.
 
 ## Key elements
 
-- **`SOURCE_URL`** — SecLists raw GitHub URL for the 10M breached-password file.
-- **`OUTPUT_PATH`** — `src/infrastructure/security/breached-passwords/list.txt`; the file loaded into a `Set` at boot.
-- **`ROOT_CONTRACT_PATH`** — repo-root `openapi.yaml`, the single source of truth for the password pattern.
-- **`passwordPatternFromContract()`** — Parses `openapi.yaml` via the `yaml` package, extracts `components.schemas.PasswordNew.pattern`, and returns it as a `RegExp`. Throws if the schema or `pattern` key is absent (no silent fallback).
-- **`downloadCorpus()`** — `fetch`es the source URL; throws on non-200 so a partial download never produces a truncated list. Returns trimmed lines.
-- **`main()`** — Orchestrates: read pattern → download → filter (non-empty lines matching the pattern) → deduplicate via `Set` → sort with `.toSorted()` → write UTF-8 file with trailing newline. Logs source/survivor counts.
-- **`runScript(main, …)`** — Entry-point wrapper (from `scripts/db/run-script`); the rollback argument is a no-op `() => Promise.resolve()` since the script has no DB transaction to unwind.
+- **`SOURCE_URL`** — SecLists raw-file URL for the 10 M breached-password corpus.
+- **`OUTPUT_PATH`** — resolved path to `src/infrastructure/security/breached-passwords/list.txt`, the file loaded into a `Set` at runtime.
+- **`ROOT_CONTRACT_PATH`** — resolved path to the committed root `openapi.yaml`.
+- **`passwordPatternFromContract()`** — parses `openapi.yaml`, extracts `components.schemas.PasswordNew.pattern`, and returns it as a `RegExp`. Throws if the schema or pattern is absent (prevents silent under-/over-filtering).
+- **`downloadCorpus()`** — `fetch`es `SOURCE_URL`; throws on any non-200 response; returns the body split into trimmed lines.
+- **`main()`** — orchestrates: reads the pattern, downloads the corpus, filters to non-empty lines matching the pattern, deduplicates via `Set`, sorts with `toSorted()`, writes the output file, and logs a summary.
+- **`runScript(undefined, main, () => Promise.resolve())`** — entry-point wrapper; first argument `undefined` signals "run by hand" (no docker/cron context), so no D9 job-health or metric tracking is registered. The recovery callback is a no-op.
 
 ## Relationships
 
-- **`scripts/db/run-script.ts`** — Provides `runScript`, the standard lifecycle wrapper (setup → main → teardown/rollback). This script passes a no-op rollback because it performs no database writes.
-- **`src/infrastructure/adapters/logger.ts`** — Provides the `logger` instance used for structured info logs at start and finish (download URL, line counts, output path).
+- **`scripts/run-script.ts`** — provides `runScript`, the shared script-execution wrapper. This file passes `undefined` as the scheduler context and a no-op recovery, distinguishing it from scheduled/cron-driven scripts.
+- **`src/infrastructure/adapters/logger.ts`** — provides the `logger` instance used for the two `info` calls (download start, completion summary with source/survivor counts and output path).
 
 ## Notes
 
-- **Run manually, never scheduled.** The repo has no cron/scheduler; the top-N breach list changes on the order of years. Re-run whenever `PasswordNew.pattern` changes in `openapi.yaml` — nothing else will notice if the list has silently under-blocked.
-- **Pattern is read from the committed contract, not duplicated.** This is intentional to prevent drift between the validation rule and the blocklist filter. If the `openapi.yaml` shape changes, the script throws rather than guessing.
-- **`toSorted()` is used (not `sort()`)**, consistent with a no-mutation convention; the `Set` also deduplicates entries.
-- **Output is ~226 KB / ~20k lines** (measured 2026-09-13) because the composition pattern rejects ~99.8% of the 10M-line corpus. The 94 MB source is never committed.
-- **`dotenv/config` is imported** at the top (likely for proxy or token config in `fetch`), but no env vars are read explicitly in the visible code.
+- The `PasswordNew` pattern is **always read from `openapi.yaml` at run time**, never hardcoded in this script. The docblock stresses this to prevent the two from drifting.
+- The script is intentionally **not scheduled**. The breach list changes on a multi-year cadence; a stale list silently under-blocks, so the re-run trigger is a pattern change, not a time interval.
+- `toSorted()` (immutable) is used rather than `sort()`, keeping the `Set` intact.
+- A non-200 HTTP response or a missing `pattern` field both **throw immediately** — the design philosophy is fail-loud rather than ship a partial or unfiltered list.
+- The trailing newline (`+ '\n'`) in the output write is intentional; the consuming code at boot expects a line-terminated file.

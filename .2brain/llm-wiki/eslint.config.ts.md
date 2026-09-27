@@ -1,7 +1,7 @@
 ---
 source: eslint.config.ts
-sha256: 682ff992e1f5e05139b9374a6b5ea18902a9ea17962173443f9c4615f7a347c5
-generated_at: 2026-09-23T17:14:57.994192+00:00
+sha256: a788fba38cee705753ad7c69098c59efac711603bb79de49d0aa00ce627eac14
+generated_at: 2026-09-27T13:48:16.305023+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Flat ESLint configuration for the project. It wires together TypeScript, Unicorn, Boundaries, JSDoc, Jest, Prettier, and custom local rules into a single typed config, enforcing project-specific bans (double casts, production try/catch, factories imports) on top of strict type-checked linting.
+The project's flat ESLint configuration. It assembles the type-checked TypeScript rule set, plugin presets, banned-syntax restrictions, and global ignores into a single entry point consumed by `npm run lint`. The file's inline comments are load-bearing: they record *why* each rule is enabled, disabled, or shaped as it is, so future changes are an argument rather than a guess.
 
 ## Key elements
 
-- **`bannedDoubleCasts`** — array of `no-restricted-syntax` selectors that reject `as unknown as T` and `as any as T` everywhere, including tests. Spread into every block that sets `no-restricted-syntax` because the rule does not merge across configs.
-- **`bannedTryCatch`** — a `no-restricted-syntax` selector on `TryStatement`; production code must prefer verdicts or pipeline-level rejection handling over try/catch.
-- **`factoriesImportPattern`** — `no-restricted-imports` regex banning `./factories`, `../factories`, and `@modules/<name>/factories` in `src/modules/**` and `scripts/ops/**`; keeps test-only builders out of production.
-- **`globalIgnores([...])`** — excludes generated code (`api/**`, `src/types/asyncapi.generated.ts`), foreign-runtime scripts (`tests/load/**`, `docker/mongo-init.js`), Stryker sandboxes (`tmp/**`), build output, and `.claude/**` worktrees.
-- **Base presets** — `js.configs.recommended`, `tseslint.configs.strictTypeChecked`, `tseslint.configs.stylisticTypeChecked`, Unicorn `flat/recommended`, and `comments.recommended` (requires a description on every `eslint-disable`).
-- **Global block** — sets `parserOptions.project` to `tsconfig.json`, Node globals, registers the `local` and `boundaries` plugins, and configures the full rule set (max-depth 3, no-console warn, restrict-template-expressions with `allowNumber`, four Unicorn rules turned off with justification, `no-non-null-assertion` off, `restrict-plus-operands` allowing number+string, etc.).
+- **`bannedDoubleCasts`** — `no-restricted-syntax` selectors banning `as unknown as T` and `as any as T`. Because `no-restricted-syntax` does not merge across config blocks (nearest match replaces), this array is spread into every block that sets that rule.
+- **`bannedTryCatch`** — A `TryStatement` selector restricting bare `try/catch` in production code to cases with no safe wrapper and a local answer.
+- **`factoriesImportPattern`** — A `no-restricted-imports` regex blocking `./factories`, `../factories`, and `@modules/<name>/factories` in production code (builders are test/scenario-only).
+- **`globalIgnores([...])`** — Generated or foreign files excluded from linting (k6 scripts, Docker init scripts, `node_modules`, `dist`, VitePress output, `tmp/`, orval/asyncapi generated files, `.claude/` worktrees).
+- **Base presets** — `js.configs.recommended`, `tseslint.configs.strictTypeChecked`, `tseslint.configs.stylisticTypeChecked`, `pluginUnicorn.configs['flat/recommended']`, `comments.recommended` (forces `eslint-disable` comments to include a description).
+- **`local` plugin** — Registers rules imported from `scripts/eslint/index.ts` as `local/<rule-name>`.
+- **`boundaries` plugin** — Layer/architecture boundary enforcement.
+- **`no-restricted-imports` / `no-restricted-syntax` / `max-depth` / `@typescript-eslint/*`** — Global rule block with per-rule justification comments (e.g., `no-non-null-assertion` is off because `!` is the narrowest honest claim; four `unicorn` rules are off because they disagree with the stack, not the code).
 
 ## Relationships
 
-- **`scripts/eslint/index.ts`** — imported as `localRules` and registered under `plugins.local.rules`, providing project-specific ESLint rules (e.g. `local/comment-links`) that the global block enables.
+- **`scripts/eslint/index.ts`** — Imported as `localRules`; its rules are exposed to ESLint under the `local` plugin namespace (e.g. `local/comment-links`). This file is the sole consumer.
+- **`eslint-config-prettier`** — Imported as `configPrettier` (likely spread later in the truncated portion) to disable rules that conflict with Prettier formatting.
 
 ## Notes
 
-- `no-restricted-syntax` and `no-restricted-imports` do **not** merge across config blocks — the nearest match _replaces_ the list. Every block that sets one of these rules must re-spread `bannedDoubleCasts`, `bannedTryCatch`, or `factoriesImportPattern`, or the ban silently lifts for that scope.
-- `@typescript-eslint/no-non-null-assertion` is deliberately off; `!` is the sanctioned narrow claim where the compiler cannot follow a guarantee (middleware auth, `.some` guard before `.map`).
-- `unicorn/prefer-module` is off because the runtime (tsx, jest) executes TS as CommonJS, making `import.meta.dirname` undefined.
-- The file references `tests/support/stub.ts` (`asStub<T>`) as the one sanctioned escape hatch for test stubs, and `docs/reference/root.md` for the `max-nested-callbacks` rationale.
+- **`no-restricted-syntax` does not merge across config blocks.** The nearest matching block *replaces* the list. Every subsequent block that sets this rule must re-spread `bannedDoubleCasts` (and `bannedTryCatch`) explicitly, or the ban silently lifts for the files that block covers. The same non-merging applies to `no-restricted-imports`.
+- **`parserOptions.project`** is set to the root `tsconfig.json`. Files outside that project (tool scripts, CLI helpers) are linted via scoped blocks lower in the config that turn off the type-aware program rather than the linter entirely.
+- **`eslint-disable` requires a description** (enforced by `@eslint-community/eslint-plugin-eslint-comments`). The project-local rules and the `TryStatement` ban are intentionally strict; a bare disable converts "deliberately annoying" into "silently ignored."
+- **`unicorn/prefer-module` is off** because the stack runs as CommonJS under `tsx` and `jest`; `import.meta.dirname` would be `undefined` at runtime. Fifty findings would each be a rename into a crash.
+- The file is a single default export of `tseslint.config(...)`; there are no named exports.

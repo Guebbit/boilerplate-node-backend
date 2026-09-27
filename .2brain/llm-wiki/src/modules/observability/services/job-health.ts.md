@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/services/job-health.ts
-sha256: 7158b91f56c78a54039a5f2c9882e04e1780c02c0e0176901f41b696cb6ae58e
-generated_at: 2026-09-23T18:57:17.667730+00:00
+sha256: 0476c40cb392c4e35d26c84a5ab9179c94eb0c6dd9e7373957e16d2150cd061c
+generated_at: 2026-09-27T15:05:26.252270+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the job-health slice of the `GET /observability/health` endpoint. Unlike `dependency-health.ts`, this module performs I/O (a single `leases` query) because no in-memory record of scheduled-job outcomes exists in the process. It translates raw lease summaries into the `ObservabilityHealthJob[]` wire shape.
+Provides the job-status half of the `GET /observability/health` endpoint. It reports every crontab job's last observed outcome by issuing a single read against the `leases` collection (populated by `scripts/run-script.ts` and, where applicable, `withLease`). It exists because no in-memory copy of "when did `reap:orders` last finish" lives in the process.
 
 ## Key elements
 
-- **`jobHealth(): Promise<ObservabilityHealthJob[]>`** – Sole export. Calls `listLeaseSummaries()`, then maps each summary to `{ name, lastSuccessAt (ISO-8601 string | undefined), lastError }`. No additional filtering or error handling beyond what `listLeaseSummaries` already does.
+- **`jobHealth(): Promise<ObservabilityHealthJob[]>`** — The sole export. Calls `listLeaseSummaries()` and maps each summary to the wire shape declared by `ObservabilityHealthJob`: `name`, `lastSuccessAt` (converted via `toISOString()`), and `lastError`.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/lease.ts`** – Source of `listLeaseSummaries`, the single I/O call this module makes.
-- **`src/modules/observability/controllers/get-observability-health.ts`** – Consumer; calls `jobHealth()` to populate the `jobs` field of the health response.
-- **`src/modules/observability/services/index.ts`** – Barrel re-export so controllers can import via the module path.
-- **`src/types/index.ts`** – Defines `ObservabilityHealthJob`, the return-type contract.
-- **`src/modules/observability/tests/unit/job-health.test.ts`** – Unit tests covering the mapping logic.
+- **`src/infrastructure/persistence/lease.ts`** — Source of `listLeaseSummaries`, the only I/O this module performs.
+- **`src/types/index.ts`** — Supplies the `ObservabilityHealthJob` type that shapes the return value.
+- **`src/modules/observability/services/health.ts`** — Consumes `jobHealth` to assemble the full `GET /observability/health` response.
+- **`src/modules/observability/services/index.ts`** — Barrel re-export for external consumers.
+- **`src/modules/observability/tests/unit/job-health.test.ts`** — Unit tests for this module.
 
 ## Notes
 
-- Timestamps are emitted as ISO-8601 strings (`.toISOString()`), matching the convention used across the entire health endpoint. `lastSuccessAt` is nulled (via optional chaining) when the job has never succeeded.
-- The function is a plain async arrow (not `async/await`) to keep the chain to a single `.then`. Callers receive the same rejection path as `listLeaseSummaries`; there is no local `try/catch`.
-- The module doc-block explicitly contrasts this file with `dependency-health.ts` (which is purely in-memory) to prevent future readers from assuming all health sub-modules are I/O-free.
+- Unlike the sibling `dependency-health.ts`, this module **does** perform I/O (one `leases` query). Callers should treat it as async and account for database latency.
+- `lastSuccessAt` is optional in the lease summary; the mapping passes `undefined` through if a job has never succeeded.
+- Timestamps are serialized as ISO-8601 strings to stay consistent with every other timestamp the health endpoint reports.

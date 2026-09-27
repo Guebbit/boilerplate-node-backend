@@ -151,7 +151,6 @@
         "husky": "^9.1.7",
         "jest": "^30.3.0",
         "jest-environment-node": "^30.3.0",
-        "jest-openapi": "^0.14.2",
         "jiti": "^2.6.1",
         "mermaid": "^11.14.0",
         "minimatch": "^10.2.6",
@@ -217,7 +216,6 @@
         "jsonpath-plus": "^10.4.0",
         "@faker-js/faker": "^10.6.0",
         "lodash": "^4.18.1",
-        "axios": "^1.20.0",
         "postman-collection": {
             "@faker-js/faker": "5.5.3"
         }

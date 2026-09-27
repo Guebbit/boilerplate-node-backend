@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/module.ts
-sha256: 107b76629e3c0b04f812c5a56a59328e744154f7a4962233ddfa02e0d02e6a9d
-generated_at: 2026-09-23T18:40:16.161874+00:00
+sha256: 53d2d57f347e28653b413c8ad2d787e7236b13c8aae3c3aba67d78f3864ee78f
+generated_at: 2026-09-27T14:52:49.929641+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the public contact/feedback form. Registers the module's identity, routes, permissions, rate limits, and personal-data export hooks with the kernel so the application can wire it up generically. The form is intentionally account-agnostic (no user reference), making this a leaf node in the module graph.
+Module manifest for the **feedback** (contact-form) module. It registers the module's routes, permissions, rate-limit budgets, personal-data export hook, and locale path into the app's `AppModule` contract. The form is deliberately open to people with no account, so records store an email address rather than a user ID.
 
 ## Key elements
 
-- **`toExportFeedback(ticket)`** – Maps a raw ticket document to the `ExportFeedbackTicket` shape. Explicitly omits `adminNotes` (staff-internal field, protected under Art. 15(4) "rights of others"). Returns a plain object rather than relying on a narrower type annotation, because the Mongoose document's own `toJSON()` would still serialize the field.
-- **Default export (`AppModule`)** – The manifest object:
-    - `name: 'feedback'`, `basePath: '/feedback'`
-    - `permissions` – three keys (`feedback.any.read/update/delete`) owned by this module; cross-cutting tests enforce that a key in the shared permission file must be attributed to a live module.
-    - `routes` – the Express router from `./routes.ts`.
-    - `rateLimits` – contact-form budgets from `./rate-limits.ts`.
-    - `personalData[0].collect` – GDR Art. 15 export hook. Gated behind `NODE_EXPORT_INCLUDE_FEEDBACK`; when the flag is off it resolves `undefined` so the `account` module omits the key entirely (the contract marks `feedback` as optional). When on, it calls `findOwnTickets(email)` and maps each ticket through `toExportFeedback`.
-    - `locales` – path to `./locales` directory.
-- Satisfies the `AppModule` interface from `@kernel/registry`, which is what allows `src/modules.ts` to aggregate it.
+- **Default export** — an `AppModule` object satisfying the `@kernel/registry` type. Fields: `name: 'feedback'`, `basePath: '/feedback'`, `permissions`, `routes`, `rateLimits`, `personalData`, `locales`.
+- **`permissions`** — `['feedback.any.read', 'feedback.any.update', 'feedback.any.delete']`. Enforced by a cross-cutting test (`tests/cross-cutting/module-permissions.test.ts`) that rejects keys orphaned from or unclaimed by this module.
+- **`routes`** — re-exported from `./routes` (`router`).
+- **`rateLimits`** — re-exported from `./rate-limits` (`feedbackRateLimits`).
+- **`personalData[0].collect`** — gated behind the `NODE_EXPORT_INCLUDE_FEEDBACK` env flag (default `false`). When on, calls `findOwnTicketsForExport(subject.email)` from `./service`; when off, resolves to `undefined` so the downstream `account` assembly omits the `feedback` key entirely.
+- **`locales`** — resolved via `path.join(__dirname, 'locales')`.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** – Provides the `AppModule` type that the default export must satisfy; the registry consumes this manifest during application bootstrap.
-- **`src/modules.ts`** – Imports this default export and includes it in the module list assembled for the kernel.
-- **`src/modules/feedback/routes.ts`** – Source of the `router` attached to the manifest.
-- **`src/modules/feedback/rate-limits.ts`** – Source of the `feedbackRateLimits` budget definitions.
-- **`src/modules/feedback/service.ts`** – Source of `findOwnTickets`, used inside the `personalData` export collector.
-- **`src/infrastructure/runtime/environment.ts`** – Provides `environmentFlag`, which gates whether feedback tickets are included in a user's data export.
-- **`src/types/index.ts`** – Defines the `ExportFeedbackTicket` shape that `toExportFeedback` must return.
-- **`src/modules/feedback/openapi.yaml`** – Documents the public contract for the `/feedback` routes registered by this manifest.
+- **`src/kernel/registry.ts`** — supplies the `AppModule` type this manifest must `satisfy`.
+- **`src/infrastructure/runtime/environment.ts`** — provides `environmentFlag`, used to gate the personal-data export.
+- **`src/modules.ts`** — top-level module aggregator that includes this module.
+- **`src/modules/feedback/routes.ts`** — defines the `router` mounted under `/feedback`.
+- **`src/modules/feedback/rate-limits.ts`** — defines `feedbackRateLimits` consumed here.
+- **`src/modules/feedback/service.ts`** — defines `findOwnTicketsForExport` used by the `collect` callback.
+- **`src/modules/feedback/openapi.yaml`** — OpenAPI spec describing this module's public API surface.
 
 ## Notes
 
-- `adminNotes` is dropped at runtime (spread into a new object), not merely at the type level. A type-level `Omit` alone would be insufficient because the Mongoose document serializes the field via its own `toJSON()`.
-- The `personalData` collector matches by **email**, not by user ID, because submitters may have no account.
-- When `NODE_EXPORT_INCLUDE_FEEDBACK` is off, the collector resolves `undefined` (not `[]`), which causes the upstream `account` assembly to omit the `feedback` key from the export entirely — the contract deliberately types it as optional since most users will have no tickets.
-- Deleting this module (removing it from `src/modules.ts`) must also remove its three permission keys from the shared permission file, or the cross-cutting test `tests/cross-cutting/module-permissions.test.ts` will fail.
+- `collect` returns `undefined` (not `[]`) when the flag is off. This is intentional: the `feedback` key is *optional* in the export contract, and most exports carry no feedback data. Returning an empty array would still emit the key.
+- Because the form stores email (not user ID), deleting a user account does **not** cascade-delete their feedback records. The doc comment labels this module "a leaf in both directions" — no other module imports from it, and it imports no other module's services.
+- The `satisfies AppModule` check is compile-time only; the object shape must also align with runtime expectations in the registry.

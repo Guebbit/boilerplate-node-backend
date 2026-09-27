@@ -1,7 +1,7 @@
 ---
 source: src/kernel/middlewares/authorizations.ts
-sha256: 44981a354468807fd53578b76c9a7b623eac9fc71b31830312b43489539d8fa6
-generated_at: 2026-09-23T17:55:24.432107+00:00
+sha256: 84021e32d3c38f833a370195ce6a04700aae01083a80d4b306e011f1ef9bd6ac
+generated_at: 2026-09-27T14:19:02.469610+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express middleware guards that gate HTTP routes on authentication state and declared permission keys. Built on the token resolvers in `kernel/authentication.ts`, it provides a layered set of checks (`getAuth` → `isAuth`/`isAuthOrCredential` → `requirePermission` → `requireFreshAuth`) so that each route can compose exactly the guarantees it needs. Every identity rejection is audited before the response is sent, guaranteeing a trail for denied requests.
+Express middleware guards that enforce authentication and authorization at the route level. Built on the token/credential resolvers in `kernel/authentication.ts`, these guards populate or inspect `request.authContext` / `request.caller`, verify permission keys against the caller's roles, gate requests by recency of proof, and audit every refusal before the response is sent. They are the single choke-point between an HTTP request and the route handlers in every module.
 
 ## Key elements
 
-- **`getTokenBearer`** – Extracts the token from the `Authorization` header (second segment); returns `undefined` if absent.
-- **`getAuth`** – Populates `request.authContext` (JWT) or `request.caller`/`credentialId` (API key) when a token is present. Never rejects on the JWT path; the one exception is an over-budget `sk_` credential, which receives a 429 via `apiKeyLimiter`. Idempotent: skips resolution if a caller is already set (handles nested router fall-through).
-- **`isAuth`** – Rejects 401 unless a bearer-authenticated session (`authContext` + a bearer token on the request) is present. Deliberately excludes API-key callers.
-- **`isAuthOrCredential`** – Same as `isAuth` but also admits `sk_…` credential callers (both `hasBearerSession` and `isCredentialCaller` are checked).
-- **`requirePermission`** – (Referenced in the module doc-block; content truncated) Rejects 403 when the caller's role does not hold the given permission key. Accepts a **key**, not a role name; `assertDeclared` enforces that the key is owned by a module at boot.
-- **`requirePermissionViaCookie`** – SSE-only variant that authenticates via the refresh cookie instead of an `Authorization` header.
-- **`requireFreshAuth` / `requireFreshAuthWhen`** – Step-up gates: check `authContext.authTime` against a tier's max-age and, if stale, answer 401 with `WWW-Authenticate: Bearer error="insufficient_user_authentication"` plus a `REAUTH_REQUIRED` error envelope.
-- **`errorLocaleKeyFor`** – Maps a code string to its locale key (`generic.error-<dashes>`).
-- **`auditRefusal`** – Central helper that records an audit event (with route, method, `outcome: 'failure'`) immediately before a guard rejects.
-- **`hasBearerSession` / `isCredentialCaller`** – Discriminators: the former requires both `authContext` and a bearer token; the latter requires both `caller` and `credentialId`.
+- **`getTokenBearer(request)`** — Extracts the bearer token from the `Authorization` header (second space-delimited segment), or returns `undefined`.
+- **`getAuth(request, response, next)`** — Primary upstream middleware. Resolves a JWT bearer token into `request.authContext` + `request.caller`, or an `sk_…` API-key into `request.caller` + `request.credentialId`. Idempotent: skips work if either is already set. On infrastructure failure calls `next(error)` (→ 503); on invalid/expired token proceeds anonymous. Applies `apiKeyLimiter` for credential callers.
+- **`isAuth(request, response, next)`** — 401 guard. Passes only when the request carries a **bearer-authenticated human session** (`authContext` + a bearer token present). Deliberately rejects API-key credentials.
+- **`isAuthOrCredential(request, response, next)`** — 401 guard. Passes when the request carries either a bearer session **or** a resolved `sk_…` credential. For routes whose subject is tenant data rather than the caller themselves.
+- **`requirePermission(key)`** — (truncated in source) 403 guard. Checks `holdsKey` for the given permission key against the caller's scope. Calls `assertDeclared` at mount time so an unowned key is a **boot-time failure**, not a silent 403 at runtime.
+- **`requirePermissionViaCookie(key)`** — SSE-only variant. Authenticates via the refresh cookie (`readRefreshCookie`) instead of an `Authorization` header, since browsers cannot set headers on `EventSource`.
+- **`requireFreshAuth` / `requireFreshAuthWhen`** — (truncated) Gate an already-authenticated caller on how recently they re-proved identity, using a `StepUpTier` → seconds mapping.
+- **`auditRefusal(request, fields)`** — Internal helper. Records an audit event (route, method, outcome `failure`) before any 401/403 response is written.
+- **`continueOrFailInfra(next, error)`** — Internal helper. Distinguishes infrastructure errors (→ `next(error)`, global 503 handler) from auth failures (→ `next()`, proceed anonymous).
+- **`errorLocaleKeyFor(code)`** — Maps a machine code (e.g. `EMAIL_NOT_VERIFIED`) to its locale key (`generic.error-email-not-verified`). Single rule used by both the default 403 and any per-key `deniedCode` override.
+- **`hasBearerSession(request)` / `isCredentialCaller(request)`** — Internal discriminators that distinguish the three caller shapes (bearer session, cookie session, API-key credential) by the specific field combinations `getAuth` writes.
 
 ## Relationships
 
-- **`src/kernel/authentication.ts`** – Supplies `resolveAccessToken`, `resolveRefreshToken`, `resolveCredential`, and `API_KEY_TOKEN_PREFIX`; `getAuth` delegates all token parsing to these resolvers.
-- **`src/kernel/ability.ts`** – Provides `holdsKey`, the role→key membership check used by `requirePermission`.
-- **`src/kernel/permissions.ts`** – Provides `assertDeclared`, `callerFor`, `callerInScope`, `findKey`, `scopeOfKey`, and the `StepUpTier` type; `getAuth` calls `callerInScope` once to set `request.caller`, and the step-up guards read tier metadata from here.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** – `apiKeyLimiter` is invoked inside `getAuth`'s credential branch to enforce per-credential request budgets before the route executes.
-- **`src/infrastructure/http/request.ts`** – `callerContextOf` extracts the audit-relevant caller fields from the request for `auditRefusal`.
-- **`src/infrastructure/http/response.ts`** – `rejectResponse` is the sole way guards emit a rejection (401/403/429), ensuring a consistent error envelope.
-- **`src/infrastructure/i18n/index.ts`** – `t` resolves the human-readable message in `challengeForFreshAuth` and other rejection bodies.
-- **`src/infrastructure/observability/audit.ts`** – `recordAudit`, `coreAuditActions`, and `buildAuditEvent` back every refusal trail.
-- **`src/infrastructure/runtime/environment.ts`** – `environmentNumber` is imported (likely used for tier thresholds or feature flags in the truncated portion).
-- **Route files** (`account/routes.ts`, `addresses/routes.ts`, `api-keys/routes.ts`, `audit-logs/routes.ts`, `cart/routes.ts`, …) – Mount these guards on their routers; each route composes `getAuth` → `isAuth`/`isAuthOrCredential` → `requirePermission('<key>')` as needed.
+- **`@kernel/authentication`** — Source of `resolveAccessToken`, `resolveRefreshToken`, `resolveCredential`, and the `API_KEY_TOKEN_PREFIX` constant that `getAuth` checks before attempting JWT parsing.
+- **`@kernel/permissions`** — Provides `assertDeclared`, `callerFor`, `callerInScope`, `findKey`, `scopeOfKey`, and the `StepUpTier` type. Guards call these to resolve scope, verify key ownership, and compute recency windows.
+- **`@kernel/ability`** — `holdsKey` is the role→permission check used by `requirePermission`.
+- **`@kernel/cookies`** — `readRefreshCookie` is used by `requirePermissionViaCookie` for SSE authentication.
+- **`@infrastructure/http/errors`** — `isInfrastructureError` lets `continueOrFailInfra` separate infra outages (503) from bad credentials (anonymous/401).
+- **`@infrastructure/http/response`** — `rejectResponse` and `ResponseErrorItem` are the uniform 401/403 body shape.
+- **`@infrastructure/http/request`** — `callerContextOf` extracts the actor identity fields for audit records.
+- **`@infrastructure/i18n`** — `t()` localizes user-facing error messages (401/403 bodies).
+- **`@infrastructure/http/middlewares/rate-limit`** — `apiKeyLimiter` enforces per-key request budgets inline within `getAuth`.
+- **`@infrastructure/observability/audit`** — `recordAudit`, `coreAuditActions`, `buildAuditEvent` back every refusal record.
+- **`@infrastructure/runtime/environment`** — `environmentNumber` supplies tier/recency thresholds from environment config.
+- **`src/modules/account/routes.ts` / `src/modules/addresses/routes.ts`** — Representative consumers; each mounts `getAuth` + `isAuth`/`requirePermission` on its own router (two modules may share a URL prefix, which is why `getAuth` is idempotent).
+- **`src/modules/account/tests/contract/api.contract.test.ts`** — Exercises the 401/403 paths these guards produce.
 
 ## Notes
 
-- **Permission keys, not roles.** Guards accept a key string (e.g. `'cart.read'`). `assertDeclared` ties each key to an owning module at boot, so a typo in a route mount is a startup failure rather than a silently unreachable route.
-- **Idempotent `getAuth`.** Nested Express routers that share a URL prefix will fall through; the guard detects an already-resolved caller and short-circuits, avoiding duplicate JWT verification or a second rate-limit budget charge.
-- **API-key prefix guard.** `sk_` tokens are identified by prefix _before_ any JWT parse is attempted, preventing a wasted base64url decode.
-- **`isAuth` is session-only by design.** API-key callers get 401 here on purpose; routes that _do_ admit machines mount `isAuthOrCredential` instead. Controllers behind `isAuth` can safely assert `request.authContext!.id`.
-- **Fail-closed step-up.** A missing or `0` `authTime` (tokens minted before the claim existed) is treated as infinitely old, forcing re-authentication at the first high-risk action.
-- **Audit-before-reject invariant.** Every 401/403 path calls `auditRefusal` (or equivalent) _before_ `rejectResponse`, so a denied request always leaves an audit record with route and method.
+- **Permission keys, not roles.** Guards accept a key string (e.g. `'account:read'`), never a role name. `assertDeclared` at mount time turns a typo into a boot failure, not a route that silently 403s forever.
+- **`isAuth` ≠ "any authenticated caller."** It rejects API-key credentials by design. Use `isAuthOrCredential` when a route is legitimately reachable by machines.
+- **Audit-before-reject.** Every 401/403 path calls `auditRefusal` *before* writing the response. A refusal with no audit record is treated as a bug.
+- **Infra vs. auth failures must not be conflated.** An unreachable Mongo/Redis surfaces as 503 (via `next(error)`), never as "invalid token." This is RFC 9110 §15.5.2-compliant and prevents masking outages as credential problems.
+- **`sk_` prefix check precedes JWT parsing.** API-key tokens are opaque and never start with `eyJ`, so the `startsWith` guard skips a wasted base64url decode.
+- **Idempotency under shared URL prefixes.** Two routers (e.g. `account` and `addresses`) may both mount `getAuth` on the same path. The guard short-circuits if `authContext` or `caller` is already populated, preventing duplicate DB reads and double-charging an API key's rate-limit budget.

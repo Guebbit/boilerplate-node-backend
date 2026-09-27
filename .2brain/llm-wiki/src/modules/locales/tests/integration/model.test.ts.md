@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/tests/integration/model.test.ts
-sha256: 2adfc8b3e0f91a88e09b8d6e25633683885bb1d46c0f1acd39830a17e48c6de6
-generated_at: 2026-09-23T18:53:30.824193+00:00
+sha256: e0949a00ee6afdbdee0b49022712a4b753d337e54837361ee59849d1e9fb547c
+generated_at: 2026-09-27T15:02:50.089325+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that pin schema-level serialization guarantees for the `locale` and `localeEntry` Mongoose models. They exist because the OpenAPI schema declares `additionalProperties: false` on ~95 schemas, and the `.lean()` query path bypasses Mongoose's `toJSON` entirely — so serialization correctness must be asserted here rather than trusted to a single utility function.
+Integration tests that pin the serialization contract of the locale and locale-entry Mongoose models against a real database. They verify that neither `_id` nor `__v` leaks on either response path (hydrated `toJSON` or `.lean()` list), that schema defaults are populated on write, and that the `baseLanguage` derivation hook behaves correctly regardless of caller input. These assertions exist because 95 schemas in `openapi.yaml` are `additionalProperties: false`, so a leaked internal field would break every client.
 
 ## Key elements
 
-- **`describe('language serialization')`** — Verifies that a hydrated locale document's `toJSON` output exposes `id` but never `_id` or `__v`; that the three caller-omittable fields (`direction`, `active`, `revision`) receive their schema defaults; and that `tag` is lowercased on write to prevent duplicate rows.
-- **`describe('entry serialization')`** — Verifies the lean-list path (`localeService.searchEntries`) returns items with `id` (24-hex) and no `_id`/`__v`; and that omitting `value` on create yields `''` (satisfying the wire contract without requiring the caller to supply it).
-- **`describe('baseLanguage')`** — Table-driven test confirming the schema `pre('validate')` hook derives `baseLanguage` from the tag's ISO 639-1 subtag across bare, regional, script, and combined forms; plus a guard that a caller-supplied `baseLanguage` is overwritten by the hook.
+- **`describe('language serialization')`** — Three tests on `localeRepository.create`: confirms `toJSON` maps `_id → id` and strips `__v`; asserts schema defaults (`direction: ltr`, `active: true`, `revision: 0`); verifies tag is trimmed and lowercased on write.
+- **`describe('entry serialization')`** — Confirms the lean/search path (`localeService.searchEntries`) returns `id` (24-hex) with no `_id`/`__v`; asserts the `value` field defaults to `''` so an untranslated row is still a valid wire contract.
+- **`describe('baseLanguage')`** — Parameterised test covering bare, regional, script, and compound tags (e.g. `zh-Hant-HK → zh`); a separate test confirms the schema hook overwrites a caller-supplied `baseLanguage` that contradicts the tag.
 
 ## Relationships
 
-- **`src/modules/locales/repository.ts`** — Primary subject under test; `localeRepository.create` and `localeEntryRepository.create` are called directly to exercise schema hooks and defaults.
-- **`src/modules/locales/services/index.ts`** — `localeService.searchEntries` is called to exercise the `.lean()` → transform → response path.
-- **`src/modules/locales/factories.ts`** — `makeLocale` provides a pre-populated locale object for the `baseLanguage` test cases, reducing boilerplate.
-- **`src/types/index.ts`** — `LocaleDirection` enum is imported to assert the `direction` default equals `ltr`.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` (called at module top-level) spins up the in-memory MongoDB instance the tests run against.
-- **`tests/support/stub.ts`** — `asStub` is a type-level assertion helper used to narrow the `searchEntries` result before property checks.
+- **`src/modules/locales/repository.ts`** — Provides `localeRepository` and `localeEntryRepository`; all "create" tests write through these.
+- **`src/modules/locales/services/index.ts`** — Provides `localeService.searchEntries`; the lean-path test exercises the real service → repository → schema pipeline.
+- **`src/modules/locales/factories.ts`** — `makeLocale` is used in the `baseLanguage` parameterised test to build a minimal valid create payload.
+- **`src/types/index.ts`** — Exports the `LocaleDirection` enum used to assert the default `direction` value.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to provision a throwaway MongoDB before any test runs.
+- **`tests/support/stub.ts`** — `asStub<…>` provides a type-safe cast on the service result so the test can index into `result.data?.items[0]` without narrowing boilerplate.
 
 ## Notes
 
-- The file deliberately does **not** test `applySerialization` in isolation; the doc comment explains this is because the lean path skips `toJSON` and the OpenAPI schema would reject leaked keys. The tests therefore assert the _output shape_ on both paths independently.
-- The `baseLanguage` override test casts through `Parameters<typeof localeRepository.create>[0]` to slip a field that no request schema accepts — the intent is to prove the hook wins regardless of what a developer writes in code.
-- `setupTestDb()` is invoked at the top of the module (outside any `before` hook), relying on the test runner to execute it before the first `it`.
+- The file intentionally tests the **schema** (Mongoose hooks/defaults) rather than the service layer for `baseLanguage`, because any future write path (seed scripts, one-off migrations) that bypasses the service still hits the hook. The test comment makes this rationale explicit.
+- `setupTestDb()` is called once at the top level; there is no per-test teardown visible in this file (it is presumably handled by the setup module).
+- The tag-normalisation test uses `'  PT-BR '` (leading/trailing spaces + uppercase) to cover both trim and lowercase in a single assertion; don't expect separate tests for each.

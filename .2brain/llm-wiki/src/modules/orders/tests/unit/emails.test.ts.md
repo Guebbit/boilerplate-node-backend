@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/emails.test.ts
-sha256: 1a0985e1dc5dd2ee2cc2901ceb8b8937657f29ce2ca2f91bf37af388e92a450e
-generated_at: 2026-09-23T19:13:27.950041+00:00
+sha256: b1cb22c62c05fc3723db8972af10b0605c0223dd3594c2a67d67bb82e63400bf
+generated_at: 2026-09-27T15:21:06.176664+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the two customer-facing money renderers — `orderConfirmEmail` and `invoiceDocument` — that must agree with the charge the customer actually sees. The file asserts that these builders _delegate_ totals to `orderTotal`, render one line per item with correct per-item fields, respect locale, and never re-resolve product titles through the i18n `t()` function. It deliberately does not re-test arithmetic (that lives in `totals.property.test.ts`).
+Unit tests for the two order-documentation builders (`orderConfirmEmail` and `invoiceDocument`). The focus is on rendering correctness—line counts, per-item field fidelity, total consistency with `orderTotal`, locale propagation, and specific invariants (no `t()` re-resolution of product titles, payment-status language, VAT-block arithmetic)—rather than on the underlying math, which is covered by `totals.property.test.ts`.
 
 ## Key elements
 
-- **`ORDER`** (const) — shared `InvoiceOrder` fixture with two distinct items (different titles, quantities, prices, 22 % tax) plus a `shippingCost`, reused by both the confirmation-email and invoice `describe` blocks.
-- **`VAT_ORDER`** (const) — single-line, single-rate order used exclusively by the VAT-block tests.
-- **`eur`** (const) — `Intl.NumberFormat('en', { style: 'currency', currency: 'EUR' })` instance matching the project's default currency; used to format expected amounts.
-- **`describe('orderConfirmEmail')`** — asserts template name, per-item line content, total delegates to `orderTotal` (shipping included), greeting by name, empty-order safety, locale passthrough, i18n key resolution, `frontendLink` passthrough, and that a title colliding with a real i18n key survives verbatim.
-- **`describe('invoiceDocument')`** — asserts per-item lines, order-id in `pageMetaTitle` (including a non-string id that must not yield `[object Object]`), locale translation, and the same title-collision guard.
-- **`describe('invoiceDocument — the VAT block')`** — asserts `grossAmount = netAmount + taxAmount` (not a fresh `price × qty` multiply), all amounts are `string` (formatted via `Intl.NumberFormat`), `grandTotal` equals `orderTotal` output, shipping row count matches distinct tax rates, and summary rows combine goods + shipping per rate.
+- **`ORDER` (shared fixture)** – Two-line `InvoiceOrder` with distinct titles, quantities, prices, and a 22 % tax rate; reused by both the email and invoice describe blocks.
+- **`describe('orderConfirmEmail')`** – Asserts template name, line count/content, total defers to `orderTotal` (incl. shipping), greeting uses the customer's name, empty-items safety, locale translation, all copy slots resolved, link URL matches `orderFrontendLink`, titles are never passed through `t()`, and the email says "awaiting payment" (never "confirmed").
+- **`describe('invoiceDocument')`** – Asserts line rendering, order-ID in title metadata (including non-string IDs), locale, no `t()` re-resolution, and that the document self-identifies as a receipt/confirmation with an explicit "not a tax invoice" disclaimer in both EN and IT.
+- **`describe('invoiceDocument — the VAT block')`** – Verifies `grossAmount = netAmount + taxAmount` (not a float multiply), and that all amounts are formatted via `Intl.NumberFormat` in EUR.
+- **`VAT_ORDER` / `eur`** – Single-line fixture and a `NumberFormat` instance matching the default shop currency, used only in the VAT-block suite.
 
 ## Relationships
 
-- **`src/modules/orders/emails.ts`** — under test; provides `orderConfirmEmail`, `invoiceDocument`, and the types `OrderLines`, `InvoiceOrder`, `InvoiceVatBlock`.
-- **`src/modules/orders/domain/index.ts`** — re-exports `orderTotal` and `orderTaxBreakdown`, which the tests import to compute _expected_ values, ensuring the builders delegate rather than recompute.
-- **`src/modules/orders/domain/totals.ts`** — source of the `orderTotal` / `orderTaxBreakdown` implementations; this file only asserts the builders _use_ those, not that they are correct.
-- **`src/infrastructure/http/frontend-link.ts`** — `frontendLink` is the expected value for the email's `linkUrl`; the test asserts the builder passes the order id and locale through unchanged.
+- **`src/modules/orders/emails.ts`** – Module under test; provides `orderConfirmEmail`, `invoiceDocument`, and the `OrderLines` / `InvoiceOrder` / `InvoiceVatBlock` types.
+- **`src/modules/orders/domain/index.ts`** (re-exports) and **`src/modules/orders/domain/totals.ts`** – Source of `orderTotal` and `orderTaxBreakdown`, used to assert the builders *defer* to the domain total rather than recomputing.
+- **`src/modules/orders/config.ts`** – Source of `orderFrontendLink`, used to verify the confirmation email's `linkUrl` is the exact output of that helper for the given locale and order ID.
 
 ## Notes
 
-- The 19.99 × 5 IEEE 754 drift test (`99.94999999999999`) is a deliberate guard: if the builder ever re-derives `grossAmount` from `price × quantity` instead of summing the already-reconciled `netAmount + taxAmount`, a wrong total would surface.
-- Title-collision tests (`'orders.email-confirm.greeting'`, `'orders.invoice.title'`) catch a regression where a product title is accidentally passed through `t()` and resolved to a different translation string.
-- The non-string `id` test uses an object with a `toString` method to simulate an ObjectId; dropping `String(id)` in the builder would produce `[object Object]` in the invoice title.
-- The file is truncated in the repo snapshot; the VAT-block `describe` includes additional summary-row tests beyond what is visible here.
+- The file explicitly does **not** re-test `orderTotal` arithmetic; it only asserts the builder *uses* it. The sum logic belongs to `totals.property.test.ts`.
+- "SH2 = C" invariant: the email must never imply payment has completed. This is a product-level constraint encoded as a regex check on subject + body.
+- The "title collides with a translation key" tests guard against a Phase 6 regression where `item.product.title` was accidentally routed through `t()`. Any future refactoring of interpolation must keep these passing.
+- VAT-block tests are sensitive to IEEE 754 rounding: the assertion checks `netAmount + taxAmount`, not `price × quantity`, to catch a builder that re-derives from raw floats.
+- The `eur` formatter is hard-coded to `en` locale + EUR to match the `.env-example` default (`NODE_DEFAULT_CURRENCY`); it is not read from environment.

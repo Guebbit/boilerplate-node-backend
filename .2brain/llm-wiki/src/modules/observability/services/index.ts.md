@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/services/index.ts
-sha256: 309767dd3dd6243f6a9ae8b7e7ff1faaa2d75b9b9e3a6c4fef76a10e476ae45c
-generated_at: 2026-09-23T18:57:09.949991+00:00
+sha256: c4b8034d7ce68f3abcfa2e244f89c3c9f4166a5028e66847a3034ce3bcaf3a66
+generated_at: 2026-09-27T15:05:19.585518+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file for the observability services directory. It re-publishes all service exports in a single entry point so consumers (primarily `src/modules/observability/index.ts`) can import from one path instead of reaching into individual files. Contains no logic of its own.
+Barrel file for the observability services layer. It re-exports all service modules (health, job-health, dependency-health, parked-jobs, process-snapshot, stream) so that consumers can import from a single path (`.../observability/services`) rather than reaching into individual files.
 
 ## Key elements
 
-- `export * from './stream'` — re-exports the live SSE feed service.
-- `export * from './job-health'` — re-exports the lease-side portion of `GET /observability/health`.
-- `export * from './dependency-health'` — re-exports the adapter-side portion of `GET /observability/health`.
-- `export * from './parked-jobs'` — re-exports the queue-side portion of `GET /observability/health`.
-- `export * from './process-snapshot'` — re-exports the process-reader utility shared across all the above payloads.
+- **Re-exports (star exports):** `stream`, `health`, `job-health`, `dependency-health`, `process-snapshot`, `parked-jobs` — all six service modules are re-published in full.
+- No original logic, classes, or functions are defined here; the file is purely a re-export surface.
 
 ## Relationships
 
-- **`src/modules/observability/index.ts`** — the primary consumer; imports the aggregated service surface through this barrel.
-- **`stream.ts`, `job-health.ts`, `dependency-health.ts`, `parked-jobs.ts`, `process-snapshot.ts`** — the five modules whose exports are re-exposed here. This file is purely a forwarding edge in the graph.
+- **`src/modules/observability/index.ts`** — parent barrel; almost certainly imports from this file to expose the services sub-path.
+- **`health.ts`** — the aggregate `GET /observability/health` payload; composed of data from the three sibling modules below.
+- **`job-health.ts`** — provides the "lease side" data consumed by `health.ts`.
+- **`dependency-health.ts`** — provides the "adapter side" data consumed by `health.ts`.
+- **`parked-jobs.ts`** — provides the "queue side" data consumed by `health.ts`.
+- **`process-snapshot.ts`** — shared process reader used by every other payload in this folder.
+- **`stream.ts`** — the live SSE feed, independent of the health aggregate.
 
 ## Notes
 
-- The health endpoint (`GET /observability/health`) is assembled from three separate service modules (job-health, dependency-health, parked-jobs) rather than living in one file. If you're looking for a single "health" implementation, it is split across those three.
-- Because this file uses `export *`, name collisions between the five source modules would surface here, not at the individual module level.
+- Because every export is a star re-export, name collisions between the six modules would surface as ambiguous exports at the consumer. Adding a new service file here requires adding a matching `export * from './new-module';` line.
+- The docstring at the top of the file serves as the canonical description of how `health.ts` is composed; if that composition changes, the docstring should be updated alongside the code.

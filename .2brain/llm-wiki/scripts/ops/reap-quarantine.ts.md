@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/reap-quarantine.ts
-sha256: 8aeb26f3b60ae860f5a9c919cc8b2fd5c6f174e12adf921ccd46bf44c183b41c
-generated_at: 2026-09-23T17:30:19.892741+00:00
+sha256: 4001601f3d20a7751bee210239a5b0aafc2616fe5247ca5c5eaa9ae80e1cab47
+generated_at: 2026-09-27T13:58:02.307242+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A standalone, idempotent cleanup script that deletes quarantined upload files older than a configurable retention window (default 24 h). It exists as a backstop: quarantine files should normally be removed by the pipeline itself, but crashes, lost deliveries, or unregistered-collection payloads can leave orphans behind. Intended to run as a periodic job (cron / scheduled container task), not by hand.
+Periodic backstop job (`npm run reap:quarantine`) that deletes quarantined upload files older than a configurable retention window. It exists to catch files left behind by edge cases (post-quarantine crash, unregistered collection, lost delivery) that the normal pipeline's own `removeQuarantined` calls would not reach. Intended to run as a cron or scheduled-container task, not by hand.
 
 ## Key elements
 
-- **`retentionMs()`** — Reads `NODE_QUARANTINE_RETENTION_HOURS` (via `environmentNumber`, min 1) and returns the threshold in milliseconds. Defaults to 24 h.
-- **`main()`** — Resolves the quarantine directory via `quarantineRoot()`, calls `reapDirectory()` with the cutoff timestamp, then logs the `{ checked, reaped }` result.
-- **`runScript(main, …)`** — Wraps `main` in the project's standard script-lifecycle harness. The second argument is a no-op cleanup callback (`Promise.resolve()`).
+- **`retentionMs()`** — Reads `NODE_QUARANTINE_RETENTION_HOURS` (default 24) via `environmentNumber` and returns the cutoff as milliseconds.
+- **`main()`** — Resolves the quarantine root, calls `reapDirectory` with the cutoff timestamp, logs `{ checked, reaped }`, then calls `start()` to open the Mongo connection (needed only by the lease record).
+- **`runScript('reap:quarantine', main, stopDatabase)`** — Wraps execution so the job's outcome is recorded in the `leases` Mongo collection; `stopDatabase` is the teardown hook.
 
 ## Relationships
 
-- **`scripts/db/run-script.ts`** — Provides `runScript`, the shared entry-point wrapper that handles setup/teardown around the `main` callback.
-- **`src/infrastructure/adapters/filesystem.ts`** — Provides `reapDirectory`, which performs the actual age-based file deletion and returns `{ checked, reaped }` counts.
-- **`src/infrastructure/adapters/image-store.ts`** — Provides `quarantineRoot()`, the canonical path to the quarantine directory (tied to `NODE_QUARANTINE_PATH`).
-- **`src/infrastructure/adapters/logger.ts`** — Provides the structured `logger` used to emit the final "Quarantine reaped." info line.
-- **`src/infrastructure/runtime/environment.ts`** — Provides `environmentNumber`, the typed env-var reader used for the retention-hours setting.
+- **`scripts/run-script.ts`** — Provides the `runScript` wrapper that handles lifecycle and writes the lease/outcome record to Mongo.
+- **`src/infrastructure/adapters/filesystem.ts`** — `reapDirectory` performs the actual directory sweep and file deletion.
+- **`src/infrastructure/adapters/image-store.ts`** — `quarantineRoot` resolves the base path (`NODE_QUARANTINE_PATH`) that holds quarantine files.
+- **`src/infrastructure/adapters/logger.ts`** — Structured log of the sweep result (root, checked count, reaped count).
+- **`src/infrastructure/runtime/database.ts`** — `start()` opens Mongo (only for the lease record); `stopDatabase` closes it after the job completes.
+- **`src/infrastructure/runtime/environment.ts`** — `environmentNumber` reads the retention-hours config with a minimum of 1.
 
 ## Notes
 
-- The script is filesystem-only; it does **not** touch the database despite living under `scripts/ops/` and importing from `scripts/db/`. The `runScript` import is purely for its lifecycle wrapper.
-- `NODE_QUARANTINE_PATH` is never served to clients and is only read by the digest pipeline, so reaping it is safe under concurrent traffic.
-- The retention default (24 h) is deliberately generous to avoid deleting files during a short broker outage or maintenance window.
-- Reference doc: `docs/tools/image-processing.md`.
+- **Sweep-before-connect (PL-28):** The file-system sweep runs *before* `start()` is called, so a Mongo outage cannot block a cleanup that does not need Mongo. The DB connection exists solely for `runScript`'s lease record.
+- **Safe to run concurrently:** The quarantine directory is never served and only read by the digest pipeline, so reaping past the retention window cannot affect in-flight requests.
+- **24 h default is deliberate:** Long enough that a broker outage spanning a normal maintenance window does not cause data loss.
+- **Not a primary cleanup path:** Every normal success/failure in `image.worker.ts` calls `removeQuarantined` itself; this script is the last-resort sweep for whatever slips through.

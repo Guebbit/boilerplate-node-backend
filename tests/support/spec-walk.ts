@@ -63,8 +63,6 @@ export interface Operation {
     isMultipart: boolean;
     /** True when the operation requires a bearer token. */
     requiresAuth: boolean;
-    /** Documented response status codes, as strings (`'200'`, `'422'`, `'default'`). */
-    documentedStatuses: string[];
 }
 
 /** One `in: query` parameter, as the fuzzer needs it to build a query string. */
@@ -198,10 +196,7 @@ export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => 
                 ),
                 bodySchema: resolveSchema(content?.['application/json']?.schema, spec),
                 isMultipart: Boolean(content?.['multipart/form-data']),
-                requiresAuth: Array.isArray(operation.security) && operation.security.length > 0,
-                documentedStatuses: Object.keys(
-                    (operation.responses as Record<string, unknown> | undefined) ?? {}
-                )
+                requiresAuth: Array.isArray(operation.security) && operation.security.length > 0
             });
         }
     }

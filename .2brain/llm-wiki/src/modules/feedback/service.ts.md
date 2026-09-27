@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/service.ts
-sha256: e921b534bffbef63d415b94648b975dbbc94c4afe10400ffd2bba44204b902e1
-generated_at: 2026-09-23T18:41:19.068321+00:00
+sha256: fd250a3f6655ba8b19b95ece1414e45bfd836edb6fad478c674ff9de478edaba
+generated_at: 2026-09-27T14:53:52.424731+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for the feedback (contact-request) module. Owns the business logic for creating tickets (including anti-bot screening and operator email notification), paginated search, status/notes updates, hard deletion, and per-caller data export. Controllers in `./controllers` are thin wrappers that validate input and hand the payload to these functions.
+Business-logic service for the feedback (contact-request) module. It owns the full lifecycle of a feedback ticket — creation with operator notification, paginated search, status/notes triage, hard deletion, and a caller-scoped data export — and is the single place where the "one event" of a customer reaching out (persist + notify) stays atomic. Controllers above it handle HTTP concerns; the repository below handles persistence.
 
 ## Key elements
 
-- **`create(payload)`** — Persists a new feedback ticket. Checks the honeypot field (`payload.website`) and calls `checkEmailPolicy` (disposable-domain check, off by default). If either signals spam, the row is stored with `status: spam` and **no** notification email is sent. The caller still receives a `201` in both cases. For legitimate submissions, enqueues an operator notification email built in `getDefaultLocale()` (the operator's language, not the submitter's).
-- **`toFeedbackStatus(status?)`** — Defensively narrows an arbitrary string onto the closed `FeedbackRequestStatus` enum. Redundant at the HTTP boundary (Zod already rejects with 422), but protects `updateStatus` against non-HTTP callers.
-- **`notifyMailbox()`** — Resolves the operator notification address at call time from `NODE_CONTACT_NOTIFY_EMAIL` → `NODE_SMTP_SENDER` → `''`. Read per invocation so the value can change without a restart.
-- **`search(filters, context?)`** — Paginated query by status, email fragment, or free-text. Emits `ADMIN_FEEDBACK_VIEWED` audit event only when `context` is provided. `page`/`pageSize` are widened to `string | number` because they arrive from a query string.
-- **`updateStatus(feedback, payload)`** — Patches `status` and/or `adminNotes` on an already-loaded document and saves. Stamps `respondedAt` only on the _first_ transition to `resolved`; re-resolving does not move the timestamp.
-- **`updateStatusById(id, payload, context?)`** — Loads by id (404 if absent), delegates to `updateStatus`, then emits `ADMIN_FEEDBACK_STATUS_UPDATED` on success.
-- **`remove(id, context?)`** — Loads by id (404 if absent), hard-deletes the document, emits `ADMIN_FEEDBACK_DELETED`. No soft-delete tier exists in this module.
-- **`findOwnTickets(email)`** — Paginated exact-match read for a caller's data export. Uses `findAll` with a raw `{ email }` filter (not the `search` email spec, which is a regex). Intended to sit behind `NODE_EXPORT_INCLUDE_FEEDBACK`; the caller decides whether to invoke it.
-- **`feedbackRequest`** (barrel export, truncated in source) — The object controllers import; bundles the above functions under a single namespace.
+- **`toFeedbackStatus(status?: string)`** — Narrows a string to the closed `FeedbackRequestStatus` enum. Defensive: the generated Zod schema already rejects invalid values with 422 at the HTTP layer; this exists so `updateStatus` holds a typed value even if called from a non-HTTP path.
+- **`notifyMailbox()`** — Resolves the support notification address from `NODE_CONTACT_NOTIFY_EMAIL` → `NODE_SMTP_SENDER` → `''`. Read per call (not captured at import) so deployments can rotate the address without a restart.
+- **`create(payload)`** — Normalizes email, evaluates honeypot (`payload.website`) and `checkEmailPolicy` disposable-domain verdict. Files the row as `spam` (skipping notification) or `new` (enqueueing an operator email built in `NODE_DEFAULT_LOCALE`). Always resolves; never rejects to the caller.
+- **`search(filters, context?)`** — Paginated query with optional `status` scope. Emits `ADMIN_FEEDBACK_VIEWED` audit event only when a `CallerContext` is supplied (omitted context ⇒ internal/test call, no event).
+- **`updateStatus(feedback, payload)`** — Mutates an already-loaded document: sets `status`, clears/sets `adminNotes` via `clearedOrValue`, stamps `respondedAt` the first time status becomes `resolved`. Persists and returns `ResponseSuccess`. No reject branch.
+- **`updateStatusById(id, payload, context?)`** — Loads by id (404 if absent), delegates to `updateStatus`, then emits `ADMIN_FEEDBACK_STATUS_UPDATED`.
+- **`remove(id, context?)`** — Loads by id (404 if absent), hard-deletes the document, emits `ADMIN_FEEDBACK_DELETED`. No soft-delete tier.
+- **(truncated) export helper** — `findAll` with an **exact** email filter (not the regex spec used by `search`) for a caller's own data export, gated behind `NODE_EXPORT_INCLUDE_FEEDBACK`.
 
 ## Relationships
 
-| Neighbor                                        | Interaction                                                                                                                                                                       |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@infrastructure/adapters/antibot`              | `create` calls `checkEmailPolicy(email)` to screen disposable domains.                                                                                                            |
-| `@infrastructure/adapters/mailer`               | `create` calls `enqueueEmail` to send the operator notification (fire-and-forget with `.catch` → `logger.error`).                                                                 |
-| `@infrastructure/adapters/logger`               | Logs a structured error if the notification email job rejects.                                                                                                                    |
-| `@infrastructure/http/response`                 | `generateSuccess` / `generateReject` shape every `updateStatus*` and `remove` return; `ResponseSuccess` / `ResponseReject` are the union types.                                   |
-| `@infrastructure/i18n` (`catalog`, `context`)   | `t('generic.error-not-found')` for 404 messages; `getDefaultLocale()` for the operator email locale.                                                                              |
-| `@infrastructure/observability/audit`           | `recordAudit` emits events in `search`, `updateStatusById`, and `remove` when a `context` is present.                                                                             |
-| `@infrastructure/persistence/search`            | `readAll` + `MAX_CONFIGURED_PAGE_SIZE` drive `findOwnTickets` pagination; `PaginatedMeta` is the meta shape in `search`.                                                          |
-| `@infrastructure/persistence/create-repository` | `Lean` type used in `findOwnTickets` return.                                                                                                                                      |
-| `modules/feedback/audit`                        | `feedbackAuditActions` supplies the action constants for every `recordAudit` call.                                                                                                |
-| `modules/feedback/controllers/*`                | All four controllers (`post-feedback-contact`, `get-feedback`, `put-feedback-status`, `delete-feedback`) import the `feedbackRequest` barrel and delegate to the functions above. |
+| Neighbor | Interaction |
+|---|---|
+| `infrastructure/adapters/antibot.ts` | Calls `checkEmailPolicy(email)` in `create` to detect disposable-inbox domains. |
+| `infrastructure/adapters/logger.ts` | Calls `logger.error` when the operator notification email enqueue fails. |
+| `infrastructure/adapters/mailer.ts` | Calls `enqueueEmail` to deliver the operator contact-request notification. |
+| `infrastructure/http/response.ts` | Uses `generateSuccess` / `generateReject` to build the `ResponseSuccess` / `ResponseReject` unions returned by `updateStatusById`, `remove`. |
+| `infrastructure/i18n/index.ts` | Imports `getDefaultLocale` (operator email locale) and `t` (404 message strings). |
+| `infrastructure/persistence/search.ts` | Imports `PaginatedMeta` type and `MAX_CONFIGURED_PAGE_SIZE` for the paginated search contract. |
+| `infrastructure/persistence/create-repository.ts` | Imports the `Lean` type used in repository generic signatures. |
+| `infrastructure/persistence/changes.ts` | Imports `clearedOrValue` to distinguish "clear field" from "set to empty string" on `adminNotes`. |
+| `infrastructure/persistence/normalize-email.ts` | Calls `normalizeEmail` at the top of `create`. |
+| `infrastructure/observability/audit.ts` | Calls `recordAudit` in `search`, `updateStatusById`, and `remove`. |
+| `modules/feedback/audit.ts` | Imports `feedbackAuditActions` enum members used as audit action identifiers. |
+| `modules/feedback/controllers/delete-feedback.ts` | Consumes `remove` (and likely `updateStatusById`) as its service call. |
+| `modules/feedback/controllers/get-feedback.ts` | Consumes `search` (and/or a single-get path) as its service call. |
 
 ## Notes
 
-- **Honeypot field is ephemeral.** `payload.website` is validated by the Zod contract but is neither persisted in `FeedbackRequestDocument` nor ever read back. A non-empty value silently flips the ticket to `spam`; the bot still gets `201`.
-- **Operator email locale is pinned.** `contactRequestEmail` is called with `getDefaultLocale()` explicitly, _not_ with the caller's `CallerContext`. The submitter's `subject`/`message` pass through verbatim.
-- **`context` is an audit gate, not a permission gate.** Passing `undefined` skips `recordAudit` but does not block the operation. This is the mechanism that lets tests and internal callers use the same functions without emitting events.
-- **No soft delete.** Unlike the `orders` module, there is no `hardDelete` flag; `remove` is always a hard delete.
-- **`findOwnTickets` is exact-match by design.** The `search` endpoint's `email` filter is a regex for staff; reusing it here would risk leaking another user's ticket whose address is a superstring.
-- **Stryker mutation-testing suppression** wraps the `logger.error` fallback in `create`; the surrounding `void enqueueEmail(...).catch(...)` is intentionally untested for mutation.
+- **Operator email locale is pinned.** The notification email is built with `getDefaultLocale()` (i.e. `NODE_DEFAULT_LOCALE`), never the submitter's locale. The function intentionally takes no `CallerContext`. Customer-supplied text (`subject`, `message`) passes through unchanged.
+- **Spam is invisible to the bot.** Both honeypot and disposable-domain hits return HTTP 201; the only difference is the `spam` status and the suppressed notification. A visible 4xx would teach a spam script which signal fired.
+- **`payload.website` (honeypot) is never persisted.** It exists in the request contract solely for the `Boolean(payload.website?.trim())` check in `create`.
+- **`respondedAt` is write-once.** Re-resolving an already-resolved ticket does not update the timestamp.
+- **No soft-delete.** Unlike the `orders` module, `remove` is a hard delete with no `hardDelete` flag.
+- **Export uses exact match, not regex.** The search spec's `email` field is a regex for staff free-text queries; the export helper deliberately uses an equality filter to avoid leaking tickets whose address merely contains the caller's as a substring.
+- **Audit is context-gated.** Passing `undefined` for `context` suppresses the audit event — the convention for non-HTTP callers (tests, internal reuse).

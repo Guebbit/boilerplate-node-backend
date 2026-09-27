@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/events.ts
-sha256: 8bbd218acdd63d6330c2644df8349d5ae239a16ec9e333c56a3ad95c23ee6a8f
-generated_at: 2026-09-23T19:03:03.492911+00:00
+sha256: 2837c57bb6917c89748a914bf764c9310dbbc9ec00594d4d38d8009e3cbef604
+generated_at: 2026-09-27T15:10:43.262173+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the domain events the orders module emits by augmenting the kernel's `DomainEventMap`, and exports the corresponding string constants so emitters and listeners share a single spelling. Because `orders` sits low in the dependency graph (payments and delivery depend on it, never the reverse), emitting events is the sole mechanism by which it signals state changes to downstream modules.
+Defines the four domain events the orders module emits by augmenting the kernel's `DomainEventMap` (rather than editing it directly, so the catalogue grows per-module). Because `orders` sits low in the dependency graph and upstream consumers (payments, delivery) can depend on it but not vice-versa, event emission is the only channel for announcing state changes.
 
 ## Key elements
 
-- **`DomainEventMap` augmentation (`declare module '@kernel/events'`)** — Adds three event payload types to the app-wide event map:
-    - `'order.cancelled'` — `{ orderId: string; refund: boolean }`. Emitted after the cancel write; `refund` carries the policy decision with the fact.
-    - `'order.status_changed'` — `{ orderId: string; from: OrderStatus; to: OrderStatus }`. Emitted on any status transition regardless of origin (system move or admin override).
-    - `'order.created'` — `{ orderId: string }`. Emitted exactly once per new order from `placeOrder`.
-- **`ORDER_CANCELLED`** (`'order.cancelled'`) — String constant for the cancel event name.
-- **`ORDER_STATUS_CHANGED`** (`'order.status_changed'`) — String constant for the status-change event name.
-- **`ORDER_CREATED`** (`'order.created'`) — String constant for the created event name.
+- **`declare module '@kernel/events'`** — extends `DomainEventMap` with four payloads:
+  - `order.cancelled` — `{ orderId, refund: boolean }`. Emitted after the cancel write; `refund` encodes customer-vs-operator policy so the listener needn't infer it.
+  - `order.refund_owed` — `{ orderId }`. Internal-only retry signal for `payments`; deliberately split from `order.cancelled` so a refund retry doesn't re-fire the customer-facing webhook.
+  - `order.status_changed` — `{ orderId, from, to }`. Fired on any status move regardless of origin (system, admin override, etc.); listeners filter on `to`.
+  - `order.created` — `{ orderId }`. Emitted once by `placeOrder` (the sole new-order writer).
+- **`ORDER_CANCELLED`, `ORDER_REFUND_OWED`, `ORDER_STATUS_CHANGED`, `ORDER_CREATED`** — exported string constants so emitters and listeners share a single spelling.
+- **`OrderStatus`** (imported from `@types`) — used in the `order.status_changed` payload.
 
 ## Relationships
 
-- **`src/types/index.ts`** — Imports the `OrderStatus` type used in the `order.status_changed` payload.
-- **`src/modules/orders/services/cancel.ts`** — Emits `order.cancelled` after a successful cancellation write.
-- **`src/modules/orders/services/status.ts`** — Emits `order.status_changed` when a system-driven status transition occurs.
-- **`src/modules/orders/services/override.ts`** — Also emits `order.status_changed`; the event does not distinguish override-originated transitions from ordinary ones.
-- **`src/modules/orders/services/place.ts`** — `placeOrder` emits `order.created`; it is the single writer of new orders.
-- **`src/modules/orders/index.ts`** / **`module.ts`** — Module barrel/registration; re-exports or wires the event constants and the augmented map for the wider app.
-- **`asyncapi.public.yaml`** — Public API spec that documents these events for external consumers.
-- **`src/modules/orders/tests/integration/*.test.ts`** — Integration tests assert that the correct event (and payload) is emitted for cancel, status-change, and creation flows.
+- **`src/modules/orders/services/cancel.ts`** — emits `ORDER_CANCELLED` (after the write, under the `$in` at-most-once guard) and `ORDER_REFUND_OWED` when a refund is still pending.
+- **`src/modules/orders/services/place.ts`** — `placeOrder` is the sole emitter of `ORDER_CREATED`, guaranteeing exactly-once per order regardless of caller.
+- **`src/modules/orders/services/override.ts`** — a status-only admin override that produces `ORDER_STATUS_CHANGED`; indistinguishable in the event from any other status move.
+- **`src/modules/orders/services/status.ts`** — ordinary system-driven status transitions, also emitting `ORDER_STATUS_CHANGED`.
+- **`src/types/index.ts`** — provides the `OrderStatus` union used in `order.status_changed`.
+- **`asyncapi.public.yaml`** — documents the externally-visible events (`cancelled`, `status_changed`, `created`). `order.refund_owed` is explicitly excluded: it has no AsyncAPI channel.
+- **Integration tests** (`cancel.test.ts`, `pending-effects.test.ts`, `service-override.test.ts`, `service-status.test.ts`) — assert that each service emits the correct event with the correct payload.
 
 ## Notes
 
-- Events are **fire-and-forget announcements**: the file defines _what_ is emitted, not _when_ or _how_. Emission lives in the service files listed above.
-- `order.status_changed` is deliberately **indistinguishable by origin** (admin override vs. system move). Listeners that care about "who moved it" must consult audit logs, not the event.
-- The `refund` field on `order.cancelled` exists because the policy (customer-cancel → refund; operator-cancel → possibly no refund) is decided at emit time; listeners should not re-derive it.
-- Payload types are added via **module augmentation**, not by editing the kernel's map directly — this keeps the catalogue extensible per-module without a central edit.
+- `order.refund_owed` is **internal-only**; it will never appear in the public AsyncAPI spec or trigger a webhook.
+- `order.status_changed` is deliberately source-agnostic. Do not add a `source`/`actor` field without re-evaluating every listener that currently filters only on `to`.
+- The `refund` boolean on `order.cancelled` is a policy decision (customer cancel → true, operator cancel → false) baked into the event at emit time; listeners should not re-derive it.
+- Emission order for a cancel: the write commits first, then `ORDER_CANCELLED` fires, then `ORDER_REFUND_OWED` (if a refund is still owed). The split prevents a payments retry sweep from duplicating the customer webhook.

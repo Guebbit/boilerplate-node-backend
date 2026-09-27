@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/place.ts
-sha256: 695c52d361b65e33aed3a8b0b05baac973c695260e618f083358cfc9d294d1ee
-generated_at: 2026-09-23T19:08:15.895894+00:00
+sha256: ff219946dc2f0befeea0070994909da0337dab2b6fc7f50be947585f9e0b1dbb
+generated_at: 2026-09-27T15:15:24.567878+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single write path for creating a new order. Both `crud.ts`'s admin `create` and `cart`'s `checkout` funnel their writes through `placeOrder`, so the actual mutation (freezing lines, allocating an invoice number, minting a bank-transfer reference, holding stock) lives in exactly one place. Caller-specific concerns (payment-method validation, open-transfer caps, cart clearing, shipping resolution) stay with the caller.
+The single write path for creating a new order row. Both `crud.ts`'s admin `create` and `@modules/cart`'s checkout delegate to `placeOrder`, so the actual insert exists in exactly one place. The function freezes line items, reserves stock, allocates an order number, and persists the document—returning a plain verdict rather than an HTTP envelope.
 
 ## Key elements
 
-- **`placeOrder(input: PlaceOrderInput): Promise<PlaceOrderOutcome>`** — the sole function. Validates lines via `checkOrderLines`, freezes them and allocates an invoice number in parallel, pre-generates an `ObjectId` so a `bank_transfer` reference can name the same row it will occupy, writes the document, reserves stock, and rolls back via `retractOrder` if the hold fails. Returns a plain verdict object; never throws on a business refusal.
-- **`PlaceOrderLine`** — one request line plus its resolved `ProductSnapshot | null | undefined`.
-- **`PlaceOrderShipping`** — caller-resolved address, a `method` whose `priceFor` receives the _frozen_ lines (not a precomputed total), and optional `holdMinutes`.
-- **`PlaceOrderInput`** — flat bag of everything the write needs (userId, email, locale, lines, paymentMethod, payBy, shipping, notes).
-- **`PlaceOrderOutcome`** — discriminated union: `{ ok: true, order }` or `{ ok: false, reason: 'no-lines' | 'product-missing' | 'insufficient-stock', shortfalls? }`. Callers map this to their own wire error codes.
+- **`placeOrder(input: PlaceOrderInput): Promise<PlaceOrderOutcome>`** — The sole exported function. Validates lines via `checkOrderLines`, freezes them, reserves stock, allocates the order number, writes the row, and emits `ORDER_CREATED`. On failure at any stage, returns a typed verdict (never throws for business rejections).
+- **`PlaceOrderInput`** — Everything the write needs: buyer identity, pre-resolved lines, optional `paymentMethod`, optional `PlaceOrderShipping`, and optional free-text `notes`.
+- **`PlaceOrderShipping`** — Caller-resolved shipping. Notably, `method.priceFor` is a *function* that receives the frozen lines, not a precomputed number, so pricing always reflects the actual basket being bought.
+- **`PlaceOrderLine`** — Pairs the request's `{productId, quantity}` with its resolved `ProductSnapshot | null | undefined`.
+- **`PlaceOrderOutcome`** — Discriminated union: `{ ok: true; order }` or one of three failure reasons (`no-lines`, `product-missing`, `insufficient-stock` with `shortfalls`).
 
 ## Relationships
 
-| Neighbor                                          | Interaction                                                                                        |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `domain/rules.ts`                                 | Calls `checkOrderLines` to reject missing products / empty baskets before any write.               |
-| `domain/transfer-reference.ts`                    | Calls `buildReference(orderId)` when `paymentMethod === 'bank_transfer'`.                          |
-| `services/snapshot.ts`                            | Calls `freezeOrderLines` to produce the immutable `OrderDocumentItem[]` written to the document.   |
-| `services/invoice-numbering.ts`                   | Calls `allocateInvoiceNumber` (run in parallel with freezing).                                     |
-| `services/retract.ts`                             | Calls `retractOrder(order, false)` to roll back the just-written document if the stock hold fails. |
-| `repository.ts`                                   | Calls `orderRepository.create` for the actual insert.                                              |
-| `inventory/index.ts` / `service.ts`               | Calls `inventoryService.reserveForOrder` to hold stock; on failure, triggers the retract path.     |
-| `kernel/events.ts`                                | Fire-and-forget `emitDomainEvent(ORDER_CREATED, …)` after a successful write.                      |
-| `orders/events.ts`                                | Source of the `ORDER_CREATED` constant.                                                            |
-| `orders/model.ts`                                 | Type source for `OrderDocument` / `OrderDocumentItem`.                                             |
-| `infrastructure/persistence/create-repository.ts` | Imports `toObjectId` to coerce the string `userId` before the write.                               |
-| `cart/services/checkout.ts`                       | Upstream caller; maps `PlaceOrderOutcome` to cart-specific error codes.                            |
-| `services/crud.ts`                                | Upstream caller (admin path); maps outcome to its own wire shape.                                  |
-| `services/index.ts`                               | Re-exports `placeOrder` and the type exports.                                                      |
+- **`@modules/inventory` (`service.ts` / `index.ts`)** — Calls `inventoryService.reserveForOrder` (before the write) and `releaseForOrder` (in the catch block if the write fails after a successful hold). Imports `StockShortfall` for the insufficient-stock verdict.
+- **`../domain/rules.ts`** — Calls `checkOrderLines` as the first gate; returns the same `no-lines`/`product-missing` reasons verbatim.
+- **`../domain/transfer-reference.ts`** — Calls `buildReference(orderId)` when `paymentMethod === 'bank_transfer'`, minting the reference against the pre-generated ObjectId.
+- **`./order-numbering.ts`** — Calls `allocateOrderNumber` inside the `try` block so a throw still releases the hold.
+- **`../repository.ts`** — Persists the final document via `orderRepository.create`.
+- **`../events.ts`** — Emits the `ORDER_CREATED` domain event (fire-and-forget with `void`).
+- **`@kernel/events.ts`** — Provides `emitDomainEvent`.
+- **`../config.ts`** — Reads `shopCurrency()` for the order's `currency` field.
+- **`@infrastructure/persistence/create-repository.ts`** — Imports `toObjectId` to coerce `userId` for the Mongoose write.
+- **`@infrastructure/adapters/logger.ts`** — Logs an error if `releaseForOrder` itself fails in the catch path.
+- **`../services/crud.ts`** and **`@modules/cart/services/checkout.ts`** — The two upstream callers that map `PlaceOrderOutcome` to their respective wire shapes (e.g. `ORDER_INSUFFICIENT_STOCK` vs `CART_INSUFFICIENT_STOCK`).
+- **`../services/index.ts`** — Re-exports `placeOrder` and its types.
 
 ## Notes
 
-- The function **never rejects** on a business refusal (empty lines, missing product, insufficient stock). It returns a verdict; callers decide the HTTP shape and error-code prefix.
-- The `ObjectId` is generated _before_ `orderRepository.create` so the bank-transfer reference names the same `_id` the row will have. A retried call produces a different id and therefore a different reference — this is what prevents duplicate references for the same logical order.
-- `paymentMethod` and `notes` are conditionally spread: `undefined` omits the field entirely from the document rather than writing `null`.
-- `shipping.method.priceFor` receives the frozen `orderItems`, not the caller's pre-freeze lines, so the free-above-threshold rule prices the exact basket being persisted.
-- The `ORDER_CREATED` event is emitted here (not in `recordCreated`) so that any future caller of `placeOrder` cannot skip the announcement. It is `void`-fire-and-forget; a slow listener must not block the response.
+- **Hold-before-write is deliberate.** A refused stock hold returns before the order number is allocated and before the row is written—neither resource is burned. The one case still requiring manual unwind is a successful hold followed by a failed write; the catch block releases it. If the release *also* fails, the hold is left to the reservation sweep.
+- **`orderId` is pre-generated** (via `new Types.ObjectId()`) so `reserveForOrder` and the bank-transfer reference both reference the *same* id that the row will eventually carry. This prevents a retried `placeOrder` from minting a second transfer reference.
+- **`priceFor(frozenLines)`** is called with the *frozen* `orderItems`, not the caller's original lines. This ensures the free-shipping threshold is evaluated against the exact basket being written.
+- **The `ORDER_CREATED` event is emitted here, not in a repository hook**, so every future caller of `placeOrder` is guaranteed to announce the order. Emitted fire-and-forget (`void`); a slow listener must not block the response.
+- **The `as Partial<OrderDocument>` cast** on the `create` call is required because the conditional spreads (`notes`, `paymentMethod`, `shippingAddress`, etc.) widen the object to a plain index signature that the repository's typed input cannot narrow.
+- **Out of scope for this function:** payment-method validation, open-transfer caps, resolving the shipping address/method, cart pre-flight, and cart clearing all remain the caller's responsibility.

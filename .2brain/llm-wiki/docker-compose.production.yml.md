@@ -1,7 +1,7 @@
 ---
 source: docker-compose.production.yml
-sha256: 0b6834f8c61b52b993ee80510645e8476c9fd66f97d8486a2a9e12f404e1d32e
-generated_at: 2026-09-23T17:11:40.548376+00:00
+sha256: 86e59315b7d100be78872aa4f9f3e2a168d45b77361328d70aef4474410847e5
+generated_at: 2026-09-27T13:46:50.890938+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Production deployment stack for the API, running one client organisation per stack. It builds a hardened image (`docker/Dockerfile.production`), starts the minimum services the app needs (`app`, `cron`, `setup`, and optionally bundled `database`/`cache`/`queue`), and intentionally omits all development-only observability tooling. Telemetry is exported over OTLP to an external collector not defined here.
+Deployment stack for a single client's API instance. Unlike the development `docker-compose.yml`, it runs a pre-built image with no source mounts, no observability dashboards, and no demo seeder. Each client organisation gets its own stack, database, and domain, selected by `COMPOSE_PROJECT_NAME`.
 
 ## Key elements
 
-- **`x-hardening` (YAML anchor)** — shared container hardening: `read_only`, `cap_drop: [ALL]`, `no-new-privileges`, and a `noexec,nosuid` tmpfs at `/tmp`. Merged into `app`, `cron`, and `setup`.
-- **`x-app-env` (YAML anchor)** — shared environment variables for all node services: `NODE_ENV=production`, `npm_config_cache` redirected to `/tmp/.npm`, and defaulted `NODE_DB_URI` / `NODE_REDIS_URL` / `NODE_RABBITMQ_URL` (TLS + replica-set for bundled Mongo).
-- **`app`** — the API server. Binds to `127.0.0.1` only, `restart: unless-stopped`, `stop_grace_period: 30s`, no in-container clustering. Volumes: `uploads`, `storage` (invoice cache + mail spool), `quarantine`, and `mongo-ca-dir` (read-only).
-- **`cron`** — same image as `app`, runs scheduled jobs. Shares hardening and app-env.
-- **`setup`** — one-shot service running `db:sync` and `access:bootstrap`, then exits. `app` and `cron` depend on it completing successfully before starting.
-- **`database` / `cache` / `queue`** — bundled backing services behind `profiles: [bundled]`. Start only when `COMPOSE_PROFILES` includes `bundled`. Each has a healthcheck that `depends_on` (with `required: false`) gates on.
-- **`COMPOSE_PROJECT_NAME`** — required; namespaces all containers/volumes and selects `clients/<name>/.env` for both `${...}` substitution and `env_file:` injection.
+- **`x-hardening` anchor** — shared container-hardening block (read-only root, `cap_drop: ALL`, `no-new-privileges`, `noexec` tmpfs at `/tmp`) merged into `app`, `cron`, and `setup`.
+- **`x-app-env` anchor** — default `NODE_ENV=production`, `npm_config_cache` redirect to tmpfs, and default URIs for Mongo (TLS + replicaSet), Redis, and RabbitMQ that a client's env file can override to point at managed services.
+- **`app`** — the HTTP service. Bound to `127.0.0.1` only (expects a reverse proxy in front). `restart: unless-stopped`, `stop_grace_period: 30s`. Named volumes for `uploads`, `storage` (mail spool / invoice cache), `quarantine`, and read-only `mongo-ca-dir`.
+- **`cron`** — scheduler process running the same image as `app`; waits on `setup` before starting.
+- **`setup`** — one-shot init service (`db:sync` + `access:bootstrap`); exits after completion. `app` and `cron` gate on it via `depends_on: condition: service_completed_successfully`.
+- **`database` / `cache` / `queue`** — bundled backing services under `profiles: [bundled]`. Start only when `COMPOSE_PROFILES` includes `bundled`; otherwise the client points `NODE_DB_URI` / `NODE_REDIS_URL` / `NODE_RABBITMQ_URL` at managed instances. `depends_on` uses `required: false` so the app starts regardless.
+- **`mongo-rs-init`** (implied by the replicaSet reference) — initialises a single-node replica set with a self-signed CA; the CA's public cert is shared into the `mongo-ca-dir` volume.
 
 ## Relationships
 
-- **`docker-compose.proxy.yml`** — the reverse proxy that sits in front of this stack. This file deliberately binds to `127.0.0.1` only, expecting that proxy to terminate TLS and publish the public interface.
-- **`docker-compose.test.yml`** — the test-stack counterpart. Shares the same service topology and env-var names but targets a disposable environment rather than a per-client production one.
-- **`asyncapi.yaml`** — the API/message contract the `app` and `cron` services implement; the production stack is the runtime that serves that contract.
+- **`docker-compose.proxy.yml`** — the reverse-proxy/TLS-terminating stack that sits in front of `app`'s loopback-bound port. This file deliberately does not expose the API on a public interface.
+- **`docker-compose.test.yml`** — the test-environment counterpart; shares the same service topology but without production hardening or the one-client-per-stack model.
+- **`asyncapi.yaml`** — the event/message contract for the RabbitMQ queue that `queue` (bundled) or a managed RabbitMQ instance serves; the `app` and `cron` services are the producers/consumers described there.
 
 ## Notes
 
-- **One deployment per client.** Never run one stack for multiple clients. `COMPOSE_PROJECT_NAME` is both the namespace key and the env-file selector; unset, nothing starts.
-- **`.env` is read twice.** `--env-file` resolves `${...}` in this file; `env_file:` injects into the container. Both must point to the same `clients/<name>/.env` or every client silently shares config.
-- **Bundled vs. managed services.** Flip between them by toggling `bundled` in `COMPOSE_PROFILES` and setting `NODE_DB_URI`/`NODE_REDIS_URL`/`NODE_RABBITMQ_URL` in the client env. `depends_on … required: false` (Compose ≥ 2.20) lets the app start without the bundled containers.
-- **`clients/` is gitignored and in `.dockerignore`.** Secrets are mounted at runtime, never baked into the image.
-- **Mongo TLS is self-signed.** `database` mints a CA at startup via `mongo-entrypoint.sh`; the public cert is shared into `mongo-ca-dir` and verified by the app's `tlsCAFile`. Do not remove the `:ro` mount without understanding this.
-- **`/tmp` tmpfs is `noexec,nosuid` and 64 MB.** This bounds _concurrent_ uploads (each file lands here); single-upload size is controlled by `NODE_MAX_UPLOAD_BYTES`.
-- **`setup` must not run the demo seeder.** `scenarios/apply.ts` refuses `NODE_ENV=production`; the production database starts empty.
-- **OTLP collector is external.** `OTEL_EXPORTER_OTLP_ENDPOINT` is an env var with no default; no collector service is defined in this file.
+- **`COMPOSE_PROJECT_NAME` is mandatory.** Unset, compose refuses to start (`:?` guard). It simultaneously namespaces containers/volumes and selects the `clients/<name>/.env` file.
+- **Env file is read twice.** `--env-file` resolves `${...}` substitutions in this file; `env_file:` inside a service is what the container receives. Both must point at the same client path.
+- **`clients/` is git-ignored and docker-ignored.** Secrets are mounted at runtime, never baked into the image.
+- **Bundled vs. managed toggle.** Removing `bundled` from `COMPOSE_PROFILES` and setting the three URI variables in the client env file switches to external backing services. The `:?` guards on passwords live on the bundled service blocks, not in `x-app-env`, to avoid nested-default compose version issues.
+- **No OTLP collector here.** `OTEL_EXPORTER_OTLP_ENDPOINT` is forwarded to the app, but the collector service is intentionally defined elsewhere.
+- **One image, three containers.** `app` carries the `build:` directive and a shared `image:` tag; `cron` and `setup` reference that tag via `image:` alone, guaranteeing identical binaries.
+- **Named volumes are not shared across hosts.** `uploads`, `storage`, and `quarantine` pin the deployment to one host. The durable path is an S3-compatible `ImageStore` adapter.

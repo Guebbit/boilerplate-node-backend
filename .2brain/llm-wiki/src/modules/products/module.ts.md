@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/module.ts
-sha256: 7df7350616138a7cdfc4a4185b7700f36bcc725ced582a4c39656de2274a5c9e
-generated_at: 2026-09-23T19:27:26.636973+00:00
+sha256: a4edbc42bda0fe27a210e1311136212e5018c78894425d3a2509b36a26051468
+generated_at: 2026-09-27T15:32:42.904937+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the product catalogue. Declares the module's identity (name, base path), its permission keys, routes, configuration gates, translatable fields, image pipeline, and test-scenario subjects in a single object that satisfies the kernel's `AppModule` contract. It is the static registration surface the kernel and downstream tooling read when wiring up the products context.
+The manifest (registration) file for the **products** domain module. It declares the module's identity to the kernel — routes, permissions, config gates, translatable fields, image targets, and test scenarios — so the rest of the application can discover and branch on the product catalogue without importing its internals. Products is a leaf module: it emits events rather than importing sibling domains (cart, orders, inventory), making it the one reference point other contexts conform to.
 
 ## Key elements
 
-- **Default export** – A `satisfies AppModule` object with:
-    - `name` / `basePath` – Module identity (`products`, `/products`).
-    - `permissions` – Five RBAC keys (`products.self.read` … `products.any.delete`). Deleting the module must remove these from the shared permission file (enforced by `tests/cross-cutting/module-permissions.test.ts`).
-    - `routes` – The Hono router imported from `./routes`.
-    - `requiredConfig` – Two env vars (`NODE_VAT_RATE_DEFAULT`, `NODE_VAT_RATE_REDUCED`); the catalogue owns tax-rate resolution.
-    - `customCheck` – `invalidVatRateConfig` from `./config`; catches non-numeric or out-of-range rates that `requiredConfig`'s empty-string check misses.
-    - `locales` – Path to the module's locale directory.
-    - `imageTargets` – Wires `productRepository.writebackImage` as the image-pipeline writeback for the `products` target.
-    - `translatables` – Declares `title` / `description` as derived index columns on the `products` collection with cache tag `products`.
-    - `scenario.shop` – Six test subjects (`softDeleted`, `inactive`, `outOfStock`, `barebones`, `inStock`, `rich`) that storefront and repository tests must cover.
-    - `personalData: 'none'` – Catalogue rows are not person-scoped; order-line snapshots belong to `orders`.
+- **Default export** — a single object satisfying `AppModule` (from `@kernel/registry`). Everything below is a field on that object.
+- **`permissions`** — five RBAC keys (`products.self.read` through `products.any.delete`). Deleting the module deletes these keys; cross-cutting tests enforce the 1-to-1 mapping.
+- **`requiredConfig` / `customCheck`** — two VAT-rate env vars (`NODE_VAT_RATE_DEFAULT`, `NODE_VAT_RATE_REDUCED`) must be non-empty *and* numerically valid (the `customCheck` from `./config` catches `2.2` or `abc`).
+- **`routes`** — the Express router imported from `./routes`.
+- **`imageTargets`** — maps the `products` image target to `productRepository.writebackImage` for async image processing.
+- **`translatables.product`** — declares `title` and `description` as *derived* index columns (not the product's own data), with `productRepository.existsById` / `writeTranslatedFields` as the hooks the i18n pipeline calls.
+- **`scenario.shop`** — seven named test subjects (`softDeleted`, `inactive`, `outOfStock`, `barebones`, `inStock`, `rich`, `digital`) that downstream scenario tests must find in the DB.
+- **`personalData: 'none'`** — the catalogue is not user-scoped; order lines carry their own frozen snapshots.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** – Imports the `AppModule` type; the manifest is validated against it at registration time.
-- **`src/modules.ts`** – Aggregates this module (and its siblings) for the kernel's boot sequence.
-- **`./routes.ts`** – Provides the `router` instance attached to the manifest.
-- **`./repository.ts`** – Provides `productRepository.writebackImage` used in `imageTargets`.
-- **`./config.ts`** – Exports `invalidVatRateConfig`, the `customCheck` callback.
-- **`./events.ts`** – Side-effect import; registers `product.created` / `product.deleted` listeners so the module stays a leaf (no sibling imports).
-- **`./openapi.yaml`** – API contract for the routes declared here (referenced in docs, not imported at runtime).
-- **Downstream tests** (`cart`, `orders`, `payments`, `products` test suites) – Exercise the scenarios, permissions, and config gates defined in this manifest.
+- **`src/kernel/registry.ts`** — provides the `AppModule` type that this object must satisfy.
+- **`src/modules.ts`** — imports this default export to register the module with the kernel.
+- **`src/modules/products/routes.ts`** — supplies the `router` bound to this module's `basePath`.
+- **`src/modules/products/repository.ts`** — supplies `writebackImage`, `existsById`, and `writeTranslatedFields` referenced by the manifest.
+- **`src/modules/products/config.ts`** — supplies the `invalidVatRateConfig` validator used as `customCheck`.
+- **`src/modules/products/events.ts`** — side-effect import; registers `product.created` / `product.deleted` event emitters so downstream modules (e.g. `inventory`) can subscribe.
+- **`tests/integration/product-write.test.ts`**, **`tests/support/checkout-modules.ts`** — integration tests that exercise the routes and permissions declared here.
+- **`src/modules/products/tests/unit/config.test.ts`** — unit-tests the `invalidVatRateConfig` function wired in as `customCheck`.
 
 ## Notes
 
-- **Leaf-module invariant.** This file must not import another sibling's service or repository. Cross-module effects flow through events (`product.created`, `product.deleted`) or the `AppModule` manifest fields (e.g. `imageTargets`, `translatables`). Adding a direct import of a sibling breaks the dependency direction and the "everything downstream is a statement about a product" rule in the docblock.
-- **`onHand` / `reserved`.** Declared on the product document but written _only_ by the `inventory` module (including the opening count triggered by `product.created`). This module never increments or decrements either counter.
-- **VAT ownership.** The catalogue resolves a tax class into a concrete rate (`resolveTaxRate`); `orders` merely freezes the number it receives. Changing a rate is a `products` config change, not an `orders` one.
-- **`scenario.shop` ordering.** The first four entries are "hidden or empty" cases; `inStock` and `rich` are the two ordinary rows a UI screen needs. `scenarios/subjects.ts` pins the concrete document behind each label.
+- **Leaf discipline:** This module never imports a sibling domain module. Communication is one-way via emitted events. `inventory` imports *this* module to read stock counters; it does not get imported back.
+- **`onHand` / `reserved`:** Declared on the product document but written *only* by `inventory` (including the opening count triggered by `product.created`). This module never mutates either counter.
+- **VAT rates belong here, not to `orders`:** `resolveTaxRate` lives in this module; `orders` only freezes the number it receives.
+- **`title` / `description` in `translatables`** are a derived Mongo index, not the canonical data source. The canonical strings live in the translation pipeline; this module just keeps a sortable copy.
+- **Scenario subjects are a contract:** `scenarios/subjects.ts` pins a DB row behind each name, and `shop.test.ts` asserts each row truly has the property its name implies. Adding a new branch in storefront code without adding a subject here will leave it untested.

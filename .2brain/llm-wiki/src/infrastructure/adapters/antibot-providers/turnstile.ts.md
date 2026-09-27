@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/antibot-providers/turnstile.ts
-sha256: ae3224b58ca74a3d1c952f446e08d05003196fb6374d6ae02efa088dfcc2e7e4
-generated_at: 2026-09-23T17:37:47.396930+00:00
+sha256: 45271679d107acaf326533561178467e718576fcbc64f5261fb7416472a4c16f
+generated_at: 2026-09-27T14:04:32.833937+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A reference implementation of the `HumanChallengeProvider` port using Cloudflare Turnstile. It exists to demonstrate the contract (public parameters out, token verified server-side) for teams choosing a human-challenge approach; the module docs explicitly note it is a worked example, not a recommendation, and that selecting it means loading a third-party script and its data-protection implications.
+Reference (not recommended) implementation of the `HumanChallengeProvider` port using Cloudflare Turnstile. Server-side, it exchanges a client-submitted token for a binary verdict (`ok` / `refused`) by calling Cloudflare's siteverify endpoint. The file is deliberately shipped as a worked example to illustrate the port's contract; deployments choosing it accept a third-party script and its data-protection implications.
 
 ## Key elements
 
-- **`turnstileProvider: HumanChallengeProvider`** (export) — the adapter object. `name` is `"turnstile"`; `publicParameters()` returns the `siteKey` env var and the Turnstile `api.js` URL for the client to load; `verify(token, remoteAddress?)` calls Cloudflare siteverify and always resolves to a `RungVerdict`.
-- **`siteverify(token, remoteAddress?)`** (internal) — POSTs `secret`, `response`, and optionally `remoteip` to the Cloudflare endpoint. Resolves to `'ok'` only when the JSON body has `success === true`; every other shape (non-200, timeout, malformed body) resolves to `'refused'`.
-- **`secretKey()`** (internal) — reads `NODE_ANTIBOT_TURNSTILE_SECRET` from the environment on every call (no caching, so rotation needs no restart). Throws if the value is empty, preventing a misconfiguration where every caller would pass.
-- **`VERIFY_URL` / `VERIFY_TIMEOUT_MS`** (internal constants) — the Cloudflare endpoint and a 5-second abort window.
+- **`VERIFY_URL`** – Hard-coded Cloudflare siteverify endpoint (`challenges.cloudflare.com/.../siteverify`).
+- **`VERIFY_TIMEOUT_MS`** – 5 000 ms; enforces the cap via `AbortSignal.timeout` so a slow upstream never holds a signup flow open.
+- **`secretKey()`** – Reads `NODE_ANTIBOT_TURNSTILE_SECRET` from `process.env` on every call (supports key rotation without restart). Throws if the variable is absent or empty, enforcing a fail-closed posture.
+- **`siteverify(token, remoteAddress?)`** – POSTs `secret`, `response` (token), and optional `remoteip` as form-encoded body. Maps any non-200 response, timeout, or body lacking `success: true` to `'refused'`.
+- **`turnstileProvider`** (export) – The `HumanChallengeProvider` object.
+  - `name`: `'turnstile'`.
+  - `publicParameters()`: returns the site key (`NODE_ANTIBOT_TURNSTILE_SITE_KEY`) and the Turnstile JS `scriptUrl` for client-side embedding.
+  - `verify(token, remoteAddress)`: delegates to `siteverify`, with a top-level `.catch(() => 'refused')` as a final safety net.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/antibot-providers/index.ts`** — defines the `HumanChallengeProvider` interface that `turnstileProvider` implements. The adapter is expected to be selected via that index based on `NODE_ANTIBOT_PROVIDER`.
-- **`src/infrastructure/adapters/antibot-verdict.ts`** — supplies the `RungVerdict` type (`'ok' | 'refused'`) that `siteverify` and the provider's `verify` return.
+- **`./index`** (`antibot-providers/index.ts`) – Imports the `HumanChallengeProvider` type that `turnstileProvider` satisfies.
+- **`../antibot-verdict.ts`** (`antibot-verdict.ts`) – Imports the `RungVerdict` type (`'ok' | 'refused'`) used as the return type of `siteverify` and `verify`.
 
 ## Notes
 
-- **Fails closed everywhere.** A missing secret, a network error, a timeout, a non-200 status, a malformed JSON body, or an uncaught exception in `verify` all produce `'refused'` — never a silent pass.
-- **Secret is read per-request**, not once at startup, so rotating the env var takes effect immediately without a deploy.
-- **`remoteip` is optional** and only improves Cloudflare's scoring; omitting it still yields a valid verdict.
-- The module is intentionally not the only provider; `docs/modules/antibot.md` documents the alternatives and trade-offs.
+- The module doc comment explicitly frames this as a *worked example*, not a recommendation. `docs/modules/antibot.md` lists alternatives and their trade-offs.
+- All failure modes (missing secret, network error, non-200, malformed JSON, timeout) resolve to `'refused'`—the provider never produces a false positive.
+- `remoteip` is sent only when a value is actually provided; its absence degrades scoring accuracy but does not change the pass/fail logic.
+- `secretKey()` is called inside the `fetch` argument construction, so a missing secret throws *before* the request is issued; the outer `.catch(() => 'refused')` on `turnstileProvider.verify` is intended as the final backstop.

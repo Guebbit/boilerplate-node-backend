@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/tests/integration/repository.test.ts
-sha256: 776a116cb7a5e626ed9cba407a09ce644d31cca8a32db18e924955baf272f227
-generated_at: 2026-09-23T18:53:44.285886+00:00
+sha256: 36fa85a19f4108fee091775b9d7181acdb19dc3c3f61226907e4994dfd0aa207
+generated_at: 2026-09-27T15:03:06.469733+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the locales module's write paths, executed against a real MongoDB instance. Despite requiring a database, they are classified as unit tests in this repo because they skip HTTP and auth. The suite targets properties an in-memory fake would satisfy by construction: revision-counter movement, cross-collection cascades, and import side-effects on rows the caller did not supply.
+Integration tests for the locales module's write paths, executed against a real MongoDB instance. They verify behaviors that an in-memory fake would satisfy by construction: the revision counter advancing per write, cascading deletes across two collections, and `importEntries` side-effects on rows not included in the payload. No HTTP or auth is involved.
 
 ## Key elements
 
-- **`givenLanguage(tag, entries?, overrides?)`** — helper that creates a locale and optionally seeds its entry rows; used by every test case.
-- **`givenEntry(locale, tenant, key, value)`** — creates a single entry row, writing past the service so the tenant field is exactly as the test specifies.
-- **`revisionOf(tag)`** — reads and returns the locale's stored revision (or `-1` if missing).
-- **`describe('the revision counter')`** — six assertions: add, edit, remove, import (bumps once, not per row), read (does not bump), and isolation (other locales untouched).
-- **`describe('importEntries')`** — verifies `counts` shape, `replace: true` vs `replace: false` semantics (paired assertions), empty-body replace, and cross-locale isolation.
-- **`describe('deleting a language')`** — covers 409 on active, 409 on fallback, 404 on missing, cascade of entries and translations, and isolation of other locales.
-- **`describe('deactivating a language')`** — ensures the fallback locale cannot be deactivated but remains updatable on other fields.
-- **`describe('the translations collection')`** — concurrency-safety checks for `upsertEntityLocale` (content truncated in source).
+- **`givenLanguage(tag, entries?, overrides?)`** – helper that creates a locale record (via `localeRepository.create` + `makeLocale`) and optionally seeds frontend-tenant entries under that tag.
+- **`givenEntry(locale, tenant, key, value)`** – creates a single entry in an explicitly named tenant, bypassing the service layer.
+- **`revisionOf(tag)`** – reads the current `revision` field for a locale tag; returns `-1` if the locale is missing.
+- **`describe('the revision counter')`** – asserts the counter moves exactly once per write path (add, edit, remove, import-batch), does not move on reads, and does not leak to other languages.
+- **`describe('importEntries')`** – covers upsert count reporting, `replace: true` vs `replace: false` semantics (asserted as a pair), empty-body replace emptying a language, cross-language isolation, and transactional rollback when the removal step throws.
+- **`describe('deleting a language')`** – covers 409 for active locales, cascade of entries *and* translations, cross-language safety, 404 for unknown tags, and refusal to delete the fallback locale even when inactive.
+- **`describe('deactivating a language')`** – (truncated in source) exercises the deactivation path.
+- **`FALLBACK`** – constant `'en'`, matching `.env-example`; used in the fallback-protection test.
 
 ## Relationships
 
-- **`src/modules/locales/factories.ts`** — supplies `makeLocale` and `makeLocaleEntry` for all test-data creation.
-- **`src/modules/locales/repository.ts`** — the primary system under test; exposes `localeRepository`, `localeEntryRepository`, and `translationRepository`.
-- **`src/modules/locales/services/index.ts`** — supplies `localeService` for service-level write paths (delete, update, read, search).
-- **`src/modules/locales/model.ts`** — provides the `LocaleDocument` type (imported as a type only).
-- **`src/modules/locales/tests/unit/tenants.fixture.ts`** — provides the `BACKEND` and `FRONTEND` tenant constants used throughout.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()` called at module level to connect to a real Mongo before any test runs.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/locales/repository.ts` | Primary SUT: `localeRepository`, `localeEntryRepository`, `translationRepository` are the objects under test. |
+| `src/modules/locales/factories.ts` | `makeLocale` / `makeLocaleEntry` build fixture documents for repository calls. |
+| `src/modules/locales/model.ts` | `localeEntryModel` is spied on in the rollback test (`deleteMany` mocked to throw); `LocaleDocument` type is imported for typing. |
+| `src/modules/locales/services/index.ts` | `localeService` is exercised for read paths (`readMessages`, `searchEntries`), `deleteLanguage`, and the deactivation suite. |
+| `src/modules/locales/tests/unit/tenants.fixture.ts` | `BACKEND` / `FRONTEND` constants label tenant-scoped entries throughout. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` boots and tears down the real MongoDB instance for the whole file. |
 
 ## Notes
 
-- The suite hard-codes `FALLBACK = 'en'`, documented as matching `.env-example`; changing that env value without updating this constant will silently alter which locale the fallback-guard tests protect.
-- The `replace: true` / `replace: false` pair for `importEntries` is deliberately asserted as a pair: the file's own comment states that either assertion alone would pass against an implementation that ignores the flag.
-- `givenEntry` intentionally bypasses `localeService` to pin the tenant field; using the service path here would let the service's own tenant logic mask a repository-level bug.
-- The file header clarifies these are "unit tests in this repo's sense" — a non-standard use of the term, but the distinction (no HTTP, no auth) is the repo's own convention.
+- **Real Mongo required.** The file's docblock explains that every property under test (revision monotonicity, two-collection cascade, import side-effects) would pass trivially against an in-memory fake, so a live database is non-negotiable.
+- **Rollback test is transactional.** The `D17e-2` test mocks `localeEntryModel.deleteMany` to throw mid-transaction and asserts the upserted keys are rolled back. This is the only test that patches the model layer.
+- **`replace` vs `merge` are asserted together.** The comment notes that either assertion alone would pass against an implementation that ignores the flag; the pair is intentional.
+- **Fallback protection.** Deleting the `en` locale returns 409 even when `active: false`—the test documents this as a deliberate guard rather than a state-machine edge case.
+- **Tenant is always `FRONTEND`** in this file. `BACKEND` is imported but only appears in the fixture helper's signature, not in any assertion.

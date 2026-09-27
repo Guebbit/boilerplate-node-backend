@@ -1,39 +1,35 @@
 ---
 source: src/modules/orders/tests/contract/api.contract.test.ts
-sha256: 26bd1a7b048e696cff42f1824bcaf38f0582281a2ffc84690f500dd635a30482
-generated_at: 2026-09-23T19:09:33.813106+00:00
+sha256: 00a2df0c3cec6a0a04d0d17990626ea98791d7c17e5c319893304f2cfe99bc20
+generated_at: 2026-09-27T15:16:44.504833+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/orders/tests/contract/api.contract.test.ts
 
 ## Purpose
-
-Contract tests for the `/orders` resource that validate every HTTP response against the OpenAPI spec via `toSatisfyApiSpec()`. The file exists because the orders API had drifted from its published contract (a list endpoint returned `totalItems`/`totalQuantity`/`totalPrice` where the spec declared a single `total`, and `GET /orders/{id}` returned different shapes per caller role) and no test crossed the HTTP boundary to catch either divergence.
+Contract tests for the `/orders` HTTP API. This suite exists because the list endpoint previously returned `totalItems`/`totalQuantity`/`totalPrice` while `openapi.yaml` declared a single `total`, and `GET /orders/{id}` answered a different shape per caller role — neither mismatch was caught until tests exercised the actual HTTP boundary. Every assertion here validates responses against the OpenAPI spec via `toSatisfyApiSpec()` and pins role-specific scoping behavior.
 
 ## Key elements
-
-- **`jest.mock('@infrastructure/adapters/pdf', …)`** — stubs `renderHtmlToPdf` to return a fixed `Buffer`; no real PDF renderer is exercised here (unit coverage lives in `orders/tests/unit/invoice.test.ts`).
-- **`seedOrderFor(user)`** — creates a product and a single-line order (qty 2) for the given user; shared by every test that needs a real invoice-able order.
-- **`describe('GET /orders — the filters it now publishes')`** — asserts `status` and `notes` query filters work, that a moderator's `userId` filter is honoured (not just admin's), that `id` accepts a batch (Tier A) while repeated `userId` returns 422.
-- **`describe('GET /orders')`** — validates the list response shape for unrestricted and scoped callers; pins the three-totals contract (`totalItems`, `totalQuantity`, `totalPrice`) and asserts the legacy `total` key is absent.
-- **`describe('GET /orders/{id}')`** — contract-validates both the unscoped (`findById`) and scoped (aggregate) code paths; tests malformed-id 404 per role; invoice route 404, cross-customer 404 for scoped callers, admin 200, and synchronous 200 on first request.
-- **`describe('POST /orders/{id}/cancel')`** — owner and admin cancellation of a pending order (content truncated in source).
+- **`seedOrderFor(user)`** — local helper; creates a product and a single-item order for the given user, used across all `describe` blocks.
+- **`jest.mock('@infrastructure/adapters/pdf')`** — stubs `renderHtmlToPdf` with a fixed `Buffer`, so invoice-route tests don't require a real PDF renderer.
+- **`describe('GET /orders — the filters it now publishes')`** — verifies `status`, `notes`, `userId` (scalar), and `id` (batch) query filters; also asserts that a repeated `userId` key yields 422.
+- **`describe('GET /orders')`** — contract compliance for the list endpoint as admin (unrestricted) and as a plain user (scoped to own orders); pins the three-field total shape and absence of a collapsed `total`.
+- **`describe('GET /orders/{id}')`** — contract compliance on both the unscoped (admin) and scoped (user) paths; 404 on malformed ids per role; invoice-route scope (stranger gets 404, admin gets 200 with `application/pdf`).
+- **`describe('POST /orders/{id}/cancel')`** — owner-cancel behavior per role (content truncated in this excerpt).
 
 ## Relationships
-
-- **`tests/support/contract.ts`** — imported as `@tests/contract`; registers the `toSatisfyApiSpec()` matcher used on every response assertion.
-- **`tests/support/http.ts`** — provides `api()` (supertest-style HTTP client), `authenticateAs(role)`, and `authenticateAsRole(role)` for obtaining bearer tokens per role.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to reset/prepare the test database before any test runs.
-- **`src/modules/orders/repository.ts`** — `orderRepository` is imported directly to call `updateStatusIfIn`, transitioning a seeded order from `pending` to `paid` through the application's own status-transition guard (rather than writing the column directly).
-- **`src/modules/orders/tests/factories.ts`** — `createOrder` and `toOrderItem` build the order fixtures.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` supplies the product referenced by order lines.
-- **`src/modules/users/tests/factories.ts`** — `createUser` and `PLAIN_PASSWORD` create ad-hoc user accounts (e.g. the "stranger" who must not see another customer's invoice).
+- **`tests/support/contract.ts`** — provides the `toSatisfyApiSpec()` Jest matcher that validates every response body/headers against `openapi.yaml`.
+- **`tests/support/http.ts`** — provides `api()` (supertest wrapper), `authenticateAs()`, and `authenticateAsRole()` for obtaining role-specific bearer tokens.
+- **`tests/support/setup-test-db.ts`** — called once at module level (`setupTestDb()`) to initialise the test database before any test runs.
+- **`src/modules/orders/tests/factories.ts`** — source of `createOrder` and `toOrderItem` used to seed order data.
+- **`src/modules/products/tests/factories.ts`** — source of `createProduct`, the prerequisite line-item entity.
+- **`src/modules/users/tests/factories.ts`** — source of `createUser` and the `PLAIN_PASSWORD` constant used for the stranger-login sub-case in the invoice scope test.
+- **`src/modules/orders/repository.ts`** — `orderRepository.updateStatusIfIn` is called directly (bypassing HTTP) to transition an order from `pending` to `paid` so the status-filter test has a non-default state.
 
 ## Notes
-
-- The PDF adapter mock mirrors the one in `orders/tests/unit/invoice.test.ts`; it is safe because the invoice route renders synchronously and these tests only assert status/headers, never PDF bytes.
-- Malformed-id tests run **per role** (`it.each`): the unscoped path raises a Mongoose `CastError` → 404, while the scoped aggregate raises a `BSONError` → 422 unless an upstream guard intercepts first. A single combined test would mask a regression on either path.
-- `id` is a **batch** query parameter (accepts repeated keys); `userId` and `productId` are intentionally **scalar** — a repeated scalar key must return 422, not silently read the first value.
-- The moderator `userId` filter test pins a specific past bug: `orders.any.read` is held by named permission, not via the scope wildcard a moderator lacks, so the filter was silently dropped for them.
-- All response assertions that check shape use `toSatisfyApiSpec()` (validates against `openapi.yaml`); assertions that check specific field values (totals, status string) are written explicitly alongside.
+- Status transitions in the filter test go through the repository method rather than a raw DB write, because only application-reachable statuses are worth filtering on.
+- Scope correctness is proven by **absence**: a stranger's order is seeded and must not appear in a scoped caller's results. The API does not return an explicit "denied" for out-of-scope reads.
+- Malformed-id cases (404) are asserted per role because the controller's `isValidObjectId` pre-check lives in each route handler; a regression that drops the check on one route would otherwise go uncaught.
+- The invoice scope test for a stranger performs a real `POST /account/login` to obtain that user's token, rather than using `authenticateAs`, to exercise the full auth path.
+- `userId` and `productId` filters are intentionally scalar; `id` is a batch (Tier A) filter. Repeated scalar keys must 422, not silently pick the first value.

@@ -54,7 +54,6 @@ describe('GET /users', () => {
         const response = await api().get('/users').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
     });
 
@@ -85,7 +84,6 @@ describe('GET /users/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
     });
 });
@@ -96,7 +94,6 @@ describe('GET /account', () => {
         const response = await api().get('/account').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
 
         // A profile is the caller's identity: a browser must never be told to keep a copy. See
@@ -116,7 +113,6 @@ describe('POST /account/signup', () => {
         });
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
     });
 
@@ -133,7 +129,6 @@ describe('POST /account/signup', () => {
         const response = await api().post('/account/signup').send(payload);
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -151,7 +146,6 @@ describe('POST /users', () => {
         });
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
     });
 
@@ -164,7 +158,6 @@ describe('POST /users', () => {
         });
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
     });
 
@@ -176,7 +169,6 @@ describe('POST /users', () => {
         });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('accepts sendSetupEmail: false the same as omitting it', async () => {
@@ -188,7 +180,6 @@ describe('POST /users', () => {
         });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     // The breach check on create (and that it creates no user row) is table-driven across every
@@ -222,7 +213,6 @@ describe('PUT /users/{id}', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         expect(response.body.data.imageUrl).toBe(DEFAULT_USER_IMAGE_URL);
         expect(response.body.data.phone).toBeUndefined();
     });
@@ -242,7 +232,6 @@ describe('PUT /users/{id}', () => {
             .send({ role: 'customer' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     // Regression guard: the controller once defaulted `requirePassword` to true on updates too,
@@ -265,7 +254,6 @@ describe('PUT /users/{id}', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
     });
 
@@ -288,7 +276,6 @@ describe('PATCH /users/{id}', () => {
             .send({ role: 'moderator' });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         expect(response.body.data.role).toBe('moderator');
         expect(response.body.data.email).toBe(target.email);
         expect(response.body.data.username).toBe(target.username);
@@ -309,7 +296,6 @@ describe('PATCH /users/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.imageUrl).toBe('https://cdn.example.com/avatars/original.png');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('null clears an optional field', async () => {
@@ -327,7 +313,6 @@ describe('PATCH /users/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.phone).toBeUndefined();
-        expect(response).toSatisfyApiSpec();
     });
 
     it('"" is refused, never a synonym for null', async () => {
@@ -343,7 +328,6 @@ describe('PATCH /users/{id}', () => {
             .send({ phone: '' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     // The breach check on PATCH is table-driven across every password-set path now, in
@@ -361,7 +345,6 @@ describe('DELETE /users/{id} — the audit action names which discharge happened
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: 'admin.user.soft_deleted',
@@ -381,7 +364,6 @@ describe('DELETE /users/{id} — the audit action names which discharge happened
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: 'admin.user.erased',
@@ -404,7 +386,6 @@ describe('POST /users/{id}/restore', () => {
 
         expect(response.status).toBe(200);
         expect((await userRepository.findById(String(user._id)))!.deletedAt).toBeUndefined();
-        expect(response).toSatisfyApiSpec();
     });
 
     it('answers 409 for a user who is not deleted', async () => {
@@ -416,7 +397,6 @@ describe('POST /users/{id}/restore', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -435,7 +415,6 @@ describe('DELETE /users — the id in the body', () => {
             .send({ id: String(target._id) });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         const stored = await userRepository.findById(String(target._id));
         expect(stored?.deletedAt).toBeInstanceOf(Date);
     });
@@ -451,7 +430,6 @@ describe('DELETE /users/{id}/hard', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         await expect(userRepository.findById(String(target._id))).resolves.toBeNull();
     });
 });
@@ -466,7 +444,6 @@ describe('DELETE /users/{id}/2fa', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the contract when it disarms a factor the user had', async () => {
@@ -484,7 +461,6 @@ describe('DELETE /users/{id}/2fa', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         const after = await userRepository.findByIdWithCredentials(String(target._id));
         expect(after!.twoFactorMethods).toEqual([]);
     });
@@ -502,7 +478,6 @@ describe.each([
             await api()[method === 'GET' ? 'get' : method === 'POST' ? 'post' : 'delete'](path);
 
         expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -516,6 +491,5 @@ describe('an id nobody holds', () => {
         const response = await api().delete(path).set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });

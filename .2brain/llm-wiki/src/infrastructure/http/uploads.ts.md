@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/uploads.ts
-sha256: 6ac831de868d45d706b009a9984107d463fbab841b14f5918403b6b3aac5f8b6
-generated_at: 2026-09-23T17:46:17.522242+00:00
+sha256: 7ae7acfe0ab291c0305c2c6b01aa19cef90c05097c358429d506a7943d021ab1
+generated_at: 2026-09-27T14:11:23.685881+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Read-side helpers for file uploads. This module normalizes whatever the multer middleware left on the Express request into a uniform shape that controllers can consume, so that individual endpoints never inspect `request.file` / `request.files` or the middleware's stored-URL arrays directly. The write side (naming, landing, digestion) lives in the upload middleware; this file only interprets the result.
+Read-side helpers for image uploads. After the multer middleware (in `middlewares/upload`) has stashed file metadata on the Express request, this module normalizes that state into a uniform `RequestImage` object and provides a write wrapper that cleans up orphaned files when a controller fails. It is shared by every image-accepting controller so the three upload paths (inline digest, broker/pending, body-only) are handled in one place.
 
 ## Key elements
 
-- **`getFormFiles(request: Request): string[] | undefined`** — Returns a flat array of file paths regardless of whether the route used `multer.single()`, `.array()`, or `.fields()`. Returns `undefined` when no file was uploaded (including the "present but empty" edge case), giving callers one falsy check.
-- **`RequestImage` (interface)** — The contract a write controller receives for the image half of a request: `imageUrl`, `thumbnailUrl`, `pendingImageKey` (quarantine key for async digest), and `deleteUpload()` (a one-shot undo that removes only files _this_ request created).
-- **`readUploadedImage(request): RequestImage`** — Reads back the URLs/keys the upload middleware recorded (`storedImageUrls`, `storedThumbnailUrls`, `quarantinedImageKeys`). Priority: inline-digested URL → pending/quarantine placeholder → body-supplied `imageUrl`. Wires `deleteUpload` to `imageStore.remove` or `imageStore.removeQuarantined` accordingly. Falls through to `bodyRecordOf(request).imageUrl` for body-only cases.
+- **`getFormFiles(request)`** – Returns `[request.file.path]` or `undefined`. Thin wrapper so callers get an array shape even though only `multer.single()` is ever mounted.
+- **`RequestImage`** – Interface describing the image half of a write request: `imageUrl`, `thumbnailUrl`, `pendingImageKey`, and a `deleteUpload()` undo callback.
+- **`readUploadedImage(request)`** – Inspects middleware-attached properties (`storedImageUrls`, `storedThumbnailUrls`, `quarantinedImageKeys`) and falls back to `body.imageUrl`. Returns a `RequestImage` for one of three states: inline-digested, quarantined/pending, or no-upload (body-only).
+- **`ImageChanges`** – `Pick<RequestImage, 'imageUrl' | 'thumbnailUrl' | 'pendingImageKey'>`; the persistable subset without the undo callback.
+- **`writeWithUploadedImage(request, changedImageUrl, write)`** – Calls `readUploadedImage`, passes the image fields into the caller's `write` function, and on failure (thrown error or `{ success: false }`) invokes `deleteUpload()` before re-throwing / returning. Upload always takes precedence over `changedImageUrl`.
 
 ## Relationships
 
-- **`@infrastructure/adapters/image-store`** — Imported as `imageStore`; `readUploadedImage` delegates its `deleteUpload` closures to `imageStore.remove()` (promoted files) and `imageStore.removeQuarantined()` (pending files).
-- **`@infrastructure/http/middlewares/upload`** — The producer side. That middleware populates `request.storedImageUrls`, `request.storedThumbnailUrls`, and `request.quarantinedImageKeys`, which `readUploadedImage` reads. The two files are the read/write halves of the same upload flow.
-- **`@infrastructure/http/request`** — Provides `bodyRecordOf`, used to safely access `request.body` (Express 5 may leave it unset) when falling through to a body-supplied `imageUrl`.
-- **Controllers** (`post-signup`, `put-account`, `create-product`, `update-product`, `write-users`) — Primary consumers; they call `readUploadedImage` to obtain the `RequestImage` they persist, and call `getFormFiles` when they need raw paths.
-- **`tests/unit/infrastructure/http/uploads.test.ts`** — Unit tests covering the normalization and priority logic.
+- **`middlewares/upload.ts`** – Produces the state this file reads. The middleware populates `request.storedImageUrls`, `request.storedThumbnailUrls`, and `request.quarantinedImageKeys`; this module never touches raw multer paths.
+- **`adapters/image-store.ts`** – `imageStore.remove(url)` and `imageStore.removeQuarantined(key)` are the two operations delegated to from `deleteUpload` callbacks.
+- **`http/request.ts`** – Supplies `bodyRecordOf`, used to safely read `request.body.imageUrl` (guards Express 5's unset-body case).
+- **Controllers** (`post-signup`, `update-account`, `create-product`, `update-product`, `create-user`, `update-user`) – Consume `readUploadedImage` and/or `writeWithUploadedImage` to persist or reject image changes.
+- **`tests/unit/infrastructure/http/uploads.test.ts`** – Unit tests for the three `readUploadedImage` branches and the `writeWithUploadedImage` cleanup logic.
 
 ## Notes
 
-- `readUploadedImage` intentionally reads URLs **from the middleware's stored arrays**, not from multer's raw `path` field. This keeps filesystem separators out of persisted values and lets the store swap between local paths and CDN URLs transparently.
-- Only index `[0]` is read: these endpoints accept a single image; extras are silently ignored.
-- In the body-only fallback, non-string `imageUrl` values (numbers, booleans) are passed through as-is (cast to `string | undefined`) so that Zod can reject them with the correct 422 message. Coercing to `undefined` would trigger the controller's `= ''` default and mask the type error.
-- `deleteUpload` is deliberately scoped to files created by _this_ request. It must never delete a body-supplied `imageUrl`, which belongs to a prior upload.
+- **Precedence rule:** An uploaded file always outranks a body-supplied `imageUrl`. A caller that sent bytes expressed stronger intent.
+- **Sentinel values matter:** `undefined` = "no change" (update-schema `.optional()`), `null` = "clear the image", string = "persist this URL". Never default `imageUrl` to `''`—it would bypass zod's `minLength: 1` check and mask a 422 as a 200.
+- **Reads middleware state, not paths:** URLs come from `imageStore`'s constructed output (local path *or* CDN URL), so controllers stay store-agnostic.
+- **Single image only:** All array accesses use `[0]`; additional files are silently ignored.
+- **Non-string body values pass through untouched** (number, bool, etc.) so zod can reject them with the correct i18n message rather than being silently coerced.
+- **`deleteUpload` is never keyed on a body `imageUrl`**—deleting a file this request didn't create would be destructive.

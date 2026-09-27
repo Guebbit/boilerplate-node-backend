@@ -1,34 +1,30 @@
 ---
 source: src/modules/orders/controllers/get-orders.ts
-sha256: 2a076acce698a50dc63447eb2316dd19a31e61e22b5209dd90df8008bae4a7d7
-generated_at: 2026-09-23T19:00:37.921737+00:00
+sha256: 378eca5c09a7a6b2bb55c6077a1437b7de79249f9ce5ba5e4fc0141ed228f069
+generated_at: 2026-09-27T15:07:37.841345+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/orders/controllers/get-orders.ts
 
 ## Purpose
-
-Thin controller that wires the `GET /orders` endpoint onto the shared `createSearchController` factory. It validates the search/pagination query, enforces caller-scoped visibility (non-admins see only their own orders), and delegates the actual query to `orderService.search`.
+Thin controller that wires `GET /orders` to the shared `createSearchController` factory. It defines the query schema, enforces caller-based visibility (non-admins see only their own orders), and delegates the actual search to `orderService.search`.
 
 ## Key elements
-
-- **`searchOrdersQuerySchema`** – Extends the orval-generated `SearchOrdersBody` with `page` and `pageSize` (both from the shared infrastructure schemas). Absent values remain absent so `normalizePagination` can apply defaults.
-- **`searchOrdersKeyParameters`** (exported) – Array of parameter names derived via `Object.keys(schema.shape)`. Used as the cache-key field list; keeping it schema-derived prevents drift between validation and caching.
-- **`getOrders`** (exported) – The controller returned by `createSearchController`. Its `extendInput` strips `userId` from the parsed input unless the caller holds the `orders.any.read` ability key. Its `runSearch` calls `orderService.search(parsed, orderService.callerScope(authContext), callerContextOf(request))`.
+- **`searchOrdersQuerySchema`** — Extends the orval-generated `SearchOrdersBody` with `page`, `pageSize` (from shared infra schemas), and a text-coerced `deleted` boolean. Used as the validation schema for both query-string and body inputs.
+- **`getOrders`** (exported) — The controller built by `createSearchController`. Its `extendInput` callback strips `userId` from the input unless the caller holds the `orders.any.read` ability key; `runSearch` passes the parsed input, a caller-derived scope, and caller context into `orderService.search`.
 
 ## Relationships
-
-- **`src/infrastructure/surfaces/create-search-controller.ts`** – Provides the `createSearchController` factory that `getOrders` is built from (handles routing, validation, and pagination plumbing).
-- **`src/infrastructure/http/schemas.ts`** – Supplies `pageSchema` and `pageSizeSchema` so all search endpoints share identical pagination validation.
-- **`src/infrastructure/http/request.ts`** – Supplies `callerContextOf(request)`, passed through to the service call.
-- **`src/kernel/permissions.ts`** – Supplies `callerForSubject`, used to resolve the effective permission subject for the ability check.
-- **`src/kernel/ability.ts`** – Supplies `holdsKey`, checked against `'orders.any.read'` to decide whether the `userId` filter is honored.
-- **`src/modules/orders/services/index.ts`** – Provides `orderService` (`.search` and `.callerScope`) which performs the actual data access.
-- **`src/modules/orders/routes.ts`** – Registers the `getOrders` controller on the `/orders` route.
+- **`src/infrastructure/surfaces/create-search-controller.ts`** — Supplies the `createSearchController` factory that assembles validation, input extension, and the HTTP response around the callbacks defined here.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts the caller context forwarded to `orderService.search`.
+- **`src/infrastructure/http/schemas.ts`** — Provides `optionalBooleanSchema`, `pageSchema`, `pageSizeSchema` so this endpoint stays consistent with every other search endpoint.
+- **`src/kernel/ability.ts`** — `holdsKey` is used in `extendInput` to check whether the caller's ability set contains `orders.any.read`.
+- **`src/kernel/permissions.ts`** — `callerForSubject(request.authContext, 'Order')` resolves the caller's permission subject before the `holdsKey` check.
+- **`src/modules/orders/services/index.ts`** — `orderService.search` performs the query; `orderService.callerScope` produces the row-level scope applied server-side.
+- **`src/modules/orders/routes.ts`** — Registers `getOrders` on the `/orders` route.
 
 ## Notes
-
-- **Permission granularity matters:** The check is specifically for `orders.any.read` (not a broader "read" key). A moderator or manager holds exactly this key; using a wider check would silently drop their `userId` filter.
-- **`userId` is stripped, not overridden, for non-admins:** `extendInput` sets it to `undefined` so the service's `callerScope` is the sole source of ownership scoping. There is no fallback to "all orders."
-- **Cache-key derivation is intentional:** `searchOrdersKeyParameters` is not a hand-maintained list; if the schema changes, the cache key updates automatically. Do not replace it with a static array.
+- `userId` is **silently dropped** (set to `undefined`) for any caller who does not hold `orders.any.read`. The server-side `callerScope` still enforces visibility regardless, so a non-admin cannot widen their result set by omitting or faking the parameter.
+- The permission check targets the exact key `orders.any.read`. A moderator or manager holds this key; asking for a broader key would miss them and silently remove their filter capability.
+- `deleted` uses `optionalBooleanSchema` because query strings deliver booleans as text (`"true"`/`"false"`); body payloads pass the boolean straight through.
+- Absent `page`/`pageSize` values are intentionally left as `undefined` here; the `createSearchController` factory (via `normalizePagination`) applies defaults.

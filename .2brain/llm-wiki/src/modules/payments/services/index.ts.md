@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/index.ts
-sha256: d6a5389d665632ae48963a774230f3ac57bfc96c544c5043e33889741f9123af
-generated_at: 2026-09-23T19:20:54.206888+00:00
+sha256: f6d8d2e0700af59a58060049d0921c2a6f35f7be9a54e2b171fd52655cefe5d4
+generated_at: 2026-09-27T15:26:05.967075+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (index) file for the payments services folder. It re-exports every public operation from the sibling service modules (`intent`, `settlement`, `refunds`, `offline`, `view`, `retention`, `lookup`, `scope`) plus `listPaymentMethods` from `../config`, and bundles the core operations into a single `paymentService` object. It exists so that `module.ts` can wire event listeners and downstream consumers (controllers, ops scripts, the cart checkout flow) can import a stable, named surface without reaching into individual service files.
+Barrel file that re-exports every payment-service operation (intent, settlement, refunds, effects, offline, view, retention, scope, lookup) and the `listPaymentMethods` helper from config. It exists so that consumers—controllers, the module's event wiring, and ops scripts—can import from one stable path rather than reaching into individual sibling files. The file was split out of a single 700+-line module (see `docs/theory/layers.md`) and this index is the public seam of the services folder.
 
 ## Key elements
 
-- **`paymentService`** (const) — the module's single service handle; aggregates `createIntent`, `confirmPayment`, `syncPayment`, `applyWebhookDelivery`, `applyWebhookSettlement`, `getForOrder`, `refundForOrder`, `refundByOrder`, `recordOfflinePayment`, `getOrderByReference`, `detachUserId`, `findOwnPayments`, `reapAbandonedPayments`, `listPaymentMethods`.
-- **Named re-exports** — every operation is also published as a top-level named export (e.g. `settlePayment`, `performRefund`, `REFUNDABLE_PAYMENT_STATUS`, `withActions`, `callerScope`, `OfflinePaymentInput`, `PaymentMethodInfo`). The file comment states this is intentional so the folder-split does not become a breaking change relative to the prior single-file layout.
-- **Docstring (module-level JSDoc)** — documents the four domain invariants: only a `pending` order's owner starts a payment; the order's move to `paid` is the gate (provider answers first, slipped orders are refunded on the spot); a refund is the `ORDER_CANCELLED` listener made at-most-once by the conditional `succeeded → refunded` move; the provider webhook is the authority, the browser confirmation is a hint.
+- **Named re-exports** — Every function is published individually (`createIntent`, `settlePayment`, `refundForOrder`, `retryPendingEffects`, `recordOfflinePayment`, `getForOrder`, `detachUserId`, `findOwnPayments`, `findOwnPaymentsForExport`, `reapAbandonedPayments`, `callerScope`, `getOrderByReference`, `listPaymentMethods`, etc.) so that `module.ts` can wire specific handlers into events and test suites can drive operations directly.
+- **`paymentService` object** — A single convenience handle aggregating the most common operations. Named for the record it serves (mirrors `paymentRepository`). Consumers that need "the payments service" import this one object.
+- **`OfflinePaymentInput` type** — Re-exported from `./offline` for callers constructing offline payment records.
+- **`PaymentMethodInfo` type** — Re-exported from `../config`.
+- **`REFUNDABLE_PAYMENT_STATUS`** — Re-exported from `./refunds`; used to gate refund eligibility.
 
 ## Relationships
 
-- **`src/modules/payments/config.ts`** — imports `listPaymentMethods` and the `PaymentMethodInfo` type; re-exports both.
-- **`src/modules/payments/services/intent.ts`** — imports `createIntent`; re-exports it.
-- **`src/modules/payments/services/lookup.ts`** — imports `getOrderByReference`; re-exports it.
-- **`src/modules/payments/services/settlement.ts`, `refunds.ts`, `offline.ts`, `view.ts`, `retention.ts`, `scope.ts`** — all re-exported by name (these are referenced in the file's import/export statements).
-- **`src/modules/payments/module.ts`** — the file comment notes `module.ts` consumes `refundForOrder` and `detachUserId` to wire the `ORDER_CANCELLED` and user-detach event listeners.
-- **`src/modules/payments/index.ts`** — parent barrel that further re-exports from this file to the module's public API.
-- **Controllers** (`post-payment-intent`, `post-payment-confirm`, `post-payment-webhook`, `post-payment-refund`, `post-payment-offline`, `post-payment-sync`, `get-payment-by-order`, `get-order-by-reference`) — consume the named exports defined here as their handler logic.
-- **`scripts/ops/reap-payments.ts`** — drives `reapAbandonedPayments` directly for the abandoned-payment sweep.
-- **`src/modules/cart/services/checkout.ts`** — calls `createIntent` to start the payment for a pending cart order.
+- **`src/modules/payments/module.ts`** — Imports individual named exports (specifically `refundForOrder` and `detachUserId`) to attach them as event listeners. This is the reason dual-export (named + object) is mandatory; publishing only the object would break this wiring.
+- **`src/modules/payments/controllers/post-payment-intent.ts`, `post-payment-confirm.ts`, `post-payment-webhook.ts`, `post-payment-refund.ts`, `post-payment-sync.ts`, `post-payment-offline.ts`, `get-order-by-reference.ts`, `get-payment-by-order.ts`** — HTTP-layer controllers that call the operations re-exported here.
+- **`src/modules/payments/config.ts`** — Source of `listPaymentMethods` and `PaymentMethodInfo`, which this index re-exports for a single import surface.
+- **`src/modules/payments/services/effects.ts`** — Source of `retryPendingEffects`; this index re-exports it for external consumers.
+- **`scripts/ops/reap-payments.ts`** — Ops script that imports from this index to trigger `reapAbandonedPayments` / `retryPendingEffects`.
+- **`scripts/ops/sweep-payment-effects.ts`** — Ops script that drives `retryPendingEffects` via this index.
+- **`src/modules/cart/services/checkout.ts`** — Checkout flow calls into the payment operations exposed here to initiate intent/confirm during the cart→order transition.
+- **`src/modules/payments/index.ts`** — Parent module barrel that aggregates this services index alongside controllers and types for the public module API.
 
 ## Notes
 
-- This is a **pure re-export file**; it contains no business logic of its own. All behaviour lives in the sibling `./` files.
-- The barrel publishes **both** a named-export surface **and** the `paymentService` object. Consumers may use either; they are the same underlying functions. Reducing either set would be a breaking change (stated in the inline comment).
-- The file was split out of a ~700-line single file; the docstring cross-references `docs/theory/layers.md` for the rationale.
-- `settlePayment` is exported but **not** included in the `paymentService` object — it is the internal choreography reached via `confirmPayment`, `applyWebhookDelivery`, and `applyWebhookSettlement`, but is also published for the ops/test suites.
+- **Dual export is intentional and load-bearing.** The comment in the file states that publishing only the `paymentService` object would break both `module.ts`'s event wiring and the test suites. Do not collapse to object-only exports.
+- **`settlePayment` is the single settlement path.** Both the webhook-driven and browser-driven paths converge on it (via `confirmPayment` / `applyWebhookSettlement`). There is deliberately no second settlement routine; two copies would risk committing inventory twice.
+- **The folder, not this file, is the unit of change.** When adding a new payment operation, create the implementation in a sibling file (e.g., `./intent.ts`) and add the re-export here; do not implement logic in this index.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/service.test.ts
-sha256: d410f8aaae9fc3741b7a1a390ceae9b769c58168e71cd28a37a0703d3c86e5a8
-generated_at: 2026-09-23T18:14:47.784022+00:00
+sha256: 4ee345d8e60e08b870d4c9e5337cec7a10bdba41d71073a1adad40aa997fe903
+generated_at: 2026-09-27T14:35:53.333047+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify the **security invariants** of the account service (signup, login, password change, bulk token removal). Tests are grouped by the invariant each defends rather than by function — e.g., the two login failure paths must be indistinguishable, a soft-deleted account must not authenticate, and a password must never be stored in plaintext. Each case is designed to survive a regression that a happy-path assertion alone would miss.
+Integration tests for the account service (`accountService`) that guard security **invariants** rather than happy paths: login-failure responses must be indistinguishable, soft-deleted accounts must be rejected, and plaintext passwords must never reach the database. Tests are grouped by the invariant each defends, so a regression in any one is caught even when every "happy path" still passes.
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/observability/analytics', …)`** — Replaces (not spies on) the analytics port so `emitAnalyticsEvent` is a plain `jest.fn`. A comment explains `jest.spyOn` cannot redefine the non-configurable getter on a CommonJS namespace import.
-- **`setupTestDb()`** — Boots the in-memory / temporary database once per suite.
-- **`describe('signup', …)`** — Covers: successful creation + DB persistence, bcrypt hashing (asserts `$2[aby]$` prefix), mismatched confirmation → 422, duplicate email → 409, `NODE_ANTIBOT_EMAIL_POLICY` off-by-default and on (disposable domain returns a success envelope with `isNew: true` but is **not** persisted), invalid input (parameterised 422), absent `imageUrl` stored as `''`, `termsAccepted: false` → 422, and `analyticsConsent` persistence.
-- **`describe('login', …)`** — (Truncated in source; referenced by the module doc as covering indistinguishable failure paths and soft-deleted-account rejection.)
-- **Password-change / token-removal blocks** — Referenced in the module doc as additional invariants tested further down.
-- **Helpers used throughout**: `asSuccess` / `asReject` (response unwrapping), `testCallerContext` (auth context stub), `createUser` + password constants from the users factory, `userRepository.findOne` / `findOneWithCredentials` for DB assertions, `observePort` for analytics verification.
+- **`describe('signup')`** — Covers account creation: persistence, password hashing (`$2[aby]$` bcrypt prefix), 422 on mismatched confirmation, 409 on duplicate email, invalid-input parameterised cases, image-URL default, terms-required check, and analytics-consent persistence.
+- **`NODE_ANTIBOT_EMAIL_POLICY` block** — Verifies the anti-disposable-email guard is off by default; when enabled, asserts the service returns a *fake* success (`isNew: true`, no DB row) so the client sees a normal 201 while nothing is persisted.
+- **`jest.mock('@infrastructure/observability/analytics', …)`** — Replaces the analytics port's `emitAnalyticsEvent` with a `jest.fn`. The file comment explains this must be a full mock (not `jest.spyOn`) because the CJS namespace getter is non-configurable.
+- **`setupTestDb()`** — Boots the in-memory/ephemeral database once for the suite.
+- **(Truncated) `login`, `password change`, `bulk token removal` describes** — Referenced in the module docblock as the remaining invariant groups.
 
 ## Relationships
 
-- **`@modules/account/services` (SUT)** — Every test calls `accountService.signup`, `.login`, etc. This file is the primary integration coverage for that module.
-- **`@infrastructure/observability/analytics`** — Replaced via `jest.mock`; the real `emitAnalyticsEvent` is stubbed so tests can assert which events fire without a live analytics backend.
-- **`@modules/account/analytics.ts`** — `accountAnalyticsEvents` is imported to identify the expected event names when asserting against the stubbed port.
-- **`@modules/users`** — Provides `hashToken`, `TokenType`, `Token`, `UserDocument` types used in token-removal and credential checks.
-- **`@modules/users/tests/factories.ts`** — Source of `createUser`, `LEGACY_PASSWORD`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, and the shared `userRepository` used for post-assertion DB reads.
-- **`tests/support/response.ts`** — `asSuccess` / `asReject` normalise the service's discriminated-union return so assertions are concise.
-- **`tests/support/ports.ts`** — `observePort` provides the port-replacement pattern documented in the `jest.mock` comment.
-- **`tests/support/callers.ts`** — `testCallerContext` supplies a fixed auth/request context for every call.
-- **`tests/support/setup-test-db.ts`** — Initialises the test database schema.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/account/services/index.ts` | The SUT — `accountService.signup`, `.login`, `.changePassword`, `.removeTokens` are called directly. |
+| `src/modules/users/tests/factories.ts` | Provides `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, `LEGACY_PASSWORD`, and a pre-wired `userRepository` for post-condition assertions. |
+| `src/modules/users/index.ts` | Exports `hashToken`, `DEFAULT_USER_IMAGE_URL`, `TokenType`, `Token`, `UserDocument` used in assertions and setup. |
+| `src/modules/users/repository.ts` | `userRepository.findOne` / `findOneWithCredentials` are used to verify what actually hit the DB (hash prefix, absence of rows, default image URL). |
+| `src/modules/users/model.ts` | The Mongoose `pre('save')` hook that hashes the password is the mechanism the "never stores plaintext" test guards indirectly. |
+| `src/infrastructure/observability/analytics/index.ts` | Fully mocked so `emitAnalyticsEvent` is a `jest.fn`; tests can later assert call shape. |
+| `src/modules/account/analytics.ts` | `accountAnalyticsEvents` imported for asserting which analytics events fire per action. |
+| `tests/support/ports.ts` | `observePort` utility (documented as the reason the analytics mock is a full `jest.mock` rather than a spy). |
+| `tests/support/response.ts` | `asSuccess` / `asReject` unwrap the service's `Result` type so tests can assert on `.data` or `.status` + `.errors`. |
+| `tests/support/callers.ts` | `testCallerContext` supplies the auth/caller metadata the service expects. |
+| `tests/support/setup-test-db.ts` | Initialises the test database before any `it` block runs. |
 
 ## Notes
 
-- **Analytics port is replaced, not spied on.** `jest.spyOn` cannot work here because a CommonJS `import * as` namespace exposes a non-configurable getter. The `jest.mock` factory spreads `requireActual` and overwrites only `emitAnalyticsEvent`.
-- **Grouping is by invariant, not by function.** The module doc makes explicit that two login failures must be indistinguishable (account enumeration), a soft-deleted account must be rejected, and password hashing must survive "simplification." A happy-path test cannot catch any of these regressions.
-- **Anti-bot policy defaults to off.** The `NODE_ANTIBOT_EMAIL_POLICY` tests assert that a known disposable domain (`mailinator.com`) signs up successfully when the env var is unset, and that when set to `'disposable'` the response _looks_ like a real signup (`isNew: true`) but the document is never persisted.
-- **Bcrypt prefix assertion** (`/^\$2[aby]\$/`) is intentional — it proves the hook fired and used bcrypt, not merely that the value differs from the input.
-- **`imageUrl` default suppression.** Passing `undefined` must result in `''` in the DB, not the Mongoose schema default (a placeholder avatar). The test guards against the default firing and making the field indistinguishable from a deliberate choice.
+- **Grouping convention:** tests are organised by *invariant* (e.g. "indistinguishable failures", "password never plaintext"), not by API method. A new invariant should get its own `describe`, not be appended to an existing one.
+- **`isNew: true` on fake success:** the anti-bot path deliberately constructs a document that *looks* saved (so downstream `post-signup` cleanup and audit logic see a valid shape) while `userRepository.findOne` returns `null`. Don't "fix" this by returning an error—the 201 is the contract.
+- **409 vs 422 is a deliberate contract:** duplicate email must be 409 (conflict), not 422 (validation), because the client UI branches on status to show "email taken" vs. inline field errors.
+- **Analytics mock style:** the file uses `jest.mock` with `jest.requireActual` spread, not `jest.spyOn`. If you add new analytics assertions, work with the existing mock rather than introducing a spy.
+- **`NODE_ANTIBOT_EMAIL_POLICY` restoration:** the `afterEach` restores the env var to its original value (or deletes it). New env-var tests in this file should follow the same save/restore pattern.

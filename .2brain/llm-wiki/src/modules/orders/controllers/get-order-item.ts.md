@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/controllers/get-order-item.ts
-sha256: fe8d481fd80c2f5c528b9e332ed8f4ab5a70256d9dfceaa799e5a40725423628
-generated_at: 2026-09-23T19:00:27.475462+00:00
+sha256: 12da7acdc3deb975e997eb9557af1133a351c4d57d0a0497122beaba5d791bd8
+generated_at: 2026-09-27T15:07:26.123706+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handler for `GET /orders/:id`. Returns a single order scoped to the caller's role (admins see any order; others see only their own) and augments the payload with the actions that caller is allowed to perform. It validates the `:id` parameter **before** issuing the query so that a malformed id always yields **404**, regardless of which role branch the service would have taken.
+Single-order read controller for `GET /orders/:id`. It enforces a 404-vs-422 distinction by validating the path id *before* the database query runs, and scopes the lookup to the caller's permissions (non-admins see only their own orders).
 
 ## Key elements
 
-- **`getOrderItem`** (exported controller function) — Receives Express `Request<{ id?: string }>` and `Response`.
-    1. Calls `isValidObjectId(request.params.id)`; on failure responds **404** immediately.
-    2. Delegates to `orderService.getById(id, orderService.callerScope(authContext))`.
-    3. If the order is `null`, responds **404**.
-    4. Otherwise calls `orderService.withActions(order, authContext)` to attach role-specific actions, then sends via `successResponse<Order>`.
-    5. Catches any thrown error with `catchAs(response, 'getOrderItem')`.
+- **`getOrderItem(request, response)`** — The sole export. Validates `request.params.id` with `isValidObjectId`; on failure returns 404 immediately. Otherwise delegates to `orderService.getById(id, orderService.callerScope(authContext))`, 404s on `null`, and on success calls `respondWithOrder` to shape the response body with role-aware actions.
+- **404-before-query guard** — A malformed id would otherwise surface as a `BSONError` → 422 via the normal `.catch` path; this file deliberately avoids that by short-circuiting before the service call.
 
 ## Relationships
 
-- **`src/modules/orders/routes.ts`** — Registers `getOrderItem` as the handler for the `GET /orders/:id` route.
-- **`src/modules/orders/services/index.ts`** — Supplies `orderService` with the three methods this controller calls: `getById`, `callerScope`, and `withActions`.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` and `rejectResponse` for all HTTP output.
-- **`src/infrastructure/http/request.ts`** — Provides `isValidObjectId` used for the pre-query id check.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs` for unified error serialization in the `.catch` branch.
-- **`src/infrastructure/i18n/index.ts`** — Exports the `t` function used to look up the `orders.not-found` message.
-- **`src/infrastructure/i18n/context.ts`** — Underlying context that `t` resolves against at runtime.
-- **`src/types/index.ts`** — Source of the `Order` type used as the generic parameter of `successResponse<Order>`.
+- **`src/modules/orders/routes.ts`** — Wires `getOrderItem` to the `GET /orders/:id` route.
+- **`src/modules/orders/services/index.ts`** — Provides `orderService.getById` and `orderService.callerScope`, the actual data access and permission scoping.
+- **`src/modules/orders/controllers/respond.ts`** — `respondWithOrder` builds the final response body including the caller's allowed actions for this order.
+- **`src/infrastructure/http/response.ts`** — `rejectResponse` sends the 404 early-exit responses.
+- **`src/infrastructure/http/request.ts`** — `isValidObjectId` supplies the pre-query id validation.
+- **`src/infrastructure/http/controller.ts`** — `catchAs` maps any service-layer rejection to a structured error response.
+- **`src/infrastructure/i18n/context.ts` / `index.ts`** — `t('orders.not-found')` localises the 404 message.
 
 ## Notes
 
-- **Why the id is validated before the query:** The admin branch (`findById`) throws a Mongoose `CastError` while the scoped branch (aggregate with `$expr`) throws a `BSONError` (mapped to **422**) for the same malformed id. Validating first guarantees a **404** in both cases. Other single-item reads in the codebase skip this and let the query fail, mapping the error in `.catch` — this file deliberately does not.
-- **Action-aware payload:** The response body is not the raw order document; it is the result of `withActions`, which embeds the set of operations the _current_ caller may perform. Clients should render UI controls from this field rather than duplicating lifecycle logic client-side.
-- **Synchronous early-return:** When the id is invalid the function returns `void` (not a `Promise`), which is safe because Express does not await the return value, but it means the return type is `Promise<void> | void`.
+- The file's JSDoc explicitly contrasts this with "other single-item reads that let the query fail and map the error in `.catch`." If you add a similar controller, the 404-vs-422 rationale here is the pattern to follow.
+- The response body embeds caller-specific actions (what *this* user may do), so the client should render controls from the server's answer rather than a shared lifecycle definition.
+- `request.params.id` is typed as optional (`{ id?: string }`); the `isValidObjectId` guard also covers the `undefined` case.

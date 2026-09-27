@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/module.ts
-sha256: fef5b4cbb33b48f0c94b0f5144611f7ff4671f9983e0d3e3fd3b2fb8c5e85ec5
-generated_at: 2026-09-23T19:04:18.074412+00:00
+sha256: b2554e086460c73f63c5f3667259e31d99a464b6973966a85d2210c29b57e7e6
+generated_at: 2026-09-27T15:11:47.119540+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,42 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the **orders** domain. It registers the module's identity (name, base path, permissions, routes), wires domain-event subscriptions (reservation expiry, user deletion, product removal), declares the GDPR data-export query, and pins the storefront/admin scenario states — all in a single `AppModule` object that the kernel's registry consumes at boot.
+The module manifest for the **orders** domain. It registers the module with the kernel (name, base path, permissions, routes), declares public webhook event mappings, subscribes to cross-module domain events (reservation expiry, product removal), defines personal-data handling (GDPR erase), and lists the storefront scenario states. It is the single file that ties the orders services, routes, events, and rate limits together as one `AppModule` export.
 
 ## Key elements
 
-- **`default export`** (`satisfies AppModule`) — the full manifest: `name`, `basePath`, `permissions`, `routes`, `requiredConfig`, `personalData`, `subscribe`, `locales`, `rateLimits`, `scenario`.
-- **`subscribe`** — registers three event handlers:
-    - `RESERVATION_EXPIRED` → calls `cancelById(orderId, SYSTEM_ACTOR)` so the shop cancels timed-out orders (avoids an import cycle with `inventory`).
-    - `USER_DELETED` → calls `detachUserId` to null the foreign key without destroying the order row.
-    - `PRODUCT_DELETED` / `PRODUCT_DEACTIVATED` → calls `cancelPendingOrdersHolding` only on hard-delete or deactivation; soft-delete is a no-op.
-- **`personalData`** — paginated GDPR export using `readAll` + `search` scoped by `ownerScope(subject.userId)`.
-- **`requiredConfig`** — mandates `NODE_SHOP_COUNTRY` (non-empty) for invoice jurisdiction.
-- **`scenario.shop`** — ordered list of 12 shop-scenario state names that `scenarios/flows/shop-history.ts` must reach; `shop.test.ts` asserts bidirectional equality.
-- **Side-effect import of `./events`** — registers `ORDER_CANCELLED`, `ORDER_CREATED`, `ORDER_STATUS_CHANGED` into the kernel's `DomainEventMap`; no local listeners remain.
+- **`publicEvents`** — Maps the three internal domain events (`ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_CANCELLED`) to their public webhook payloads. `ORDER_STATUS_CHANGED` is the only non-trivial mapping: it derives `order.paid` or `order.shipped` from `payload.to` and returns `undefined` for every other transition.
+- **`export default`** — The `AppModule` object:
+  - `permissions` — Six keys (`orders.self.read` … `orders.any.override`) this module introduces.
+  - `routes` — The Express router from `./routes`.
+  - `requiredConfig` — `NODE_SHOP_COUNTRY` (min length 1), mandatory for invoice jurisdiction.
+  - `personalData` — `collect` calls `findOwnOrders`; `erase` calls `detachUserId` (detaches the buyer reference without deleting the order row).
+  - `subscribe` — Registers three `onDomainEvent` handlers:
+    - `RESERVATION_EXPIRED` → auto-cancels the order as `SYSTEM_ACTOR`.
+    - `PRODUCT_DELETED` (hard-delete only) → cancels pending orders holding that product.
+    - `PRODUCT_DEACTIVATED` → same cancellation path.
+  - `rateLimits` — Imported from `./rate-limits.ts` (every invoice render spawns a Chromium launch).
+  - `scenario.shop` — The 12 order-state fixtures the integration test runner must reproduce.
 
 ## Relationships
 
-| Neighbor                             | Interaction                                                                                                                                                                                  |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kernel/registry`                   | `AppModule` type contract satisfied by the default export.                                                                                                                                   |
-| `@kernel/permissions`                | `SYSTEM_ACTOR` used as the acting identity for reservation-expiry cancellations.                                                                                                             |
-| `@kernel/events`                     | `onDomainEvent` powers the three subscriptions in `subscribe`.                                                                                                                               |
-| `@modules/inventory`                 | Imports `RESERVATION_EXPIRED` event constant; the handler calls back into this module's `cancelById`, which in turn calls `releaseForOrder` — the two paths converge without double-release. |
-| `@modules/users`                     | Imports `USER_DELETED`; `services/cancel.ts` and `services/crud.ts` call `userService.getById` for the buyer's stored locale (email i18n).                                                   |
-| `@modules/products`                  | Imports `PRODUCT_DELETED`, `PRODUCT_DEACTIVATED`; line items embed a _copy_ via `orderLineProductSchema`, never a live `productSchema` reference.                                            |
-| `@infrastructure/persistence/search` | `readAll` + `MAX_CONFIGURED_PAGE_SIZE` drive the `personalData` export loop.                                                                                                                 |
-| `./routes`                           | The Hono/Express router mounted at `/orders`.                                                                                                                                                |
-| `./services`                         | `cancelById`, `cancelPendingOrdersHolding`, `detachUserId`, `search`, `ownerScope` — the business-logic layer this manifest delegates to.                                                    |
-| `./rate-limits`                      | `ordersRateLimits` applied module-wide (each invoice render spawns Chromium).                                                                                                                |
-| `./events`                           | Side-effect import only; no runtime value used here.                                                                                                                                         |
-| `src/modules.ts`                     | Aggregates this module into the application's module list.                                                                                                                                   |
-| `src/modules/cart/*`                 | Cart imports from this module (one-directional), keeping the dependency graph acyclic.                                                                                                       |
+| Neighbor | Interaction |
+|---|---|
+| `src/kernel/registry.ts` | Provides the `AppModule` / `PublicEventTarget` types this file satisfies. |
+| `src/kernel/permissions.ts` | Supplies `SYSTEM_ACTOR`, used as the actor when the reservation-expiry sweep cancels an order. |
+| `src/kernel/events.ts` | Provides `onDomainEvent` and the `DomainEventMap` type used in subscription callbacks. |
+| `src/modules/inventory/index.ts` | Imports `RESERVATION_EXPIRED`; the orders module listens for it but never imports inventory's cancel logic (keeps the graph acyclic). |
+| `src/modules/orders/events.ts` | Imports the three event-name constants directly (bypassing the module barrel per the project's module-barrel rule). |
+| `src/modules/orders/services/index.ts` | Barrel re-export of `cancelById`, `cancelPendingOrdersHolding`, `detachUserId`, `findOwnOrders` (individual services live in `services/cancel.ts`, `services/crud.ts`, etc.). |
+| `src/modules/orders/routes.ts` | The `router` object attached to the manifest. |
+| `src/modules/orders/rate-limits.ts` | The `ordersRateLimits` config attached to the manifest. |
+| `src/modules.ts` | Top-level registry that imports this module's default export to mount it. |
+| `src/modules/orders/module.yaml` | Paired declarative manifest (config schema, etc.) read alongside this file. |
 
 ## Notes
 
-- **No queue consumer.** Invoices are rendered synchronously on the requesting thread (`services/invoice.ts`); there is no background worker owned by this module.
-- **`SYSTEM_ACTOR` vs. user identity.** The reservation-expiry sweep deliberately acts as `SYSTEM_ACTOR` because the _shop_ is cancelling, not the customer; this bypasses owner-scope checks in `cancelById`.
-- **Soft-delete semantics.** `PRODUCT_DELETED` with `hardDelete: false` is intentionally a no-op here — the order line already copied the product fields at purchase time, so a soft-delete (or its restore) must not mutate historical data.
-- **Permission key ownership.** The `permissions` array is the single source of truth; `tests/cross-cutting/module-permissions.test.ts` cross-checks it against the shared permissions file in both directions.
-- **`module.yaml`** is the YAML counterpart of this manifest; keep them in sync when adding/removing config keys or permissions.
+- The module deliberately does **not** import `@modules/products` directly. Product fields are copied into its own `orderLineProductSchema` at purchase time so the embedded line has no live warehouse counter. Product events (`PRODUCT_DELETED`, `PRODUCT_DEACTIVATED`) are consumed, not the product service.
+- The `RESERVATION_EXPIRED` handler and the explicit cancel path both call `cancelById` → `releaseForOrder`. Because `releaseForOrder` is idempotent (a hold already released is a no-op), the two paths converge without double-releasing units.
+- `ORDER_STATUS_CHANGED` is the only public event whose `toPublicEvent` can return `undefined` (non-paid, non-shipped transitions are suppressed at the webhook layer, not the domain layer).
+- `personalData.erase` uses **detach, not delete**: the order row survives the account deletion within the same hard-delete transaction (DDD-D6 invariant).
+- The `scenario.shop` list is asserted in both directions by `tests/integration/scenarios/shop.test.ts` against the ids actually minted by `scenarios/flows/shop-history.ts`; adding a state here without a matching flow will fail that test.

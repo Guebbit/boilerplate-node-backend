@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/repository.ts
-sha256: 7b773c6ca7bbb7d8ee9d7ea1d9d6548fb0be9e316964c967bda2e2ad20226d3a
-generated_at: 2026-09-23T18:37:05.669784+00:00
+sha256: 21f1cfd1893062e487bf69d86ab0af8248891bb31126fb4341cff592c9781d2e
+generated_at: 2026-09-27T14:50:40.014575+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Exports `shipmentRepository` — the data-access layer for the delivery domain. It layers domain-specific lookups (order-based find, idempotent upsert, atomic status transition) on top of the shared CRUD surface provided by the repository factory.
+Defines the shipment repository: standard CRUD (delegated to the shared factory) plus the domain-specific lookups the carrier service performs — single/batch retrieval by order, idempotent shipment creation, and an atomic conditional status transition. It is the persistence boundary for the delivery module.
 
 ## Key elements
 
-- **`shipmentRepository`** — the sole export. An object that spreads `createRepository<ShipmentDocument, Wire<ShipmentDocument>>(shipmentModel, …)` and adds four carrier-specific methods.
-- **`findByOrderId(orderId)`** — `findOne` on `orderId`; returns `null` if the order hasn't shipped yet.
-- **`findByOrderIds(orderIds[])`** — single `$in` query for bulk retrieval (used by account-data export).
-- **`upsertForOrder(orderId, trackingCode?)`** — `findOneAndUpdate` with `{ upsert: true }` and `$setOnInsert`, so concurrent first-time calls race safely and the loser's `trackingCode` is discarded rather than overwriting the winner's.
-- **`updateStatusIfIn(orderId, from[], to, extra?)`** — conditional status write: the filter includes `status: { $in: from }`, so mongod guarantees exactly one concurrent tick succeeds; losers receive `null`.
+- **`shipmentRepository`** (exported const) — the sole export. An object that spreads the factory-generated CRUD surface (`createRepository`) and adds four methods:
+  - `findByOrderId(orderId)` — returns the single `ShipmentDocument` for an order, or `null` if none exists yet.
+  - `findByOrderIds(orderIds)` — batch `find` via `$in`; used by the account data-export path so one request issues one query.
+  - `upsertForOrder(orderId, trackingCode?)` — `findOneAndUpdate` with `upsert` + `$setOnInsert`; idempotent under concurrent first-ship races (loser's `trackingCode` is silently discarded).
+  - `updateStatusIfIn(orderId, from[], to, extra?)` — atomic status transition guarded by a `$in` filter on `status`; returns `null` when the guard doesn't match, preventing double-stamp races.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — supplies `createRepository` (CRUD + transform wiring), `toObjectId` (string→ObjectId coercion), and the `Repository` / `Wire` types that shape the return annotation.
-- **`src/modules/delivery/model.ts`** — provides `shipmentModel` (the Mongoose model) and `applyShipmentTransform` (document→wire mapping passed to the factory).
-- **`src/types/index.ts`** — source of the `ShipmentStatus` union used in method signatures.
-- **`src/modules/delivery/service.ts`** — the domain service that calls into `shipmentRepository` for its read/write operations.
-- **`src/modules/delivery/tests/integration/service.test.ts`** — integration tests that exercise these methods through the service layer.
+- **`src/infrastructure/persistence/create-repository.ts`** — supplies the `createRepository` factory, the `toObjectId` helper, and the `Repository` / `Wire` type aliases. The CRUD portion of `shipmentRepository` is produced here.
+- **`src/modules/delivery/model.ts`** — provides `shipmentModel` (the Mongoose model all queries hit) and `applyShipmentTransform` (passed as the factory's `transform` option). Also the source of the `ShipmentDocument` type.
+- **`src/types/index.ts`** (`@types`) — source of the `ShipmentStatus` union used in `updateStatusIfIn`'s signature.
+- **`src/modules/delivery/service.ts`** — primary consumer; calls the repository methods listed above to implement carrier-state transitions and lookups.
+- **`src/modules/delivery/tests/integration/service.test.ts`** — integration tests that exercise this repository indirectly through the service.
 
 ## Notes
 
-- The return type is written out in full (not inferred) because Mongoose's generics exceed TypeScript's inference budget at an export boundary (TS7056). The same constraint motivates the `Repository` type alias itself.
-- `upsertForOrder` depends on a **`unique` index on `orderId`** for idempotency; without it, two concurrent inserts would both succeed.
-- `updateStatusIfIn` is keyed on `orderId` (not the document `_id`) because the unique constraint makes it a natural key — mirroring the pattern in `paymentRepository` / `orderRepository`.
-- All methods return plain `Promise<…>` (via `.exec()`), not Mongoose query objects, so callers can `await` directly without chaining.
+- The explicit return-type annotation on `shipmentRepository` (instead of `as const` / inference) exists to work around **TS7056**: Mongoose generics are too large for TypeScript to serialize an inferred type at an export boundary.
+- All lookups key on `orderId` (not `_id`) because the model carries a `unique` index on `orderId`, making it a practical application-level key.
+- `updateStatusIfIn` deliberately places the status guard **in the filter**, not in application logic; this is the same atomicity pattern used by `orderRepository` and `paymentRepository`. A read-then-write approach would allow two concurrent ticks to both stamp the target status.
+- `upsertForOrder` sets `status: 'shipped'` and an optional `trackingCode` **only** via `$setOnInsert`; an existing document is never modified by this call.

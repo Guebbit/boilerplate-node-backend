@@ -33,14 +33,20 @@ export default defineConfig({
             client: 'zod',
             override: {
                 zod: {
-                    // Every fragment already declares `additionalProperties: false` on request
-                    // bodies; without this, orval emits a plain `zod.object({…})`, which Zod
-                    // SILENTLY STRIPS unknown keys from rather than rejecting — so the generated
-                    // validator was weaker than the contract it came from. `body` only: no
-                    // controller reads a generated response schema at runtime, so making those
-                    // strict too would change nothing but risk.
+                    // Every fragment already declares `additionalProperties: false`; without this,
+                    // orval emits a plain `zod.object({…})`, which Zod SILENTLY STRIPS unknown
+                    // keys from rather than rejecting — so the generated validator would be weaker
+                    // than the contract it came from. `response` strictness is what makes
+                    // `tests/support/contract.ts`'s judge an over-serialization guard.
                     // https://orval.dev/docs/reference/configuration/output#strict
-                    strict: { body: true }
+                    strict: { body: true, response: true },
+                    // One schema per DOCUMENTED STATUS (`Login200Response`, `Login422Response`, …)
+                    // instead of one per operation. Without this, only the single "success" branch
+                    // gets a schema at all — `tests/support/contract.ts` and the fuzz suite
+                    // (`tests/fuzz/endpoints.fuzz.test.ts`) both need to judge an ERROR response
+                    // (a 401, a 422) against its own declared shape too.
+                    // https://orval.dev/docs/reference/configuration/output#generateeachhttpstatus
+                    generateEachHttpStatus: true
                 }
             }
         }

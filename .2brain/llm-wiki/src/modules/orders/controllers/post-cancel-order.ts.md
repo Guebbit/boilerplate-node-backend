@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/controllers/post-cancel-order.ts
-sha256: 7954e3df1d5fe08bde5697cf24cf8cc857d1f3fdaf2bee6199671f9ec6a98814
-generated_at: 2026-09-23T19:00:46.627068+00:00
+sha256: ed8cd53e41e59225a242cb90ece72821d19d6c19224a1c75cfe80817c7427cf6
+generated_at: 2026-09-27T15:07:49.020661+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP handler for `POST /orders/:id/cancel` — the only order write a customer is permitted to perform. It extracts the caller's identity and optional refund preference from the request, delegates the actual write to `orderService.cancelById`, then returns the updated order with its available actions.
+HTTP controller for `POST /orders/:id/cancel`. It is a thin wiring layer that translates the incoming Express request into a call to `orderService.cancelById`, handling the caller's authentication scope, the optional `refund` body field, and the success/refusal response.
 
 ## Key elements
 
-- **`postCancelOrder`** _(exported function)_ — The sole export. Accepts an Express `Request`/`Response`, calls `orderService.cancelById(orderId, authContext, { refund }, callerContext)`. On success, chains to `orderService.withActions(order, authContext)` and sends a `200` response with the `Order` and a message. On refusal or error, short-circuits via `refused` / `catchAs`.
+- **`postCancelOrder`** (default and only export) — async Express handler. Builds the service arguments (`id`, `authContext`, `{ refund }`, caller context), delegates to `orderService.cancelById`, then either short-circuits via `refused` or delegates success rendering to `respondWithOrder`. Errors are funnelled through `catchAs`.
 
 ## Relationships
 
-- **`src/modules/orders/services/index.ts`** — Imports `orderService`; all business logic (status guards, scope checks, refund rules) lives there.
-- **`src/modules/orders/routes.ts`** — Registers `postCancelOrder` on the `POST /orders/:id/cancel` route (implied by the handler's shape and param usage).
-- **`src/infrastructure/http/request.ts`** — Imports `callerContextOf` to derive the caller's context from the request for audit/scoping.
-- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to serialize the success payload.
-- **`src/infrastructure/http/controller.ts`** — Imports `catchAs` (error → HTTP mapping) and `refused` (early-return for rejected operations).
-- **`src/types/index.ts`** — Imports `CancelOrderRequest` and `Order` for typed request body and response shape.
+- **`src/modules/orders/services/index.ts`** — imports `orderService`; the single business-logic call (`cancelById`) lives there.
+- **`src/infrastructure/http/request.ts`** — imports `callerContextOf` to extract the authenticated caller context from the request.
+- **`src/infrastructure/http/controller.ts`** — imports `refused` (determines whether the service result is a denial to relay) and `catchAs` (normalises thrown errors into an HTTP response).
+- **`src/modules/orders/controllers/respond.ts`** — imports `respondWithOrder` to serialise the order result back to the client with the appropriate status code and message.
+- **`src/modules/orders/routes.ts`** — registers this handler on the `POST /orders/:id/cancel` route.
+- **`src/types/index.ts`** — imports the `CancelOrderRequest` type for the optional body shape.
 
 ## Notes
 
-- **Body is optional.** A customer's cancel sends no body; Express leaves `request.body` as `undefined` (not `{}`). The handler guards with `request.body?.refund`.
-- **`refund` flag is admin-gated at the service layer.** The controller passes it through unconditionally; the service ignores it for non-admin callers (a customer's cancel is always refunded).
-- **Single-responsibility by design.** No validation, no status checks, no status-code branching beyond the `refused` / `catchAs` helpers — all of that is in the service.
+- The request body is **optional**: a customer's cancel typically sends none. Express leaves `request.body` as `undefined` (not `{}`), so the code uses `request.body?.refund` to avoid a crash.
+- The `refund` flag in the body is a **caller's choice only honoured for admins**; a customer's cancel is always refunded regardless of what they send.
+- The route's `:id` param is typed as `string | undefined` in the Express generic and cast with `String(...)` before being passed to the service.
+- Success responses return HTTP 200 (not 204), and the `result.message` from the service is forwarded into the response body via `respondWithOrder`.

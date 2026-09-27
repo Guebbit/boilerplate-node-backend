@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/controllers/post-order-status-override.ts
-sha256: 41baaf2b0b47745890f7d384c0ebae9bc638f3832be64b45e7e02fde53127e07
-generated_at: 2026-09-23T19:00:56.682632+00:00
+sha256: bb6f07e2af906988922e2b9a4bc52219aa4748110b23a3cf3b38230fa5be08b8
+generated_at: 2026-09-27T15:08:03.648118+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Admin controller for `POST /orders/:id/status-override`. It validates the order ID, parses a status-override body, delegates to `orderService.overrideStatus`, enriches the result with allowed actions, and returns the updated order. It is a "status-only door" — no parcel or email side effects are triggered.
+Controller handler for `POST /orders/:id/status-override`. It is a thin admin endpoint that forces an order's status to a new value with a recorded reason, explicitly without triggering any parcel or email side effects. All wiring delegates to `orderService.overrideStatus`.
 
 ## Key elements
 
-- **`postOrderStatusOverride`** (exported `Request`/`Response` handler) — the sole handler for the route. Sequence:
-    1. Guards `request.params.id` with `isValidObjectId`; 404s on failure.
-    2. Parses the request body against the `OverrideOrderStatusBody` Zod schema via `parseBody`.
-    3. Calls `orderService.overrideStatus(id, body.to, body.reason, callerContextOf(request))`.
-    4. If the service result is refused, short-circuits via `refused`.
-    5. Enriches the order with `orderService.withActions(order, request.authContext)` then responds via `successResponse`.
-    6. Catches any thrown error with `catchAs(response, 'postOrderStatusOverride')`.
+- **`postOrderStatusOverride`** (exported) — Express handler. Validates the `:id` route param, parses the body against the `OverrideOrderStatusBody` Zod schema, calls `orderService.overrideStatus(id, to, reason, callerContext)`, and renders the result via `respondWithOrder`. Handles refusal short-circuits and unexpected errors through the shared `refused` / `catchAs` helpers.
 
 ## Relationships
 
-- **`src/modules/orders/routes.ts`** — registers the `POST /orders/:id/status-override` route and attaches `requirePermission('orders.any.override')` _before_ this handler runs.
-- **`src/modules/orders/services/index.ts`** — provides `orderService`, whose `overrideStatus` and `withActions` methods do the actual work.
-- **`src/infrastructure/http/controller.ts`** — supplies `catchAs`, `parseBody`, `refused` (shared error/parse helpers).
-- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf` (extracts actor identity) and `isValidObjectId` (param guard).
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse` and `rejectResponse` (uniform response shaping).
-- **`src/infrastructure/i18n/index.ts`** — supplies `t` for the 404 message (`orders.not-found`).
-- **`src/types/index.ts`** — supplies the `StatusOverrideRequest` and `Order` types used in signatures.
+- **`routes.ts`** — registers this handler at `POST /orders/:id/status-override` behind the `requirePermission('orders.any.override')` guard; permission is already enforced before this file runs.
+- **`services/index.ts`** — source of `orderService.overrideStatus`, the sole business-logic call this controller makes.
+- **`respond.ts`** — provides `respondWithOrder`, the shared success-renderer for order payloads.
+- **`controller.ts`** (infrastructure) — supplies the `parseBody`, `refused`, and `catchAs` helpers used throughout.
+- **`request.ts`** (infrastructure) — supplies `isValidObjectId` (param check) and `callerContextOf` (audit context extraction).
+- **`response.ts`** (infrastructure) — supplies `rejectResponse` for the 404 short-circuit.
+- **`i18n/index.ts` / `context.ts`** — supplies the `t()` function used for the `orders.not-found` message.
+- **`types/index.ts`** — defines `StatusOverrideRequest` used as the typed body parameter.
 
 ## Notes
 
-- The `id` route param is typed `string | undefined` in the handler's generic, so the explicit `isValidObjectId` check is required even though Express will only call the handler when a param is present.
-- Permission enforcement is the _route's_ responsibility, not this file's. Do not add auth checks here; the route's `requirePermission` (step-up gated) already ran.
-- Early-exit paths (404, parse failure) resolve the promise immediately with `return Promise.resolve()` rather than throwing, so the `.catch` chain is never reached.
+- The `id` param is typed as optional (`id?: string`) in the route-generics, which is why the handler must explicitly call `isValidObjectId` before proceeding.
+- The module docstring calls this the "status-only door": it deliberately does **not** invoke parcel creation or email dispatch. Do not add such side effects here; they belong in a different endpoint.
+- The permission key (`orders.any.override`) is step-up gated at the route level; this controller performs no additional auth checks.

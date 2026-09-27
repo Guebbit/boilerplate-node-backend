@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/generate-dependency-map.ts
-sha256: 6e94c1cf2071e5e85dac390c3555a26d2e1655bd5bfacfe5b31756ed2ac78917
-generated_at: 2026-09-23T17:25:19.483730+00:00
+sha256: 24c94d18f670183d659a4436bdb3eb69919ad9e527715e5798b9d162be34a561
+generated_at: 2026-09-27T13:55:19.975487+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates (or checks) the two dependency tables in `docs/tools/package-dependencies.md` by combining hand-kept group definitions with an automated scan of production source files. It ensures the published package list is always in sync with `package.json` and actual import sites, and flags undeclared dependencies that only resolve transitively.
+A CLI script (`tsx`) that regenerates the two dependency tables (Runtime / Dev) in `docs/tools/package-dependencies.md`. It derives the package list from `package.json`, scans production source files to determine which module (if any) imports each package, and merges that with hand-kept group definitions. Running with `--check` (the default in `complete`) reports drift instead of rewriting, so the page stays accurate without a human re-copying a list.
 
 ## Key elements
 
-- **`checkOnly`** — flags `--check` mode: reports drift instead of rewriting the page (used by `complete`).
-- **`SCAN_DIRECTORIES` / `SCAN_FILES`** — the only places ownership is read from: `src/`, `scenarios/`, `scripts/`, plus root tool configs (eslint, orval, jest, dependency-cruiser). `tests/` and `*.test.*`/`*.spec.*` files are always excluded.
-- **`ALIAS_PREFIXES`** — tsconfig path aliases (`@modules/`, `@kernel/`, etc.) that must never be mistaken for package names.
-- **`walk(directory)`** — recursive file listing, skipping `tests/` dirs and test files.
-- **`ownerOf(file)`** — maps a file to a coarse ownership label (`module:<name>`, `kernel`, `infrastructure`, `scenarios`, `scripts`, `app`).
-- **`importSpecifiers(source)`** — extracts external package specifiers from `from "…"` / `require("…")`, filtering out relatives and aliases.
-- **`packageFor(specifier, packages)`** — resolves a specifier to its `package.json` name (exact or subpath).
-- **`isBuiltin(specifier)`** — skips `node:`-prefixed and bare Node builtins.
-- **`undeclaredImportError(specifier, file)`** — throws if a specifier resolves in `node_modules` but is absent from `package.json` (the "D1 defect").
-- **`readOwnership(packages)`** — scans all production files, builds a `Map<packageName, Set<owner>>`.
-- **`soleModuleOwner(owners)`** — returns the module name only when exactly one `module:<name>` imports the package.
-- **`groupRows` / `moduleOwnedRow` / `ungroupedTable`** — build the three table sections: hand-kept groups, single-module-owned packages, and ungrouped leftovers.
-- **`renderTable(packages, groups, ownership)`** — assembles one half (Runtime or Dev) of the page.
-- **`apply()`** — writes both marked blocks into `package-dependencies.md` (or exits non-zero on drift in `--check` mode), formatting via `prettier`.
+- **`checkOnly`** – flags `--check` mode; when set, the script reports differences rather than writing.
+- **`SCAN_DIRECTORIES` / `SCAN_FILES`** – the three top-level dirs (`src`, `scenarios`, `scripts`) and five root config files whose imports are inspected; `tests/` folders and `*.test.*` / `*.spec.*` files are excluded.
+- **`ALIAS_PREFIXES`** – tsconfig path aliases (`@api/`, `@modules/`, `@infrastructure/`, …) filtered out so they are never mistaken for npm packages.
+- **`walk(directory)`** – recursively collects `.ts`/`.js`/`.mjs`/`.cjs` files, pruning `tests/` subdirectories and test files.
+- **`ownerOf(file)`** – maps a file path to a coarse ownership label (`module:<name>`, `kernel`, `infrastructure`, `scenarios`, `scripts`, `app`).
+- **`importSpecifiers(source)`** – regex-extracts `from "…"` / `require("…")` targets, filtering builtins and aliases.
+- **`packageFor(specifier, packages)`** – resolves a specifier (possibly a subpath) to its top-level package name.
+- **`readOwnership(packages)`** – the main scan loop: builds a `Map<packageName, Set<owner>>`; **throws** if a specifier resolves in `node_modules` but is absent from `package.json` (the "undeclared import" guard).
+- **`soleModuleOwner(owners)`** – returns the module name only when exactly one `module:*` owner exists.
+- **`groupRows` / `moduleOwnedRow` / `ungroupedTable`** – render the three tiers of the output table: hand-kept groups, single-module-owned packages, and the catch-all "Ungrouped" section.
+- **`apply()`** – reads the manifest, computes both tables, and calls `applyMarkerBlocks` to splice them between the HTML-comment markers in the page (or diffs in `--check` mode).
 
 ## Relationships
 
-- **`scripts/docs/dependency-groups.ts`** — sole source of hand-kept classification: `DEV_GROUPS`, `RUNTIME_GROUPS`, the `matchesGroup` predicate, and the `DependencyGroup` type. A package not claimed by any group falls through to the ownership or "Ungrouped" logic here.
-- **`src/infrastructure/adapters/cache.ts`** — a production file under `src/infrastructure/`; this script reads it during the ownership scan to discover which packages it imports, attributing them to the `infrastructure` owner label.
+- **`scripts/docs/dependency-groups.ts`** – imported for `RUNTIME_GROUPS`, `DEV_GROUPS`, `matchesGroup`, and the `DependencyGroup` type. These are the hand-kept group names, purpose strings, read-more links, and regex/prefix matchers the script uses to bucket packages.
+- **`scripts/docs/marker-block.ts`** – imported for `applyMarkerBlocks`, which performs the actual read-modify-write of the markdown page between the four `<!-- dependency-map:{runtime|dev}:{start|end} -->` comment pairs, leaving surrounding prose untouched.
 
 ## Notes
 
-- The script is idempotent: it only rewrites content between the `<!-- dependency-map:*:start/end -->` markers; surrounding prose is untouched.
-- A package with no group and exactly one `src/modules/<name>/` importer is listed automatically under that module — no entry in `dependency-groups.ts` needed.
-- Anything with no group _and_ no single owner lands in an "Ungrouped" table: visible in the doc but **not** a build failure (per the "less policing" stance in `docs/theory/modules.md`).
-- Undeclared dependencies (resolvable in `node_modules` but missing from `package.json`) are a **hard error**, not a warning.
-- The script uses `tsx` (see shebang) and imports `prettier` directly; it is not run under `ts-node`.
+- **Ownership granularity is intentionally coarse.** Only `src/modules/<name>/` can claim a package as "sole owner." Anything in `src/kernel/`, `src/infrastructure/`, etc., is grouped into a shared-area bucket and *cannot* produce a single-owner row — a package imported from both `kernel` and `module:auth` will land in "Ungrouped."
+- **The undeclared-import guard throws at scan time**, not at render time. A package that exists in `node_modules` (pulled transitively) but is missing from `package.json` will crash the script with a diagnostic naming the offending file.
+- **`--check` is non-destructive** and is what `complete` invokes; it exits non-zero on drift so CI catches a stale page.
+- The script reads `package.json` but **ignores version strings** entirely — only the key names matter.
+- New groups must be added to `dependency-groups.ts`, not inline here; the script has no CLI flag for adding a group.

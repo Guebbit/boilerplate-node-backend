@@ -1,7 +1,7 @@
 ---
 source: src/modules.ts
-sha256: c0f0eae13f59d240358291bf647b4e976b3811130b7415c92edd29cc4f0a2c18
-generated_at: 2026-09-23T17:56:46.560263+00:00
+sha256: dddd4ecfe08641c9b64e0747fd0180aba721e8599fe8c8e163c5f745d68c457b
+generated_at: 2026-09-27T14:20:34.958528+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central registry that declares which domain modules this build serves. It is the single list consumed by the app tier, documentation generators, and operational scripts. Adding a module means creating a folder under `src/modules/` and appending one import + one array entry here; removing one is deleting the line and the folder.
+The single registry of every domain module this build serves. It is the one list the app tier, docs generators, ops scripts, and scenario checks all walk to discover which modules exist. Adding or removing a module is a folder under `src/modules/` plus (or minus) one line here.
 
 ## Key elements
 
-- **`enabledModules: AppModule[]`** — Ordered (alphabetical) array of all 18 mounted module objects. The app tier, doc generators, and scripts walk this list to discover available domains.
-- **`ModuleName`** (type) — Union of the 18 string-literal module names. Hand-listed rather than derived from `enabledModules` because `AppModule.name` is typed `string` and TypeScript widens literal properties; a `typeof` trick cannot recover the literal. Consumed by `scenarios/index.ts` (`shopModules`) to make an invalid module name a compile-time error.
-- **18 imports** — One per module (`access`, `account`, `addresses`, `antibot`, `apiKeys`, `auditLogs`, `cart`, `delivery`, `feedback`, `inventory`, `locales`, `observability`, `orders`, `payments`, `products`, `users`, `webhooks`, `wishlist`).
+- **`enabledModules: AppModule[]`** — The canonical array of all mounted modules (18 in this build), alphabetically ordered. Consumed by the app tier for mounting/routing/workers and by scripts for docs and ops sweeps.
+- **`enabledModuleLocales(): string[]`** — Derives the flat list of locale directories from `enabledModules` (filtering out modules that ship none) for `bootI18n` to register translations.
+- **`ModuleName`** (type) — A hand-listed string-literal union of every module name. Lets downstream code (e.g. `scenarios/index.ts`'s `shopModules`) key on a named module and get a compile error if it references one this build doesn't mount.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — Provides the `AppModule` type that `enabledModules` is annotated with; defines the contract each module must satisfy.
-- **`src/modules/access/module.ts`, `src/modules/account/module.ts`, `src/modules/addresses/module.ts`** (and all other module files) — Imported here; this file is their single registration point.
-- **`src/app.ts` / `src/app/routes.ts` / `src/app/workers.ts`** — Consume `enabledModules` to mount routes, start workers, and wire subscriptions.
-- **`scenarios/check.ts`** — Uses `ModuleName` (via `shopModules`) to type-check scenario targets at compile time.
-- **`scripts/ops/reap-inactive-accounts.ts`, `scripts/ops/sweep-order-effects.ts`, `scripts/db/index-sync.ts`, `scripts/docs/generate-rate-limit-budgets.ts`** — Iterate `enabledModules` to operate on every mounted domain.
-- **`tests/cross-cutting/contract-bundles.test.ts`** (referenced in the header comment) — Validates that any module shipping an `openapi.yaml` has a matching `MODULE_SECTIONS` entry; cross-checks against this list rather than at import time, so the bundler can run before `enabledModules` is importable.
+- **`src/kernel/registry.ts`** — Provides the `AppModule` type that `enabledModules` is typed against.
+- **`src/modules/{access,account,addresses}/module.ts`** (and the other 15 module files) — Each is imported and placed into `enabledModules`; this file is their sole registration point.
+- **`src/app.ts`, `src/app/routes.ts`, `src/app/security.ts`, `src/app/workers.ts`** — The app tier walks `enabledModules` to mount routes, apply security middleware, and start per-module workers.
+- **`scenarios/check.ts`** — Consumes `ModuleName` (via `scenarios/index.ts`) to type-check that referenced modules are actually mounted.
+- **`scripts/db/index-sync.ts`, `scripts/docs/generate-rate-limit-budgets.ts`, `scripts/ops/reap-inactive-accounts.ts`, `scripts/ops/sweep-order-effects.ts`, `scripts/ops/sweep-reservations.ts`, `scripts/setup/required-keys.ts`** — Ops/setup/docs scripts iterate `enabledModules` to act on every mounted domain.
 
 ## Notes
 
-- **Order is cosmetic.** Alphabetical ordering is chosen only to keep diffs small; mount order, import resolution, and `subscribe` timing are independent of array position.
-- **`ModuleName` is maintained by hand.** It cannot be derived via `satisfies`, `typeof`, or mapped types because `AppModule.name` is `string`. Forgetting to add a new module name here is a silent gap: the type will still compile, but `shopModules` will silently exclude that module.
-- **OpenAPI coupling is checked after the fact.** The bundler (`scripts/contracts/openapi-bundle.ts`) reads `openapi.yaml` from disk and does not import `enabledModules`, so a new module with a contract file will not break the build until the cross-cutting test runs.
+- **Order is cosmetic.** Alphabetical only; mount order, import resolution, and `subscribe` timing do not depend on array position.
+- **`ModuleName` is deliberately hand-listed**, not derived from `enabledModules`. `AppModule.name` is typed `string`, so a computed union would widen every literal back to `string`; there is no `typeof` expression to claw the literal back. Keeping it in sync with `enabledModules` is the operator's responsibility.
+- **OpenAPI bundling is decoupled.** A module that ships its own `openapi.yaml` also needs a line in `MODULE_SECTIONS` (`scripts/contracts/openapi-bundle.ts`). The bundler reads those files from disk and runs before `enabledModules` is importable (the modules import a generated `@api/` client the bundler produces). Compliance is checked by `tests/cross-cutting/contract-bundles.test.ts`, not at import time.
+- **Removing a module is a two-step operation:** `rm -rf` the folder *and* delete its line here (and its `ModuleName` literal). Any residual reference that remains after both steps is a real coupling worth surfacing.

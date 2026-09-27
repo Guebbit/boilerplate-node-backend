@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-reauth.ts
-sha256: 74f2ac1df2e8794246ab2cf4309a5027168d90edb877bd34b72ca98691d4d04d
-generated_at: 2026-09-23T18:03:23.442328+00:00
+sha256: 926a893e4ed785f09ca18a5d8a3974c9bf70adff909c43553274d8ec0faed08f
+generated_at: 2026-09-27T14:25:41.606003+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin Express handler for `POST /account/reauth`. It re-proves the caller's password (responding to a `401 REAUTH_REQUIRED` step-up challenge issued by `requireFreshAuth`) and re-mints the existing session with a fresh `auth_time`, without terminating it.
+Thin HTTP adapter for `POST /account/reauth`. When `requireFreshAuth` issues a `401 REAUTH_REQUIRED` step-up challenge, the client calls this endpoint to re-prove the password and obtain a freshly minted session (with an updated `auth_time`) without terminating the existing one. The controller delegates the actual password check to `accountService.reauth` and session re-minting to `issueSession`.
 
 ## Key elements
 
-- **`postReauth`** (exported) — The sole handler. Validates the body against the `ReauthBody` zod schema, calls `accountService.reauth`, then calls `issueSession` to re-mint the session. Emits `authReauthTotal` metric on every path (success, validation failure, service failure, or error).
+- **`postReauth(request, response)`** — the sole export; the Express handler. It:
+  - Reads the caller id from `request.authContext` (set by `isAuth` middleware).
+  - Validates the JSON body against the `ReauthBody` zod schema; rejects via `rejectValidation` on failure.
+  - Calls `accountService.reauth(id, password, callerContext)`; short-circuits with `refused` if the service declines.
+  - On success, calls `issueSession(response, id)` to re-mint the session, then responds `200` with the token and an i18n message.
+  - Catches any downstream error and delegates to `rejectDatabaseError`.
+  - Increments the `authReauthTotal` Prometheus counter on **every** exit path (validation failure, refused, success, catch).
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — Calls `accountService.reauth(id, password, callerContext)` to perform the actual password verification.
-- **`src/modules/account/session/session.ts`** — Calls `issueSession(response, id)` to re-mint the session token with a new `auth_time`. This is the same tail shared with `postLogin` and `postPasswordChange`.
-- **`src/modules/account/metrics.ts`** — Increments `authReauthTotal` with `{ status: 'success' | 'failure' }` on every code path.
-- **`src/infrastructure/http/controller.ts`** — Uses `rejectValidation` to return a 400 when the zod parse fails.
-- **`src/infrastructure/http/errors.ts`** — Uses `rejectDatabaseError` in the `.catch` to map unexpected errors to a 500.
-- **`src/infrastructure/http/response.ts`** — Uses `successResponse` / `rejectResponse` for the final HTTP reply.
-- **`src/infrastructure/http/request.ts`** — Extracts caller context via `callerContextOf(request)` and reads `request.authContext` (set upstream by auth middleware).
-- **`src/infrastructure/i18n/index.ts`** — Calls `t('account.reauth.success')` for the i18n success message.
-- **`src/types/index.ts`** — Uses `ReauthRequest` (typed body) and `AuthTokens` (success payload shape).
-- **`src/modules/account/routes.ts`** — Consumes `postReauth` to wire the `POST /account/reauth` route.
+- **`@infrastructure/http/controller`** — imports `rejectValidation` and `refused` for structured rejection responses.
+- **`@infrastructure/http/errors`** — imports `rejectDatabaseError` to format unexpected errors into a `500`.
+- **`@infrastructure/http/request`** — imports `callerContextOf` to extract the client IP / user-agent forwarded to the service layer.
+- **`@infrastructure/http/response`** — imports `successResponse` for the happy-path `200`.
+- **`@infrastructure/i18n`** — imports `t` to translate the success message key `account.reauth.success`.
+- **`@types`** — imports `ReauthRequest` (body shape) and `AuthTokens` (response payload) types.
+- **`../services` (accountService)** — calls `accountService.reauth` to compare the password; the service performs no writes or revocations.
+- **`../session/session`** — calls `issueSession` to re-mint the session token with a fresh `auth_time`.
+- **`../metrics`** — imports and increments the `authReauthTotal` counter.
+- **`../routes`** — registers `postReauth` as the handler for the `POST /account/reauth` route (behind `isAuth`).
 
 ## Notes
 
-- The handler does **not** write any durable state itself; `accountService.reauth` only compares the password. All session re-minting is delegated to `issueSession`.
-- A failed `issueSession` call intentionally falls through to the outer `.catch` (500) rather than returning a 200 with no token — a 200 would falsely signal that the step-up challenge was cleared.
-- Auth context (`request.authContext`) is guaranteed by the `isAuth` middleware; the `!` non-null assertion is safe in this context.
-- `ReauthBody` is imported from `@api/schemas.zod` (not listed as a graph neighbor), not from the account module.
+- `request.authContext!` uses a non-null assertion; safety is guaranteed by the `isAuth` middleware upstream, not by a runtime check here.
+- An `issueSession` failure is **deliberately not** caught inside the `.then` chain. It must bubble to the outer `.catch` and surface as `500`, because a `200` with no token would falsely signal that the step-up challenge was cleared when no fresh session was actually issued.
+- This is the third caller of `issueSession` (the others being `postLogin` and `postPasswordChange`), which is why that function was extracted into a shared module.
+- `accountService.reauth` is read-only (password comparison); it writes nothing and revokes no session. All durable state changes happen in `issueSession`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/integration/service.test.ts
-sha256: acd2f69a0fc441bb5d7f77a2610d9e56c746067bf2750fff0fbcddfb05fd24cf
-generated_at: 2026-09-23T18:47:14.221794+00:00
+sha256: 0f415615743f538d346bc66fb8cd8d0724486bcd669a135f83f5cbc95fb270c6
+generated_at: 2026-09-27T14:57:14.799918+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the inventory module's own service guarantees: exactly-once reservation claims, atomic all-or-nothing holds, the two admin transitions (commit, release) and their refusal paths, the reservation sweep, and receive/adjust. Cross-module lifecycle (cart → stock) and replay invariants are covered elsewhere; this file uses real MongoDB because every guarantee under test is a conditional write.
+Integration tests for the inventory service's own module edges: exactly-once reservation claims, admin transitions (receive/adjust) and their refusals, and the reservation sweep. Cross-module lifecycle is delegated to `cart/tests/integration/stock.test.ts` and replay invariants to `ledger.property.test.ts`. All tests run against a real Mongo instance because every guarantee under test is a conditional write.
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/observability/audit', …)`** — Replaces (not spies on) the audit port. `recordAudit` is re-wired to call the mock `emitAuditEvent` because the real closure would bypass the spy.
-- **`setupTestDb()`** — Spins up a real Mongo instance for the whole suite (imported from `tests/support/setup-test-db`).
-- **`anOrderId()`** — Module-scoped counter producing syntactically valid 24-char hex order IDs; guarantees uniqueness per call.
-- **`countersOf(productId)`** — Reads the product mirror (`productService.findByIdRaw`) to assert `onHand`/`reserved`.
-- **`levelOf(productId)`** — Reads `stockLevelRepository.findByProductId` directly; the source-of-truth row that `syncStockCache` mirrors into products.
-- **`withoutWindow(body)`** — Runs `body` with `NODE_RESERVATION_TTL_MINUTES=0` so every hold is already stale; defined at module scope to avoid leaking the zero TTL into other cases.
-- **`describe('reserveForOrder')`** — Covers: all-or-nothing holds, rollback movement rows, idempotency on retry, caller-given TTL vs. env-var fallback, propagation of non-11000 DB errors (mutation-testing guard), and refusal when units exist but are all held.
-- **`describe('commitForOrder')`** — Covers: normal commit drops both counters, at-most-once (second call is a no-op, no alarm), committing a released hold (refused + `ADMIN_COMMIT_ORPHANED` audit), committing a never-held order (refused + alarm).
-- **Additional describes (truncated)** — `releaseForOrder`, `runReservationSweep`, `receive`, `adjust`, `listLevels`, `lowStockCount`, `listMovements`.
+- **`jest.mock('@infrastructure/observability/audit', …)`** — Replaces (not spies) the audit port. The mock re-routes `recordAudit` through the replacement `emitAuditEvent` so a single spy sees both direct and indirect audit calls.
+- **`setupTestDb()`** — Provisions a real Mongo database for the suite.
+- **`anOrderId()`** — Returns a syntactically valid, unique 24-char hex order ID per call.
+- **`levelOf(productId)`** — Reads directly from `stocklevels` (the module's source of truth), bypassing the `products` mirror that `countersOf` checks.
+- **`withoutWindow(body)`** — Runs `body` with `NODE_RESERVATION_TTL_MINUTES=0` so all holds are immediately stale; scoped per-call to avoid affecting other tests.
+- **`describe('reserveForOrder')`** — Covers: all-or-nothing holds, movement audit trail (reserve + release both recorded), idempotency on order ID, caller-supplied TTL vs. env-var fallback, non-duplicate DB error propagation, partial-hold rollback on mid-loop throw, and refusal when stock is fully reserved.
+- **Remaining describes** (beyond the truncated portion) — Cover `commitForOrder`, `releaseForOrder`, `receive`, `adjust`, `runReservationSweep`, `listLevels`, `lowStockCount`, and `listMovements`.
 
 ## Relationships
 
-- **`src/modules/inventory/service.ts`** — Primary subject; every exported service function is exercised here.
-- **`src/modules/inventory/repository.ts`** — `reservationRepository` and `stockLevelRepository` are used directly for post-condition assertions (e.g., reading the hold's `expiresAt`).
-- **`src/modules/inventory/model.ts`** — `reservationModel.create` is mocked in the non-duplicate-error test.
-- **`src/modules/inventory/audit.ts`** — `inventoryAuditActions` constants used to assert audit payloads.
-- **`src/infrastructure/observability/audit.ts`** — Mocked at module level; `emitAuditEvent` is the spy target, `recordAudit` is re-routed through it.
-- **`src/modules/products/service.ts` / `src/modules/products/index.ts`** — `productService.findByIdRaw` and `createProduct` factory used to seed and read product state.
-- **`src/modules/products/tests/factories.ts`** — `createProduct`, `readProduct`, `deleteProduct` helpers.
-- **`src/types/index.ts`** — `StockMovementReason` enum used in movement assertions.
-- **`tests/support/setup-test-db.ts`** — Real Mongo lifecycle for the suite.
-- **`tests/support/environment.ts`** — `withEnvironment` overrides `NODE_RESERVATION_TTL_MINUTES` per test.
-- **`tests/support/ports.ts`** — `observePort` helper that wraps the mock `emitAuditEvent` into a spy-friendly reference.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/inventory/service.ts` | SUT — all exported functions under test are imported here. |
+| `src/modules/inventory/repository.ts` | `reservationRepository` and `stockLevelRepository` used for direct-state assertions and for spying (`applyDelta`, `findByOrderId`). |
+| `src/modules/inventory/model.ts` | `reservationModel.create` spied to simulate non-duplicate DB failures. |
+| `src/modules/inventory/audit.ts` | `inventoryAuditActions` imported for audit-action assertions. |
+| `src/infrastructure/observability/audit.ts` | Fully mocked via `jest.mock`; `emitAuditEvent` replaced with a `jest.fn()` for call-count/shape assertions. |
+| `src/modules/products/tests/factories.ts` | `createProduct`, `readProduct`, `deleteProduct`, `countersOf` provide product fixtures and mirror-cache reads. |
+| `src/types/index.ts` | `StockMovementReason` enum used in expected movement rows. |
+| `tests/support/environment.ts` | `withEnvironment` temporarily overrides env vars (e.g. TTL) for individual tests. |
+| `tests/support/ports.ts` | `observePort` imported (referenced in the mock-replacement rationale comment). |
+| `tests/support/setup-test-db.ts` | `setupTestDb` initialises the real Mongo connection before the suite. |
 
 ## Notes
 
-- The audit mock **replaces** the module rather than using `jest.spyOn`, because a CommonJS namespace import exposes a non-configurable getter that `spyOn` cannot redefine. The `recordAudit` shim is necessary because the real function closes over its own `emitAuditEvent` reference.
-- `countersOf` reads the **products mirror**, while `levelOf` reads **stocklevels** (the actual inventory row). Tests that verify the idempotent-hold path assert both, since a cache agreeing with itself is not proof the underlying write landed.
-- The non-duplicate-error test exists because a mutation (replacing the `code === 11000` check with `true`) would silently swallow _any_ DB error as "already held," causing an order to ship with no stock. Only MongoDB duplicate-key (11000) may be mapped to a no-op.
-- `withoutWindow` is intentionally at module scope (not inside a `describe`) so the zero TTL does not leak into unrelated tests in the file.
-- `afterEach(() => jest.restoreAllMocks())` is the cleanup mechanism; individual tests that call `jest.spyOn` directly (e.g., the error-propagation test) also call `mockRestore()` inline.
+- **Audit mock is a replacement, not a spy.** `jest.spyOn` cannot override the non-configurable getter that a CommonJS namespace import exposes; the full reasoning lives in `tests/support/ports.ts`. The `recordAudit` override inside the mock exists because that function closes over its own module's `emitAuditEvent` and would bypass the top-level replacement.
+- **Two sources of truth, two readers.** `countersOf` (from products factories) reads the `products` mirror written by `syncStockCache`; `levelOf` reads `stocklevels` directly. Assertions that need the "real" row use `levelOf`; those checking the mirror use `countersOf`. Both are asserted in idempotency tests to catch a cache that agrees with itself while diverging from the write.
+- **`withoutWindow` is module-scoped, not describe-scoped.** Setting TTL to zero inside a `describe` would leak into sibling tests that depend on live holds.
+- **Mutation-testing annotations.** Inline comments (e.g. the `code: 121` propagation test, the B15 partial-hold test) document specific mutants that survived prior test suites and the regression each test now pins.
+- **Order IDs are hex-padded to 24 chars** to satisfy any string-length constraint Mongo or the application may impose, while remaining unique via an incrementing counter.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/refunds.ts
-sha256: c514decdcd62af84d7ae3ac2b3c01974bf0f88afbb2913b453988907ff3c7eae
-generated_at: 2026-09-23T19:21:43.585425+00:00
+sha256: 3508bbbd08b3d38483d60237f9995f04f463a3d6589055a46b592b99bcc5b6af
+generated_at: 2026-09-27T15:27:00.194900+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single money-out path in the payments module. Provides the operator-initiated refund action (`refundByOrder`) and the `ORDER_CANCELLED` event's compensation (`refundForOrder`), both funneled through one conditional status write (`performRefund`) that guarantees at-most-once semantics. No other file in the module is permitted to move money out.
+The single module responsible for moving money out. It exposes two entry points — the operator's `POST /payments/order/:orderId/refund` and the `ORDER_REFUND_OWED` event listener — both of which funnel through one conditional write (`performRefund`) so that a refund is applied at most once. Nothing else in the payments module may move money out.
 
 ## Key elements
 
-- **`REFUNDABLE_PAYMENT_STATUS`** — Constant `'succeeded'`; the only status from which a refund can originate.
-- **`performRefund(orderId, context?)`** — The one conditional write. Atomically moves a payment from `succeeded` to `refunded` via `updateStatusIfIn`; a second call finds nothing and returns `null`. After the move it branches:
-    - `manual` provider → stamps `refundedByHand: true` on the row (no external call).
-    - Real provider → calls `resolvePaymentProvider().refund(...)` with the payment's own `providerRef`, amount, and currency.
-    - Missing `providerRef` on a `succeeded` row → logs a loud error (corrupted row) but still completes the status move to prevent a second attempt.
-- **`refundByOrder(orderId, authContext, context)`** — Admin route handler for `POST /payments/order/:orderId/refund`. Calls `performRefund`; on `null` performs a scoped second read to distinguish 404 (no payment) from 409 (payment exists but not in `succeeded`). Returns a `ResponseSuccess` or `ResponseReject` with i18n'd messages.
-- **`refundForOrder(orderId)`** — `ORDER_CANCELLED` event listener. Calls `performRefund` without a caller context; outcome is logged, not audited.
+- **`REFUNDABLE_PAYMENT_STATUS`** (exported const) — the only status from which a refund can originate (`'succeeded'`).
+- **`performRefund(orderId, context?)`** (exported) — the core refund pipeline. Reads the payment by order, bails if not `succeeded`, handles `manual`-provider payments (operator confirms or leaves for an operator), handles the corrupted no-`providerRef` case, otherwise calls the PSP's `refund` with an idempotency key, then performs the conditional `succeeded → refunded` status write.
+- **`refundByOrder(orderId, authContext, context)`** (exported) — HTTP handler. Calls `performRefund`; on success returns the payment; on `null` does a second scoped read to distinguish 404 (payment absent) from 409 (payment exists but not refundable).
+- **`refundForOrder(orderId)`** (exported) — the `ORDER_REFUND_OWED` listener. Calls `performRefund` without a `context`, then discards the result.
+- **`markRefunded`** (internal) — the conditional write via `paymentRepository.updateStatusIfIn`. Returns `null` when the row is no longer `succeeded` (idempotence). Records an audit entry when a `context` is present.
+- **`leaveForOperator`** (internal) — for hand-paid refunds triggered by the automatic listener: logs a warning, records a `PAYMENT_REFUND_OWED_BY_HAND` audit row under `SYSTEM_ACTOR`, and returns the payment unchanged.
 
 ## Relationships
 
-- **`@infrastructure/i18n`** — Translates user-facing success and error messages via `t()`.
-- **`@infrastructure/adapters/logger`** — Emits info/error logs for each refund outcome and for the corrupted-row case.
-- **`@infrastructure/http/response`** — Wraps results in `generateSuccess` / `generateReject` for the route handler.
-- **`@infrastructure/observability/audit`** — `recordAudit` records the admin refund action (only when a `CallerContext` is present, i.e. the operator path).
-- **`../audit`** — Supplies `paymentsAuditActions.ADMIN_PAYMENT_REFUNDED` as the audit action identifier.
-- **`../providers`** — `resolvePaymentProvider()` provides the PSP adapter whose `.refund()` is called for non-manual payments.
-- **`../repository`** — `paymentRepository.updateStatusIfIn` performs the atomic status transition; `findByOrderId` handles the 404/409 disambiguation read.
-- **`../model`** — `PaymentDocument` type for the row shape.
-- **`./scope`** — `callerScope(authContext)` restricts the second read to the caller's tenancy.
-- **`./settlement.ts`, `./view.ts`, `./index.ts`** — Sibling services in the same barrel; this file is the only one that mutates money out.
-- **`../module.ts`** — Wires `refundForOrder` as the `ORDER_CANCELLED` listener and `refundByOrder` onto the admin route.
-- **`../tests/integration/service.test.ts`** — Exercises the at-most-once guarantee and the manual/real-provider branches.
+- **`src/modules/payments/repository.ts`** — `paymentRepository` provides `findByOrderId` (reads) and `updateStatusIfIn` (the conditional write that enforces at-most-once).
+- **`src/modules/payments/providers/index.ts`** — `providerNamed(payment.provider)` dispatches the actual PSP refund call. The provider is always the one on the payment document, never a deployment-level default.
+- **`src/modules/payments/audit.ts`** — supplies the `paymentsAuditActions` constants (`ADMIN_PAYMENT_REFUNDED`, `PAYMENT_REFUND_OWED_BY_HAND`) used in audit records.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the audit trail entries.
+- **`src/kernel/permissions.ts`** — `SYSTEM_ACTOR` and `callerForSubject` build the actor identity for the unattended `leaveForOperator` audit row.
+- **`src/modules/payments/services/scope.ts`** — `callerScope(authContext)` scopes the fallback read in `refundByOrder` so the 404-vs-409 check respects caller permissions.
+- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape the HTTP response.
+- **`src/infrastructure/i18n/index.ts`** — `t()` localizes the success and rejection messages.
+- **`src/infrastructure/adapters/logger.ts`** — structured logging for warnings, info, and error paths.
+- **`src/modules/payments/module.ts`** — defines the `ORDER_REFUND_OWED` retry sweep that re-delivers `refundForOrder`; the doc comment here cross-references it.
+- **`src/modules/payments/services/index.ts`** — barrel that re-exports the three public functions from this file.
 
 ## Notes
 
-- **Idempotence is the status move, not a side-effect guard.** `updateStatusIfIn` is the sole concurrency control; no distributed lock or token is used.
-- **Provider is read from the payment row, not the deployment config.** A payment made via PSP A is refunded via A even after the deployment switches to PSP B.
-- **`refundForOrder` audits nothing.** It is unattended (event-driven), matching the convention of other background compensation jobs (e.g. token cleanup).
-- **`refundByOrder` does a second read** after the write to choose between 404 and 409. The write decision is already final; the read only selects the error sentence.
-- **Stryker mutators are explicitly disabled** around the logging/audit lines so mutation testing does not flag them as redundant (they are the only observable side-effects on some paths).
+- **Idempotency key** is `refund:<payment._id>`, so a redelivered event or a double-click produces the same PSP refund rather than a second one.
+- **Provider-first ordering**: the PSP is asked *before* the status moves. A provider rejection leaves the payment in `succeeded`, which is the exact state the `ORDER_REFUND_OWED` sweep can retry against.
+- **`context` presence is the caller discriminator**: present → operator call (audited, can confirm a manual refund); absent → automatic listener (cannot confirm a manual refund, leaves it for a human).
+- **Corrupted-row path** (a `succeeded` payment with no `providerRef`): the status still moves to `refunded` to prevent infinite retry, but the audit outcome is recorded as `failure` and an error is logged. This is considered unreachable in normal operation.
+- **Stryker mutation-testing guards** (`Stryker disable all` / `restore all`) wrap every `logger.*` call so mutation testing doesn't flag them.

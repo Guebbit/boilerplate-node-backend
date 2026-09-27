@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/image-store.ts
-sha256: 54a94ad40868c97170f9c8ade475983c06a2a99243b4acd583fc7b6e8457d805
-generated_at: 2026-09-23T17:39:28.511598+00:00
+sha256: a5524ba0c5e437b015d2d433ef9cd6b027f8eb61478ba8ab0162a8ef6ec1ff7d
+generated_at: 2026-09-27T14:05:55.988385+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the `ImageStore` port — the single seam between application code and wherever image bytes physically live. Callers address images only by an opaque `imageUrl` string; this file is the sole place that translates that handle to a filesystem path (today: `NODE_PUBLIC_PATH/images/`). It exists so that swapping the storage backend (e.g. to an object bucket) is a change to one file rather than every service and controller.
+Port-and-implementation for image storage. It isolates every conversion between an opaque `imageUrl` handle and a concrete filesystem path so that callers (services, controllers, workers) never spell out path construction themselves. Swapping the backend (e.g. to an object bucket) becomes a one-file change. Today the sole backend is local disk under `NODE_PUBLIC_PATH/images/`.
 
 ## Key elements
 
-- **`ImageStore` (interface)** — the port. Methods: `quarantine`, `readQuarantined`, `removeQuarantined`, `promote`, `putDerivative`, `remove`.
-- **`filesystemImageStore` (const)** — the one concrete implementation, backed by local disk under `NODE_PUBLIC_PATH/images/`.
-- **`quarantineRoot()` (exported)** — resolves the quarantine directory (`NODE_QUARANTINE_PATH` or `tmp/quarantine`). Used by this module and the reap script.
-- **`resolveUnderPublicRoot`** (private) — maps a client-supplied `imageUrl` to a real path, rejecting anything that escapes the public root (path-traversal guard).
-- **`isRemoteUrl`** (private) — detects absolute-scheme and protocol-relative URLs so `remove` can no-op them instead of attempting a local unlink.
-- **`EXTENSION_OF`, `IMAGES_SEGMENT`, `THUMBNAIL_VERSION`** — constants that pin the on-disk layout and URL shape.
-- **`thumbnailFilename`, `thumbnailsDirectory`** (private) — derive the thumbnail path from the original's `stem`.
+- **`ImageStore`** (interface) — the contract every caller programs against. Methods: `quarantine`, `readQuarantined`, `removeQuarantined`, `promote`, `putDerivative`, `remove`.
+- **`filesystemImageStore`** (exported const) — the local-disk implementation of `ImageStore`.
+- **`quarantineRoot()`** (exported) — resolves the quarantine directory (`NODE_QUARANTINE_PATH` or `tmp/quarantine`). Intentionally *outside* the public root so unvalidated bytes are never fetchable.
+- **`resolveUnderPublicRoot`** — maps an `imageUrl` to a real path, rejecting anything that escapes the public root (path-traversal guard).
+- **`isRemoteUrl`** — detects absolute (`https://…`) and protocol-relative (`//…`) URLs so `remove` is a no-op for external images (e.g. the configured default).
+- **`writeAtomically`** — writes to a temp file then `rename`s into place, avoiding a mid-write read on a file served with `Cache-Control: immutable, 1y`.
+- **`EXTENSION_OF`** — maps the three accepted MIME types to their file extensions.
+- **`IMAGES_SEGMENT` / `THUMBNAIL_VERSION`** — URL-segment constants; the version segment exists because the immutable cache cannot be revalidated in place.
 
 ## Relationships
 
-- **`@infrastructure/adapters/filesystem`** — imports `deleteFile`, `moveFile`, `toPosixPath` for the actual I/O.
-- **`@infrastructure/adapters/image`** — imports the `ReencodableImageMime` type (the three accepted formats).
-- **`image.worker.ts`** — the digest job that calls `readQuarantined`, `promote`, `putDerivative`, and `removeQuarantined`; it derives the `stem` once and passes it to both `promote` and `putDerivative` so `remove` can find the thumbnail from the main image's filename alone.
-- **`http/middlewares/upload.ts`** — stages uploads to a private temp path, then hands that path to `quarantine`; the quarantine directory it targets is this module's `quarantineRoot()`.
-- **`scripts/ops/reap-quarantine.ts`** — consumes `quarantineRoot()` (or `removeQuarantined`) to clean up stale quarantine entries.
-- **`modules/products/service.ts`, `modules/users/service.ts`** — callers that read `imageUrl` from documents and pass it to `remove` on delete/replace; they never construct a filesystem path themselves.
-- **`tests/unit/infrastructure/adapters/image-store.test.ts`** — unit tests for every `ImageStore` method against the filesystem implementation.
-- **`tests/unit/infrastructure/adapters/image.worker.test.ts`** — exercises the worker→store interaction (promote, putDerivative, removeQuarantined paths).
+- **`@infrastructure/adapters/filesystem`** — supplies `deleteFile`, `moveFile`, and `toPosixPath` helpers used throughout the implementation.
+- **`@infrastructure/adapters/image`** — provides the `ReencodableImageMime` type; the worker calls its `digestImage` / `thumbnailImage` and passes the results to `promote` / `putDerivative`.
+- **`image.worker.ts`** — the digest job that drives the store's lifecycle: `readQuarantined` → `promote` + `putDerivative` → (on failure) `removeQuarantined` / `remove`.
+- **`http/middlewares/upload.ts`** — stages the upload to a private path; `quarantine` then moves it into the quarantine directory.
+- **`http/uploads.ts`** — orchestrates the request flow that stages and quarantines uploads.
+- **`modules/products/service.ts`** / **`modules/users/service.ts`** — call `remove` (or `removeQuarantined`) when a record that owns an image is deleted.
+- **`scripts/ops/reap-quarantine.ts`** — ops script that calls `removeQuarantined` for stale entries.
+- **`tests/unit/infrastructure/adapters/image-store.test.ts`** — unit tests for the store itself.
+- **`tests/unit/infrastructure/adapters/image.worker.test.ts`** — exercises the store through the worker's flow.
 
 ## Notes
 
-- **Throw vs. never-throw split is intentional.** `quarantine`, `promote`, `putDerivative` throw (a failed write means the job must be retried). `removeQuarantined` and `remove` never throw (they run on failure/cleanup paths where a second error would be worse than a silent no-op).
-- **`remove` only unlinks flat files directly inside `<public>/images/`.** Anything in a subdirectory (e.g. `images/seed/` demo fixtures) is a no-op, so replacing a seeded record's image cannot destroy committed test assets.
-- **URLs are built with string literals, not `path.join`.** On Windows `path.join` would produce backslashes that `express.static` and browsers reject.
-- **`THUMBNAIL_VERSION` exists because responses are cached with `immutable, 1y`.** Bumping the segment (v1 → v2) is the only way to change thumbnail quality without invalidating live URLs.
-- **Quarantine is deliberately outside `NODE_PUBLIC_PATH`** so unvalidated bytes are never fetchable by the static file server, and a restart does not lose a file a pending job still needs.
-- **`resolveUnderPublicRoot` joins with `'.' + relative`** rather than a bare `path.resolve(root, relative)`, because a leading `/` in `imageUrl` would otherwise make `path.resolve` discard `root` entirely and land at the filesystem root.
+- **Error-asymmetry is intentional.** `quarantine`, `promote`, `putDerivative`, and `readQuarantined` *throw* on failure (the caller must retry or fail the request). `remove` and `removeQuarantined` *never* throw — they run on paths that are already answering an error and must not introduce a second, different failure.
+- **URLs are built with string literals, not `path.join`.** `promote` and `putDerivative` return forward-slash URLs; using `path.join` would produce backslashes on Windows that `express.static` won't serve.
+- **`stem` couples original and thumbnail.** The worker derives `stem` once from the digested bytes and passes the same value to both `promote` and `putDerivative`. This lets `remove` find a thumbnail from the main image's filename alone, without needing the thumbnail's bytes.
+- **Quarantine durability.** The `tmp/quarantine` default is a local-dev convenience only. Production must set `NODE_QUARANTINE_PATH` to a durable mount; a restart that loses quarantined files leaves records stuck on a placeholder.
+- **`path.resolve` leading-slash trap.** `resolveUnderPublicRoot` prepends `'.'` before joining to avoid `path.resolve(root, '/images/x')` resolving to the filesystem root.

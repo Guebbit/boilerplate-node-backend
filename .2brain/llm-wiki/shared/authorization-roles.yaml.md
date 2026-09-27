@@ -1,7 +1,7 @@
 ---
 source: shared/authorization-roles.yaml
-sha256: 607b042f3d0467645e1021ddec303d534a6a450cb08bb01f9554e91b96093552
-generated_at: 2026-09-23T17:33:21.763878+00:00
+sha256: 23aacece2a7be06954d4b0f94d057d8ec9072709ba70f74c0e109c56506003a7
+generated_at: 2026-09-27T14:01:24.390242+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the complete set of preset authorization roles (and the exact keys each holds) so that the Node and PHP-Laravel boilerplate repos produce the **same product** out of the box, not merely two implementations that happen to pass the same conformance tests. It is the single source of truth both seeders read verbatim; nobody deploys an empty permission matrix.
+Defines the preset roles and the exact permission keys each one holds, serving as the single source of truth committed byte-for-byte into both `boilerplate-node-backend` and `boilerplate-php-laravel-backend`. It exists so the two independently-stored implementations (PHP via `spatie/laravel-permission`, Node via a different mechanism) produce the same *product*, not merely the same test results. Roles are a deployment starting point, not a fixed schema.
 
 ## Key elements
 
-- **`version`** — schema version (currently `1`).
-- **`roles`** — ordered list of role objects, each with `name`, `scope` (`tenant` or `platform`), `title`, `description`, and an explicit `permissions` array.
-    - _Tenant roles:_ `unverified`, `customer`, `manager`, `warehouse`, `support`, `editor`, `moderator`, `admin`.
-    - _Platform role:_ `operator` — holds only `platform.observability.any.read`; explicitly cannot read shop-level data.
-- **`anonymous`** — the role every unauthenticated request resolves to (named `guest`, scope `tenant`); holds only `products.self.read`, `locales.self.read`, `delivery.any.read`.
-- **No wildcards anywhere.** Breadth is encoded in the key name (`self` vs `any`), so every role lists exactly the keys it grants, `admin` included.
+- **`roles`** — Ordered list of role definitions. Each entry has `name`, `scope` (`tenant` or `platform`), `title`, `description`, and a flat `permissions` array of key strings.
+  - *Tenant roles:* `unverified`, `customer`, `manager`, `warehouse`, `support`, `editor`, `moderator`, `admin`.
+  - *Platform role:* `operator` (observability only; explicitly not a super-admin).
+- **`anonymous`** — The role every unauthenticated request resolves to (`name: guest`). Holds only `products.self.read`, `locales.self.read`, `delivery.any.read`.
+- **`version`** — Currently `1`; versioning knob for future changes to the role set.
 
 ## Relationships
 
-- **`shared/authorization-keys.yaml`** — defines the full key vocabulary and their semantics. This file references key names as strings; the conformance note in `authorization-keys.yaml` states that a key no role lists grants nothing to anyone (including `admin`).
-- **`shared/authorization-conformance.yaml`** — the test suite that both boilerplates run. It cross-checks this file's role grants against the key catalogue: a declared tenant key omitted from `admin`'s list causes a conformance failure, and the suite asserts `operator` holds no shop-level key.
+- **`shared/authorization-keys.yaml`** — Declares the full key vocabulary referenced by every `permissions` list here. That file's closing note establishes that a key no role lists grants nothing, which is why `admin` must enumerate every tenant key explicitly.
+- **`shared/authorization-conformance.yaml`** — The conformance suite both backends run against. It refuses a declared tenant key that `admin`'s list omits, and asserts `operator` holds no bare (non-`platform.*`) key. This file is the input that suite validates.
 
 ## Notes
 
-- The file is committed byte-for-byte identical in `boilerplate-node-backend` and `boilerplate-php-laravel-backend`; do not fork it per repo.
-- Roles are a **starting point, not a schema** — operators may add/remove keys post-deployment.
-- Every staff role (including `admin`) holds `cart.self.checkout` explicitly. There is deliberately no "unverified manager": granting a staff role _is_ the vouching act, so the one key an unverified account lacks is the spending key.
-- `admin` is scoped to a single tenant; it says nothing about platform scope. One role cannot span both scopes by design.
-- The PHP implementation stores these via `spatie/laravel-permission`; the Node implementation does not persist them the same way. This file is what keeps the two stores aligned.
+- **No wildcards, ever.** Breadth is encoded in the key name itself (`<family>.self.*` vs `<family>.any.*`). `admin` lists every tenant key by name for the same reason every other role does; there is no `*` or implicit "all" grant.
+- **`unverified` is the only tenant role lacking `cart.self.checkout`.** Granting any staff role *is* the vouching; `cart.self.checkout` is therefore held explicitly by every role except `unverified`.
+- **Committed identically in both boilerplates.** Seeders read this file rather than restating roles inline, so a change in one repo is a change in both.
+- **`anonymous`/`guest` is a named model value**, not a null sentinel. Any code path that skips role resolution should route through it.
+- **Product writes are stacked:** a role that edits a listing needs both `products.any.update` *and* `translations.any.update` (or `.any.read`) because translations are a separate key family.
+- **Roles double as demo personas** (`docs/demo-ecommerce/`) — every role except `admin` is exercised against every screen in the demo, so the permission model is tested by usage, not only by its own test suite.

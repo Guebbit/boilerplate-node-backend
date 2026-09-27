@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/crud.ts
-sha256: 1e510ce2a827c405641142b7d66d93fe59bf289a875289f83f38c94c9df57cda
-generated_at: 2026-09-23T19:06:37.984247+00:00
+sha256: b6186776cc3d5777254ea63939a4ba6a6247cbb2e69ce9c03a77eebd107cfe7c
+generated_at: 2026-09-27T15:13:33.380969+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,48 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service-layer CRUD operations for the Orders module: search, fetch, create, and update. It composes repository reads/writes with domain-transition guards, cross-module lookups (product, user, inventory), and the side-effect fan-out (audit, analytics, email) that each successful mutation requires. Cancellation and retraction are deliberately excluded — they live in `./cancel` and `./retract` respectively.
+CRUD service layer for the Orders module: searching, fetching, creating, updating, and (partially) deleting order records. It composes lower-level operations (`placeOrder`, image resolution, email dispatch, audit/analytics emission) into the endpoints' public API. Cancellation is intentionally excluded—it lives in `./cancel` with its own multi-step sequence.
 
 ## Key elements
 
-- **`search(search?, scope?, context?)`** — Paginated order search (matches `POST /orders/search`). Batch-resolves current product images via `resolveCurrentImages`, optionally emits an `orders_viewed` analytics event when a `CallerContext` is supplied.
-- **`ownOrderIds(userId)`** — Returns every order id for a user by paging internally with `readAll`. Used by sibling modules that need ids only.
-- **`getById(id, scope?)`** — Single-order fetch. Overloaded: without a scope it resolves `OrderDocument | undefined`; with a scope it may resolve the wire-shaped `Order`.
-- **`recordCreated(order, context)`** — Shared post-creation side-effect: writes an `ORDER_CREATED` audit record and emits the corresponding analytics event. Does **not** emit the `ORDER_CREATED` domain event (that belongs to `placeOrder` in `./place`).
-- **`countOpenBankTransfers(userId)`** — Returns the count of open `bank_transfer` orders for a user; used by checkout to enforce a per-account cap.
-- **`getByTransferReference(reference)`** — Exact-match lookup of an order by its RF reference (admin payments lookup). Normalization is the caller's responsibility.
-- **`create(userId, email, items, context)`** — Admin/bulk order creation. Resolves each product via `productService`, delegates the write + stock hold to `placeOrder`, then fires `recordCreated` and `sendOrderPlacedEmail`. Returns `ResponseSuccess` / `ResponseReject` with structured 422 / 404 / 409 error bodies.
-- **`update(order, data)`** — Admin field/status update. Validates the status transition with `canTransition`; explicitly rejects `cancelled` (must go through the cancel endpoint) and blocks `shipped`/`delivered` (delivery module's responsibility). _(File is truncated here; remaining logic not visible.)_
+- **`search(search, scope?, context?)`** — Paginated order search (DTO wire shape). Batch-resolves current product images for the whole page via `resolveCurrentImages`. Emits `ORDERS_VIEWED` analytics when a `CallerContext` is supplied.
+- **`ownOrderIds(userId)`** — Returns every order ID for a user (paged internally via `readAll`). Intended for sibling modules that need IDs only, avoiding image resolution and analytics.
+- **`findOwnOrders(userId)`** — Full-order export path; delegates through `search` so image resolution runs, but omits `context` so no view-analytics fire.
+- **`getById(id, scope?)`** — Single-order fetch returning `OrderDocument` (hydrated). Returns `undefined` on missing/falsy ID.
+- **`recordCreated(order, context)`** — Audit + analytics emission for an order creation. Deliberately separated from `placeOrder` so both the admin path and cart's `orderConfirm` can call it without duplicating the write.
+- **`countOpenBankTransfers(userId)`** — Open `bank_transfer` order count; checkout uses this to cap free stock holds.
+- **`getByTransferReference(reference)`** — Exact-match lookup by RF reference (admin payment reconciliation).
+- **`create(userId, email, items, context)`** — Admin order creation. Resolves buyer's stored locale (falls back to default on failure), resolves product snapshots, delegates the write to `placeOrder`, then calls `recordCreated` and fires the placed-order email. Returns typed `ResponseSuccess`/`ResponseReject`.
+- **`update(order, data)`** — Applies an email change to a loaded document and saves. Does not touch `status` (not in `UpdateOrderByIdRequest`).
+- **`updateById(id, data, context)`** — Fetch-then-delegate to `update`; returns 404 reject on miss.
+- **`resolveItemProducts`** (private) — Parallel `productService.findByIdRaw` lookup for each cart line.
 
 ## Relationships
 
-| Neighbor                                                                   | Interaction                                                                                                                                |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/infrastructure/http/response.ts`                                      | All public functions return `ResponseSuccess<T>` / `ResponseReject` built via `generateSuccess` / `generateReject`.                        |
-| `src/infrastructure/i18n/index.ts` (re-exports `catalog.ts`, `context.ts`) | `t()` for user-facing error/success strings; `getDefaultLocale()` as fallback when the buyer has no stored locale.                         |
-| `src/infrastructure/observability/analytics/index.ts`                      | `emitAnalyticsEvent` + `buildAnalyticsBase` for `orders_viewed` and `order_created` events.                                                |
-| `src/infrastructure/observability/audit.ts`                                | `recordAudit` in `recordCreated`.                                                                                                          |
-| `src/infrastructure/persistence/search.ts`                                 | `readAll` + `MAX_CONFIGURED_PAGE_SIZE` for the internal pagination in `ownOrderIds`.                                                       |
-| `src/infrastructure/persistence/create-repository.ts`                      | `toObjectId` for coercing `userId` before writes; rejection on malformed ids.                                                              |
-| `src/modules/inventory/service.ts` (via `src/modules/inventory/index.ts`)  | `inventoryService` imported; likely consumed in the truncated portion of `update` (stock release on status change).                        |
-| `src/modules/orders/analytics.ts`                                          | `ordersAnalyticsEvents` enum (e.g. `ORDERS_VIEWED`, `ORDER_CREATED`).                                                                      |
-| `src/modules/orders/audit.ts`                                              | `ordersAuditActions` enum (e.g. `ORDER_CREATED`).                                                                                          |
-| `src/kernel/events.ts`                                                     | `emitDomainEvent` imported; likely used in the truncated portion of `update` for `ORDER_STATUS_CHANGED`.                                   |
-| `asyncapi.public.yaml`                                                     | `search` is documented as matching the `POST /orders/search` operation; response shape and error codes should stay in sync with this spec. |
+- **`./place`** (`placeOrder`) — `create` delegates the actual write, stock hold, and invoice allocation here. `placeOrder` owns its own rollback on refused writes.
+- **`./cancel`** — Not imported here; the module docblock explicitly excludes cancellation from this file.
+- **`./current`** (`resolveCurrentImages`) — Batch image resolution applied to search and find-own-orders results.
+- **`./notify`** (`sendOrderPlacedEmail`, `mailBuyer`) — Post-creation email dispatch in `create`.
+- **`./invoice`** (`deleteCachedInvoice`) — Imported (used by the broader module, referenced in this file's import list).
+- **`./scope`** (`ownerScope`) — Builds the ownership filter passed to repository searches for `ownOrderIds` / `findOwnOrders`.
+- **`../analytics`** / **`../audit`** — Event and action-name constants consumed by `search` and `recordCreated`.
+- **`../model`** — `OrderDocument` type used throughout.
+- **`../repository`** (`orderRepository`) — All persistence reads/writes go through this.
+- **`@modules/inventory`** (`inventoryService`) — Imported; stock-related reads during the create flow.
+- **`@modules/products`** (`productService`) — Product lookup for snapshot resolution.
+- **`@modules/users`** (`userService`) — Buyer locale lookup in `create`.
+- **`@infrastructure/i18n`** — `t()` for user-facing messages; `getDefaultLocale()` for fallback.
+- **`@infrastructure/observability/audit`** / **`analytics`** — `recordAudit` / `emitAnalyticsEvent` calls.
+- **`@infrastructure/persistence/search`** (`readAll`, `MAX_CONFIGURED_PAGE_SIZE`) — Pagination helper for `ownOrderIds` and `findOwnOrders`.
+- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` response builders.
+- **`@infrastructure/adapters/logger`** — Error logging in the buyer-locale fallback path.
+- **`asyncapi.public.yaml`** — The search endpoint shape (`POST /orders/search`) is documented there; this file implements it.
 
 ## Notes
 
-- **Locale resolution is buyer-anchored, not caller-anchored.** `create` loads the buyer's stored locale (falling back to `getDefaultLocale()`) and uses it for both the frozen line snapshots and the placed-order email. `context.locale` is the _caller's_ UI language and must not leak into buyer-facing output.
-- **`create` is `async` (not `.then`-chained) so that `toObjectId` rejection propagates as a rejected promise** rather than a synchronous throw — the same contract the repository layer enforces.
-- **`recordCreated` is shared with `@modules/cart`'s checkout path.** The cart path sends its own placed-order email; `create` here does too. Do not add another email call inside `recordCreated` or both paths will double-send.
-- **Status-transition guard is two-layered:** the Zod schema (controller) validates the _value_; `canTransition` (this file) validates the _edge_. `cancelled`, `shipped`, and `delivered` are explicitly refused here even if the domain graph technically allows the edge, because each has a dedicated endpoint that runs additional side-effects (refunds, delivery hand-off).
-- **`getById` is overloaded** so that unscoped callers get `Promise<OrderDocument | undefined>` (narrower type) while scoped callers get the wider `OrderDocument | Order | undefined`. Callers that never pass a scope avoid handling a union member they can't receive.
+- `recordCreated` is audit + analytics **only**; it does not emit the `ORDER_CREATED` webhook or perform any write. That responsibility stays in `placeOrder`, so a caller forgetting `recordCreated` cannot also silence the webhook.
+- `create` resolves the buyer's locale from `userService`, **not** from `context.locale` (which may be an admin's UI language). The lookup is guarded: failure falls back to `getDefaultLocale()` rather than aborting the order.
+- `update` intentionally does not handle `status`—the request type omits it, and the theory doc (`docs/theory/tactical-ddd.md#who-writes-the-status`) designates a different owner for status transitions.
+- `ownOrderIds` and `findOwnOrders` both use `readAll` to transparently page through all results; the former skips image resolution, the latter does not.
+- `create` uses flat `await`s (not nested `.then()`) so that `toObjectId` and other steps reject as promises rather than throwing synchronously.
+- `search`'s `context` parameter is optional; passing it triggers the `ORDERS_VIEWED` analytics emit, omitting it suppresses it (e.g., in `findOwnOrders`).

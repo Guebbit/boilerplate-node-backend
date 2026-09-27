@@ -1,7 +1,7 @@
 ---
 source: package.json
-sha256: 33add309f4e055e8fff7bdd2dee7d43d37fed9168f68572001e74c6b77afe82b
-generated_at: 2026-09-23T17:16:03.726528+00:00
+sha256: 19d9f547ef97ef38dd99a0200bc99c977b6011ee8e282d7d8f3adf39d2de1b38
+generated_at: 2026-09-27T13:48:55.745459+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Root manifest for the **boilerplate-node-api-mongodb-mongoose** project (v2.0.0, AGPL-3.0). It declares the `src/cluster.ts` entry point, runtime and dev dependencies, and the full set of npm scripts that drive development, testing, contract validation, documentation generation, deployment, and benchmarking workflows. Every CI gate, local dev loop, and ops task is invoked through a script defined here.
+Project manifest for the `boilerplate-node-api-mongodb-mongoose` monorepo (v2.0.0, AGPL-3.0). It declares the runtime entry point (`src/cluster.ts`), all npm scripts (dev, test, lint, contracts, ops, docs, Docker), and the full dependency/dev-dependency tree. Every workflow in the project is invoked through the scripts defined here.
 
 ## Key elements
 
-- **`main`** — points to `src/cluster.ts`, the process entry that boots the Express app (cluster mode).
-- **`scripts`** — ~90 named commands grouped by domain:
-    - _Runtime_: `dev`, `dev:docker`, `start`, `debug`, `demo` (runs `scenarios/run-server.ts`).
-    - _Quality gates_: `ts-check`, `lint`, `lint:openapi*`, `lint:asyncapi*`, `prettier:*`, `check:dependencies` (dependency-cruiser), `check:spec-identity`.
-    - _Contracts_: `contracts:bundle`, `check:contracts-bundle`, `check:asyncapi-breaking`, `gen:api` (orval), `gen:asyncapi` (Modelina).
-    - _Testing_: `test` (runs unit → cross-cutting → integration → contract → fuzz), `test:unit:coverage`, `test:order-random`, `test:cluster`, `mutation*` (Stryker), `test:prism`.
-    - _Docs_: `docs:*` (VitePress), `check:docs-*` (generated artifact verification).
-    - _Ops / DB_: `db:sync`, `db:bootstrap`, `access:*`, `reap:*`, `sweep:*`, `compose*` (podman/docker).
-    - _Benchmarking_: `bench`, `bench:search`, `bench:orders`, `bench:inventory`, `bench:k6*`.
-    - _Aggregate_: `complete` / `complete:fix` chain every gate above in sequence; `complete:manual` adds Prism + cluster tests.
-- **`dependencies`** — runtime libs: Express 5, Mongoose (implied), i18next, helmet, express-rate-limit, OpenTelemetry SDK + instrumentations, amqplib, bcrypt, jsonwebtoken, CASL (RBAC), dotenv, ejs, altcha-lib, etc.
-- **`devDependencies`** — TypeScript 5, Jest 30 (+ SWC transform), ESLint 9 + plugins, Prettier, Spectral, Stryker, dependency-cruiser, orval, VitePress, mongodb-memory-server, fast-check (fuzz), Husky, npm-check-updates, autocannon, k6.
-- **`postinstall`** — automatically runs `contracts:bundle`, `gen:api`, and `gen:asyncapi` after `npm install`.
-- **`prepare`** — installs Husky git hooks.
+- **`main`: `"src/cluster.ts"`** — the process entry point for both dev and production.
+- **`scripts`** — ~90 npm scripts grouped by concern:
+  - *Run:* `dev`, `dev:docker`, `dev:docker:cluster`, `start`, `debug` (all via `tsx`).
+  - *Test:* `test` (chained unit → cross-cutting → integration → contract → fuzz), `test:unit`, `test:cross-cutting`, `test:integration`, `test:contract`, `test:fuzz`, `test:order-random`, `test:cluster`, `test:prism`.
+  - *Lint / contracts:* `ts-check`, `lint`, `lint:openapi`, `lint:openapi:modules`, `lint:asyncapi`, `lint:asyncapi:modules`, `prettier:check/fix`.
+  - *Contract tooling:* `contracts:bundle`, `check:contracts-bundle`, `check:asyncapi-breaking`, `check:spec-identity`, `gen:api` (orval), `gen:asyncapi`.
+  - *Docs:* `docs:graph`, `docs:roles`, `docs:dependencies`, `docs:rate-limits`, `docs:audit-actions`, plus `check:*` variants; VitePress `docs:dev/build/preview`.
+  - *Ops / reaping:* `reap:quarantine`, `reap:invoices`, `reap:orders`, `reap:payments`, `sweep:*`, `refresh:breached-passwords`.
+  - *DB / access:* `db:sync`, `db:bootstrap`, `access:bootstrap`, `access:grant`, `deploy:setup`.
+  - *Docker / Compose:* `compose`, `compose:up`, `compose:up:full`, `compose:restart`, `compose:rebuild`, `compose:kill` (engine defaults to `podman`, overridable via `CONTAINER_ENGINE`).
+  - *Benchmarking:* `bench`, `bench:search`, `bench:orders`, `bench:inventory` (autocannon); `bench:k6`, `bench:k6:checkout` (containerised k6).
+  - *Mutation:* `mutation`, `mutation:full`, `mutation:check` (Stryker).
+  - *CI gate:* `complete` — single script chaining every check and the full test suite; `complete:fix` and `complete:manual` are variants.
+  - *Lifecycle:* `postinstall` (bundles contracts, generates API + AsyncAPI types), `prepare` (installs Husky hooks).
+- **`dependencies`** — Express 5, Mongoose, AMQP (amqplib), OpenTelemetry SDK, CASL, bcrypt, helmet, express-rate-limit, i18next, EJS, altcha-lib, etc.
+- **`devDependencies`** — TypeScript ~6, Jest 30, tsx/SWC, ESLint 10 + plugins (boundaries, unicorn, jsdoc, prettier), Stryker, autocannon, Spectral, Redocly, orval, AsyncAPI parser/diff, dependency-cruiser, Prettier, VitePress, nodemon, husky, mongodb-memory-server, supertest, fast-check, mermaid.
 
 ## Relationships
 
-- **src/app/\* (`routes.ts`, `security.ts`, `telemetry.ts`, `request-context.ts`, `error-handling.ts`, `static-assets.ts`, `demo.ts`)** — all launched indirectly: `start`/`dev` execute `src/cluster.ts` which imports these modules; `demo` runs `scenarios/run-server.ts` which wires them in test mode. The OpenTelemetry runtime deps power `telemetry.ts`; `helmet`, `express-rate-limit`, `cookie-parser` back `security.ts`.
-- **scenarios/flows/loopback.ts** — consumed by the `demo` and `scenario:apply` scripts for end-to-end flow execution against a running instance.
-- **src/infrastructure/adapters/image.ts** — exercised by `scenario:images` (seed-image generation) and covered by unit/integration suites run via `test:unit` / `test:integration`.
-- **tests/cross-cutting/contract-error-declarations.test.ts** — part of the `test:cross-cutting` suite (invoked by the aggregate `test` script and `test:unit:coverage`).
-- **tests/support/spec-walk.ts** — helper used by the Jest suites above to enumerate spec fixtures; pulled in via the same `tsx scripts/testing/run-suite.ts` orchestrator.
+- **`scenarios/flows/loopback.ts`** — exercised by the `demo` script (`tsx scenarios/run-server.ts`) which loads scenario flows.
+- **`src/app/demo.ts`, `src/app/error-handling.ts`, `src/app/request-context.ts`, `src/app/routes.ts`, `src/app/security.ts`, `src/app/static-assets.ts`, `src/app/telemetry.ts`** — application modules loaded at runtime by the `main` entry (`src/cluster.ts`); covered by `test:*` and `lint` scripts.
+- **`src/infrastructure/adapters/image.ts`** — infrastructure module exercised by `scenario:images` and integration tests.
+- **`src/infrastructure/runtime/server-lifecycle.ts`** — runtime boot code invoked by `dev`, `start`, `debug`, and `test:cluster`.
+- **`tests/cross-cutting/contract-error-declarations.test.ts`**, **`tests/cross-cutting/replace-patch-parity.test.ts`** — run by `test:cross-cutting`.
+- **`tests/support/spec-walk.ts`** — test helper used across contract and cross-cutting suites.
 
 ## Notes
 
-- `postinstall` **and** `prepare` both run on `npm install`; `postinstall` requires network-free codegen (orval, Modelina) to succeed, so offline installs will fail unless generated artifacts are committed.
-- The `complete` script is the canonical CI gate — it runs **every** check sequentially; any single failure aborts the chain. Use `complete:fix` for an auto-fix pass first.
-- `dev:docker` uses `nodemon --legacy-watch` (required for inotify limits inside containers) and runs `src/app.ts`, **not** `src/cluster.ts`; `dev:docker:cluster` is the cluster variant.
-- `bench` scripts default to port `3000` via `${NODE_PORT:-3000}`; override with the `NODE_PORT` env var.
-- Container engine is abstracted behind `${CONTAINER_ENGINE:-podman}` — set `CONTAINER_ENGINE=docker` to switch.
-- `host` script is a `cross-env` prefix, not a standalone command; it must be followed by another npm script (e.g., `npm run host start`).
-- The project uses **Express 5** (not v4) — middleware signatures and async error handling differ from most existing examples.
+- `postinstall` regenerates contract bundles and API types on every `npm install`; a stale `node_modules` can mask missing generated artifacts.
+- `bench` scripts default to port 3000 but respect `NODE_PORT`; the `host` script clears DB/Redis env vars for local-first runs.
+- The `complete` script is the single CI gate — it runs **every** check in sequence and fails fast on the first non-zero exit.
+- `compose` scripts default to **podman** (`${CONTAINER_ENGINE:-podman}`); set `CONTAINER_ENGINE=docker` to override.
+- `test:unit:coverage` forces `--max-old-space-size=4096` and `--runInBand` to avoid OOM on the full unit + cross-cutting shard.
+- `gen:api` uses `rm -rf ./api` before running orval; running it concurrently with another process that reads `./api` will fail.
+- `typescript` is pinned to `~6.0.0` (tilde), while most other dev deps use caret ranges.

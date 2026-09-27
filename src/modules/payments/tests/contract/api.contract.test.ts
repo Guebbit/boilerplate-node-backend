@@ -97,7 +97,6 @@ describe('GET /payments/methods', () => {
         expect(response.body.data.methods.map((method: { id: string }) => method.id)).toContain(
             'card'
         );
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -113,7 +112,6 @@ describe('POST /payments/intent', () => {
         expect(response.status).toBe(201);
         expect(response.body.data.amount).toBe(20);
         expect(response.body.data.status).toBe('requires_confirmation');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('never publishes the provider reference, and returns the client secret only here', async () => {
@@ -145,7 +143,6 @@ describe('POST /payments/intent', () => {
             .send({ orderId: MISSING_ID });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an invalid body', async () => {
@@ -154,7 +151,6 @@ describe('POST /payments/intent', () => {
         const response = await api().post('/payments/intent').set('Authorization', bearer).send({});
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -169,7 +165,6 @@ describe('POST /payments/{id}/confirm', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('succeeded');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a declined card', async () => {
@@ -182,7 +177,6 @@ describe('POST /payments/{id}/confirm', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('PAYMENT_DECLINED');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a payment that does not exist', async () => {
@@ -194,7 +188,6 @@ describe('POST /payments/{id}/confirm', () => {
             .send({ paymentMethodRef: GOOD_METHOD });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a method reference the contract does not allow', async () => {
@@ -208,7 +201,6 @@ describe('POST /payments/{id}/confirm', () => {
             .send({ paymentMethodRef: '4242 4242 4242 4242' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it.each([
@@ -225,7 +217,6 @@ describe('POST /payments/{id}/confirm', () => {
             .send({ paymentMethodRef });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('answers 200 with the payment still in flight when the bank wants a challenge', async () => {
@@ -240,7 +231,6 @@ describe('POST /payments/{id}/confirm', () => {
         // answer the challenge.
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('requires_action');
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -258,7 +248,6 @@ describe('POST /payments/{id}/sync', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('succeeded');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('answers an already-succeeded payment as it stands, without asking the provider again', async () => {
@@ -278,7 +267,6 @@ describe('POST /payments/{id}/sync', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('succeeded');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a payment that does not exist', async () => {
@@ -289,7 +277,6 @@ describe('POST /payments/{id}/sync', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -325,7 +312,6 @@ describe('POST /payments/webhook', () => {
         });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         const settled = await paymentRepository.findById(paymentId);
         expect(settled!.status).toBe('succeeded');
     });
@@ -345,16 +331,15 @@ describe('POST /payments/webhook', () => {
         });
 
         expect(response.status).toBe(400);
-        expect(response).toSatisfyApiSpec();
         const untouched = await paymentRepository.findById(paymentId);
         expect(untouched!.status).toBe('requires_confirmation');
     });
 
     it('answers a MessageResponse, not the PaymentEnvelope every other route answers', async () => {
         // A deliberate shape difference: the caller is a machine with no use for the payment back,
-        // and `toSatisfyApiSpec()` alone would pass a `PaymentEnvelope` here too, since the two
-        // schemas overlap on `success`/`status`. This is the one assertion that would catch a
-        // controller change that started leaking the payment into the webhook's own response.
+        // and the automatic contract check alone would pass a `PaymentEnvelope` here too, since
+        // the two schemas overlap on `success`/`status`. This is the one assertion that would
+        // catch a controller change that started leaking the payment into the webhook's response.
         const { providerRef } = await preparedPayment();
 
         const response = await deliver({
@@ -376,7 +361,6 @@ describe('POST /payments/webhook', () => {
         );
 
         expect(response.status).toBe(400);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('applies a repeated delivery once', async () => {
@@ -401,7 +385,6 @@ describe('POST /payments/webhook', () => {
         // 200 either way — a provider reads anything else as a failed delivery and retries harder.
         expect(first.status).toBe(200);
         expect(replay.status).toBe(200);
-        expect(replay).toSatisfyApiSpec();
 
         expect(commitSpy).toHaveBeenCalledTimes(1);
         expect(statusChanges).toHaveLength(1);
@@ -416,7 +399,6 @@ describe('POST /payments/webhook', () => {
         });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -430,7 +412,6 @@ describe('GET /payments/order/{orderId}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.orderId).toBe(String(order._id));
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract when no intent exists yet', async () => {
@@ -441,7 +422,6 @@ describe('GET /payments/order/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -457,7 +437,6 @@ describe('POST /payments/order/{orderId}/refund', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.status).toBe('succeeded');
     });
@@ -474,7 +453,6 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('refunded');
-        expect(response).toSatisfyApiSpec();
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.status).toBe('refunded');
     });
@@ -491,7 +469,6 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
             .set('Authorization', adminBearer);
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an order with no payment', async () => {
@@ -502,7 +479,6 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -520,7 +496,6 @@ describe('POST /payments/order/{orderId}/offline', () => {
         expect(response.body.data.status).toBe('succeeded');
         expect(response.body.data.provider).toBe('manual');
         expect(response.body.data.method).toBe('cash');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('refuses the order`s own owner — recording by hand is admin-only', async () => {
@@ -532,7 +507,6 @@ describe('POST /payments/order/{orderId}/offline', () => {
             .send({ method: 'cash' });
 
         expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an order that does not exist', async () => {
@@ -544,7 +518,6 @@ describe('POST /payments/order/{orderId}/offline', () => {
             .send({ method: 'cash' });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a method the contract does not allow', async () => {
@@ -557,7 +530,6 @@ describe('POST /payments/order/{orderId}/offline', () => {
             .send({ method: 'crypto' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an order already paid', async () => {
@@ -575,7 +547,6 @@ describe('POST /payments/order/{orderId}/offline', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -591,7 +562,6 @@ describe('GET /payments/order-by-reference', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.id).toBe(String(order._id));
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a reference that fails its check digits', async () => {
@@ -606,7 +576,6 @@ describe('GET /payments/order-by-reference', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('refuses the order`s own owner — matching a transfer is admin-only', async () => {
@@ -618,7 +587,6 @@ describe('GET /payments/order-by-reference', () => {
             .set('Authorization', customerBearer);
 
         expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a request that names no reference at all', async () => {
@@ -629,6 +597,5 @@ describe('GET /payments/order-by-reference', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });

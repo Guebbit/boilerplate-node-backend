@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/oauth/state.ts
-sha256: 56b9366522d0737c186002f81a24b0bc5018aad964a5b7b4d35918eaf0b72865
-generated_at: 2026-09-23T18:07:10.248397+00:00
+sha256: 9d8feccb29ac6ec694d8742405fab958f416c3d7a2a772826e308bd8ec536e67
+generated_at: 2026-09-27T14:28:01.273788+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the two per-attempt cookies an OAuth login requires before redirecting to the provider: a CSRF `state` token (double-submit pattern) and a PKCE `code_verifier`. It handles generation, cookie setting/clearing, the S256 challenge derivation, and the callback-side state verification — all stateless, with no server-side session or new secret.
+Manages the three per-attempt cookies that bracket an OAuth login round-trip before the browser ever reaches the provider: the CSRF `state` (double-submit), the PKCE `verifier`, and the `continue` redirect path. It mints, sets, validates, and destroys those cookies on an Express `Response` so that the start controller and the callback controller share a single, consistent cookie contract without any server-side session state.
 
 ## Key elements
 
-- **`OAUTH_STATE_COOKIE` / `OAUTH_VERIFIER_COOKIE`** — cookie name constants (`oauth_state`, `oauth_verifier`).
-- **`generateOAuthState()`** — returns a 128-bit random hex string for the CSRF token.
-- **`generateCodeVerifier()`** — returns a 256-bit random base64url string (43 chars, satisfies RFC 7636 §4.1).
-- **`codeChallengeOf(verifier)`** — SHA-256 → base64url (S256 transform, RFC 7636 §4.2); used as the `code_challenge` query param.
-- **`oauthCookieOptions()`** — shared flags: `httpOnly`, `sameSite: 'lax'`, `secure` only when `NODE_ENV === 'production'`, 5-minute TTL.
-- **`createStateCookie` / `createVerifierCookie`** — set the respective cookie on the Express `Response`.
-- **`destroyStateCookie` / `destroyVerifierCookie`** — clear the respective cookie (called on both successful and failed callbacks).
-- **`stateMatches(cookieValue, queryValue)`** — returns `true` only if both are non-empty strings and are equal (plain comparison, not constant-time).
+- **Cookie name constants** — `OAUTH_STATE_COOKIE`, `OAUTH_VERIFIER_COOKIE`, `OAUTH_CONTINUE_COOKIE`: the literal cookie names shared by start and callback controllers.
+- **`OAUTH_COOKIE_TTL_MS`** (5 min) — single TTL applied to all three cookies via the internal `oauthCookieOptions()` helper, which spreads `secureCookieOptions()` (imported from `../session/cookies`) and adds `maxAge`.
+- **`generateOAuthState()`** — returns a 128-bit hex token (`randomBytes(16)`).
+- **`generateCodeVerifier()`** — returns a 43-char base64url string (`randomBytes(32)`), satisfying RFC 7636 §4.1.
+- **`codeChallengeOf(verifier)`** — S256 transform (SHA-256 → base64url) per RFC 7666 §4.2; the value sent to the provider as `code_challenge`.
+- **`createStateCookie` / `destroyStateCookie`** — set or clear the `oauth_state` cookie on a given `Response`.
+- **`createVerifierCookie` / `destroyVerifierCookie`** — same pattern for `oauth_verifier`.
+- **`createContinueCookie` / `destroyContinueCookie`** — same pattern for `oauth_continue`.
+- **`stateMatches(cookieValue, queryValue)`** — plain string equality check (type-guarded, non-empty); intentionally not a timing-safe comparison because neither side is secret.
+- **`isSameOriginPath(value)`** — type-guard that a string is a single-slash relative path (rejects absolute URLs and `//evil.example`). Used both at start (validating the query param) and at callback (re-validating the cookie value, since cookies are client-writable).
 
 ## Relationships
 
-- **`get-oauth-start.ts`** — consumer: calls `generateOAuthState`, `generateCodeVerifier`, `codeChallengeOf`, then `createStateCookie` / `createVerifierCookie` on the redirect response.
-- **`get-oauth-callback.ts`** — consumer: reads the cookie, calls `stateMatches` to verify, then `destroyStateCookie` / `destroyVerifierCookie` regardless of outcome.
-- **`oauth-state.test.ts`** — unit-test neighbor exercising every exported function.
-- **`fake.ts`** — fake OAuth provider used in tests; may rely on or assert the cookie values this module sets.
-- **`oauth-providers.test.ts`** — integration-level tests that exercise the start → callback flow and thus transitively hit these functions.
+- **`src/modules/account/session/cookies.ts`** — provides `secureCookieOptions()`, which every cookie set/clear in this file inherits (HttpOnly, Secure, SameSite, etc.).
+- **`src/modules/account/controllers/get-oauth-start.ts`** — calls `generateOAuthState`, `generateCodeVerifier`, `codeChallengeOf`, `createStateCookie`, `createVerifierCookie`, `createContinueCookie`, and `isSameOriginPath` to initiate an attempt.
+- **`src/modules/account/controllers/get-oauth-callback.ts`** — calls `stateMatches` to verify the round-trip, then `destroyStateCookie`, `destroyVerifierCookie`, `destroyContinueCookie` (success or failure), and re-applies `isSameOriginPath` to the stored `continue` cookie.
+- **`src/modules/account/tests/unit/oauth-state.test.ts`** — unit-tests every export in this file (generation, cookie set/clear, `stateMatches`, `isSameOriginPath`).
+- **`src/modules/account/tests/unit/oauth-providers.test.ts`** — exercises the fake provider alongside state/verifier generation.
+- **`src/modules/account/oauth/providers/fake.ts`** — test-only provider that round-trips `state` and `code_verifier` without a real identity server; exercised by the tests above.
 
 ## Notes
 
-- `oauthCookieOptions` is a **function**, not a frozen constant, so `NODE_ENV` is read at call time rather than at import time.
-- `stateMatches` deliberately uses plain `===` (not a timing-safe comparison) because neither value is a stored secret — it defeats a forged callback, not a guessed one.
-- Both cookies share the same 5-minute TTL and must be cleared together; forgetting to clear on the failure path would leave a reusable token.
-- The verifier is base64url without padding to land exactly on the 43-character minimum of RFC 7636.
+- **Double-submit, not session.** The `state` value is never stored server-side; security depends solely on the cookie/query-param equality check. There is no lookup table or signed token.
+- **`continue` is untrusted input.** It is validated with `isSameOriginPath` twice — once at set-time (query param) and again at read-time (cookie value) — because a client can rewrite the cookie. The comment explicitly warns against trusting it blind.
+- **`stateMatches` is deliberately a plain `===`.** Neither value is secret; a timing-safe compare is intentionally absent to avoid implying a threat model that doesn't apply.
+- **All three cookies share identical lifetime and clearing points.** If you add a clearing site, all three `destroy*` calls must appear together (the callback controller does this in both success and error paths).
+- **TTL is 5 minutes by design.** Long enough to pick a Google account, short enough to limit the reuse window of a leaked cookie.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/oauth-state.test.ts
-sha256: 372009ace30d397879697c76d9d50fc9ee219eb6e19b4f1fd4ce87cb2f0fd118
-generated_at: 2026-09-23T18:16:21.409899+00:00
+sha256: 83c08982cd2df1362e63f168734da2b76254ba1c9cd40e705fd215cfa8cf4fac
+generated_at: 2026-09-27T14:36:38.898792+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the pure functions in `oauth/state.ts` that implement the OAuth 2.0 CSRF state parameter and the PKCE (RFC 7636) code-verifier / code-challenge handshake. Cookie plumbing is deliberately excluded here (covered by integration/contract suites); this file verifies the comparison logic, token shape, entropy, and determinism in isolation.
+Unit tests for the pure-function layer of the OAuth state module (`oauth/state.ts`). It verifies the CSRF state token, the PKCE code verifier / code challenge pair, and the `continue`-path guard. Cookie and HTTP plumbing is deliberately left to integration/contract suites; this file exercises only the comparisons and token shapes.
 
 ## Key elements
 
-- **`describe('generateOAuthState')`** — Asserts the output is a 32-char lowercase hex string (128 bits) and that successive calls never collide.
-- **`describe('stateMatches')`** — Verifies the CSRF comparison helper: accepts identical non-empty strings, rejects mismatches, `undefined` on either side, Express array values (repeated query param), and the empty-string vs empty-string edge case.
-- **`describe('generateCodeVerifier')`** — Asserts the PKCE verifier is a 43-char base64url string (256 bits) and unique per call.
-- **`describe('codeChallengeOf')`** — Confirms S256 hashing is deterministic for a given verifier, differs across verifiers, and matches the canonical worked example from RFC 7636 Appendix B.
+- **`generateOAuthState` (tests)** — Asserts the return value is a 32-char lowercase hex string (128 bits of entropy) and that two consecutive calls never produce the same value.
+- **`stateMatches` (tests)** — Covers the happy path, mismatch, `undefined` on either side, an Express-style array (repeated query param), and the empty-string edge case (`''` vs `''` must be rejected).
+- **`generateCodeVerifier` (tests)** — Asserts a 43-char base64url string (256 bits of entropy) and uniqueness across calls.
+- **`codeChallengeOf` (tests)** — Verifies determinism, distinctness for different verifiers, and conformance to the RFC 7636 §B worked example.
+- **`isSameOriginPath` (tests)** — Confirms acceptance of a single leading slash and rejection of protocol-relative (`//`), absolute URLs, slash-less paths, `undefined`, arrays, and non-string values.
 
 ## Relationships
 
-- **`src/modules/account/oauth/state.ts`** (tested module) — Imports and exercises all four exported functions: `generateOAuthState`, `stateMatches`, `generateCodeVerifier`, `codeChallengeOf`. No other imports or side effects.
+- **`src/modules/account/oauth/state.ts`** — Sole import target. Every `describe` block exercises a named export from that module. No other files are imported or referenced.
 
 ## Notes
 
-- The `stateMatches` test for the array case (`['abc123']`) documents a real Express behavior: when the same query/cookie key appears twice, Express returns an array. The comparison must treat that as a mismatch rather than a coincidental string match.
-- The RFC 7636 conformance test hard-codes the spec's exact input/output pair; if the implementation's hash changes (e.g., switching from SHA-256 to a different algorithm), this test will fail and must be updated intentionally.
-- The file is annotated `@module` (not a named export) — it is a side-effect-only test file, consistent with Jest/Vitest conventions.
+- No mocks or spies are used; the tests call the functions directly.
+- The "repeated query param" guard (Express returns an array for `?state=a&state=a`) is tested in **both** `stateMatches` and `isSameOriginPath`, reflecting that Express's array-injection can hit either guard.
+- The PKCE test includes a literal RFC 7636 Appendix B vector as a regression anchor; if the implementation changes hash algorithm, this line will fail intentionally.

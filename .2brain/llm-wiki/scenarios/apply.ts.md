@@ -1,7 +1,7 @@
 ---
 source: scenarios/apply.ts
-sha256: 78aa051a496004eb4dd3b7e7241e5f95c3f23f052839ee06ed2ea280ab804a79
-generated_at: 2026-09-23T17:16:53.443382+00:00
+sha256: 126def662edaf9c6cf1e57d5b3ad5b4ea895da1adbfebe6d0cb0cb6430224c6c
+generated_at: 2026-09-27T13:49:10.496404+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI runner for `npm run scenario:apply`. It validates safety gates, boots the Express app **in-process** (no port), calls the named scenario's `buildScenario` (which drives real checkout/payment/shipping flows through the middleware stack), clears the cache, and exits. It owns no scenario data — `scenarios/index.ts`'s registry does that.
+CLI runner (`npm run scenario:apply [scenario]`) that seeds a database by booting the app **in-process** and driving the real checkout, payment, shipping, and refund endpoints. It owns the data; `db:sync` owns the schema. It exists so a scenario can only be built through the actual middleware stack (auth, rate-limiting, routing) rather than raw inserts.
 
 ## Key elements
 
-- **Top-level env setup** — Sets `NODE_APP_NO_LISTEN`, merges `SCRIPTED_RATE_LIMITS`, forces `NODE_MAIL_TRANSPORT=log`, and applies `DEMO_BANK_TRANSFER` defaults. Must run before the dynamic `import('../src/app')` because `app.ts` reads these at import time.
-- **`reset` / `scenarioArgument` / `describeTo`** — Parsed from `process.argv`; the only CLI surface (one positional, two flags).
-- **`bootAppInProcess()`** — Dynamically imports `../src/app`, calls `bootInfrastructure()`, stores the module in `application`, returns the Express instance.
-- **`seed()`** — Main body: production gate → unknown-scenario gate → public-password gate → boot → `--reset` / non-empty check → `buildScenario(name, app)` → `clearCache()` → optional `--describe-to` file write.
-- **Entry point** — `runScript(seed, cleanup).then(() => process.exit(...))`; the forced exit is required (see Notes).
+- **Module-level env overrides** — Sets `SCRIPTED_RATE_LIMITS`, `NODE_MAIL_TRANSPORT='log'`, and `DEMO_BANK_TRANSFER` (via `??=`) *before* the dynamic `import('../src/app')` so the booted app picks them up.
+- **CLI argument parsing** — Extracts the positional scenario name, `--reset`, and `--describe-to=<file>` from `process.argv`.
+- **`bootAppInProcess()`** — Dynamically imports `src/app.ts`, calls `createApp()` → `boot()` (never `start()`), stores the instance in the module-level `application` variable, and returns the Express app.
+- **`seed()`** — Main orchestration: safety gates → boot → optional `emptyDatabase()` / skip-if-non-empty → `buildScenario(name, app)` → `clearCache()` → optional `--describe-to` write.
+- **`runScript` call + `process.exit()`** — Wraps `seed()` with a `finally` that calls `application?.stop()`, then forces exit (see Notes).
 
 ## Relationships
 
-- **`scenarios/index.ts`** — Source of `DEFAULT_SCENARIO`, `isScenarioName`, and `buildScenario`; the registry maps scenario names to their builders.
-- **`scenarios/accounts.ts`** — Provides `hasFallbackSeedPassword()` (safety gate) and `seedCredentials` (written into the `--describe-to` file).
-- **`scenarios/rate-limits.ts`** — Provides `SCRIPTED_RATE_LIMITS` and `DEMO_BANK_TRANSFER` env presets applied at the top of this file.
-- **`src/app.ts`** — Dynamically imported; this file needs its Express instance and `bootInfrastructure`/`stopServer` lifecycle methods.
-- **`src/infrastructure/runtime/database-snapshot.ts`** — `emptyDatabase()` (reset path) and `isDatabaseEmpty()` (skip-if-seeded guard).
-- **`src/infrastructure/adapters/cache.ts`** — `clearCache()` invalidates stale responses after seeding; result is logged, never thrown.
-- **`src/infrastructure/adapters/logger.ts`** — All human-facing output.
-- **`scripts/db/run-script.ts`** — Wraps the async `seed` with a cleanup callback (`application?.stopServer()`); this file is the one caller that additionally forces `process.exit`.
+| Neighbor | Interaction |
+|---|---|
+| `scenarios/index.ts` | Imports `DEFAULT_SCENARIO`, `isScenarioName`, `buildScenario` — the scenario registry. |
+| `scenarios/accounts.ts` | Imports `hasFallbackSeedPassword` (gate check) and `seedCredentials` (written into `--describe-to` output). |
+| `scenarios/rate-limits.ts` | Imports `DEMO_BANK_TRANSFER` and `SCRIPTED_RATE_LIMITS` for the env overrides. |
+| `scripts/run-script.ts` | Provides the `runScript(signal, fn, cleanup)` wrapper for structured CLI execution. |
+| `src/app.ts` | Dynamically imported; `createApp().boot()` is called, `start()` is **not**. |
+| `src/infrastructure/runtime/database-snapshot.ts` | `emptyDatabase()` (on `--reset`) and `isDatabaseEmpty()` (skip gate). |
+| `src/infrastructure/adapters/cache.ts` | `clearCache()` called after seeding to invalidate module-fixture cache entries. |
+| `src/infrastructure/adapters/logger.ts` | All logging (info / warn) in this file. |
 
 ## Notes
 
-- **`NODE_APP_NO_LISTEN` must be set at top level, before the dynamic import.** `src/app.ts` reads it at import time for its auto-start; the cleanup path can also import the app, so the variable must already be present.
-- **Forced `process.exit` is intentional and unique to this caller.** Importing `src/app.ts` pulls in `@opentelemetry/instrumentation`, whose `module.register()` hook spawns a worker thread that never drains. `stopServer()` cannot unregister it. Other `runScript` callers never import `src/app.ts` and rely on `process.exitCode` instead.
-- **Non-empty DB → warn + exit 0, not throw.** The compose `app` command chains `npm run db:bootstrap && start`; a non-zero exit here would prevent an already-seeded container from booting.
-- **Cache clear is fail-open.** If Redis is down, seeding still succeeds; the warning makes the stale-cache window visible in logs.
-- **Plain-text passwords in fixtures are deliberate.** The model's pre-save hook performs hashing; writing a hash by hand would drift from that hook and leave no recoverable plaintext.
-- **`dotenv/config` runs first but never overwrites.** The subsequent `Object.assign(process.env, …)` and `??=` assignments are safe because dotenv respects pre-existing keys.
+- **Forced `process.exit()`** — Importing `src/app.ts` pulls in OpenTelemetry's `module.register()` ESM loader hook, which is process-lifetime and cannot be unregistered. Without a hard exit the event loop never drains. This is safe here only because `stop()` has already flushed async transports. Other `runScript` callers that never import `src/app` do not need this.
+- **Non-empty DB → warn + succeed (exit 0)** — The compose `app` command runs `npm run db:bootstrap && <start server>`; a non-zero exit would prevent the container from starting.
+- **`clearCache()` fails open** — If Redis is unreachable, seeding still succeeds; a warning is logged so the operator notices stale responses may persist until TTL expiry.
+- **`--describe-to` writes to a file, not stdout** — `npm run` prints its own banner to stdout, and the paired frontend's live-profile reset needs parseable output.
+- **`DEMO_BANK_TRANSFER` uses `??=`** (not `Object.assign`) so a deployment that sets its own beneficiary value is preserved; rate-limit and mail-transport overrides are unconditional.

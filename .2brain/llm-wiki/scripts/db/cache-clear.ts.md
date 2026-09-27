@@ -1,7 +1,7 @@
 ---
 source: scripts/db/cache-clear.ts
-sha256: a2354d004a42f5abbc58a26e1d06514c0fe6fad47692ae475032c1e9c4afb337
-generated_at: 2026-09-23T17:23:39.932991+00:00
+sha256: 13ddf8e57c74c719cbec337e3b1d42b31ca06c81220be8be3752de942e55dc5a
+generated_at: 2026-09-27T13:53:59.406374+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Standalone script that deletes every cached response owned by this app from Redis. It exists because writes that bypass the HTTP API (manual `mongosh` sessions, one-off `ops/` scripts) skip the API's `invalidateCache` middleware, leaving stale entries served until their TTL expires.
+Drops every cached response belonging to this app from Redis. It exists because writes that bypass the HTTP API (manual `mongosh` sessions, one-off scripts under `ops/`) skip the normal `invalidateCache` middleware, leaving stale answers in the cache until TTL expiry. `scenario:apply` calls this automatically; otherwise run it by hand after any direct database edit.
 
 ## Key elements
 
-- **Top-level `runScript(...)` call** — the entire body. Calls `clearCache()`, asserts `reachable`, logs the key count, and throws a descriptive error if Redis was unreachable. The second argument (`stopCache`) is the cleanup callback that closes the Redis connection.
-- **`clearCache` (imported)** — performs the actual key deletion scoped to `NODE_REDIS_CACHE_PREFIX`. Returns `{ deleted, reachable }`.
-- **`stopCache` (imported)** — shuts down the Redis client after the script finishes.
-- **`logger.info(...)`** — single log line reporting how many keys were removed.
+- **Inline `runScript` body** — calls `clearCache()`, checks the `reachable` flag, logs the key count, then calls `stopCache()` as a teardown callback.
+- **`reachable` guard** — `clearCache` is designed to fail open (so the seeder can proceed without Redis). This script inverts that: if `reachable` is false it **throws**, because "0 keys removed, exit 0" would be indistinguishable from a genuinely empty cache.
+- **`clearCache` / `stopCache`** (from the cache adapter) — perform the actual Redis key-range deletion and connection teardown respectively.
+- **`logger.info`** — prints the final "Cache cleared: N keys removed" line.
+- **`NODE_REDIS_CACHE_PREFIX` scoping** — only keys under this app's prefix are deleted; `FLUSHALL` is never used, so a shared Redis instance is safe.
 
 ## Relationships
 
-- **`scripts/db/run-script.ts`** — provides `runScript`, the shared entry-point wrapper that handles `dotenv/config`, top-level error formatting, and the post-run cleanup callback. This file is a thin script body handed to that wrapper.
-- **`src/infrastructure/adapters/cache.ts`** — source of `clearCache` (scoped key deletion) and `stopCache` (connection teardown).
-- **`src/infrastructure/adapters/logger.ts`** — source of the `logger` used for the success message.
+- **`scripts/run-script.ts`** — provides the `runScript` wrapper (error handling, exit codes). This script passes `undefined` as the first argument, meaning **no Mongo connection is opened** — the script only needs Redis.
+- **`src/infrastructure/adapters/cache.ts`** — source of `clearCache` (does the key deletion) and `stopCache` (closes the Redis connection).
+- **`src/infrastructure/adapters/logger.ts`** — source of `logger.info` used for the success message.
 
 ## Notes
 
-- **Fails closed on unreachable Redis.** `clearCache` is designed to fail _open_ (return `deleted: 0`) so the seed flow isn't blocked (§9). This script explicitly checks the `reachable` flag and throws, because printing "0 keys removed" and exiting 0 would be indistinguishable from a genuinely empty cache.
-- **Never runs `FLUSHALL`.** Deletion is scoped to `NODE_REDIS_CACHE_PREFIX`, making it safe on a shared Redis instance.
-- **`scenario:apply` invokes this automatically**; run manually (`npm run db:cache:clear` or `npm run host -- db:cache:clear`) after any direct database edit.
-- The `void` before `runScript(...)` signals a top-level fire-and-forget invocation (the script's own process is the only consumer).
+- **Fail-open vs. fail-closed:** `clearCache` intentionally returns `{ deleted: 0, reachable: false }` instead of throwing, so callers like the seeder can continue. This script is the one caller that **must** treat unreachability as a hard error, hence the explicit `reachable` check.
+- **No Mongo dependency:** the `undefined` first arg to `runScript` is deliberate — recording a script outcome would require a Mongo connection this script has no other reason to hold.
+- **Invocation:** `npm run db:cache:clear` targets the compose Redis hostname; `npm run host -- db:cache:clear` targets `localhost`.

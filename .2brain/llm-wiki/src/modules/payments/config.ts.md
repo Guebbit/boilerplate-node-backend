@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/config.ts
-sha256: abe16b667f9182575a5274d3cf8ad0880e4b5606c9f6a780137315661606a62a
-generated_at: 2026-09-23T19:16:31.285790+00:00
+sha256: f3bc2a8e4dc6d1af2749eecb074e1f1602df068504e181357cb30d8c413c23ed
+generated_at: 2026-09-27T15:23:08.278752+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralises the payment-method configuration that belongs to the payments module: the list of methods offered to clients and the boot-time validation of bank-transfer credentials. Values are read per call (not cached at import) so a runtime change to a `NODE_BANK_TRANSFER_*` env var takes effect on the next request without a restart. The actual bank-transfer _values_ (beneficiary, IBAN, BIC, hold hours, enabled flag) live in `@modules/orders`; this file only validates them and derives the method list.
+Centralizes the payment-specific configuration values that this module exclusively owns (method listing, effect-sweep grace window, Stripe key gate, bank-transfer validation). Values are read per call rather than captured at import time so that a config change takes effect on the next invocation without a restart, and so no consumer transcribes its own copy of a fallback.
 
 ## Key elements
 
-- **`PaymentMethodInfo`** (interface) — shape of one entry in the methods list: `id: 'card' | 'bank_transfer'` plus optional `holdHours` (present only for `bank_transfer`).
-- **`listPaymentMethods()`** — returns the ordered list of methods the deployment offers. `card` is always included; `bank_transfer` is appended only when `bankTransferEnabled()` is truthy, carrying the current `holdHours`. Both `GET /payments/methods` and checkout defer to this single function to avoid drift.
-- **`validateBankTransferConfig()`** — boot-time gate (registered as the module's `customCheck`). Normalises the IBAN with `electronicFormatIBAN`, then checks IBAN and BIC with `ibantools`. Returns an array of offending variable names (`NODE_BANK_TRANSFER_BENEFICIARY`, `…_IBAN`, `…_BIC`); empty when transfer is unconfigured or all values are valid.
+- **`PaymentMethodInfo`** — interface describing one offerable payment method (`card` or `bank_transfer`), with an optional `holdHours` field only present for bank transfers.
+- **`listPaymentMethods()`** — returns the ordered array of methods this deployment offers; includes `bank_transfer` only when `bankTransferEnabled()` is true. Shared single source for both the `GET /payments/methods` endpoint and checkout so they cannot drift.
+- **`validateBankTransferConfig()`** — boot-time check (registered as the module's `customCheck`) that validates IBAN via `ibantools.isValidIBAN` and BIC via `isValidBIC`; strips spaces with `electronicFormatIBAN` before checking. Returns an array of offending env-var names.
+- **`paymentEffectRetryMinutes()`** — grace window (minutes) before `effects.ts#retryPendingEffects` will act on a `pendingEffects` marker; read via `environmentNumber` so tests can vary it per case.
+- **`validateStripeSecretKey()`** — production-only boot gate that refuses to start if `NODE_STRIPE_SECRET_KEY` begins with `sk_test_`. Dormant in non-production environments.
 
 ## Relationships
 
-- **`src/modules/orders/config.ts`** (via `@modules/orders` → `index.ts` barrel) — supplies the five `bankTransfer*` readers this file imports. Orders owns the values; payments consumes and validates them.
-- **`src/modules/payments/controllers/get-payment-methods.ts`** — calls `listPaymentMethods()` to build its HTTP response.
-- **`src/modules/payments/module.ts`** — registers `validateBankTransferConfig` as the module's `customCheck` so the process refuses to start with a bad IBAN/BIC.
-- **`src/modules/payments/tests/unit/config.test.ts`** — unit-tests both exported functions.
-- **`src/modules/payments/services/intent.ts`**, **`services/offline.ts`**, **`services/index.ts`** — sibling services in the same module; they do not import this file directly but share the module boundary through `module.ts`.
+- **`@infrastructure/runtime/environment`** — provides `environmentNumber`, used by `paymentEffectRetryMinutes` to read `NODE_PAYMENT_EFFECT_RETRY_MINUTES` with a default of `1` and a minimum of `0`.
+- **`@modules/orders` (index / config)** — source of `bankTransferBeneficiary`, `bankTransferBic`, `bankTransferEnabled`, `bankTransferHoldHours`, `bankTransferIban`. This file consumes those values for validation and method listing but does not own the underlying bank-transfer business rule.
+- **`src/modules/payments/module.ts`** — registers `validateBankTransferConfig` and `validateStripeSecretKey` as the module's `customCheck` boot gates.
+- **`src/modules/payments/controllers/get-payment-methods.ts`** — calls `listPaymentMethods()` to build its response.
+- **`src/modules/payments/services/effects.ts`** — reads `paymentEffectRetryMinutes()` on each sweep tick to decide whether a `pendingEffects` marker is old enough to retry.
+- **`src/modules/cart/services/checkout.ts`** — calls `listPaymentMethods()` so the checkout flow offers the same methods the public endpoint reports.
+- **`src/modules/payments/tests/unit/config.test.ts`** — unit-tests every exported function.
 
 ## Notes
 
-- The IBAN is normalised (`electronicFormatIBAN`) _before_ validation to handle pasted IBANs that contain spaces.
-- `validateBankTransferConfig` only flags `NODE_BANK_TRANSFER_BENEFICIARY` when an IBAN _is_ set but the beneficiary is missing; if the entire transfer feature is disabled the function returns `[]` (no false alarms).
-- The file deliberately does **not** re-export or own the bank-transfer values — that authority stays in `orders` because `orders` renders transfer instructions and enforces the open-transfer cap.
+- Bank-transfer *values* (beneficiary, IBAN, BIC, hold-hours, enabled flag) live in `@modules/orders/config.ts`, not here. This file only validates them and exposes them as a method-list entry. If you change a bank-transfer default, edit the `orders` config, not this file.
+- `validateBankTransferConfig` is intentionally permissive: an empty IBAN means "bank transfer unconfigured" and produces no error. Only *present-but-invalid* values are flagged.
+- `validateStripeSecretKey` checks `process.env.NODE_STRIPE_SECRET_KEY` directly (not via `environmentNumber`/`environment.ts`) because it only needs a prefix check, not a typed numeric read.
+- `paymentEffectRetryMinutes` uses a minimum of `0` (not `1`), meaning a deployment can set it to `0` to allow immediate retry — useful in tests.

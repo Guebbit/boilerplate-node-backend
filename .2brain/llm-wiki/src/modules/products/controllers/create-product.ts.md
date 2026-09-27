@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/controllers/create-product.ts
-sha256: 6b4b6cc799c59a29c968014e864876bf636e6fa3a62dcbd8ee4c086c226f45f0
-generated_at: 2026-09-23T19:25:33.632048+00:00
+sha256: b1ec3414d4954af3fa956ca53e9efa92653e334780718c2d3987204d3e065313
+generated_at: 2026-09-27T15:30:53.445758+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Admin-facing HTTP handler for `POST /products`. It decodes the request body (JSON or multipart) and the image upload into a flat, typed payload, then delegates validation and persistence to `productService.writeCreate`, which writes the product and all its language translations in a single operation.
+Admin "create product" HTTP controller for the catalogue. Decodes the typed request body (JSON or multipart) and the image upload, then delegates to `productService.writeCreate` so that the product and all its language translations are validated and persisted in a single atomic operation.
 
 ## Key elements
 
-- **`createProduct`** (exported) — Express handler. Decodes fields via `readInput` (booleans, numbers, string-arrays, JSON fields), reads the uploaded image via `readUploadedImage`, calls `productService.writeCreate`, and responds with `201` + a `Product` on success or an appropriate error status on failure.
-- **`readInput` configuration** — declares which body keys are booleans (`active`), numbers (`price`, `onHand`, `weight`), string arrays (`categories`, `tags`), and JSON fields (`translations`), producing correctly-typed values regardless of transport format.
-- **`deleteUpload`** — a cleanup callback returned by `readUploadedImage`; invoked on every failure path to remove the now-orphaned uploaded file.
+- **`createProduct`** (exported) — The sole handler for `POST /products`.
+  - Calls `readInput` to decode booleans (`active`, `requiresShipping`), numbers (`price`, `onHand`, `weight`), string arrays (`categories`, `tags`), and a JSON field (`translations`) from the request body.
+  - Calls `readUploadedImage` to extract `imageUrl`, `thumbnailUrl`, `pendingImageKey`, and a `deleteUpload` cleanup callback.
+  - Delegates to `productService.writeCreate` with the decoded payload, caller context, and image metadata.
+  - On domain failure: invokes `deleteUpload()` (errors swallowed), then `rejectResponse`.
+  - On success: responds `201` with `productService.toProduct(result.data)`.
+  - On unexpected/DB error: invokes `deleteUpload()` (errors swallowed), then `rejectDatabaseError`.
 
 ## Relationships
 
-- **`src/modules/products/service.ts`** — imports and calls `productService.writeCreate` (persistence) and `productService.toProduct` (DTO mapping for the 201 response).
-- **`src/infrastructure/http/request.ts`** — uses `readInput` for typed body decoding and `callerContextOf` to extract the authenticated caller identity passed to the service.
-- **`src/infrastructure/http/uploads.ts`** — uses `readUploadedImage` to extract `imageUrl`, `thumbnailUrl`, `pendingImageKey`, and the `deleteUpload` cleanup function from the request.
-- **`src/infrastructure/http/response.ts`** — uses `successResponse` (201) and `rejectResponse` (business-logic failure) for HTTP replies.
-- **`src/infrastructure/http/errors.ts`** — uses `rejectDatabaseError` as the catch-all for unexpected/DB exceptions.
-- **`src/types/index.ts`** — imports `CreateProductRequest`, `CreateProductRequestMultipart`, and `Product` for typing the request body and the response payload.
-- **`src/modules/products/routes.ts`** — registers `createProduct` as the handler for the `POST /products` admin route.
+- **`src/modules/products/service.ts`** — All business logic (validation, persistence, product mapping) is delegated here via `productService.writeCreate` and `productService.toProduct`.
+- **`src/modules/products/routes.ts`** — Wires the `POST /products` route to this controller function.
+- **`src/infrastructure/http/request.ts`** — Provides `readInput` (typed field decoding) and `callerContextOf` (caller identity for the service layer).
+- **`src/infrastructure/http/uploads.ts`** — Provides `readUploadedImage` for image extraction and the `deleteUpload` cleanup callback.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` / `rejectResponse` for building HTTP replies.
+- **`src/infrastructure/http/errors.ts`** — Provides `rejectDatabaseError` for unexpected persistence failures.
+- **`src/types/index.ts`** — Source of `CreateProductRequest`, `CreateProductRequestMultipart`, and `Product` types used in signatures and the success payload.
 
 ## Notes
 
-- **Multipart `translations`:** In a multipart request, `translations` arrives as a JSON-encoded _string_ (multipart parts cannot carry nested objects). `readInput` decodes it via the `jsonFields` mechanism, just as it decodes `numbers` and `stringArrays`. Callers must `JSON.stringify` the translations object before putting it in the multipart part.
-- **`imageUrl` default:** When no image is uploaded, `imageUrl` is set to `''` (empty string), not `null`/`undefined`. This matches the `zodProductCreateSchema` expectation.
-- **Cleanup on every failure path:** `deleteUpload()` is called in both the business-logic rejection branch _and_ the unexpected-error `.catch`, each with a `.catch(() => undefined)` so a failed cleanup doesn't mask the original error.
-- **Body spread ordering:** `{ ...request.body, price, active, … }` places the decoded (typed) values _after_ the raw body spread, so the decoded values always win over any same-named raw fields.
+- **Multipart `translations`:** In a `multipart/form-data` request, `translations` arrives as a JSON-encoded *string* (multipart parts cannot carry nested objects). It is therefore listed under `jsonFields` in `readInput` so it is `JSON.parse`-d before reaching the service.
+- **Image "absent" sentinel:** When no image is uploaded, `imageUrl` is left `undefined` (not `''`) so that `zodProductCreateSchema`'s `.optional()` field treats it as "no image" rather than a validation error (`ImageUrl` enforces `minLength: 1`).
+- **Upload cleanup:** On both the failure and the catch path, `deleteUpload()` is called with its rejection swallowed (`.catch(() => undefined)`) to remove the server-side file before the response is sent.
+- **Status code:** Successful creation returns **201**, not 200.

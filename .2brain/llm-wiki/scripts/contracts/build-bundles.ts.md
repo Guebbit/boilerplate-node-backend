@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/build-bundles.ts
-sha256: 92e6621d266abed4964ec76170559cac1b319cbc07a7a6a4787107c23bab433b
-generated_at: 2026-09-23T17:21:44.559393+00:00
+sha256: a6b6ae2a52358653aaf6c179cd84fe61e6843b5973022972d8065952fb3c01a6
+generated_at: 2026-09-27T13:52:19.283824+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI entry point (`npm run contracts:bundle`) that assembles committed contract bundles (OpenAPI, AsyncAPI, etc.) from their source fragments. Fragments are the source of truth; the produced bundle files stay committed because downstream tools (Spectral, Orval, Prism, `check:spec-identity`) read them directly. Supports a `--check` mode that asserts bundles are current without rewriting, and name-based selection to narrow a run.
+CLI entry point for `npm run contracts:bundle`. It rebuilds the committed contract bundles (OpenAPI, AsyncAPI, etc.) from their source fragments, writing only files that have actually drifted. In `--check` mode it verifies staleness without writing, serving as a CI gate. It also handles opt-in regeneration of client collections (generated from the committed contract rather than the fragments).
 
 ## Key elements
 
-- **Argument parsing (top-level)** — Reads `process.argv` for a `--check` flag and optional bundle names. Exits with code 2 on unknown names.
-- **`bundle(bundles)`** — Assembles each bundle via `assembleBundle`, compares the result to the committed file (`readCommittedBundle`), and writes only the stale ones (skips writes in `--check` mode). Returns the list of stale bundles.
-- **`fail(message)`** — Prints an error and exits with code 1.
-- **Named-run branch** (`named.length > 0`) — Selects exactly the bundles the user asked for. Refuses `--check` on generated (client-collection) bundles since they are not committed. Assembles, reports staleness, and exits.
-- **Full-run branch** (no names given) — Assembles only authored (`!isGenerated`) bundles. The four client collections are deliberately excluded; they are generated on demand and `.gitignore`'d.
-- **`relative(file)`** — Shortens output paths relative to `REPO_ROOT` for human-readable log lines.
+- **`bundle(bundles)`** (local const) — Assembles each bundle via `assembleBundle`, compares the result to the committed file with `readCommittedBundle`, and writes only the stale ones (unless `--check`). Returns the stale subset.
+- **`fail(message)`** — Prints an error and calls `process.exit(1)`.
+- **`relative(file)`** — Converts an absolute path to repo-relative for user-facing messages.
+- **Argument parsing** (top-level) — Reads `process.argv.slice(2)` for a `--check` flag and zero or more bundle names; validates names against `CONTRACT_BUNDLES` and exits `2` on unknown names.
+- **Named-selection path** — Regenerates exactly the bundles asked for. Explicitly refuses `--check` on generated (client-collection) bundles because they are `.gitignore'd` and have no committed copy to compare against.
+- **Full-run path** (no names given) — Rebuilds only *authored* bundles (`!isGenerated(item)`); generated collections are excluded to avoid writing files nobody requested.
 
 ## Relationships
 
-- **`scripts/contracts/bundle-registry.ts`** — Direct dependency. Imports `assembleBundle`, `CONTRACT_BUNDLES`, `findBundle`, `isGenerated`, `readCommittedBundle`, `REPO_ROOT`, and the `ContractBundle` type. This file contains all the bundle metadata and the actual fragment-assembly logic that `build-bundles.ts` orchestrates.
-- **`scripts/contracts/bundle-kinds.ts`** — Indirect dependency (pulled in through `bundle-registry.ts`). Provides the bundle kind definitions that shape the `CONTRACT_BUNDLES` list.
-- **`tests/cross-cutting/mail-copy.test.ts`** — Indirect consumer. Tests behaviour of the contract surfaces whose bundles this script produces; not imported by or importing this file directly.
+- **`scripts/contracts/bundle-registry.ts`** — Sole module import. Provides `assembleBundle`, `CONTRACT_BUNDLES`, `findBundle`, `isGenerated`, `readCommittedBundle`, `REPO_ROOT`, and the `ContractBundle` type. All bundle identity, assembly, and I/O logic lives there; this file is purely the orchestration/CLI layer.
+- **`scripts/contracts/bundle-kinds.ts`** — Indirect dependency: the `CONTRACT_BUNDLES` entries (defined in `bundle-registry.ts`) reference kind discriminants originating here.
+- **`tests/cross-cutting/mail-copy.test.ts`** — Consumes the bundle outputs this script produces; exercises the end-to-end contract-to-artifact pipeline.
 
 ## Notes
 
-- **Why selection lives here, not in `package.json`:** npm appends `--` arguments only to the _last_ command in a `&&` chain, so putting the flag after a chained script would silently drop it. Keeping the logic in this script sidesteps that.
-- **Generated vs. authored bundles:** Client collections (e.g. Bruno) are opt-in by name, are not committed, and are generated from the _committed_ contract file rather than from fragments. `--check` refuses them outright rather than reporting them as perpetually stale, which would create a permanently red CI gate.
-- **Paired-repo sync:** The `--check` failure message for authored bundles reminds the operator that every authored bundle is byte-identical with a paired repo and must be copied over after rebuilding.
-- **Exit codes:** 0 = success (built or up-to-date), 1 = stale or `--check` violation, 2 = unknown bundle name.
+- **Exit codes:** `0` success / up-to-date, `1` stale or `--check` on a generated bundle, `2` unknown bundle name.
+- **`--check` on generated bundles is a hard error, not a pass.** The comment explains the rationale: a "stale" verdict on a file that is absent by design would create a permanently red CI gate that teams learn to ignore.
+- **Selection lives here, not in `package.json`.** npm appends `--` args only to the *last* command in a `&&` chain, so putting the flag in the script avoids silently dropped arguments.
+- **Paired-repo obligation:** when a bundle is rebuilt, the result must be byte-identical with a paired repo; the `--check` failure message reminds the operator to copy it over.
+- The script is invoked via `tsx` (shebang `#!/usr/bin/env tsx`); it has no named exports and is never imported as a module.
+- `arguments_` (trailing underscore) is used to avoid shadowing the global `arguments` object.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/controllers/get-feedback.ts
-sha256: 0ebabbb46169b10acbdfb4bbd4cc3bec0057cf84277cbaa3a60bacbfccf2a058
-generated_at: 2026-09-23T18:39:17.931871+00:00
+sha256: ea6568beba0dd262601a3613e2e6086b090d7b73d7d36614c7c4066f6b368620
+generated_at: 2026-09-27T14:52:26.581928+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller for `GET /feedback` and `POST /feedback/search`, the admin triage queue for feedback tickets. It builds a cacheable search endpoint (query form) and a filter-rich endpoint (body form) using the shared `createSearchController` factory also used by the products, users, and orders modules.
+Controller for the admin feedback triage queue (`GET /feedback` and `POST /feedback/search`). It validates and coerces query/pagination params, then delegates to the feedback service via the shared search-controller factory. Exists to keep the admin search surface thin and consistent with other search endpoints while enforcing that the result is per-admin (never cached).
 
 ## Key elements
 
-- **`searchFeedbackQuerySchema`** — Extends the orval-generated `SearchFeedbackRequestsBody` with `page` and `pageSize` (coerced from strings, since GET query params arrive as text rather than typed JSON).
-- **`searchFeedbackKeyParameters`** — Array of parameter names derived from `Object.keys(searchFeedbackQuerySchema.shape)`. Used downstream to build the cache key; every parameter that affects the response must appear here.
-- **`getFeedback`** — The exported controller produced by `createSearchController`. Wires the schema to `feedbackRequestService.search`, passing the caller context extracted from the request.
+- **`searchFeedbackQuerySchema`** — Extends the orval-generated `SearchFeedbackRequestsBody` with `page` and `pageSize` (both coerced from string to number via `pageSchema`/`pageSizeSchema`). Used as the validation schema for both GET query and POST body forms.
+- **`getFeedback`** (exported) — The controller built by `createSearchController`. Wires the schema to `feedbackRequestService.search`, passing the parsed body and the caller context extracted from the request.
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-search-controller.ts`** — Provides the `createSearchController` factory; this file supplies the entity name, schema, and `runSearch` callback.
-- **`src/modules/feedback/service.ts`** — `feedbackRequestService.search` performs the actual database search; the controller delegates all domain logic here.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts the authenticated caller's context for passing to the service.
-- **`src/infrastructure/http/schemas.ts`** — Supplies `pageSchema` and `pageSizeSchema` for string-to-number coercion of pagination params.
+- **`create-search-controller.ts`** — Provides the `createSearchController` factory; this file is a concrete instantiation of it with entity `"feedback"`.
+- **`service.ts`** (`feedbackRequestService`) — The `runSearch` callback calls `feedbackRequestService.search(parsed, callerContextOf(request))`; all domain logic lives there.
+- **`request.ts`** — Supplies `callerContextOf`, which extracts the admin's identity/context from the incoming request so the service can scope results to that caller.
+- **`schemas.ts`** — Supplies `pageSchema` and `pageSizeSchema`, the shared string-to-number coercion validators for pagination params.
 - **`src/types/index.ts`** — Source of the `FeedbackRequestsResponse` return type.
-- **`src/modules/feedback/routes.ts`** — Presumed consumer that mounts `getFeedback` onto the `GET /feedback` and `POST /feedback/search` routes.
+- **`routes.ts`** — Mounts `getFeedback` onto the `/feedback` and `/feedback/search` routes (this file is the handler it registers).
 
 ## Notes
 
-- **Cache-key safety:** `searchFeedbackKeyParameters` is derived from the schema shape, not hand-listed. If a controller reads a parameter that the schema does not declare, it will be missing from the cache key and two different searches could share one cached response. Add new filters to the schema first.
-- **Shared factory convention:** This file mirrors the structure of the products/users/orders controllers. Changing the `createSearchController` contract affects all four modules simultaneously.
-- **Two spelling forms:** The GET form is URL-safe and cacheable; the POST `/search` form accepts filters too broad or numerous for a query string. Both funnel through the same `runSearch`.
+- Explicitly **never Redis-cached**: the doc comment states the response is one admin's queue, not a shared shop-wide answer. Any caching layer upstream should treat this endpoint as cache-ineligible.
+- `page`/`pageSize` arrive as **query strings** on the GET form, so the schema extends the orval-generated body schema with coerced (string→number) versions rather than reusing the JSON-typed fields.
+- The orval-generated `SearchFeedbackRequestsBody` (from `@api/schemas.zod`) is the base shape for search filters (status, email, text); this file only adds pagination.

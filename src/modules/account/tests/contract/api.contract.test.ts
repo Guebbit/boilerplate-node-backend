@@ -123,7 +123,6 @@ describe('POST /account/login — remember me', () => {
             .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'medium' });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         // Read through the same accessor the app signs with, not the raw variable: the tiers carry
         // code-side defaults, so an environment that never sets them still has a right answer.
         const expected = getExpiryTime(RefreshTokenExpiryTime.MEDIUM);
@@ -148,7 +147,6 @@ describe('POST /account/login — remember me', () => {
             .send({ email: 'nobody@example.com', password: 'whatever-it-is', remember: 'forever' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -166,7 +164,6 @@ describe('PUT /account', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.username).toBe('replaced-self');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('refuses a body missing the required username', async () => {
@@ -178,7 +175,6 @@ describe('PUT /account', () => {
             .send({ email: user.email });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -251,7 +247,6 @@ describe('PATCH /account', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.username).toBe('self-renamed');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('holds a new address as pending rather than changing email immediately', async () => {
@@ -269,7 +264,6 @@ describe('PATCH /account', () => {
         // Still verified, at the same instant: an unconfirmed new address must not unverify the
         // proven one it has not yet replaced.
         expect(response.body.data.verifiedAt).toBe(user.verifiedAt!.toISOString());
-        expect(response).toSatisfyApiSpec();
     });
 
     it('restating the CURRENT address is a no-op — a pending change survives it', async () => {
@@ -286,7 +280,6 @@ describe('PATCH /account', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.pendingEmail).toBe('someone-else-typed-this@example.com');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an email another account holds', async () => {
@@ -302,7 +295,6 @@ describe('PATCH /account', () => {
             .send({ email: 'taken@example.com' });
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an invalid body', async () => {
@@ -314,7 +306,6 @@ describe('PATCH /account', () => {
             .send({ email: 'not-an-email' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -329,7 +320,6 @@ describe('DELETE /account/pending-email', () => {
         const response = await api().delete('/account/pending-email').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
 
         const after = await api().get('/account').set('Authorization', bearer);
         expect(after.body.data.pendingEmail).toBeUndefined();
@@ -341,7 +331,6 @@ describe('DELETE /account/pending-email', () => {
         const response = await api().delete('/account/pending-email').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -408,7 +397,6 @@ describe('POST /account/password', () => {
         });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
 
         const relogin = await api()
             .post('/account/login')
@@ -454,7 +442,6 @@ describe('POST /account/password', () => {
         });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     /*
@@ -475,7 +462,6 @@ describe('POST /account/password', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data).toBeUndefined();
-        expect(response).toSatisfyApiSpec();
         expect(loggedWarn).toHaveBeenCalledWith(
             expect.objectContaining({
                 message: 'Password changed, but the session re-mint failed.',
@@ -496,7 +482,6 @@ describe('POST /account/reauth', () => {
             .send({ password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         expect(typeof response.body.data.token).toBe('string');
     });
 
@@ -512,7 +497,6 @@ describe('POST /account/reauth', () => {
             .send({ password: 'wrong-guess' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('sets a fresh refresh cookie too, same as POST /account/password', async () => {
@@ -558,7 +542,6 @@ describe('POST /account/export', () => {
         const response = await api().post('/account/export').set('Authorization', bearer).send();
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         const { data } = response.body as {
             data: {
                 profile: { email: string };
@@ -601,7 +584,6 @@ describe('POST /account/logout', () => {
         const response = await api().post('/account/logout').set('Cookie', jwtCookie);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
 
         // The revoked cookie can no longer mint access tokens — the session is dead server-side,
         // not merely cleared client-side.
@@ -613,7 +595,6 @@ describe('POST /account/logout', () => {
         const response = await api().post('/account/logout');
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -629,7 +610,6 @@ describe('GET /account/sessions', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.sessions).toHaveLength(1);
         expect(response.body.data.sessions[0].current).toBe(true);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('flags nothing current for a bearer-only caller', async () => {
@@ -640,7 +620,6 @@ describe('GET /account/sessions', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.sessions).toHaveLength(1);
         expect(response.body.data.sessions[0].current).toBe(false);
-        expect(response).toSatisfyApiSpec();
     });
 
     /**
@@ -669,7 +648,6 @@ describe('GET /account/sessions', () => {
 
         expect(after.status).toBe(200);
         expect(typeof after.body.data.sessions[0].lastUsedAt).toBe('string');
-        expect(after).toSatisfyApiSpec();
     });
 });
 
@@ -695,7 +673,6 @@ describe('DELETE /account/sessions/{sessionId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
 
         const after = await api()
             .get('/account/sessions')
@@ -722,7 +699,6 @@ describe('DELETE /account/sessions/{sessionId}', () => {
             .set('Authorization', attacker.bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
 
         // And the owner's session is untouched.
         const after = await api().get('/account/sessions').set('Authorization', owner.bearer);
@@ -739,7 +715,6 @@ describe('DELETE /account/sessions/{sessionId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a malformed id', async () => {
@@ -750,7 +725,6 @@ describe('DELETE /account/sessions/{sessionId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -766,7 +740,6 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
 
         expect(response.status).toBe(201);
         expect(response.body.data.verifiedAt).toBeUndefined();
-        expect(response).toSatisfyApiSpec();
 
         expect(await readVerifyToken(response.body.data.id)).toBeDefined();
     });
@@ -787,7 +760,6 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
         });
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
         expect(response.body.data.token).toBeUndefined();
 
         expect(setCookie(response, 'jwt')).toBeDefined();
@@ -815,7 +787,6 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
         });
 
         expect(response.status).toBe(201);
-        expect(response).toSatisfyApiSpec();
         expect(response.body.data.email).toBe('ada+shop@mail.example.photography');
     });
 
@@ -824,12 +795,10 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
 
         const request = await api().post('/account/verify-request').set('Authorization', bearer);
         expect(request.status).toBe(200);
-        expect(request).toSatisfyApiSpec();
 
         const token = verifyTokenFromMail();
         const confirm = await api().post('/account/verify-confirm').send({ token });
         expect(confirm.status).toBe(200);
-        expect(confirm).toSatisfyApiSpec();
 
         const stored = await userRepository.findById(user.id);
         expect(stored?.verifiedAt).toBeInstanceOf(Date);
@@ -841,7 +810,6 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
         const response = await api().post('/account/verify-request').set('Authorization', bearer);
 
         expect(response.status).toBe(409);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an invented token', async () => {
@@ -850,7 +818,6 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
             .send({ token: 'not-a-real-token' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('a token spends exactly once', async () => {
@@ -863,7 +830,6 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
 
         expect(first.status).toBe(200);
         expect(second.status).toBe(422);
-        expect(second).toSatisfyApiSpec();
     });
 });
 
@@ -894,7 +860,6 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
         const confirm = await api().post('/account/email-change-confirm').send({ token });
 
         expect(confirm.status).toBe(200);
-        expect(confirm).toSatisfyApiSpec();
         const stored = await userRepository.findById(user.id);
         expect(stored?.email).toBe('new-address@example.com');
         expect(stored?.verifiedAt).toBeInstanceOf(Date);
@@ -911,7 +876,6 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
         const token = verifyTokenFromMail();
         const confirm = await api().post('/account/email-change-confirm').send({ token });
         expect(confirm.status).toBe(200);
-        expect(confirm).toSatisfyApiSpec();
 
         const account = await api().get('/account').set('Authorization', bearer);
         expect(account.body.data.email).toBe('ada+shop@mail.example.photography');
@@ -966,7 +930,6 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
         const response = await api().post('/account/email-change-confirm').send({ token });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('an `email-change` token is refused by the plain verify-confirm', async () => {
@@ -980,7 +943,6 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
         const response = await api().post('/account/verify-confirm').send({ token });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an invented email-change token', async () => {
@@ -989,7 +951,6 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
             .send({ token: 'not-a-real-token' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     /*
@@ -1024,7 +985,6 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
         const confirm = await api().post('/account/email-change-confirm').send({ token });
 
         expect(confirm.status).toBe(409);
-        expect(confirm).toSatisfyApiSpec();
         // The loser changes nothing — still the account it started as.
         const stored = await userRepository.findById(changer.user.id);
         expect(stored?.email).toBe(changer.user.email);
@@ -1050,7 +1010,6 @@ describe('the address book: /account/addresses', () => {
             .send(HOME);
         expect(added.status).toBe(200);
         expect(added.body.data.addresses[0].default).toBe(true);
-        expect(added).toSatisfyApiSpec();
 
         const second = await api()
             .post('/account/addresses')
@@ -1061,12 +1020,10 @@ describe('the address book: /account/addresses', () => {
             ({ default: d }: { default: boolean }) => d
         );
         expect(defaults.map(({ label }: { label: string }) => label)).toEqual(['office']);
-        expect(second).toSatisfyApiSpec();
 
         const listed = await api().get('/account/addresses').set('Authorization', bearer);
         expect(listed.status).toBe(200);
         expect(listed.body.data.addresses).toHaveLength(2);
-        expect(listed).toSatisfyApiSpec();
 
         const officeId = defaults[0].id as string;
         const updated = await api()
@@ -1074,7 +1031,6 @@ describe('the address book: /account/addresses', () => {
             .set('Authorization', bearer)
             .send({ city: 'Bologna' });
         expect(updated.status).toBe(200);
-        expect(updated).toSatisfyApiSpec();
 
         const removed = await api()
             .delete(`/account/addresses/${officeId}`)
@@ -1084,7 +1040,6 @@ describe('the address book: /account/addresses', () => {
         expect(
             removed.body.data.addresses.map(({ default: d }: { default: boolean }) => d)
         ).toEqual([true]);
-        expect(removed).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an invalid body', async () => {
@@ -1095,7 +1050,6 @@ describe('the address book: /account/addresses', () => {
             .send({ label: 'incomplete' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     // E12: `country` is an ISO 3166-1 alpha-2 code, not free text — a full name or a lowercase
@@ -1112,7 +1066,6 @@ describe('the address book: /account/addresses', () => {
             .send({ ...HOME, country });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an entry the caller does not hold', async () => {
@@ -1123,7 +1076,6 @@ describe('the address book: /account/addresses', () => {
             .send({ city: 'Nowhere' });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     // A PUT body IS the new resource (RFC 9110 §9.3.4) — every writable field
@@ -1148,7 +1100,6 @@ describe('the address book: /account/addresses', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         const replaced = response.body.data.addresses.find(
             (a: { id: string }) => a.id === addressId
         );
@@ -1171,7 +1122,6 @@ describe('the address book: /account/addresses', () => {
             .send({ fullName: 'Ada L.', street: 'Via Torino 9', city: 'Torino', zip: '10121' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('PATCH null clears the optional label, leaving everything else unchanged', async () => {
@@ -1188,7 +1138,6 @@ describe('the address book: /account/addresses', () => {
             .send({ label: null });
 
         expect(response.status).toBe(200);
-        expect(response).toSatisfyApiSpec();
         const patched = response.body.data.addresses.find(
             (a: { id: string }) => a.id === addressId
         );
@@ -1210,7 +1159,6 @@ describe('the address book: /account/addresses', () => {
             .send({ label: '' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('answers the same 404 when REMOVING an entry the caller does not hold', async () => {
@@ -1226,7 +1174,6 @@ describe('the address book: /account/addresses', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('checkout carries the snapshot the contract declares', async () => {
@@ -1249,6 +1196,5 @@ describe('the address book: /account/addresses', () => {
             fullName: 'Ada Lovelace',
             street: 'Via Roma 1'
         });
-        expect(response).toSatisfyApiSpec();
     });
 });

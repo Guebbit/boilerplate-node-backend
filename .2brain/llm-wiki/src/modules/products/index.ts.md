@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/index.ts
-sha256: 7b858d2b808d305405c777eb1afa9c9a5d2ddfd1d479d6e9a1d7c8a1815e980f
-generated_at: 2026-09-23T19:26:56.064248+00:00
+sha256: e41c2ea3275c56275bd314155df484ee24e886359d9dd5dfcf3ef7a00bc8e7d4
+generated_at: 2026-09-27T15:32:05.425024+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Public barrel (the module's single import surface) that enforces the strategic-DDD rule: sibling modules may only import what this file re-exports, never internal files. It curates which symbols are visible externally while keeping the repository, schema, and model runtime private to the module.
+Public barrel for the Products module and the **only** entry point a sibling module may import from (per `docs/theory/strategic-ddd.md` §5). It curates which symbols are exposed externally while keeping the repository, runtime schema, and transform functions strictly internal.
 
 ## Key elements
 
-- **`export * from './service'`** — Exposes `productService` (and any other public service functions). This is the read path siblings use for `onHand`/`reserved` inventory data.
-- **`export * from './events'`** — Re-exports product domain events.
-- **`export { resolveTaxRate } from './tax'`** — Resolves a product's `taxClass` into a decimal VAT rate. Exposed specifically so the orders module can freeze the rate onto an order line at snapshot time.
-- **`export type { TaxClass } from './tax'`** — The tax-class union type, available to consumers without importing the tax module directly.
-- **`export * from './domain'`** — Re-exports domain logic (value objects, invariants, etc.).
-- **`export type * from './model'`** — Exposes **types only** from the model layer; the runtime (`productSchema`, `applyProductTransform`, `productModel`) and `productRepository` are deliberately _not_ exported.
+- `export * from './service'` — the `productService` API through which siblings read `onHand`/`reserved` product state.
+- `export * from './events'` — domain event definitions emitted by the products module.
+- `resolveTaxRate` (from `./tax`) — resolves a product's `taxClass` to a decimal VAT rate; consumed by `orders` to freeze the rate onto an order line at checkout.
+- `TaxClass` (type, from `./tax`) — the union/type of tax classifications a product can carry.
+- `export * from './domain'` — domain entities / value objects for products.
+- `export type * from './model'` — model types only (no runtime values) from the schema layer.
+- **Deliberately omitted:** `productRepository`, `productSchema`, `applyProductTransform`, `productModel` — these stay internal; no sibling may import them directly.
 
 ## Relationships
 
-- **`src/modules/inventory/`** (service, module, tests) — The _only_ module permitted to write the `onHand`/`reserved` inventory mirror that product reads surface through `productService`.
-- **`src/modules/orders/`** (model, module, availability, crud) — Consumes `resolveTaxRate` and `TaxClass` to freeze the VAT rate on order lines; reads product availability/stock via the service.
-- **`src/modules/cart/`** (module, items, checkout, reorder, view, integration tests) — Downstream consumer of the barrel; accesses product data (identity, pricing) through the public service surface.
+- **`src/modules/inventory/*`** — The *only* module allowed to write the `onHand`/`reserved` inventory mirror that `productService` exposes. Inventory's `service.ts` and `module.ts` are the write-side counterpart.
+- **`src/modules/orders/services/place.ts`, `crud.ts`, `availability.ts`, `current.ts`** — Consume `productService` (read) and `resolveTaxRate` / `TaxClass` (tax resolution at order time).
+- **`src/modules/cart/services/checkout.ts`, `items.ts`, `reorder.ts`, `view.ts`** — Sibling modules that import product data through this barrel (e.g., availability checks, price/tax lookups).
+- **`src/modules/orders/model.ts`** — Order line model references `TaxClass` and the frozen tax rate resolved via `resolveTaxRate`.
+- **Integration tests** (`cart/tests/…`, `inventory/tests/…`) — Exercise product service behavior indirectly through the barrel exports.
 
 ## Notes
 
-- The file is the _sole_ import target for any sibling module. Direct imports of `./service`, `./model`, `./tax`, etc. from outside `src/modules/products/` violate the architecture rule in `docs/theory/strategic-ddd.md` §5.
-- `productRepository`, `productSchema`, `applyProductTransform`, and `productModel` are intentionally absent from the export list. Do not "fix" this by adding them.
-- `export type * from './model'` is type-only; importing a runtime value from `./model` via this barrel will fail at build time.
-- `resolveTaxRate` is exported as a named value (not `export *`) to keep the tax module's internal surface minimal.
+- Import rule is strict: a sibling must go through this barrel. Reaching into `./service`, `./model`, etc. directly from outside the module is an architectural violation.
+- `productRepository` and the schema runtime are intentionally hidden; if you need to mutate product state, go through `productService`. If you need to *write* inventory quantities, only `@modules/inventory` does that.
+- `./model` is exported as **type-only** (`export type *`), so no runtime cost is paid for model definitions in consumer bundles.

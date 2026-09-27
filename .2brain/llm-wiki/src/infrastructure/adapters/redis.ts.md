@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/redis.ts
-sha256: e0d5e567b770bb78632a755423109e53aa40d7635305e52f7ae07eae2c48e88b
-generated_at: 2026-09-23T17:41:41.382432+00:00
+sha256: 2892cb65d4aa239e88e876de12853c7cbcdd8e15ded750a7c07f4e33c61e3a52
+generated_at: 2026-09-27T14:08:10.818724+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared Redis connection utilities for all Redis-backed adapters in this codebase. It centralises URL assembly from environment variables, the node-redis client options (timeout, reconnect policy), and graceful client shutdown. Error-handling and retry logic are intentionally _excluded_ because the two consumers (cache vs. rate-limiter) handle them differently.
+Shared plumbing for every Redis-backed adapter in this codebase. It centralises URL assembly from environment variables, the node-redis client options, client construction, graceful shutdown, and connection-error detection. Adapter-specific concerns (error-listener policy, `connect()` retry strategy) are deliberately left out so each adapter can differ.
 
 ## Key elements
 
-- **`redisUrlFromHostPort(hostVariable, portVariable)`** — Reads host and port from `process.env` and returns `redis://host:port`. Returns `undefined` when the port variable is unset (the "not configured" signal). Host defaults to `127.0.0.1`.
-- **`redisClientOptions(url)`** — Returns the node-redis options object: a 1-second `connectTimeout` (fail-fast so a lookup never dominates request latency) and `reconnectStrategy: false as const` (disables node-redis' built-in reconnect loop; each adapter drives its own recovery).
-- **`closeRedisClient(client)`** — Gracefully shuts down a client: calls `quit()` (sends QUIT, waits for queued replies); if that rejects, falls back to `destroy()` (drops the socket immediately). Accepts `undefined` and resolves immediately when no client was ever opened.
+- **`redisUrlFromHostPort(hostVariable, portVariable)`** – Builds a `redis://host:port` URL from two separate env-var names. Returns `undefined` when the port variable is unset, signalling "Redis not configured" to the caller. Host defaults to `127.0.0.1`.
+- **`COMMAND_TIMEOUT_MS`** (private) – `1000`; the budget for a command still queued to be sent.
+- **`redisClientOptions(url)`** – Returns the full node-redis options object: RESP2, `maintNotifications: 'disabled'`, `connectTimeout: 1000`, `reconnectStrategy: false`, `commandOptions.timeout: 1000`.
+- **`createRedisClient(url)`** – Thin wrapper over `createClient(redisClientOptions(url))`; the single factory every adapter uses.
+- **`RedisClient`** (type) – `ReturnType<typeof createRedisClient>`; the RESP2-variant client type (node-redis's own `RedisClientType` defaults to RESP3, so this is derived, not re-stated).
+- **`closeRedisClient(client?)`** – Attempts `client.close()` (graceful, waits for queued replies); on failure falls back to `client.destroy()`. Accepts `undefined` (resolves immediately).
+- **`REDIS_CONNECTION_ERRORS`** (private) – Array of the five node-redis error classes that mean "no server reachable."
+- **`isRedisConnectionError(error)`** – `instanceof` check against the array above; exported for adapters and error-translation layers.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/cache.ts`** — Imports all three exports. Uses `redisUrlFromHostPort` for its URL, `redisClientOptions` to build each per-attempt client, and `closeRedisClient` on shutdown. The cache attaches its own silent `error` listener and builds a fresh client on each retry.
-- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** — Imports the same three exports. Unlike the cache, it keeps a single client across retry attempts (node-redis rejects a racing second `connect()`) and logs connection errors at `error` level.
+- **`src/infrastructure/adapters/cache.ts`** – Consumes `createRedisClient`, `closeRedisClient`, and `isRedisConnectionError` for its cache-adapter lifecycle.
+- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** – Consumes the same exports; keeps a single client across `connect()` retries (the file's docstring calls out this contrast with the cache adapter).
+- **`src/infrastructure/http/errors.ts`** – `isRedisConnectionError` is designed to feed the same status-code path as that file's `databaseErrorInterpreter` (a Redis outage maps to the same HTTP status as a Mongo outage).
+- **`tests/unit/infrastructure/adapters/redis.test.ts`** – Unit-tests the exports in this file.
 
 ## Notes
 
-- `reconnectStrategy` is typed as the literal `false` (`false as const`), not a plain `boolean`, because node-redis' socket-options type requires the literal to disable the loop.
-- The `undefined` return from `redisUrlFromHostPort` is a deliberate config-absence signal—callers should fall back to a default URL or skip Redis entirely rather than treating it as an empty string.
-- This module has **no** `error` listener and **no** retry loop; those live in each consumer to allow the differing degradation strategies.
+- **RESP2 is pinned, not inherited.** node-redis 6 defaults to RESP3 + Enterprise maintenance notifications; both are overridden here because the callers (and `rate-limit-redis`'s raw commands) were written against RESP2.
+- **`reconnectStrategy: false` is a literal**, not a boolean — node-redis' types require `false as const` to disable the background reconnect loop. Each adapter drives its own recovery.
+- **`commandOptions.timeout` only covers the send window.** Once the command is on the wire the timer is dropped; a half-open connection still waits on the kernel for a reply.
+- **Error matching uses `instanceof`, not `.name`.** The node-redis error classes never set `.name` (they all report as plain `Error`), so string matching would fail.
+- **`redisUrlFromHostPort` returning `undefined` is intentional.** It is a "not configured" signal for the caller, not a bug or a fallback.

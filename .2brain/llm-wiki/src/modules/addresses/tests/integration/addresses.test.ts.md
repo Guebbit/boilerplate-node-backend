@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/tests/integration/addresses.test.ts
-sha256: 15889109d000b1de35f7b764137f20d7845ead52cf3d727fcd07bb62c2fda088
-generated_at: 2026-09-23T18:21:44.713753+00:00
+sha256: f980035ea3e2b823fdabaebe949c6941e9a555e8098414898735b75cbe1d5f8c
+generated_at: 2026-09-27T14:40:13.077324+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for the address book module. Validates the module's three core invariants end-to-end against a real database: (1) a non-empty book has **exactly one** default regardless of which write set it, (2) another user's entry is indistinguishable from a non-existent one (404), and (3) the checkout resolver's three-way answer (named → default → none). Also verifies PII is encrypted at rest and round-trips correctly.
+Integration test suite for the address book module. It verifies four cross-cutting invariants: (1) a non-empty book always has exactly one default, (2) another user's entry is indistinguishable from a non-existent one (404), (3) the checkout resolver's three-way answer (default, named, or absent) and its failure modes, and (4) PII fields are stored encrypted and round-trip correctly through the repository.
 
 ## Key elements
 
-- **`HOME` / `OFFICE`** — Two address fixture objects used throughout the suite.
-- **`defaults(userId)`** — Helper that calls `addressService.addressesGet` and returns only the entries flagged `default: true`.
-- **`cartWith(userId)`** — Creates a product via the products factory and adds one unit to the user's cart; returns the product. Shared setup for every checkout case.
-- **`describe('the one-default invariant')`** — Five tests covering: first-entry auto-default, explicit claim via update, `default: true` on add, `default: false` on update (no-op), and promotion of the oldest entry on removal.
-- **`describe('ownership')`** — Single test asserting cross-user update/remove both return 404 and leave the owner's data untouched.
-- **`describe('checkout and the address')`** — Five tests: snapshot default when no id named, named entry overrides default, stale id refuses checkout with `CART_ADDRESS_NOT_FOUND` and no side effects, foreign user's real id is refused identically (ownership, not existence), and empty book produces an order with `shippingAddress` undefined.
-- **`describe('PII at rest')`** — Two tests: raw DB read shows versioned-secret ciphertext (not plaintext), and the repository decrypts back to the submitted values.
+- **`HOME` / `OFFICE`** — two fixture address objects (Modena, IT) used throughout as distinct entries.
+- **`defaults(userId)`** — helper that calls `addressesGet` and returns only the entries flagged `default: true`.
+- **`cartWith(userId)`** — helper that creates an in-stock product and adds one unit to the user's cart; returns the product for later stock assertions.
+- **`describe('the one-default invariant')`** — five tests: first-entry auto-default, explicit claim via update, explicit claim via add, `default: false` is a no-op, and oldest-survivor promotion on removal.
+- **`describe('ownership')`** — one test: a stranger's update/remove against a real foreign id returns 404 and leaves the owner's entry unchanged.
+- **`describe('checkout and the address')`** — five tests covering: default resolution under `standard` shipping, named-entry override, stale-id rejection (404 + `CART_ADDRESS_NOT_FOUND` + no stock/order side-effects), foreign-id rejection (same contract as stale), and empty-book checkout under `pickup` (no address on order).
+- **`describe('PII at rest')`** — two tests: raw Mongoose read (`.lean()`) confirms fields match the `v\d+` versioned-secret wire format (not plaintext), and a service-level read round-trips back to the submitted values.
 
 ## Relationships
 
-- **`src/modules/addresses/service.ts`** — Primary subject under test. Imported as `addressService` via relative path (`../../service`) for all CRUD operations (`addressAdd`, `addressUpdate`, `addressRemove`, `addressesGet`).
-- **`src/modules/addresses/model.ts`** — Imported as `addressBookModel`; used only in the PII-at-rest test to bypass the repository's decryption layer and read raw stored fields.
-- **`src/modules/cart/index.ts`** — Provides `cartService` for `cartItemAddById` (cart setup) and `orderConfirm` (checkout resolution under test).
-- **`src/modules/cart/services/index.ts`** — Barrel re-export consumed through the cart index above.
-- **`src/modules/users/tests/factories.ts`** — `createUser` supplies authenticated test identities.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` / `readProduct` build cart contents and let the suite assert inventory was untouched after a refused checkout.
-- **`src/modules/orders/tests/factories.ts`** — `countOrders` confirms no order row was persisted after a refused checkout.
-- **`tests/support/callers.ts`** — `testCallerContext` provides the caller argument `orderConfirm` requires.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the test database before the suite runs.
+- **`src/modules/addresses/service.ts`** — imported as `addressService` via a **relative** path (`../../service`), not the barrel. All CRUD calls (`addressAdd`, `addressUpdate`, `addressRemove`, `addressesGet`) go through it.
+- **`src/modules/addresses/model.ts`** — imports `addressBookModel` directly, used *only* in the PII-at-rest test to bypass the repository's decrypt layer and inspect the raw stored representation.
+- **`src/modules/cart/index.ts`** (→ `src/modules/cart/services/index.ts`) — imports `cartService` for `cartItemAddById`, `cartShippingMethodSet`, `orderConfirm`, and `cartGetForBadge`.
+- **`src/modules/users/tests/factories.ts`** — `createUser` provides test accounts (owner, stranger, generic).
+- **`src/modules/products/tests/factories.ts`** — `createProduct` / `readProduct` supply in-stock items and verify stock counts after rejected checkouts.
+- **`src/modules/orders/tests/factories.ts`** — `countOrders` asserts that a failed checkout creates zero orders.
+- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity required by `orderConfirm`.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` resets/initializes the test database before the suite runs.
 
 ## Notes
 
-- **Relative import for the service.** The file deliberately imports `../../service` rather than the `@modules/addresses` barrel. The project's barrel rule (CLAUDE.md) forbids a module's own tests from importing its own `index.ts`, so the test reaches the sibling file directly.
-- **PII test reads raw storage.** The encryption assertion calls `addressBookModel.findOne(...).lean()` to simulate a stolen disk or raw DB read, intentionally bypassing the repository's decrypt path. The expected ciphertext shape is `^v\d+(?::[\da-f]+){3}$` (versioned-secret wire format).
-- **Stale/foreign-id checkout tests assert zero side effects.** They verify product `onHand` remains 10, `reserved` remains 0, the cart is unchanged, and no order row exists — confirming the address check runs before any reservation or order write.
-- **The foreign-entry checkout test is an ownership test, not an existence test.** Its inline comment explains that collapsing the split return type in `addressForCheckout` would let a foreign id silently downgrade to "no address" instead of a hard 404, which is the distinction this test guards.
+- **Barrel-avoidance rule:** the import of `addressService` is deliberately relative (`../../service`) with an inline comment citing CLAUDE.md's rule that a module's own tests must not import through `index.ts`. Other cross-module imports (cart, users, products, orders) use the `@modules/…` alias freely.
+- **PII test bypasses the domain layer:** `addressBookModel.findOne(...).lean()` is a raw Mongoose call that skips the repository's decrypt step, simulating what a stolen disk or raw query would expose. The expected format (`^v\d+(?::[\da-f]+){3}$`) is defined in `infrastructure/security/versioned-secret.ts`.
+- **Ordering guarantees asserted:** the stale-id and foreign-id checkout tests explicitly verify that the address check fires *before* stock reservation and order creation (stock unchanged, cart intact, `countOrders === 0`), pinning the short-circuit position in the pipeline.
+- **Shipping-method coupling:** `standard` requires an address (triggers resolution); `pickup` does not (empty book still succeeds). These two methods are the only ones exercised.

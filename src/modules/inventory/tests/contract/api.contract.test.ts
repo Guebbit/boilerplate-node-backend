@@ -27,7 +27,6 @@ describe('GET /inventory/levels', () => {
             available: 7
         });
         expect(response.body.data.meta).toMatchObject({ totalItems: 1, totalPages: 1 });
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the contract when narrowed to what needs ordering', async () => {
@@ -41,7 +40,6 @@ describe('GET /inventory/levels', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(0);
         expect(response.body.data.meta.totalItems).toBe(0);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('pages the board rather than reading the whole catalogue', async () => {
@@ -56,7 +54,6 @@ describe('GET /inventory/levels', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(2);
         expect(response.body.data.meta).toMatchObject({ totalItems: 5, totalPages: 3 });
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -69,7 +66,6 @@ describe('GET /inventory/movements', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(0);
         expect(response.body.data.meta).toMatchObject({ totalItems: 0, totalPages: 0 });
-        expect(response).toSatisfyApiSpec();
     });
 
     it('pages the ledger rather than truncating it', async () => {
@@ -95,7 +91,6 @@ describe('GET /inventory/movements', () => {
             totalItems: 5,
             totalPages: 3
         });
-        expect(response).toSatisfyApiSpec();
     });
 
     it('narrows the ledger to one kind of transition', async () => {
@@ -117,7 +112,6 @@ describe('GET /inventory/movements', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(1);
         expect(response.body.data.items[0].reason).toBe('adjust');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the contract for a ledger holding rows, narrowed by product', async () => {
@@ -140,7 +134,6 @@ describe('GET /inventory/movements', () => {
             onHandDelta: 5,
             reservedDelta: 0
         });
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -156,7 +149,6 @@ describe('POST /inventory/receipts', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ onHand: 10, reserved: 0, available: 10 });
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an unknown product', async () => {
@@ -168,7 +160,6 @@ describe('POST /inventory/receipts', () => {
             .send({ productId: MISSING_ID, quantity: 7 });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for an invalid body', async () => {
@@ -180,7 +171,6 @@ describe('POST /inventory/receipts', () => {
             .send({ quantity: 0 });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -196,7 +186,6 @@ describe('POST /inventory/adjustments', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ onHand: 6, available: 6 });
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract when the correction goes below what is reserved', async () => {
@@ -210,7 +199,6 @@ describe('POST /inventory/adjustments', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('INVENTORY_BELOW_RESERVED');
-        expect(response).toSatisfyApiSpec();
     });
 
     it('matches the error contract for a zero correction', async () => {
@@ -223,7 +211,6 @@ describe('POST /inventory/adjustments', () => {
             .send({ productId: String(product._id), delta: 0 });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -237,6 +224,5 @@ describe('POST /inventory/reservations/sweep', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data).toEqual({ expired: 0 });
-        expect(response).toSatisfyApiSpec();
     });
 });

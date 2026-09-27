@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/providers/index.ts
-sha256: 5f19e2656c5c23fe1d21ac46f301c8a8c3b3a88c5be92948c2c771b9244c9a9f
-generated_at: 2026-09-23T19:19:34.779739+00:00
+sha256: d69b100ca969e71ae2b23c6dedef1c10e6e2be3679c7a08f2fb968f550a990f4
+generated_at: 2026-09-27T15:24:54.424138+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the `PaymentProvider` port — the contract every PSP implementation must satisfy — along with the supporting types that describe a payment's lifecycle state. It also provides the `resolvePaymentProvider` factory that selects an implementation at runtime based on `NODE_PAYMENT_PROVIDER`. The file exists so that swapping or adding a PSP is a one-file, one-registry-line change rather than a code-path refactor.
+Defines the **payment provider port** — the interface every PSP implementation must satisfy — along with the provider registry and two resolution functions. It is the single seam where a real payment service plugs in: a live project adds one implementation file and one line to the `PROVIDERS` record, and no other call-site changes.
 
 ## Key elements
 
-- **`PaymentProvider`** (interface) — the port. Methods: `prepare`, `confirm`, `retrieve`, `refund`, `parseWebhook`. A real implementation must verify webhook signatures over the raw body and never trust browser-reported status.
-- **`ProviderPaymentStatus`** (type) — `'requires_action' | 'processing' | 'succeeded' | 'declined'`. Deliberately excludes `refunded` (that state is owned by this application, not the provider).
-- **`ProviderPaymentState`** (interface) — status + optional `cardLast4` (the only card data this server may store).
-- **`PreparedPayment`** (interface) — `providerRef` (persisted) + `clientSecret` (hand-off to browser; must never be persisted or logged).
-- **`ProviderWebhookEvent`** (interface) — normalised webhook shape: `id` (dedup key), optional `providerRef`, optional `state`.
-- **`resolvePaymentProvider()`** (exported const fn) — reads `NODE_PAYMENT_PROVIDER` fresh per call, validates against the `PROVIDERS` registry, returns the implementation or throws.
-- **`PROVIDERS`** (module-private const) — registry mapping name → implementation. Currently only `fake`.
-- **Re-exports from `./webhook-signature`** — `signWebhookPayload`, `verifyWebhookSignature`, `WEBHOOK_SIGNATURE_HEADER`, `WebhookRejected`.
+- **`PaymentProvider`** (interface) — the port. Methods: `prepare`, `confirm`, `retrieve`, `refund`, `cancel`, `parseWebhook`. Each carries idempotency, error, and security contracts in its JSDoc.
+- **`ProviderPaymentStatus`** — union: `'requires_action' | 'processing' | 'succeeded' | 'declined'`. `refunded` is intentionally *absent*; it is this application's own later state.
+- **`ProviderPaymentState`** — status + optional `cardLast4` (sourced from the provider; this server never sees full card digits).
+- **`PreparedPayment`** — `providerRef` (persisted) + `clientSecret` (browser-only, never stored).
+- **`ProviderWebhookEvent`** — normalised webhook payload with dedup `id`, optional `providerRef` and `state`.
+- **`resolvePaymentProvider()`** — returns the implementation named by `NODE_PAYMENT_PROVIDER` (default `fake`). Read fresh per call; throws on unknown name rather than silently falling back.
+- **`providerNamed(name)`** — resolves the implementation for a *specific payment's* `provider` field (e.g. routing a refund back to the PSP that took the money). Distinct from `resolvePaymentProvider`; the two must not be conflated.
+- **Re-exports** — `PaymentInFlightError` (from `./errors`), `signWebhookPayload`, `verifyWebhookSignature`, `WEBHOOK_SIGNATURE_HEADER`, `WebhookRejected` (from `./webhook-signature`).
+- **`PROVIDERS`** — private `Record<string, PaymentProvider | undefined>` registry; currently holds only `fake`.
 
 ## Relationships
 
-- **`src/infrastructure/runtime/environment.ts`** — imports `environmentChoice` to validate the provider name against an allow-list and supply the `fake` default.
-- **`src/modules/payments/providers/fake.ts`** — imports `fakePaymentProvider` and registers it as the only entry in `PROVIDERS`.
-- **`src/modules/payments/providers/webhook-signature.ts`** — re-exports its public surface so downstream consumers import from this module rather than reaching into the sibling file.
-- **`src/modules/payments/services/intent.ts`** — consumes `PaymentProvider` (calls `prepare`, `confirm`, `retrieve`) and `PreparedPayment`/`ProviderPaymentState` types.
-- **`src/modules/payments/services/refunds.ts`** — consumes `PaymentProvider.refund`.
-- **`src/modules/payments/services/settlement.ts`** — consumes `ProviderWebhookEvent` and `ProviderPaymentState` when processing webhook deliveries.
-- **`src/modules/payments/controllers/post-payment-webhook.ts`** — calls `resolvePaymentProvider()` and `parseWebhook`, catches `WebhookRejected` to return 400.
-- **`src/modules/payments/module.ts`** — wires the resolved provider into the service layer at bootstrap.
-- **`src/modules/webhooks/services/publish.ts`** — receives processed `ProviderWebhookEvent` data for downstream domain event publication.
-- **`src/modules/payments/tests/unit/providers.test.ts`** — unit-tests the registry resolution and type surface.
-- **`src/modules/payments/tests/contract/api.contract.test.ts`** — asserts that implementations honour the `PaymentProvider` contract (idempotency, error semantics).
+- **`./fake`** — imports `fakePaymentProvider` into the registry; the default and test implementation.
+- **`./errors`** — re-exports `PaymentInFlightError`, thrown by `cancel` when an intent is already succeeded or mid-flight.
+- **`./webhook-signature`** — re-exports the HMAC signing/verification helpers and the `WebhookRejected` error type used by `parseWebhook` implementations.
+- **`@infrastructure/runtime/environment`** — imports `environmentChoice` to read `NODE_PAYMENT_PROVIDER` with validation against registered keys.
+- **Consumers (import from this file):** `services/intent.ts`, `services/refunds.ts`, `services/settlement.ts`, `services/offline.ts` call the provider methods; `controllers/post-payment-webhook.ts` calls `parseWebhook`; `module.ts` wires the resolved provider into the module graph. All three test files (`unit/providers.test.ts`, `contract/api.contract.test.ts`, `tests/integration/concurrency/payment-races.test.ts`) exercise the port's contracts.
 
 ## Notes
 
-- `clientSecret` is a live authorisation token; the codebase convention (enforced by the JSDoc) is that it is **never** persisted, logged, or audited.
-- `parseWebhook` receives the raw `Buffer`, not a parsed object — signature verification is computed over the exact received bytes. `src/app/security.ts` is the only route that preserves the buffer.
-- The `PROVIDERS[name]!` non-null assertion is safe by construction (`environmentChoice` only returns keys that exist in `PROVIDERS`), but the TypeScript compiler cannot verify that cross-call guarantee.
-- `resolvePaymentProvider` intentionally does **not** memoise. A deployment typo that names an absent provider throws; it does **not** silently fall back to `fake`.
-- Adding a real PSP means: (1) create one file exporting a `PaymentProvider`, (2) add one line to the `PROVIDERS` record, (3) set `NODE_PAYMENT_PROVIDER` in the environment. No other code changes.
+- **Two resolution paths, two questions.** `resolvePaymentProvider()` answers "which PSP opens *new* intents under the current deployment setting." `providerNamed()` answers "which PSP *actually took* the money on this specific payment row." A deployment that flips `NODE_PAYMENT_PROVIDER` must not silently redirect an old payment's refund to the new provider — that is the reason both exist.
+- **`parseWebhook` takes a raw `Buffer`, not a parsed object.** Signatures are computed over exact bytes; re-serialising a JSON object changes them. The caller (`src/app/security.ts`) must preserve the original body.
+- **`clientSecret` is never persisted, logged, or audited.** It authorises completing the payment challenge and is treated as a one-use credential.
+- **`PROVIDERS[name]!`** uses a non-null assertion because `environmentChoice` guarantees the returned key is in `allowed` (which equals `Object.keys(PROVIDERS)`) or the fallback `'fake'` (also a key). The compiler cannot trace that guarantee across the call.
+- **Refund idempotency is two-layered.** The provider-side `idempotencyKey` (e.g. `refund:{paymentId}`) makes concurrent retries safe at the PSP; the caller's own `succeeded → refunded` conditional write covers the sequential case. Both halves are required.
+- **`cancel` is the counterpart to `prepare`** and exists because reference PSPs (e.g. Stripe PaymentIntents) do not auto-expire. It throws `PaymentInFlightError` if the intent already succeeded or is still processing — the correct remedy in that case is `refund`, not `cancel`.

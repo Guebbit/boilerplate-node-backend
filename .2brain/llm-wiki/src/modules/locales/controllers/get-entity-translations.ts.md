@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/controllers/get-entity-translations.ts
-sha256: 3ec13bd5a2302f58111eb1a7019f95c40413aa35d93298a1c98417befe018ae4
-generated_at: 2026-09-23T18:48:21.645168+00:00
+sha256: 2fb1976b37c5ea45b2a81a672e76c8b9a9ecc9cd7d668561c51fab5eb4974470
+generated_at: 2026-09-27T14:58:17.216060+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for the admin endpoint `GET /locales/translations/:entityType/:id`. It extracts the two path parameters, delegates to `localeService.getEntityTranslations`, and maps the service result onto an HTTP response (success or refusal). Contains no business logic.
+Thin Express controller for the admin route `GET /locales/translations/:entityType/:id`. It reads the two URL params, delegates to `localeService.getEntityTranslations`, and serialises the result (or an error) into an HTTP response. It exists solely to bridge the HTTP layer to the service layer.
 
 ## Key elements
 
-- **`getEntityTranslations`** (exported function) — Express handler that reads `entityType` and `id` from `request.params`, calls `localeService.getEntityTranslations(entityType, id)`, then either short-circuits via `refused` (service-signalled rejection) or sends `successResponse(response, result.data)`. Errors are funneled through `catchAs(response, 'getEntityTranslations')`.
+- **`getEntityTranslations`** (exported) – Express handler typed with `Request<{ entityType: string; id: string }>`. Calls `localeService.getEntityTranslations(entityType, id)`, then either returns a `refused` response (access denied) or a `successResponse` with `result.data`. Errors are funnelled through `catchAs(response, 'getEntityTranslations')`.
 
 ## Relationships
 
-- **`src/modules/locales/services/index.ts`** — Provides `localeService`, whose `getEntityTranslations` method is the sole data source this controller calls.
-- **`src/infrastructure/http/controller.ts`** — Supplies the `catchAs` (error→response wrapper) and `refused` (result-check that writes a refusal status and returns a truthy sentinel to skip the success branch) utilities.
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the standardized 200-shape writer.
-- **`src/modules/locales/routes.ts`** — Registers `getEntityTranslations` as the handler for the corresponding route path.
+- **`src/infrastructure/http/controller.ts`** – provides `refused` (short-circuit on access-denied results) and `catchAs` (uniform error-to-HTTP mapping with the operation name tag).
+- **`src/infrastructure/http/response.ts`** – provides `successResponse` for the happy-path JSON envelope.
+- **`src/modules/locales/routes.ts`** – registers `getEntityTranslations` on the Express router for the translations path.
+- **`src/modules/locales/services/index.ts`** – source of the `localeService` instance whose `getEntityTranslations` method does the actual data work.
 
 ## Notes
 
-- JSDoc marks the endpoint as **admin**-scoped; the actual auth guard lives in the route definition, not here.
-- `refused` is a _result-check_ pattern (not an exception): the service returns a tagged refusal, and the controller checks it before calling `successResponse`. A caller reading only the `catch` block will miss this failure path.
-- The operation name passed to `catchAs` (`'getEntityTranslations'`) is likely used for structured logging/tracing downstream.
+- Auth is implied to be handled upstream (JSDoc marks the route as *admin*); this handler performs no auth logic itself.
+- Route params are typed inline in the `Request` generic rather than imported from a shared param type, which is the pattern in this module.
+- Error handling relies entirely on the `refused`/`catchAs` helpers; no `try/catch` or manual status codes appear here.

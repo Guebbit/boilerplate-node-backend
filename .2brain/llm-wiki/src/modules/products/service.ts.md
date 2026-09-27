@@ -1,48 +1,47 @@
 ---
 source: src/modules/products/service.ts
-sha256: 4ba2bae3f3accbf66394a7731e8ace31fca0d5759882ace1d0fe996916485b00
-generated_at: 2026-09-23T19:28:38.114416+00:00
+sha256: 9937ff234fe92cff5f7a0fd07d5a7831163733daea49a76312ee5cbf9c887859
+generated_at: 2026-09-27T15:33:55.199022+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/products/service.ts
 
 ## Purpose
-
-The business-logic layer for the product (catalogue) entity. It is the single entry point controllers call into; all raw database access is delegated to `productRepository`. The service owns validation, access scoping, i18n-aware search, domain-event emission, and analytics/audit side-effects for every catalogue mutation.
+Business-logic layer for the Product catalogue entity. It is the single entry point controllers call for all product operations (create, read, search, update, delete). Raw database access is delegated to `productRepository`; this module adds validation, locale-aware translation resolution, access scoping, analytics/audit emission, and domain-event dispatch.
 
 ## Key elements
-
-- **`validateCreateData` / `validateUpdateData`** – Zod-schema gate for CREATE and PATCH bodies; return `ResponseErrorItem[]` (empty = valid). Accept `unknown` so callers need not pre-cast.
-- **`callerScope`** – Wraps `accessibleFilter(context, 'Product')`. Returns `undefined` for admins (no restriction) or a Mongo filter for other roles.
-- **`search`** – Main read path. Unions the product's own column match with translated-row matches (`searchTranslatedEntityIds`) across the caller's locale chain, then overlays resolved translations via `applyTranslations` in one batched pass.
-- **`searchWithTranslatedText`** – Internal helper that builds the `$or` union (own match OR translated `_id` set) and delegates to `productRepository.search`.
-- **`searchViewed` / `getByIdViewed`** – Thin wrappers around `search` / `getById` that emit an analytics event (`PRODUCTS_SEARCHED`, `PRODUCT_VIEWED`). Kept separate so non-HTTP callers (tests, other services) skip the telemetry.
-- **`getById`** – Fetches one product, calls `.toJSON()` _before_ `applyTranslations` (translation is a plain-object overlay; doing it after would clobber the document's own transforms like `_id → id` and ISO-date formatting).
-- **`create`** – Persists with `onHand: 0`, sanitizes `categories`/`tags`, emits `PRODUCT_CREATED` (inventory module is the subscriber that moves the counter), then re-reads the document so the response reflects the post-event state. Optionally enqueues an image-digest job via `enqueueIfPending`.
-- **`sanitizeStringArray`** (internal) – Trim, drop blanks, de-duplicate a string array; `null`/non-array → `[]`.
-- **`TRANSLATABLE_SEARCH_FIELDS`** – `['title', 'description']`; the columns free-text search compares against, kept local rather than read from the translation registry.
-- **`enqueueIfPending`** (internal) – Forwards to `enqueueIfImagePending` with the `'products'` queue name and a writeback callback on the repository.
+- **`validateCreateData` / `validateUpdateData`** — Parse untrusted input against the Zod create/update schemas; return `ResponseErrorItem[]` (empty = valid).
+- **`callerScope`** — Wraps `accessibleFilter` for the `'Product'` entity; returns `undefined` (admin, unrestricted) or a published-catalogue filter.
+- **`search`** — Locale-aware product search. Free-text matches the product's own column **or** the translations collection (union via `$or`). Applies caller's locale via `applyTranslations` after the repository query.
+- **`searchWithTranslatedText`** *(internal)* — Builds the `$or` union: own-column match + translated-entity IDs. Strips `text`/`title` from the remaining filters to avoid a redundant AND in `buildWhere`.
+- **`searchViewed` / `getByIdViewed`** — Thin wrappers around `search`/`getById` that additionally emit `PRODUCTS_SEARCHED` / `PRODUCT_VIEWED` analytics. Kept separate so unit tests and cross-module callers (no `CallerContext`) hit the pure functions.
+- **`getById`** — Fetch one product, run `.toJSON()` *before* `applyTranslations` (order is load-bearing: translation overlay is a plain-object spread that would clobber the document's own transform).
+- **`create`** — Persist a new product with `onHand: 0`. Emits `PRODUCT_CREATED`; the inventory subscriber sets the real count. Re-reads the product after the await so the response reflects the post-listener state.
+- **`enqueueIfPending`** *(internal)* — If the saved document carries a `pendingImageKey`, enqueues the image digest worker job.
+- **`TRANSLATABLE_SEARCH_FIELDS`** — Constant `['title', 'description']`; the exact columns registered as translatable for `product` in the module definition.
 
 ## Relationships
-
-- **`@infrastructure/i18n`** (index, context, catalog) – `getCurrentLocale`, `localeCandidatesFor`, and `t` drive locale-aware search and the `applyTranslations` overlay on every read.
-- **`@kernel/translation`** – Provides `applyTranslations`, `searchTranslatedEntityIds`, `planTranslations`, `writeTranslations`, etc., which implement the i18n storage/retrieval this service orchestrates.
-- **`@kernel/events`** – `emitDomainEvent` is called after `create` (and presumably update/delete in the truncated portion) to notify subscribers (e.g., inventory) without a direct import.
-- **`@kernel/access/query`** – `accessibleFilter` builds the Mongo filter that restricts reads for non-admin callers.
-- **`@infrastructure/http/response`** – `validationErrors`, `generateSuccess`, `generateReject`, and the `ResponseSuccess`/`ResponseReject` types shape every validation and mutation response.
-- **`@infrastructure/observability/analytics`** – `emitAnalyticsEvent` / `buildAnalyticsBase` fire the `*_viewed` and `*_searched` events in the `*Viewed` wrappers.
-- **`@infrastructure/observability/audit`** – `recordAudit` logs mutations (used in the truncated create/update/delete paths).
-- **`@infrastructure/adapters/image-store`** – `imageStore` is imported for the upload/read path (`readUploadedImage` referenced in docblocks, used in the truncated section).
-- **`@infrastructure/adapters/image.worker`** – `enqueueIfImagePending` pushes a digest job onto the image queue after a product save carries a pending upload key.
-- **`@infrastructure/persistence/search`** – `toSearchPattern` builds the regex; `PaginatedMeta` types the page envelope returned by `search`.
-- **`@infrastructure/persistence/create-repository`** – `toObjectId` converts string IDs to Mongo ObjectIds when building the translated-ID union query.
-- **`src/modules/cart/services/items` / `reorder`** – Downstream consumers: they import from this service to resolve product data for cart line-items and reorder operations (no reverse import here).
+| Neighbor | Interaction |
+|---|---|
+| `@kernel/translation` | `applyTranslations`, `searchTranslatedEntityIds`, `planTranslations`, `readAllTranslations`, `writeTranslations`, `removeTranslations` — all locale resolution and translated-search logic. |
+| `@kernel/access/query` | `accessibleFilter` — builds the per-caller scope passed into every repository call. |
+| `@kernel/events` | `emitDomainEvent` — dispatches `PRODUCT_CREATED`, `PRODUCT_DELETED`, `PRODUCT_DEACTIVATED`. |
+| `@infrastructure/http/response` | `generateSuccess`, `generateReject`, `validationErrors` — shapes HTTP-level success/reject/error responses. |
+| `@infrastructure/i18n` (context, catalog, index) | `getCurrentLocale`, `getFallbackLocale`, `localeCandidatesFor`, `t` — drives which locale chain is resolved. |
+| `@infrastructure/observability/analytics` | `emitAnalyticsEvent`, `buildAnalyticsBase` — products-searched / products-viewed tracking. |
+| `@infrastructure/observability/audit` | `recordAudit` — audit-log entries per mutation. |
+| `@infrastructure/persistence/changes` | `clearedOrValue` — normalises "explicit null vs. omit" on update. |
+| `@infrastructure/persistence/create-repository` | `toObjectId`, `withScope` — ID conversion and `$or`-safe scope merging. |
+| `@infrastructure/persistence/search` | `toSearchPattern`, `PaginatedMeta` — search-pattern construction and pagination shape. |
+| `@infrastructure/adapters/image-store` | `imageStore`, `applyImageWriteback` — image upload / write-back to the product document. |
+| `@infrastructure/adapters/image.worker` | `enqueueIfImagePending` — queues the async image-processing job. |
+| `src/modules/cart/services/items` | Downstream consumer; resolves product data (price, availability) when cart items are read or validated. |
 
 ## Notes
-
-- **`onHand` is always written as `0` on create.** The opening stock count is applied _after_ the `PRODUCT_CREATED` domain event, by the `inventory` module's `receive()`. A listener failure leaves the honest `0` rather than a speculative value.
-- **`.toJSON()` ordering in `getById`** is deliberate: it must run _before_ `applyTranslations` because the translation overlay is a plain-object `Object.assign`-style merge that would overwrite the schema's own `toJSON` transforms (`available` flag, `_id → id`, ISO dates).
-- **`searchViewed` / `getByIdViewed` exist only for the HTTP path.** Any internal or test caller should use `search` / `getById` directly; the wrappers require a `CallerContext` that non-HTTP call sites don't have.
-- **`sanitizeStringArray` is not exported.** Controllers or other services must not bypass it when mutating `categories`/`tags`; only `create`/`update` in this file apply it.
-- The file is intentionally the **one place a controller may call into** for product logic; other modules (cart, inventory) interact through domain events or by importing this service, never through the repository directly.
+- **`onHand` is always `0` on create.** The real opening stock is set by the inventory module's subscription to `PRODUCT_CREATED`. A failure in that listener leaves the counter at the honest `0`.
+- **`currency` is never persisted.** It is read live at serialization time (`applyProductAvailability` in `./model`), so omitting it from the create payload is intentional.
+- **`.toJSON()` before `applyTranslations` is mandatory.** The document transform computes `available`, maps `_id → id`, and serialises dates; the translation overlay is a plain-object spread that would overwrite those.
+- **`withScope` over object spread.** Both the translated-search union and the caller scope can carry `$or`; a naïve `{ ...union, ...scope }` would drop one.
+- **`TRANSLATABLE_SEARCH_FIELDS` is hardcoded** here (and in `./module.ts`) rather than read from the translation registry, to avoid a circular read at search time.
+- **Viewed-wrappers are intentional.** `search`/`getById` stay context-free so tests and cross-module callers don't need a `CallerContext`; the analytics moment is opt-in via the `*Viewed` variants.

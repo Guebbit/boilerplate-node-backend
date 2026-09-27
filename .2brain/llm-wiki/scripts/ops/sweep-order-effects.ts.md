@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/sweep-order-effects.ts
-sha256: ecffb46cc8bb4722aa0d427c611e9a1c840387340c98649f9fd552d23832b769
-generated_at: 2026-09-23T17:30:41.250744+00:00
+sha256: 1b187d979e28de7dba091423e48cfdfeaf874c5e63b14a8f1225e15d77036f7f
+generated_at: 2026-09-27T13:58:24.838464+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Periodic ops script (`npm run sweep:order-effects`) that retries order-cancellation refund effects the event bus could not deliver. A cancel releases the stock hold (self-healing via `expiresAt`) but the refund depends on `ORDER_CANCELLED` being received by `payments`; if the provider was unreachable, the refund never fires. This script re-emits that event for every order still marked as pending, and is safe to re-run because `payments` uses a conditional refund.
+Periodic ops script (`npm run sweep:order-effects`) that retries the refund leg of a cancelled order. When `cancelById` fires, it emits `ORDER_REFUND_OWED` so the `payments` module can issue a refund; if the payments provider was unreachable at that moment, the refund never lands. This sweep re-emits `ORDER_REFUND_OWED` for every order whose refund marker is still pending. It does **not** cover the stock/restock half of a cancel.
 
 ## Key elements
 
-- **`main`** — async pipeline: `start()` → `registerModules(enabledModules)` → `orderService.retryPendingEffects()` → resolve. Does no further cleanup; lifecycle is delegated to `runScript`.
-- **`runScript(main, stopDatabase)`** — wraps `main` with process-exit handling and calls `stopDatabase` on the way out.
-- **`enabledModules`** (from `@modules`) — the list passed to `registerModules`; determines which listeners (notably `payments`) are active during the sweep.
+- **`main`** — async chain: `start()` (DB) → `registerModules(enabledModules)` (installs the `payments` event subscription) → `orderService.retryPendingEffects()`. Resolves to `void`.
+- **`runScript('sweep:order-effects', main, stopDatabase)`** — wraps `main` with standard script lifecycle (signal handling, DB teardown on exit).
 
 ## Relationships
 
-- **`scripts/db/run-script.ts`** — generic script runner; wraps `main`, maps unhandled rejections to non-zero exit, invokes `stopDatabase` on completion.
-- **`src/infrastructure/runtime/database.ts`** — `start()` opens the connection pool before any service call; `stopDatabase` tears it down after `main` settles.
-- **`src/kernel/registry.ts`** — `registerModules` wires domain-event subscriptions. Without it, `ORDER_CANCELLED` has no `payments` listener and the sweep would clear markers without refunding.
-- **`src/modules.ts`** — exports the `enabledModules` array consumed by `registerModules`.
-- **`src/modules/orders/index.ts`** — re-exports `orderService`.
-- **`src/modules/orders/services/index.ts`** — implements `orderService.retryPendingEffects()`, the actual query-and-re-emit logic this script drives.
+- **`scripts/run-script.ts`** — supplies the `runScript` wrapper that orchestrates process lifecycle around `main`.
+- **`src/infrastructure/runtime/database.ts`** — exports `start` (DB connect) and `stopDatabase` (shutdown), both called here.
+- **`src/kernel/registry.ts`** — exports `registerModules`; **required** in this script (unlike other `reap:*` scripts) because the sweep works by emitting an event that only a registered `payments` module will listen to.
+- **`src/modules.ts`** — exports `enabledModules`, the list handed to `registerModules`.
+- **`src/modules/orders/index.ts`** — exports `orderService`, whose `retryPendingEffects()` is the core action of this script.
+- **`src/modules/orders/services/index.ts`** — implementation layer for `orderService.retryPendingEffects()` (re-announces `ORDER_REFUND_OWED` for orders with outstanding refund markers).
 
 ## Notes
 
-- **Module registration is mandatory here** (unlike the other `reap:*` scripts, which can skip it). The sweep's mechanism is _emit an event and let a listener act_; no listener → no refund → markers cleared for nothing.
-- **Idempotent by design.** `payments` performs a conditional refund, so a second pass over an already-settled order is a no-op. Safe to overlap with a concurrent run.
-- **Never on boot.** Intended for a cron schedule (same container as other `reap:*` scripts). Running it on every boot would hammer the DB and the provider for no gain.
-- **Removal is coupled to the `orders` module.** Deleting the module also requires removing this file, the `sweep:order-effects` npm script, and the corresponding `docker/crontab` entry.
+- **Module registration is load-bearing.** Skipping `registerModules` (as other `reap:*` scripts do) would let the sweep clear every pending marker *without* any refund actually firing, because no `payments` listener would exist to act on the event.
+- **Scope gap (stock side).** This script only retries the refund. The restock side is partially covered by `sweep:reservations`, but that query only matches `held` holds — a `committed` hold (restocked by the cancel path) that throws is never retried by either script, and those units stay lost from sale.
+- **Idempotent.** `payments` uses a conditional refund, so a second pass over an already-settled order is a no-op.
+- **Scheduling.** Intended for the same periodic cron container as the `reap:*` scripts; never run on every boot.
+- **Ownership.** Belongs to the `orders` module. Removing the module also removes this script, the `sweep:order-effects` npm entry, and its `docker/crontab` line.
