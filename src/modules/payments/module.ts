@@ -27,15 +27,18 @@ import { validateBankTransferConfig, validateStripeSecretKey } from './config';
 import { paymentsRateLimits } from './rate-limits';
 import { checkSelector } from '@kernel/required-config';
 import { resolvePaymentProvider } from './providers';
-// Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED). Reached
-// directly, never through this module's own barrel — see CLAUDE.md's module-barrel rule.
-import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from './events';
+// Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED,
+// PAYMENT_REFUNDED). Reached directly, never through this module's own barrel — see CLAUDE.md's
+// module-barrel rule.
+import { PAYMENT_SUCCEEDED, PAYMENT_FAILED, PAYMENT_REFUNDED } from './events';
 
 /**
  * DDD-D4: this module's public (webhook-visible) events — `webhooks/services/publish.ts`
  * subscribes to these generically, through `kernel/registry.ts`'s `resolvePublicEvents`, instead
- * of importing `PAYMENT_SUCCEEDED`/`PAYMENT_FAILED` by name. Both are a straight rename: the
- * public payload is exactly the domain one.
+ * of importing `PAYMENT_SUCCEEDED`/`PAYMENT_FAILED`/`PAYMENT_REFUNDED` by name.
+ * `payment.succeeded`/`payment.failed` are a straight rename: the public payload is exactly the
+ * domain one. `payment.refunded` additionally carries `amount`/`currency` — already on the domain
+ * event, and worth a subscriber not having to look the payment back up for.
  */
 const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
     [PAYMENT_SUCCEEDED]: {
@@ -48,6 +51,17 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
         toPublicEvent: (payload: DomainEventMap[typeof PAYMENT_FAILED]) => ({
             eventType: 'payment.failed',
             data: { paymentId: payload.paymentId, orderId: payload.orderId }
+        })
+    },
+    [PAYMENT_REFUNDED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof PAYMENT_REFUNDED]) => ({
+            eventType: 'payment.refunded',
+            data: {
+                paymentId: payload.paymentId,
+                orderId: payload.orderId,
+                amount: payload.amount,
+                currency: payload.currency
+            }
         })
     }
 };

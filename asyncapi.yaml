@@ -132,6 +132,14 @@ channels:
         messages:
             PaymentFailedEvent:
                 $ref: '#/components/messages/PaymentFailedEvent'
+    payment.refunded:
+        address: payment.refunded
+        description: A succeeded payment was refunded.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentRefundedEvent:
+                $ref: '#/components/messages/PaymentRefundedEvent'
     worker.webhook.deliver:
         address: worker.webhook.deliver
         description: >-
@@ -234,6 +242,15 @@ operations:
             One-to-one with the `payment.failed` domain event. Retryable with another method, so this can fire more than once for the same order.
         messages:
             - $ref: '#/channels/payment.failed/messages/PaymentFailedEvent'
+    webhookPaymentRefunded:
+        action: send
+        channel:
+            $ref: '#/channels/payment.refunded'
+        summary: A `succeeded` payment moved to `refunded`.
+        description: >-
+            One-to-one with the `payment.refunded` domain event — see `payments/services/refunds.ts`'s `markRefunded`. Fired whether an operator asked for the refund directly or the `ORDER_REFUND_OWED` retry sweep completed it; never fired for a hand-paid refund left for an operator to confirm by hand.
+        messages:
+            - $ref: '#/channels/payment.refunded/messages/PaymentRefundedEvent'
     workerWebhookDeliverPublish:
         action: receive
         channel:
@@ -347,6 +364,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/PaymentFailedEnvelope'
+        PaymentRefundedEvent:
+            name: PaymentRefundedEvent
+            title: Payment refunded
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/PaymentRefundedEnvelope'
         WebhookDeliverJobMessage:
             name: WebhookDeliverJobMessage
             title: Webhook delivery job
@@ -478,6 +502,25 @@ components:
                 orderId:
                     type: string
             additionalProperties: false
+        PaymentRefundedPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - amount
+                - currency
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                amount:
+                    type: number
+                    description: The refunded amount — the payment's own `amount`, two decimal places.
+                currency:
+                    type: string
+                    description: ISO-4217, e.g. `EUR`.
+            additionalProperties: false
         OrderCreatedEnvelope:
             type: object
             required:
@@ -587,6 +630,24 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/PaymentEventPayload'
+            additionalProperties: false
+        PaymentRefundedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: PaymentRefundedEventType
+                    type: string
+                    enum:
+                        - payment.refunded
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentRefundedPayload'
             additionalProperties: false
         WebhookDeliverJobPayload:
             type: object
