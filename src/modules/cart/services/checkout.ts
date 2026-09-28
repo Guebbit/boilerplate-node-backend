@@ -7,7 +7,7 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { bankTransferMaxOpenPerAccount, shipToCountries } from '@modules/orders';
+import { bankTransferMaxOpenPerAccount, shipToCountries, shopCurrency } from '@modules/orders';
 import {
     generateSuccess,
     generateReject,
@@ -408,11 +408,15 @@ const runCheckout = async (
                           // The threshold prices only what ships — a digital line's price
                           // shouldn't count toward "spend enough for free shipping" when it never
                           // needed shipping to begin with.
+                          // The shop's CURRENT currency, not a frozen one — this runs as `placeOrder`
+                          // is still deciding what to freeze onto the new order.
                           priceFor: (frozenLines) =>
                               priceShipping(
                                   shippingMethod,
-                                  sumLineItems(frozenLines.filter((line) => isShippedItem(line)))
-                                      .price
+                                  sumLineItems(
+                                      frozenLines.filter((line) => isShippedItem(line)),
+                                      shopCurrency()
+                                  ).price
                               )
                       }
                   }

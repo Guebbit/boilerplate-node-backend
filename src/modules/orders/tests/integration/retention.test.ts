@@ -9,12 +9,18 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem, detachOrderUserId } from '@modules/orders/tests/factories';
+import {
+    createOrder,
+    toOrderItem,
+    detachOrderUserId,
+    markOrderPaidAt
+} from '@modules/orders/tests/factories';
 import { orderRepository } from '../../repository';
 import { orderService } from '@modules/orders/services';
 import { userService } from '@modules/users';
 import { resetDomainEvents } from '@kernel/events';
 import { registerCheckoutModules } from '@tests/checkout-modules';
+import { OrderStatus } from '@types';
 
 setupTestDb();
 
@@ -31,11 +37,17 @@ describe('orders — detach on account erasure', () => {
         else process.env.NODE_ORDER_PII_RETENTION_DAYS = originalRetention;
     });
 
+    // Each of these three pins the order to `paid` (`markOrderPaidAt`) — the per-order-clock
+    // arithmetic they test (`max(now, createdAt + days)`) only applies to an order that actually
+    // became the tax record this retention window exists for. A never-paid order's own immediate
+    // rule has its own describe block below.
+
     it('unsets userId and schedules anonymization when the account is hard-deleted', async () => {
         process.env.NODE_ORDER_PII_RETENTION_DAYS = '7';
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await markOrderPaidAt(String(order._id), new Date());
 
         await userService.remove(user, true);
 
@@ -57,6 +69,7 @@ describe('orders — detach on account erasure', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             createdAt: fiveDaysAgo
         });
+        await markOrderPaidAt(String(order._id), fiveDaysAgo);
 
         await userService.remove(user, true);
 
@@ -75,6 +88,7 @@ describe('orders — detach on account erasure', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             createdAt: twentyDaysAgo
         });
+        await markOrderPaidAt(String(order._id), twentyDaysAgo);
 
         await userService.remove(user, true);
 
@@ -116,6 +130,67 @@ describe('orders — detach on account erasure', () => {
 
         const reloaded = await orderRepository.findById(String(order._id));
         expect(String(reloaded!.userId)).toBe(untouched._id.toString());
+    });
+});
+
+describe('orders — a never-paid order is due for anonymization AT ONCE (A1)', () => {
+    const originalRetention = process.env.NODE_ORDER_PII_RETENTION_DAYS;
+
+    beforeEach(() => registerCheckoutModules());
+
+    afterEach(() => {
+        resetDomainEvents();
+        if (originalRetention === undefined) delete process.env.NODE_ORDER_PII_RETENTION_DAYS;
+        else process.env.NODE_ORDER_PII_RETENTION_DAYS = originalRetention;
+    });
+
+    it('is due immediately, not after the retention window, while still pending', async () => {
+        process.env.NODE_ORDER_PII_RETENTION_DAYS = '7';
+        const user = await createUser();
+        const product = await createProduct();
+        // Old enough that a paid order's own clock would still have days left on its window.
+        const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            createdAt: fiveDaysAgo
+        });
+
+        await userService.remove(user, true);
+
+        const reloaded = await orderRepository.findById(String(order._id));
+        expect(reloaded!.anonymizeAfter!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    });
+
+    it('is due immediately even once cancelled, as long as it was never paid', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.cancelled
+        });
+
+        await userService.remove(user, true);
+
+        const reloaded = await orderRepository.findById(String(order._id));
+        expect(reloaded!.anonymizeAfter!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    });
+
+    it('keeps the FULL window for an order that was paid and only later cancelled', async () => {
+        // `paidAt` is what decides this, not the CURRENT status — a refunded order was still once
+        // a real tax record.
+        process.env.NODE_ORDER_PII_RETENTION_DAYS = '7';
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.cancelled
+        });
+        await markOrderPaidAt(String(order._id), new Date());
+
+        await userService.remove(user, true);
+
+        const reloaded = await orderRepository.findById(String(order._id));
+        const daysAhead =
+            (reloaded!.anonymizeAfter!.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
+        expect(daysAhead).toBeGreaterThan(6.9);
+        expect(daysAhead).toBeLessThan(7.1);
     });
 });
 

@@ -15,7 +15,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { PaymentMethod } from '@types';
-import { orderService, orderTotal, isPayable, shopCurrency } from '@modules/orders';
+import { orderService, orderTotal, isPayable, orderCurrency } from '@modules/orders';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import type { CallerContext } from '@types';
@@ -82,9 +82,13 @@ export const recordOfflinePayment = async (
     }
 
     const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
+    const currency = orderCurrency(order);
     const payment = await paymentRepository.upsertOffline(orderId, payerId, {
-        amount: orderTotal(order),
-        currency: shopCurrency(),
+        // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
+        // document; spreading it copies nothing, since its schema paths are prototype getters,
+        // not the document's own enumerable properties.
+        amount: orderTotal({ items: order.items, shippingCost: order.shippingCost, currency }),
+        currency,
         method: input.method,
         reference: input.reference,
         receivedAt: input.receivedAt ? new Date(input.receivedAt) : new Date()

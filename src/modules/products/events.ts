@@ -9,16 +9,19 @@
 declare module '@kernel/events' {
     interface DomainEventMap {
         /**
-         * A product is about to stop being reachable — soft-deleted, hard-deleted, or restored.
+         * A product just stopped being reachable — soft-deleted or hard-deleted. Never fires on a
+         * restore: what the delete already set in motion (pending orders cancelled, carts and
+         * wishlists emptied) stays done, since a restore puts the product back on sale, not undoes
+         * the past — see `restoreById`'s own docblock.
          *
-         * Emitted and awaited *before* the write, so listeners that drop references still see a
-         * consistent database. Fires on restore as well: the cart lines were already removed when
-         * the product was soft-deleted, and re-adding them is the user's call, not the catalogue's.
+         * Emitted and awaited AFTER the write, not before it: this is a past-tense fact, and firing
+         * it first would let every listener's cascade (cart emptying the line, `orders` cancelling
+         * a pending order) run even if the write that follows then fails.
          *
          * `hardDelete` is what lets a listener tell the destructive half apart from the reversible
          * one — `inventory` deletes this product's level row ONLY when it is `true`: a soft delete
-         * (or its restore) must leave the counters exactly where they are, since the row is what a
-         * restore has to come back to.
+         * must leave the counters exactly where they are, since the row is what a restore has to
+         * come back to.
          */
         'product.deleted': { productId: string; hardDelete: boolean };
 
@@ -26,9 +29,10 @@ declare module '@kernel/events' {
          * A product's `active` flag flipped from `true` to `false` — never fired for any other
          * edit, including one that repeats `active: false` unchanged (see `products/service.ts`'s
          * `updateById`, the same "flip, not every write" shape `users`' `ADMIN_USER_BANNED` uses).
-         * `orders` is the one subscriber today: a pending order holding this product is cancelled
-         * at once, the same as a hard delete — deactivation means "gone for a long time", unlike a
-         * product merely out of stock (`onHand: 0`, still `active`).
+         * No subscriber today — `orders` deliberately does NOT cancel a pending order over this:
+         * only a hard delete does (`product.deleted`, `hardDelete: true`). A deactivated product
+         * still refuses anything NEW against it, through `orders/services/availability.ts`'s own
+         * fresh `productService` read, not this event.
          */
         'product.deactivated': { productId: string };
 

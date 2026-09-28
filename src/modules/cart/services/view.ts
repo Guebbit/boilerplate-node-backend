@@ -91,12 +91,13 @@ export const readCartLines = (cart: CartDocument | null): Promise<CartLine[]> =>
  */
 const shippingCostOf = (
     method: ReturnType<typeof findShippingMethod>,
-    lines: CartLine[]
+    lines: CartLine[],
+    currency: string
 ): number => {
     if (!method) return 0;
     const joined = lines.filter((line) => isJoined(line));
     if (!needsShipping(joined) || !methodFitsWeight(method, basketWeight(joined))) return 0;
-    return priceShipping(method, sumLineItems(joined).price);
+    return priceShipping(method, sumLineItems(joined, currency).price);
 };
 
 /**
@@ -107,12 +108,16 @@ const shippingCostOf = (
  */
 export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
     readCartLines(cart).then((lines) => {
-        const { count, quantity, price } = sumLineItems(lines);
+        // A cart never freezes a currency of its own — it hasn't checked out — so it always
+        // prices against the shop's CURRENT setting, unlike an order's frozen `orderCurrency`.
+        const currency = shopCurrency();
+        const { count, quantity, price } = sumLineItems(lines, currency);
         const shippingCost = shippingCostOf(
             cart?.shippingMethodId === undefined
                 ? undefined
                 : findShippingMethod(cart.shippingMethodId),
-            lines
+            lines,
+            currency
         );
         return {
             items: lines.map(({ productId, quantity: lineQuantity }) => ({
@@ -125,7 +130,7 @@ export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
                 itemsTotal: price,
                 shippingCost,
                 totalPrice: price + shippingCost,
-                currency: shopCurrency()
+                currency
             },
             ...(cart?.shippingMethodId === undefined
                 ? {}

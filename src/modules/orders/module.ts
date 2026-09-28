@@ -21,7 +21,7 @@ import type { AppModule, PublicEventTarget } from '@kernel/registry';
 import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
-import { PRODUCT_DELETED, PRODUCT_DEACTIVATED } from '@modules/products';
+import { PRODUCT_DELETED } from '@modules/products';
 import { router } from './routes';
 import { cancelById, cancelPendingOrdersHolding, detachUserId, findOwnOrders } from './services';
 // Also registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
@@ -97,15 +97,14 @@ export default {
         onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) =>
             cancelById(orderId, SYSTEM_ACTOR, {}, undefined, true)
         );
-        // Only the HARD half of a product's removal — a soft delete (or its restore) leaves a
-        // pending order's line exactly as it was, the same reasoning `inventory`'s own listener
-        // follows for the level row. Deactivation is unconditional: `product.deactivated` never
-        // fires for anything but the true→false flip.
+        // Only the HARD half of a product's removal — a soft delete (or its restore), and a
+        // deactivation, both leave a pending order's line exactly as it was: the order was placed
+        // while the product was sellable, and the buyer's money (or its 7-day bank-transfer
+        // promise) should not evaporate because the catalogue changed its mind. `unavailableLines`
+        // still refuses anything NEW against a deactivated product — checkout, and a card payment
+        // on an existing order — an offline payment stays allowed, an operator's own call.
         onDomainEvent(PRODUCT_DELETED, ({ productId, hardDelete }) =>
             hardDelete ? cancelPendingOrdersHolding(productId) : undefined
-        );
-        onDomainEvent(PRODUCT_DEACTIVATED, ({ productId }) =>
-            cancelPendingOrdersHolding(productId)
         );
     },
     locales: path.join(__dirname, 'locales'),

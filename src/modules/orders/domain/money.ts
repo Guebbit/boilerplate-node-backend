@@ -5,6 +5,12 @@
  * and order-independent. `Money` is a brand, not a class — same integer at runtime, distinct type
  * at compile time — so `toDecimalAmount` is the only way back out.
  *
+ * A currency's minor unit is NOT always a hundredth: JPY/KRW have none (the yen IS its own minor
+ * unit), KWD/BHD have a thousandth (the fils). {@link toMinorUnits}/{@link toDecimalAmount} both
+ * take the currency they're converting FOR, so a caller pricing a JPY order never multiplies by
+ * 100 where it should multiply by 1 — see Fowler's Money pattern, or Stripe's own "zero-decimal
+ * currencies" table for the same rule under a different name.
+ *
  * See `docs/theory/tactical-ddd.md` §3.
  */
 
@@ -21,19 +27,66 @@ const asMoney = (value: number): Money =>
     (Number.isFinite(value) ? (value === 0 ? 0 : value) : 0) as Money;
 
 /**
+ * How many decimal places a currency's minor unit represents — 2 for EUR/USD, 0 for JPY/KRW, 3
+ * for KWD/BHD. Cached per code: constructing an `Intl.NumberFormat` is real work, and this runs on
+ * every money conversion.
+ *
+ * `Intl.NumberFormat` throws a `RangeError` for a currency code it doesn't recognise — a
+ * synchronous throw from a call we don't own, so a `try`/`catch` guards it rather than one more
+ * validation this module would have to keep in step with ISO 4217 by hand. `NODE_DEFAULT_CURRENCY`
+ * and an order's own frozen `currency` are both plain strings, never checked against the standard
+ * at the point they're set — 2 is `Intl`'s own default for a style it otherwise can't resolve.
+ * https://tc39.es/ecma402/#sec-currencydigits
+ */
+const minorUnitExponentCache = new Map<string, number>();
+
+/**
+ * @param currency - an ISO-4217 code
+ * @returns the number of decimal places that currency's minor unit represents
+ */
+const minorUnitExponent = (currency: string): number => {
+    const cached = minorUnitExponentCache.get(currency);
+    if (cached !== undefined) return cached;
+
+    let exponent = 2;
+    // `Intl.NumberFormat` throws a `RangeError` for a currency code it doesn't recognise; there
+    // is no verdict-returning way to ask it first, and a malformed `NODE_DEFAULT_CURRENCY` must
+    // fall back to 2, not crash the process that reads it.
+    // eslint-disable-next-line no-restricted-syntax -- contains exactly that RangeError, see above
+    try {
+        // `maximumFractionDigits` is typed optional (some `style`s never set it) though the spec
+        // guarantees `'currency'` always does — the `?? 2` is TypeScript's own requirement, not a
+        // second fallback this code path can actually reach.
+        exponent =
+            new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
+                .maximumFractionDigits ?? 2;
+    } catch {
+        // Stryker disable next-line -- an unrecognised currency code is a config mistake, not a
+        // branch this suite drives; the fallback above already covers it.
+    }
+
+    minorUnitExponentCache.set(currency, exponent);
+    return exponent;
+};
+
+/**
  * Read a decimal amount as minor units, rounding to the nearest integer. `unknown` because
  * callers get raw aggregate output, where an unpopulated line carries no number at all.
  * @param value - a decimal amount, or anything at all
+ * @param currency - the ISO-4217 code `value` is priced in — decides the scale factor
  * @returns the amount in minor units, rounded to the nearest one
  */
-export const toMinorUnits = (value: unknown): Money => asMoney(Math.round(Number(value) * 100));
+export const toMinorUnits = (value: unknown, currency: string): Money =>
+    asMoney(Math.round(Number(value) * 10 ** minorUnitExponent(currency)));
 
 /**
  * Return an amount as the decimal `number` the contract publishes.
  * @param amount - the amount in minor units
- * @returns the same amount as a decimal, at most two places
+ * @param currency - the ISO-4217 code `amount` is priced in — decides the scale factor
+ * @returns the same amount as a decimal, at most `currency`'s own number of places
  */
-export const toDecimalAmount = (amount: Money): number => amount / 100;
+export const toDecimalAmount = (amount: Money, currency: string): number =>
+    amount / 10 ** minorUnitExponent(currency);
 
 /**
  * Add amounts with exact integer addition — no floating-point drift.

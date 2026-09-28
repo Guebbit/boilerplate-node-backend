@@ -137,3 +137,21 @@ export const detachOrderUserId = (userId: string, anonymizeAfter: Date): Promise
         )
         .exec()
         .then(({ modifiedCount }) => modifiedCount);
+
+/**
+ * Stamp `paidAt` directly, bypassing the real `paid` transition (`orderRepository.markPaid`) that
+ * would otherwise be the only writer — `paidAt` is internal-only (never on the wire, see
+ * `model.ts`'s `omit`), so no `OrderOverrides` key reaches it. A retention test needs a fixture
+ * that IS a paid order's own history without driving a whole checkout+payment flow to get one.
+ *
+ * @param orderId - the order to stamp
+ * @param paidAt - when it was paid
+ */
+export const markOrderPaidAt = (orderId: string, paidAt: Date): Promise<OrderDocument | null> =>
+    orderModel
+        .findByIdAndUpdate(
+            orderId,
+            { $set: { paidAt } },
+            { timestamps: false, returnDocument: 'after' }
+        )
+        .exec();

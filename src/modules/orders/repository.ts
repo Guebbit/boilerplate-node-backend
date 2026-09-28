@@ -323,10 +323,12 @@ const existingIds = (ids: readonly string[]): Promise<Set<string>> =>
  * An aggregation-pipeline update, not a flat `$set`, because the clock runs PER ORDER: a decade-old
  * order is due almost immediately, not ten years from today. `anonymizeAfter = max(now, createdAt +
  * retentionDays)` — the `$max` is what stops an order already past its own window from getting a
- * fresh ten years just because the account was erased today.
+ * fresh ten years just because the account was erased today. A never-paid order (`paidAt` unset —
+ * `pending`, or cancelled before ever reaching `paid`) is due AT ONCE instead: it is no tax record
+ * at all, so Art. 17(3)(b)/(e)'s retention reason never applied to it in the first place.
  *
  * @param userId - the erased account's id
- * @param retentionDays - how many days of PII an order gets from ITS OWN `createdAt`
+ * @param retentionDays - how many days of PII a PAID order gets from ITS OWN `createdAt`
  * @returns how many orders were detached
  */
 const detachUserId = (
@@ -344,16 +346,27 @@ const detachUserId = (
                     $set: {
                         userId: '$$REMOVE',
                         anonymizeAfter: {
-                            $max: [
-                                now,
-                                {
-                                    $dateAdd: {
-                                        startDate: '$createdAt',
-                                        unit: 'day',
-                                        amount: retentionDays
-                                    }
-                                }
-                            ]
+                            // `$paidAt` missing evaluates falsy in `$cond`'s own boolean rules —
+                            // no `$ifNull` needed. https://www.mongodb.com/docs/manual/reference/operator/aggregation/cond/
+                            $cond: {
+                                if: '$paidAt',
+                                // MongoDB's own `$cond` operator syntax requires this exact key;
+                                // it is data for the aggregation pipeline, never awaited as a value.
+                                // eslint-disable-next-line unicorn/no-thenable -- see comment above
+                                then: {
+                                    $max: [
+                                        now,
+                                        {
+                                            $dateAdd: {
+                                                startDate: '$createdAt',
+                                                unit: 'day',
+                                                amount: retentionDays
+                                            }
+                                        }
+                                    ]
+                                },
+                                else: now
+                            }
                         }
                     }
                 }

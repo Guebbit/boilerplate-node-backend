@@ -10,7 +10,7 @@
  */
 import { orderConfirmEmail, type OrderLines } from '@modules/orders/emails';
 import { orderTotal } from '@modules/orders/domain';
-import { orderFrontendLink } from '@modules/orders/config';
+import { orderFrontendLink, orderCurrency } from '@modules/orders/config';
 
 const NAME = 'Ada Lovelace';
 const ORDER_ID = 'order-1';
@@ -57,7 +57,9 @@ describe('orderConfirmEmail', () => {
         // email and the charge cannot drift apart. `totals.property.test.ts` covers the sum.
         const { data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
 
-        expect(data.total).toContain(String(orderTotal(ORDER)));
+        expect(data.total).toContain(
+            String(orderTotal({ ...ORDER, currency: orderCurrency(ORDER) }))
+        );
     });
 
     it('includes the shipping cost in that total rather than quoting the goods alone', () => {

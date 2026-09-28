@@ -30,7 +30,6 @@ flowchart LR
     products -. "product.deleted" .-> cart
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
-    products -. "product.deactivated" .-> orders
     products -. "product.deleted" .-> orders
     products -. "product.deleted" .-> wishlist
 
@@ -94,21 +93,22 @@ flowchart LR
 
 ## Removing or deactivating a product
 
-A hard delete (`hardDelete: true`) or an update that flips `active` to `false` both mean the same
-thing to the rest of the shop: this product can no longer be sold. Each fires its own event —
-`product.deleted` (with `hardDelete` on the payload) or `product.deactivated` — and three modules
-react:
+A hard delete (`hardDelete: true`) and a deactivation (an update that flips `active` to `false`)
+both mean the product can no longer be **newly** sold — but only a hard delete reaches back into
+an order already placed:
 
 - [`inventory`](./inventory.md) deletes the product's `stocklevels` row on a hard delete; a
   deactivation leaves the counters alone, since the product still exists and might come back.
-- `orders` cancels every `pending` order still holding the product, as the `system` actor, and
-  emails the customer — the same auto-cancel path an expired stock hold uses, see
-  [Who writes the status](./orders.md#who-writes-the-status). `payments`' checkout start also
-  refuses with a 409 `ORDER_PRODUCT_UNAVAILABLE` naming the product, as a backstop for the race
-  between the event firing and a payment already in flight.
-- `cart`'s own unavailability check gained the same `active`/`deletedAt` guard it was missing
-  before — `CART_PRODUCT_UNAVAILABLE` now carries `details.lines` naming exactly which lines are
-  affected, instead of leaving the client to work it out.
+- `orders` cancels every `pending` order still holding the product on a hard delete only, as the
+  `system` actor, and emails the customer — the same auto-cancel path an expired stock hold uses,
+  see [Who writes the status](./orders.md#who-writes-the-status). A **deactivation does not touch
+  a pending order at all**: it was placed while the product was sellable, and the buyer's money
+  (or its 7-day bank-transfer promise) should not evaporate because the catalogue changed its
+  mind. Both cases still refuse anything NEW against the product — `payments`' checkout start
+  answers a 409 `ORDER_PRODUCT_UNAVAILABLE` naming it, whether removed or merely deactivated.
+- `cart`'s own unavailability check carries the same `active`/`deletedAt` guard — either state
+  drops the line — and `CART_PRODUCT_UNAVAILABLE` carries `details.lines` naming exactly which
+  lines are affected, instead of leaving the client to work it out.
 
 An admin can still record an **offline** payment against an order holding a since-removed or
 deactivated product — that path is deliberately not refused, since a human operator confirming

@@ -1,9 +1,10 @@
 /**
  * @module
- * Whether an order's lines are still sellable, and what happens when one of them stops being so
- * — a hard delete or a deactivation, reported by `products`. `orders` asks `productService` fresh
- * rather than trusting the order's own frozen snapshot, since `active`/`deletedAt` on a line
- * describe what was true at PURCHASE time, never now.
+ * Whether an order's lines are still sellable — a hard delete or a deactivation, reported by
+ * `products`. `orders` asks `productService` fresh rather than trusting the order's own frozen
+ * snapshot, since `active`/`deletedAt` on a line describe what was true at PURCHASE time, never
+ * now. A pending order already holding a since-deactivated product is left alone (`module.ts`
+ * only cancels on a HARD delete); this is what still refuses anything NEW against it.
  */
 
 import { getDefaultLocale } from '@infrastructure/i18n';
@@ -58,13 +59,15 @@ export const unavailableLines = (order: {
 
 /**
  * Cancel every still-`pending` order holding `productId`, and tell each buyer why — the
- * `PRODUCT_DELETED` (hard-delete half only, see `module.ts`) and `PRODUCT_DEACTIVATED` listeners'
- * own job. Deliberately its own email, not `cancel.ts`'s `bank_transfer`-only reservation-expiry
- * one: this happens with no warning the buyer could have expected, so it always deserves an
- * explanation, `card` orders included. One order failing to cancel (a race past `pending`, an
- * unrelated write conflict) must not stop the rest — each is caught and logged on its own.
+ * `PRODUCT_DELETED` hard-delete listener's own job (see `module.ts`; a deactivation does NOT call
+ * this, on purpose — a pending order's money should not evaporate because the catalogue changed
+ * its mind). Deliberately its own email, not `cancel.ts`'s `bank_transfer`-only
+ * reservation-expiry one: this happens with no warning the buyer could have expected, so it
+ * always deserves an explanation, `card` orders included. One order failing to cancel (a race
+ * past `pending`, an unrelated write conflict) must not stop the rest — each is caught and logged
+ * on its own.
  *
- * @param productId - the product that just stopped being sellable
+ * @param productId - the product that was just hard-deleted
  */
 export const cancelPendingOrdersHolding = (productId: string): Promise<void> =>
     orderRepository.findPendingByProductId(productId).then((orders) =>

@@ -1,10 +1,12 @@
 /**
  * @module
- * A removed or deactivated product must not be sold, but removing it must still work — the
- * cross-module cascade: `products` announces it, `inventory` drops the level row (hard delete
- * only), `orders` cancels every pending order still holding it and emails the buyer, and a
- * payment attempt racing the event is refused by name. Cross-module by nature (four modules'
- * real `subscribe()` hooks), so it lives here rather than in any one module's own `tests/`.
+ * A removed or deactivated product must not be sold NEW, but the two differ on an order already
+ * placed: `products` announces either, `inventory` drops the level row (hard delete only),
+ * `orders` cancels every pending order still holding it ONLY on a hard delete and emails the
+ * buyer — a deactivation leaves a pending order exactly as it was. Either way a NEW card payment
+ * attempt racing the change is refused by name, while an offline one still succeeds. Cross-module
+ * by nature (several modules' real `subscribe()` hooks), so it lives here rather than in any one
+ * module's own `tests/`.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -26,7 +28,7 @@ import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 
 import { createUser } from '@modules/users/tests/factories';
-import { createProduct, readProduct } from '@modules/products/tests/factories';
+import { createProduct, readProduct, productRepository } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
 import { cartItemSetById, orderConfirm } from '@modules/cart/services';
 import { cartRepository } from '@modules/cart/repository';
@@ -43,7 +45,10 @@ beforeEach(() => {
     mockEnqueueEmail.mockClear();
 });
 
-afterEach(() => resetDomainEvents());
+afterEach(() => {
+    resetDomainEvents();
+    jest.restoreAllMocks();
+});
 
 /** A pending order for one unit of `product`, through the real checkout flow. */
 const placePendingOrder = async (product: Awaited<ReturnType<typeof createProduct>>) => {
@@ -83,22 +88,51 @@ describe('hard-deleting a product with a pending order against it', () => {
 });
 
 describe('deactivating a product with a pending order against it', () => {
-    it('cancels the order and emails the buyer, but keeps the level row', async () => {
+    it('leaves the order pending and holding its stock — no cancellation, no email', async () => {
         const product = await createProduct({ onHand: 5 });
         const { orderId } = await placePendingOrder(product);
 
-        // The id is enough; this fresh read only confirms the product exists first.
-        await readProduct(String(product._id));
         await productService.updateById(String(product._id), { active: false }, testCallerContext);
 
         const order = await readOrder(orderId);
-        expect(order!.status).toBe('cancelled');
-        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        expect(order!.status).toBe('pending');
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
 
-        // Deactivation may be reversed — the counters must still be there to reverse it onto.
+        // The hold is still there to release on a later cancel or a successful payment.
         await expect(
             stockLevelRepository.findByProductId(String(product._id))
         ).resolves.not.toBeNull();
+    });
+
+    it('still refuses a NEW card payment attempt with 409 ORDER_PRODUCT_UNAVAILABLE', async () => {
+        const product = await createProduct({ onHand: 5 });
+        const { orderId, user } = await placePendingOrder(product);
+
+        await productService.updateById(String(product._id), { active: false }, testCallerContext);
+
+        const result = await createIntent(orderId, asCustomer(user.id));
+
+        expect(result.success).toBe(false);
+        const rejected = result as ResponseReject;
+        expect(rejected.status).toBe(409);
+        expect(rejected.errors[0].code).toBe('ORDER_PRODUCT_UNAVAILABLE');
+    });
+
+    it('still allows an offline payment on it, since a human confirmed the money already moved', async () => {
+        const product = await createProduct({ onHand: 5 });
+        const { orderId } = await placePendingOrder(product);
+
+        await productService.updateById(String(product._id), { active: false }, testCallerContext);
+
+        const result = await recordOfflinePayment(
+            orderId,
+            { method: 'bank_transfer', reference: 'till-1' },
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        const order = await readOrder(orderId);
+        expect(order!.status).toBe('paid');
     });
 });
 
@@ -172,5 +206,45 @@ describe('admin offline recording on an order whose product is gone', () => {
         expect(result.success).toBe(true);
         const order = await readOrder(orderId);
         expect(order!.status).toBe('paid');
+    });
+});
+
+describe('a write that fails must not have already announced the deletion (B13)', () => {
+    it('a hard delete whose write fails leaves the cart line — the event never fired', async () => {
+        const product = await createProduct({ onHand: 5 });
+        const user = await createUser();
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        jest.spyOn(productRepository, 'deleteOne').mockRejectedValueOnce(
+            new Error('mongo is down')
+        );
+
+        await expect(productService.remove(product, true)).rejects.toThrow('mongo is down');
+
+        // `cart`'s own `PRODUCT_DELETED` listener drops the line unconditionally — it never ran,
+        // because the event is only emitted AFTER `deleteOne` succeeds, and this `deleteOne` didn't.
+        const cart = await cartRepository.findByUserId(user.id);
+        expect(cart!.items.some((item) => item.productId.toString() === String(product._id))).toBe(
+            true
+        );
+        // The row itself never left the database either — same write, same failure.
+        await expect(readProduct(String(product._id))).resolves.not.toBeNull();
+    });
+
+    it('a soft delete whose write fails leaves the cart line — the event never fired', async () => {
+        const product = await createProduct({ onHand: 5 });
+        const user = await createUser();
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        jest.spyOn(productRepository, 'save').mockRejectedValueOnce(new Error('mongo is down'));
+
+        await expect(productService.remove(product, false)).rejects.toThrow('mongo is down');
+
+        const cart = await cartRepository.findByUserId(user.id);
+        expect(cart!.items.some((item) => item.productId.toString() === String(product._id))).toBe(
+            true
+        );
+        const reloaded = await readProduct(String(product._id));
+        expect(reloaded!.deletedAt).toBeUndefined();
     });
 });

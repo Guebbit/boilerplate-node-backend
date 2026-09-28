@@ -7,8 +7,9 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-// `toCents` is deliberately absent: `sumLineItems` is its only caller, and `totals.ts` is where
-// its property test reaches it. A barrel line would make it look like a rule others may use.
+// `toMinorUnits`/`toDecimalAmount` are deliberately absent: `sumLineItems`/`orderTaxBreakdown` are
+// their only callers, and `money.property.test.ts` is where their own property tests reach them.
+// A barrel line would make them look like a rule other modules may call directly.
 export { sumLineItems, orderTotal } from './totals';
 
 export { checkOrderLines, isShippedItem, isDigitalOnlyOrder } from './rules';

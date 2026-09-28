@@ -9,7 +9,7 @@
  * See: docs/modules/invoicing.md
  */
 
-import { orderTaxBreakdown, orderTotal, shopCurrency, shopCountry } from '@modules/orders';
+import { orderTaxBreakdown, orderTotal, orderCurrency, shopCountry } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { shopLegalName, shopVatNumber, shopStreet, shopCity, shopZip } from '../config';
 import { invoicingRepository } from '../repository';
@@ -61,9 +61,11 @@ const frozenLines = (order: OrderDocument): InvoiceLine[] =>
 export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | undefined> => {
     if (order.items.length === 0) return Promise.resolve(undefined);
 
+    const currency = orderCurrency(order);
     const breakdown = orderTaxBreakdown({
         items: order.items,
-        shippingCost: order.shippingCost
+        shippingCost: order.shippingCost,
+        currency
     });
 
     return allocateInvoiceNumber().then((number) =>
@@ -71,7 +73,7 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
             orderId: order._id,
             number,
             issuedAt: new Date(),
-            currency: order.currency ?? shopCurrency(),
+            currency,
             locale: order.items[0].locale,
             ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
             ...(order.shippingAddress ? { billingAddress: order.shippingAddress } : {}),
@@ -87,7 +89,11 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
             // The exact function `orders/model.ts#applyOrderTotals` and the placed-order email
             // both quote — never a hand-composed sum, so this can never drift from what the order
             // itself says it charged.
-            grandTotal: orderTotal({ items: order.items, shippingCost: order.shippingCost })
+            grandTotal: orderTotal({
+                items: order.items,
+                shippingCost: order.shippingCost,
+                currency
+            })
         })
     );
 };

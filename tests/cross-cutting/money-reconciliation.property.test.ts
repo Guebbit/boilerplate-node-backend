@@ -14,6 +14,9 @@ import { findShippingMethod, priceShipping } from '@modules/delivery';
 /** One seed for the file, and one place to change it. */
 const RUN = { seed: 20_260_902, numRuns: 300, endOnFailure: true } as const;
 
+/** This shop's own currency for the composition — a currency's OWN rounding is `money.property.test.ts`'s job. */
+const EUR = 'EUR';
+
 /** A catalogue price, cents-precise — `Product.price` is `format: double`, never a whole dollar only. */
 const decimalPrice = () => fc.integer({ min: 0, max: 10_000_000 }).map((cents) => cents / 100);
 
@@ -35,9 +38,9 @@ describe('order total + shipping — reconciliation', () => {
                 fc.array(lineItem(), { maxLength: 20 }),
                 shippingMethod(),
                 (items, method) => {
-                    const linesTotal = sumLineItems(items).price;
+                    const linesTotal = sumLineItems(items, EUR).price;
                     const shippingCost = priceShipping(method, linesTotal);
-                    const total = orderTotal({ items, shippingCost });
+                    const total = orderTotal({ items, shippingCost, currency: EUR });
 
                     expect(Math.round(total * 100)).toBe(
                         Math.round(linesTotal * 100) + Math.round(shippingCost * 100)
@@ -53,12 +56,16 @@ describe('order total + shipping — reconciliation', () => {
         // must equal the lines alone with nothing left over from the composition.
         fc.assert(
             fc.property(fc.array(lineItem(), { maxLength: 20 }), (items) => {
-                const linesTotal = sumLineItems(items).price;
+                const linesTotal = sumLineItems(items, EUR).price;
                 const pickup = findShippingMethod('pickup')!;
 
-                expect(orderTotal({ items, shippingCost: priceShipping(pickup, linesTotal) })).toBe(
-                    linesTotal
-                );
+                expect(
+                    orderTotal({
+                        items,
+                        shippingCost: priceShipping(pickup, linesTotal),
+                        currency: EUR
+                    })
+                ).toBe(linesTotal);
             }),
             RUN
         );

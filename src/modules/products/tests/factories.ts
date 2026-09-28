@@ -16,6 +16,14 @@ import { productService } from '../service';
 export { makeProduct, type ProductOverrides } from '../factories';
 
 /**
+ * The live repository object, for a sibling's `jest.spyOn` — a wrapper function copies the call,
+ * not the binding, so it cannot intercept what `productService`'s OWN code reaches internally.
+ * Every other need above has a named, narrower helper instead; reach for this one only when the
+ * assertion is "did the write fail/get retried", not "what does the database now hold".
+ */
+export { productRepository } from '../repository';
+
+/**
  * Seed `@modules/inventory`'s stock level row to match a just-created product's own counters.
  *
  * Production never needs this: a real product always gets its level row through
