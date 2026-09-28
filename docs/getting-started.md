@@ -184,7 +184,7 @@ commit. Its mutating twin, `npm run complete:fix`, fixes lint and formatting ins
 them.
 
 Deliberately outside that gate, run by hand when you want them: `npm run mutation` (Stryker,
-minutes), `npm run test:fuzz`, `npm run test:prism` (boots a mock server on a real port).
+minutes), `npm run test:prism` (boots a mock server on a real port).
 
 ## Where to go next
 
