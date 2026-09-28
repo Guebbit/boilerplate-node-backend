@@ -203,10 +203,10 @@ The two axes are independent: `access` is `generic` (§4) AND `foundation` (this
 Unlike `subdomain`, this line is **enforced, not aspirational**:
 `.dependency-cruiser.cjs`'s `foundation-cannot-reach-shop` rule fails closed on a `foundation`
 module importing a `shop` one, the same way `module-coupling-<name>` fails closed on an
-undeclared sibling import. `webhooks` is labelled `shop` for now — its own event catalogue is the
-demo's worked example (`orders`/`payments` events), not because delivery, retries and signing are
-themselves shop-specific. A later change may move it once modules declare their own public events
-generically.
+undeclared sibling import. `webhooks` is labelled `foundation`: delivery, retries and signing are
+generic, and each module declares its own public events on its manifest (`publicEvents`,
+`kernel/registry.ts`'s `resolvePublicEvents`), so `webhooks` subscribes to whatever is registered
+instead of importing `orders`/`payments` event constants directly.
 
 This is also the axis a CI job measures "is the demo shop removable" against: deleting every
 `group: shop` folder and seeing what still compiles and passes is a checked experiment now, not a
