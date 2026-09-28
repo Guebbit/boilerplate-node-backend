@@ -188,7 +188,7 @@ Both halves are live:
 
 ### The folder is optional
 
-A few modules have one — `orders`, `cart`, `delivery`, `inventory`, `payments` and `webhooks` — most
+A few modules have one — `orders`, `cart`, `delivery`, `inventory`, `products` and `webhooks` — most
 don't. Creating an empty `domain/` to match a shape is how ceremony starts.
 
 **`delivery/domain/` is the shortest worked example, and the best argument for the folder.** It is
@@ -216,12 +216,13 @@ that does money arithmetic — and because the lint rule below forbids a domain 
 a shared kernel, which is where a jointly-owned money type would otherwise live.
 
 **`inventory/domain/transitions.ts` is the other kind of case: the folder holding the model
-itself.** It is one table mapping each of the six stock transitions to the pair of counter deltas
-it implies, plus the subtraction that defines availability. Nothing about it needs a database, and
-everything that does — the conditional writes, the ledger row, the reservation lifecycle — reads
-the table rather than restating it. The service's `writerFor` is deliberately a second short table
-beside it, so "which write performs a transition" and "what that transition costs" can be read
-against each other; `src/modules/inventory/tests/unit/transitions.test.ts` asserts they agree for every reason.
+itself.** It is one table (`counterDeltaFor`) mapping each of the seven stock transitions to the
+pair of counter deltas it implies, plus the subtraction that defines availability. Nothing about it
+needs a database, and everything that does — the conditional writes, the ledger row, the
+reservation lifecycle — reads the table rather than restating it;
+`src/modules/inventory/tests/unit/transitions.test.ts` pins the actual signed delta each reason
+produces against `openapi.yaml`'s own documented table, so a reason added to the contract and not
+to this one is a compile error the moment something calls it.
 
 ---
 

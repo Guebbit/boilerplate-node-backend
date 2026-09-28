@@ -143,12 +143,13 @@ One of those files is usually internal — here `view.ts`, whose helpers the oth
 caller asks for by name. Export its **types** from the barrel, not its helpers.
 
 `account` took the same step, and then a second one: `services/` splits into `authentication.ts`,
-`profile.ts`, `verification.ts`, `tokens.ts`, `token-cleanup.ts`, `export.ts` and `oauth.ts`
-(`accountService`), `two-factor.ts` (`twoFactorService`) and `addresses.ts` (`addressService`) —
-three namespaces behind one `index.ts`, not one. At 44 functions, a single object meant every
-caller of `accountService.login` was, to TypeScript, also coupled to 2FA and the address book;
+`profile.ts`, `verification.ts`, `tokens.ts`, `token-cleanup.ts`, `mail.ts` and `oauth.ts`
+(`accountService`) and `two-factor.ts` (`twoFactorService`) — two namespaces behind one
+`index.ts`, not one; `export.ts` stays out of both on purpose (see the barrel's own docblock), and
+the address book left entirely, as `@modules/addresses`. A single object meant every
+caller of `accountService.login` was, to TypeScript, also coupled to 2FA;
 splitting along the same file boundaries removes that coupling without adding new ones, since
-none of the three groups calls another. `tokens.ts` is the one worth reading for the reason a
+neither group calls the other. `tokens.ts` is the one worth reading for the reason a
 split like this pays off in the first place:
 what makes a one-time token live — right type, not expired — used to be re-derived in three
 controllers, and a fourth flow that forgot the expiry comparison would have shipped a link that
@@ -217,10 +218,11 @@ into central registries would trade that for a file every domain must edit.
 
 A module does not have to serve HTTP. The manifest is a union of two alternatives — one carrying
 `basePath` **and** `routes`, one carrying neither — so a domain that owns a collection and no URL is
-a first-class entry rather than a special case. `audit-logs` is the example: it owns the audit
-trail, while the endpoint that reads it, `GET /observability/audit`, belongs to the dashboard that
-renders it. The `never` typing means a router without a mount point (or the reverse) is a type error
-at the manifest, not a route that silently never registers.
+a first-class entry rather than a special case. `access` is the example: it owns the tenant and
+membership collections, but nothing in the boilerplate creates a shop or grants a role over the
+wire, so there is no URL of its own to mount — `account`, `api-keys` and `users` reach it only
+through its barrel. The `never` typing means a router without a mount point (or the reverse) is a
+type error at the manifest, not a route that silently never registers.
 
 There are no layer directories. `src/controllers`, `src/services`, `src/repositories` and <!-- doc-paths:ignore -->
 `src/models` existed while the domains were being migrated and were deleted with the last of them; <!-- doc-paths:ignore -->
@@ -260,7 +262,7 @@ layer above, and may never import from them. ESLint enforces this.
 | `infrastructure/adapters`      | the substrate's I/O — anything that talks to something outside this process: [cache](../tools/redis-cache.md), [queue](../tools/rabbitmq.md), mailer, storage, [logger](../tools/winston.md), filesystem, PDF, image-signature sniffing | anything that talks only to this process's own memory                                                                                                                                                                            |
 | `infrastructure/observability` | [metrics](../tools/prometheus.md), [tracing](../tools/opentelemetry.md) helpers, audit, analytics, SSE stream                                                                                                                           | anything a caller reads back — signals go out, they are not an API                                                                                                                                                               |
 | `infrastructure/http`          | Express-coupled request/response helpers, and in `middlewares/` the domain-free pipeline: cache, locale, rate limiting, access logs, observability context, route flags                                                                 | anything that would still make sense with no `Request` and no `Response` — including anything that knows a service envelope, an audit action or a not-found key, which is a module's convention, a rung above protocol substrate |
-| `infrastructure/surfaces`      | one shared implementation per [route surface](./request-input.md) — the delete, read-one, paged-list and search controller shapes each module's controller is a short spec against                                                      | anything with a single caller — a shape only one module needs is that module's controller, not a surface                                                                                                                         |
+| `infrastructure/surfaces`      | one shared implementation per [route surface](./request-input.md) — the delete, restore, read-one, paged-list, search and update controller shapes each module's controller is a short spec against                                     | anything with a single caller — a shape only one module needs is that module's controller, not a surface                                                                                                                         |
 | `infrastructure/persistence`   | mongoose substrate every collection shares: the base repository, search/pagination filters, the serialization transform                                                                                                                 | anything that knows what a document _means_                                                                                                                                                                                      |
 | `infrastructure/i18n`          | resolves a language: catalog discovery, the admin-editable override layer, request-scoped `t`, `Accept-Language` negotiation                                                                                                            | copy itself — it resolves a language, `src/locales` holds the words                                                                                                                                                              |
 
@@ -270,15 +272,19 @@ holds no business rule, however many modules want one — see the `infrastructur
 
 ### A port does not have to be infrastructure
 
-`adapters/image-store` is the familiar shape: an interface, one or more implementations, and an env
-var choosing between them. The tier is not part of the pattern. **A module may own a port of its
-own, in `providers/`**, when the thing behind it is its business rather than the application's.
+`adapters/image-store` is the familiar shape: an interface and an implementation, ready for a
+second — nothing selects between them yet, on purpose, since a switch offering one nobody wrote
+would only invite a guess at what going live needs. The tier is not part of the pattern. **A module
+may own a port of its own, in `providers/`**, when the thing behind it is its business rather than
+the application's.
 
-`payments/providers/` is the one in the tree. It declares what a payment provider must do, ships
-`fake.ts`, and selects on `NODE_PAYMENT_PROVIDER` — so a project going live writes `stripe.ts` <!-- doc-paths:ignore -->
-beside it and changes an env var, while the service, the contract and the frontend hear nothing. It
-is not `infrastructure` for the reason the table above gives: a substrate that knew what a charge
-was would be holding a business rule.
+`payments/providers/` and `account/oauth/providers/` are the two in the tree. `payments/providers/`
+declares what a payment provider must do, ships `fake.ts`, and selects on `NODE_PAYMENT_PROVIDER` —
+so a project going live writes `stripe.ts` beside it and changes an env var, while the service, the <!-- doc-paths:ignore -->
+contract and the frontend hear nothing. `account/oauth/providers/` is the same shape one step
+further along: `github.ts` and `google.ts` are both real, alongside `fake.ts` for tests. Neither is
+`infrastructure` for the reason the table above gives: a substrate that knew what a charge or an
+OAuth handshake was would be holding a business rule.
 
 Which tier a port belongs to is the same question as everything else on this page: `image-store`
 survives an application with no modules, and `payments/providers` becomes meaningless without the
