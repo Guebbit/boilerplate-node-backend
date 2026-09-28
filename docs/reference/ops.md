@@ -233,10 +233,10 @@ sit on top of them, are in [Data Protection](../theory/data-protection.md).
 
 ## Rendered templates
 
-| Pattern                            | What it is                                                                                                                                                     | Read next                                                                              |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `src/modules/*/templates/*.ejs`    | One template per email a module sends, or the PDF a module renders (today, `invoicing`'s), named for the module and the event that sends it — collected via `AppModule.templates`, so deleting the module deletes them with it. | [Email & PDF Rendering](../tools/email-and-rendering.md) · [Modules](./src-modules.md) |
-| `shared/templates/layouts/*.ejs`   | The shared wrappers those templates include: the email head, the PDF head, and the common footer — owned by no module, the same reasoning `shared/contracts` is. Styling lives here so a template holds only its own content. | [Email & PDF Rendering](../tools/email-and-rendering.md)                               |
+| Pattern                          | What it is                                                                                                                                                                                                                      | Read next                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `src/modules/*/templates/*.ejs`  | One template per email a module sends, or the PDF a module renders (today, `invoicing`'s), named for the module and the event that sends it — collected via `AppModule.templates`, so deleting the module deletes them with it. | [Email & PDF Rendering](../tools/email-and-rendering.md) · [Modules](./src-modules.md) |
+| `shared/templates/layouts/*.ejs` | The shared wrappers those templates include: the email head, the PDF head, and the common footer — owned by no module, the same reasoning `shared/contracts` is. Styling lives here so a template holds only its own content.   | [Email & PDF Rendering](../tools/email-and-rendering.md)                               |
 
 ## Served assets
 

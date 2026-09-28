@@ -6,7 +6,11 @@
  * `payments/tests/unit/providers.test.ts` answers for the single-active-provider registry.
  */
 
-import { enabledProviders, resolveOAuthProvider, registerOAuthProvider } from '../../oauth/providers';
+import {
+    enabledProviders,
+    resolveOAuthProvider,
+    registerOAuthProvider
+} from '../../oauth/providers';
 import { FAKE_OAUTH_CODE, fakeOAuthProvider } from '../../oauth/providers/fake';
 import { generateCodeVerifier, codeChallengeOf } from '../../oauth/state';
 

@@ -36,12 +36,12 @@ handled in [Into a pattern](#into-a-pattern) below.
 
 ## Into a template
 
-| Attack                                | How it works                                                            | This boilerplate                                                                                                                       |
-| ------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Attack                                | How it works                                                            | This boilerplate                                                                                                                              |
+| ------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | Server-side template injection (SSTI) | user text goes into the template STRING rather than a template variable | EJS interpolates with `<%= %>`, which HTML-escapes; `<%- %>` appears only on `include(…)` of a fixed layout path — `src/modules/*/templates/` |
-| Expression-language injection         | SpEL, OGNL, JEXL, MVEL evaluated from request parameters                | No surface: no expression evaluator in the stack.                                                                                      |
-| Server-side includes (SSI) injection  | `<!--#exec … -->` in a page the server processes for includes           | No surface: no include-style loader, no SSI processor.                                                                                 |
-| Client-side template injection        | user text reaches a browser framework's expression evaluator            | The frontend's row — see [Client-side](client-side.md#script-execution-in-the-origin).                                                 |
+| Expression-language injection         | SpEL, OGNL, JEXL, MVEL evaluated from request parameters                | No surface: no expression evaluator in the stack.                                                                                             |
+| Server-side includes (SSI) injection  | `<!--#exec … -->` in a page the server processes for includes           | No surface: no include-style loader, no SSI processor.                                                                                        |
+| Client-side template injection        | user text reaches a browser framework's expression evaluator            | The frontend's row — see [Client-side](client-side.md#script-execution-in-the-origin).                                                        |
 
 ## Into a protocol or a document
 

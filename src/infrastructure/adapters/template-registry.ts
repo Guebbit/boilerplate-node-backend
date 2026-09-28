@@ -51,7 +51,9 @@ export const registerTemplateDirectories = (directories: readonly string[]): voi
  * wholesale, kept working exactly as before templates were collected per module.
  */
 const overrideTemplatesDirectory = (): string | undefined =>
-    process.env.NODE_EMAIL_TEMPLATES_DIR ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR) : undefined;
+    process.env.NODE_EMAIL_TEMPLATES_DIR
+        ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR)
+        : undefined;
 
 /**
  * The file an outbox name renders from.

@@ -110,10 +110,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         { title: 'Boiled sweets' }
     ]),
     'delivery.shipment-shipped': shipmentShippedEmail(locale, 'Ada', 'TRK-0000TEST'),
-    'webhooks.subscription-disabled': subscriptionDisabledEmail(
-        locale,
-        'https://example.com/hook'
-    ),
+    'webhooks.subscription-disabled': subscriptionDisabledEmail(locale, 'https://example.com/hook'),
     'feedback.contact': contactRequestEmail(locale, {
         name: 'Ada',
         email: 'ada@example.com',

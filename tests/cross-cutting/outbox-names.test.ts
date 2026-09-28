@@ -131,7 +131,10 @@ it('points every name at a template that exists', () => {
             const file = templateFileOrUndefined(name);
             return !file || !existsSync(file);
         })
-        .map(({ module, name }) => `${module}: ${name} → ${templateFileOrUndefined(name) ?? 'unregistered'}`);
+        .map(
+            ({ module, name }) =>
+                `${module}: ${name} → ${templateFileOrUndefined(name) ?? 'unregistered'}`
+        );
 
     expect(missing).toEqual([]);
 });
