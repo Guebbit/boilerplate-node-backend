@@ -9,11 +9,10 @@
 import { createChallenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
 import { verify } from 'altcha-lib/frameworks/shared';
-import type { HumanChallengeProvider } from './index';
+import type { HumanChallengeProvider, IssuedChallenge } from './index';
 import type { RungVerdict } from '../antibot-verdict';
 import { altchaStore } from './altcha-store';
 import { environmentNumber } from '@infrastructure/runtime/environment';
-import type { AntibotChallenge } from '@types';
 
 /**
  * PBKDF2 rather than Argon2id: it runs on WebCrypto everywhere, while Argon2 is native only on
@@ -53,7 +52,7 @@ const cost = (): number => environmentNumber('NODE_ANTIBOT_ALTCHA_COST', DEFAULT
  * challenge unusable; `cost` is how much work solving it takes.
  * https://github.com/altcha-org/altcha-lib#createchallenge
  */
-const issue = (): Promise<AntibotChallenge> =>
+const issue = (): Promise<IssuedChallenge> =>
     createChallenge({
         algorithm: ALGORITHM,
         cost: cost(),

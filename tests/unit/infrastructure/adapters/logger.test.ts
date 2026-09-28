@@ -12,6 +12,7 @@
  * winston handed it.
  */
 import fc from 'fast-check';
+import type winston from 'winston';
 import {
     redactSensitiveFields,
     serializeError,
@@ -695,7 +696,11 @@ describe('the two loggers are configured independently', () => {
 
         const { logger: appLogger } = await loadLoggers();
 
-        expect(appLogger.level).toBe('error');
+        // `level`/`transports` are winston's own configuration surface, erased by the narrow
+        // `Logger` port (SK-04) every OTHER caller depends on. This test is the one place that
+        // legitimately needs the concrete implementation back, to prove winston itself is wired
+        // the way the port's callers assume.
+        expect((appLogger as winston.Logger).level).toBe('error');
     });
 
     it('does NOT let NODE_LOG_LEVEL quieten the audit logger', async () => {
@@ -705,7 +710,7 @@ describe('the two loggers are configured independently', () => {
 
         const { auditLogger: audit } = await loadLoggers();
 
-        expect(audit.level).toBe('info');
+        expect((audit as winston.Logger).level).toBe('info');
     });
 
     it('keeps the audit logger at info even in production', async () => {
@@ -714,13 +719,13 @@ describe('the two loggers are configured independently', () => {
 
         const { auditLogger: audit } = await loadLoggers();
 
-        expect(audit.level).toBe('info');
+        expect((audit as winston.Logger).level).toBe('info');
     });
 
     it('gives both loggers at least one transport, so neither writes into the void', async () => {
         const { logger: appLogger, auditLogger: audit } = await loadLoggers();
 
-        expect(appLogger.transports.length).toBeGreaterThan(0);
-        expect(audit.transports.length).toBeGreaterThan(0);
+        expect((appLogger as winston.Logger).transports.length).toBeGreaterThan(0);
+        expect((audit as winston.Logger).transports.length).toBeGreaterThan(0);
     });
 });

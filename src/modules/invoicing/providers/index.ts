@@ -13,6 +13,7 @@
  */
 
 import { environmentChoice } from '@infrastructure/runtime/environment';
+import { createProviderRegistry } from '@infrastructure/runtime/provider-registry';
 import { pdfEInvoicingProvider } from './pdf';
 import type { InvoiceLine, InvoiceParty, InvoiceSeller } from '../model';
 import type { OrderTaxSummaryRow } from '@types';
@@ -66,10 +67,17 @@ export interface EInvoicingProvider {
     issue(document: EInvoicingDocument): Promise<EInvoicingArtifact>;
 }
 
-/** Every implementation this build knows. A real deployment adds one file and one line here. */
-const PROVIDERS: Record<string, EInvoicingProvider | undefined> = {
+/**
+ * Every implementation this build knows. A live deployment adds one file and calls
+ * {@link registerEInvoicingProvider} — no edit here required.
+ */
+const registry = createProviderRegistry<EInvoicingProvider>({
     pdf: pdfEInvoicingProvider
-};
+});
+
+/** Add (or, in a test, override) one implementation without editing this file. */
+export const registerEInvoicingProvider = (name: string, provider: EInvoicingProvider): void =>
+    registry.register(name, provider);
 
 /**
  * The configured e-invoicing provider, read fresh per call rather than memoised — the same
@@ -78,8 +86,8 @@ const PROVIDERS: Record<string, EInvoicingProvider | undefined> = {
  * @throws {Error} when the variable names an implementation this build does not have
  */
 export const resolveEInvoicingProvider = (): EInvoicingProvider => {
-    const name = environmentChoice('NODE_EINVOICING_PROVIDER', Object.keys(PROVIDERS), 'pdf');
-    // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are keys
-    // of PROVIDERS by construction, a guarantee the compiler cannot follow across the call.
-    return PROVIDERS[name]!;
+    const name = environmentChoice('NODE_EINVOICING_PROVIDER', registry.names(), 'pdf');
+    // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are names
+    // the registry holds by construction, a guarantee the compiler cannot follow across the call.
+    return registry.resolve(name)!;
 };

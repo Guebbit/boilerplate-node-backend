@@ -74,7 +74,7 @@ export const startInProcessMongod = (databasePath: string | undefined): Promise<
     ])
         .then(toEphemeralMongo)
         .catch((error: unknown) => {
-            logger.error(error);
+            logger.error({ message: 'Ephemeral mongod failed to start.', error });
             return process.exit(1);
         })
         .finally(() => clearTimeout(timer));
