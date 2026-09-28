@@ -55,7 +55,7 @@ Controllers using it:
 
 - `post-reset-request.ts` — password reset email
 - `post-reset-confirm.ts` — password change confirmation
-- `write-orders.ts` — order confirmation email
+- `create-order.ts` — order confirmation email
 - `post-feedback-contact.ts` — contact form notification
 
 ### Invoice PDF rendering — NOT a queue
