@@ -179,8 +179,9 @@ never as anything that says why.
 npm run complete     # build + all tests + lint + format check — several minutes
 ```
 
-This is exactly what the pre-commit hook runs, so running it by hand only ever saves you a rejected
-commit. Its mutating twin, `npm run complete:fix`, fixes lint and formatting instead of reporting
+For now the pre-commit hook runs a faster subset, `npm run complete:light`: every static check plus
+the unit and cross-cutting suites, nothing that needs `mongod`. Run the full `complete` yourself
+before merging. Its mutating twin, `npm run complete:fix`, fixes lint and formatting instead of reporting
 them.
 
 Deliberately outside that gate, run by hand when you want them: `npm run mutation` (Stryker,

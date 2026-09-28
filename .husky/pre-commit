@@ -1,16 +1,19 @@
-# The full gate, and the only one: build, lint, both spec lints, format check, the contract-bundle
-# and cross-repo contract checks, then unit, cross-cutting, integration, contract and fuzz tests.
+# TEMPORARY (2026-09-28, until the HANDOFF.md queue is done): the LIGHT gate, `complete:light`.
+# It keeps every static check (type-check, lint, both spec lints, format, the contract-bundle, docs and
+# cross-repo checks) plus the unit and cross-cutting suites — nothing that starts `mongod`.
 #
-# Several minutes, fuzz being most of it — there is nothing worth trading away, and one gate is
-# easier to trust than three.
+# Left out, so run the full `npm run complete` by hand before merging a lane and once on main after
+# each merge (CI still runs all of it):
+#
+# - `test:integration`, `test:contract` and `test:fuzz` — the database and HTTP layers, fuzz being
+#   most of the full gate's minutes;
+# - `docs:build`.
+#
+# Restoring the full gate: revert the commit that introduced this block.
 #
 # `check:spec-identity` SKIPS rather than fails when the paired frontend is not on disk, so a
 # half-cloned pair can still commit. It stays fatal under CI, where a missing sibling means the
 # workflow is misconfigured.
-#
-# `test:fuzz` IS here, inside `npm run test`. It was held back to nightly while the 500 it found on
-# `POST /products/search` was open; that is fixed, and the suite has since caught two more of the
-# same shape — a bad request answered as a server fault. It earns its place in the gate.
 #
 # Deliberately not here, and run by hand for the occasions that want them: `test:mutation`
 # (re-executes the unit suite once per mutant — nightly in CI), `complete:manual` (`test:prism`,
@@ -37,4 +40,4 @@
 npm run regenerate -- --no-sync
 git add asyncapi.yaml asyncapi.public.yaml
 
-npm run complete
+npm run complete:light

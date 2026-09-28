@@ -200,8 +200,8 @@ rules they report in the editor and fix on save.
 
 ## Git hooks
 
-| File                | What it is                                                                    | Read next                                      |
-| ------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
-| `.husky/pre-commit` | Runs the full local gate before a commit is written.                          | [Package Scripts](../tools/package-scripts.md) |
-| `.husky/commit-msg` | Runs commitlint, so every message is a conventional commit.                   | [Repository Root](./root.md)                   |
-| `.husky/.gitignore` | Husky's own — keeps the shell wrappers husky generates out of the repository. | —                                              |
+| File                | What it is                                                                        | Read next                                      |
+| ------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `.husky/pre-commit` | Runs the light local gate (`complete:light`) before a commit is written, for now. | [Package Scripts](../tools/package-scripts.md) |
+| `.husky/commit-msg` | Runs commitlint, so every message is a conventional commit.                       | [Repository Root](./root.md)                   |
+| `.husky/.gitignore` | Husky's own — keeps the shell wrappers husky generates out of the repository.     | —                                              |
