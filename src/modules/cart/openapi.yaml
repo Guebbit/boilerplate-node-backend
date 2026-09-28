@@ -457,7 +457,9 @@ components:
                     type: number
                     format: double
                     minimum: 0
-                    description: Sum of item prices * quantity (before tax/shipping/discounts)
+                    description: >-
+                        Sum of item prices * quantity. Gross — VAT included, same as each product's
+                        own `price` — before shipping. There are no discounts to net out.
                 shippingCost:
                     type: number
                     format: double
