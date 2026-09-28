@@ -34,6 +34,7 @@ import {
     cartItemAddById,
     cartItemRemoveById,
     cartRemove,
+    cartShippingMethodSet,
     orderConfirm,
     cartService,
     productRemoveFromCartsById
@@ -66,7 +67,10 @@ const EMPTY_CART = {
         shippingCost: 0,
         totalPrice: 0,
         currency: 'EUR'
-    }
+    },
+    // An empty basket needs no shipment — `shippingOptionsFor` reads `needsShipping` as false
+    // for an empty line list, the same as an all-digital one.
+    shipping: { required: false, selected: null, options: [] }
 };
 
 /** Reads the persisted quantity for a product, so assertions survive the round trip to Mongo. */
@@ -244,6 +248,63 @@ describe('cartGetForBadge', () => {
     });
 });
 
+/*
+ * FA-D6/B3: `shipping.options` is priced through the same `priceShipping`/`methodFitsWeight`
+ * checkout itself uses, not a copy — these cases exercise the live pricing and the "still fits"
+ * check a stored choice is re-derived against on every read, not just at the moment it was set.
+ */
+describe('shipping (FA-D6/B3)', () => {
+    it('is empty, and required is false, for an all-digital basket', async () => {
+        const user = await createUser();
+        const digital = await createProduct({ requiresShipping: false });
+        await cartItemSetById(user.id, String(digital._id), 1);
+
+        const { shipping } = await cartGetForBadge(user.id);
+
+        expect(shipping).toEqual({ required: false, selected: null, options: [] });
+    });
+
+    it('prices a free-above threshold live, crossed by the basket alone', async () => {
+        const user = await createUser();
+        // Two at 60 clears `standard`'s 100 free-above threshold.
+        const product = await createProduct({ price: 60 });
+        await cartItemSetById(user.id, String(product._id), 2);
+
+        const { shipping } = await cartGetForBadge(user.id);
+
+        expect(shipping.options.find((option) => option.id === 'standard')?.price).toBe(0);
+    });
+
+    it('reads the stored choice back as selected once it fits the basket', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
+        await cartShippingMethodSet(user.id, 'standard');
+
+        const { shipping } = await cartGetForBadge(user.id);
+
+        expect(shipping.selected).toBe('standard');
+    });
+
+    it('reads the stored choice back as null once the basket outgrows it', async () => {
+        const user = await createUser();
+        const light = await createProduct({ weight: 100 });
+        await cartItemSetById(user.id, String(light._id), 1);
+        await cartShippingMethodSet(user.id, 'express');
+
+        // A second, heavy line pushes the basket past `express`'s 5000g ceiling — the stored
+        // choice stands (`cartShippingMethodSet` only checks at the moment of choosing), but a
+        // fresh read no longer offers or selects a method the basket has outgrown.
+        const heavy = await createProduct({ weight: 6000 });
+        await cartItemSetById(user.id, String(heavy._id), 1);
+
+        const { shipping } = await cartGetForBadge(user.id);
+
+        expect(shipping.selected).toBeNull();
+        expect(shipping.options.map((option) => option.id)).not.toContain('express');
+    });
+});
+
 describe('cartItemSetById', () => {
     it('adds a line that was not in the cart', async () => {
         const user = await createUser();
@@ -302,6 +363,17 @@ describe('cartItemSetById', () => {
                 shippingCost: 0,
                 totalPrice: 50,
                 currency: 'EUR'
+            },
+            // A weightless product fits every method's range, so all three are on offer, priced
+            // against this basket's own `itemsTotal` (50 — under `standard`'s 100 free-above).
+            shipping: {
+                required: true,
+                selected: null,
+                options: [
+                    { id: 'standard', price: 5, requiresAddress: true, tracked: false },
+                    { id: 'express', price: 15, requiresAddress: true, tracked: true },
+                    { id: 'pickup', price: 0, requiresAddress: false, tracked: false }
+                ]
             }
         });
     });
