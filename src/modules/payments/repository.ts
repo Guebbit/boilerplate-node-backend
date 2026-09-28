@@ -7,14 +7,10 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import {
-    paymentModel,
-    paymentWebhookEventModel,
-    applyPaymentTransform,
-    CONFIRMABLE_PAYMENT_STATUSES
-} from './model';
+import { paymentModel, paymentWebhookEventModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod } from '@types';
 import type { PaymentDocument } from './model';
+import { CONFIRMABLE_PAYMENT_STATUSES } from './domain';
 import {
     createRepository,
     toObjectId,

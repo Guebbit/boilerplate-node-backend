@@ -186,10 +186,16 @@ Both halves are live:
 | `readScope`         | A tagged union its only caller destructured two lines later                   |
 | `canDecrement`      | `q > MIN_LINE_QUANTITY`, one template binding                                 |
 
-### The folder is optional
+### Mandatory for a 3+-state status, optional otherwise
 
-A few modules have one — `orders`, `cart`, `delivery`, `inventory`, `products` and `webhooks` — most
-don't. Creating an empty `domain/` to match a shape is how ceremony starts.
+**A module with a 3+-state status field must have a `domain/` folder.** A transition table catches
+real bugs a status literal scattered across services cannot — `orders/domain/lifecycle.ts` below is
+the worked example, and `payments`/`feedback` are the two modules this rule reaches beyond `orders`
+itself, past their own 6- and 4-state fields.
+
+Everywhere else the folder stays optional, and creating an empty one to match a shape is how
+ceremony starts — most modules here don't have one. Modules with a `domain/` folder today: `orders`,
+`cart`, `delivery`, `inventory`, `products`, `webhooks`, `payments` and `feedback`.
 
 **`delivery/domain/` is the shortest worked example, and the best argument for the folder.** It is
 two pure functions, `findShippingMethod` and `priceShipping`, and they are the module's _entire_

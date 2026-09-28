@@ -298,11 +298,15 @@ export const updateById = (
  * `paidAt` alone answers this, with no need to ask `invoicing` whether the freeze actually landed
  * (see `services/scope.ts`'s `invoice` flag): a paid order is worth keeping either way.
  * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
+ * @param context - records `ORDER_DELETED`; omit for a caller with no request behind it
  */
 export const remove = (
     order: OrderDocument,
-    hardDelete = false
+    hardDelete = false,
+    context?: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> => {
+    const id = String(order._id);
+
     if (hardDelete && order.paidAt)
         return Promise.resolve(
             generateReject(409, [
@@ -318,8 +322,18 @@ export const remove = (
                 // belongs to. Whether it released is not checked, for the same reason
                 // `cancelById` does not check: a hold that already expired is an ordinary
                 // sequence with nothing left to do about it.
-                .releaseForOrder(String(order._id))
+                .releaseForOrder(id)
                 .then(() => orderRepository.deleteOne(order))
+                .then(() => {
+                    if (context)
+                        recordAudit(context, {
+                            action: ordersAuditActions.ORDER_DELETED,
+                            outcome: 'success',
+                            target_type: 'order',
+                            target_id: id,
+                            metadata: { hardDelete: true }
+                        });
+                })
                 .then(() => generateSuccess(undefined, 200, t('orders.hard-deleted')))
         );
 
@@ -329,25 +343,44 @@ export const remove = (
         return Promise.resolve(generateSuccess(order, 200, t('orders.soft-deleted')));
 
     order.deletedAt = new Date();
-    return orderRepository
-        .save(order)
-        .then((saved) => generateSuccess(saved, 200, t('orders.soft-deleted')));
+    return orderRepository.save(order).then((saved) => {
+        if (context)
+            recordAudit(context, {
+                action: ordersAuditActions.ORDER_DELETED,
+                outcome: 'success',
+                target_type: 'order',
+                target_id: id,
+                metadata: { hardDelete: false }
+            });
+        return generateSuccess(saved, 200, t('orders.soft-deleted'));
+    });
 };
 
 /**
  * Undo a soft delete.
  *
  * @param id - the order to restore
+ * @param context - records `ORDER_RESTORED`; omit for a caller with no request behind it
  * @returns the restored order; 404 when there is none, 409 when it is not soft-deleted
  */
-export const restoreById = (id: string): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
+export const restoreById = (
+    id: string,
+    context?: CallerContext
+): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
     orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
         if (!order.deletedAt) return generateReject(409, [t('orders.not-deleted')]);
         order.deletedAt = undefined;
-        return orderRepository
-            .save(order)
-            .then((saved) => generateSuccess(saved, 200, t('orders.restored')));
+        return orderRepository.save(order).then((saved) => {
+            if (context)
+                recordAudit(context, {
+                    action: ordersAuditActions.ORDER_RESTORED,
+                    outcome: 'success',
+                    target_type: 'order',
+                    target_id: id
+                });
+            return generateSuccess(saved, 200, t('orders.restored'));
+        });
     });
 
 /**
@@ -355,13 +388,17 @@ export const restoreById = (id: string): Promise<ResponseSuccess<OrderDocument> 
  * Fetches the document then delegates to remove().
  *
  * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
+ * @param context - forwarded to {@link remove} for the audit row
  */
 export const removeById = (
     id: string,
-    hardDelete = false
+    hardDelete = false,
+    context?: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> =>
     orderRepository
         .findById(id)
         .then((order) =>
-            order ? remove(order, hardDelete) : generateReject(404, [t('orders.not-found')])
+            order
+                ? remove(order, hardDelete, context)
+                : generateReject(404, [t('orders.not-found')])
         );

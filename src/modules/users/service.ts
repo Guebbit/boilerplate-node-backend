@@ -414,28 +414,34 @@ const runErasureCascade = async (user: UserDocument, session: ClientSession): Pr
  * every write a hard delete makes. Only the hard path touches either, since a soft delete is a
  * restore waiting to happen.
  *
- * @param auditContext - T6: given only by a caller with no HTTP request behind it (the
- * inactivity reaper) — records the hard delete under `SYSTEM_USER_ERASED` itself, since nothing
- * downstream of a cron job otherwise would. Omitted by every HTTP-driven caller, which already
- * records its own `ADMIN_USER_ERASED`/`ADMIN_USER_SOFT_DELETED` through
- * `createDeleteController`'s spec — passing it there too would double the row.
+ * @param context - who did this. Absent for a caller with no request behind it that also has no
+ * stake in the trail (a test, a script's dry run). Present and `caller.system` for the inactivity
+ * reaper's own hard delete, which records `SYSTEM_USER_ERASED` rather than an `admin.*` action —
+ * nobody was at the keyboard. Present and NOT `caller.system` for the admin `DELETE /users(/:id)`
+ * route, which records `ADMIN_USER_ERASED`/`ADMIN_USER_SOFT_DELETED`. The soft branch never
+ * records under a system context: nothing today calls it that way, and the day something does, it
+ * still shouldn't — a reaper's soft delete stays a step in ITS OWN sweep, not a fact for the
+ * `admin.*` vocabulary to carry.
  */
 export const remove = (
     user: UserDocument,
     hardDelete = false,
-    auditContext?: CallerContext
+    context?: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     if (hardDelete)
         return revokeAllOf(user.id)
             .then(() => withTransaction((session) => runErasureCascade(user, session)))
             .then(() => imageStore.remove(user.imageUrl))
             .then(() => {
-                if (auditContext)
-                    recordAudit(auditContext, {
-                        action: usersAuditActions.SYSTEM_USER_ERASED,
+                if (context)
+                    recordAudit(context, {
+                        action: context.caller.system
+                            ? usersAuditActions.SYSTEM_USER_ERASED
+                            : usersAuditActions.ADMIN_USER_ERASED,
                         outcome: 'success',
                         target_type: 'user',
-                        target_id: user.id
+                        target_id: user.id,
+                        metadata: { hardDelete: true }
                     });
             })
             .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
@@ -450,7 +456,17 @@ export const remove = (
         saved
             .tokenRemoveAll(TokenType.REFRESH)
             .catch(() => undefined)
-            .then(() => generateSuccess(saved, 200, t('users.soft-deleted')))
+            .then(() => {
+                if (context && !context.caller.system)
+                    recordAudit(context, {
+                        action: usersAuditActions.ADMIN_USER_SOFT_DELETED,
+                        outcome: 'success',
+                        target_type: 'user',
+                        target_id: user.id,
+                        metadata: { hardDelete: false }
+                    });
+                return generateSuccess(saved, 200, t('users.soft-deleted'));
+            })
     );
 };
 
@@ -458,16 +474,27 @@ export const remove = (
  * Undo a soft delete. The account's sessions stay revoked: the owner logs in again.
  *
  * @param id - the user to restore
+ * @param context - records `ADMIN_USER_RESTORED`; omit for a caller with no request behind it
  * @returns the restored user; 404 when there is none, 409 when it is not soft-deleted
  */
-export const restoreById = (id: string): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+export const restoreById = (
+    id: string,
+    context?: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     userRepository.findById(id).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
         if (!user.deletedAt) return generateReject(409, [t('users.not-deleted')]);
         user.deletedAt = undefined;
-        return userRepository
-            .save(user)
-            .then((saved) => generateSuccess(saved, 200, t('users.restored')));
+        return userRepository.save(user).then((saved) => {
+            if (context)
+                recordAudit(context, {
+                    action: usersAuditActions.ADMIN_USER_RESTORED,
+                    outcome: 'success',
+                    target_type: 'user',
+                    target_id: id
+                });
+            return generateSuccess(saved, 200, t('users.restored'));
+        });
     });
 
 /**
@@ -543,15 +570,19 @@ export const adminDisableTwoFactor = (
     });
 };
 
-/** Remove a user by ID (soft or hard delete). Fetches the document then delegates to remove(). */
+/**
+ * Remove a user by ID (soft or hard delete). Fetches the document then delegates to remove().
+ * @param context - forwarded to {@link remove} for the audit row
+ */
 export const removeById = (
     id: string,
-    hardDelete = false
+    hardDelete = false,
+    context?: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> =>
     userRepository
         .findById(id)
         .then((user) =>
-            user ? remove(user, hardDelete) : generateReject(404, [t('users.not-found')])
+            user ? remove(user, hardDelete, context) : generateReject(404, [t('users.not-found')])
         );
 
 /*

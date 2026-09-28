@@ -114,9 +114,7 @@ const ALLOWED_ELSEWHERE: Readonly<Record<string, string>> = {
     'recordAudit @ account/session/login-observability.ts':
         'Shared by every controller that completes or fails a login (POST /account/login, POST /account/login/2fa): a failed attempt has no user document to hand a service, and a success record must wait until a session actually exists, which only the controller layer knows.',
     'emitAnalyticsEvent @ account/session/login-observability.ts':
-        'Same file, same constraint as the audit record above — the login event is reported for outcomes that never reach a service.',
-    'recordAudit @ account/controllers/post-reset-request.ts':
-        'Fires unconditionally, whether or not the address belongs to an account, which is exactly what keeps the 200 identical either way and prevents user enumeration. A service reached only after a user is found cannot reproduce that.'
+        'Same file, same constraint as the audit record above — the login event is reported for outcomes that never reach a service.'
 };
 
 /** `<marker> → the files that call it, by layer`. */

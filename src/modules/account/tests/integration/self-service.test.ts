@@ -714,6 +714,48 @@ describe('removeOwnAccount', () => {
     });
 });
 
+describe('requestPasswordReset', () => {
+    // The audit relocated from the `postResetRequest` controller into this service function
+    // (B11) — this pins that the "audit fires either way" contract survived the move, since an
+    // account-enumeration defense that only audits a REAL address would leak the same fact the
+    // identical HTTP response is built to hide. See `docs/theory/module-lifecycle.md` rule 1.
+    it('audits the attempt unconditionally, even for an address with no account', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        const sent = await accountService.requestPasswordReset(
+            'nobody@example.com',
+            testCallerContext
+        );
+
+        expect(sent).toBe(false);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
+                actor_user_id: 'anonymous',
+                actor_role: 'anonymous',
+                outcome: 'success'
+            })
+        );
+    });
+
+    it('queues a reset mail and audits the same way for a registered address', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser();
+
+        const sent = await accountService.requestPasswordReset(user.email, testCallerContext);
+
+        expect(sent).toBe(true);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
+                actor_user_id: 'anonymous',
+                actor_role: 'anonymous',
+                outcome: 'success'
+            })
+        );
+    });
+});
+
 describe('passwordResetChange', () => {
     it('changes the password and audits a reset completion, distinct from a logged-in change', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);

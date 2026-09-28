@@ -592,12 +592,25 @@ export const getAdmin = (id: string): Promise<ProductAdmin | null> =>
  * all. This module still doesn't know who listens, which keeps the dependency arrow one-way.
  *
  * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
+ * @param context - records `ADMIN_PRODUCT_DELETED`; omit for a caller with no request behind it
  */
 export const remove = (
     product: ProductDocument,
-    hardDelete = false
+    hardDelete = false,
+    context?: CallerContext
 ): Promise<ResponseSuccess<ProductDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     const id = product._id.toString();
+
+    const auditDeleted = () => {
+        if (context)
+            recordAudit(context, {
+                action: productsAuditActions.ADMIN_PRODUCT_DELETED,
+                outcome: 'success',
+                target_type: 'product',
+                target_id: id,
+                metadata: { hardDelete }
+            });
+    };
 
     // HARD delete
     // Translations go with it, in this same operation — through the port, never the
@@ -611,6 +624,7 @@ export const remove = (
             .then(() => removeTranslations('product', id))
             .then(() => emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: true }))
             .then(() => imageStore.remove(product.imageUrl))
+            .then(() => auditDeleted())
             .then(() => generateSuccess(undefined, 200, t('products.hard-deleted')));
 
     // SOFT delete. Already deleted: nothing to do, and nothing to announce again.
@@ -623,7 +637,10 @@ export const remove = (
         .then((saved) =>
             emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: false }).then(() => saved)
         )
-        .then((saved) => generateSuccess(saved, 200, t('products.soft-deleted')));
+        .then((saved) => {
+            auditDeleted();
+            return generateSuccess(saved, 200, t('products.soft-deleted'));
+        });
 };
 
 /**
@@ -631,15 +648,19 @@ export const remove = (
  * Fetches the document then delegates to remove().
  *
  * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
+ * @param context - forwarded to {@link remove} for the audit row
  */
 export const removeById = (
     id: string,
-    hardDelete = false
+    hardDelete = false,
+    context?: CallerContext
 ): Promise<ResponseSuccess<ProductDocument> | ResponseSuccess<undefined> | ResponseReject> =>
     productRepository
         .findById(id)
         .then((product) =>
-            product ? remove(product, hardDelete) : generateReject(404, [t('products.not-found')])
+            product
+                ? remove(product, hardDelete, context)
+                : generateReject(404, [t('products.not-found')])
         );
 
 /**
@@ -647,18 +668,27 @@ export const removeById = (
  * cancelled, carts emptied) stays done — a restore puts the product back on sale, not the past.
  *
  * @param id - the product to restore
+ * @param context - records `ADMIN_PRODUCT_RESTORED`; omit for a caller with no request behind it
  * @returns the restored product; 404 when there is none, 409 when it is not soft-deleted
  */
 export const restoreById = (
-    id: string
+    id: string,
+    context?: CallerContext
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
     productRepository.findById(id).then((product) => {
         if (!product) return generateReject(404, [t('products.not-found')]);
         if (!product.deletedAt) return generateReject(409, [t('products.not-deleted')]);
         product.deletedAt = undefined;
-        return productRepository
-            .save(product)
-            .then((saved) => generateSuccess(saved, 200, t('products.restored')));
+        return productRepository.save(product).then((saved) => {
+            if (context)
+                recordAudit(context, {
+                    action: productsAuditActions.ADMIN_PRODUCT_RESTORED,
+                    outcome: 'success',
+                    target_type: 'product',
+                    target_id: id
+                });
+            return generateSuccess(saved, 200, t('products.restored'));
+        });
     });
 
 /**
