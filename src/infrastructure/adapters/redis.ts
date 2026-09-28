@@ -54,7 +54,15 @@ const COMMAND_TIMEOUT_MS = 1000;
  *   on every attempt; each adapter drives its own recovery from the traffic that needs it.
  * - `commandOptions.timeout`: fail a command still waiting to be written after 1s (node-redis 6
  *   would otherwise apply 5s). It does NOT cover a reply that never comes: node-redis drops the
- *   timer once the command is on the wire, so a half-open connection still waits on the kernel.
+ *   timer once the command is on the wire (`commands-queue.js#commandsToWrite`), so a half-open
+ *   connection — the socket reports open, nothing is coming back — used to hang on the kernel
+ *   with no ceiling at all.
+ * - `socket.timeout` (node-redis' own name for `net.Socket#setTimeout`): closes the SOCKET after
+ *   1s of no traffic either way, independent of command bookkeeping — the half-open case above.
+ *   Safe here specifically because every caller (`cache.ts`, `rate-limit-store.ts`) is a plain
+ *   request/reply lookup: nothing on this client ever subscribes or blocks, so there is no
+ *   legitimate reason for the socket to sit idle mid-command.
+ *   https://github.com/redis/node-redis/blob/master/docs/client-configuration.md
  * - `RESP: 2` and `maintNotifications: 'disabled'`: node-redis 6 defaults to RESP3 and, with it,
  *   to Enterprise maintenance handling. Stated rather than inherited, so the wire format the
  *   callers (and `rate-limit-redis`'s raw commands) were written against stays the one in use.
@@ -70,7 +78,10 @@ export const redisClientOptions = (url: string) => ({
         connectTimeout: 1000,
         // A literal `false`, not `boolean`: node-redis' socket options require the literal to
         // disable the reconnect loop rather than accepting a plain boolean.
-        reconnectStrategy: false as const
+        reconnectStrategy: false as const,
+        // The half-open-connection guard `commandOptions.timeout` above cannot be — see this
+        // function's own docblock.
+        socketTimeout: COMMAND_TIMEOUT_MS
     },
     commandOptions: { timeout: COMMAND_TIMEOUT_MS }
 });
