@@ -53,8 +53,8 @@ This is the boundary people trip on, so it gets one question and no adjectives:
 - **Yes, it still works** → `infrastructure`.
 - **No, it becomes meaningless** → `kernel`.
 
-`infrastructure` is not "framework-free" — it is the opposite. Seven files there import Express and
-six import Mongoose, which is exactly right: `infrastructure/http/response.ts` is Express-coupled
+`infrastructure` is not "framework-free" — it is the opposite. 22 files there import Express and 10
+import Mongoose, which is exactly right: `infrastructure/http/response.ts` is Express-coupled
 substrate and belongs where it is. The one thing it may never contain is the knowledge that a
 module system exists.
 
@@ -188,7 +188,7 @@ flowchart LR
 In `account` it closes a `users → account → users` cycle, because `users`' own admin routes need
 `requirePermission`. In `app` it makes modules import upward. So `kernel` declares what it needs —
 "turn this token into a user" — and `account` registers an implementation at boot. Same inversion as
-`IAuditSink` and `IImageStore`. See `src/kernel/authentication.ts`.
+`AuditSink` and `ImageStore`. See `src/kernel/authentication.ts`.
 
 ### Where everything else sits
 
@@ -312,7 +312,7 @@ a module deleted without removing its entry from `scripts/contracts/client-colle
 the build rather than shipping a short collection. See
 [Contract Ownership & Fragmentation](../api/contract-fragmentation.md#the-client-collections-generated).
 
-`providers/` is a **module-tier port**: the same inversion as `IAuditSink` and `IImageStore`, owned
+`providers/` is a **module-tier port**: the same inversion as `AuditSink` and `ImageStore`, owned
 by a domain instead of by the substrate. `payments/providers/` declares what a payment provider must
 do, ships a `fake` implementation, and picks between them on `NODE_PAYMENT_PROVIDER` — so going live
 means writing `stripe.ts` beside it and changing an env var, while the contract, the service and the <!-- doc-paths:ignore -->
@@ -326,7 +326,7 @@ copied — `infrastructure/observability/analytics/index.ts` cites it by name fo
 `infrastructure/adapters/email.worker.ts`, which drains a queue possibly in another process, long after
 the request that asked for the email ended — so there is no locale store there and nothing to
 resolve a translation key against. Rather than rebuild that context in the worker, each module
-resolves its own copy while the request is alive: `emails.ts` returns an `IEmailContent` (template
+resolves its own copy while the request is alive: `emails.ts` returns an `EmailContent` (template
 name, subject, and every string the template interpolates), the controller hands it to
 `enqueueEmail`, and the job that reaches the worker is finished text. The workers import no i18n
 at all, and the templates interpolate rather than translate.
@@ -471,54 +471,23 @@ thing itself. `subscribe` was the one field that broke it; six modules fill it t
 
 ## The dependency graph
 
-::: tip The live version of this graph
-The diagram below explains the **rules**. The graph as it stands — every edge, labelled with its
-relationship and its reason, generated from the manifests — is
-[the map on the Modules overview](../modules/index.md#the-map), and every node there links to
-the domain's own page.
+::: tip The graph itself lives on one page, generated
+Every edge, and every node's `reaches`/`reached by` row, is generated from the manifests on
+[the Modules overview](../modules/index.md#the-map) — that page is the census; a second, hand-drawn
+one here would only go stale. What follows is the **rules** the generated graph obeys, read through
+today's shape as an example.
 :::
 
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 55}}}%%
-flowchart TD
-    wishlist --> cart
-    wishlist --> products
-    wishlist --> users
-    cart --> account
-    cart --> delivery
-    cart --> inventory
-    cart --> orders
-    cart --> products
-    cart --> users
-    payments --> inventory
-    payments --> orders
-    payments --> users
-    delivery --> orders
-    delivery --> users
-    orders --> inventory
-    orders --> products
-    inventory --> products
-    account --> users
-    observability --> audit-logs
-    feedback["feedback<br/><i>leaf</i>"]
-    locales["locales<br/><i>leaf</i>"]
-
-    classDef domain fill:#dbeafe,stroke:#2563eb,color:#111827;
-    classDef leaf fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class cart,orders,account,observability,wishlist,payments,delivery,inventory domain;
-    class products,users,feedback,locales,audit-logs leaf;
-```
-
-Every arrow is an import across a module boundary, through the target's barrel. Four modules reach
-for nothing and are reached for instead (`products`, `users`, `audit-logs`) or by nobody at all
-(`feedback`, `locales`). `cart` is the busiest node with six edges, which is not a smell to
-refactor away: a checkout is the one operation that genuinely needs the catalogue, the customer, the
-order it becomes, the units held against it, the address it ships to and the price of getting it
-there.
+Every arrow is an import across a module boundary, through the target's barrel. `cart` is the
+busiest node on the graph, reaching `addresses`, `delivery`, `orders`, `payments`, `products` and
+`users` — six edges, and not a smell to refactor away: a checkout is the one operation that
+genuinely needs the catalogue, the customer, the order it becomes, the method and address it ships
+to, and the payment that settles it. `products` and `access` sit at the opposite end: reached by
+several modules, reaching none.
 
 `inventory` is worth reading as a shape rather than a node. It sits one level above `products` and
-three modules depend on it, because it owns the only writes to the two stock counters: `cart` and
-`orders` ask it to hold units, `payments` asks it to turn a hold into a sale. It used to sit at the
+two modules depend on it, because it owns the only writes to the two stock counters: `orders` asks
+it to hold units, `payments` asks it to turn a hold into a sale. It used to sit at the
 bottom as a passive listener while four modules each moved stock themselves — the module named
 `inventory` did not own inventory — and inverting that is what the arrows now record.
 
@@ -547,9 +516,10 @@ on every path, and on the rollback paths they did not. A counter change nobody r
 smaller feature, it is a corrupt audit trail. The row is now written by the same function call that
 moves the counter and cannot be forgotten, because there is nothing left to forget.
 
-Every solid arrow also carries a **kind**: `conformist`, `customer-supplier`, `published-language`
-or `shared-kernel`. That label is what makes the map answer "what does changing `products` cost?"
-rather than only "who touches `products`?" — see [Strategic DDD](./strategic-ddd.md).
+Every solid arrow is also one of four **kinds** — `conformist`, `customer-supplier`,
+`published-language` or `shared-kernel` — though nothing on the map labels which; naming the kind
+is what turns "who touches `products`?" into "what does changing `products` cost?" — see
+[Strategic DDD](./strategic-ddd.md) for what each one means and how to tell them apart by hand.
 
 That pairing is the answer to mutual need. Deleting a product must empty it from every cart, while
 the cart needs the catalogue to price a line. As imports that is a cycle; as one import plus one
