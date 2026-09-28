@@ -1,20 +1,18 @@
 /**
  * @module
  * Feedback request service — creation (with the operator notification), search, and status
- * triage. `toFeedbackStatus` is the one piece of domain logic worth naming: a write's `status`
- * is unreachable outside the closed enum, since the generated Zod enum already rejects it with a
- * 422 before this runs — the mapping only ever narrows a value the type already guarantees.
+ * triage. The status rules themselves — narrowing, the starting status, when `respondedAt`
+ * stamps — live in `./domain`; this file is the write path around them.
  *
  * See: docs/modules/feedback.md
  */
 
-import {
-    FeedbackRequestStatus,
-    type FeedbackRequest,
-    type SearchFeedbackRequestsRequest,
-    type UpdateFeedbackRequestStatusRequest,
-    type CreateFeedbackRequest,
-    type ExportFeedbackTicket
+import type {
+    FeedbackRequest,
+    SearchFeedbackRequestsRequest,
+    UpdateFeedbackRequestStatusRequest,
+    CreateFeedbackRequest,
+    ExportFeedbackTicket
 } from '@types';
 import type { FeedbackRequestDocument } from './model';
 import { feedbackRequestRepository } from './repository';
@@ -40,20 +38,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from './audit';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
-
-/** Every value the generated `FeedbackRequestStatus` enum declares, for the membership check below. */
-const FEEDBACK_STATUS_VALUES = Object.values(FeedbackRequestStatus) as string[];
-
-/**
- * A write's `status` narrowed onto the closed set — unreachable with an invalid value, since the
- * generated Zod enum already answers 422 before this runs (`update-feedback-status.ts`). Exists so
- * `updateStatus` holds a real `FeedbackRequestStatus` rather than trusting the generated type
- * alone against a caller that bypasses the HTTP layer.
- */
-const toFeedbackStatus = (status?: string): FeedbackRequestStatus | undefined =>
-    status && FEEDBACK_STATUS_VALUES.includes(status)
-        ? (status as FeedbackRequestStatus)
-        : undefined;
+import { toFeedbackStatus, initialFeedbackStatus, shouldStampRespondedAt } from './domain';
 
 /**
  * Where the operator's notification goes: the dedicated contact mailbox, then the generic SMTP
@@ -96,7 +81,7 @@ export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestD
                 email,
                 subject: payload.subject.trim(),
                 message: payload.message.trim(),
-                status: suspectedSpam ? FeedbackRequestStatus.spam : FeedbackRequestStatus.new
+                status: initialFeedbackStatus(suspectedSpam)
             })
             .then((created) => {
                 if (suspectedSpam) return created;
@@ -193,7 +178,7 @@ export const updateStatus = (
     if (nextStatus !== undefined) feedback.status = nextStatus;
     // `null` clears the notes — $unset on save, via `clearedOrValue`.
     if (payload.adminNotes !== undefined) feedback.adminNotes = clearedOrValue(payload.adminNotes);
-    if (nextStatus === FeedbackRequestStatus.resolved && !feedback.respondedAt)
+    if (shouldStampRespondedAt(nextStatus, Boolean(feedback.respondedAt)))
         feedback.respondedAt = new Date();
     return feedbackRequestRepository.save(feedback).then((saved) => generateSuccess(saved));
 };

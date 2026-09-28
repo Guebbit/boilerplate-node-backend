@@ -8,6 +8,8 @@
 
 export * from './service';
 
+export * from './domain';
+
 export * from './emails';
 
 export type * from './model';
