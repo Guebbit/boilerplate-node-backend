@@ -3,10 +3,12 @@
  * Turns a runner's JSON report into the two things a raw log cannot tell you: which MODULE a
  * failure belongs to, and where the time went — `npm run test:report`.
  *
- * SHARED SCRIPT — byte-identical in `boilerplate-node-backend` and `boilerplate-vue-frontend`,
- * and compared by `npm run check:spec-identity`. It can be, because Vitest's `json` reporter emits
- * the same shape Jest's `--json` does: a `testResults[]` of files, each with `assertionResults[]`.
- * Verified rather than assumed — both were run and their keys diffed before this was written.
+ * SHARED SCRIPT — started byte-identical in `boilerplate-node-backend` and
+ * `boilerplate-vue-frontend`. Not in `SHARED_FILES` (`scripts/pairing/spec-identity.ts`), so
+ * nothing enforces it — `diff` is the tool, by hand, when you change one copy. What makes sharing
+ * it possible at all: Vitest's `json` reporter emits the same shape Jest's `--json` does, a
+ * `testResults[]` of files, each with `assertionResults[]`. Verified rather than assumed — both
+ * were run and their keys diffed before this was written.
  *
  * ── Why JSON and not JUnit ───────────────────────────────────────────────────────────────────
  * JUnit is the format CI dashboards read, and it would need `jest-junit` as a dependency on the
