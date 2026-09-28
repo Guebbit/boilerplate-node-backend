@@ -21,7 +21,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import type { PaymentStatus, AuthContext } from '@types';
+import type { AuthContext } from '@types';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { emitDomainEvent } from '@kernel/events';
@@ -31,11 +31,9 @@ import { providerNamed } from '../providers';
 import { paymentRepository } from '../repository';
 import { PAYMENT_REFUNDED } from '../events';
 import type { PaymentDocument } from '../model';
+import { REFUNDABLE_PAYMENT_STATUS } from '../domain';
 import { callerScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
-
-/** The only status money can come back from: it has to have arrived first. */
-export const REFUNDABLE_PAYMENT_STATUS: PaymentStatus = 'succeeded';
 
 /**
  * Record, unattended, that a hand-paid order's refund is left for an operator — the

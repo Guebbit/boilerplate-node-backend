@@ -33,24 +33,12 @@ import { paymentsAnalyticsEvents } from '../analytics';
 import { paymentsAuditActions } from '../audit';
 import { providerNamed, type ProviderPaymentState, type ProviderWebhookEvent } from '../providers';
 import { claimWebhookEvent, releaseWebhookEvent, paymentRepository } from '../repository';
-import { CONFIRMABLE_PAYMENT_STATUSES } from '../model';
+import { CONFIRMABLE_PAYMENT_STATUSES, SETTLEABLE_PAYMENT_STATUSES } from '../domain';
 import type { PaymentDocument } from '../model';
 import { callerScope } from './scope';
 import { performRefund } from './refunds';
 import { notPayable } from './errors';
 import { ERROR_CODES } from '@api/error-codes';
-
-/**
- * The statuses a settlement may move a payment away from — every non-terminal one. `succeeded` and
- * `refunded` are absent, which is what makes {@link settlePayment} at-most-once: a webhook retried
- * for three days finds nothing to move on its second delivery.
- */
-const SETTLEABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
-    'requires_confirmation',
-    'requires_action',
-    'processing',
-    'declined'
-];
 
 /** What a settlement did, for a caller that has to turn it into an HTTP answer. */
 interface Settlement {

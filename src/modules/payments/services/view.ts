@@ -17,11 +17,10 @@ import type { Payment, AuthContext } from '@types';
 import { orderService, isPayable } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentRepository } from '../repository';
-import { CONFIRMABLE_PAYMENT_STATUSES } from '../model';
 import type { PaymentDocument } from '../model';
+import { CONFIRMABLE_PAYMENT_STATUSES, REFUNDABLE_PAYMENT_STATUS } from '../domain';
 import { presentPayment } from '../presenter';
 import { callerScope } from './scope';
-import { REFUNDABLE_PAYMENT_STATUS } from './refunds';
 
 /**
  * The payment behind an order, for the order page's payment panel.
