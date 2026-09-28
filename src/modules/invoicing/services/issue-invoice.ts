@@ -32,18 +32,20 @@ const frozenSeller = (): InvoiceSeller => ({
 });
 
 /**
- * One order line, frozen onto the invoice — title, quantity, the frozen unit price and VAT rate
- * only. The net/tax/gross split is NOT stored per line: `emails.ts#buildVatBlock` re-derives it
- * from these same four fields via `orderTaxBreakdown`, the pure function this module reuses rather
+ * One order line, frozen onto the invoice — title, quantity, the frozen unit price, VAT rate and
+ * rate type. The net/tax/gross split is NOT stored per line: `emails.ts#buildVatBlock` re-derives
+ * it from these same fields via `orderTaxBreakdown`, the pure function this module reuses rather
  * than re-implementing — storing the derived figures too would only be a second place for them to
- * drift from what that function computes.
+ * drift from what that function computes. `rateType` is copied only when the order line actually
+ * carries one — an order placed before this field existed has none to copy.
  */
 const frozenLines = (order: OrderDocument): InvoiceLine[] =>
     order.items.map((item) => ({
         title: item.product.title,
         quantity: item.quantity,
         unitPrice: item.product.price,
-        taxRate: item.product.taxRate
+        taxRate: item.product.taxRate,
+        ...(item.product.rateType === undefined ? {} : { rateType: item.product.rateType })
     }));
 
 /**

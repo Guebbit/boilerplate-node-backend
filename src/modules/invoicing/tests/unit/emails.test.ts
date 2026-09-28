@@ -4,7 +4,7 @@
  * the place where a formatting slip is read as a billing error by the person least able to check
  * it, adapted from `orders/tests/unit/emails.test.ts`'s own retired `invoiceDocument` suite.
  */
-import { buildDocumentView } from '@modules/invoicing/emails';
+import { buildDocumentView, taxCategoryCode } from '@modules/invoicing/emails';
 import type { EInvoicingDocument } from '@modules/invoicing/providers';
 
 /** A single-line, single-rate document — anything simpler risks masking a bug. */
@@ -181,5 +181,59 @@ describe('buildDocumentView — the VAT block', () => {
 
         expect(withVat.supplier.vatNumberLine).toContain('IT12345678901');
         expect(withoutVat.supplier.vatNumberLine).toMatch(/not configured/i);
+    });
+});
+
+describe('taxCategoryCode — EN 16931 category, C4', () => {
+    it('is S for any non-zero rate, regardless of rateType', () => {
+        expect(taxCategoryCode(0.22, undefined)).toBe('S');
+        expect(taxCategoryCode(0.1, 'exempt')).toBe('S');
+    });
+
+    it('is Z for a 0% rate with no rateType, or an explicit zero-rated', () => {
+        expect(taxCategoryCode(0, undefined)).toBe('Z');
+        expect(taxCategoryCode(0, 'zero-rated')).toBe('Z');
+    });
+
+    it('is E for a 0% rate marked exempt', () => {
+        expect(taxCategoryCode(0, 'exempt')).toBe('E');
+    });
+});
+
+describe('buildDocumentView — the VAT table’s category column, C4', () => {
+    it('prints Z and E on their own lines, never the same code for both', () => {
+        const document: EInvoicingDocument = {
+            ...DOCUMENT,
+            lines: [
+                {
+                    title: 'Zero-rated widget',
+                    quantity: 1,
+                    unitPrice: 10,
+                    taxRate: 0,
+                    rateType: 'zero-rated'
+                },
+                {
+                    title: 'Exempt widget',
+                    quantity: 1,
+                    unitPrice: 10,
+                    taxRate: 0,
+                    rateType: 'exempt'
+                }
+            ]
+        };
+
+        const vat = buildDocumentView('en', document).vat as {
+            rows: { categoryCode: string }[];
+        };
+
+        expect(vat.rows.map((row) => row.categoryCode)).toEqual(['Z', 'E']);
+    });
+
+    it('labels the category column, in the document’s own locale', () => {
+        const english = buildDocumentView('en', DOCUMENT).vat as { columns: { category: string } };
+        const italian = buildDocumentView('it', DOCUMENT).vat as { columns: { category: string } };
+
+        expect(english.columns.category).toBe('VAT category');
+        expect(italian.columns.category).not.toBe(english.columns.category);
     });
 });

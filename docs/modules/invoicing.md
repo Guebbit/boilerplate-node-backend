@@ -88,10 +88,11 @@ flowchart LR
 ```
 
 `issueInvoice` (`services/issue-invoice.ts`) freezes: the order's own lines (title, quantity,
-frozen unit price, frozen VAT rate), the VAT breakdown `orderTaxBreakdown` computes from them, the
-order's own `shippingAddress` as the Art. 226 billing address (this shop collects no separate
-billing address — the ship-to address is the only customer address a checkout ever records), the
-seller's own identity (`config.ts`), and the order's own frozen `currency`/`orderNumber`/`locale`.
+frozen unit price, frozen VAT rate, frozen rate type), the VAT breakdown `orderTaxBreakdown`
+computes from them, the order's own `shippingAddress` as the Art. 226 billing address (this shop
+collects no separate billing address — the ship-to address is the only customer address a checkout
+ever records), the seller's own identity (`config.ts`), and the order's own frozen
+`currency`/`orderNumber`/`locale`.
 `issueCreditNote` (`services/issue-credit-note.ts`) mirrors the invoice it corrects wholesale —
 today's `payments` only ever refunds the FULL amount of a `succeeded` payment, so there is no
 partial amount to compute; a future partial-refund design (SH5) needs its own input here, not a
@@ -141,11 +142,29 @@ first one.
 Every getter is read fresh per call (`config.ts`), so a correction needs no restart; an empty
 string reads as unset, never as a blank row on the invoice.
 
+## VAT category codes
+
+EN 16931's category codes distinguish a 0%-rated line (`Z`) from an exempt one (`E`) — a
+distinction `products`' `taxClass` enum (`reduced`/`zero`) alone cannot make, since `zero` covers
+both reasons. `products`' `rateType` (`standard`/`zero-rated`/`exempt`) says which, frozen onto the
+order line the same way `taxClass` resolves into `taxRate` — but copied AS IS rather than resolved,
+since there is no numeric form for a reason code to become.
+
+- **Where it lives.** `taxCategoryCode()`, `emails.ts` — the only place a code is decided.
+- **Rule.** `taxRate !== 0` → `S`. Otherwise `rateType === 'exempt'` → `E`, else `Z`.
+- **Printed.** The per-line VAT table only (`invoicing.document.vat-table.ejs`'s `category`
+  column). The shipping and per-rate summary tables stay grouped by rate alone — see the
+  per-category summary gap below.
+- **Not covered.** A reduced, non-zero rate always prints `S`. EN 16931 has its own code for that
+  too, out of scope here.
+
 ## What this module deliberately does not do
 
-- **Zero-rated vs VAT-exempt.** EN 16931's category codes distinguish a 0%-rated line (`Z`) from an
-  exempt one (`E`); `products`' `taxClass` enum (`reduced`/`zero`) has no way to say which a `zero`
-  line actually is. Fixing this needs a products-schema decision first — not guessed here.
+- **A per-category VAT summary.** The summary and shipping tables above group by decimal rate
+  alone, so a rate carrying both a zero-rated and an exempt line folds into one 0% row instead of
+  two. Splitting those tables by (rate, category) is a bigger rework than adding the per-line code
+  above — left for later, alongside the module's own per-line-vs-per-rate rounding question
+  (EN 16931 BR-CO-17), which this change does not touch either.
 - **A render cache.** The old receipt cached a render for a few minutes to absorb a burst of
   requests for the same order; this module skips it. The document is immutable once issued, so
   there is no correctness reason to cache it — only a possible future perf one, if traffic ever

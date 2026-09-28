@@ -17,6 +17,7 @@
                 "column-unit-price": "Prezzo unitario (lordo)",
                 "column-net": "Imponibile",
                 "column-rate": "Aliquota IVA",
+                "column-category": "Categoria IVA",
                 "column-tax": "IVA",
                 "column-gross": "Totale",
                 "shipping-title": "Spedizione",

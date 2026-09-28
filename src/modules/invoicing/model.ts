@@ -13,7 +13,7 @@
 
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import type { OrderTaxSummaryRow } from '@types';
+import type { OrderTaxSummaryRow, RateType } from '@types';
 
 /**
  * One frozen line — a product's title, quantity and the price/rate it was actually sold at. No
@@ -31,6 +31,12 @@ export interface InvoiceLine {
     unitPrice: number;
     /** The decimal VAT rate this line was actually charged — `0.22` for 22%. */
     taxRate: number;
+    /**
+     * WHY `taxRate` is 0, when it is — copied straight from the order line's own frozen
+     * `rateType`. Absent means `standard`. `emails.ts#taxCategoryCode` reads this alongside
+     * `taxRate` to print EN 16931's `Z` (zero-rated) vs `E` (exempt) category code.
+     */
+    rateType?: RateType;
 }
 
 /** A billing or seller postal address, frozen onto the document at issue — Art. 226(e)/(f). */
@@ -137,7 +143,8 @@ const lineSchema = new Schema<InvoiceLine>(
         title: { type: String, required: true },
         quantity: { type: Number, required: true },
         unitPrice: { type: Number, required: true },
-        taxRate: { type: Number, required: true, min: 0, max: 1 }
+        taxRate: { type: Number, required: true, min: 0, max: 1 },
+        rateType: { type: String, enum: ['standard', 'zero-rated', 'exempt'] }
     },
     { _id: false }
 );
