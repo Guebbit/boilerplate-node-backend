@@ -120,6 +120,31 @@ export const rejectServiceUnavailable = (response: Response) => {
 };
 
 /**
+ * Log a database-derived failure at the severity it deserves: `warn` for a 4xx (the request's
+ * fault — a duplicate key, a bad id, a refused write), `error` for a 5xx (the server's). Without
+ * the split, an ordinary 409/422 — the everyday case `unique: true` and a bad id exist to turn
+ * into a clean 4xx — paged the same as a genuine outage.
+ *
+ * @param context - developer-facing operation name, e.g. `'getProducts'`, recorded in the log line
+ * @param status - the status {@link databaseErrorInterpreter} derived
+ * @param detail - the interpreter's own message for that status
+ * @param error - whatever the `.catch()` caught — never assumed to be an `Error`
+ */
+const logDatabaseFailure = (
+    context: string,
+    status: number,
+    detail: string,
+    error: unknown
+): void => {
+    // `context` and `detail` are developer-facing — logged with the request/trace id (which is
+    // what makes this findable) rather than returned, since the driver must not speak to the
+    // client. `error` under its own key, not folded into the message string, is what lets the
+    // logger's own serializer attach a stack trace — see `adapters/logger.ts`'s `serializeError`.
+    // Stryker disable next-line all
+    logger[status < 500 ? 'warn' : 'error'](`${context} - ${detail}`, { status, error });
+};
+
+/**
  * Answer a failed database operation with the status it actually deserves — the single entry
  * point every controller's `.catch` uses. The status is DERIVED by
  * {@link databaseErrorInterpreter}, never assumed, and the driver's message is logged, never
@@ -132,12 +157,7 @@ export const rejectServiceUnavailable = (response: Response) => {
 export const rejectDatabaseError = (response: Response, context: string, error: unknown) => {
     const [status, detail] = databaseErrorInterpreter(error);
 
-    // `context` and `detail` are developer-facing — logged with the request/trace id (which is
-    // what makes this findable) rather than returned, since the driver must not speak to the
-    // client. `error` under its own key, not folded into the message string, is what lets the
-    // logger's own serializer attach a stack trace — see `adapters/logger.ts`'s `serializeError`.
-    // Stryker disable next-line all
-    logger.error(`${context} - ${detail}`, { status, error });
+    logDatabaseFailure(context, status, detail, error);
 
     return status === 503 ? rejectServiceUnavailable(response) : rejectResponse(response, status);
 };
@@ -154,8 +174,7 @@ export const rejectDatabaseError = (response: Response, context: string, error: 
 export const rejectDatabaseEnvelope = (context: string, error: unknown) => {
     const [status, detail] = databaseErrorInterpreter(error);
 
-    // Stryker disable next-line all
-    logger.error(`${context} - ${detail}`, { status, error });
+    logDatabaseFailure(context, status, detail, error);
 
     // No `Retry-After` here: an envelope has no response to set it on.
     return status === 503
