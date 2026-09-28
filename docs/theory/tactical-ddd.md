@@ -7,8 +7,9 @@ Two tactical patterns are in the code. Both live in `src/modules/orders/domain/`
 data with functions in front of them, and both were taken for the same reason: a rule was already
 written down in more than one place, and the copies had stopped agreeing.
 
-Everything else — aggregates, domain repositories, mappers, a read model — is deliberately absent.
-`TACTICAL_DDD_PLAN.md`, beside this repo in the workspace, prices that decision. <!-- doc-paths:ignore -->
+Everything else — aggregates, domain repositories, mappers, a read model — is deliberately absent,
+worth the cost only once a real core domain argues, by hand, about rules a plain function can no
+longer keep straight.
 
 ## Why these two and not the rest
 
@@ -24,7 +25,7 @@ flowchart TD
     Q2 -->|no| WATCH["one function, one owner<br/>✅ sumLineItems, priceShipping"]
     Q2 -->|yes| Q3{"Does the rule need state<br/>a pure function cannot see?"}
     Q3 -->|no| TABLE["a value type or a table<br/>✅ Money, lifecycle"]
-    Q3 -->|yes| AGG["an aggregate<br/>⚠️ not taken — see TACTICAL_DDD_PLAN.md"]
+    Q3 -->|yes| AGG["an aggregate<br/>⚠️ not taken — see Domain layer, part 5"]
 
     classDef ask fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef cheap fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -281,8 +282,7 @@ one caller runs the sequence**; a double-click and the reservation sweep cannot 
 What it does not buy is atomicity. The three steps run in order, not together, so a crash between the
 status write and `releaseForOrder` leaves a cancelled order holding stock until the sweep reclaims
 it. An aggregate would close that window by making the three one act; so would a transaction, which
-is what the SQL twin has. It is a real gap and a small one, and `TACTICAL_DDD_PLAN.md` prices the <!-- doc-paths:ignore -->
-aggregate-shaped answer to it.
+is what the SQL twin has. It is a real gap and a small one.
 
 ---
 
@@ -507,15 +507,15 @@ hang it on — the need exists, only the vocabulary is missing.
 It is the only one. `updateStatusIfIn` here and `claimStatus` in `inventory/repository.ts` look
 similar and are a different pattern: they key on `status`, naming the state a move comes _from_ so
 that exactly one of N concurrent callers wins. That is an exactly-once primitive, correct as it
-stands, and an aggregate would not simplify it. The distinction decides an entry condition in
-`TACTICAL_DDD_PLAN.md` §2 — count `__v`, not `status` — so it is worth keeping straight. <!-- doc-paths:ignore -->
+stands, and an aggregate would not simplify it. Worth keeping straight, since it is the thing that
+would decide whether a future aggregate slice is real pressure or a shape imposed for its own
+sake: count `__v`, not `status`.
 
 The line this repo draws: a value type or a rules table where the rule is real and already
 duplicated, and no aggregate until something needs state a pure function cannot see.
 
 ## Related pages
 
-- [Domain layer](./domain-layer.md) — what earns a place in `domain/`, and the lint rule
+- [Domain layer](./domain-layer.md) — what earns a place in `domain/`, and the lint rule; §5 covers
+  what an aggregate slice would cost, and the conditions that would make it the right call
 - [Strategic DDD](./strategic-ddd.md) — the half adopted wholesale
-- `TACTICAL_DDD_PLAN.md` (workspace root) — what an aggregate slice would cost, and the conditions <!-- doc-paths:ignore -->
-  that would make it the right call

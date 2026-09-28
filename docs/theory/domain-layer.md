@@ -369,8 +369,10 @@ DDD's own doctrine: spend the modelling effort on the **core domain**, keep supp
 subdomains simple. A boilerplate cannot know which is which, so it ships the cheap option and leaves
 the expensive one one folder away.
 
-`TACTICAL_DDD_PLAN.md` (workspace root, beside this repo) prices the expensive option in full — what <!-- doc-paths:ignore -->
-an aggregate slice would take, what it breaks, and the conditions that would make it the right call.
+The expensive option is an aggregate root, a repository returning domain objects instead of
+`OrderDocument`, and invariants enforced at construction rather than by a Mongoose schema
+validator — worth the redesign only once a real core domain argues, by hand, about rules the
+`domain/` folder's plain functions can no longer keep straight.
 
 ## Related pages
 

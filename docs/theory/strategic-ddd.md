@@ -4,11 +4,11 @@
 context mapping, ubiquitous language and subdomain distillation. All four are in the code — as
 folders, imports, identifiers and barrels, which is where they can be seen rather than asserted.
 
-The other half — entities, aggregates, domain repositories — is **not** here, on purpose.
-`TACTICAL_DDD_PLAN.md`, beside this repo in the workspace, prices adopting it — the cost, the order <!-- doc-paths:ignore -->
-of work, and what would have to be true first. The two cheapest patterns did land, because they
-fixed live bugs rather than imposing a shape — see [Tactical DDD](./tactical-ddd.md). This page is
-about what _is_ adopted at the strategic level.
+The other half — entities, aggregates, domain repositories — is **not** here, on purpose: it is
+worth adopting only once a real core domain argues, by hand, about rules a plain function can no
+longer keep straight, and nothing in this repo has reached that yet. The two cheapest patterns did
+land, because they fixed live bugs rather than imposing a shape — see
+[Tactical DDD](./tactical-ddd.md). This page is about what _is_ adopted at the strategic level.
 
 ::: tip The distinction that matters
 A folder per feature is a **packaging** decision. DDD is a **modelling** one. You can have immaculate
@@ -111,9 +111,10 @@ removed, for reasons worth restating now that a `dependsOn` field is back in a d
 `module.yaml#dependsOn` avoids both: it carries the edge ONLY, no kind and no prose, and
 `.dependency-cruiser.cjs` reads it directly as the rule it enforces — an import outside a module's
 own `dependsOn` fails `check:dependencies`, the same gate CI runs. There is no second copy to drift:
-the file the config reads IS the map. The relationship kind (`conformist`, `customer-supplier`,
-`published-language`, `shared-kernel`) and the reasoning behind an edge still live where they always
-did, in `module.ts`'s docblock — `module.yaml` answers "may it", the docblock answers "why, and how".
+the file the config reads IS the map. The reasoning behind an edge — which of the four kinds
+(`conformist`, `customer-supplier`, `published-language`, `shared-kernel`) it is, and why — still
+lives where it always did, in `module.ts`'s docblock, in prose rather than a label a script reads:
+`module.yaml` answers "may it", the docblock answers "why, and how".
 
 The twin makes the opposite call, and correctly: `boilerplate-php-laravel-backend` keeps its
 `dependsOn` edges because `ModuleRegistry::inDependencyOrder()` sorts the seeders with them —
@@ -125,11 +126,11 @@ why the same field is documentation here and load-bearing there.
 
 ### Reading the map
 
-`cart` reaches five modules, and that is not a smell to refactor away — a checkout is the one place
+`cart` reaches six modules, and that is not a smell to refactor away — a checkout is the one place
 where price, stock, address, shipping and the resulting order all have to agree at once. Its
-docblock says _how_ it depends on each: two `conformist` reads, two `customer-supplier` calls, one
-`published-language`. The last of those is the cheapest relationship in the table and the one to
-copy: `delivery` publishes two pure functions and no storage at all.
+docblock says _how_ it depends on each — a `published-language` read of `products`, a
+`customer-supplier` call into `orders`, and so on. `delivery` is the cheapest relationship to
+name and the one to copy: it publishes two pure functions and no storage at all.
 
 ## 3. Ubiquitous language — per context, not per app
 
@@ -269,8 +270,9 @@ A repository export deserves more thought than a type export even so, and the as
 worth restating in code, not just here: `OrderDocument` leaving the barrel promises a shape will not
 move; a repository leaving it is a bypass of everything the owning service enforces.
 
-The narrowest surface in the repo is `observability`'s — empty, since it owns no collection and no
-data a sibling could want (see that module's own page). The widest is `users`, and it is wide
+The narrowest surface in the repo is `observability`'s — it owns no collection and no data a
+sibling could want, so its barrel publishes services nothing has needed to import yet (see that
+module's own page). The widest is `users`, and it is wide
 because it is the `users` end of the one shared-kernel relationship in the repo — `account`
 authenticates the record `users` administers.
 
@@ -286,5 +288,5 @@ Two exceptions, both taken because the rule was already written down in several 
 stopped agreeing with itself: `Money` and the order lifecycle table. Neither needs an aggregate, and
 neither is a step toward one — [Tactical DDD](./tactical-ddd.md) has both.
 
-See [Domain layer](./domain-layer.md) for the `domain/` folder as it stands, and
-`TACTICAL_DDD_PLAN.md` for what going further would cost. <!-- doc-paths:ignore -->
+See [Domain layer](./domain-layer.md) for the `domain/` folder as it stands, and what going
+further would cost.

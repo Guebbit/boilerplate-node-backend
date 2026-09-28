@@ -44,11 +44,11 @@ published) because this one holds read-back services instead of metric declarati
 Beyond the audit read this module owns no collection at all, which is also why it has no `model.ts`
 and no `repository.ts`.
 
-::: tip The barrel has nothing to promise
-It carries the convenience barrel every module does — `export {}`, empty, since this module owns
-no collection and no data a sibling could want. Every route it serves is either an audit read
-through `audit-logs` or a number read straight off `infrastructure/observability`; nothing reads
-this module back.
+::: tip The barrel has nothing worth promising
+It carries the convenience barrel every module does, publishing this module's readiness/telemetry
+services — but nothing reads it back: every route it serves is either an audit read through
+`audit-logs` or a number read straight off `infrastructure/observability`, and no sibling module
+has needed a service of its own yet.
 :::
 
 Every route here is authenticated, and the three styles are chosen per route rather than shared:
