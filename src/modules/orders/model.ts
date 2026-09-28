@@ -37,6 +37,9 @@ import type { Order } from '@types';
  * `ProductSnapshot` minus `taxClass`, plus the resolved `taxRate` — same reasoning as
  * `ProductSnapshot` itself omitting `onHand`/`reserved`: an order line freezes the RESOLVED rate,
  * never the class it came from, so the class must not even be reachable to store here.
+ *
+ * `rateType` is NOT omitted — unlike `taxClass`, it has no resolved numeric form to stand in for
+ * it, so it stays on `ProductSnapshot` and rides across untouched, the same as `sku`/`weight`.
  */
 export type FrozenOrderLineProduct = Omit<ProductSnapshot, 'taxClass'> & {
     /** The decimal VAT rate this line was actually charged — see the schema field's own comment. */
@@ -257,7 +260,14 @@ const orderLineProductSchema = new Schema(
          * at freeze time (`services/snapshot.ts`) — never the class itself, and never re-resolved
          * from the product's CURRENT class.
          */
-        taxRate: { type: Number, required: true, min: 0, max: 1 }
+        taxRate: { type: Number, required: true, min: 0, max: 1 },
+        /**
+         * WHY `taxRate` is 0, when it is — copied straight from `Product.rateType`, unlike
+         * `taxClass` above it (resolved into `taxRate`, then discarded). There is no numeric rate
+         * for `rateType` to resolve into, and an invoice needs the category (Z vs E) the order was
+         * actually placed under — see `services/snapshot.ts#freezeOrderLines`.
+         */
+        rateType: { type: String, enum: ['standard', 'zero-rated', 'exempt'] }
     },
     { timestamps: true }
 );

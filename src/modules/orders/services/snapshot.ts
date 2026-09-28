@@ -74,7 +74,10 @@ export const freezeOrderLines = (
             // says so in the one place a reader of this function would look.
             //
             // `taxClass` never rides along either — only the RATE it resolves to does, exactly
-            // like `onHand`/`reserved` are excluded above it. See `FrozenOrderLineProduct`.
+            // like `onHand`/`reserved` are excluded above it. `rateType` is different: it has no
+            // resolved form, so it is left IN `frozenProduct` below and rides across untouched —
+            // an invoice needs it to tell a zero-rated line from an exempt one. See
+            // `FrozenOrderLineProduct`.
             const {
                 imageUrl: _imageUrl,
                 thumbnailUrl: _thumbnailUrl,

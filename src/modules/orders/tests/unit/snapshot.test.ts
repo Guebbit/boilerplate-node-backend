@@ -174,6 +174,40 @@ describe('freezeOrderLines — the VAT rate', () => {
         });
     });
 
+    // C4: unlike `taxClass` (resolved into `taxRate`, then dropped), `rateType` has no resolved
+    // form — an invoice needs the actual reason code, not a decimal, so it rides across as-is.
+    it('freezes the product’s rateType onto the line, same as sku/weight — unlike taxClass', () => {
+        registerTranslationPort(fakePort());
+
+        return freezeOrderLines(
+            'en',
+            [
+                {
+                    _id: new Types.ObjectId(),
+                    title: 'Book',
+                    price: 10,
+                    taxClass: 'zero',
+                    rateType: 'exempt'
+                }
+            ],
+            [1]
+        ).then(([item]) => {
+            expect(item.product.rateType).toBe('exempt');
+        });
+    });
+
+    it('leaves rateType absent when the product has none, rather than defaulting it', () => {
+        registerTranslationPort(fakePort());
+
+        return freezeOrderLines(
+            'en',
+            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: 10 }],
+            [1]
+        ).then(([item]) => {
+            expect(item.product.rateType).toBeUndefined();
+        });
+    });
+
     it('never carries `taxClass` on the frozen line — only the resolved rate', () => {
         // The type-level guarantee (`FrozenOrderLineProduct` omits it) restated at runtime: an
         // order line must not even be able to hold the class it came from.
