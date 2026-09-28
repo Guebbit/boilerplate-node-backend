@@ -156,6 +156,12 @@ apart.
 - **`npm run reap:quarantine`** — deletes quarantine files older than
   `NODE_QUARANTINE_RETENTION_HOURS`. Meant to run periodically (cron, a scheduled container task);
   a normal run of the pipeline never leaves a file behind for it to find.
+- **`npm run clean:orphaned-images`** — deletes a promoted image or thumbnail no current document
+  references. A manual dev-hygiene tool, not a scheduled job: a repeated `npm run
+demo`/scenario-apply/e2e cycle reseeds an EPHEMERAL Mongo every time while every upload still
+  lands on the host's persistent `public/images/`, so files accumulate there across runs.
+  Reference-based rather than age-based — see the script's own docblock for why a promoted image
+  cannot be swept the way quarantine is.
 
 ## Operational notes
 

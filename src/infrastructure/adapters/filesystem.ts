@@ -152,3 +152,36 @@ export const reapDirectory = (root: string, cutoffMs: number, label: string): Pr
                 reaped: results.filter(Boolean).length
             }))
         );
+
+/**
+ * Deletes every FILE directly under `root` whose basename is not in `keep` — a subdirectory is
+ * left alone unconditionally, same as {@link reapDirectory}. Reference-based rather than
+ * age-based: `scripts/ops/clean-orphaned-images.ts` is the one caller, for a store (a promoted
+ * image, its thumbnail) meant to outlive the process, where age says nothing about whether it is
+ * still wanted — only "does something still name it" can.
+ *
+ * @param root - the flat directory to sweep; missing is not a failure, just nothing to do
+ * @param keep - basenames that must survive this sweep
+ * @returns how many entries were checked and how many files were removed
+ */
+export const pruneUnreferenced = (root: string, keep: ReadonlySet<string>): Promise<ReapResult> =>
+    readdir(root, { withFileTypes: true })
+        .catch((error: NodeJS.ErrnoException) => {
+            if (error.code === 'ENOENT') return [];
+            throw error;
+        })
+        .then((entries) => {
+            const orphaned = entries.filter((entry) => entry.isFile() && !keep.has(entry.name));
+
+            return Promise.all(
+                orphaned.map((entry) =>
+                    unlinkIfPresent(
+                        path.join(root, entry.name),
+                        'Could not delete an orphaned file.',
+                        {
+                            file: entry.name
+                        }
+                    )
+                )
+            ).then(() => ({ checked: entries.length, reaped: orphaned.length }));
+        });

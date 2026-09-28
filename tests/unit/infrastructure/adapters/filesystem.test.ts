@@ -184,3 +184,46 @@ describe('reapDirectory', () => {
         ).resolves.toEqual({ checked: 0, reaped: 0 });
     });
 });
+
+describe('pruneUnreferenced', () => {
+    it('deletes only the files not named in `keep`, and counts every entry checked', async () => {
+        const { pruneUnreferenced } = await import('@infrastructure/adapters/filesystem');
+        const kept = await stage('referenced.jpg');
+        const orphan = await stage('orphaned.jpg');
+
+        const result = await pruneUnreferenced(root, new Set(['referenced.jpg']));
+
+        expect(result).toEqual({ checked: 2, reaped: 1 });
+        expect(existsSync(kept)).toBe(true);
+        expect(existsSync(orphan)).toBe(false);
+    });
+
+    it('leaves a subdirectory alone, unlike its own files', async () => {
+        const { pruneUnreferenced } = await import('@infrastructure/adapters/filesystem');
+        const nested = path.join(root, 'seed');
+        await mkdir(nested);
+
+        const result = await pruneUnreferenced(root, new Set());
+
+        expect(result).toEqual({ checked: 1, reaped: 0 });
+        expect(existsSync(nested)).toBe(true);
+    });
+
+    it('reports zero, rather than throwing, for a directory that does not exist', async () => {
+        const { pruneUnreferenced } = await import('@infrastructure/adapters/filesystem');
+
+        await expect(
+            pruneUnreferenced(path.join(root, 'never-created'), new Set())
+        ).resolves.toEqual({ checked: 0, reaped: 0 });
+    });
+
+    it('deletes nothing when every file on disk is still referenced', async () => {
+        const { pruneUnreferenced } = await import('@infrastructure/adapters/filesystem');
+        const kept = await stage('still-used.jpg');
+
+        const result = await pruneUnreferenced(root, new Set(['still-used.jpg']));
+
+        expect(result).toEqual({ checked: 1, reaped: 0 });
+        expect(existsSync(kept)).toBe(true);
+    });
+});
