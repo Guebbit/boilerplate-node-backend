@@ -3,7 +3,7 @@
 ::: tip At a glance
 **Owns** — subscriptions, the delivery log, signing, retries and auto-disable for outbound webhook delivery.
 **Depends on** — [`orders`](./orders.md) and [`payments`](./payments.md) for their domain-event constants, `users` for the disable-notice recipient's email — no reach back the other way.
-**Breaks if you change** — the six event names in `asyncapi.yaml`, or the queue payload shape in `asyncapi.internal.yaml`.
+**Breaks if you change** — the seven event names in `asyncapi.yaml`, or the queue payload shape in `asyncapi.internal.yaml`.
 :::
 
 ## What a webhook is
@@ -85,11 +85,11 @@ subscribes to each one generically on the kernel's domain-event bus, the same sh
 the email a disable notice is sent to — never a call back into either module's business logic.
 
 **The public event catalogue is a contract, not an accident.** This module's own `asyncapi.yaml`
-fragment declares the six events this shop's clone is willing to promise, and both
+fragment declares the seven events this shop's clone is willing to promise, and both
 `GET /webhooks/events` and `tests/cross-cutting/webhook-event-producers.test.ts`'s producer-coverage
 check read that fragment directly — `asyncapi.public.yaml` is a derived sibling output, not the
 source either reads. A module reaching for the internal domain-event bus and calling it "public"
-would publish internal coupling as an external promise; declaring the six here instead is what
+would publish internal coupling as an external promise; declaring the seven here instead is what
 keeps that from happening. The mapping (which domain event becomes which public name) now lives on
 `orders`'/`payments`' own manifests; this file still owns the channel CATALOGUE itself, because
 every channel shares one server and one header schema declared once here — see this file's own
@@ -204,7 +204,7 @@ Every ingredient it is built from — the domain-event bus, the queue, the cron 
 AsyncAPI bundle — is still there and still used by whatever remains. `orders` and `payments` lose
 nothing: they never knew this module existed, and deleting them along with it needs no separate
 step here either — `orders`'/`payments`' `publicEvents` declarations go with their own manifests,
-and this module's `asyncapi.yaml` fragment (the six channels, hand-authored, not generated from
+and this module's `asyncapi.yaml` fragment (the seven channels, hand-authored, not generated from
 those modules) is deleted with the rest of the folder.
 :::
 

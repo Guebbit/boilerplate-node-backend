@@ -10,7 +10,7 @@
  * `kernel/registry.ts` and wires the generic subscriber from them — nothing here hardcodes which
  * domain events fire which public ones. Each underlying domain event is then emitted with a
  * synthetic payload, and the `eventType` a delivery row was created with is read back. If the SET
- * of eventTypes this produces is exactly the catalogue's six names — no more, no fewer — both
+ * of eventTypes this produces is exactly the catalogue's seven names — no more, no fewer — both
  * directions hold at once.
  */
 
@@ -21,7 +21,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { resetDomainEvents, emitDomainEvent } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
 import { ORDER_CREATED, ORDER_STATUS_CHANGED, ORDER_CANCELLED } from '@modules/orders';
-import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '@modules/payments';
+import { PAYMENT_SUCCEEDED, PAYMENT_FAILED, PAYMENT_REFUNDED } from '@modules/payments';
 import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
 import {
@@ -74,12 +74,12 @@ describe('every public webhook event has exactly one producer, and no producer n
         resetDomainEvents();
     });
 
-    it('the six declared events are produced, and nothing else is', async () => {
+    it('the seven declared events are produced, and nothing else is', async () => {
         await createCatchAllSubscription();
 
-        // The five domain-event emits the registered modules' `publicEvents` declarations project
+        // The six domain-event emits the registered modules' `publicEvents` declarations project
         // from — `order.paid`/`order.shipped` both derive from `ORDER_STATUS_CHANGED`, which is
-        // why five emits produce six public event types.
+        // why six emits produce seven public event types.
         await emitDomainEvent(ORDER_CREATED, { orderId: ORDER_ID });
         await emitDomainEvent(ORDER_STATUS_CHANGED, {
             orderId: ORDER_ID,
@@ -94,6 +94,12 @@ describe('every public webhook event has exactly one producer, and no producer n
         await emitDomainEvent(ORDER_CANCELLED, { orderId: ORDER_ID, refund: true });
         await emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: PAYMENT_ID, orderId: ORDER_ID });
         await emitDomainEvent(PAYMENT_FAILED, { paymentId: PAYMENT_ID, orderId: ORDER_ID });
+        await emitDomainEvent(PAYMENT_REFUNDED, {
+            paymentId: PAYMENT_ID,
+            orderId: ORDER_ID,
+            amount: 20,
+            currency: 'EUR'
+        });
 
         const deliveries = await webhookDeliveryRepository.findAll({}, { limit: 100 });
         const produced = new Set(deliveries.map((delivery) => delivery.eventType));
@@ -101,7 +107,7 @@ describe('every public webhook event has exactly one producer, and no producer n
         expect([...produced].toSorted()).toEqual(declaredCatalogue().toSorted());
     });
 
-    it('the catalogue names exactly the six events the design doc fixes for v1 — no silent addition or removal', () => {
+    it('the catalogue names exactly the seven events the design doc fixes for v1 — no silent addition or removal', () => {
         expect(declaredCatalogue().toSorted()).toEqual(
             [
                 'order.cancelled',
@@ -109,6 +115,7 @@ describe('every public webhook event has exactly one producer, and no producer n
                 'order.paid',
                 'order.shipped',
                 'payment.failed',
+                'payment.refunded',
                 'payment.succeeded'
             ].toSorted()
         );

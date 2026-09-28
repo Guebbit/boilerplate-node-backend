@@ -438,7 +438,7 @@ describe('POST /webhooks/deliveries/:id/replay', () => {
 });
 
 describe('GET /webhooks/events', () => {
-    it('serves the six-event public catalogue', async () => {
+    it('serves the seven-event public catalogue', async () => {
         const { bearer } = await authenticateAsRole('manager');
 
         const response = await api().get('/webhooks/events').set('Authorization', bearer);
@@ -453,6 +453,7 @@ describe('GET /webhooks/events', () => {
                 'order.paid',
                 'order.shipped',
                 'payment.failed',
+                'payment.refunded',
                 'payment.succeeded'
             ].toSorted()
         );
