@@ -1,15 +1,14 @@
 /**
  * @module
- * The OAuth provider registry (`oauth/providers/index.ts`) and the `fake` implementation it always
- * carries. Google/GitHub each get their own file for the token-exchange parsing; this one is about
- * "which providers show up at all", the same question `payments/tests/unit/providers.test.ts`
- * answers for the single-active-provider registry.
+ * The OAuth provider registry (`oauth/providers/index.ts`) and the `fake` implementation only the
+ * demo profile ever registers into it (SK-08). Google/GitHub each get their own file for the
+ * token-exchange parsing; this one is about "which providers show up at all", the same question
+ * `payments/tests/unit/providers.test.ts` answers for the single-active-provider registry.
  */
 
-import { enabledProviders, resolveOAuthProvider } from '../../oauth/providers';
+import { enabledProviders, resolveOAuthProvider, registerOAuthProvider } from '../../oauth/providers';
 import { FAKE_OAUTH_CODE, fakeOAuthProvider } from '../../oauth/providers/fake';
 import { generateCodeVerifier, codeChallengeOf } from '../../oauth/state';
-import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 
 /** Every env var a provider's "configured" check reads, restored after each test. */
 const OAUTH_ENV_KEYS = [
@@ -34,10 +33,9 @@ describe('the OAuth provider registry', () => {
             if (originalEnvironment[key] === undefined) delete process.env[key];
             else process.env[key] = originalEnvironment[key];
         }
-        enableDemoProfile(false);
     });
 
-    it('lists nothing when no credentials are set and the demo profile is off', () => {
+    it('lists nothing when no credentials are set and nothing else is registered', () => {
         expect(enabledProviders()).toEqual([]);
         expect(resolveOAuthProvider('google')).toBeUndefined();
         expect(resolveOAuthProvider('github')).toBeUndefined();
@@ -60,10 +58,13 @@ describe('the OAuth provider registry', () => {
         expect(enabledProviders()).toEqual(['github']);
     });
 
-    it('lists fake only under the demo profile, with no credentials of its own', () => {
+    it('lists fake once something registers it, with no credentials of its own', () => {
+        // Production seeds no `fake` entry at all (SK-08) — only the demo entry
+        // (`scenarios/run-server.ts`) calls `registerOAuthProvider('fake', ...)`, which this
+        // reproduces directly rather than through the demo profile flag.
         expect(enabledProviders()).not.toContain('fake');
 
-        enableDemoProfile();
+        registerOAuthProvider('fake', () => fakeOAuthProvider);
         expect(enabledProviders()).toContain('fake');
         expect(resolveOAuthProvider('fake')?.name).toBe('fake');
     });

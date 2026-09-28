@@ -25,7 +25,6 @@ import { ATTR_MESSAGING_SYSTEM } from '@opentelemetry/semantic-conventions/incub
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber, environmentChoice } from '@infrastructure/runtime/environment';
-import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import { recordDemoEmail } from '@infrastructure/adapters/demo-outbox';
 import { resolveSpooled, discardSpooled } from '@infrastructure/adapters/mail-spool';
 import { withSpan } from '@infrastructure/observability/tracer';
@@ -79,20 +78,21 @@ const MAIL_TRANSPORTS: readonly MailTransport[] = ['smtp', 'log', 'outbox'];
 /**
  * Which transport this process uses, resolved per send.
  *
- * Two safety rails sit ABOVE the setting, because neither is a preference a deployment gets to
- * express. The demo profile's outbox IS its control surface — `GET /__test/emails` is how the
- * paired e2e suite reads a reset token — so a `.env` naming `smtp` must not quietly empty it. And
- * a test run must never open a socket whatever the environment says, or the suite delivers real
- * mail using the real credentials `dotenv` just loaded.
+ * One safety rail sits ABOVE the setting: a test run must never open a socket whatever the
+ * environment says, or the suite delivers real mail using the real credentials `dotenv` just
+ * loaded. The demo profile's own guarantee — its outbox IS its control surface
+ * (`GET /__test/emails`), so nothing may quietly empty it — is no longer this adapter's job
+ * (SK-08): `scenarios/run-server.ts` forces `NODE_MAIL_TRANSPORT=outbox` itself, the same
+ * unconditional override it already uses to force Redis and RabbitMQ off, so this reads it back
+ * through the ordinary setting below rather than through a second, demo-aware branch.
  *
- * Below those, `NODE_MAIL_TRANSPORT` decides, and SMTP is what a deployment that says nothing
- * gets — the behaviour every existing caller already had.
+ * `NODE_MAIL_TRANSPORT` decides, and SMTP is what a deployment that says nothing gets — the
+ * behaviour every existing caller already had.
  *
  * @throws {Error} when it is set to something none of the three transports recognise, or to
  *   `outbox` in production
  */
 export const resolveMailTransport = (): MailTransport => {
-    if (isDemoMode()) return 'outbox';
     if (process.env.NODE_ENV === 'test') return 'log';
 
     const named = environmentChoice('NODE_MAIL_TRANSPORT', MAIL_TRANSPORTS, 'smtp');

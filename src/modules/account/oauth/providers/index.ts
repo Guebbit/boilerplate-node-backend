@@ -7,26 +7,25 @@
  * restart-shaped memoisation to go stale.
  */
 
-import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import { createProviderRegistry } from '@infrastructure/runtime/provider-registry';
 import { googleOAuthProvider } from './google';
 import { isOAuthProviderConfigured } from '../config';
 import { githubOAuthProvider } from './github';
-import { fakeOAuthProvider } from './fake';
 import type { OAuthProvider } from './port';
 
 /** A registered entry is a FACTORY, not a value: "configured" can change between calls. */
 type OAuthProviderFactory = () => OAuthProvider | undefined;
 
 /**
- * Every implementation this build knows, keyed by the name a route/`OAuthAccount` uses. A live
- * deployment adds one file and calls {@link registerOAuthProvider} — no edit here required.
+ * Every implementation this PRODUCTION build knows, keyed by the name a route/`OAuthAccount`
+ * uses. A live deployment adds one file and calls {@link registerOAuthProvider} — no edit here
+ * required. `fake` (`./fake`) is NOT seeded here (SK-08): production code must not know a demo
+ * profile exists, so `scenarios/run-server.ts` registers it itself, the same way it composes its
+ * own mail transport.
  */
 const registry = createProviderRegistry<OAuthProviderFactory>({
     google: () => (isOAuthProviderConfigured('google') ? googleOAuthProvider : undefined),
-    github: () => (isOAuthProviderConfigured('github') ? githubOAuthProvider : undefined),
-    // The demo profile's stand-in — see `./fake`'s doc for why it needs no credentials of its own.
-    fake: () => (isDemoMode() ? fakeOAuthProvider : undefined)
+    github: () => (isOAuthProviderConfigured('github') ? githubOAuthProvider : undefined)
 });
 
 /** Add (or, in a test, override) one implementation without editing this file. */

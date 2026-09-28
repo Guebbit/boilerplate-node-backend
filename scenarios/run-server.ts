@@ -24,6 +24,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseDotenv } from 'dotenv';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
+import { registerOAuthProvider } from '@modules/account/oauth/providers';
+import { fakeOAuthProvider } from '@modules/account/oauth/providers/fake';
 import { startEphemeralMongo } from './support/ephemeral-mongo';
 import { startInProcessMongod } from './support/ephemeral-mongod';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from './rate-limits';
@@ -62,6 +64,12 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_PII_ENCRYPTION_KEY: 'demo-pii-encryption-key',
     NODE_TOTP_ENCRYPTION_KEY: 'demo-totp-encryption-key',
     NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'demo-webhook-secret-encryption-key',
+    // `orders`' and `products`' own boot-time requirements (SK-08) — `assertRequiredConfig` no
+    // longer exempts this profile, so it satisfies the gate the ordinary way, with the same
+    // values `.env-example` ships for a plain developer checkout.
+    NODE_SHOP_COUNTRY: 'IT',
+    NODE_VAT_RATE_DEFAULT: '0.22',
+    NODE_VAT_RATE_REDUCED: '0.10',
     // `.env`'s own value when it sets one — a lane pointed at non-default frontend ports (to
     // avoid clashing with another lane's live e2e) is respected instead of silently overridden.
     // Falls back to both standard local frontend ports: the dev server (8080) and the e2e preview
@@ -92,6 +100,16 @@ const FORCED_ABSENT = [
     'NODE_RABBITMQ_HOST',
     'NODE_RABBITMQ_PORT'
 ];
+
+/**
+ * Unlike {@link REQUIRED_DEFAULTS}, which only fills a key a `.env` left blank, this OVERRIDES
+ * one unconditionally — the same mechanism {@link FORCED_ABSENT} uses, for a setting that is not
+ * a preference this profile lets a copied `.env` express (SK-08). `GET /__test/emails` is the
+ * paired e2e suite's only way to read a reset token, so a `.env` naming `smtp` must not quietly
+ * empty it — `mailer.ts#resolveMailTransport` no longer knows this profile exists at all, so the
+ * guarantee has to live here instead, exactly the way it forces external services off below.
+ */
+const FORCED_MAIL_TRANSPORT = 'outbox';
 
 /**
  * Poll `GET /` until the server answers, the same signal the paired frontend's shard runner waits
@@ -135,6 +153,7 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
         for (const [key, value] of Object.entries(REQUIRED_DEFAULTS))
             process.env[key] = process.env[key]?.trim() ? process.env[key] : value;
         for (const key of FORCED_ABSENT) process.env[key] = '';
+        process.env.NODE_MAIL_TRANSPORT = FORCED_MAIL_TRANSPORT;
 
         // Always the `demo` database, regardless of source: a stable name is what lets the
         // external-Mongo path (`NODE_TEST_MONGO_URI`) persist across restarts instead of scattering
@@ -153,6 +172,11 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
         // The only call site in the whole codebase, on purpose: no copied `.env` can mount the
         // control surface on a host that isn't this one.
         enableDemoProfile();
+
+        // This profile's own OAuth identity provider (SK-08) — production's registry seeds none,
+        // so a Cypress spec clicking "Continue with Google" needs this profile to put one there
+        // itself, the same composition `Mail::fake()` does in Laravel.
+        registerOAuthProvider('fake', () => fakeOAuthProvider);
 
         // Import AFTER the environment is shaped. `createApp()` (SK-D2) builds the app; its own
         // `start()` seeds `shop` (via `restoreScenario`, since `enableDemoProfile()` above turned

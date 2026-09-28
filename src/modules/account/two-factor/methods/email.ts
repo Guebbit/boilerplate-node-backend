@@ -7,7 +7,6 @@
  */
 
 import { t } from '@infrastructure/i18n';
-import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import type { CallerContext } from '@types';
 import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
 import type { TwoFactorDelivery } from '@types';
@@ -78,9 +77,12 @@ export const emailMethod: TwoFactorMethodHandler = {
     delivers: true,
 
     // The same condition every other account email already depends on. A deployment with no SMTP
-    // host cannot send the code, so it must not offer the method; the demo profile routes mail to
-    // its own outbox and can.
-    available: () => isDemoMode() || Boolean(process.env.NODE_SMTP_HOST),
+    // host and no outbox transport cannot deliver the code anywhere a caller can read it, so it
+    // must not offer the method. `NODE_MAIL_TRANSPORT=outbox` is what the demo profile forces on
+    // itself (`scenarios/run-server.ts`, SK-08) — this reads the same setting `resolveMailTransport`
+    // would, rather than asking whether it is specifically the demo profile asking.
+    available: () =>
+        process.env.NODE_MAIL_TRANSPORT === 'outbox' || Boolean(process.env.NODE_SMTP_HOST),
 
     eligibility: (user) =>
         user.verifiedAt

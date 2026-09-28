@@ -9,7 +9,6 @@
  * See: docs/reference/ops.md
  */
 
-import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import type { AppModule, RequiredConfig } from '@kernel/registry';
 
 /**
@@ -94,23 +93,24 @@ const forbiddenUnderProduction = (appModules: AppModule[]): string[] =>
  * Refuse to boot on a missing, truncated or still-placeholder required variable — or on
  * {@link forbiddenUnderProduction}'s one variable set where it must not be.
  *
- * Skipped under `NODE_ENV=test` and in the demo profile: a demo deployment that developers
- * routinely boot straight off a copied `.env-example` is not the placeholder-in-production risk
- * this exists to catch, and blocking it breaks the paired frontend's e2e/visual suites, which
- * start this profile with no env of their own. Throws ONCE, listing every offending variable
- * across every module — not the first one, which would mean N restarts to find N mistakes.
+ * Skipped under `NODE_ENV=test` only — jest builds its own environment per suite, never this
+ * one. The demo profile carries no exemption (SK-08): it satisfies this gate the ordinary way,
+ * by setting every variable this file and every module's own manifest asks for
+ * (`scenarios/run-server.ts`'s `REQUIRED_DEFAULTS`), the same as any other deployment would.
+ * Throws ONCE, listing every offending variable across every module — not the first one, which
+ * would mean N restarts to find N mistakes.
  *
  * @param appModules - the enabled module list, each contributing its own `requiredConfig`
  * @param nonModuleChecks - what belongs to neither a module nor the kernel — see
  *   {@link NonModuleChecks}; omitted only by a caller with nothing of its own to add
  * @throws when any required variable fails its check, or the forbidden one is set, outside
- *   `NODE_ENV=test`/the demo profile
+ *   `NODE_ENV=test`
  */
 export const assertRequiredConfig = (
     appModules: AppModule[],
     nonModuleChecks: NonModuleChecks = {}
 ): void => {
-    if (process.env.NODE_ENV === 'test' || isDemoMode()) return;
+    if (process.env.NODE_ENV === 'test') return;
 
     const declared = [
         ...appModules.flatMap((appModule) => appModule.requiredConfig ?? []),

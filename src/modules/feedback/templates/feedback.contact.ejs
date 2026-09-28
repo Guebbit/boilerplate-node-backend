@@ -1,0 +1,21 @@
+<!doctype html>
+<%#
+    Operator-facing notification, not customer-facing: its copy is resolved in
+    NODE_DEFAULT_LOCALE by `modules/feedback/emails.ts` rather than in the language of
+    whoever filled in the form. The customer's own words arrive untranslated.
+%>
+<html lang="<%= locale %>">
+    <head>
+        <meta charset="UTF-8" />
+        <title><%= pageMetaTitle %></title>
+    </head>
+    <body>
+        <h2><%= title %></h2>
+        <p><strong><%= labelName %>:</strong> <%= name %></p>
+        <p><strong><%= labelEmail %>:</strong> <%= email %></p>
+        <p><strong><%= labelSubject %>:</strong> <%= subject %></p>
+        <p><strong><%= labelMessage %>:</strong></p>
+        <pre><%= message %></pre>
+        <p><strong><%= labelCreatedAt %>:</strong> <%= createdAt %></p>
+    </body>
+</html>

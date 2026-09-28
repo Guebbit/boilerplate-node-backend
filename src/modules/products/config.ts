@@ -14,7 +14,8 @@ import { environmentDecimal, parseEnvironmentDecimal } from '@infrastructure/run
 /**
  * The VAT rate applied to a product with no `taxClass` — the shop's default, and every product's
  * fallback. Required at boot ({@link invalidVatRateConfig} range-checks it); the fallback here is
- * for `NODE_ENV=test` and the demo profile, which both skip that gate.
+ * for `NODE_ENV=test`, which skips that gate — the demo profile does not: it sets both VAT rates
+ * itself, the same as any other deployment must (SK-08).
  * @returns the configured decimal rate (0.22 for 22%), or `0.22` when unset
  */
 export const vatRateDefault = (): number => environmentDecimal('NODE_VAT_RATE_DEFAULT', 0.22);
