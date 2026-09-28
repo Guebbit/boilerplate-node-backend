@@ -202,16 +202,16 @@ inside a module folder is, is [Modules (files)](../reference/src-modules.md).
 
 ## The two repositories
 
-Most domains exist on both sides under the same name. **The interesting two do not**, and neither
-does the frontend's third extra module — an asymmetry that is real architecture rather than drift,
-and that is written down nowhere else in either repository.
+Most domains exist on both sides under the same name. **A few do not**, and neither does the
+frontend's one extra module — an asymmetry that is real architecture rather than drift, and that
+is written down nowhere else in either repository.
 
-| This repository | `boilerplate-vue-frontend` | Note                                                                                                                                                                                                                                    |
-| --------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `audit-logs`    | `admin`                    | This module owns the trail and its own `GET /audit`; `observability` mounts a second, platform-scoped read (`GET /observability/audit`) over the same collection, and the screen that renders either is the frontend's admin dashboard. |
-| `observability` | `admin` + `realtime`       | Its two surfaces are consumed by two different frontend modules: the health and metrics reads by `admin`, the SSE stream by `realtime`.                                                                                                 |
-| `addresses`     | `account`                  | The frontend keeps the address book inside `account` rather than its own module — see the pairing test's own reason for it.                                                                                                             |
-| everything else | the same name              | —                                                                                                                                                                                                                                       |
+| This repository | `boilerplate-vue-frontend` | Note                                                                                                                                                                                                                                           |
+| --------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `audit-logs`    | `observability`            | This module owns the trail and its own `GET /audit`; `observability` mounts a second, platform-scoped read (`GET /observability/audit`) over the same collection, and the screen that renders either is the frontend's `observability` module. |
+| `addresses`     | `account`                  | The frontend keeps the address book inside `account` rather than its own module — see the pairing test's own reason for it.                                                                                                                    |
+| `invoicing`     | `orders`                   | No screen of its own — `GET /orders/{id}/invoice` and `/credit-note` are two buttons on the frontend's own order detail page.                                                                                                                  |
+| everything else | the same name              | —                                                                                                                                                                                                                                              |
 
 And one frontend module answers to nothing here: `demo`, a client-side showcase of the shared UI
 kit, which pairs with the demo profile and the seeded dataset rather than with any single domain.

@@ -1,15 +1,16 @@
 /**
  * Every domain here names the module that answers it in `boilerplate-vue-frontend`.
  *
- * Eleven of fifteen domains exist on both sides under the same name. The other four don't —
+ * Fourteen of nineteen domains exist on both sides under the same name. The other five don't —
  * `access` because it is routeless and has no screen of its own to have, `antibot` for the same
- * reason, `audit-logs` and `observability` because two backend modules serve one frontend screen
- * between them — and neither does the frontend's one extra module. An asymmetry that is real
- * architecture rather than drift, and that is written down nowhere else in either repository.
+ * reason, `addresses` and `invoicing` because their own screens live inside a sibling's frontend
+ * module (`account`, `orders`), and `audit-logs` because it shares the frontend's `observability`
+ * screen with the backend module of that same name. An asymmetry that is real architecture rather
+ * than drift, and that is written down nowhere else in either repository.
  *
  * STATED, NOT DERIVED. A name matcher would call `audit-logs` unpaired, which is exactly the wrong
  * answer: the trail lives here, the endpoint that reads it belongs to `observability`, and the
- * screen that renders it is the frontend's admin dashboard. Three names, one domain.
+ * screen that renders it is the frontend's `observability` module. Two backend names, one screen.
  *
  * TWO HALVES, AND NEITHER WORKS WITHOUT `FRONTEND_PATH`. The cases against this repo hold the map
  * to the modules here: an added module with no entry, an entry for a module that is gone. On their
@@ -59,8 +60,8 @@ const FRONTEND_PAIRING: Readonly<Partial<Record<string, Pairing>>> = {
     },
     'api-keys': { counterparts: ['api-keys'] },
     'audit-logs': {
-        counterparts: ['admin'],
-        why: "Two endpoints read the one trail this module owns — its own `GET /audit` for a shop's staff, `observability`'s `GET /observability/audit` for the platform operator — and both render in the frontend's admin dashboard."
+        counterparts: ['observability'],
+        why: "Two endpoints read the one trail this module owns — its own `GET /audit` for a shop's staff, `observability`'s `GET /observability/audit` for the platform operator — and both render in the frontend's `observability` module."
     },
     cart: { counterparts: ['cart'] },
     delivery: { counterparts: ['delivery'] },
@@ -71,10 +72,7 @@ const FRONTEND_PAIRING: Readonly<Partial<Record<string, Pairing>>> = {
         why: "It has no screen of its own — `GET /orders/{id}/invoice` and `/credit-note` are two buttons on the frontend's own Order.vue, gated on the order's `actions.invoice` flag, the same as any other conditional order action."
     },
     locales: { counterparts: ['locales'] },
-    observability: {
-        counterparts: ['admin', 'realtime'],
-        why: 'Its two surfaces are consumed by two different frontend modules: the health and metrics reads by `admin`, the SSE stream by `realtime`.'
-    },
+    observability: { counterparts: ['observability'] },
     orders: { counterparts: ['orders'] },
     payments: { counterparts: ['payments'] },
     products: { counterparts: ['products'] },
