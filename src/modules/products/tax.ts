@@ -12,6 +12,13 @@ import type { Product } from '@types';
 export type TaxClass = NonNullable<Product['taxClass']>;
 
 /**
+ * Mirrors `RateType` on the contract — the values a product's `rateType` may hold. Unlike
+ * `TaxClass`, this is never resolved into anything: it rides frozen onto an order line as-is, and
+ * an invoice reads it straight off that freeze — see `orders/services/snapshot.ts`.
+ */
+export type RateType = NonNullable<Product['rateType']>;
+
+/**
  * The decimal VAT rate a product is charged, from its own `taxClass`. Absent or unrecognized
  * means the shop's standard rate — there is no "no rate" state, which is what lets an order line
  * always freeze a real number rather than an optional one with a hole in it.

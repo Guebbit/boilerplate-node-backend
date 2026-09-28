@@ -191,6 +191,15 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             enum: ['reduced', 'zero']
         },
         /*
+         * WHY `taxClass` is `zero`, when it is — meaningless otherwise. Absent means `standard`,
+         * same convention as `taxClass` leaving its own absence to mean the shop's default rate.
+         * `enum` matches the contract's `RateType` exactly, same reasoning as `taxClass` above.
+         */
+        rateType: {
+            type: String,
+            enum: ['standard', 'zero-rated', 'exempt']
+        },
+        /*
          * SH4: an optional, deployment-chosen stock-keeping unit. Uniqueness is `products_sku`
          * below (`unique: true, sparse: true`), not enforced here — the schema declares the
          * shape, the index is what makes a collision a database fact rather than a race two

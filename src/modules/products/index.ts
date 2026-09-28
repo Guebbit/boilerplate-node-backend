@@ -18,7 +18,7 @@ export * from './events';
  * can freeze the resolved rate onto an order line at checkout time — see `services/snapshot.ts`.
  */
 export { resolveTaxRate } from './tax';
-export type { TaxClass } from './tax';
+export type { TaxClass, RateType } from './tax';
 
 export * from './domain';
 

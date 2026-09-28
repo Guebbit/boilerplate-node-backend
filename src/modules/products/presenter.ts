@@ -26,6 +26,7 @@ export const presentProduct = (document: ProductDocument): Product => {
         available: availableStock(onHand, reserved),
         currency: productCurrency(),
         ...(document.taxClass === undefined ? {} : { taxClass: document.taxClass }),
+        ...(document.rateType === undefined ? {} : { rateType: document.rateType }),
         ...(document.sku === undefined ? {} : { sku: document.sku }),
         ...(document.onHand === undefined ? {} : { onHand: document.onHand }),
         ...(document.reserved === undefined ? {} : { reserved: document.reserved }),

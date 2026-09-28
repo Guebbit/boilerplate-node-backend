@@ -4,7 +4,7 @@
  * shared `createUpdateController` factory. Both verbs delegate the product write and the
  * translation-row merge to `productService.writeUpdate`, which already owns the 404 check and the
  * audit emit — the verb difference is entirely in which schema validates the body and whether an
- * omitted clearable field (`taxClass`/`weight`/`imageUrl`) is cleared or left alone; `translations`
+ * omitted clearable field (`taxClass`/`rateType`/`weight`/`imageUrl`) is cleared or left alone; `translations`
  * keeps the same per-locale upsert/delete semantics either way (see `PUT`'s own operation
  * description for why a translations table isn't a "whole-body replace" field).
  */

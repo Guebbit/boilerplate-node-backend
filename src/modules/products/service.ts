@@ -20,7 +20,8 @@ import type {
     Product,
     ProductAdmin,
     ProductTranslationFields,
-    TaxClass
+    TaxClass,
+    RateType
 } from '@types';
 import type { TranslationBatch } from '@kernel/translation';
 import {
@@ -309,17 +310,19 @@ export const create = (
  */
 export const update = (
     product: ProductDocument,
-    // `imageUrl`/`weight`/`taxClass`/`sku` widened to accept `null`, since the domain type
-    // `Product` states them as always a real value (`imageUrl`) or absent-means-zero/standard/
-    // unset (`weight`, `taxClass`, `sku`), never explicitly cleared. `imageUrl: null` resolves to
-    // {@link DEFAULT_PRODUCT_IMAGE_URL} below rather than ever reaching the document as a null;
-    // `weight`/`taxClass`/`sku: null` genuinely unset them.
-    data: Partial<Omit<Product, 'id' | 'imageUrl' | 'weight' | 'taxClass' | 'sku'>> & {
+    // `imageUrl`/`weight`/`taxClass`/`rateType`/`sku` widened to accept `null`, since the domain
+    // type `Product` states them as always a real value (`imageUrl`) or absent-means-zero/
+    // standard/unset (`weight`, `taxClass`, `rateType`, `sku`), never explicitly cleared.
+    // `imageUrl: null` resolves to {@link DEFAULT_PRODUCT_IMAGE_URL} below rather than ever
+    // reaching the document as a null; `weight`/`taxClass`/`rateType`/`sku: null` genuinely unset
+    // them.
+    data: Partial<Omit<Product, 'id' | 'imageUrl' | 'weight' | 'taxClass' | 'rateType' | 'sku'>> & {
         /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
         pendingImageKey?: string;
         imageUrl?: string | null;
         weight?: number | null;
         taxClass?: TaxClass | null;
+        rateType?: RateType | null;
         sku?: string | null;
     }
 ): Promise<ProductDocument> => {
@@ -344,6 +347,8 @@ export const update = (
     if (data.weight !== undefined) product.weight = clearedOrValue(data.weight);
     // `null` clears the class back to the shop's standard rate — $unset on save, same as weight.
     if (data.taxClass !== undefined) product.taxClass = clearedOrValue(data.taxClass);
+    // `null` clears it back to `standard` — $unset on save, same as taxClass.
+    if (data.rateType !== undefined) product.rateType = clearedOrValue(data.rateType);
     // `null` clears the SKU back to unset — $unset on save, same as weight/taxClass. The unique
     // sparse index (`sku_1` on `productSchema`) is what turns a collision into a 409, not this.
     if (data.sku !== undefined) product.sku = clearedOrValue(data.sku);
@@ -374,12 +379,14 @@ export const update = (
  */
 export const updateById = (
     id: string,
-    // `imageUrl`/`weight`/`taxClass`/`sku` widened to accept `null` — see `update`'s own docblock.
-    data: Partial<Omit<Product, 'id' | 'imageUrl' | 'weight' | 'taxClass' | 'sku'>> & {
+    // `imageUrl`/`weight`/`taxClass`/`rateType`/`sku` widened to accept `null` — see `update`'s
+    // own docblock.
+    data: Partial<Omit<Product, 'id' | 'imageUrl' | 'weight' | 'taxClass' | 'rateType' | 'sku'>> & {
         pendingImageKey?: string;
         imageUrl?: string | null;
         weight?: number | null;
         taxClass?: TaxClass | null;
+        rateType?: RateType | null;
         sku?: string | null;
     },
     context: CallerContext

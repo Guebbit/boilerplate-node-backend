@@ -280,6 +280,49 @@ describe('SKU (SH4)', () => {
     });
 });
 
+describe('VAT rate type (C4)', () => {
+    // `rateType` says WHY a `taxClass: zero` product is 0% — `zero-rated` or `exempt` — round
+    // tripping each value the same way `taxClass` itself already does.
+    it.each(['zero-rated', 'exempt'] as const)(
+        'creates a product carrying rateType %s',
+        async (rateType) => {
+            const { bearer } = await authenticateAsRole('editor');
+
+            const response = await api()
+                .post('/products')
+                .set('Authorization', bearer)
+                .send({
+                    price: 24.9,
+                    taxClass: 'zero',
+                    rateType,
+                    translations: { en: { title: 'Dog Bed' } }
+                });
+
+            expect(response.status).toBe(201);
+            expect(response.body.data.rateType).toBe(rateType);
+        }
+    );
+
+    // `rateType: null` means "back to standard", same as `taxClass`'s own clearing rule.
+    it('clears rateType back to standard on an explicit null', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({
+            title: 'Bed',
+            price: 10,
+            taxClass: 'zero',
+            rateType: 'exempt'
+        });
+
+        const response = await api()
+            .patch(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ rateType: null });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.rateType).toBeUndefined();
+    });
+});
+
 describe('GET /products/{id}/admin', () => {
     it('matches the contract, returning every language the product has', async () => {
         const { bearer } = await authenticateAsRole('editor');
