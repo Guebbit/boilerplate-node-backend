@@ -2,14 +2,15 @@
 /**
  * Rebuild the documents this repo publishes from their fragments — `npm run contracts:bundle`.
  *
- * Fragments are the source of truth; the bundles stay COMMITTED because they are what spectral,
- * orval, Prism and `check:spec-identity` read. `--check` asserts they are not stale instead of
- * rewriting them. Name bundles to narrow the run:
+ * Fragments are the source of truth; the bundles are what spectral, orval, Prism and
+ * `check:spec-identity` read — `openapi.yaml` is `.gitignore`d and rebuilt on every install,
+ * `asyncapi.yaml`/`asyncapi.public.yaml` stay COMMITTED. `--check` asserts none of the three are
+ * stale instead of rewriting them. Name bundles to narrow the run:
  *
  *   npm run contracts:bundle -- openapi asyncapi
  *
- * The client collections are opt-in — ask for them by name, since they are generated from the
- * COMMITTED contract rather than from the fragments.
+ * The client collections are opt-in — ask for them by name, since they are generated from
+ * `openapi.yaml` on disk rather than from the fragments.
  *
  * The selection lives here rather than in `package.json` because npm appends `--` arguments to the
  * LAST command of a chain only, so a `&&`-joined ordering would silently drop the flag.
