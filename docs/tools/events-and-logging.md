@@ -73,7 +73,7 @@ Everything else here has a single sink. Audit has two, on purpose:
 ```
 emitAuditEvent()
    ├─→ auditLogger (Winston) → stdout → Promtail → Loki      the compliance record
-   └─→ IAuditSink → auditLogService.record → Mongo auditlogs  the queryable copy
+   └─→ AuditSink → auditLogService.record → Mongo auditlogs  the queryable copy
 ```
 
 The **log** is the source of truth. It is append-only, shipped off the box, and is what an
@@ -85,9 +85,9 @@ from the API, with no log backend wired up. It carries a TTL index
 request continues and the log line has already gone out.
 
 Why a sink rather than a direct call — `src/infrastructure/**` is the bottom of the dependency graph and
-`no-restricted-imports` forbids it from reaching up into `@modules/*`, where the audit repository
+`eslint-plugin-boundaries` forbids it from reaching up into `@modules/*`, where the audit repository
 now lives. So `audit.ts` declares
-the port and `app.ts` supplies the implementation at boot, the same shape as `IImageStore`. The
+the port and `app.ts` supplies the implementation at boot, the same shape as `ImageStore`. The
 practical payoff: swapping the destination touches one line in `app.ts`, not the 53 call sites.
 
 ## The domain event bus, and what it is not
@@ -127,8 +127,11 @@ loses the event outright. Emails already go through RabbitMQ, which is durable �
 in-process hop in front of a durable queue is backwards. Cache invalidation wants the opposite of
 async fan-out: it should happen immediately after the write, in the same process.
 
-If cross-process fan-out is ever genuinely needed, the answer is a RabbitMQ topic exchange fed by a
-transactional outbox. See
+`webhooks` is the case where cross-process fan-out genuinely was needed, and it does not grow this
+bus into a broker either: `webhooks/services/publish.ts` listens the same way any in-process
+subscriber does, but writes a durable delivery row BEFORE it publishes to the queue — a fire-and-forget
+publish that fails leaves the row `pending` for `sweep:webhook-retries` to pick up, never lost. That
+durable-row-then-publish shape is the pattern to copy, not a bus grown wider. See
 [AsyncAPI Workflow](../api/asyncapi-workflow.md#naming-convention) for why a channel is only
 declared for something that actually travels on a wire.
 

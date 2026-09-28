@@ -133,28 +133,29 @@ for one shape. Gone along with the duplicate declarations it existed for.
 
 ### Shared with the frontend
 
-This script is **byte-identical** to `scripts/contracts/generate-asyncapi-types.ts` in `boilerplate-vue-frontend`,
-and both write the same path:
+This script **started** byte-identical to `scripts/contracts/generate-asyncapi-types.ts` in
+`boilerplate-vue-frontend`, and both still write the same path — but it is NOT byte-identical any
+more: the frontend's copy also emits an inlined-JSON-Schema map for its own runtime SSE-frame
+validation, which this backend copy has no use for and emits queue-payload Zod validators instead.
+What both copies still share is the input format and the channel/message-naming machinery.
 
 | Repo | Command | Reads |
 | --- | --- | --- |
 | Backend | `tsx scripts/contracts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | this repo's `asyncapi.yaml` — every channel |
 | Frontend | `tsx scripts/contracts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | its `asyncapi.yaml`, which is a copy of `asyncapi.public.yaml` |
 
-The script is the same, the INPUT is not — so the two outputs differ, and are meant to: only this
-repo's carries the queue payload types (`EmailJobPayload`, `ImageDigestJobPayload`, each module's
-own like `WebhookDeliverJobPayload` and `OrderInvoicePdfJobPayload`) and `WORKER_CHANNELS`.
-Everything the frontend's
-does carry, it carries identically, because the shared half of the spec is one document copied
-across.
+The INPUT still differs the way it always did: only this repo's output carries the queue payload
+types (`EmailJobPayload`, `ImageDigestJobPayload`, each module's own like
+`WebhookDeliverJobPayload` and `OrderInvoicePdfJobPayload`) and `WORKER_CHANNELS`, because only this
+repo generates from the whole contract rather than the public subset.
 
 `asyncapi.public.yaml` is in `SHARED_FILES` (`scripts/pairing/spec-identity.ts`), so
 `check:spec-identity` fails on the commit that forks it. **This script is not, and neither are the
-generated outputs.** The script is held identical by hand — nothing fails if the two copies drift,
-so compare them with `diff` when you change one. It is off the list for the reason the list itself
-gives: everything on it is produced in the backend and copied, which is what makes "which side is
-right" answerable, and a hand-maintained twin has no such answer. The outputs are off it for a
-different reason, and
+generated outputs.** The script is held to the same shared machinery by hand, not to identical
+bytes — nothing fails if the two drift further, so compare them with `diff` when you change one. It
+is off the list for the reason the list itself gives: everything on it is produced in the backend
+and copied, which is what makes "which side is right" answerable, and a hand-maintained twin has no
+such answer. The outputs are off it for a different reason, and
 deliberately: they legitimately differ now, and even where they overlap a cross-repo comparison
 would only re-ask a question the two entries above already answer, at the price of carrying another
 file to the frontend on every contract change.

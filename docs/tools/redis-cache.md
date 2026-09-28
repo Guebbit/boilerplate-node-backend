@@ -48,13 +48,14 @@ conditional-request target for free), and there is no server-side entry to inval
 `products` and `locales`, by contrast, answer the SAME thing to every caller with the same READ
 SCOPE — the published catalogue, the active locale manifest — so those stay cached, but never
 keyed per caller. Every route that still mounts `setCache`/`searchCache` supplies a `scopeKey`
-(`CacheOptions.scopeKey`, `infrastructure/http/middlewares/cache.ts`) that resolves, per request:
+(`CacheOptions.scopeKey`, `infrastructure/http/middlewares/cache.ts`) — a `(request) => boolean`
+predicate, checked per request:
 
-- the SAME scope string every other cacheable caller gets (`'guest'`, in every case today) — this
-  request shares that entry;
-- `undefined` — this caller sees MORE than the shared answer (an admin, inactive rows included) —
-  Redis is bypassed for the request entirely, neither read nor written, and the response answers
-  `private, no-cache` instead of the shared entry's `public, max-age=…`.
+- `true` — this caller reads the SAME guest-visible scope every other cacheable caller shares, so
+  the key segment is always the literal `guest` and this request shares that one entry;
+- `false` — this caller sees MORE than the shared answer (an admin, inactive rows included) —
+  Redis is bypassed for the request entirely, neither read nor written, no key built at all, and
+  the response answers `private, no-cache` instead of the shared entry's `public, max-age=…`.
 
 `kernel/access/query.ts#hasAnonymousReadScope` is what a `scopeKey` is built on: it compares the
 caller's compiled CASL read filter to an anonymous caller's, byte for byte, rather than branching
@@ -131,7 +132,7 @@ Mongo query behind the second copy. The third row is why an arbitrary parameter 
 entry — not a vulnerability, since the app fails open and the rate limiter bounds the volume, but
 there is no reason to store the same body twice.
 
-Note what the key still separates, and must: the path, the resolved `scopeKey` (see above), the
+Note what the key still separates, and must: the path, the `guest` scope segment (see above), the
 locale, and any declared parameter that genuinely differs — including a repeated one
 (`?tag=a&tag=b` arrives as an array) and a blank one, which is not assumed to mean the same as
 absent.
@@ -159,7 +160,7 @@ and regardless of whether that endpoint's page size is ever raised.
 ## Refresh-ahead: no stampede when a hot key goes stale
 
 A popular key expiring is a cache **stampede**: every request being served from it misses at the
-same instant, and all of them run the same expensive query. `scopeKey` resolves to `'guest'` for
+same instant, and all of them run the same expensive query. `scopeKey` answers `true` for
 every cacheable caller (see [No caching depends on who is asking](#no-caching-depends-on-who-is-asking)),
 so the crowd behind one entry is exactly that — every visitor to `GET /products` who reads the
 published catalogue, guest or logged-in alike, shares one entry; a caller who sees more bypasses

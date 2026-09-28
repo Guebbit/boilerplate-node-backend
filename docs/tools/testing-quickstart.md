@@ -84,8 +84,9 @@ look like real bugs.
 It needs a JSON report to read, which `test:unit:report` produces. Coverage rows appear only when
 `tmp/coverage/lcov.info` exists — run `test:unit:coverage` first if you want them.
 
-The same script exists in the paired frontend, byte-identical, because Vitest's `json` reporter
-emits the shape Jest's `--json` does. `npm run check:spec-identity` keeps the two copies honest.
+The same script exists in the paired frontend, sharing this machinery because Vitest's `json`
+reporter emits the shape Jest's `--json` does — though the two copies have since picked up their
+own repo-specific differences, and nothing but `diff`, by hand, keeps them in step.
 
 ## The five test layers
 

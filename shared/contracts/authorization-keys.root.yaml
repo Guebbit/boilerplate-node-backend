@@ -1,4 +1,7 @@
-# Every permission key that exists, and the only place one may be introduced.
+# Every permission key that exists. Generated — `npm run authorization:bundle` splices this file
+# from one fragment per owning module (`src/modules/<name>/authorization.yaml`) plus this root
+# residual for the app-level `core` keys. A key is introduced in its owning fragment, never in the
+# bundle directly; `--check` (wired into `complete`) fails the build if the bundle drifts from them.
 #
 # Committed with identical bytes in `boilerplate-node-backend` and
 # `boilerplate-php-laravel-backend`. Neither repo's formatter touches it — see the exclusion in

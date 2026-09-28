@@ -82,7 +82,9 @@ Four ideas carry the whole repository:
 
 1. **A module is a value, not a convention.** Every domain declares what it needs — routes,
    locales, scenario guarantees, event subscriptions, contract fragments — in one typed object. `src/modules.ts`
-   lists them, and the registry validates the dependency graph at boot rather than at the first 500. Adding a domain is one folder plus one line; removing it is `rm -rf` plus that line.
+   lists them, and the registry refuses to boot on missing or placeholder config rather than
+   failing at the first request. See [Adding & removing a module](docs/theory/module-lifecycle.md)
+   for what a domain actually costs to add or remove.
 2. **The contract is an output, not a document.** `openapi.yaml` is assembled from per-module
    fragments and generates the typed client and Zod schemas that both repositories import.
 3. **Layers stay honest.** `kernel` knows no domain, `infrastructure` knows no domain,

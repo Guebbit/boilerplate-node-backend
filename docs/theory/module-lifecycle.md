@@ -13,9 +13,9 @@ That claim is not aspirational — `wishlist` was added under it, and three doma
 it. What each one actually cost is recorded below, honestly, including the parts that are more than
 one line.
 
-## The registries, all three of them
+## The registries, all four of them
 
-A module is named in exactly three places. Knowing which ones apply to your domain is most of both
+A module is named in exactly four places. Knowing which ones apply to your domain is most of both
 procedures:
 
 | Registry             | File                                           | Applies when                                 |
@@ -40,7 +40,7 @@ needs a registry line at all.
 An `analytics.ts` needs no entry anywhere: `tests/cross-cutting/analytics-events.test.ts` sweeps the
 module folders for one.
 
-`FRONTEND_PAIRING` is the newest of the five and the only one that names the other repository: which
+`FRONTEND_PAIRING` is the newest of the four and the only one that names the other repository: which
 frontend module answers this domain, or a sentence saying why none does.
 `tests/cross-cutting/frontend-pairing.test.ts` fails on a missing entry, which is what stops the
 FE/BE gap from widening unnoticed.
@@ -178,6 +178,9 @@ export default {
     name: 'wishlist',
     basePath: '/wishlist',
     routes: router,
+    // REQUIRED, not optional — a module cannot compile without answering this. 'none' is the
+    // explicit, reviewed answer for a module with nothing personal to export.
+    personalData: [{ section: 'wishlist', collect: wishlistExport, erase: wishlistDeleteByUserId }],
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;
 ```
@@ -351,16 +354,9 @@ rm docs/modules/<name>.md
 Then drop its entry from `FRONTEND_PAIRING` and its sub-page slugs from `SUB_PAGES` (both in
 `tests/cross-cutting/`), and its sidebar entries from `docs/.vitepress/config.mts`.
 
-The cross-cutting suite reports each of those independently, by name, so there is no order to get
-right — run `npm run test` and work the list:
-
-```
-● the shape every module declares › gives every module a page, and every page a module
-    - docs/modules/wishlist.md documents nothing enabled
-
-● the two repositories, module by module › names no module that is not enabled
-    - wishlist
-```
+`tests/cross-cutting/frontend-pairing.test.ts` fails, naming the module, if its `FRONTEND_PAIRING`
+entry is left behind — run `npm run test` and work the list. Deleting the page itself is still a
+step you do by hand; nothing currently refuses a leftover one.
 
 ### 5 · Re-bundle and mirror
 

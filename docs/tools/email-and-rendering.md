@@ -67,7 +67,7 @@ Every send is wrapped in an OTel span (`withSpan`) so failures show up in [Tempo
 
 ### Templates interpolate, they do not translate
 
-An email is usually rendered by a queue worker, in another process, after the request that asked for it is gone — so there is no locale to resolve a translation key against at that point. The copy is therefore resolved **before** the job is published: a module's `emails.ts` takes the language as an argument, binds its own `t` to it, and returns an `IEmailContent` — the template name, the subject, and every string the template prints, down to the `locale` that fills `<html lang>` and the footer line the shared partial shows. `enqueueEmail` adds nothing and resolves nothing; it publishes exactly what the builder produced.
+An email is usually rendered by a queue worker, in another process, after the request that asked for it is gone — so there is no locale to resolve a translation key against at that point. The copy is therefore resolved **before** the job is published: a module's `emails.ts` takes the language as an argument, binds its own `t` to it, and returns an `EmailContent` — the template name, the subject, and every string the template prints, down to the `locale` that fills `<html lang>` and the footer line the shared partial shows. `enqueueEmail` adds nothing and resolves nothing; it publishes exactly what the builder produced.
 
 The consequences are worth knowing:
 

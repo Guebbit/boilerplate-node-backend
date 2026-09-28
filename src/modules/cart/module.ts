@@ -3,7 +3,8 @@
  * The shopping cart: one document per user, priced against the live catalogue. Depends on
  * products, users and orders — a checkout is where a cart stops being a cart — plus delivery and
  * payments, to price shipping and to validate/size the chosen payment method against what the
- * deployment actually offers. Products reaches back via a domain event; users reaches back
+ * deployment actually offers, and addresses, to resolve the ship-to address a checkout freezes
+ * onto the order. Products reaches back via a domain event; users reaches back
  * through this module's own `personalData.erase` hook below — neither an import, keeping the
  * import graph acyclic.
  *

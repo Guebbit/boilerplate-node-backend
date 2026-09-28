@@ -86,10 +86,10 @@ flowchart TD
         F1["modules/products/openapi.yaml"] --> B
         F2["modules/orders/openapi.yaml"] --> B
         F3["modules/…/openapi.yaml"] --> B
-        B --> ROOT["openapi.yaml<br/>committed at the repo root"]
+        B --> ROOT["openapi.yaml<br/>gitignored, rebuilt at the repo root"]
     end
 
-    ROOT -.->|"manual copy-paste<br/>(byte-identical)"| FEROOT
+    ROOT -.->|"npm run sync:frontend<br/>(byte-identical)"| FEROOT
 
     subgraph FE["boilerplate-vue-frontend  (consumes it)"]
         FEROOT["openapi.yaml"] --> ORVAL[orval] --> CLIENT["contracts/rest/index.ts"]
@@ -109,9 +109,11 @@ it, and each is load-bearing:
 
 1. **Fragments are authored here, and only here.** A module owns its slice of every shared document
    the same way it owns its routes and its seeds.
-2. **The bundled file stays committed.** It is not a build artefact you can delete — it is what
-   `spectral`, `orval`, the seed runner, the API clients and the frontend all read.
-3. **The frontend receives finished files.** It does not bundle, does not fragment, does not author.
+2. **The bundled file stays whole.** `openapi.yaml` is gitignored and rebuilt on every install here,
+   but it is still what `spectral`, `orval`, the seed runner and the API clients all read locally —
+   never fragments read piecemeal at request time.
+3. **The frontend receives a finished file, and commits its copy.** It does not bundle, does not
+   fragment, does not author; `sync:frontend` is what hands it across.
 
 ## Why the root file stays whole
 
@@ -124,7 +126,7 @@ It would be tidier to ship only fragments and bundle on demand. Three reasons no
   compare.
 - **Regeneration is not reproducible across repos.** `redocly bundle` output depends on the
   installed CLI version, so two repos bundling independently can produce different bytes from the
-  same sources. The output must be committed and copied, not rebuilt on both sides and assumed to
+  same sources. The output must be built once and copied, not rebuilt on both sides and assumed to
   match.
 
 That last point is the one that bites. **If the bundle step ever produces different bytes here than
@@ -466,8 +468,8 @@ than incomplete: its bodies predated the response envelope, so it mocked a bare 
 `{ success, error, traceId }` shape. **A mock server serving shapes the frontend cannot parse is
 worse than no mock server.**
 
-So `scripts/contracts/client-collections-bundle.ts` produces them instead — **one committed file per
-tool, generated whole.** There is no intermediate on disk: no per-module slice to hand-edit, no
+So `scripts/contracts/client-collections-bundle.ts` produces them instead — **one gitignored file
+per tool, generated whole.** There is no intermediate on disk: no per-module slice to hand-edit, no
 header to keep in step with a footer, and nothing under `src/` that must never be opened.
 
 The traversal, the example synthesis and the four emitters live in
@@ -490,9 +492,9 @@ property of that configuration rather than of the package.
 - **identifiers are hashed from method and path**, not generated fresh, so regenerating rewrites
   only what actually changed rather than re-forking all three files.
 
-Two assertions hold it in place: each committed collection must equal a fresh run, and every
-collection must carry one request per operation the contract declares — which is precisely the
-check that was missing while they rotted.
+Two assertions hold it in place: each collection must equal a fresh run, and every collection must
+carry one request per operation the contract declares — which is precisely the check that was
+missing while they rotted.
 
 **A request the contract cannot describe still has a home — `src/modules/<name>/probes.ts`.** A
 collection is also where you keep the requests that prove the API *rejects* things, and a spec

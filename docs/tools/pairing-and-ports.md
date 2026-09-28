@@ -183,9 +183,10 @@ here that decided it — so there is no catalogue to publish and nothing to keep
 not a new defect.** The frontend compares against whichever backend its own `.env` names in
 `BACKEND_PATH` — not whichever one last ran `sync:frontend` — so the fix is to point that at this
 backend (unset, or `../boilerplate-node-backend`, is the default) and then run `sync:frontend` from
-here, in that order. The two backends' bundles are function-identical, and this one bundles
-byte-stably; the PHP twin does not, which is why the frontend's own check compares YAML parsed
-rather than as raw bytes. See the frontend's
+here, in that order. The two backends' bundles are NOT function-identical — the PHP twin trails this
+one by dozens of operations at any given time — and this one bundles byte-stably; the PHP twin does
+not, which is why the frontend's own check compares YAML parsed rather than as raw bytes. See the
+frontend's
 `boilerplate-vue-frontend/docs/reference/contracts.md#keeping-the-pair-in-step` for the full
 mechanism.
 
