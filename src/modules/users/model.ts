@@ -12,7 +12,7 @@ import bcrypt from 'bcrypt';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
-import { CreateUserBody, createUserBodyPasswordMin } from '@api/schemas.zod';
+import { CreateUserBody, createUserBodyPasswordMin, signupBodyUsernameMin } from '@api/schemas.zod';
 import { type User } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
@@ -281,10 +281,15 @@ export const zodUserSchema = CreateUserBody.extend({
         .email({ error: () => t('users.field-email-invalid') })
         .min(1, { error: () => t('users.field-email-required') }),
 
+    // `signupBodyUsernameMin` rather than a second hand-typed `3`: `users/openapi.yaml`'s own
+    // `CreateUserRequest`/`UpdateUserByIdRequest`/`ReplaceUserByIdRequest` only require `minLength:
+    // 1` (or nothing), so account's `SignupBody` — where the length floor is actually declared —
+    // is the one place this business rule lives; an admin creating or editing a user gets the same
+    // floor a self-service signup does.
     username: z
         .string()
         .min(1, { error: () => t('users.field-username-required') })
-        .min(3, { error: () => t('users.field-username-min') }),
+        .min(signupBodyUsernameMin, { error: () => t('users.field-username-min') }),
 
     // Complexity beyond length duplicates `PasswordNew`'s contract pattern in translated form —
     // the generated schema (`CreateUserBody`) would answer first in English, same reason as the
