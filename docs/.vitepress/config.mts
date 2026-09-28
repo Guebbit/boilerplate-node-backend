@@ -13,6 +13,7 @@ export default withMermaid(
                 { text: 'Home', link: '/' },
                 { text: 'Start', link: '/getting-started' },
                 { text: 'Start (Production)', link: '/getting-started-production' },
+                { text: 'Start a New Project', link: '/getting-started-new-project' },
                 { text: 'Demo Shop', link: '/demo-ecommerce/' },
                 { text: 'Theory', link: '/theory/' },
                 { text: 'Modules', link: '/modules/' },
