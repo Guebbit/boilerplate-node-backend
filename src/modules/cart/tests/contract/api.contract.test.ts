@@ -196,7 +196,7 @@ describe('PUT /cart/shipping-method', () => {
             .send({ shippingMethodId: 'standard' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.shippingMethodId).toBe('standard');
+        expect(response.body.data.shipping.selected).toBe('standard');
         expect(response.body.data.summary.shippingCost).toBeGreaterThanOrEqual(0);
     });
 
@@ -213,7 +213,7 @@ describe('PUT /cart/shipping-method', () => {
             .send({ shippingMethodId: null });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.shippingMethodId).toBeUndefined();
+        expect(response.body.data.shipping.selected).toBeNull();
     });
 
     it('matches the error contract for an unknown method', async () => {
