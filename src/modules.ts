@@ -66,6 +66,18 @@ export const enabledModuleLocales = (): string[] =>
         .filter((directory) => directory !== undefined);
 
 /**
+ * Every enabled module's own template directory, in registry order — what
+ * `registerTemplateDirectories` needs to know which EJS templates this build can render (SK-15).
+ * A module carries its own copy or none; this is the one place that turns the registry into the
+ * flat list `mailer.ts` takes, the same shape {@link enabledModuleLocales} gives `bootI18n`.
+ * @returns the template directories to register, one per module that ships one
+ */
+export const enabledModuleTemplateDirectories = (): string[] =>
+    enabledModules
+        .map((appModule) => appModule.templates)
+        .filter((directory) => directory !== undefined);
+
+/**
  * Every name a module in this build can carry — what a module table may key itself on instead of
  * `string`, so naming one this build does not mount is a compile error rather than a test that has
  * to run first (`scenarios/index.ts`'s `shopModules`).

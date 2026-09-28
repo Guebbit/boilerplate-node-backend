@@ -36,5 +36,6 @@ export default {
                 ownOrderIds(subject.userId).then((orderIds) => findShipmentsForOrders(orderIds))
         }
     ],
-    locales: path.join(__dirname, 'locales')
+    locales: path.join(__dirname, 'locales'),
+    templates: path.join(__dirname, 'templates')
 } satisfies AppModule;

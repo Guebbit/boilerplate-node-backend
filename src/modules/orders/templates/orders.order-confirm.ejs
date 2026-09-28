@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="<%= locale %>">
-<%- include("../layouts/email-template-head.ejs"); %>
+<%- include("/shared/templates/layouts/email-template-head.ejs"); %>
 <body>
 <main class="centered">
     <h1><%= greeting %></h1>
@@ -8,7 +8,9 @@
     <ul>
         <% lines.forEach(function (line) { %><li><%= line %></li><% }); %>
     </ul>
+    <p><%= total %></p>
+    <p><a href="<%= linkUrl %>"><%= linkLabel %></a></p>
 </main>
-<%- include("../layouts/default-footer.ejs"); %>
+<%- include("/shared/templates/layouts/default-footer.ejs"); %>
 </body>
 </html>

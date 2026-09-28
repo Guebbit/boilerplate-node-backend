@@ -7,28 +7,34 @@
  * restart-shaped memoisation to go stale.
  */
 
-import { isDemoMode } from '@infrastructure/runtime/demo-profile';
+import { createProviderRegistry } from '@infrastructure/runtime/provider-registry';
 import { googleOAuthProvider } from './google';
 import { isOAuthProviderConfigured } from '../config';
 import { githubOAuthProvider } from './github';
-import { fakeOAuthProvider } from './fake';
 import type { OAuthProvider } from './port';
 
+/** A registered entry is a FACTORY, not a value: "configured" can change between calls. */
+type OAuthProviderFactory = () => OAuthProvider | undefined;
+
 /**
- * Every implementation this build knows, keyed by the name a route/`OAuthAccount` uses.
- * `Partial<Record<...>>`, not `Record<...>`: a route param the registry doesn't recognise (a typo,
- * a provider never built) must resolve to `undefined` rather than call a hole in the map.
+ * Every implementation this PRODUCTION build knows, keyed by the name a route/`OAuthAccount`
+ * uses. A live deployment adds one file and calls {@link registerOAuthProvider} — no edit here
+ * required. `fake` (`./fake`) is NOT seeded here (SK-08): production code must not know a demo
+ * profile exists, so `scenarios/run-server.ts` registers it itself, the same way it composes its
+ * own mail transport.
  */
-const PROVIDERS: Partial<Record<string, () => OAuthProvider | undefined>> = {
+const registry = createProviderRegistry<OAuthProviderFactory>({
     google: () => (isOAuthProviderConfigured('google') ? googleOAuthProvider : undefined),
-    github: () => (isOAuthProviderConfigured('github') ? githubOAuthProvider : undefined),
-    // The demo profile's stand-in — see `./fake`'s doc for why it needs no credentials of its own.
-    fake: () => (isDemoMode() ? fakeOAuthProvider : undefined)
-};
+    github: () => (isOAuthProviderConfigured('github') ? githubOAuthProvider : undefined)
+});
+
+/** Add (or, in a test, override) one implementation without editing this file. */
+export const registerOAuthProvider = (name: string, factory: OAuthProviderFactory): void =>
+    registry.register(name, factory);
 
 /** The names `GET /account/oauth/providers` reports — a deployment with no keys set lists none. */
 export const enabledProviders = (): string[] =>
-    Object.keys(PROVIDERS).filter((name) => PROVIDERS[name]?.() !== undefined);
+    registry.names().filter((name) => registry.resolve(name)?.() !== undefined);
 
 /**
  * Resolve one provider by name, only if it is actually enabled — an unset `NODE_OAUTH_GOOGLE_*`
@@ -36,4 +42,4 @@ export const enabledProviders = (): string[] =>
  * `NODE_PAYMENT_PROVIDER` does for payments: loud (404 from the controller), never silently wrong.
  */
 export const resolveOAuthProvider = (name: string): OAuthProvider | undefined =>
-    PROVIDERS[name]?.();
+    registry.resolve(name)?.();

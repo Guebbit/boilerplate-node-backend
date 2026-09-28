@@ -108,6 +108,7 @@ export default {
         );
     },
     locales: path.join(__dirname, 'locales'),
+    templates: path.join(__dirname, 'templates'),
     /**
      * The order states the storefront and the admin both have a screen for.
      *

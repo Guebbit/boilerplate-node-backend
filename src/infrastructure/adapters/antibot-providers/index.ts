@@ -7,11 +7,41 @@
  */
 
 import { environmentChoice } from '@infrastructure/runtime/environment';
+import { createProviderRegistry } from '@infrastructure/runtime/provider-registry';
 import { noneProvider } from './none';
 import { turnstileProvider } from './turnstile';
 import { altchaProvider } from './altcha';
-import type { AntibotChallenge } from '@types';
 import type { RungVerdict } from '../antibot-verdict';
+
+/**
+ * The challenge shape a self-hosted provider hands the client verbatim — this port's own
+ * vocabulary for it, structurally identical to `modules/antibot`'s `AntibotChallenge` schema but
+ * declared here rather than imported from `@types`. Infrastructure must not type-check against a
+ * schema only one module owns (SK-01); the module's controller passes this straight to
+ * `successResponse<AntibotChallenge>` with no cast, since the two shapes agree field for field.
+ */
+export interface IssuedChallenge {
+    parameters: ChallengeParameters;
+    /** HMAC over the parameters, proving this server issued them. */
+    signature: string;
+}
+
+/** What the solver needs to derive the key a challenge asks for — ALTCHA's own parameter set. */
+export interface ChallengeParameters {
+    /** Key-derivation function, e.g. `PBKDF2/SHA-256`. */
+    algorithm: string;
+    nonce: string;
+    salt: string;
+    /** Iteration count — how much work solving takes. */
+    cost: number;
+    keyLength: number;
+    keyPrefix: string;
+    keySignature?: string;
+    memoryCost?: number;
+    parallelism?: number;
+    /** Unix seconds after which the challenge is refused, solved or not. */
+    expiresAt?: number;
+}
 
 /**
  * What an implementation must provide — and, for a REAL one, what it must additionally defend.
@@ -46,7 +76,7 @@ export interface HumanChallengeProvider {
      *
      * @returns the provider's own challenge, sent to the client verbatim
      */
-    issueChallenge?(): Promise<AntibotChallenge>;
+    issueChallenge?(): Promise<IssuedChallenge>;
 
     /**
      * Decide whether the token a client returned proves a person solved the challenge.
@@ -59,15 +89,20 @@ export interface HumanChallengeProvider {
 }
 
 /**
- * Every implementation this build knows. A real deployment adds one file and one line here.
- * Values are optional because most keys are absent — that is what makes the miss below a real
- * check rather than dead code.
+ * Every implementation this build knows. A live deployment adds one file and calls
+ * {@link registerHumanChallengeProvider} — no edit here required.
  */
-const PROVIDERS: Record<string, HumanChallengeProvider | undefined> = {
+const registry = createProviderRegistry<HumanChallengeProvider>({
     none: noneProvider,
     turnstile: turnstileProvider,
     altcha: altchaProvider
-};
+});
+
+/** Add (or, in a test, override) one implementation without editing this file. */
+export const registerHumanChallengeProvider = (
+    name: string,
+    provider: HumanChallengeProvider
+): void => registry.register(name, provider);
 
 /**
  * The configured provider, read fresh per call rather than memoised like `PaymentProvider`'s —
@@ -80,10 +115,10 @@ const PROVIDERS: Record<string, HumanChallengeProvider | undefined> = {
  *   as it would for `NODE_ANTIBOT_EMAIL_POLICY`
  */
 export const resolveHumanChallengeProvider = (): HumanChallengeProvider => {
-    const name = environmentChoice('NODE_ANTIBOT_PROVIDER', Object.keys(PROVIDERS), 'none');
-    // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are keys
-    // of PROVIDERS by construction, a guarantee the compiler cannot follow across the call.
-    return PROVIDERS[name]!;
+    const name = environmentChoice('NODE_ANTIBOT_PROVIDER', registry.names(), 'none');
+    // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are names
+    // the registry holds by construction, a guarantee the compiler cannot follow across the call.
+    return registry.resolve(name)!;
 };
 
 /** Whether this deployment has switched rung 3 on — i.e. picked anything but the no-op. */

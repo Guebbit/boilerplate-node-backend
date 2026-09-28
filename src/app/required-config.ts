@@ -11,15 +11,18 @@
  *   module's.
  * - The SMTP companions, since the kernel must not name the mail adapter directly — the probe
  *   itself lives with the adapter (`adapters/mailer.ts#missingSmtpCompanions`), this file only
- *   wires it in. Antibot's equivalent checks live on `modules/antibot`'s own manifest instead,
- *   since antibot is a real module with a manifest of its own.
- * - Three provider-selector probes: analytics, mail transport and the log personal-field mode
- *   each pick an implementation by name; a wrong name must fail at boot, not on the first request
- *   that needs it. `checkSelector` turns each resolver's own throw into the same shape every
- *   other check here produces.
- * - NOT `NODE_PAYMENT_PROVIDER` or `NODE_ANTIBOT_PROVIDER` — both are real modules with their own
- *   manifests, so their selectors are probed by `payments/module.ts`'s and `antibot/module.ts`'s
- *   own `customCheck`.
+ *   wires it in.
+ * - Four provider-selector probes: analytics, mail transport, the log personal-field mode and the
+ *   antibot human-challenge ladder each pick an implementation by name; a wrong name must fail at
+ *   boot, not on the first request that needs it. `checkSelector` turns each resolver's own throw
+ *   into the same shape every other check here produces.
+ * - Antibot's OWN checks (SK-06): a selected provider's missing secret, and an unrecognised
+ *   `NODE_ANTIBOT_EMAIL_POLICY`. Antibot is a real module (`modules/antibot`), but the human
+ *   -challenge GATE it configures is cross-cutting middleware `account`/`feedback` call directly
+ *   — deleting the module's HTTP surface would not stop the gate from running, so validating it
+ *   cannot live on a manifest that deleting the module also deletes.
+ * - NOT `NODE_PAYMENT_PROVIDER` — a real module (`payments`) whose gate IS the module, so its
+ *   selector is probed by `payments/module.ts`'s own `customCheck`.
  */
 
 import { checkSelector, type NonModuleChecks } from '@kernel/required-config';
@@ -27,6 +30,41 @@ import type { RequiredConfig } from '@kernel/registry';
 import { missingSmtpCompanions, resolveMailTransport } from '@infrastructure/adapters/mailer';
 import { resolvePersonalFieldMode } from '@infrastructure/adapters/logger';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
+import { isEmailPolicy } from '@infrastructure/adapters/antibot';
+import { resolveHumanChallengeProvider } from '@infrastructure/adapters/antibot-providers';
+
+/**
+ * What each selectable human-challenge provider cannot run without. `none` — the default — needs
+ * nothing, which is why the rung costs an untouched deployment no configuration at all.
+ */
+const ANTIBOT_PROVIDER_SECRETS: Readonly<Record<string, readonly string[]>> = {
+    altcha: ['NODE_ANTIBOT_ALTCHA_SECRET'],
+    turnstile: ['NODE_ANTIBOT_TURNSTILE_SITE_KEY', 'NODE_ANTIBOT_TURNSTILE_SECRET']
+};
+
+/**
+ * Selecting a human-challenge provider is a choice; selecting one without its secret is not. The
+ * provider would throw on the first guarded request instead of at boot — a signup outage that
+ * looks like a bug rather than a missing variable.
+ *
+ * @returns the variables the selected provider needs and does not have
+ */
+const missingAntibotProviderSecrets = (): string[] =>
+    (ANTIBOT_PROVIDER_SECRETS[process.env.NODE_ANTIBOT_PROVIDER ?? 'none'] ?? []).filter(
+        (key) => !process.env[key]
+    );
+
+/**
+ * Same reasoning as {@link missingAntibotProviderSecrets}: an unrecognized
+ * `NODE_ANTIBOT_EMAIL_POLICY` would otherwise only throw on the first signup, in the middle of a
+ * request, rather than at boot.
+ *
+ * @returns `['NODE_ANTIBOT_EMAIL_POLICY']` when the value is set and unrecognized, otherwise `[]`
+ */
+const invalidEmailPolicy = (): string[] => {
+    const raw = process.env.NODE_ANTIBOT_EMAIL_POLICY;
+    return raw !== undefined && !isEmailPolicy(raw) ? ['NODE_ANTIBOT_EMAIL_POLICY'] : [];
+};
 
 /**
  * `NODE_URL` is unconditional: unset, `account/oauth/config.ts` builds a relative OAuth redirect
@@ -62,6 +100,9 @@ export const APP_NON_MODULE_CHECKS: NonModuleChecks = {
         missingSmtpCompanions,
         () => checkSelector('NODE_ANALYTICS_PROVIDER', resolveAnalyticsProvider),
         () => checkSelector('NODE_MAIL_TRANSPORT', resolveMailTransport),
-        () => checkSelector('NODE_LOG_PERSONAL_FIELDS', resolvePersonalFieldMode)
+        () => checkSelector('NODE_LOG_PERSONAL_FIELDS', resolvePersonalFieldMode),
+        () => checkSelector('NODE_ANTIBOT_PROVIDER', resolveHumanChallengeProvider),
+        missingAntibotProviderSecrets,
+        invalidEmailPolicy
     ]
 };

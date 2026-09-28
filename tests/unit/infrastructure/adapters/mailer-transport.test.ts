@@ -26,7 +26,6 @@ import {
     resetTransporter,
     resolveMailTransport
 } from '@infrastructure/adapters/mailer';
-import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 import { withoutEnvironmentInThisFile } from '@tests/environment';
 
 /**
@@ -176,18 +175,17 @@ describe('credentials and identity', () => {
 });
 
 /**
- * Which transport a process uses, as `NODE_MAIL_TRANSPORT` and the two rails above it decide.
+ * Which transport a process uses, as `NODE_MAIL_TRANSPORT` and the one rail above it decide.
  *
- * The rails are the point: a deployment may state a preference, but it may not state one that
- * empties the demo profile's outbox or lets a test run reach a real mail server.
+ * The rail is the point: a deployment may state a preference, but it may not state one that lets
+ * a test run reach a real mail server. The demo profile's own guarantee — its `.env` naming
+ * `smtp` must not quietly empty the outbox `GET /__test/emails` reads from — is no longer this
+ * adapter's job (SK-08): `scenarios/run-server.ts` forces the variable itself, covered by that
+ * script's own tests rather than here.
  */
 describe('resolveMailTransport', () => {
     /** Every variable these cases drive, so each starts from "this deployment said nothing". */
     withoutEnvironmentInThisFile(['NODE_MAIL_TRANSPORT', 'NODE_ENV']);
-
-    afterEach(() => {
-        enableDemoProfile(false);
-    });
 
     it('sends over SMTP when the deployment names nothing', () => {
         expect(resolveMailTransport()).toBe('smtp');
@@ -203,15 +201,6 @@ describe('resolveMailTransport', () => {
         process.env.NODE_MAIL_TRANSPORT = 'carrier-pigeon';
 
         expect(() => resolveMailTransport()).toThrow(/Unknown NODE_MAIL_TRANSPORT/);
-    });
-
-    it('keeps the demo profile on its outbox whatever the deployment asked for', () => {
-        // `GET /__test/emails` is the paired suite's only way to read a reset token. A `.env`
-        // naming SMTP must not quietly empty it.
-        process.env.NODE_MAIL_TRANSPORT = 'smtp';
-        enableDemoProfile();
-
-        expect(resolveMailTransport()).toBe('outbox');
     });
 
     it('refuses the outbox in production, where it would silently send nothing', () => {

@@ -38,6 +38,7 @@ export default {
     basePath: '/webhooks',
     routes: router,
     locales: path.join(__dirname, 'locales'),
+    templates: path.join(__dirname, 'templates'),
     /**
      * The permission keys this module introduces. Deleting the module deletes them:
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file

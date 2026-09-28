@@ -10,6 +10,7 @@
 
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
 import { environmentFlag, environmentChoice } from '@infrastructure/runtime/environment';
+import { createProviderRegistry } from '@infrastructure/runtime/provider-registry';
 import type { CallerContext } from '@types';
 import { umamiAnalyticsProvider } from './umami';
 import { posthogAnalyticsProvider } from './posthog';
@@ -108,15 +109,18 @@ export interface AnalyticsProvider {
 // ─── Registry ────────────────────────────────────────────────────────────────
 
 /**
- * Every implementation this build knows. `none` is the spelling for "analytics off". Optional
- * because most keys are absent — that is what makes the miss below a real check rather than dead
- * code, the same reasoning `antibot-providers/index.ts#PROVIDERS` states for its own registry.
+ * Every implementation this build knows. `none` is the spelling for "analytics off". A live
+ * deployment adds one file and calls {@link registerAnalyticsProvider} — no edit here required.
  */
-const PROVIDERS: Record<string, AnalyticsProvider | undefined> = {
+const registry = createProviderRegistry<AnalyticsProvider>({
     umami: umamiAnalyticsProvider,
     posthog: posthogAnalyticsProvider,
     none: noneAnalyticsProvider
-};
+});
+
+/** Add (or, in a test, override) one implementation without editing this file. */
+export const registerAnalyticsProvider = (name: string, provider: AnalyticsProvider): void =>
+    registry.register(name, provider);
 
 /** Memoised provider handle — see `resolveAnalyticsProvider`. */
 let provider: AnalyticsProvider | undefined;
@@ -133,10 +137,11 @@ let provider: AnalyticsProvider | undefined;
  */
 export const resolveAnalyticsProvider = (): AnalyticsProvider => {
     if (!provider) {
-        const name = environmentChoice('NODE_ANALYTICS_PROVIDER', Object.keys(PROVIDERS), 'umami');
+        const name = environmentChoice('NODE_ANALYTICS_PROVIDER', registry.names(), 'umami');
         // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are
-        // keys of PROVIDERS by construction, a guarantee the compiler cannot follow across the call.
-        provider = PROVIDERS[name]!;
+        // names the registry holds by construction, a guarantee the compiler cannot follow
+        // across the call.
+        provider = registry.resolve(name)!;
     }
     return provider;
 };

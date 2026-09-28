@@ -5,7 +5,6 @@
  * See: docs/tools/email-and-rendering.md
  */
 
-import path from 'node:path';
 // EJS = the HTML templating engine used for email bodies. `Data` is its type for the
 // variables interpolated into a template (`<%= user.name %>`).
 import ejs, { type Data } from 'ejs';
@@ -25,40 +24,22 @@ import { ATTR_MESSAGING_SYSTEM } from '@opentelemetry/semantic-conventions/incub
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber, environmentChoice } from '@infrastructure/runtime/environment';
-import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import { recordDemoEmail } from '@infrastructure/adapters/demo-outbox';
 import { resolveSpooled, discardSpooled } from '@infrastructure/adapters/mail-spool';
 import { withSpan } from '@infrastructure/observability/tracer';
 // The queue name comes from the adapter, not from the worker that drains it: producer and
 // consumer must agree on the spelling, and `infrastructure` may not import application code to get it.
 import { publishToQueue, EMAIL_QUEUE, type JobPriority } from '@infrastructure/adapters/queue';
+// Split into its own leaf module, with no `ejs`/`nodemailer` import of its own — see that
+// file's own header for why `tests/support/setup.ts` needs it kept that way. Re-exported below so
+// every OTHER caller keeps importing from this one file, the mail adapter's own public surface.
+import { templateFile } from '@infrastructure/adapters/template-registry';
 
-/**
- * Absolute path to the EJS email templates, overridable with `NODE_EMAIL_TEMPLATES_DIR`.
- *
- * Under `shared/` rather than in a module: the template NAME travels through RabbitMQ to a
- * consumer that may be another process, so a bare filename stays portable where a path into
- * `src/modules` would not — the owner lives in the filename prefix instead. A function, not a
- * constant, for the same lazy-env reason as {@link getTransporter}.
- *
- * See: docs/tools/email-and-rendering.md#templates-interpolate-they-do-not-translate
- */
-export const emailTemplatesDirectory = (): string =>
-    process.env.NODE_EMAIL_TEMPLATES_DIR
-        ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR)
-        : path.resolve(process.cwd(), 'shared/templates/emails');
-
-/**
- * The file an outbox name renders from.
- *
- * The single point where the identifier becomes a path, and so the single place `.ejs` is written.
- * Which engine renders a mail is this backend's business; the name is not, because the demo outbox
- * publishes it and the paired frontend asserts on it against both backends.
- *
- * @param templateName - an {@link EmailContent.template} name, without extension
- */
-export const templateFile = (templateName: string): string =>
-    path.resolve(emailTemplatesDirectory(), `${templateName}.ejs`);
+export {
+    registerTemplateDirectories,
+    templateFile,
+    registeredTemplateNames
+} from '@infrastructure/adapters/template-registry';
 
 /**
  * How this deployment treats an email.
@@ -79,20 +60,21 @@ const MAIL_TRANSPORTS: readonly MailTransport[] = ['smtp', 'log', 'outbox'];
 /**
  * Which transport this process uses, resolved per send.
  *
- * Two safety rails sit ABOVE the setting, because neither is a preference a deployment gets to
- * express. The demo profile's outbox IS its control surface — `GET /__test/emails` is how the
- * paired e2e suite reads a reset token — so a `.env` naming `smtp` must not quietly empty it. And
- * a test run must never open a socket whatever the environment says, or the suite delivers real
- * mail using the real credentials `dotenv` just loaded.
+ * One safety rail sits ABOVE the setting: a test run must never open a socket whatever the
+ * environment says, or the suite delivers real mail using the real credentials `dotenv` just
+ * loaded. The demo profile's own guarantee — its outbox IS its control surface
+ * (`GET /__test/emails`), so nothing may quietly empty it — is no longer this adapter's job
+ * (SK-08): `scenarios/run-server.ts` forces `NODE_MAIL_TRANSPORT=outbox` itself, the same
+ * unconditional override it already uses to force Redis and RabbitMQ off, so this reads it back
+ * through the ordinary setting below rather than through a second, demo-aware branch.
  *
- * Below those, `NODE_MAIL_TRANSPORT` decides, and SMTP is what a deployment that says nothing
- * gets — the behaviour every existing caller already had.
+ * `NODE_MAIL_TRANSPORT` decides, and SMTP is what a deployment that says nothing gets — the
+ * behaviour every existing caller already had.
  *
  * @throws {Error} when it is set to something none of the three transports recognise, or to
  *   `outbox` in production
  */
 export const resolveMailTransport = (): MailTransport => {
-    if (isDemoMode()) return 'outbox';
     if (process.env.NODE_ENV === 'test') return 'log';
 
     const named = environmentChoice('NODE_MAIL_TRANSPORT', MAIL_TRANSPORTS, 'smtp');
@@ -288,7 +270,12 @@ export const sendTemplatedEmail = (
                  * the worker that calls it, possibly in another process, hours later) does not
                  * need to know what a locale is.
                  */
-                .renderFile(templateFile(templateName), { ...data })
+                // `root: process.cwd()` — a template's own `/shared/templates/layouts/...`
+                // include is root-relative (EJS: a leading `/` resolves against `root`, not
+                // against the including file's own directory), so this stays correct however
+                // deep under `src/modules/<name>/templates` the file itself now lives.
+                // https://ejs.co/#docs (Includes)
+                .renderFile(templateFile(templateName), { ...data }, { root: process.cwd() })
                 .then((html) =>
                     send({
                         // Default sender; spread below lets a caller override it.

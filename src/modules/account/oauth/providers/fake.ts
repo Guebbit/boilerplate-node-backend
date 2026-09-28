@@ -1,7 +1,8 @@
 /**
  * @module
  * The fake identity provider — mirrors `payments/providers/fake.ts`: no network call, no consent
- * screen, gated behind `isDemoMode()`. `authorizeUrl` skips straight to the callback with a fixed
+ * screen. Registered into `../providers`' registry only by `scenarios/run-server.ts` (SK-08),
+ * never by production code. `authorizeUrl` skips straight to the callback with a fixed
  * `code`, so clicking "Continue with Google" in a Cypress spec never has to leave this app; the
  * `state` still round-trips through the real cookie, so the CSRF check gets genuine coverage too.
  *

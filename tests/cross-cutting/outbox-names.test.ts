@@ -24,6 +24,19 @@ import path from 'node:path';
 import { templateFile } from '@infrastructure/adapters/mailer';
 import { MODULES_ROOT } from '@tests/paths';
 
+// `templateFile` resolves against the collection `tests/support/setup.ts` already built once for
+// this worker, the same as every other suite that sends a templated mail (SK-15).
+
+/** `templateFile` now throws on an unregistered name rather than handing back a path that is
+ * merely missing — both are "not a template that exists" for this file's purposes. */
+const templateFileOrUndefined = (name: string): string | undefined => {
+    try {
+        return templateFile(name);
+    } catch {
+        return undefined;
+    }
+};
+
 /** Every `src/modules/<name>/emails.ts`, discovered rather than listed. */
 const listEmailFiles = (): { module: string; file: string }[] =>
     readdirSync(MODULES_ROOT)
@@ -114,8 +127,14 @@ it('points every name at a template that exists', () => {
      * asked for the mail.
      */
     const missing = publishedNames()
-        .filter(({ name }) => !existsSync(templateFile(name)))
-        .map(({ module, name }) => `${module}: ${name} → ${templateFile(name)}`);
+        .filter(({ name }) => {
+            const file = templateFileOrUndefined(name);
+            return !file || !existsSync(file);
+        })
+        .map(
+            ({ module, name }) =>
+                `${module}: ${name} → ${templateFileOrUndefined(name) ?? 'unregistered'}`
+        );
 
     expect(missing).toEqual([]);
 });

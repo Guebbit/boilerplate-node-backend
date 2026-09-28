@@ -16,6 +16,33 @@ import { createHmac } from 'node:crypto';
 // fails at jest's globalSetup runtime.
 import { environmentChoice } from '../runtime/environment';
 
+/** A structured log call's own object form: a `message` plus whatever context goes with it. */
+export type LogFields = Record<string, unknown>;
+
+/**
+ * The logging port every other tier depends on instead of winston directly (SK-04). Narrow on
+ * purpose: it states exactly the five calls this codebase makes — `logger.info('text')`,
+ * `logger.error('text', error)`, `logger.error({ message, ...meta })`, `logger.log(level, ...)` —
+ * so a project swapping winston for another library only has to satisfy this, not winston's own,
+ * much wider `Logger` interface.
+ */
+export interface Logger {
+    /** @param meta - a bare string, an `Error`, or a metadata object; redacted before it is written */
+    debug(input: string | LogFields, meta?: unknown): void;
+
+    /** @param meta - a bare string, an `Error`, or a metadata object; redacted before it is written */
+    info(input: string | LogFields, meta?: unknown): void;
+
+    /** @param meta - a bare string, an `Error`, or a metadata object; redacted before it is written */
+    warn(input: string | LogFields, meta?: unknown): void;
+
+    /** @param meta - a bare string, an `Error`, or a metadata object; redacted before it is written */
+    error(input: string | LogFields, meta?: unknown): void;
+
+    /** The level is an explicit first argument rather than a fixed method — `audit.ts` picks it per event. */
+    log(level: string, message: string, meta?: unknown): void;
+}
+
 /**
  * Field names that must never be logged in clear text.
  *
@@ -318,7 +345,7 @@ export const resolveConsoleFormat = (): winston.Logform.Format =>
  * `winston.createLogger()` returns the object every module imports as `logger`.
  * Call it as `logger.info('text')` or `logger.info({ message: 'text', ...meta })`.
  */
-export const logger = winston.createLogger({
+export const logger: Logger = winston.createLogger({
     // Minimum severity that gets emitted at all (see `resolveLogLevel`).
     level: resolveLogLevel(),
     // Logger-wide pipeline. The Console transport below overrides it per-environment,
@@ -345,7 +372,7 @@ export const logger = winston.createLogger({
  * silenced by `NODE_LOG_LEVEL` (hard-coded `info`) or reformatted for dev reading (always
  * `baseFormat`) — the shape has to stay machine-stable. Fed by `@infrastructure/observability/audit`.
  */
-export const auditLogger = winston.createLogger({
+export const auditLogger: Logger = winston.createLogger({
     // Fixed, not env-driven: audit trails cannot be turned off by configuration.
     level: 'info',
     format: baseFormat,

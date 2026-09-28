@@ -13,7 +13,7 @@ plus deleting that line. Everything on this page exists to make those two senten
 flowchart TD
     A["<b>src/app</b><br/>this application: assembly<br/><i>bootstrap · system route</i>"]
     M["<b>src/modules/*</b><br/>one domain each, top to bottom<br/><i>products · orders · account · …</i>"]
-    P["<b>src/kernel</b><br/>the module system itself<br/><i>registry · events · auth port · guard</i>"]
+    P["<b>src/kernel</b><br/>module system + authn/authz<br/><i>registry · events · auth port · guard</i>"]
     C["<b>src/infrastructure</b><br/>substrate — never knows modules exist<br/><i>adapters · http · persistence · i18n · runtime</i>"]
 
     A ==> M
@@ -64,7 +64,10 @@ the substrate is what the application runs ON, and none of it knows what an orde
 shared rule belongs to whichever domain OWNS it, exported through that module's barrel — see
 `src/modules/orders/domain/totals.ts`, which sat here until the rename made the leak obvious.
 
-So `kernel` is small on purpose. It is the module system, and nothing else:
+So `kernel` holds only what would lose its reason to exist if modules did — which today is NOT
+just the module system machinery (`registry.ts`, `events.ts`): six of its ten files, and most of
+its code, are the authn/authz surface every module's guard shares (SK-16). That is a real weight,
+not an oversight — the table below is what earns each file its place, module system or not:
 
 | File                            | Why it cannot be infrastructure                                                                          |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------- |

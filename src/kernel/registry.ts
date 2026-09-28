@@ -281,6 +281,18 @@ export interface AppModule {
     locales?: string;
 
     /**
+     * Absolute path to this module's `templates/` directory, holding the EJS email/PDF templates
+     * it owns — `orders`' order-confirm email, `invoicing`'s PDF, and so on (SK-15). Deleting the
+     * module now deletes its templates with it; before this field they lived in `shared/templates`
+     * regardless of which module rendered them, so `rm -rf` on a module left them behind with no
+     * owner. `app.ts` passes these to `registerTemplateDirectories` before the first request that
+     * could render one. `shared/templates/layouts` holds only include PARTIALS no template is
+     * ever resolved BY NAME, so it is not collected here — every template reaches it directly, by
+     * its own fixed path, the same way `shared/contracts` is reached by the bundler.
+     */
+    templates?: string;
+
+    /**
      * This module's {@link ImageTarget}s, keyed by the `collection` string an
      * `ImageDigestJobPayload` names. Most modules have none; a module whose documents can carry an
      * uploaded image registers one entry per such collection.

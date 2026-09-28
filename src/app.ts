@@ -26,6 +26,7 @@ import { start as startDatabase } from '@infrastructure/runtime/database';
 import { startCache } from '@infrastructure/adapters/cache';
 import { startQueue } from '@infrastructure/adapters/queue';
 import { registerWorkers } from '@app/workers';
+import { registerTemplateDirectories } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
@@ -40,7 +41,7 @@ import {
 import { isTranslationAvailable } from '@kernel/translation';
 
 import { registerModules } from '@kernel/registry';
-import { enabledModules, enabledModuleLocales } from './modules';
+import { enabledModules, enabledModuleLocales, enabledModuleTemplateDirectories } from './modules';
 import { APP_NON_MODULE_CHECKS } from '@app/required-config';
 
 import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
@@ -114,6 +115,11 @@ export const createApp = (): AppInstance => {
                 // step needed to add a language — the middleware negotiates against the same list.
                 bootI18n(enabledModuleLocales())
             )
+            .then(() => {
+                // Same reasoning, for a module's own EJS templates (SK-15) — before the first
+                // request or queue job that could resolve a template name against them.
+                registerTemplateDirectories(enabledModuleTemplateDirectories());
+            })
             /*
              * Layer whatever has been edited on top of the files just loaded, then keep doing it.
              *

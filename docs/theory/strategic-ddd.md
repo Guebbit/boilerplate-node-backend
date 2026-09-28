@@ -187,7 +187,7 @@ drifting to `core`), or that a `generic` module carries no `domain/` folder. Pla
 the module it describes is still worth doing, since a doc table can go stale the moment a new module
 lands and nothing points back at it; it is not a claim that the label is enforced beyond its spelling.
 
-## 4a. Foundation and shop — an enforced fact, not a naming convention
+## 4a. Foundation and shop — an enforced fact, not a naming convention {#4a-foundation-and-shop}
 
 Subdomain distillation (§4) asks "how much modelling effort does this deserve". A second, separate
 question asks "does this module ship with every deployment, or is it the demo shop's own worked

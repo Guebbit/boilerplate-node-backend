@@ -1,9 +1,10 @@
 /**
  * @module
  * Contract tests for the OAuth surface: `GET /account/oauth/providers`, and the full
- * start → callback round trip through the `fake` provider (`enableDemoProfile()`) — the same path
- * a Cypress spec walks against a real browser, exercised here against the real routes, the real
- * CSRF cookie, and a real database.
+ * start → callback round trip through the `fake` provider — the same path a Cypress spec walks
+ * against a real browser, exercised here against the real routes, the real CSRF cookie, and a
+ * real database. Registers `fake` the same way `scenarios/run-server.ts` does (SK-08): production
+ * seeds no such entry, so this suite has to put it there itself.
  */
 
 import '@tests/contract';
@@ -13,16 +14,13 @@ import { api } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
 import { codeFor } from '@tests/totp';
 import { userRepository } from '@modules/users/tests/factories';
-import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
+import { registerOAuthProvider } from '../../oauth/providers';
+import { fakeOAuthProvider } from '../../oauth/providers/fake';
 
 setupTestDb();
 
-/** So the fake provider these cases need is switched off again for every other suite. */
 beforeAll(() => {
-    enableDemoProfile();
-});
-afterAll(() => {
-    enableDemoProfile(false);
+    registerOAuthProvider('fake', () => fakeOAuthProvider);
 });
 
 /**
@@ -33,7 +31,7 @@ const attemptCookies = (start: { headers: Record<string, unknown> }): string =>
     cookieHeader(start, 'oauth_state', 'oauth_verifier');
 
 describe('GET /account/oauth/providers', () => {
-    it('lists the fake provider under the demo profile', async () => {
+    it('lists the fake provider once it is registered', async () => {
         const response = await api().get('/account/oauth/providers');
 
         expect(response.status).toBe(200);

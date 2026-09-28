@@ -23,7 +23,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
-import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
+import { registerOAuthProvider } from '../../oauth/providers';
+import { fakeOAuthProvider } from '../../oauth/providers/fake';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { accountAuditActions } from '../../audit';
@@ -56,12 +57,9 @@ jest.mock('@infrastructure/observability/audit', () => {
 
 setupTestDb();
 
-/** OAuth needs the fake provider; off again afterwards for every other suite. */
+/** OAuth needs the fake provider — production seeds no such entry, so this suite registers it. */
 beforeAll(() => {
-    enableDemoProfile();
-});
-afterAll(() => {
-    enableDemoProfile(false);
+    registerOAuthProvider('fake', () => fakeOAuthProvider);
 });
 afterEach(() => {
     jest.restoreAllMocks();

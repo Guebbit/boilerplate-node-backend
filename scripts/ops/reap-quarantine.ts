@@ -39,9 +39,8 @@ const main = (): Promise<void> => {
     const root = quarantineRoot();
 
     return reapDirectory(root, Date.now() - retentionMs(), 'Quarantine')
-        .then(
-            ({ checked, reaped }) =>
-                void logger.info({ message: 'Quarantine reaped.', root, checked, reaped })
+        .then(({ checked, reaped }) =>
+            logger.info({ message: 'Quarantine reaped.', root, checked, reaped })
         )
         .then(() => start());
 };

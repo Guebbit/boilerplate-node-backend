@@ -15,6 +15,11 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { bootI18n } from '@infrastructure/i18n';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
+// The leaf module, NOT `@infrastructure/adapters/mailer` — that file also imports `nodemailer`,
+// and this runs in `setupFiles`, before a test file's own `jest.mock('nodemailer', …)` is even
+// hoisted. Importing the mailer here would hand every mocking test file an already-evaluated,
+// un-mockable `nodemailer` — see `template-registry.ts`'s own header.
+import { registerTemplateDirectories } from '@infrastructure/adapters/template-registry';
 import { MODULES_ROOT } from '@tests/paths';
 
 /**
@@ -263,3 +268,16 @@ void bootI18n(
  * would be asserting behaviour the running service does not have.
  */
 registerValidationMessages();
+
+/*
+ * The third half of `app.ts`'s boot (SK-15): without it, `templateFile()` throws on every name a
+ * suite's own `sendTemplatedEmail`/`enqueueEmail` call tries to resolve, since nothing has
+ * collected the per-module directories yet. Globbed off disk for the same reason `bootI18n`'s
+ * directories are, above — importing `enabledModules` here would load every module before any
+ * `jest.mock` in an individual test file could intercept it.
+ */
+registerTemplateDirectories(
+    readdirSync(MODULES_ROOT)
+        .map((name) => path.join(MODULES_ROOT, name, 'templates'))
+        .filter((directory) => existsSync(directory))
+);

@@ -56,5 +56,6 @@ export default {
         });
         onDomainEvent(PAYMENT_REFUNDED, ({ orderId }) => issueCreditNote(orderId));
     },
-    locales: path.join(__dirname, 'locales')
+    locales: path.join(__dirname, 'locales'),
+    templates: path.join(__dirname, 'templates')
 } satisfies AppModule;

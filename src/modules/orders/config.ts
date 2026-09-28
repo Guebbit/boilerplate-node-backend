@@ -28,8 +28,9 @@ import type { OrderTransferInstructions } from '@types';
 /**
  * The shop's own country — the ONLY jurisdiction VAT is ever charged at: no destination lookup,
  * no per-customer address, legal below the EU's €10,000 distance-selling threshold. Required at
- * boot via this module's manifest; read defensively regardless, since `NODE_ENV=test` and the demo
- * profile both skip that check.
+ * boot via this module's manifest; read defensively regardless, since `NODE_ENV=test` skips that
+ * check — the demo profile does not: it sets `NODE_SHOP_COUNTRY` itself, the same as any other
+ * deployment must (SK-08).
  * @returns the configured ISO-3166 country code, or `undefined`
  */
 export const shopCountry = (): string | undefined => process.env.NODE_SHOP_COUNTRY || undefined;
