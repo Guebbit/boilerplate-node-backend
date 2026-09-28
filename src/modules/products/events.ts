@@ -9,16 +9,19 @@
 declare module '@kernel/events' {
     interface DomainEventMap {
         /**
-         * A product is about to stop being reachable — soft-deleted, hard-deleted, or restored.
+         * A product just stopped being reachable — soft-deleted or hard-deleted. Never fires on a
+         * restore: what the delete already set in motion (pending orders cancelled, carts and
+         * wishlists emptied) stays done, since a restore puts the product back on sale, not undoes
+         * the past — see `restoreById`'s own docblock.
          *
-         * Emitted and awaited *before* the write, so listeners that drop references still see a
-         * consistent database. Fires on restore as well: the cart lines were already removed when
-         * the product was soft-deleted, and re-adding them is the user's call, not the catalogue's.
+         * Emitted and awaited AFTER the write, not before it: this is a past-tense fact, and firing
+         * it first would let every listener's cascade (cart emptying the line, `orders` cancelling
+         * a pending order) run even if the write that follows then fails.
          *
          * `hardDelete` is what lets a listener tell the destructive half apart from the reversible
          * one — `inventory` deletes this product's level row ONLY when it is `true`: a soft delete
-         * (or its restore) must leave the counters exactly where they are, since the row is what a
-         * restore has to come back to.
+         * must leave the counters exactly where they are, since the row is what a restore has to
+         * come back to.
          */
         'product.deleted': { productId: string; hardDelete: boolean };
 

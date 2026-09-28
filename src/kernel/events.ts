@@ -57,9 +57,11 @@ export const onDomainEvent = <TEventName extends DomainEventName>(
 /**
  * Emit a domain event and wait for every handler to settle.
  *
- * Handlers run **sequentially and awaited**, because the emitters here depend on the effect having
- * happened: a product is removed from carts before it is removed from the database. Fire-and-forget
- * would turn an ordering guarantee into a race.
+ * Handlers run **sequentially and awaited** so two listeners on the same payload never race each
+ * other, and the emitter can await the whole cascade rather than fire-and-forget it. This is
+ * orthogonal to WHEN an emitter fires: a past-tense event (`products`' `product.deleted`) fires
+ * only after its own write actually lands, precisely so a handler here is never awaited for an
+ * effect the emitter hasn't earned the right to claim yet.
  *
  * A throwing handler is logged and does not stop the remaining handlers or the emitter. A listener
  * that fails must not roll back an operation that has already been authorised — the emitting module

@@ -585,9 +585,11 @@ export const getAdmin = (id: string): Promise<ProductAdmin | null> =>
  * soft delete stamps `deletedAt`, and repeating it is a no-op — DELETE must be safe to retry, so
  * undoing it is {@link restoreById}'s job, never a second DELETE's.
  *
- * `product.deleted` is emitted and awaited before the write, so a listener that cleans up
- * references (cart empties the product from every cart) has run before it can stop resolving —
- * this module doesn't know who listens, which keeps the dependency arrow one-way.
+ * `product.deleted` is emitted and awaited AFTER the write, not before it — a past-tense event is
+ * a report, not an "about to happen" hook: firing it first and having the write then fail would
+ * leave every subscriber's cascade (cart emptying the line, `orders` cancelling a pending order)
+ * already run against a product that, as far as the database is concerned, was never removed at
+ * all. This module still doesn't know who listens, which keeps the dependency arrow one-way.
  *
  * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
  */
@@ -604,9 +606,10 @@ export const remove = (
     // row, `orders`' pending-order cancellation) tell the two apart. A soft delete can be
     // restored, so both the rows and the counters must survive it.
     if (hardDelete)
-        return emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: true })
-            .then(() => productRepository.deleteOne(product))
+        return productRepository
+            .deleteOne(product)
             .then(() => removeTranslations('product', id))
+            .then(() => emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: true }))
             .then(() => imageStore.remove(product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('products.hard-deleted')));
 
@@ -615,8 +618,11 @@ export const remove = (
         return Promise.resolve(generateSuccess(product, 200, t('products.soft-deleted')));
 
     product.deletedAt = new Date();
-    return emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: false })
-        .then(() => productRepository.save(product))
+    return productRepository
+        .save(product)
+        .then((saved) =>
+            emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: false }).then(() => saved)
+        )
         .then((saved) => generateSuccess(saved, 200, t('products.soft-deleted')));
 };
 
