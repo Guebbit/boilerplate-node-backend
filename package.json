@@ -50,6 +50,7 @@
         "test:unit": "tsx scripts/testing/run-suite.ts unit",
         "test:cross-cutting": "tsx scripts/testing/run-suite.ts cross-cutting",
         "measure:demo-strip": "tsx scripts/testing/measure-demo-strip.ts",
+        "demo:remove": "tsx scripts/ops/demo-remove.ts",
         "test:unit:coverage": "cross-env NODE_OPTIONS=--max-old-space-size=4096 tsx scripts/testing/run-suite.ts unit cross-cutting --unsharded --coverage --runInBand",
         "test:integration": "tsx scripts/testing/run-suite.ts integration",
         "test:contract": "tsx scripts/testing/run-suite.ts contract",

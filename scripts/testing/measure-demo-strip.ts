@@ -17,11 +17,11 @@
  * See: docs/theory/strategic-ddd.md#4a-foundation-and-shop
  */
 
-import { cpSync, mkdirSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
+import { cpSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import { readModuleDescriptor } from '../docs/module-descriptor';
+import { readShopModuleNames } from './shop-module-names';
 
 /** Repo root, two levels up from `scripts/testing/`. */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -49,22 +49,6 @@ const CHECKS: readonly Check[] = [
     { label: 'test:cross-cutting', command: 'npm', args: ['run', 'test:cross-cutting'] },
     { label: 'docs:build', command: 'npm', args: ['run', 'docs:build'] }
 ];
-
-/**
- * Every module folder labelled `group: shop` — read fresh, off each module's own `module.yaml`
- * via the same typed reader `generate-module-graph.ts` uses for `subdomain`, so a relabelled
- * module changes the strip without an edit here.
- */
-const shopModules = (): string[] => {
-    const modulesRoot = path.join(REPO_ROOT, 'src', 'modules');
-    return readdirSync(modulesRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .filter(
-            (name) =>
-                readModuleDescriptor(path.join(modulesRoot, name, 'module.yaml')).group === 'shop'
-        );
-};
 
 /** Copy the checkout into `SCRATCH`, skipping what {@link SKIP_ENTRIES} names. */
 const assembleScratchCopy = (): void => {
@@ -99,7 +83,7 @@ const run = (check: Check): boolean => {
     return result.status === 0;
 };
 
-const shop = shopModules();
+const shop = readShopModuleNames(REPO_ROOT);
 console.info(`[demo-strip] stripping ${shop.length} group: shop module(s): ${shop.join(', ')}`);
 
 assembleScratchCopy();
