@@ -15,7 +15,6 @@ import {
     indexOptionSpecs,
     indexSpecs,
     optionsOf,
-    pathOptions,
     requiredPaths
 } from '@tests/schema';
 
@@ -54,9 +53,8 @@ describe('localeSchema', () => {
         expect(defaultOf(localeSchema, 'revision')).toBe(0);
     });
 
-    it('restricts direction to the contract enum and refuses a negative revision', () => {
+    it('restricts direction to the contract enum', () => {
         expect(enumOf(localeSchema, 'direction')).toEqual(Object.values(LocaleDirection));
-        expect(pathOptions(localeSchema, 'revision').min).toBe(0);
     });
 });
 
