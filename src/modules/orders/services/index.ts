@@ -77,6 +77,7 @@ export {
     bankTransferIbanFriendly,
     bankTransferMaxOpenPerAccount,
     shopCurrency,
+    orderCurrency,
     shopCountry,
     shipToCountries
 } from '../config';

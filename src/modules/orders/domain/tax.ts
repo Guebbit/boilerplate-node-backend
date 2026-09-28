@@ -96,6 +96,8 @@ export interface OrderTaxInput {
      * raw aggregate output; absent on an order that chose no delivery method.
      */
     shippingCost?: unknown;
+    /** The ISO-4217 code this order is priced in — the order's own frozen currency. */
+    currency: string;
 }
 
 /**
@@ -140,21 +142,25 @@ const foldIntoRate = (
 /**
  * Every VAT figure an order's response and invoice need, derived from each line's FROZEN price,
  * quantity and rate, plus shipping's own apportioned share.
- * @param order - the order's lines and its frozen shipping cost
+ * @param order - the order's lines, its frozen shipping cost, and the currency both are priced in
  * @returns the full breakdown
  */
-export const orderTaxBreakdown = ({ items, shippingCost }: OrderTaxInput): OrderTaxBreakdown => {
+export const orderTaxBreakdown = ({
+    items,
+    shippingCost,
+    currency
+}: OrderTaxInput): OrderTaxBreakdown => {
     const rates = items.map((item) => frozenRate(item));
 
     const grossAmounts = items.map((item) =>
-        scaleMoney(toMinorUnits(item.product?.price), wholeCount(item.quantity))
+        scaleMoney(toMinorUnits(item.product?.price, currency), wholeCount(item.quantity))
     );
     // Shipping is ancillary to the goods it delivers (see the module docblock) — a digital line
     // carries none of it, so its weight in the apportionment is zero rather than its gross value.
     const shippingWeights = items.map((item, index) =>
         isShippedItem(item) ? grossAmounts[index] : NO_MONEY
     );
-    const shippingShares = apportion(toMinorUnits(shippingCost), shippingWeights);
+    const shippingShares = apportion(toMinorUnits(shippingCost, currency), shippingWeights);
 
     let netTotal: Money = NO_MONEY;
     let taxTotal: Money = NO_MONEY;
@@ -181,9 +187,9 @@ export const orderTaxBreakdown = ({ items, shippingCost }: OrderTaxInput): Order
         foldIntoRate(shippingByRateMap, rate, shippingNet, shippingTax);
 
         return {
-            taxAmount: toDecimalAmount(tax),
-            netAmount: toDecimalAmount(net),
-            grossAmount: toDecimalAmount(addMoney(net, tax))
+            taxAmount: toDecimalAmount(tax, currency),
+            netAmount: toDecimalAmount(net, currency),
+            grossAmount: toDecimalAmount(addMoney(net, tax), currency)
         };
     });
 
@@ -192,17 +198,17 @@ export const orderTaxBreakdown = ({ items, shippingCost }: OrderTaxInput): Order
             .toSorted(([left], [right]) => left - right)
             .map(([rate, { net, tax }]) => ({
                 rate,
-                netAmount: toDecimalAmount(net),
-                taxAmount: toDecimalAmount(tax),
-                grossAmount: toDecimalAmount(addMoney(net, tax))
+                netAmount: toDecimalAmount(net, currency),
+                taxAmount: toDecimalAmount(tax, currency),
+                grossAmount: toDecimalAmount(addMoney(net, tax), currency)
             }));
 
     return {
         lines,
-        netTotal: toDecimalAmount(netTotal),
-        taxTotal: toDecimalAmount(taxTotal),
-        shippingNetAmount: toDecimalAmount(shippingNetTotal),
-        shippingTaxAmount: toDecimalAmount(shippingTaxTotal),
+        netTotal: toDecimalAmount(netTotal, currency),
+        taxTotal: toDecimalAmount(taxTotal, currency),
+        shippingNetAmount: toDecimalAmount(shippingNetTotal, currency),
+        shippingTaxAmount: toDecimalAmount(shippingTaxTotal, currency),
         taxSummary: summaryRowsOf(byRate),
         // A rate whose whole shipping share rounded down to zero — no shipping cost at all, or
         // every line at that rate priced at zero, so `apportion` has no positive weight to split

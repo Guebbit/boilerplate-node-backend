@@ -8,7 +8,7 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-import { orderFrontendLink } from './config';
+import { orderFrontendLink, orderCurrency } from './config';
 import { orderTotal } from './domain';
 import type { OrderTransferInstructions } from '@types';
 
@@ -26,7 +26,22 @@ export interface OrderLines {
     items: { quantity: number; product: { title: string; price: number } }[];
     /** The shipping frozen at checkout. Absent on an order that chose no delivery method. */
     shippingCost?: number;
+    /** The order's own frozen currency; `orderCurrency`'s fallback covers an order that predates it. */
+    currency?: string;
 }
+
+/**
+ * What every builder below actually quotes — `orderTotal`, resolved against `order`'s own
+ * currency. Explicit fields, not `{ ...order, currency }`: `order` is often a hydrated Mongoose
+ * document (`notify.ts`, `cancel.ts`), whose schema paths are prototype getters a spread copies
+ * nothing from.
+ */
+const totalOf = (order: OrderLines): number =>
+    orderTotal({
+        items: order.items,
+        shippingCost: order.shippingCost,
+        currency: orderCurrency(order)
+    });
 
 /**
  * The placed-order email, sent to the customer — "order received, awaiting payment", never
@@ -63,7 +78,7 @@ export const orderConfirmEmail = (
                     price: item.product.price
                 })
             ),
-            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            total: t('orders.email-confirm.total', { total: totalOf(order) }),
             linkLabel: t('orders.email-confirm.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
             footer: t('email.footer')
@@ -100,7 +115,7 @@ export const paymentSucceededEmail = (
                     price: item.product.price
                 })
             ),
-            total: t('orders.email-paid.total', { total: orderTotal(order) }),
+            total: t('orders.email-paid.total', { total: totalOf(order) }),
             linkLabel: t('orders.email-paid.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
             footer: t('email.footer')
@@ -146,7 +161,7 @@ export const bankTransferInstructionsEmail = (
                     timeStyle: 'short'
                 }).format(payBy)
             }),
-            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            total: t('orders.email-confirm.total', { total: totalOf(order) }),
             // Order-number allocation doesn't wait on payment (see `order-numbering.ts`), so the
             // same link, rendering the same receipt on demand, applies here as on the paid path.
             linkLabel: t('orders.email-transfer.link-label'),
@@ -171,7 +186,7 @@ export const bankTransferExpiredEmail = (locale: string, order: OrderLines): Ema
             pageMetaLinks: [],
             greeting: t('orders.email-transfer-expired.greeting'),
             body: t('orders.email-transfer-expired.body'),
-            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            total: t('orders.email-confirm.total', { total: totalOf(order) }),
             footer: t('email.footer')
         }
     };
@@ -193,7 +208,7 @@ export const cardHoldExpiredEmail = (locale: string, order: OrderLines): EmailCo
             pageMetaLinks: [],
             greeting: t('orders.email-card-expired.greeting'),
             body: t('orders.email-card-expired.body'),
-            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            total: t('orders.email-confirm.total', { total: totalOf(order) }),
             footer: t('email.footer')
         }
     };

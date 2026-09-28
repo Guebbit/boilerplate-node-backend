@@ -105,7 +105,8 @@ const buildVatBlock = (
         items: document.lines.map((line) => ({
             quantity: line.quantity,
             product: { price: line.unitPrice, taxRate: line.taxRate }
-        }))
+        })),
+        currency: document.currency
     }).lines;
 
     const rows: DocumentVatRow[] = document.lines.map((line, index) => ({

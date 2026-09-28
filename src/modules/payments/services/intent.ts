@@ -18,7 +18,7 @@ import {
     orderTotal,
     isPayable,
     unavailableLines,
-    shopCurrency
+    orderCurrency
 } from '@modules/orders';
 import { userService } from '@modules/users';
 import { resolvePaymentProvider, providerNamed } from '../providers';
@@ -64,8 +64,11 @@ export const resolvePayerId = (orderUserId: string | undefined): Promise<string 
  * The amount is frozen here through `orderTotal` — the same function the order's serializer and
  * the confirmation email call, so the intent cannot ask for a different number than the order
  * shows. Lines alone is not that number: shipping is frozen on the order at checkout and the
- * contract counts it in `totalPrice`. Re-asking is the double-click case and answers the same
- * intent; an order whose money already moved answers 409.
+ * contract counts it in `totalPrice`. `orderCurrency` resolves the SAME currency the order was
+ * priced in — the shop's live setting only for an order that predates the field — so a provider
+ * charging in JPY never sees a EUR-shaped amount for a currency change made after the order was
+ * placed. Re-asking is the double-click case and answers the same intent; an order whose money
+ * already moved answers 409.
  *
  * The provider is asked for an intent only when this payment does not already have one — a second
  * intent for the same order is a second thing the customer could pay.
@@ -109,9 +112,13 @@ export const createIntent = async (
     // second intent for the same order is a second thing the customer could pay.
     const provider = resolvePaymentProvider();
     const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
+    const currency = orderCurrency(order);
     const payment = await paymentRepository.upsertIntent(orderId, payerId, {
-        amount: orderTotal(order),
-        currency: shopCurrency(),
+        // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
+        // document; spreading it copies nothing, since its schema paths are prototype getters,
+        // not the document's own enumerable properties.
+        amount: orderTotal({ items: order.items, shippingCost: order.shippingCost, currency }),
+        currency,
         provider: provider.name
     });
     if (!payment) return notPayable();

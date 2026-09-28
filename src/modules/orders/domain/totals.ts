@@ -38,9 +38,10 @@ export interface LineItemTotals {
  * Sum a list of priced line items. `toMinorUnits`/`wholeCount` absorb junk, so a line whose
  * product failed to populate contributes nothing rather than turning the total into `NaN`.
  * @param items - the priced lines
+ * @param currency - the ISO-4217 code these lines are priced in — decides the rounding scale
  * @returns line count, total quantity, and the total as a decimal amount
  */
-export const sumLineItems = (items: readonly LineItem[]): LineItemTotals => {
+export const sumLineItems = (items: readonly LineItem[], currency: string): LineItemTotals => {
     let quantity = 0;
     let price: Money = NO_MONEY;
 
@@ -48,11 +49,14 @@ export const sumLineItems = (items: readonly LineItem[]): LineItemTotals => {
         // One reading of the quantity for both columns — counted and charged must be the same units.
         const itemQuantity = wholeCount(item.quantity);
         quantity += itemQuantity;
-        price = addMoney(price, scaleMoney(toMinorUnits(item.product?.price), itemQuantity));
+        price = addMoney(
+            price,
+            scaleMoney(toMinorUnits(item.product?.price, currency), itemQuantity)
+        );
     }
 
     // `count` is lines as given; `quantity` is units. A dropped line still counts as a line.
-    return { count: items.length, quantity, price: toDecimalAmount(price) };
+    return { count: items.length, quantity, price: toDecimalAmount(price, currency) };
 };
 
 /** An order, as far as its grand total is concerned. */
@@ -63,14 +67,25 @@ export interface OrderTotalInput {
      * optional because a checkout that chose no delivery method owes nothing for shipping.
      */
     shippingCost?: unknown;
+    /**
+     * The ISO-4217 code this order (or cart preview) is priced in — the order's own frozen one,
+     * or the shop's current one for a cart that hasn't checked out yet.
+     */
+    currency: string;
 }
 
 /**
  * What the customer owes: the lines plus the frozen shipping cost. `money.ts` owns rounding, this
  * owns composition — the order, its payment intent, and its confirmation email must all agree on
  * this number, so none of them sums it independently.
- * @param order - the order's lines and its frozen shipping cost
+ * @param order - the order's lines, its frozen shipping cost, and the currency both are priced in
  * @returns the grand total as the decimal amount the contract publishes
  */
-export const orderTotal = ({ items, shippingCost }: OrderTotalInput): number =>
-    toDecimalAmount(addMoney(toMinorUnits(sumLineItems(items).price), toMinorUnits(shippingCost)));
+export const orderTotal = ({ items, shippingCost, currency }: OrderTotalInput): number =>
+    toDecimalAmount(
+        addMoney(
+            toMinorUnits(sumLineItems(items, currency).price, currency),
+            toMinorUnits(shippingCost, currency)
+        ),
+        currency
+    );

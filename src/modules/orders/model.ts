@@ -29,6 +29,7 @@ import {
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
 import { isPayable } from './domain/lifecycle';
+import { orderCurrency } from './config';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
 
@@ -505,15 +506,15 @@ const applyOrderItems = (serialized: Record<string, unknown>) => {
  * and update all agree. (Name collision with `PaginationMeta.totalItems` — unrelated,
  * pre-existing.)
  */
-const applyOrderTotals = (serialized: Record<string, unknown>) => {
+const applyOrderTotals = (serialized: Record<string, unknown>, currency: string) => {
     const items = Array.isArray(serialized.items) ? (serialized.items as LineItem[]) : [];
-    const { count, quantity } = sumLineItems(items);
+    const { count, quantity } = sumLineItems(items, currency);
 
     serialized.totalItems = count;
     serialized.totalQuantity = quantity;
     // What the customer owes, from the one function that decides it — the same call the payment
     // intent and the confirmation email make, so the three cannot quote different numbers.
-    serialized.totalPrice = orderTotal({ items, shippingCost: serialized.shippingCost });
+    serialized.totalPrice = orderTotal({ items, shippingCost: serialized.shippingCost, currency });
 };
 
 /**
@@ -521,13 +522,14 @@ const applyOrderTotals = (serialized: Record<string, unknown>) => {
  * `shippingNetAmount`/`shippingTaxAmount` split, and the per-rate `taxSummary` from the lines'
  * frozen `taxRate` — added onto the already-normalized items `applyOrderItems` produced.
  */
-const applyOrderTax = (serialized: Record<string, unknown>) => {
+const applyOrderTax = (serialized: Record<string, unknown>, currency: string) => {
     const items = Array.isArray(serialized.items) ? serialized.items : [];
     // `orderTaxBreakdown` only reads `product.price`/`quantity`/`product.taxRate` — the same
     // narrowing `applyOrderTotals` above already relies on for `LineItem`.
     const breakdown = orderTaxBreakdown({
         items: items as TaxableLineItem[],
-        shippingCost: serialized.shippingCost
+        shippingCost: serialized.shippingCost,
+        currency
     });
 
     for (const [index, item] of (items as Record<string, unknown>[]).entries()) {
@@ -589,8 +591,11 @@ export const applyOrderTransform = applySerialization(orderSchema, {
     omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides', 'paidAt'],
     after: (serialized) => {
         applyOrderItems(serialized);
-        applyOrderTotals(serialized);
-        applyOrderTax(serialized);
+        // Resolved once, not read twice: an order predating `currency` falls back to the shop's
+        // current setting, same rule `issue-invoice.ts` freezes an invoice's own currency with.
+        const currency = orderCurrency({ currency: serialized.currency as string | undefined });
+        applyOrderTotals(serialized, currency);
+        applyOrderTax(serialized, currency);
         applyTransferInstructions(serialized);
     }
 });

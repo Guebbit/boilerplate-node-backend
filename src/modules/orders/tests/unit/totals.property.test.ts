@@ -4,7 +4,8 @@
  * behind every order total and cart summary: total by construction, a line whose product failed
  * to populate contributes nothing rather than NaN. Additivity and scaling are asserted EXACTLY in
  * cents, since a float accumulator only satisfies that to a tolerance — seeded, so any
- * counterexample found is written back as an ordinary `it()`.
+ * counterexample found is written back as an ordinary `it()`. Everything here prices in EUR;
+ * `sumLineItems`/`orderTotal`'s own per-currency rounding is `money.property.test.ts`'s job.
  */
 import fc from 'fast-check';
 import { PROPERTY_RUNS } from '@tests/knobs';
@@ -12,6 +13,9 @@ import { sumLineItems, orderTotal, type LineItem } from '../../domain/totals';
 
 /** One seed for the file, and one place to change it; the count is `TEST_PROPERTY_RUNS`. */
 const RUN = { seed: 20_260_809, numRuns: PROPERTY_RUNS, endOnFailure: true } as const;
+
+/** Every case here prices in EUR — the currency is not what's under test in this file. */
+const EUR = 'EUR';
 
 /**
  * The two nullish spellings a failed populate can leave behind — both must contribute 0 rather
@@ -51,7 +55,7 @@ describe('sumLineItems — totality', () => {
         // propagates: one unpopulated product poisons the whole order.
         fc.assert(
             fc.property(fc.array(hostileLineItem()), (items) => {
-                const { count, quantity, price } = sumLineItems(items);
+                const { count, quantity, price } = sumLineItems(items, EUR);
 
                 expect(Number.isNaN(count)).toBe(false);
                 expect(Number.isNaN(quantity)).toBe(false);
@@ -64,7 +68,7 @@ describe('sumLineItems — totality', () => {
     it('never throws, for any input at all', () => {
         fc.assert(
             fc.property(fc.array(hostileLineItem()), (items) => {
-                expect(() => sumLineItems(items)).not.toThrow();
+                expect(() => sumLineItems(items, EUR)).not.toThrow();
             }),
             RUN
         );
@@ -75,7 +79,7 @@ describe('sumLineItems — totality', () => {
         // still exists. `CartSummary.itemsCount` depends on that distinction.
         fc.assert(
             fc.property(fc.array(hostileLineItem()), (items) => {
-                expect(sumLineItems(items).count).toBe(items.length);
+                expect(sumLineItems(items, EUR).count).toBe(items.length);
             }),
             RUN
         );
@@ -84,7 +88,7 @@ describe('sumLineItems — totality', () => {
 
 describe('sumLineItems — arithmetic invariants', () => {
     it('is zero on every axis for an empty cart', () => {
-        expect(sumLineItems([])).toEqual({ count: 0, quantity: 0, price: 0 });
+        expect(sumLineItems([], EUR)).toEqual({ count: 0, quantity: 0, price: 0 });
     });
 
     it('is order-independent', () => {
@@ -92,8 +96,8 @@ describe('sumLineItems — arithmetic invariants', () => {
         // is the property that would catch an accumulator whose rounding depended on sequence.
         fc.assert(
             fc.property(fc.array(lineItem()), (items) => {
-                const forwards = sumLineItems(items);
-                const backwards = sumLineItems(items.toReversed());
+                const forwards = sumLineItems(items, EUR);
+                const backwards = sumLineItems(items.toReversed(), EUR);
 
                 expect(backwards).toEqual(forwards);
             }),
@@ -104,7 +108,7 @@ describe('sumLineItems — arithmetic invariants', () => {
     it('is non-negative for non-negative input', () => {
         fc.assert(
             fc.property(fc.array(lineItem()), (items) => {
-                const { quantity, price } = sumLineItems(items);
+                const { quantity, price } = sumLineItems(items, EUR);
 
                 expect(quantity).toBeGreaterThanOrEqual(0);
                 expect(price).toBeGreaterThanOrEqual(0);
@@ -118,9 +122,9 @@ describe('sumLineItems — arithmetic invariants', () => {
         // out: `0.1 + 0.2` is not `0.3`, however exact the cents behind them were.
         fc.assert(
             fc.property(fc.array(lineItem()), fc.array(lineItem()), (left, right) => {
-                const combined = sumLineItems([...left, ...right]);
-                const separate = sumLineItems(left);
-                const other = sumLineItems(right);
+                const combined = sumLineItems([...left, ...right], EUR);
+                const separate = sumLineItems(left, EUR);
+                const other = sumLineItems(right, EUR);
 
                 expect(combined.count).toBe(separate.count + other.count);
                 expect(combined.quantity).toBe(separate.quantity + other.quantity);
@@ -137,9 +141,10 @@ describe('sumLineItems — arithmetic invariants', () => {
         // an example with quantity 1 cannot distinguish.
         fc.assert(
             fc.property(fc.array(lineItem(), { maxLength: 20 }), (items) => {
-                const single = sumLineItems(items);
+                const single = sumLineItems(items, EUR);
                 const doubled = sumLineItems(
-                    items.map((item) => ({ ...item, quantity: item.quantity * 2 }))
+                    items.map((item) => ({ ...item, quantity: item.quantity * 2 })),
+                    EUR
                 );
 
                 expect(doubled.quantity).toBe(single.quantity * 2);
@@ -155,11 +160,11 @@ describe('sumLineItems — arithmetic invariants', () => {
                 fc.array(lineItem()),
                 fc.integer({ min: 0, max: 100_000 }),
                 (items, price) => {
-                    const withFreeLine = sumLineItems([
-                        ...items,
-                        { quantity: 0, product: { price } }
-                    ]);
-                    const without = sumLineItems(items);
+                    const withFreeLine = sumLineItems(
+                        [...items, { quantity: 0, product: { price } }],
+                        EUR
+                    );
+                    const without = sumLineItems(items, EUR);
 
                     expect(withFreeLine.price).toBe(without.price);
                     expect(withFreeLine.count).toBe(without.count + 1);
@@ -185,7 +190,9 @@ describe('orderTotal', () => {
                 fc.array(lineItem(), { maxLength: 20 }),
                 fc.constantFrom(undefined, null, 0),
                 (items, shippingCost) => {
-                    expect(orderTotal({ items, shippingCost })).toBe(sumLineItems(items).price);
+                    expect(orderTotal({ items, shippingCost, currency: EUR })).toBe(
+                        sumLineItems(items, EUR).price
+                    );
                 }
             ),
             RUN
@@ -200,9 +207,9 @@ describe('orderTotal', () => {
                 fc.array(lineItem(), { maxLength: 20 }),
                 fc.integer({ min: 0, max: 100_000 }),
                 (items, shippingCost) => {
-                    expect(Math.round(orderTotal({ items, shippingCost }) * 100)).toBe(
-                        Math.round(sumLineItems(items).price * 100) + shippingCost * 100
-                    );
+                    expect(
+                        Math.round(orderTotal({ items, shippingCost, currency: EUR }) * 100)
+                    ).toBe(Math.round(sumLineItems(items, EUR).price * 100) + shippingCost * 100);
                 }
             ),
             RUN
@@ -215,10 +222,22 @@ describe('orderTotal', () => {
                 fc.array(hostileLineItem()),
                 fc.oneof(fc.double(), fc.string(), nullish(), fc.boolean()),
                 (items, shippingCost) => {
-                    expect(Number.isNaN(orderTotal({ items, shippingCost }))).toBe(false);
+                    expect(Number.isNaN(orderTotal({ items, shippingCost, currency: EUR }))).toBe(
+                        false
+                    );
                 }
             ),
             RUN
         );
+    });
+
+    it("rounds to the currency's OWN minor unit, not always the cent", () => {
+        // The same basket, in EUR (2dp), JPY (0dp) and KWD (3dp) — `orderTotal` must round each
+        // to its own scale rather than the EUR one every earlier case in this file assumes.
+        const items = [{ quantity: 1, product: { price: 19.9 } }];
+
+        expect(orderTotal({ items, shippingCost: 5, currency: 'EUR' })).toBe(24.9);
+        expect(orderTotal({ items, shippingCost: 5, currency: 'JPY' })).toBe(25);
+        expect(orderTotal({ items, shippingCost: 5, currency: 'KWD' })).toBe(24.9);
     });
 });
