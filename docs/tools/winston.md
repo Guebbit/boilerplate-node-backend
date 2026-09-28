@@ -183,9 +183,9 @@ Two destinations, from the single `emitAuditEvent` call:
 | `auditLogger` → stdout | the compliance record — append-only, shipped to [Loki](./loki.md) | a broken logger is a real problem                             |
 | Mongo `auditlogs`      | the queryable copy behind `GET /observability/audit`              | silently, into a warning — never fails the triggering request |
 
-The Mongo write goes through an `IAuditSink` port that `app.ts` registers after the database
+The Mongo write goes through an `AuditSink` port that `app.ts` registers after the database
 connects. `src/infrastructure/**` may not import `@modules/*`, so the dependency is inverted rather
-than smuggled — and the 53 `emitAuditEvent` call sites know about neither destination.
+than smuggled — and the call sites that reach `recordAudit` know about neither destination.
 
 Before this, the endpoint read a 200-entry in-process ring buffer. It could not answer
 "what has this user done": 200 entries **in total** across every actor, a different slice in each

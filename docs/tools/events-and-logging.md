@@ -73,7 +73,7 @@ Everything else here has a single sink. Audit has two, on purpose:
 ```
 emitAuditEvent()
    ├─→ auditLogger (Winston) → stdout → Promtail → Loki      the compliance record
-   └─→ IAuditSink → auditLogService.record → Mongo auditlogs  the queryable copy
+   └─→ AuditSink → auditLogService.record → Mongo auditlogs  the queryable copy
 ```
 
 The **log** is the source of truth. It is append-only, shipped off the box, and is what an
@@ -85,9 +85,9 @@ from the API, with no log backend wired up. It carries a TTL index
 request continues and the log line has already gone out.
 
 Why a sink rather than a direct call — `src/infrastructure/**` is the bottom of the dependency graph and
-`no-restricted-imports` forbids it from reaching up into `@modules/*`, where the audit repository
+`eslint-plugin-boundaries` forbids it from reaching up into `@modules/*`, where the audit repository
 now lives. So `audit.ts` declares
-the port and `app.ts` supplies the implementation at boot, the same shape as `IImageStore`. The
+the port and `app.ts` supplies the implementation at boot, the same shape as `ImageStore`. The
 practical payoff: swapping the destination touches one line in `app.ts`, not the 53 call sites.
 
 ## The domain event bus, and what it is not
