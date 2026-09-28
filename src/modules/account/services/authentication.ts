@@ -134,39 +134,57 @@ const PASSWORD_RESET_TOKEN_TTL_MS = environmentNumber(
 /**
  * Issue a password-reset token and deliver it — or silently do nothing for an unregistered
  * address. The silence is the feature: `POST /account/reset-request` always answers 200, so the
- * response can't be used to enumerate registered addresses. The boolean return is for the
- * caller's metric only, never a client-visible refusal — the caller audits unconditionally.
+ * response can't be used to enumerate registered addresses. `AUTH_PASSWORD_RESET_REQUESTED` fires
+ * unconditionally for the same reason — an audit row present only for a real address would leak
+ * the same fact the response is built to hide, and a DB failure below still counts as an attempt.
+ * The boolean return is for the caller's metric only, never a client-visible refusal.
  * Like {@link requestAccountDeletion}, the token value never leaves this file.
- * @returns `true` when a mail was queued, `false` when the address has no account
+ * @returns `true` when a mail was queued, `false` when the address has no account or the lookup failed
  */
 export const requestPasswordReset = (
     email: string | undefined,
     context: CallerContext
 ): Promise<boolean> => {
-    if (!email) return Promise.resolve(false);
-
     // Credentials included: issuing the token pushes onto this document's `tokens`.
-    return userService.findByEmail(email).then((user) => {
-        if (!user) return false;
+    const attempt = email
+        ? userService.findByEmail(email).then((user) => {
+              if (!user) return false;
 
-        return tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then(
-            (token) => {
-                /*
-                 * The account's own language, so the email matches the rest of what this user
-                 * receives from us rather than the browser that happened to submit the form. The
-                 * copy is finished before the job is published, so the worker needs no locale.
-                 */
-                const mail = resetRequestEmail(
-                    recipientLocale(user.locale, context),
-                    user.username,
-                    token
-                );
-                // High priority: a token-bearing link the user is actively waiting on, not a notification.
-                void sendAccountMail(user.email, mail);
-                return true;
-            }
-        );
-    });
+              return tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then(
+                  (token) => {
+                      /*
+                       * The account's own language, so the email matches the rest of what this
+                       * user receives from us rather than the browser that happened to submit the
+                       * form. The copy is finished before the job is published, so the worker
+                       * needs no locale.
+                       */
+                      const mail = resetRequestEmail(
+                          recipientLocale(user.locale, context),
+                          user.username,
+                          token
+                      );
+                      // High priority: a token-bearing link the user is actively waiting on.
+                      void sendAccountMail(user.email, mail);
+                      return true;
+                  }
+              );
+          })
+        : Promise.resolve(false);
+
+    // Fail closed: a rejected lookup still answers `false` and still records the attempt, so
+    // neither the response nor the trail can be used to tell "no such account" from "something
+    // broke" apart.
+    return attempt
+        .catch(() => false)
+        .then((sent) => {
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
+                actor_user_id: 'anonymous',
+                actor_role: 'anonymous',
+                outcome: 'success'
+            });
+            return sent;
+        });
 };
 
 /**
