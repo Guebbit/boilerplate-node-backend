@@ -164,11 +164,11 @@ everything else should use the simplest thing that works.
 | `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`, `invoicing`                                              |
 | `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `observability`, `feedback`, `access`, `users`, `account`, `api-keys` |
 
-The rule of thumb that follows: **a `generic` module should not carry a `domain/` folder.** A
-pure-rules layer inside authentication or i18n is effort spent on the part of the system that should
-stay replaceable. There is deliberately no converse rule — `products` is core and has no `domain/`,
-because its rules are currently thin enough to live in the service, and a rule that forced the
-folder would only produce empty ones.
+The rule of thumb that follows: **a `generic` module should not carry a `domain/` folder**, with
+one exception — a 3+-state status field earns the folder regardless of subdomain, which is why
+`feedback` (`generic`) has one and `products` (`core`) doesn't. See
+[Domain layer](./domain-layer.md#mandatory-for-a-3-state-status-optional-otherwise) for the full
+rule and every module it reaches.
 
 ::: warning These values are an example, not a finding
 A boilerplate has no core domain. It cannot know what the next project's will be, and what it ships

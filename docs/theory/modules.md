@@ -265,23 +265,23 @@ flowchart TD
     class CN,EX,TS side;
 ```
 
-| File                                                 | Required?                             | What it is                                                                          |
-| ---------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------- |
-| `module.ts`                                          | **yes**                               | the manifest — the only file `src/modules.ts` imports                               |
-| `index.ts`                                           | only if a sibling imports this module | the public barrel; a module nothing imports has none                                |
-| `routes.ts` + `controllers/`                         | only if the domain serves HTTP        | `audit-logs` has neither                                                            |
-| `service.ts` · `repository.ts` · `model.ts`          | only if it owns data                  | `observability` owns none — it serves URLs over other domains' data                 |
-| `services/`                                          | when `service.ts` outgrows one file   | see [Layers](./layers.md#when-service-ts-becomes-services)                          |
-| `presenter.ts` (`presenters.ts` for >1 resource)     | if it serves HTTP and owns a model    | the one place a document becomes wire shape — see [below](#the-module-template)     |
-| `domain/`                                            | only if the module has rules to prove | see [Domain Layer](./domain-layer.md)                                               |
-| `openapi.yaml`                                       | if it serves HTTP                     | its standalone slice of the REST contract                                           |
-| `asyncapi.yaml`                                      | if it owns a channel                  | the same, for the async contract, server included — `observability` is the only one |
-| `probes.ts`                                          | as needed                             | the requests a spec cannot describe — see below                                     |
-| `providers/`                                         | if the domain has an outbound port    | `payments` is the only one — see below                                              |
-| `audit.ts` · `metrics.ts` · `locales/` · `events.ts` | as needed                             | the domain's slice of what used to be shared registries                             |
-| `analytics.ts` · `factories.ts`                      | as needed                             | the event names it emits; how its test/demo records are built                       |
-| `emails.ts`                                          | only if the domain sends email        | the finished copy of its emails — see below                                         |
-| `tests/unit/` · `tests/contract/`                    | yes, in practice                      | deleted with the module                                                             |
+| File                                                 | Required?                                                              | What it is                                                                              |
+| ---------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `module.ts`                                          | **yes**                                                                | the manifest — the only file `src/modules.ts` imports                                   |
+| `index.ts`                                           | only if a sibling imports this module                                  | the public barrel; a module nothing imports has none                                    |
+| `routes.ts` + `controllers/`                         | only if the domain serves HTTP                                         | `audit-logs` has neither                                                                |
+| `service.ts` · `repository.ts` · `model.ts`          | only if it owns data                                                   | `observability` owns none — it serves URLs over other domains' data                     |
+| `services/`                                          | when `service.ts` outgrows one file                                    | see [Layers](./layers.md#when-service-ts-becomes-services)                              |
+| `presenter.ts` (`presenters.ts` for >1 resource)     | if it serves HTTP and owns a model                                     | the one place a document becomes wire shape — see [below](#the-module-template)         |
+| `domain/`                                            | only if the module has rules to prove, MANDATORY for a 3+-state status | see [Domain Layer](./domain-layer.md#mandatory-for-a-3-state-status-optional-otherwise) |
+| `openapi.yaml`                                       | if it serves HTTP                                                      | its standalone slice of the REST contract                                               |
+| `asyncapi.yaml`                                      | if it owns a channel                                                   | the same, for the async contract, server included — `observability` is the only one     |
+| `probes.ts`                                          | as needed                                                              | the requests a spec cannot describe — see below                                         |
+| `providers/`                                         | if the domain has an outbound port                                     | `payments` is the only one — see below                                                  |
+| `audit.ts` · `metrics.ts` · `locales/` · `events.ts` | as needed                                                              | the domain's slice of what used to be shared registries                                 |
+| `analytics.ts` · `factories.ts`                      | as needed                                                              | the event names it emits; how its test/demo records are built                           |
+| `emails.ts`                                          | only if the domain sends email                                         | the finished copy of its emails — see below                                             |
+| `tests/unit/` · `tests/contract/`                    | yes, in practice                                                       | deleted with the module                                                                 |
 
 The table lists what a module MAY have. What decides **where** in the module a file goes is one
 rule, and `account` is the module that forced it to be written down:
@@ -344,7 +344,7 @@ src/modules/<name>/
   service.ts                                   DEFAULT
   services/<use-case>.ts                       REPLACES it past ~300 lines, ~12 members, or two audiences
   model.ts repository.ts                       IF it owns a collection; every conditional write is a named repository method
-  domain/                                      IF a rule is worth a unit test; MANDATORY for a 3+-state status or money/quantity maths
+  domain/                                      IF a rule is worth a unit test; MANDATORY for a 3+-state status
   events.ts                                    IF it emits: past tense, emitted AFTER the write, with an id
   audit/analytics/metrics/probes/rate-limits/config/emails.ts   IF there is something to declare
   providers/                                   IF it owns a port to an outside service (an ACL)
