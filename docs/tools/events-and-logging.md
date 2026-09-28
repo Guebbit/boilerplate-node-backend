@@ -127,8 +127,11 @@ loses the event outright. Emails already go through RabbitMQ, which is durable â
 in-process hop in front of a durable queue is backwards. Cache invalidation wants the opposite of
 async fan-out: it should happen immediately after the write, in the same process.
 
-If cross-process fan-out is ever genuinely needed, the answer is a RabbitMQ topic exchange fed by a
-transactional outbox. See
+`webhooks` is the case where cross-process fan-out genuinely was needed, and it does not grow this
+bus into a broker either: `webhooks/services/publish.ts` listens the same way any in-process
+subscriber does, but writes a durable delivery row BEFORE it publishes to the queue â€” a fire-and-forget
+publish that fails leaves the row `pending` for `sweep:webhook-retries` to pick up, never lost. That
+durable-row-then-publish shape is the pattern to copy, not a bus grown wider. See
 [AsyncAPI Workflow](../api/asyncapi-workflow.md#naming-convention) for why a channel is only
 declared for something that actually travels on a wire.
 
