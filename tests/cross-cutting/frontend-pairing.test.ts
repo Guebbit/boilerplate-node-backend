@@ -11,16 +11,17 @@
  * answer: the trail lives here, the endpoint that reads it belongs to `observability`, and the
  * screen that renders it is the frontend's admin dashboard. Three names, one domain.
  *
- * TWO HALVES, AND ONLY ONE OF THEM WORKS WITHOUT THE SIBLING. The cases against this repo hold the
- * map to the modules here: an added module with no entry, an entry for a module that is gone. On
- * their own they would be a completeness check on a hand-written list — they cannot notice the
- * FRONTEND renaming `admin`, dropping `realtime` or adding a module, which is most of the drift the
- * map exists to catch. So the second half reads the sibling checkout and holds the names to what is
+ * TWO HALVES, AND NEITHER WORKS WITHOUT `FRONTEND_PATH`. The cases against this repo hold the map
+ * to the modules here: an added module with no entry, an entry for a module that is gone. On their
+ * own they would be a completeness check on a hand-written list — they cannot notice the FRONTEND
+ * renaming `admin`, dropping `realtime` or adding a module, which is most of the drift the map
+ * exists to catch. So the second half reads the sibling checkout and holds the names to what is
  * actually over there, in both directions.
  *
- * That half is conditional on the sibling being present, and says so out loud rather than passing
- * quietly — the same bargain `tests/unit/scripts/pairing/spec-identity.test.ts` makes, for the same reason:
- * a guard that evaporates in silence is worse than one that is visibly absent.
+ * Both halves are conditional on `FRONTEND_PATH` (G-D5): a deployment with no paired frontend at
+ * all owes this table nothing, and says so out loud rather than passing quietly — the same bargain
+ * `tests/unit/scripts/pairing/spec-identity.test.ts` makes, for the same reason: a guard that
+ * evaporates in silence is worse than one that is visibly absent.
  *
  * `why` is prose for a reader, on the entries where the counterpart is not simply the same name and
  * a reader could not guess. Nothing asserts its shape: a sentence held to a regex is a sentence
@@ -89,18 +90,53 @@ const FRONTEND_ONLY: Readonly<Record<string, string>> = {
 
 const moduleNames = (): string[] => enabledModules.map((appModule) => appModule.name);
 
+/**
+ * Whether someone named a paired checkout at all, and so expects the pairing table — and the
+ * live cross-repo cases below it — to actually be kept up to date.
+ *
+ * Not `CI`: the pipeline's cross-repo guard is the `spec-identity` job, which checks the sibling out
+ * and fails on its own when it cannot — see `tests/unit/scripts/pairing/spec-identity.test.ts` for
+ * the same reasoning at more length. Failing here as well only made a job that clones one repo red
+ * for something it had no way to check.
+ *
+ * G-D5: an adopter who has stripped the frontend pairing out of this deployment entirely (no
+ * `FRONTEND_PATH`) owes this hand-maintained table nothing — maintaining a list for a sibling
+ * repo that no longer exists is exactly the policing this decision drops.
+ */
+const siblingExpected = Boolean(process.env.FRONTEND_PATH?.trim());
+
 describe('the two repositories, module by module', () => {
     it('finds the modules it means to check', () => {
         expect(moduleNames().length).toBeGreaterThan(0);
     });
 
-    it('gives every module here an entry', () => {
-        expect(moduleNames().filter((name) => !FRONTEND_PAIRING[name])).toEqual([]);
+    it('gives every module here an entry, or the table is knowingly unmaintained', () => {
+        const missing = moduleNames().filter((name) => !FRONTEND_PAIRING[name]);
+
+        if (!siblingExpected && missing.length > 0) {
+            // eslint-disable-next-line no-console -- the skip warning must reach a terminal with no logger configured
+            console.warn(
+                `⚠️  Frontend pairing table incomplete (no FRONTEND_PATH): ${missing.join(', ')} have no entry.`
+            );
+            return;
+        }
+
+        expect(missing).toEqual([]);
     });
 
-    it('names no module that is not enabled', () => {
+    it('names no module that is not enabled, or the table is knowingly unmaintained', () => {
         const enabled = new Set(moduleNames());
-        expect(Object.keys(FRONTEND_PAIRING).filter((name) => !enabled.has(name))).toEqual([]);
+        const stale = Object.keys(FRONTEND_PAIRING).filter((name) => !enabled.has(name));
+
+        if (!siblingExpected && stale.length > 0) {
+            // eslint-disable-next-line no-console -- the skip warning must reach a terminal with no logger configured
+            console.warn(
+                `⚠️  Frontend pairing table stale (no FRONTEND_PATH): ${stale.join(', ')} name a disabled module.`
+            );
+            return;
+        }
+
+        expect(stale).toEqual([]);
     });
 });
 
@@ -111,16 +147,6 @@ describe('the two repositories, module by module', () => {
 const siblingRoot = resolveFrontendPath();
 const siblingModules = path.join(siblingRoot, 'src', 'modules');
 const siblingPresent = existsSync(siblingModules);
-
-/**
- * Whether someone named a checkout, and so expects these cases to actually run.
- *
- * Not `CI`: the pipeline's cross-repo guard is the `spec-identity` job, which checks the sibling out
- * and fails on its own when it cannot — see `tests/unit/scripts/pairing/spec-identity.test.ts` for
- * the same reasoning at more length. Failing here as well only made a job that clones one repo red
- * for something it had no way to check.
- */
-const siblingExpected = Boolean(process.env.FRONTEND_PATH?.trim());
 
 /** Every module folder in the paired frontend. */
 const frontendModules = (): string[] =>

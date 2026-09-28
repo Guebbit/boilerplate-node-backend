@@ -1,4 +1,4 @@
 subdomain: supporting
-group: shop
+group: foundation
 dependsOn:
     - users # resolves the subscription owner's email for the auto-disable notification

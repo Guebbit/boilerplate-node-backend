@@ -20,10 +20,32 @@
  *
  * See: docs/tools/demo-profile.md
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { parse as parseDotenv } from 'dotenv';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 import { startEphemeralMongo } from './support/ephemeral-mongo';
 import { startInProcessMongod } from './support/ephemeral-mongod';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from './rate-limits';
+
+/**
+ * `.env`'s own `NODE_CORS_ORIGIN`, read in isolation — never `import 'dotenv/config'` here: that
+ * would load every OTHER key too, and `.env`'s real rate limits and token secrets are exactly
+ * what `REQUIRED_DEFAULTS`/`SCRIPTED_RATE_LIMITS` below exist to override for this throwaway
+ * profile. `dotenv.parse` only reads the file into a plain object — no `process.env` write — so
+ * this borrows just the one value a lane's non-default frontend ports actually need.
+ * https://github.com/motdotla/dotenv#parse
+ * @returns the file's `NODE_CORS_ORIGIN`, or `undefined` when `.env` is missing or doesn't set it
+ */
+const corsOriginFromDotenv = (): string | undefined => {
+    const environmentPath = path.join(process.cwd(), '.env');
+    try {
+        return parseDotenv(readFileSync(environmentPath, 'utf8')).NODE_CORS_ORIGIN;
+    } catch {
+        // No `.env` in this checkout — REQUIRED_DEFAULTS' own fallback below covers it.
+        return undefined;
+    }
+};
 
 const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_ENV: 'development',
@@ -40,9 +62,12 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_PII_ENCRYPTION_KEY: 'demo-pii-encryption-key',
     NODE_TOTP_ENCRYPTION_KEY: 'demo-totp-encryption-key',
     NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'demo-webhook-secret-encryption-key',
-    // Both local frontend ports: the dev server (8080) and the e2e preview (8085). Without the
-    // second, a browser on the preview is refused by CORS while every Node-side call passes.
-    NODE_CORS_ORIGIN: 'http://localhost:8080,http://localhost:8085',
+    // `.env`'s own value when it sets one — a lane pointed at non-default frontend ports (to
+    // avoid clashing with another lane's live e2e) is respected instead of silently overridden.
+    // Falls back to both standard local frontend ports: the dev server (8080) and the e2e preview
+    // (8085). Without the second, a browser on the preview is refused by CORS while every
+    // Node-side call passes.
+    NODE_CORS_ORIGIN: corsOriginFromDotenv() ?? 'http://localhost:8080,http://localhost:8085',
     // The e2e suite is not a person browsing, and neither is the seeder behind it — see
     // `./rate-limits`, which `scenarios/apply.ts` needs for the same reason.
     ...SCRIPTED_RATE_LIMITS,

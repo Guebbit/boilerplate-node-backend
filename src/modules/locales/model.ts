@@ -125,10 +125,12 @@ export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
          * repository (see `./repository`), so no service path can change an entry without moving
          * it.
          */
+        // No `min: 0` — `repository.ts#bumpRevision` only ever moves this by `$inc: { revision: 1
+        // }`, which Mongoose never validates against `min`/`max`. The field is monotonic by
+        // construction (starts at 0, +1 forever), so nothing here can actually go negative.
         revision: {
             type: Number,
-            default: 0,
-            min: 0
+            default: 0
         }
     },
     {

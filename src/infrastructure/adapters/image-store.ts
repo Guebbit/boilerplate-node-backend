@@ -106,14 +106,14 @@ export interface ImageStore {
  * served from. One constant because the three have to agree: `express.static` serves
  * `NODE_PUBLIC_PATH` at the site root, so the folder name *is* the url segment.
  */
-const IMAGES_SEGMENT = 'images';
+export const IMAGES_SEGMENT = 'images';
 
 /** Version segment for thumbnails — bump it, rather than overwriting existing files in place, the
  * day quality settings change: every url is `immutable, 1y` and cannot be revalidated. */
 const THUMBNAIL_VERSION = 'v1';
 
 /** The directory `express.static` serves at the site root — where a promoted image finally lands. */
-const publicRoot = () => path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public');
+export const publicRoot = () => path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public');
 
 /**
  * Where a quarantined upload lives between the request that staged it and the job that digests it.
@@ -128,7 +128,7 @@ export const quarantineRoot = () =>
     path.resolve(process.env.NODE_QUARANTINE_PATH ?? path.join('tmp', 'quarantine'));
 
 /** The directory holding one image's thumbnail derivatives. */
-const thumbnailsDirectory = (root: string) =>
+export const thumbnailsDirectory = (root: string) =>
     path.join(root, IMAGES_SEGMENT, 'thumbs', THUMBNAIL_VERSION);
 
 /** The thumbnail filename for a given original's stem — same stem, always `.webp`. */

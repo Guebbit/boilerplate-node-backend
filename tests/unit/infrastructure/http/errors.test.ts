@@ -302,10 +302,12 @@ describe('rejectDatabaseError', () => {
 
         rejectDatabaseError(response, 'getProducts', error);
 
-        expect(mockedLogger.error).toHaveBeenCalledWith('getProducts - Invalid identifier', {
+        // `warn`, not `error`: a 422 is the request's fault, not a server failure worth paging.
+        expect(mockedLogger.warn).toHaveBeenCalledWith('getProducts - Invalid identifier', {
             status: 422,
             error
         });
+        expect(mockedLogger.error).not.toHaveBeenCalled();
     });
 
     it('keeps a 5xx driver message out of the response entirely', () => {
@@ -320,10 +322,25 @@ describe('rejectDatabaseError', () => {
             expect.objectContaining({ message: 'Internal Server Error' })
         );
         expect(JSON.stringify(response.json.mock.calls[0][0])).not.toContain('shard-02');
+        // `error`, not `warn`: this is the genuine server fault the split exists to still page on.
         expect(mockedLogger.error).toHaveBeenCalledWith(
             'getProducts - connection reset to shard-02',
             { status: 500, error }
         );
+        expect(mockedLogger.warn).not.toHaveBeenCalled();
+    });
+
+    it('logs a duplicate-key 409 at warn, the same as any other 4xx', () => {
+        const response = makeResponseStub();
+        const error = makeDuplicateKeyError();
+
+        rejectDatabaseError(response, 'createUser', error);
+
+        expect(mockedLogger.warn).toHaveBeenCalledWith('createUser - Already exists', {
+            status: 409,
+            error
+        });
+        expect(mockedLogger.error).not.toHaveBeenCalled();
     });
 
     it('never puts the driver message in the user-facing errors array', () => {
@@ -425,10 +442,12 @@ describe('rejectDatabaseEnvelope', () => {
         const error = makeBsonError();
         rejectDatabaseEnvelope('login', error);
 
-        expect(mockedLogger.error).toHaveBeenCalledWith('login - Invalid identifier', {
+        // `warn`, not `error`: a 422 is the request's fault, not a server failure worth paging.
+        expect(mockedLogger.warn).toHaveBeenCalledWith('login - Invalid identifier', {
             status: 422,
             error
         });
+        expect(mockedLogger.error).not.toHaveBeenCalled();
     });
 
     it('keeps the driver message out of the envelope entirely', () => {

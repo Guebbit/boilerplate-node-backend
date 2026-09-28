@@ -11,7 +11,11 @@
  */
 
 import type { AuthorizationScope, CallerContext } from '@types';
-import { findRole } from '@kernel/permissions';
+import {
+    findRole,
+    SIGNUP_DEFAULT_ROLE_NAME,
+    VERIFIED_CUSTOMER_ROLE_NAME
+} from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
@@ -21,11 +25,13 @@ import type { MembershipDocument, TenantDocument } from './model';
 import { accessAuditActions } from './audit';
 
 /** The one role self-service signup (or an OAuth signup a provider already vouches for) may ever
- * grant — never a caller-supplied name. See {@link assignDefaultRole}. */
-export const SIGNUP_DEFAULT_ROLE = 'unverified';
+ * grant — never a caller-supplied name. Read off `shared/authorization-roles.yaml`'s
+ * `signupDefault` flag (DDD-D5), not hand-typed. See {@link assignDefaultRole}. */
+export const SIGNUP_DEFAULT_ROLE = SIGNUP_DEFAULT_ROLE_NAME;
 
-/** What `unverified` promotes to once the address is proven. See {@link promoteVerifiedCustomer}. */
-export const VERIFIED_CUSTOMER_ROLE = 'customer';
+/** What `SIGNUP_DEFAULT_ROLE` promotes to once the address is proven, read off that role's
+ * `promotesTo` flag (DDD-D5). See {@link promoteVerifiedCustomer}. */
+export const VERIFIED_CUSTOMER_ROLE = VERIFIED_CUSTOMER_ROLE_NAME;
 
 /**
  * The one tenant key {@link validateGrant} exempts `VERIFIED_CUSTOMER_ROLE` from needing, held by

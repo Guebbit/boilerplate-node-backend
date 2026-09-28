@@ -11,6 +11,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Resource } from 'i18next';
+import { isPlainObject } from '@infrastructure/object-guards';
 
 /**
  * Where the shared dictionaries live. Resolved from this file rather than from `process.cwd()`, so
@@ -129,10 +130,6 @@ const deepMerge = (
     }
     return target;
 };
-
-/** True for a plain object node `deepMerge` should recurse into, false for any leaf value. */
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * One language's dictionary: the shared keys plus every registered module's contribution, layered

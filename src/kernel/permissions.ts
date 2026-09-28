@@ -139,6 +139,17 @@ export interface PresetRole {
     title: string;
     description: string;
     permissions: readonly string[];
+    /**
+     * Whether self-service signup (or an OAuth signup a provider already vouches for) may assign
+     * this role automatically. Exactly one declared role may carry it — see
+     * {@link SIGNUP_DEFAULT_ROLE_NAME}, DDD-D5.
+     */
+    signupDefault?: boolean;
+    /**
+     * What {@link signupDefault}'s role promotes to once the account is verified (address proven,
+     * or an OAuth provider that already vouches for it) — see {@link VERIFIED_CUSTOMER_ROLE_NAME}.
+     */
+    promotesTo?: string;
 }
 
 /** Runtime shape for one entry of `shared/authorization-roles.yaml`'s `roles` list. */
@@ -147,7 +158,9 @@ const presetRoleSchema = z.object({
     scope: z.enum(AUTHORIZATION_SCOPES),
     title: z.string(),
     description: z.string(),
-    permissions: z.array(z.string())
+    permissions: z.array(z.string()),
+    signupDefault: z.boolean().optional(),
+    promotesTo: z.string().optional()
 }) satisfies z.ZodType<PresetRole>;
 
 /**
@@ -244,6 +257,43 @@ export const PRESET_ROLES: readonly PresetRole[] = rolesDocument.roles;
 
 /** What an unauthenticated request resolves to — a value in the model, not a null to handle. */
 export const ANONYMOUS_ROLE = rolesDocument.anonymous;
+
+/**
+ * The one role `PRESET_ROLES` marks `signupDefault: true` — read here instead of hand-typed at
+ * every call site (DDD-D5), so a deployment renaming its signup role only ever edits the YAML.
+ * @throws Error unless exactly one declared role carries the flag
+ */
+const signupDefaultRole = ((): PresetRole => {
+    const matches = PRESET_ROLES.filter((role) => role.signupDefault);
+
+    if (matches.length !== 1) {
+        throw new Error(
+            `[permissions] shared/authorization-roles.yaml must mark exactly one role ` +
+                `"signupDefault: true", found ${String(matches.length)}.`
+        );
+    }
+
+    return matches[0];
+})();
+
+/** `access/service.ts`'s `SIGNUP_DEFAULT_ROLE` — the name self-service signup may assign automatically. */
+export const SIGNUP_DEFAULT_ROLE_NAME = signupDefaultRole.name;
+
+/**
+ * `access/service.ts`'s `VERIFIED_CUSTOMER_ROLE` — what {@link SIGNUP_DEFAULT_ROLE_NAME} promotes
+ * to, read off that same role's `promotesTo`.
+ * @throws Error if the signup-default role declares no `promotesTo`
+ */
+export const VERIFIED_CUSTOMER_ROLE_NAME = ((): string => {
+    if (!signupDefaultRole.promotesTo) {
+        throw new Error(
+            `[permissions] shared/authorization-roles.yaml's signup-default role ` +
+                `"${signupDefaultRole.name}" must declare "promotesTo".`
+        );
+    }
+
+    return signupDefaultRole.promotesTo;
+})();
 
 /** Every declared key, indexed by its own name for {@link findKey}'s O(1) lookup. */
 const byKey = new Map(PERMISSION_KEYS.map((entry) => [entry.key, entry]));
