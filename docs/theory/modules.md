@@ -348,7 +348,7 @@ src/modules/<name>/
   events.ts                                    IF it emits: past tense, emitted AFTER the write, with an id
   audit/analytics/metrics/probes/rate-limits/config/emails.ts   IF there is something to declare
   providers/                                   IF it owns a port to an outside service (an ACL)
-  presenter.ts                                 IF it serves HTTP and owns a model — see T9 below
+  presenter.ts                                 IF it serves HTTP and owns a model — see below
   factories.ts locales/ asyncapi.yaml          IF needed
 ```
 
@@ -385,11 +385,11 @@ version: 1 } })`, never a plain `findByIdAndUpdate` — a version that does not 
    same version and racing to save would otherwise both "succeed", the second silently discarding
    the first's write with no error either side can see. Moving it inside the SAME filtered write
    (not a separate check-then-write) is what makes the race impossible rather than merely unlikely.
-4. **One presenter per module (T9).** Before this rule, a controller reached for its own
-   `document.toJSON() as SomeResponse` cast, ad hoc, once per call site — the compiler enforced the
-   OUTPUT type but nothing enforced that two call sites for the same resource agreed on how they
-   got there, and a sibling wanting the same shape found it cheaper to import the raw Mongoose
-   `Document` type than to ask. `presenter.ts` is the fix: one pure function per resource
+4. **One presenter per module.** Without it, a controller reaching for its own
+   `document.toJSON() as SomeResponse` cast, ad hoc, once per call site, would still have the
+   compiler enforce the OUTPUT type — but nothing would enforce that two call sites for the same
+   resource agree on how they got there, and a sibling wanting the same shape would find it cheaper
+   to import the raw Mongoose `Document` type than to ask. `presenter.ts` is the fix: one pure function per resource
    (`presentProduct(document): Product`), the single place a Mongoose document becomes the wire
    shape, replacing every ad hoc cast in that module's own controllers. A sibling reaches the
    transform through the owning module's SERVICE, the same door it already uses for a repository

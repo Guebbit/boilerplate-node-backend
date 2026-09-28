@@ -247,7 +247,7 @@ way a handle does. What it never publishes, no matter how convenient:
   that touch storage stay inside.
 - **The presenter FUNCTION.** `presenter.ts` (or `presenters.ts`, for a module presenting more than
   one resource shape) is the one place a Mongoose document becomes a wire shape — see
-  [Modules](./modules.md#the-module-template) (T9). Its RETURN TYPE leaves the barrel the same way
+  [Modules](./modules.md#the-module-template). Its RETURN TYPE leaves the barrel the same way
   the model's does, `export type * from './presenter'`; the function itself never does, in any
   form. A sibling that needs the transform asks the service for it, the same door it already goes
   through for a repository read — `orderService.withActions` is `orders/presenter.ts`'s
