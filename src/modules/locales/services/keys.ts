@@ -8,6 +8,7 @@
 
 import { t } from '@infrastructure/i18n';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
+import { isPlainObject } from '@infrastructure/object-guards';
 import type { EntryInput } from '../repository';
 
 /**
@@ -20,10 +21,6 @@ import type { EntryInput } from '../repository';
  * could address.
  */
 const UNSAFE_KEY_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
-
-/** Narrows to an ordinary object node — excludes arrays and `null`, which `typeof` alone would not. */
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Writes the last segment of a key, refusing to overwrite a group with a string.

@@ -19,6 +19,7 @@ import { coerceStringArray, getJson } from '@guebbit/js-toolkit';
 import { parseBooleanWord } from '@infrastructure/runtime/environment';
 import { rejectResponse } from '@infrastructure/http/response';
 import { stripUndefined } from '@infrastructure/persistence/factories';
+import { isPlainObject } from '@infrastructure/object-guards';
 
 /**
  * Parse a string-transported value as a boolean.
@@ -157,9 +158,7 @@ export const bodyRecordOf = (request: Pick<Request, 'body'>): Record<string, unk
     // `request.body` is typed `any` by Express; routed through `unknown` before the narrowing
     // below so the `any` stops here rather than infecting every caller.
     const body: unknown = request.body;
-    return typeof body === 'object' && body !== null && !Array.isArray(body)
-        ? (body as Record<string, unknown>)
-        : {};
+    return isPlainObject(body) ? body : {};
 };
 
 /**
