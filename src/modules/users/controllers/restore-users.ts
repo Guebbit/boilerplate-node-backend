@@ -6,14 +6,16 @@
  */
 
 import { createRestoreController } from '@infrastructure/surfaces/create-restore-controller';
+import { callerContextOf } from '@infrastructure/http/request';
 import { userService } from '../service';
-import { usersAuditActions } from '../audit';
 
-/** POST /users/:id/restore — undo a soft delete (admin). 409 when the account is not deleted. */
+/**
+ * POST /users/:id/restore — undo a soft delete (admin). 409 when the account is not deleted.
+ * `userService.restoreById` owns the `ADMIN_USER_RESTORED` audit emit.
+ */
 export const restoreUsers = createRestoreController({
     entity: 'user',
-    restore: (id) => userService.restoreById(id),
+    restore: (id, request) => userService.restoreById(id, callerContextOf(request)),
     present: (user) => userService.toUserContract(user),
-    auditAction: usersAuditActions.ADMIN_USER_RESTORED,
     notFoundKey: 'users.not-found'
 });

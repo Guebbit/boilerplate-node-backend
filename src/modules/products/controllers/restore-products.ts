@@ -5,14 +5,16 @@
  */
 
 import { createRestoreController } from '@infrastructure/surfaces/create-restore-controller';
+import { callerContextOf } from '@infrastructure/http/request';
 import { productService } from '../service';
-import { productsAuditActions } from '../audit';
 
-/** POST /products/:id/restore — undo a soft delete (admin). 409 when the product is not deleted. */
+/**
+ * POST /products/:id/restore — undo a soft delete (admin). 409 when the product is not deleted.
+ * `productService.restoreById` owns the `ADMIN_PRODUCT_RESTORED` audit emit.
+ */
 export const restoreProducts = createRestoreController({
     entity: 'product',
-    restore: (id) => productService.restoreById(id),
+    restore: (id, request) => productService.restoreById(id, callerContextOf(request)),
     present: (product) => productService.toProduct(product),
-    auditAction: productsAuditActions.ADMIN_PRODUCT_RESTORED,
     notFoundKey: 'products.not-found'
 });

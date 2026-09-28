@@ -6,8 +6,8 @@
  */
 
 import { createDeleteController } from '@infrastructure/surfaces/create-delete-controller';
+import { callerContextOf } from '@infrastructure/http/request';
 import { userService } from '../service';
-import { usersAuditActions } from '../audit';
 
 /**
  * DELETE /users — delete a user by id in the request body (admin).
@@ -16,15 +16,13 @@ import { usersAuditActions } from '../audit';
  * docs/modules/users.md's generated neighbourhood diagram for the current list, checked on every
  * regenerate rather than named here, where it would go stale silently.
  *
- * Only `?hardDelete=true` discharges an Art. 17 erasure request — the audit
- * action names which one happened, so the trail itself can answer that question later.
+ * Only `?hardDelete=true` discharges an Art. 17 erasure request — `userService.removeById` names
+ * which one happened in the audit action it records, so the trail itself can answer that question
+ * later.
  */
 export const deleteUsers = createDeleteController({
     entity: 'user',
-    remove: (id, hardDelete) => userService.removeById(id, hardDelete),
-    auditAction: (hardDelete) =>
-        hardDelete
-            ? usersAuditActions.ADMIN_USER_ERASED
-            : usersAuditActions.ADMIN_USER_SOFT_DELETED,
+    remove: (id, hardDelete, request) =>
+        userService.removeById(id, hardDelete, callerContextOf(request)),
     notFoundKey: 'users.not-found'
 });

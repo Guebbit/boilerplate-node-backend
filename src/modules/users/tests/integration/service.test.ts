@@ -791,6 +791,60 @@ describe('userService.removeById', () => {
         expect((result as ResponseReject).status).toBe(409);
     });
 
+    // B11: the admin-facing audit relocated from `createDeleteController`/
+    // `createRestoreController` into this service, matching every other module's write path.
+    // These three pin that the same rows still land, from the new layer.
+    it('audits ADMIN_USER_SOFT_DELETED for an admin-context soft delete', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser();
+        const id = user._id.toString();
+
+        await userService.removeById(id, false, callerContextAs('admin'));
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.ADMIN_USER_SOFT_DELETED,
+                outcome: 'success',
+                target_type: 'user',
+                target_id: id
+            })
+        );
+    });
+
+    it('audits ADMIN_USER_ERASED, not SYSTEM_USER_ERASED, for an admin-context hard delete', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser();
+        const id = user._id.toString();
+
+        await userService.removeById(id, true, callerContextAs('admin'));
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.ADMIN_USER_ERASED,
+                outcome: 'success',
+                target_type: 'user',
+                target_id: id
+            })
+        );
+    });
+
+    it('audits ADMIN_USER_RESTORED on a restore', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ deletedAt: new Date() });
+        const id = user._id.toString();
+
+        await userService.restoreById(id, callerContextAs('admin'));
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.ADMIN_USER_RESTORED,
+                outcome: 'success',
+                target_type: 'user',
+                target_id: id
+            })
+        );
+    });
+
     it('hard-deletes a user when hardDelete is true', async () => {
         const user = await createUser();
         const id = user._id.toString();

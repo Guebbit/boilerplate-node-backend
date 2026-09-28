@@ -9,7 +9,7 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { extractAndValidateId, callerContextOf } from '@infrastructure/http/request';
+import { extractAndValidateId } from '@infrastructure/http/request';
 import {
     catchAsNotFound,
     namedHandler,
@@ -17,21 +17,23 @@ import {
     refused,
     type ServiceResult
 } from '@infrastructure/http/controller';
-import { recordAudit, type AuditAction } from '@infrastructure/observability/audit';
 
 /** What makes one entity's restore different from another's. */
 export interface RestoreControllerSpec<TRow> {
-    /** The entity, lower-case and singular — `'order'`; the audit `target_type` and log name. */
+    /** The entity, lower-case and singular — `'order'`; names the log line. */
     entity: string;
-    /** The service call: 404 when absent, 409 when not soft-deleted, the restored row otherwise. */
-    restore: (id: string) => Promise<ServiceResult<TRow>>;
+    /**
+     * The service call: 404 when absent, 409 when not soft-deleted, the restored row otherwise.
+     * Takes the raw `request` so the module's own wiring can build its `CallerContext` and hand
+     * it down — the service records its own audit row (rule 1,
+     * `docs/theory/module-lifecycle.md`), the same way `createUpdateController`'s `update` does.
+     */
+    restore: (id: string, request: Request) => Promise<ServiceResult<TRow>>;
     /**
      * The restored row in the entity's contract shape — the same projection its own reads
      * answer with, so a restore never hands out fields a read would not.
      */
     present: (row: TRow, request: Request) => unknown;
-    /** The module's own audit action for a successful restore. */
-    auditAction: AuditAction;
     /** The i18n key answered when the id is well-formed but matches nothing. */
     notFoundKey: string;
 }
@@ -39,14 +41,13 @@ export interface RestoreControllerSpec<TRow> {
 /**
  * Build a module's restore controller.
  *
- * @param spec - the four things that differ per entity
+ * @param spec - the three things that differ per entity
  * @returns the express handler, named for the entity it restores (e.g. `restoreOrder`)
  */
 export const createRestoreController = <TRow>({
     entity,
     restore,
     present,
-    auditAction,
     notFoundKey
 }: RestoreControllerSpec<TRow>) => {
     const operation = operationName('restore', entity);
@@ -56,17 +57,11 @@ export const createRestoreController = <TRow>({
         const id = extractAndValidateId(request, response, 'path');
         if (!id) return Promise.resolve();
 
-        return restore(id)
+        return restore(id, request)
             .then((result) => {
                 // Sends the error envelope (404, 409) and stops here if the service refused.
                 if (refused(response, result)) return;
 
-                recordAudit(callerContextOf(request), {
-                    action: auditAction,
-                    outcome: 'success',
-                    target_type: entity,
-                    target_id: id
-                });
                 return Promise.resolve(present(result.data, request)).then((shaped) => {
                     successResponse(response, shaped, 200, result.message);
                 });
