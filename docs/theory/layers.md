@@ -81,14 +81,14 @@ flowchart TD
 
 ## Quick map
 
-| Tier           | Folder               | Main job                                                                  |
-| -------------- | -------------------- | ------------------------------------------------------------------------- |
-| App            | `src/app`            | assembles this application; the only tier allowed to know every domain    |
-| Registry       | `src/modules.ts`     | the enabled module list — the one file that names every domain            |
-| Modules        | `src/modules/*`      | one domain each, top to bottom; `index.ts` is its only public surface     |
-| Kernel         | `src/kernel`         | the module system only: registry, event bus, auth port, the guard         |
-| Infrastructure | `src/infrastructure` | technical substrate, Express and Mongoose included — see below            |
-| Scenarios      | `scenarios/`         | the demo records and the flow runner — outside `src/` entirely, see below |
+| Tier           | Folder               | Main job                                                                                                                                                                                    |
+| -------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App            | `src/app`            | assembles this application; the only tier allowed to know every domain                                                                                                                      |
+| Registry       | `src/modules.ts`     | the enabled module list — the one file that names every domain                                                                                                                              |
+| Modules        | `src/modules/*`      | one domain each, top to bottom; `index.ts` is its only public surface                                                                                                                       |
+| Kernel         | `src/kernel`         | the module system, PLUS the authn/authz every module's guard shares — six of its ten files (most of its code), not a minor detail; see [Modules](./modules.md) for why each earns its place |
+| Infrastructure | `src/infrastructure` | technical substrate, Express and Mongoose included — see below                                                                                                                              |
+| Scenarios      | `scenarios/`         | the demo records and the flow runner — outside `src/` entirely, see below                                                                                                                   |
 
 Four tiers, one alias each — `@app/*`, `@modules/*`, `@kernel/*`, `@infrastructure/*` — so every import
 line says which boundary it crosses. [Modules](./modules.md) has the full picture and the reasoning,
