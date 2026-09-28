@@ -169,8 +169,8 @@ paths:
             summary: Replace product
             description: |
                 Replaces the product identified by `{id}` in the path (RFC 9110 §9.3.4) — every
-                writable scalar field is required, since none of them but `taxClass`/`weight`/
-                `imageUrl` has a legal "cleared" state, and an omitted one of those three is
+                writable scalar field is required, since none of them but `taxClass`/`rateType`/
+                `weight`/`imageUrl` has a legal "cleared" state, and an omitted one of those four is
                 cleared, not left alone. `translations` keeps the same per-locale upsert/delete
                 semantics `PATCH` uses (see its own description): a translations table is keyed
                 sub-resources, not a single field a "whole-body replace" can meaningfully null out
@@ -461,6 +461,8 @@ components:
                     description: ISO-4217 currency code (e.g. EUR) — see `Product.currency`.
                 taxClass:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                rateType:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 onHand:
@@ -637,6 +639,8 @@ components:
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                rateType:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 # The opening count — the one place an ABSOLUTE stock number is honest, because
@@ -712,6 +716,8 @@ components:
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                rateType:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 # The opening count — the one place an ABSOLUTE stock number is honest, because
@@ -755,8 +761,8 @@ components:
                         type: string
 
         # PUT /products/{id} — RFC 9110 §9.3.4: every scalar field the resource has is required,
-        # since none of them but taxClass/weight/imageUrl has a legal "cleared" state; those three
-        # stay optional-nullable, same as PATCH. `translations` keeps PATCH's own per-locale
+        # since none of them but taxClass/rateType/weight/imageUrl has a legal "cleared" state;
+        # those four stay optional-nullable, same as PATCH. `translations` keeps PATCH's own per-locale
         # upsert/delete semantics — see the PUT operation's own description for why.
         ReplaceProductRequest:
             type: object
@@ -776,6 +782,12 @@ components:
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                # `null` clears it back to `standard`, same as `taxClass`. Omitted on a PUT is
+                # the same as `null` — see the operation description.
+                rateType:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
                     nullable: true
                     allOf:
@@ -819,6 +831,10 @@ components:
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                rateType:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
                     nullable: true
                     allOf:
@@ -865,6 +881,12 @@ components:
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                # `null` clears it back to `standard`, same as `taxClass`. Omitted leaves the
+                # stored value alone.
+                rateType:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
                     nullable: true
                     allOf:
@@ -913,6 +935,10 @@ components:
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                rateType:
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
                     nullable: true
                     allOf:

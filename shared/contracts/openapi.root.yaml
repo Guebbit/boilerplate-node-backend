@@ -846,6 +846,21 @@ components:
                 medicine and similar, depending on the deployment's own jurisdiction. Absent means
                 the standard rate.
 
+        # EN 16931's VAT category codes distinguish a 0%-rated line (`Z`) from an exempt one
+        # (`E`) — reasons that both resolve `TaxClass: zero` to the same 0% rate but print a
+        # different code on an invoice. `standard` covers every non-zero rate (`reduced` and the
+        # shop's default alike); absent means `standard`, same convention as `TaxClass` itself.
+        # `products/service.ts` does not enforce `taxClass: zero` alongside a non-`standard`
+        # value here — an invoice's category-code render (`invoicing/emails.ts`) only consults
+        # this field once the frozen rate is actually 0, so a mismatched pair is inert rather
+        # than rejected.
+        RateType:
+            type: string
+            enum: [standard, zero-rated, exempt]
+            description: >-
+                WHY a product's resolved VAT rate is 0%, when it is — `TaxClass: zero` alone
+                cannot say. Meaningless when the resolved rate isn't 0%.
+
         # SH4: a stock-keeping unit, deliberately just a string — this deployment's own numbering
         # scheme, unvalidated beyond "not empty". Product VARIANTS (one SKU per size/colour) are
         # a separate, larger feature, on the roadmap and not built here; today's SKU is one per
@@ -887,6 +902,8 @@ components:
                         reports the shop's CURRENT setting.
                 taxClass:
                     $ref: '#/components/schemas/TaxClass'
+                rateType:
+                    $ref: '#/components/schemas/RateType'
                 sku:
                     $ref: '#/components/schemas/Sku'
                 # ── The two counters and the number derived from them ──────────────────────
@@ -1078,6 +1095,13 @@ components:
                     description: >-
                         The VAT rate this line was actually charged, as a decimal (0.22 for 22%).
                         Frozen at checkout, same reasoning as `price`.
+                # Unlike `taxClass` — resolved into `taxRate` and then discarded — `rateType` is
+                # copied here AS IS, same as `sku`/`weight`: there is no numeric rate for it to
+                # resolve into, and an invoice needs the category (Z vs E) the order was actually
+                # placed under, not whatever the product's config says today. See
+                # `orders/services/snapshot.ts#freezeOrderLines`.
+                rateType:
+                    $ref: '#/components/schemas/RateType'
 
         # The picture, resolved LIVE from the catalogue product `OrderItem.product.id` still
         # names — never frozen, so a hard-deleted or replaced image can never leak through order
