@@ -235,9 +235,8 @@ sit on top of them, are in [Data Protection](../theory/data-protection.md).
 
 | Pattern                            | What it is                                                                                                                                                     | Read next                                                                              |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `shared/templates/emails/*.ejs`    | One template per email the app sends, named for the module and the event that sends it — so an orphaned template is visible at a glance.                       | [Email & PDF Rendering](../tools/email-and-rendering.md) · [Modules](./src-modules.md) |
-| `shared/templates/documents/*.ejs` | The same for documents rendered to PDF rather than sent — today, the order invoice.                                                                            | [Email & PDF Rendering](../tools/email-and-rendering.md)                               |
-| `shared/templates/layouts/*.ejs`   | The shared wrappers those templates include: the email head, the PDF head, and the common footer. Styling lives here so a template holds only its own content. | [Email & PDF Rendering](../tools/email-and-rendering.md)                               |
+| `src/modules/*/templates/*.ejs`    | One template per email a module sends, or the PDF a module renders (today, `invoicing`'s), named for the module and the event that sends it — collected via `AppModule.templates`, so deleting the module deletes them with it. | [Email & PDF Rendering](../tools/email-and-rendering.md) · [Modules](./src-modules.md) |
+| `shared/templates/layouts/*.ejs`   | The shared wrappers those templates include: the email head, the PDF head, and the common footer — owned by no module, the same reasoning `shared/contracts` is. Styling lives here so a template holds only its own content. | [Email & PDF Rendering](../tools/email-and-rendering.md)                               |
 
 ## Served assets
 

@@ -113,7 +113,7 @@ own two series.
 back: `200` once the document exists, `404` otherwise (`ORDER_INVOICE_NOT_ISSUED` /
 `ORDER_CREDIT_NOTE_NOT_ISSUED`) — for an order that has not reached the fact yet, or a gap in the
 policy above. Never re-rendered from live config: every render reads the SAME frozen row, byte for
-byte, run through the same EJS template (`shared/templates/documents/invoicing.document.ejs`) every
+byte, run through the same EJS template (`src/modules/invoicing/templates/documents/invoicing.document.ejs`) every
 time.
 
 ## The e-invoicing port

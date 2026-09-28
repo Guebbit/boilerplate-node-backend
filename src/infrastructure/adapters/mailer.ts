@@ -5,7 +5,6 @@
  * See: docs/tools/email-and-rendering.md
  */
 
-import path from 'node:path';
 // EJS = the HTML templating engine used for email bodies. `Data` is its type for the
 // variables interpolated into a template (`<%= user.name %>`).
 import ejs, { type Data } from 'ejs';
@@ -31,33 +30,16 @@ import { withSpan } from '@infrastructure/observability/tracer';
 // The queue name comes from the adapter, not from the worker that drains it: producer and
 // consumer must agree on the spelling, and `infrastructure` may not import application code to get it.
 import { publishToQueue, EMAIL_QUEUE, type JobPriority } from '@infrastructure/adapters/queue';
+// Split into its own leaf module, with no `ejs`/`nodemailer` import of its own — see that
+// file's own header for why `tests/support/setup.ts` needs it kept that way. Re-exported below so
+// every OTHER caller keeps importing from this one file, the mail adapter's own public surface.
+import { templateFile } from '@infrastructure/adapters/template-registry';
 
-/**
- * Absolute path to the EJS email templates, overridable with `NODE_EMAIL_TEMPLATES_DIR`.
- *
- * Under `shared/` rather than in a module: the template NAME travels through RabbitMQ to a
- * consumer that may be another process, so a bare filename stays portable where a path into
- * `src/modules` would not — the owner lives in the filename prefix instead. A function, not a
- * constant, for the same lazy-env reason as {@link getTransporter}.
- *
- * See: docs/tools/email-and-rendering.md#templates-interpolate-they-do-not-translate
- */
-export const emailTemplatesDirectory = (): string =>
-    process.env.NODE_EMAIL_TEMPLATES_DIR
-        ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR)
-        : path.resolve(process.cwd(), 'shared/templates/emails');
-
-/**
- * The file an outbox name renders from.
- *
- * The single point where the identifier becomes a path, and so the single place `.ejs` is written.
- * Which engine renders a mail is this backend's business; the name is not, because the demo outbox
- * publishes it and the paired frontend asserts on it against both backends.
- *
- * @param templateName - an {@link EmailContent.template} name, without extension
- */
-export const templateFile = (templateName: string): string =>
-    path.resolve(emailTemplatesDirectory(), `${templateName}.ejs`);
+export {
+    registerTemplateDirectories,
+    templateFile,
+    registeredTemplateNames
+} from '@infrastructure/adapters/template-registry';
 
 /**
  * How this deployment treats an email.
@@ -288,7 +270,12 @@ export const sendTemplatedEmail = (
                  * the worker that calls it, possibly in another process, hours later) does not
                  * need to know what a locale is.
                  */
-                .renderFile(templateFile(templateName), { ...data })
+                // `root: process.cwd()` — a template's own `/shared/templates/layouts/...`
+                // include is root-relative (EJS: a leading `/` resolves against `root`, not
+                // against the including file's own directory), so this stays correct however
+                // deep under `src/modules/<name>/templates` the file itself now lives.
+                // https://ejs.co/#docs (Includes)
+                .renderFile(templateFile(templateName), { ...data }, { root: process.cwd() })
                 .then((html) =>
                     send({
                         // Default sender; spread below lets a caller override it.

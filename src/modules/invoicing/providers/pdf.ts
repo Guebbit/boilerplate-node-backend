@@ -11,9 +11,18 @@ import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 import { buildDocumentView } from '../emails';
 import type { EInvoicingProvider } from './index';
 
-/** The EJS template every render — invoice or credit note — prints through. */
-const DOCUMENT_TEMPLATE = path.resolve(
-    'shared',
+/**
+ * The EJS template every render — invoice or credit note — prints through, owned by this module
+ * (SK-15) rather than by `shared/templates` — deleting `invoicing` now deletes it too.
+ *
+ * Under `templates/documents/`, one level deeper than a module's OTHER templates: nothing ever
+ * resolves this file BY NAME (unlike an `EmailContent.template`, which travels through a queue as
+ * a bare string), so it stays out of `mailer.ts#registerTemplateDirectories`' non-recursive
+ * collection — reached directly here instead, the way it always was.
+ */
+const DOCUMENT_TEMPLATE = path.join(
+    __dirname,
+    '..',
     'templates',
     'documents',
     'invoicing.document.ejs'
@@ -30,7 +39,12 @@ export const pdfEInvoicingProvider: EInvoicingProvider = {
 
     issue: (document) =>
         ejs
-            .renderFile(DOCUMENT_TEMPLATE, buildDocumentView(document.locale, document))
+            // `root: process.cwd()` — the template's `/shared/templates/layouts/...` include is
+            // root-relative, so this resolves correctly regardless of this module's own depth
+            // under `src/modules`. https://ejs.co/#docs (Includes)
+            .renderFile(DOCUMENT_TEMPLATE, buildDocumentView(document.locale, document), {
+                root: process.cwd()
+            })
             .then((html) => renderHtmlToPdf(html, { format: 'A4' }))
             .then((bytes) => ({ contentType: 'application/pdf', bytes: Buffer.from(bytes) }))
 };

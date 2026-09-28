@@ -16,12 +16,15 @@
  * fixture happens to construct.
  *
  * ── Scope ─────────────────────────────────────────────────────────────────────────────────────
- * `shared/templates/emails/*.ejs` and the `EmailContent`-returning builders in each module's
- * `emails.ts` — mail only. `shared/templates/documents/invoicing.document.ejs` is the same
- * mechanism (EJS, `invoicing/emails.ts`'s `buildDocumentView`) rendering a PDF rather than a mail,
- * found on the way and deliberately left out: it is not an `EmailContent`, so it does not fit this
- * file's builder-matching without a second shape, and it is one template. Worth its own pass, not
- * a reason to widen this one.
+ * Every `src/modules/<name>/templates/*.ejs` (SK-15 moved these out of `shared/templates`, one
+ * directory per owning module) and the `EmailContent`-returning builders in each module's
+ * `emails.ts` — mail only. `invoicing.document.ejs` and its `invoicing.document.vat-table.ejs`
+ * partial render a PDF through the same mechanism (EJS, `invoicing/emails.ts`'s
+ * `buildDocumentView`) rather than a mail, so this walk never reaches them at all: they live one
+ * directory deeper, under `invoicing/templates/documents/`, the same reason
+ * `mailer.ts#registerTemplateDirectories`'s non-recursive collection does not reach them either.
+ * Neither is an `EmailContent`, and neither fits this file's builder-matching without a second
+ * shape — worth its own pass, not a reason to widen this one.
  *
  * ── Two things this file assumes, and defends ────────────────────────────────────────────────
  * Every template here only interpolates a bare variable or loops one array with `.forEach(function
@@ -31,11 +34,16 @@
  * than silently stop covering the new shape.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { REPO_ROOT, MODULES_ROOT } from '@tests/paths';
 
-const TEMPLATES_DIR = path.join(REPO_ROOT, 'shared/templates/emails');
+/** Every module's own `templates/` directory — non-recursive, so a PDF held one level deeper
+ *  (`invoicing/templates/documents/`) is out of scope on its own, see this file's own header. */
+const templateDirectories = (): string[] =>
+    readdirSync(MODULES_ROOT)
+        .map((module) => path.join(MODULES_ROOT, module, 'templates'))
+        .filter((directory) => existsSync(directory));
 
 const OUTPUT_TAG = /<%[=-]([\S\s]*?)%>/g;
 
@@ -64,6 +72,18 @@ const includedPartials = (source: string): string[] =>
     [...source.matchAll(/include\(\s*["']([^"']+)["']/g)].map((match) => match[1]);
 
 /**
+ * Resolves one `include()` path the same way EJS itself does at render time: a leading `/` is
+ * root-relative — against `REPO_ROOT`, this file's own `root` option — everything else is
+ * relative to the INCLUDING file's own directory. A plain `path.resolve` would treat a
+ * root-relative string as an OS-absolute path and ignore `fromFile` entirely.
+ * https://ejs.co/#docs (Includes)
+ */
+const resolveIncludePath = (relative: string, fromFile: string): string =>
+    relative.startsWith('/')
+        ? path.join(REPO_ROOT, relative)
+        : path.resolve(path.dirname(fromFile), relative);
+
+/**
  * Every bare variable a template needs, walking its `include()`s.
  *
  * `visited` guards a cycle the same way `resolveSchema` in `spec-walk.ts` guards a
@@ -82,10 +102,7 @@ const requiredVariables = (filePath: string, visited: Set<string> = new Set()): 
         if (head && head !== 'include' && !locals.has(head)) required.add(head);
 
     for (const relative of includedPartials(source))
-        for (const name of requiredVariables(
-            path.resolve(path.dirname(filePath), relative),
-            visited
-        ))
+        for (const name of requiredVariables(resolveIncludePath(relative, filePath), visited))
             required.add(name);
 
     return required;
@@ -98,9 +115,11 @@ const unsupportedTags = (filePath: string): string[] =>
         .map(({ body }) => `${path.relative(REPO_ROOT, filePath)}: <%= ${body} %>`);
 
 const templateFiles = (): string[] =>
-    readdirSync(TEMPLATES_DIR)
-        .filter((entry) => entry.endsWith('.ejs'))
-        .map((entry) => path.join(TEMPLATES_DIR, entry));
+    templateDirectories().flatMap((directory) =>
+        readdirSync(directory)
+            .filter((entry) => entry.endsWith('.ejs'))
+            .map((entry) => path.join(directory, entry))
+    );
 
 /**
  * Strip comments before splitting entries. A source comment can hold a bare `:` of its own — see
@@ -205,8 +224,11 @@ describe('every EJS mail template gets a value for every variable it prints', ()
         const unsupported = [
             ...templateFiles().flatMap((file) => unsupportedTags(file)),
             ...templateFiles()
-                .flatMap((file) => includedPartials(readFileSync(file, 'utf8')))
-                .map((relative) => path.resolve(TEMPLATES_DIR, relative))
+                .flatMap((file) =>
+                    includedPartials(readFileSync(file, 'utf8')).map((relative) =>
+                        resolveIncludePath(relative, file)
+                    )
+                )
                 .flatMap((file) => unsupportedTags(file))
         ];
 

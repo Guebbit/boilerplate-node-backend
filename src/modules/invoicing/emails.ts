@@ -226,7 +226,7 @@ const buildVatBlock = (
  * differently-structured document.
  * @param locale - the document's own frozen language
  * @param document - every frozen field the provider was handed
- * @returns the EJS render context `shared/templates/documents/invoicing.invoice.ejs` interpolates
+ * @returns the EJS render context `templates/invoicing.document.ejs` interpolates
  */
 export const buildDocumentView = (
     locale: string,
