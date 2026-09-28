@@ -43,6 +43,11 @@ roles:
           What `customer` is minus the ability to spend. Assigned automatically at signup; the
           verify flow promotes the account to `customer` once the address is proven, and an
           operator may promote it to anything else at any time — granting a role is the vouching.
+      # `access/service.ts`'s SIGNUP_DEFAULT_ROLE and VERIFIED_CUSTOMER_ROLE read these two flags
+      # rather than hand-typing the role names — DDD-D5. Exactly one role in this file may carry
+      # `signupDefault: true`; `kernel/permissions.ts` throws at boot otherwise.
+      signupDefault: true
+      promotesTo: customer
       permissions:
           - products.self.read
           - locales.self.read
