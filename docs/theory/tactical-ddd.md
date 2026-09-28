@@ -20,7 +20,7 @@ here is narrow: **is the rule already duplicated, and do the copies disagree?**
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 45}}}%%
 flowchart TD
     Q1{"Is the rule written<br/>in more than one place?"}
-    Q1 -->|no| KEEP["leave it in the service<br/>✅ nine modules"]
+    Q1 -->|no| KEEP["leave it in the service<br/>✅ thirteen modules"]
     Q1 -->|yes| Q2{"Do the copies<br/>already disagree?"}
     Q2 -->|no| WATCH["one function, one owner<br/>✅ sumLineItems, priceShipping"]
     Q2 -->|yes| Q3{"Does the rule need state<br/>a pure function cannot see?"}
@@ -316,8 +316,8 @@ response cache keys on the user, so an operator's answer is never served to a cu
 **Why the split across two modules.** Each answers for what it owns. `orders` says which status
 moves are open and whether the order still awaits payment; `payments` says whether money can come
 back. Neither guesses at the other's half, and no new dependency edge is created — which matters,
-because `payments` already depends on `orders` and the reverse would be a cycle the registry
-rejects at boot.
+because `payments` already depends on `orders` and the reverse would be a cycle
+`dependency-cruiser` rejects at lint time, in `check:dependencies`.
 
 **Why `pay` appears on both.** They answer different questions. `Order.actions.pay` is "this order
 still awaits payment", which is what decides whether to offer a card form on an order with no

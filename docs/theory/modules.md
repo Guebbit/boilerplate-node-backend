@@ -68,7 +68,7 @@ So `kernel` is small on purpose. It is the module system, and nothing else:
 
 | File                            | Why it cannot be infrastructure                                                                          |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `registry.ts`                   | it _is_ the module system — `AppModule`, the DAG check, `registerModules`                                |
+| `registry.ts`                   | it _is_ the module system — `AppModule`, the required-config check, `registerModules`                    |
 | `events.ts`                     | it exists so two modules can talk without importing each other                                           |
 | `authentication.ts`             | the socket `account` plugs into, so guards need no module import                                         |
 | `middlewares/authorizations.ts` | the guard that consumes that socket                                                                      |
@@ -568,7 +568,7 @@ flowchart TD
     CQ --> L["registerLocaleDirectories&lpar;&rpar;<br/><i>from each manifest</i>"]
     L --> I["i18next.init&lpar;&rpar;<br/><i>reads the merged result</i>"]
     I --> S["listen"]
-    RM["registerModules&lpar;&rpar;<br/><i>validate DAG · subscribe · onRegistered</i>"] --> MNT["mount routers by basePath"]
+    RM["registerModules&lpar;&rpar;<br/><i>validate config · subscribe · onRegistered</i>"] --> MNT["mount routers by basePath"]
     MNT --> H404["404 catch-all"]
 
     classDef boot fill:#fef3c7,stroke:#d97706,color:#111827;
