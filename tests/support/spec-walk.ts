@@ -30,6 +30,8 @@ export interface SchemaNode {
     format?: string;
     enum?: unknown[];
     minimum?: number;
+    /** OpenAPI 3.0 boolean form: `minimum` itself is not a valid value. */
+    exclusiveMinimum?: boolean;
     maximum?: number;
     minLength?: number;
     maxLength?: number;
@@ -275,6 +277,7 @@ export const SUPPORTED_KEYWORDS = new Set([
     'format',
     'enum',
     'minimum',
+    'exclusiveMinimum',
     'maximum',
     'minLength',
     'maxLength',
