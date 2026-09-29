@@ -9,12 +9,12 @@
 // to every log record) with *transports* (where the record is written). Everything below is
 // built out of those two concepts.
 import winston from 'winston';
-import { createHmac } from 'node:crypto';
 // Relative, not the `@infrastructure` alias: this file sits on `global-setup.ts`'s own import
 // chain (via `scenarios/support/ephemeral-mongo.ts`), which is loaded outside jest's normal
 // module resolution — see that file's own comment. An alias resolves at `tsc`/`eslint` time but
 // fails at jest's globalSetup runtime.
 import { environmentChoice } from '../runtime/environment';
+import { pseudonymise } from '../security/pseudonymise';
 
 /** A structured log call's own object form: a `message` plus whatever context goes with it. */
 export type LogFields = Record<string, unknown>;
@@ -142,17 +142,9 @@ export const resolvePersonalFieldMode = (): PersonalFieldMode =>
     environmentChoice('NODE_LOG_PERSONAL_FIELDS', PERSONAL_FIELD_MODES, 'hash');
 
 /**
- * Non-secret fallback key outside production, where `NODE_LOG_HASH_KEY` is not required
- * (`required-config.ts`, `productionOnly: true`) — a dev/test log still needs a STABLE digest to
- * stay correlatable, and there is no secret worth protecting on a machine that already has this
- * source tree.
- */
-const DEV_LOG_HASH_KEY = 'dev-log-hash-key';
-
-/**
  * Applies the resolved {@link PersonalFieldMode} to one personal-data value.
  *
- * `hash` is a keyed hash — HMAC-SHA256 under `NODE_LOG_HASH_KEY` — not a bare `sha256(value)`.
+ * `hash` is a keyed hash (`pseudonymise('log', …)`), not a bare `sha256(value)`.
  * A bare hash of an IPv4 or a common email is brute-forced in seconds (2³² addresses, or a
  * breach list); a keyed hash is reversible only by whoever holds the key. GDPR pseudonymisation:
  * Art. 4(5), EDPB Guidelines 01/2025.
@@ -166,8 +158,7 @@ const applyPersonalFieldMode = (value: string): string => {
     const mode = resolvePersonalFieldMode();
     if (mode === 'plain') return value;
     if (mode === 'redact') return REDACTED;
-    const key = process.env.NODE_LOG_HASH_KEY || DEV_LOG_HASH_KEY;
-    return `hmac:${createHmac('sha256', key).update(value).digest('hex').slice(0, 12)}`;
+    return `hmac:${pseudonymise('log', value).slice(0, 12)}`;
 };
 
 /**
