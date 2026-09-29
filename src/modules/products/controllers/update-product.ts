@@ -4,7 +4,7 @@
  * shared `createUpdateController` factory. Both verbs delegate the product write and the
  * translation rows to `productService.writeUpdate`, which already owns the 404 check and the
  * audit emit. The verb difference is only what an omission means: a PUT clears an omitted
- * clearable field (`taxClass`/`rateType`/`sku`/`weight`/`imageUrl`) and deletes every stored
+ * clearable field (`taxClass`/`rateType`/`sku`/`weight`) — never the image, which an upload owns — and deletes every stored
  * locale its `translations` leaves out; a PATCH leaves both alone.
  */
 
@@ -39,6 +39,8 @@ export const { replace: replaceProduct, update: updateProduct } = createUpdateCo
         writeWithUploadedImage(request, changes.imageUrl, (image) =>
             productService.writeUpdate(id, changes, callerContextOf(request), image)
         ),
+    // A client cannot send the current image back, so a PUT that omits it keeps it.
+    keptWhenOmitted: ['imageUrl'],
     // PUT only: every locale the product holds and the body left out becomes a `null` delete.
     completeReplace: (id, changes) => productService.clearOmittedLocales(id, changes),
     present: (product) => productService.toProduct(product)

@@ -8,7 +8,6 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
-import { DEFAULT_USER_IMAGE_URL } from '@modules/users/model';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 
@@ -210,8 +209,9 @@ describe('POST /users', () => {
 
 describe('PUT /users/{id}', () => {
     // A PUT body IS the new resource (RFC 9110 §9.3.4) — every omitted optional field is
-    // cleared, not left alone. `password` is the one exception: it keeps its own
-    // flow and is never cleared this way, so it is left out of this body entirely.
+    // cleared, not left alone. `password` and `imageUrl` are the exceptions: the first keeps its
+    // own flow, the second belongs to an upload (WM-D5), so both are left out of this body and
+    // both survive it.
     it('replaces every writable field, clearing every omitted optional one', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser(
@@ -235,7 +235,7 @@ describe('PUT /users/{id}', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.imageUrl).toBe(DEFAULT_USER_IMAGE_URL);
+        expect(response.body.data.imageUrl).toBe('https://cdn.example.com/avatars/original.png');
         expect(response.body.data.phone).toBeUndefined();
     });
 

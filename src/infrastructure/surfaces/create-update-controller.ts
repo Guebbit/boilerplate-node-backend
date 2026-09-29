@@ -66,6 +66,13 @@ export interface UpdateControllerSpec<TReplace extends ZodObject, TPatch extends
      * to `null`, the signal a PATCH would have used. Omit it when the resource has no such map.
      */
     completeReplace?: (id: string, changes: TPatch['_output']) => Promise<TPatch['_output']>;
+    /**
+     * Fields OUTSIDE the PUT representation: an omission keeps them, as on a PATCH, though the
+     * schema accepts `null`. An uploaded file is the case — a client cannot send the current one
+     * back, so a PUT that never mentions `imageUrl` must not wipe it; an explicit `null` still
+     * clears. Omit it for a resource with no such field.
+     */
+    keptWhenOmitted?: readonly string[];
 }
 
 /**
@@ -113,13 +120,16 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
     update,
     present,
     idFrom,
-    completeReplace
+    completeReplace,
+    keptWhenOmitted = []
 }: UpdateControllerSpec<TReplace, TPatch, TRow>): {
     replace: (request: Request, response: Response) => Promise<void>;
     update: (request: Request, response: Response) => Promise<void>;
 } => {
     // Derived once per controller, not per request — the schema never changes.
-    const replaceFills = clearableFields(replaceSchema);
+    const replaceFills = clearableFields(replaceSchema).filter(
+        (field) => !keptWhenOmitted.includes(field)
+    );
 
     /**
      * The one pipeline both verbs run: id → decode → validate → (PUT only) fill and complete →

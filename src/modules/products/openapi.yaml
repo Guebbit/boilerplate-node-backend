@@ -172,8 +172,10 @@ paths:
             description: |
                 Replaces the product identified by `{id}` in the path (RFC 9110 §9.3.4) — every
                 writable scalar field is required, since none of them but `taxClass`/`rateType`/
-                `sku`/`weight`/`imageUrl` has a legal "cleared" state, and an omitted one of those
-                five is cleared, not left alone. `translations` is the whole set as well: it must
+                `sku`/`weight` has a legal "cleared" state, and an omitted one of those four is
+                cleared, not left alone. The image is outside the representation: it is set by an
+                upload, cleared by an explicit `imageUrl: null`, and kept when a PUT never mentions
+                it — a client cannot send the current path back. `translations` is the whole set as well: it must
                 name the fallback locale, and every stored locale it leaves out is deleted. To
                 change one locale without restating the others, use `PATCH`.
             operationId: replaceProductById
@@ -813,8 +815,9 @@ components:
                         minLength: 1
 
         # PUT /products/{id} — RFC 9110 §9.3.4: every scalar field the resource has is required,
-        # since none of them but taxClass/rateType/sku/weight/imageUrl has a legal "cleared" state;
-        # those five stay optional-nullable, same as PATCH. `translations` is the whole set: a
+        # since none of them but taxClass/rateType/sku/weight has a legal "cleared" state; those
+        # four stay optional-nullable, same as PATCH. `imageUrl` is outside the representation: an
+        # omission keeps the image. `translations` is the whole set: a
         # stored locale it leaves out is deleted, and the fallback locale is required.
         ReplaceProductRequest:
             type: object
