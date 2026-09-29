@@ -247,6 +247,27 @@ describe('POST /orders/{id}/cancel', () => {
         expect(first.status).toBe(200);
         expect(second.status).toBe(409);
     });
+
+    /*
+     * `refund` decides whether money goes back. Read raw, the string `"false"` is truthy and a
+     * misspelt key is ignored — both refunded. Neither may reach the service.
+     */
+    it.each([
+        ['a string where the boolean goes', { refund: 'false' }],
+        ['a key the contract does not declare', { refnd: false }]
+    ])('refuses %s with a 422 and leaves the order alone', async (_label, body) => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .post(`/orders/${String(order._id)}/cancel`)
+            .set('Authorization', bearer)
+            .send(body);
+
+        expect(response.status).toBe(422);
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored?.status).toBe('pending');
+    });
 });
 
 describe('POST /orders/{id}/status-override', () => {

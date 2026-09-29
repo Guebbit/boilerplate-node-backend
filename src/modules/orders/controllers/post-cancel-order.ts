@@ -7,8 +7,9 @@
 import type { Request, Response } from 'express';
 import { orderService } from '../services';
 import type { CancelOrderRequest } from '@types';
+import { CancelOrderByIdBody } from '@api/schemas.zod';
 import { callerContextOf } from '@infrastructure/http/request';
-import { catchAs, refused } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { respondWithOrder } from './respond';
 
 /**
@@ -23,12 +24,18 @@ export const postCancelOrder = (
     // `request.body` undefined rather than empty when there is nothing to parse.
     request: Request<{ id?: string }, unknown, CancelOrderRequest | undefined>,
     response: Response
-): Promise<void> =>
-    orderService
+): Promise<void> => {
+    // Parsed, not read raw: `refund` decides whether money goes back, and a raw `"false"` is a
+    // truthy string. An absent body parses as `{}`, which the schema's default turns into
+    // `refund: true`.
+    const body = parseBody(CancelOrderByIdBody, request.body ?? {}, response);
+    if (!body) return Promise.resolve();
+
+    return orderService
         .cancelById(
             String(request.params.id),
             request.authContext,
-            { refund: request.body?.refund },
+            { refund: body.refund },
             callerContextOf(request)
         )
         .then((result) => {
@@ -44,3 +51,4 @@ export const postCancelOrder = (
             );
         })
         .catch(catchAs(response, 'postCancelOrder'));
+};
