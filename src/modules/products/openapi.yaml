@@ -750,6 +750,7 @@ components:
                         type: string
                         minLength: 1
 
+        # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
         CreateProductRequestMultipart:
             type: object
             additionalProperties: false
@@ -872,6 +873,7 @@ components:
                         type: string
                         minLength: 1
 
+        # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
         ReplaceProductRequestMultipart:
             type: object
             additionalProperties: false
@@ -887,17 +889,14 @@ components:
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     type: string
-                    nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 rateType:
                     type: string
-                    nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
                     type: string
-                    nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 active:
@@ -907,7 +906,6 @@ components:
                 weight:
                     type: integer
                     minimum: 0
-                    nullable: true
                     description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUpload:
                     # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
@@ -983,6 +981,7 @@ components:
                         type: string
                         minLength: 1
 
+        # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
         UpdateProductRequestMultipart:
             type: object
             additionalProperties: false
@@ -999,17 +998,14 @@ components:
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
                     type: string
-                    nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 rateType:
                     type: string
-                    nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
                     type: string
-                    nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 active:
@@ -1019,7 +1015,6 @@ components:
                 weight:
                     type: integer
                     minimum: 0
-                    nullable: true
                     description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUpload:
                     # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
