@@ -1,9 +1,10 @@
 /**
  * @module
- * The four write routes on a language's entries: one key at a time, plus two bulk imports.
- * The bulk routes are two methods rather than one route with a flag — PUT replaces (what
- * isn't sent is deleted), PATCH merges (what isn't sent is left alone) — so a mis-set
- * boolean can't silently empty a dictionary.
+ * The write routes on a language's entries: one key at a time, plus two bulk imports. The tenant is
+ * a path segment (`/locales/:locale/tenants/:tenant/entries`), so a PUT replaces exactly what the
+ * GET on the same URI lists. The bulk routes are two methods rather than one route with a flag —
+ * PUT replaces (what isn't sent is deleted), PATCH merges (what isn't sent is left alone) — so a
+ * mis-set boolean can't silently empty a dictionary.
  */
 
 import type { Request, Response } from 'express';
@@ -18,7 +19,6 @@ import type {
     LocaleEntry,
     LocaleEntryInput,
     LocaleImportResult,
-    LocaleTenant,
     MergeLocaleEntriesRequest,
     ReplaceLocaleEntriesRequest,
     UpdateLocaleEntryRequest
@@ -30,18 +30,23 @@ import { presentLocaleEntry } from '../presenters';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
- * POST /locales/:locale/entries (admin)
- * Add one key.
+ * POST /locales/:locale/tenants/:tenant/entries (admin)
+ * Add one key to the tenant's dictionary.
  */
 export const createLocaleEntry = (
-    request: Request<{ locale: string }, unknown, CreateLocaleEntryRequest>,
+    request: Request<{ locale: string; tenant: string }, unknown, CreateLocaleEntryRequest>,
     response: Response
 ) => {
     const parseResult = CreateLocaleEntryBody.safeParse(request.body);
     if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
     return localeService
-        .createEntry(request.params.locale, parseResult.data, callerContextOf(request))
+        .createEntry(
+            request.params.locale,
+            request.params.tenant,
+            parseResult.data,
+            callerContextOf(request)
+        )
         .then((result) => {
             if (refused(response, result)) return;
 
@@ -84,14 +89,19 @@ export const updateLocaleEntry = (
 
 /** The two bulk routes differ by one word, so they are one handler and a mode. */
 const importEntries = (
-    request: Request<{ locale: string }, unknown, { entries?: LocaleEntryInput[] }>,
+    request: Request<{ locale: string; tenant: string }, unknown, { entries?: LocaleEntryInput[] }>,
     response: Response,
     mode: 'replace' | 'merge',
-    tenant: LocaleTenant,
     entries: LocaleEntryInput[]
 ) =>
     localeService
-        .importEntries(request.params.locale, tenant, entries, mode, callerContextOf(request))
+        .importEntries(
+            request.params.locale,
+            request.params.tenant,
+            entries,
+            mode,
+            callerContextOf(request)
+        )
         .then((result) => {
             if (refused(response, result)) return;
 
@@ -100,41 +110,29 @@ const importEntries = (
         .catch(catchAs(response, `${mode}LocaleEntries`));
 
 /**
- * PUT /locales/:locale/entries (admin)
- * Replace the whole set — anything stored and not sent is deleted.
+ * PUT /locales/:locale/tenants/:tenant/entries (admin)
+ * Replace the tenant's whole set — anything stored under it and not sent is deleted.
  */
 export const replaceLocaleEntries = (
-    request: Request<{ locale: string }, unknown, ReplaceLocaleEntriesRequest>,
+    request: Request<{ locale: string; tenant: string }, unknown, ReplaceLocaleEntriesRequest>,
     response: Response
 ) => {
     const parseResult = ReplaceLocaleEntriesBody.safeParse(request.body);
     if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
-    return importEntries(
-        request,
-        response,
-        'replace',
-        parseResult.data.tenant,
-        parseResult.data.entries
-    );
+    return importEntries(request, response, 'replace', parseResult.data.entries);
 };
 
 /**
- * PATCH /locales/:locale/entries (admin)
+ * PATCH /locales/:locale/tenants/:tenant/entries (admin)
  * Upsert what is sent, leave the rest alone. Nothing is ever deleted by this route.
  */
 export const mergeLocaleEntries = (
-    request: Request<{ locale: string }, unknown, MergeLocaleEntriesRequest>,
+    request: Request<{ locale: string; tenant: string }, unknown, MergeLocaleEntriesRequest>,
     response: Response
 ) => {
     const parseResult = MergeLocaleEntriesBody.safeParse(request.body);
     if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
-    return importEntries(
-        request,
-        response,
-        'merge',
-        parseResult.data.tenant,
-        parseResult.data.entries
-    );
+    return importEntries(request, response, 'merge', parseResult.data.entries);
 };

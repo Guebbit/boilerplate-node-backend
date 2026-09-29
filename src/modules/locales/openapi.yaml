@@ -299,7 +299,9 @@ paths:
                 translation screen lists. Flat, because a row is what gets edited; the nested tree
                 is `GET /locales/{locale}/messages`.
 
-                `text` searches keys and values together.
+                `text` searches keys and values together. Every tenant's rows are listed unless
+                `tenant` narrows them; one tenant's slice is also a resource of its own,
+                `/locales/{locale}/tenants/{tenant}/entries`, which is where it is written.
             operationId: listLocaleEntries
             security:
                 - bearerAuth: []
@@ -321,11 +323,48 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # One tenant's slice of a language's entries — the target of every write. The tenant is a
+    # path segment (Google AIP-122, Microsoft REST guidelines: a parent resource belongs in the
+    # path, a query string only filters a read), so a PUT replaces exactly what the GET on the SAME
+    # URI lists.
+    /locales/{locale}/tenants/{tenant}/entries:
+        get:
+            tags: [System]
+            summary: List one tenant's translation entries
+            description: |
+                The rows behind one language's dictionary, paginated and searchable — what a
+                translation screen lists. Flat, because a row is what gets edited; the nested tree
+                is `GET /locales/{locale}/messages`.
+
+                `text` searches keys and values together. The same rows `GET
+                /locales/{locale}/entries?tenant=` lists, at the address the writes below target.
+            operationId: listTenantLocaleEntries
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/TenantPathParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
+            responses:
+                '200':
+                    description: A page of entries
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleEntriesResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
             tags: [System]
             summary: Add one translation entry
             description: |
-                409 if the key already exists in this language, and equally if it COLLIDES with one
+                Adds a key to this tenant's dictionary. 409 if the key already exists in this language, and equally if it COLLIDES with one
                 — see `LocaleEntryInput.key` for what a collision is and why it is refused here
                 rather than discovered when the tree is built.
             operationId: createLocaleEntry
@@ -333,6 +372,7 @@ paths:
                 - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/TenantPathParam'
             requestBody:
                 required: true
                 content:
@@ -359,7 +399,9 @@ paths:
             summary: Replace every entry
             description: |
                 Bulk import, REPLACING semantics: what is not sent is DELETED. The whole set of
-                entries for this language becomes exactly what the body carries.
+                this tenant's entries for this language becomes exactly what the body carries;
+                the other tenants are untouched. The URI names that slice, so the body is the
+                same thing `GET` on it lists (RFC 9110 §9.3.4).
 
                 Paired with `PATCH` on this same collection, which merges instead. "Does an import
                 delete missing keys" is the question every translation tool gets wrong, so the two
@@ -373,6 +415,7 @@ paths:
                 - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/TenantPathParam'
             requestBody:
                 required: true
                 content:
@@ -406,6 +449,7 @@ paths:
                 - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/TenantPathParam'
             requestBody:
                 required: true
                 content:
@@ -646,6 +690,16 @@ components:
             description: >-
                 Which frontend tenant's dictionary to build. Omitted, the deployment's default
                 frontend tenant — a client paired one-to-one with this API never needs to say.
+
+        TenantPathParam:
+            name: tenant
+            in: path
+            required: true
+            schema:
+                $ref: '#/components/schemas/LocaleTenant'
+            description: >-
+                The tenant whose slice of the language's entries this is. An id the deployment does
+                not configure is refused with a 422 — see `GET /locales/tenants`.
 
         EntryIdPathParam:
             name: entryId
@@ -1152,10 +1206,8 @@ components:
         CreateLocaleEntryRequest:
             type: object
             additionalProperties: false
-            required: [tenant, key, value]
+            required: [key, value]
             properties:
-                tenant:
-                    $ref: '#/components/schemas/LocaleTenant'
                 key:
                     type: string
                     minLength: 1
@@ -1175,17 +1227,16 @@ components:
         ReplaceLocaleEntriesRequest:
             type: object
             additionalProperties: false
-            required: [tenant, entries]
+            required: [entries]
             description: >-
-                The COMPLETE set of entries for this language IN ONE TENANT. Anything already stored
-                under that tenant and not named here is deleted; the other tenants are untouched.
+                The COMPLETE set of entries for this language IN THE TENANT the URI names. Anything
+                already stored under that tenant and not named here is deleted; the other tenants
+                are untouched.
 
-                The tenant is named once for the batch rather than per row, so a replace cannot
-                half-apply across dictionaries — the operation that deletes what it was not sent
-                has to know exactly what it is allowed to delete.
+                The tenant is the path's, once for the batch rather than per row, so a replace
+                cannot half-apply across dictionaries — the operation that deletes what it was not
+                sent has to know exactly what it is allowed to delete.
             properties:
-                tenant:
-                    $ref: '#/components/schemas/LocaleTenant'
                 entries:
                     type: array
                     items:
@@ -1194,12 +1245,11 @@ components:
         MergeLocaleEntriesRequest:
             type: object
             additionalProperties: false
-            required: [tenant, entries]
+            required: [entries]
             description: >-
-                Entries to upsert into ONE tenant. Anything already stored is left exactly as it was.
+                Entries to upsert into the tenant the URI names. Anything already stored is left
+                exactly as it was.
             properties:
-                tenant:
-                    $ref: '#/components/schemas/LocaleTenant'
                 entries:
                     type: array
                     minItems: 1

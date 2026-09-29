@@ -32,15 +32,19 @@ const ADMIN = [
     'PATCH /:locale',
     'DELETE /:locale',
     'GET /:locale/entries',
-    'POST /:locale/entries',
-    'PUT /:locale/entries',
-    'PATCH /:locale/entries',
+    'GET /:locale/tenants/:tenant/entries',
+    'POST /:locale/tenants/:tenant/entries',
+    'PUT /:locale/tenants/:tenant/entries',
+    'PATCH /:locale/tenants/:tenant/entries',
     'PUT /:locale/entries/:entryId',
     'DELETE /:locale/entries/:entryId',
     'GET /translations/:entityType/:id',
     'PUT /translations/:entityType/:id',
     'PATCH /translations/:entityType/:id'
 ];
+
+/** The two entry reads — the editing screen, uncached, and never a reason to invalidate. */
+const ENTRY_READS = ['GET /:locale/entries', 'GET /:locale/tenants/:tenant/entries'];
 
 /**
  * The three translator-door routes: uncached like `GET /:locale/entries` (the editing screen), and
@@ -131,7 +135,7 @@ describe('locale routes — caching', () => {
             });
     });
 
-    it.each(['GET /:locale/entries', ...TRANSLATIONS])('%s is left uncached', (signature) => {
+    it.each([...ENTRY_READS, ...TRANSLATIONS])('%s is left uncached', (signature) => {
         // `GET /:locale/entries` feeds the screen the writes are made from, and both translation
         // routes are the same kind of screen — a cached copy would show a stale save.
         expect(chainOf(router, signature).some((each) => each.startsWith('setCache'))).toBe(false);
@@ -139,7 +143,7 @@ describe('locale routes — caching', () => {
 
     it.each(
         ADMIN.filter(
-            (signature) => signature !== 'GET /:locale/entries' && !TRANSLATIONS.includes(signature)
+            (signature) => !ENTRY_READS.includes(signature) && !TRANSLATIONS.includes(signature)
         )
     )('%s invalidates the locales tag it just changed', (signature) => {
         // Every write changes what every visitor reads, and the tag reaches shared Redis, so

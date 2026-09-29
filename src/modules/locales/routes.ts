@@ -21,7 +21,7 @@ import { getLocaleTenants } from './controllers/get-locale-tenants';
 import { createLocale } from './controllers/create-locale';
 import { replaceLocale, updateLocale } from './controllers/update-locale';
 import { deleteLocale } from './controllers/delete-locale';
-import { getLocaleEntries } from './controllers/get-locale-entries';
+import { getLocaleEntries, getTenantLocaleEntries } from './controllers/get-locale-entries';
 import {
     createLocaleEntry,
     updateLocaleEntry,
@@ -123,17 +123,26 @@ router.get(
     requirePermission('locales.any.update'),
     getLocaleEntries
 );
+// One tenant's slice of the entries is a resource of its own — the tenant is a path segment, so a
+// PUT replaces exactly what the GET on the same URI lists. See `controllers/write-locale-entries.ts`.
+router.get(
+    '/:locale/tenants/:tenant/entries',
+    getAuth,
+    isAuthOrCredential,
+    requirePermission('locales.any.update'),
+    getTenantLocaleEntries
+);
 router.post(
-    '/:locale/entries',
+    '/:locale/tenants/:tenant/entries',
     getAuth,
     isAuthOrCredential,
     requirePermission('locales.any.create'),
     invalidateCache(['locales']),
     createLocaleEntry
 );
-// PUT replaces, PATCH merges. See `controllers/write-locale-entries.ts`.
+// PUT replaces, PATCH merges.
 router.put(
-    '/:locale/entries',
+    '/:locale/tenants/:tenant/entries',
     getAuth,
     isAuthOrCredential,
     requirePermission('locales.any.update'),
@@ -141,7 +150,7 @@ router.put(
     replaceLocaleEntries
 );
 router.patch(
-    '/:locale/entries',
+    '/:locale/tenants/:tenant/entries',
     getAuth,
     isAuthOrCredential,
     requirePermission('locales.any.update'),
