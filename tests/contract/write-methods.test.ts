@@ -10,6 +10,7 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { MISSING_ID } from '@tests/ids';
+import { createProduct } from '@modules/products/tests/factories';
 
 setupTestDb();
 
@@ -96,5 +97,29 @@ describe('the body media type', () => {
             .send(JSON.stringify({ email: 'a@b.co', username: 'abc', analyticsConsent: false }));
 
         expect(response.status).toBe(415);
+    });
+});
+
+describe('stock writes replay under an Idempotency-Key (WM-D9)', () => {
+    it.each([
+        ['receipts', { quantity: 5 }, 5],
+        ['adjustments', { delta: -2 }, -2]
+    ])('a retried %s call moves the stock once', async (route, amount, expectedDelta) => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ title: 'Cedar Toy', price: 5, onHand: 10 });
+        const send = () =>
+            api()
+                .post(`/inventory/${route}`)
+                .set('Authorization', bearer)
+                .set('Idempotency-Key', `stock-${route}-1`)
+                .send({ productId: String(product._id), ...amount });
+
+        const first = await send();
+        const second = await send();
+
+        expect(first.status).toBe(200);
+        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.body).toEqual(first.body);
+        expect(first.body.data.onHand).toBe(10 + expectedDelta);
     });
 });
