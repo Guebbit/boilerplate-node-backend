@@ -43,6 +43,7 @@ import { isTranslationAvailable } from '@kernel/translation';
 import { registerModules } from '@kernel/registry';
 import { enabledModules, enabledModuleLocales, enabledModuleTemplateDirectories } from './modules';
 import { APP_NON_MODULE_CHECKS } from '@app/required-config';
+import { securityTxtWarning } from '@app/security-txt';
 
 import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
@@ -192,6 +193,10 @@ export const createApp = (): AppInstance => {
     };
 
     registerModules(enabledModules, APP_NON_MODULE_CHECKS);
+
+    // Not a refusal: a boilerplate must boot unconfigured. But a stale security.txt is worse than none.
+    const securityTxtProblem = securityTxtWarning(process.env);
+    if (securityTxtProblem) logger.warn({ message: securityTxtProblem });
 
     // LOCALES_OPTIONAL_0925 D-LO1: `locales` being absent is a supported deployment shape, not a
     // misconfiguration — this is the one line that says so, once, rather than a reader inferring it

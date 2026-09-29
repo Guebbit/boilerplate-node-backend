@@ -39,6 +39,31 @@ describe('GET /readyz', () => {
     });
 });
 
+describe('GET /.well-known/security.txt', () => {
+    afterEach(() => {
+        delete process.env.NODE_SECURITY_CONTACT;
+        delete process.env.NODE_SECURITY_EXPIRES;
+    });
+
+    it('matches the contract when configured (200, text/plain)', async () => {
+        process.env.NODE_SECURITY_CONTACT = 'https://example.test/advisories/new';
+        process.env.NODE_SECURITY_EXPIRES = '2099-01-01T00:00:00Z';
+
+        const response = await api().get('/.well-known/security.txt');
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toContain('text/plain');
+        expect(response.text).toContain('Contact: https://example.test/advisories/new');
+        expect(response.text).toContain('Expires: 2099-01-01T00:00:00.000Z');
+    });
+
+    it('matches the contract when unconfigured (404)', async () => {
+        const response = await api().get('/.well-known/security.txt');
+
+        expect(response.status).toBe(404);
+    });
+});
+
 describe('error envelopes', () => {
     it('matches the 404 contract for an unmatched route', async () => {
         const response = await api().get('/definitely-not-a-route');

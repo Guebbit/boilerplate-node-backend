@@ -1644,6 +1644,26 @@ paths:
                 '503':
                     description: Booting, draining, or the database is unreachable.
 
+    /.well-known/security.txt:
+        get:
+            tags: [System]
+            summary: Vulnerability disclosure contact
+            description: |
+                RFC 9116 `security.txt`: where an outside reporter sends a vulnerability.
+                Published only when the deployment sets `NODE_SECURITY_CONTACT` and
+                `NODE_SECURITY_EXPIRES`; a fork that has not opted in answers 404 and publishes
+                nothing. Plain text, not the JSON envelope, because the format is fixed by the RFC.
+            operationId: getSecurityTxt
+            responses:
+                '200':
+                    description: The policy file.
+                    content:
+                        text/plain:
+                            schema:
+                                type: string
+                '404':
+                    description: This deployment has not published a disclosure contact.
+
     # ---------- locales ----------
     /locales:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales'

@@ -111,6 +111,12 @@ docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml \
 The same command is the recovery path if every admin is ever locked out — `--scope platform` grants
 an installation-wide role (an operator) instead of a shop role.
 
+## Publish a disclosure contact
+
+Set `NODE_SECURITY_CONTACT`, `NODE_SECURITY_EXPIRES` (and optionally `NODE_SECURITY_POLICY_URL`) so
+a researcher who finds a bug in your deployment knows where to send it. Left unset, nothing is
+published. See [Reporting a vulnerability](tools/security.md#reporting-a-vulnerability).
+
 ## What's different from dev
 
 | Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                                                                                     |

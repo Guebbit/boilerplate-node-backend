@@ -550,6 +550,38 @@ The obvious alternative is `?token=…`. URLs land in access logs, proxy logs, b
 `Referer` headers, and a refresh token in any of those is a full account takeover.
 :::
 
+## Reporting a vulnerability
+
+Three layers, each reaching a different finder:
+
+| Layer                                  | Reaches                              | Where                                                       |
+| -------------------------------------- | ------------------------------------ | ----------------------------------------------------------- |
+| GitHub private vulnerability reporting | someone browsing the repo            | repo Settings → Security (a maintainer toggle, outside git) |
+| A security policy file                 | the repo's Security tab              | repo root                                                   |
+| `/.well-known/security.txt` (RFC 9116) | someone probing a running deployment | `src/app/system-routes.ts`                                  |
+
+Layer 3 is an Express route, not a static file: `express.static` runs with `dotfiles: 'ignore'`,
+which 404s every `.well-known` path, and that option is a defence worth keeping.
+
+It is **off by default**, so a fork never publishes the author's contact:
+
+| Variable                   | Meaning                                                 |
+| -------------------------- | ------------------------------------------------------- |
+| `NODE_SECURITY_CONTACT`    | required to publish; a GitHub advisory URL or `mailto:` |
+| `NODE_SECURITY_EXPIRES`    | required to publish; ISO 8601 date                      |
+| `NODE_SECURITY_POLICY_URL` | optional `Policy:` link                                 |
+
+`Expires` is a renewal duty. It is a fixed date on purpose: a rolling one always looks fresh and
+so says nothing. Boot logs a warning when it is missing, past, or within 30 days. Not published:
+PGP `Encryption:` and signatures.
+
+```mermaid
+flowchart LR
+    R[GET /.well-known/security.txt] --> C{contact + valid Expires?}
+    C -- yes --> T[200 text/plain]
+    C -- no --> N[404 envelope]
+```
+
 ## Strategy
 
 Security concerns should happen **before** business logic reaches deep layers.
