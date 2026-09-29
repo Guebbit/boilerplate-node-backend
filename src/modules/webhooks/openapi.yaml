@@ -42,8 +42,11 @@ paths:
             description: |
                 Mints the ring's first secret and returns it in plaintext, once — the only
                 response that ever carries it. `url` must be `https://` and must not resolve to a
-                private, loopback or link-local address; that check runs again on every delivery,
-                since a subscription's DNS can change after it is created.
+                private, loopback or link-local address. The host is resolved here, so a refusal is a
+                422 naming the field (`errors[].details` `{ field: url, reason }`) instead of a
+                delivery that fails later; `PUT` and `PATCH` run the same check when the `url`
+                changes. It runs again on every delivery, since a subscription's DNS can change
+                after it is created.
             operationId: createWebhookSubscription
             security:
                 - bearerAuth: []

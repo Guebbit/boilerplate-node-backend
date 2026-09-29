@@ -25,7 +25,12 @@ import type {
 import type { WebhookSubscriptionDocument } from '../model';
 import { webhookSubscriptionRepository } from '../repository';
 import { mintRingSecret, removeRingSecret } from '../secrets';
-import { getWebhookSubscriptionCap } from '../config';
+import { getWebhookDemoAllowedHost, getWebhookSubscriptionCap } from '../config';
+import {
+    resolveSafeOutboundTarget,
+    SsrfRefusedError
+} from '@infrastructure/adapters/ssrf-guard';
+import { ERROR_CODES } from '@api/error-codes';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { webhooksAuditActions } from '../audit';
 
@@ -37,6 +42,40 @@ export interface SubscriptionWithMintedSecrets {
     /** Set only by `rotateSecret` — a newly added secret. */
     newSecret?: string;
 }
+
+/** How long the create/update check may spend resolving the URL's host before refusing it. */
+const URL_CHECK_TIMEOUT_MS = 5000;
+
+/**
+ * Refuses a subscription URL the delivery-time SSRF guard would refuse anyway — fail fast where
+ * the operator is looking (OWASP SSRF: validate on input, and again at connection). The delivery
+ * check stays: DNS can change after this one passes. Same demo-sink exemption as delivery, or the
+ * sink could not be subscribed to.
+ *
+ * @param url - the address an operator asked deliveries to go to
+ * @returns a 422 naming the URL field, or `undefined` when the URL is fine
+ */
+const refuseUnsafeUrl = (url: string): Promise<ResponseReject | undefined> =>
+    resolveSafeOutboundTarget(
+        url,
+        getWebhookDemoAllowedHost(),
+        AbortSignal.timeout(URL_CHECK_TIMEOUT_MS)
+    )
+        .then((): undefined => undefined)
+        .catch((error: unknown) =>
+            generateReject(422, [
+                {
+                    code: ERROR_CODES.VALIDATION_ERROR,
+                    message: t('webhooks.url-refused'),
+                    // A timeout is not an SsrfRefusedError, but it refuses the same way: nothing
+                    // verified the target, so nothing is subscribed to it.
+                    details: {
+                        field: 'url',
+                        reason: error instanceof SsrfRefusedError ? error.reason : 'unverifiable'
+                    }
+                }
+            ])
+        );
 
 /** List this tenant's subscriptions, newest first, optionally filtered by `enabled`. */
 export const list = (
@@ -120,9 +159,12 @@ export const create = (
 ): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> => {
     const tenant = context.caller.tenantId;
 
-    return webhookSubscriptionRepository.count({ tenant }).then((count) => {
+    return webhookSubscriptionRepository.count({ tenant }).then(async (count) => {
         if (count >= getWebhookSubscriptionCap())
             return generateReject(422, [t('webhooks.subscription-cap-reached')]);
+
+        const refusal = await refuseUnsafeUrl(body.url);
+        if (refusal) return refusal;
 
         const { entry, plaintext } = mintRingSecret();
         // A pointer, not a copy: whoever's email the auto-disable notice reaches is resolved fresh
@@ -156,8 +198,15 @@ export const update = (
 ): Promise<ResponseSuccess<WebhookSubscriptionDocument> | ResponseReject> =>
     webhookSubscriptionRepository
         .findByIdInTenant(id, context.caller.tenantId)
-        .then((subscription) => {
+        .then(async (subscription) => {
             if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+
+            // Only a URL that CHANGES is worth a lookup: an edit to the description must not
+            // start failing because the host's DNS is down today.
+            if (body.url !== undefined && body.url !== subscription.url) {
+                const refusal = await refuseUnsafeUrl(body.url);
+                if (refusal) return refusal;
+            }
 
             if (body.url !== undefined) subscription.url = body.url;
             // `null` clears the description — $unset on save.
