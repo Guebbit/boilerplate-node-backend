@@ -30,15 +30,25 @@ const corruptedPayment = asStub<PaymentDocument>({
     provider: 'fake',
     providerRef: undefined,
     amount: 10,
+    amountRefunded: 0,
+    refunds: [],
     currency: 'EUR'
 });
 
 describe('performRefund — a succeeded payment with no providerRef', () => {
     it('audits a failure, not a success, for money that never actually moved', async () => {
+        const refunded = asStub<PaymentDocument>({
+            ...corruptedPayment,
+            status: 'refunded',
+            amountRefunded: 10,
+            refunds: [{ status: 'succeeded' }]
+        });
         jest.spyOn(paymentRepository, 'findByOrderId').mockResolvedValue(corruptedPayment);
-        jest.spyOn(paymentRepository, 'updateStatusIfIn').mockResolvedValue(
-            asStub<PaymentDocument>({ ...corruptedPayment, status: 'refunded' })
+        jest.spyOn(paymentRepository, 'addRefund').mockResolvedValue(
+            asStub<PaymentDocument>({ ...corruptedPayment, amountRefunded: 10 })
         );
+        jest.spyOn(paymentRepository, 'settleRefund').mockResolvedValue(refunded);
+        jest.spyOn(paymentRepository, 'updateStatusIfIn').mockResolvedValue(refunded);
 
         // Imported after the mocks above are in place, so `performRefund` closes over the
         // replaced `recordAudit`.

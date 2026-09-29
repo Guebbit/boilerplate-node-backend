@@ -97,8 +97,10 @@ describe('every public webhook event has exactly one producer, and no producer n
         await emitDomainEvent(PAYMENT_REFUNDED, {
             paymentId: PAYMENT_ID,
             orderId: ORDER_ID,
+            refundId: 'r'.repeat(24),
             amount: 20,
-            currency: 'EUR'
+            currency: 'EUR',
+            full: true
         });
 
         const deliveries = await webhookDeliveryRepository.findAll({}, { limit: 100 });

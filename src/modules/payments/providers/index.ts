@@ -47,6 +47,12 @@ export interface PreparedPayment {
     clientSecret?: string;
 }
 
+/** What a provider answers once it has returned money: its own id for the refund. */
+export interface RefundedByProvider {
+    /** The provider's refund id (`re_…`), kept on the refund record for reconciliation. */
+    refundRef: string;
+}
+
 /** A webhook delivery, normalised — the provider owns the translation from its own event shape. */
 export interface ProviderWebhookEvent {
     /** The provider's event id, deduplicated so a retried delivery settles nothing twice. */
@@ -104,7 +110,10 @@ export interface PaymentProvider {
     retrieve(providerRef: string): Promise<ProviderPaymentState>;
 
     /**
-     * Return the money of a succeeded charge.
+     * Return money of a succeeded charge — all of it, or a part.
+     *
+     * `charge.amount` is what to return THIS time, not what was paid; more than one refund can
+     * stand against the same charge until they add up to it.
      *
      * `idempotencyKey` is what makes a RETRY of this call safe at the provider, not just at this
      * application: two calls carrying the same key (`refund:{paymentId}`) return the same refund
@@ -116,7 +125,7 @@ export interface PaymentProvider {
         providerRef: string,
         charge: { amount: number; currency: string },
         idempotency: { idempotencyKey: string }
-    ): Promise<void>;
+    ): Promise<RefundedByProvider>;
 
     /**
      * Close an intent that has not succeeded yet — the customer abandoned it, or this application

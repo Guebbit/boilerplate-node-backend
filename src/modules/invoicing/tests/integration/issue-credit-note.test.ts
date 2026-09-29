@@ -14,12 +14,13 @@ import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
 import invoicingModule from '@modules/invoicing/module';
-import { createIntent, confirmPayment, performRefund } from '@modules/payments';
+import { createIntent, confirmPayment, performRefund, paymentService } from '@modules/payments';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { asCustomer, testCallerContext } from '@tests/callers';
+import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
 import { invoicingRepository } from '../../repository';
+import { issueCreditNote } from '../../services';
 
 /** `payments/providers/fake.ts`'s own "always succeeds" reference — the demo panel's default. */
 const FAKE_SUCCESS_METHOD = 'pm_card_visa';
@@ -50,6 +51,32 @@ const waitUntil = async <T>(read: () => Promise<T | null>, timeoutMs = 2000): Pr
     }
 };
 
+/** A customer who paid 25.00 and whose invoice has been frozen. */
+const paidAndInvoiced = async () => {
+    const user = await createUser();
+    const product = await createProduct({ price: 25 });
+    const order = await createOrder(user, [toOrderItem(product, 1)]);
+    const orderId = String(order._id);
+    const intent = await createIntent(orderId, asCustomer(user.id));
+    if (!intent.success) throw new Error('intent refused');
+    await confirmPayment(
+        intent.data.id,
+        FAKE_SUCCESS_METHOD,
+        asCustomer(user.id),
+        testCallerContext
+    );
+    const invoice = await waitUntil(() => invoicingRepository.findInvoiceByOrderId(orderId));
+    return { orderId, invoice };
+};
+
+/** Polls until the order has `count` credit notes. */
+const waitForNotes = (orderId: string, count: number) =>
+    waitUntil(() =>
+        invoicingRepository
+            .findCreditNotesByOrderId(orderId)
+            .then((notes) => (notes.length >= count ? notes : null))
+    );
+
 describe('issuing a credit note off PAYMENT_REFUNDED', () => {
     it('freezes a credit note, numbered in its own series, once the refund lands', async () => {
         const user = await createUser();
@@ -69,8 +96,10 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         );
 
         await performRefund(String(order._id));
-        const creditNote = await waitUntil(() =>
-            invoicingRepository.findCreditNoteByOrderId(String(order._id))
+        const [creditNote] = await waitUntil(() =>
+            invoicingRepository
+                .findCreditNotesByOrderId(String(order._id))
+                .then((notes) => (notes.length > 0 ? notes : null))
         );
 
         // Both series independently start their own year at 1 — the SAME printed number on two
@@ -80,6 +109,53 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         expect(creditNote.invoiceId.toString()).toBe(invoice._id.toString());
         expect(creditNote.invoiceNumber).toBe(invoice.number);
         expect(creditNote.grandTotal).toBe(invoice.grandTotal);
+    });
+
+    it('mirrors the invoice for a full refund', async () => {
+        const { orderId, invoice } = await paidAndInvoiced();
+
+        await paymentService.refundByOrder(orderId, asAdmin(), testCallerContext);
+        const notes = await waitForNotes(orderId, 1);
+
+        expect(notes[0].lines).toHaveLength(invoice.lines.length);
+        expect(notes[0].grandTotal).toBe(invoice.grandTotal);
+        expect(notes[0].netTotal).toBe(invoice.netTotal);
+        expect(notes[0].taxTotal).toBe(invoice.taxTotal);
+    });
+
+    it('issues one credit note per partial refund, each for its own amount', async () => {
+        const { orderId, invoice } = await paidAndInvoiced();
+
+        await paymentService.refundByOrder(orderId, asAdmin(), testCallerContext, { amount: 20 });
+        await paymentService.refundByOrder(orderId, asAdmin(), testCallerContext, { amount: 5 });
+        const notes = await waitForNotes(orderId, 2);
+
+        expect(notes.map((note) => note.grandTotal)).toEqual([20, 5]);
+        expect(notes[0].number).not.toBe(notes[1].number);
+        expect(notes[0].refundId).not.toBe(notes[1].refundId);
+        for (const note of notes) {
+            expect(note.invoiceNumber).toBe(invoice.number);
+            // Reconciled: net + VAT is the credit note's own gross, to the cent.
+            expect(Math.round((note.netTotal + note.taxTotal) * 100)).toBe(
+                Math.round(note.grandTotal * 100)
+            );
+        }
+    });
+
+    it('is idempotent on the refund — a redelivered event issues nothing twice', async () => {
+        const { orderId } = await paidAndInvoiced();
+        await paymentService.refundByOrder(orderId, asAdmin(), testCallerContext, { amount: 20 });
+        const [note] = await waitForNotes(orderId, 1);
+
+        const again = await issueCreditNote({
+            orderId,
+            refundId: note.refundId,
+            amount: 20,
+            full: false
+        });
+
+        expect(String(again?._id)).toBe(String(note._id));
+        expect(await invoicingRepository.findCreditNotesByOrderId(orderId)).toHaveLength(1);
     });
 
     it('issues nothing when there is no invoice to reverse', async () => {
@@ -93,7 +169,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
 
         await expect(
-            invoicingRepository.findCreditNoteByOrderId(String(order._id))
-        ).resolves.toBeNull();
+            invoicingRepository.findCreditNotesByOrderId(String(order._id))
+        ).resolves.toEqual([]);
     });
 });

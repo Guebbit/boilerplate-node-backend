@@ -101,8 +101,14 @@ export interface InvoiceDocument extends FrozenTaxDocument, Document {}
 /** Invoice model type. */
 export type InvoiceModel = Model<InvoiceDocument>;
 
-/** One issued credit note — a full reversal of the invoice it corrects, on today's refund model. */
+/**
+ * One issued credit note — the reversal of ONE refund. A full refund mirrors the invoice it
+ * corrects; a partial one carries only the refunded share, so an order refunded in parts has one
+ * credit note per part.
+ */
 export interface CreditNoteDocument extends FrozenTaxDocument, Document {
+    /** The `payments` refund record this credit note is for — what makes issuing it idempotent. */
+    refundId: string;
     /** The invoice this credit note reverses — always present: nothing is refunded before it is invoiced. */
     invoiceId: Types.ObjectId;
     /** The invoice's own number, printed for cross-reference without a lookup. */
@@ -203,15 +209,19 @@ const creditNoteSchema = new Schema<CreditNoteDocument, CreditNoteModel>(
     {
         ...frozenTaxDocumentFields,
         invoiceId: { type: Schema.Types.ObjectId, required: true },
-        invoiceNumber: { type: String, required: true }
+        invoiceNumber: { type: String, required: true },
+        refundId: { type: String, required: true }
     },
     { timestamps: true }
 );
 
-// One credit note per order — today's refund model is a single full refund, so a second one has
-// nothing left to reverse. Revisit alongside SH5's partial refunds, which legitimately need more
-// than one.
-creditNoteSchema.index({ orderId: 1 }, { name: 'creditNotes_orderId', unique: true });
+// One credit note per REFUND — `PAYMENT_REFUNDED` is fired from an at-most-once write, but the
+// event bus promises no de-duplication of its own, so this index is what makes a redelivered
+// event issue nothing twice. An order refunded in parts legitimately has several.
+creditNoteSchema.index({ refundId: 1 }, { name: 'creditNotes_refundId', unique: true });
+
+// Backs the per-order list `GET /orders/{id}/credit-notes` reads.
+creditNoteSchema.index({ orderId: 1, issuedAt: 1 }, { name: 'creditNotes_orderId_issuedAt' });
 
 /** Mongoose model for issued credit notes. */
 export const creditNoteModel = model<CreditNoteDocument, CreditNoteModel>(

@@ -203,7 +203,7 @@ knows the order is still `pending` from its own point of view.
 order alone. The actual tax invoice — a frozen document, its own numbering series, credit notes on
 refund — is [`invoicing`](./invoicing.md), a module this one has no import of and no wiring for:
 `invoicing` depends on `orders`, never the reverse, and reaches its own `GET /orders/{id}/invoice`
-and `GET /orders/{id}/credit-note` by sharing this module's `/orders` basePath (the same pattern
+and `GET /orders/{id}/credit-notes` by sharing this module's `/orders` basePath (the same pattern
 [`addresses`](./addresses.md) uses on `/account`).
 
 The only trace of that relationship here is `paidAt` (`model.ts`), stamped by `services/status.ts`'s

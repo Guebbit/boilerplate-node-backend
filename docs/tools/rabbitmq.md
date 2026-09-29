@@ -60,7 +60,7 @@ Controllers using it:
 
 ### Invoice PDF rendering — NOT a queue
 
-`GET /orders/:id/invoice` and `/credit-note` render synchronously, on the request thread —
+`GET /orders/:id/invoice` and `/credit-notes/:creditNoteId` render synchronously, on the request thread —
 `src/modules/invoicing/services/render.ts` — and stream the bytes back. There is no queue, no
 worker and no stored status: the frozen `Invoice`/`CreditNote` row is the system of record, and
 each request just renders it again — see [invoicing](../modules/invoicing.md).

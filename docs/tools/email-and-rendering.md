@@ -16,7 +16,7 @@ Both are optional: they only activate when the relevant env vars / browser binar
 | Email triggers   | `src/modules/account/controllers/post-reset-request.ts` (password reset)                                                                                                        |
 | Email copy       | `src/modules/<name>/emails.ts`                                                                                                                                                  |
 | HTML templates   | `src/modules/<name>/templates/*.ejs` — one directory per owning module (`AppModule.templates`); `shared/templates/layouts/*.ejs` holds only the include partials no module owns |
-| PDF rendering    | `src/modules/invoicing/services/render.ts` — `GET /orders/{id}/invoice` and `/credit-note` both render through it; see [invoicing](../modules/invoicing.md)                     |
+| PDF rendering    | `src/modules/invoicing/services/render.ts` — `GET /orders/{id}/invoice` and `/credit-notes/{creditNoteId}` both render through it; see [invoicing](../modules/invoicing.md)     |
 
 ## Email pipeline
 

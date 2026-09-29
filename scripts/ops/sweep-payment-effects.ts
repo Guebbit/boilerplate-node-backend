@@ -10,6 +10,9 @@
  * nothing to redeliver it — unlike a webhook, nobody retries a settlement that already answered
  * its caller. This sweep is the only thing that ever will.
  *
+ * It also retries every refund the provider refused (`payments.refunds[].status` `failed` or
+ * `pending`), with the same idempotency key, until it lands.
+ *
  * No module registration needed: unlike `sweep-order-effects.ts`, this sweep calls
  * `inventoryService.commitForOrder` and `orderService.markRefundOwed` directly rather than
  * emitting an event, so there is no listener it depends on.
@@ -27,10 +30,11 @@ import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { paymentService } from '@modules/payments';
 import { runScript } from '../run-script';
 
-/** Connect, retry every owed effect, and resolve nothing. */
+/** Connect, retry every owed effect and every open refund, and resolve nothing. */
 const main = (): Promise<void> =>
     start()
         .then(() => paymentService.retryPendingEffects())
+        .then(() => paymentService.retryOpenRefunds())
         .then(() => undefined);
 
 void runScript('sweep:payment-effects', main, stopDatabase);

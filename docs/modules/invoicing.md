@@ -52,7 +52,7 @@ The model here is Stripe's invoice lifecycle (finalize once, void rather than de
 never from a request, and it is immutable from the moment it exists.
 
 ::: tip Shares a URL, not a folder
-`GET /orders/{id}/invoice` and `GET /orders/{id}/credit-note` mount at `/orders`, the same prefix
+`GET /orders/{id}/invoice` and `GET /orders/{id}/credit-notes` mount at `/orders`, the same prefix
 `orders` itself answers at — see [`addresses`](./addresses.md) for the precedent (`/account`,
 shared with `account`) and `docs/api/contract-fragmentation.md` for why fragmenting by `basePath`
 still splits the two contracts correctly.
@@ -93,10 +93,14 @@ computes from them, the order's own `shippingAddress` as the Art. 226 billing ad
 collects no separate billing address — the ship-to address is the only customer address a checkout
 ever records), the seller's own identity (`config.ts`), and the order's own frozen
 `currency`/`orderNumber`/`locale`.
-`issueCreditNote` (`services/issue-credit-note.ts`) mirrors the invoice it corrects wholesale —
-today's `payments` only ever refunds the FULL amount of a `succeeded` payment, so there is no
-partial amount to compute; a future partial-refund design (SH5) needs its own input here, not a
-change to this shape.
+`issueCreditNote` (`services/issue-credit-note.ts`) freezes one credit note per REFUND
+(`PAYMENT_REFUNDED` carries `refundId`, this refund's `amount` and `full`). A full refund mirrors the
+invoice it corrects wholesale. A partial one carries only the refunded share: `src/modules/invoicing/services/partial-credit.ts`
+spreads the amount over the invoice's VAT rates in proportion to what each collected (goods and
+shipping together), one line per rate, and the VAT is extracted the way the invoice's own was — so
+the credit note reconciles to the cent and only ever names rates the invoice charged. An order
+refunded in parts therefore has several credit notes; `refundId` is unique, which is what makes a
+redelivered event issue nothing twice.
 
 Both are idempotent the same way: a unique index on `orderId` (`model.ts`) is what actually
 guarantees "at most one", not the listener's own read-then-insert — a redelivered event, or two
@@ -109,8 +113,9 @@ own two series.
 
 ## Downloading a document
 
-`GET /orders/{id}/invoice` and `/credit-note` render on the request thread and stream the bytes
-back: `200` once the document exists, `404` otherwise (`ORDER_INVOICE_NOT_ISSUED` /
+`GET /orders/{id}/invoice` and `GET /orders/{id}/credit-notes/{creditNoteId}` render on the request
+thread and stream the bytes back (`GET /orders/{id}/credit-notes` lists an order's credit notes as
+JSON, so a client can pick one): `200` once the document exists, `404` otherwise (`ORDER_INVOICE_NOT_ISSUED` /
 `ORDER_CREDIT_NOTE_NOT_ISSUED`) — for an order that has not reached the fact yet, or a gap in the
 policy above. Never re-rendered from live config: every render reads the SAME frozen row, byte for
 byte, run through the same EJS template (`src/modules/invoicing/templates/documents/invoicing.document.ejs`) every
@@ -169,8 +174,9 @@ since there is no numeric form for a reason code to become.
   requests for the same order; this module skips it. The document is immutable once issued, so
   there is no correctness reason to cache it — only a possible future perf one, if traffic ever
   asks for it.
-- **Partial credit notes.** SH5's returns/partial-refund design is a separate lane; this module's
-  credit note is a full reversal, matching today's full-refund-only `payments`.
+- **Line-level credit notes for a return.** A partial credit note names the VAT rates it refunds,
+  not the returned products: the refund amount is all `payments` announces. A return's own lines
+  would need `returns` to hand this module more than an amount.
 
 ## Related pages
 

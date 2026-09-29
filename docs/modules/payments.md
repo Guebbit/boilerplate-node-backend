@@ -172,7 +172,8 @@ non-terminal status: `CONFIRMABLE_PAYMENT_STATUSES` (`service.ts`) gates which o
 /payments/{id}/confirm` accepts as a starting point (`requires_confirmation`, `declined` — a
 decline is retryable with another method), and `SETTLEABLE_PAYMENT_STATUSES` gates which ones
 `settlePayment` will still write over (everything except the two terminal states below). `succeeded`
-moves to `refunded` and nowhere else; `refunded` moves nowhere.
+moves to `refunded` and nowhere else — and only once the refund records add up to `amount`
+([Refund records](#refund-records)); `refunded` moves nowhere.
 
 ```mermaid
 stateDiagram-v2
@@ -194,7 +195,8 @@ stateDiagram-v2
     declined --> declined: confirm, refused again
     requires_confirmation --> succeeded: recorded by hand
     declined --> succeeded: recorded by hand
-    succeeded --> refunded: admin refund, or order cancelled
+    succeeded --> refunded: the refunds add up to the amount paid
+    succeeded --> succeeded: a partial refund
     refunded --> [*]
 ```
 
@@ -242,6 +244,49 @@ listener (a customer's own cancel) leaves the payment `succeeded` and writes an 
 with the same fresh-session tier as recording one — is the only door that may set
 `refundedByHand: true` (B1b). A cancelled hand-paid order therefore shows `succeeded` until an
 operator confirms it, not "refunded" for money nobody actually moved.
+
+<a id="refund-records"></a>
+
+### Refund records
+
+A refund is a row on the payment (`refunds[]`), one per attempt — Stripe's `Refund` shape — and
+`amountRefunded` is the running total, counting a refund from the moment it is opened.
+
+```mermaid
+sequenceDiagram
+    participant C as caller (operator / cancel listener)
+    participant P as payments
+    participant D as database
+    participant V as provider
+    C->>P: refund(orderId, amount?)
+    P->>D: settle any refund still open (same idempotency key)
+    P->>D: open a record + raise amountRefunded (conditional on the value read)
+    P->>V: refund(part, idempotencyKey)
+    alt provider answers
+        P->>D: record succeeded (conditional on it still being open)
+        P->>D: payment refunded, only if the records add up to amount
+        P-->>C: payment.refunded (once per refund)
+    else provider refuses
+        P->>D: record failed + lastError, still counted
+        P-->>C: error — the sweep retries the same record
+    end
+```
+
+- **Opened before asked.** The write that appends the record also raises `amountRefunded`, and it is
+  conditional on `amountRefunded` still being what the caller read — so two racing partial refunds
+  cannot return more than was paid. A miss re-reads and re-checks.
+- **Exact sums.** Amounts are summed in integer minor units (`toMinorUnits`/`toDecimalAmount` from
+  `orders`), never by adding decimals.
+- **One key per record.** `refund:{paymentId}:{refundId}` — a retry of a refund is safe at the
+  provider, and two different partial refunds are never mistaken for one.
+- **A refusal stays open.** The record is `failed` (its `lastError` is stored, never published) and
+  keeps its share of `amountRefunded`, so nothing is opened beside it. `retryOpenRefunds` (run by
+  `npm run sweep:payment-effects`) and the next cancel or operator call both finish it.
+- **The default is everything left.** `POST /payments/order/{orderId}/refund` with no body returns
+  all that is still refundable; with an `amount` it returns that part. More than what is left is a
+  422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); nothing left is a 409.
+- **A credit note per refund.** `payment.refunded` carries `refundId`, this refund's `amount` and
+  `full`; `invoicing` issues from it ([`invoicing`](./invoicing.md)).
 
 Every other refund dispatches to the provider named on the payment's own `provider` field — never
 the deployment's currently configured one (B1c) — so a refund of an older payment still reaches the

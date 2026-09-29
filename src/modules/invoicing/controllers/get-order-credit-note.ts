@@ -1,9 +1,8 @@
 /**
  * @module
  * PDF credit-note controller — {@link import('./get-order-invoice').getOrderInvoice}'s twin: `200`
- * once a credit note has been issued for the order (a refund landed), `404` for an order with none
- * (never refunded, or no invoice to reverse in the first place) or that does not exist, `500` on a
- * render failure.
+ * for a credit note of the order (a refund landed), `404` for one it does not have — never issued,
+ * or another order's — or an order that does not exist, `500` on a render failure.
  */
 
 import type { Request, Response } from 'express';
@@ -15,35 +14,48 @@ import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
 import { ERROR_CODES } from '@api/error-codes';
 
-/** GET /orders/:id/credit-note — the credit-note PDF; non-admin callers see only their own order's. */
-export const getOrderCreditNote = (request: Request<{ id?: string }>, response: Response) => {
-    if (!isValidObjectId(request.params.id)) {
+/** The 404 for a credit note the order does not have — one answer for absent and someone else's. */
+const notIssued = (response: Response): void => {
+    rejectResponse(response, 404, [
+        {
+            code: ERROR_CODES.ORDER_CREDIT_NOTE_NOT_ISSUED,
+            message: t('invoicing.credit-note-not-issued')
+        }
+    ]);
+};
+
+/** GET /orders/:id/credit-notes/:creditNoteId — the credit-note PDF; non-admin callers see only their own order's. */
+export const getOrderCreditNote = (
+    request: Request<{ id?: string; creditNoteId?: string }>,
+    response: Response
+) => {
+    const { id, creditNoteId } = request.params;
+    if (!isValidObjectId(id)) {
         rejectResponse(response, 404, [t('orders.not-found')]);
         return;
     }
 
     return orderService
-        .getById(request.params.id, orderService.callerScope(request.authContext))
+        .getById(id, orderService.callerScope(request.authContext))
         .then((order) => {
             if (!order) {
                 rejectResponse(response, 404, [t('orders.not-found')]);
                 return undefined;
             }
+            if (!isValidObjectId(creditNoteId)) {
+                notIssued(response);
+                return undefined;
+            }
 
-            return invoicingService.findCreditNoteForOrder(String(order._id)).then((creditNote) => {
-                if (!creditNote) {
-                    rejectResponse(response, 404, [
-                        {
-                            code: ERROR_CODES.ORDER_CREDIT_NOTE_NOT_ISSUED,
-                            message: t('invoicing.credit-note-not-issued')
-                        }
-                    ]);
-                    return undefined;
-                }
+            return invoicingService
+                .findCreditNoteForOrderById(String(order._id), creditNoteId)
+                .then((creditNote) => {
+                    if (!creditNote) {
+                        notIssued(response);
+                        return undefined;
+                    }
 
-                return invoicingService
-                    .renderCreditNotePdf(creditNote)
-                    .then((pdf) =>
+                    return invoicingService.renderCreditNotePdf(creditNote).then((pdf) => {
                         response
                             .status(200)
                             .setHeader('Content-Type', 'application/pdf')
@@ -52,9 +64,9 @@ export const getOrderCreditNote = (request: Request<{ id?: string }>, response: 
                                 `inline; filename="credit-note-${creditNote.number}.pdf"`
                             )
                             .setHeader('Cache-Control', 'private, no-store')
-                            .send(pdf)
-                    );
-            });
+                            .send(pdf);
+                    });
+                });
         })
         .catch(catchAs(response, 'Credit note generation failed'));
 };

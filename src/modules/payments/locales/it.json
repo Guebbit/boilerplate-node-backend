@@ -15,6 +15,9 @@
         "received-at-future": "La data di arrivo del pagamento non può essere nel futuro.",
         "offline-recorded": "Pagamento registrato — l'ordine è pagato.",
         "webhook-accepted": "Accettato.",
-        "webhook-unverified": "Non è stato possibile verificare questa notifica."
+        "webhook-unverified": "Non è stato possibile verificare questa notifica.",
+        "refund-exceeds-remaining": "L'importo supera quanto resta da rimborsare su questo pagamento.",
+        "refund-currency-mismatch": "La valuta del rimborso non è quella del pagamento.",
+        "refund-invalid-amount": "Non è un importo valido nella valuta del pagamento."
     }
 }

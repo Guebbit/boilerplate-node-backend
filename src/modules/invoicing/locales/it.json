@@ -29,7 +29,8 @@
                 "grand-total": "Totale generale",
                 "vat-number": "Partita IVA: {{number}}",
                 "vat-number-missing": "Partita IVA non configurata"
-            }
+            },
+            "partial-refund-line": "Rimborso"
         }
     }
 }

@@ -12,20 +12,24 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 import { router } from '@modules/invoicing/routes';
 
 describe('invoicing routes — what is mounted', () => {
-    it('mounts exactly the two download routes', () => {
-        expect(routeSignatures(router)).toEqual(['GET /:id/invoice', 'GET /:id/credit-note']);
+    it('mounts the invoice, the credit-note list and one credit note', () => {
+        expect(routeSignatures(router)).toEqual([
+            'GET /:id/invoice',
+            'GET /:id/credit-notes',
+            'GET /:id/credit-notes/:creditNoteId'
+        ]);
     });
 });
 
 describe('invoicing routes — authorization', () => {
-    it.each(['GET /:id/invoice', 'GET /:id/credit-note'])(
+    it.each(['GET /:id/invoice', 'GET /:id/credit-notes', 'GET /:id/credit-notes/:creditNoteId'])(
         '%s requires a logged-in caller',
         (signature) => {
             expect(guardsOn(router, signature)).toContain('isAuth');
         }
     );
 
-    it.each(['GET /:id/invoice', 'GET /:id/credit-note'])(
+    it.each(['GET /:id/invoice', 'GET /:id/credit-notes', 'GET /:id/credit-notes/:creditNoteId'])(
         '%s is readable by any logged-in caller, scoped in the controller',
         (signature) => {
             expect(guardsOn(router, signature)).not.toContain('requirePermissionGuard');
@@ -36,6 +40,12 @@ describe('invoicing routes — authorization', () => {
 describe('invoicing routes — rate limiting', () => {
     it('budgets both renders under the same namespace', () => {
         expect(chainOf(router, 'GET /:id/invoice')).toContain('invoicing-render');
-        expect(chainOf(router, 'GET /:id/credit-note')).toContain('invoicing-render');
+        expect(chainOf(router, 'GET /:id/credit-notes/:creditNoteId')).toContain(
+            'invoicing-render'
+        );
+    });
+
+    it('does not budget the list — it renders nothing', () => {
+        expect(chainOf(router, 'GET /:id/credit-notes')).not.toContain('invoicing-render');
     });
 });

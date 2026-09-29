@@ -9,7 +9,7 @@
 import type { ClientSession } from 'mongoose';
 import { paymentModel, paymentWebhookEventModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod } from '@types';
-import type { PaymentDocument } from './model';
+import type { PaymentDocument, RefundRecord } from './model';
 import { CONFIRMABLE_PAYMENT_STATUSES } from './domain';
 import {
     createRepository,
@@ -118,6 +118,26 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     ) => Promise<PaymentDocument | null>;
     clearPendingEffects: (orderId: string) => Promise<void>;
     findWithPendingEffects: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
+    addRefund: (
+        paymentId: string,
+        expectedRefunded: number,
+        newRefunded: number,
+        refund: Pick<
+            RefundRecord,
+            '_id' | 'amount' | 'currency' | 'reason' | 'idempotencyKey' | 'status'
+        >
+    ) => Promise<PaymentDocument | null>;
+    settleRefund: (
+        paymentId: string,
+        refundId: string,
+        fields: { providerRefundRef?: string; refundedByHand?: true }
+    ) => Promise<PaymentDocument | null>;
+    failRefund: (
+        paymentId: string,
+        refundId: string,
+        lastError: string
+    ) => Promise<PaymentDocument | null>;
+    findWithOpenRefunds: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
 } = {
     ...createRepository<PaymentDocument, PaymentWire>(paymentModel, {
         transform: applyPaymentTransform
@@ -294,6 +314,117 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         paymentModel
             .find({
                 pendingEffects: { $exists: true, $ne: [] },
+                updatedAt: { $lte: updatedBefore }
+            })
+            .sort({ updatedAt: 1 })
+            .limit(limit)
+            .exec(),
+
+    /**
+     * Open a refund: append its record and raise `amountRefunded` in ONE write, conditional on the
+     * payment still being `succeeded` and `amountRefunded` still being what the caller read. That
+     * condition is the whole race guard — two partial refunds computed from the same read cannot
+     * both land, so the total can never pass what was paid. The caller re-reads and re-checks on a
+     * miss.
+     *
+     * The new total arrives computed, not `$inc`-ed: it is summed in integer minor units by the
+     * caller, where a float `$inc` would drift (0.1 + 0.2).
+     *
+     * @param paymentId - the payment
+     * @param expectedRefunded - `amountRefunded` as the caller read it
+     * @param newRefunded - `amountRefunded` once this refund is counted
+     * @param refund - the record to append
+     * @returns the payment as it now stands, or `null` if the guard no longer held
+     */
+    addRefund: (paymentId, expectedRefunded, newRefunded, refund) =>
+        paymentModel
+            .findOneAndUpdate(
+                {
+                    _id: toObjectId(paymentId),
+                    status: 'succeeded',
+                    amountRefunded: expectedRefunded
+                },
+                { $set: { amountRefunded: newRefunded }, $push: { refunds: refund } },
+                { returnDocument: 'after' }
+            )
+            .exec(),
+
+    /**
+     * Mark one refund `succeeded`, only if it is still open (`pending` or `failed`) — the
+     * conditional write that makes a settled refund settle exactly once, however many callers (the
+     * request, the sweep) race to finish it. A `null` answer means someone else already did.
+     *
+     * @param paymentId - the payment
+     * @param refundId - the refund record inside it
+     * @param fields - the provider's refund id when there was one, and `refundedByHand` for money
+     *   an operator returned outside the application
+     * @returns the payment as it now stands, or `null` if that refund was not open
+     */
+    settleRefund: (paymentId, refundId, fields) =>
+        paymentModel
+            .findOneAndUpdate(
+                {
+                    _id: toObjectId(paymentId),
+                    refunds: {
+                        $elemMatch: {
+                            _id: toObjectId(refundId),
+                            status: { $in: ['pending', 'failed'] }
+                        }
+                    }
+                },
+                {
+                    $set: {
+                        'refunds.$.status': 'succeeded',
+                        'refunds.$.settledAt': new Date(),
+                        ...(fields.providerRefundRef === undefined
+                            ? {}
+                            : { 'refunds.$.providerRefundRef': fields.providerRefundRef }),
+                        ...(fields.refundedByHand ? { refundedByHand: true } : {})
+                    },
+                    $unset: { 'refunds.$.lastError': 1 }
+                },
+                { returnDocument: 'after' }
+            )
+            .exec(),
+
+    /**
+     * Record that the provider refused a refund, keeping it open for the sweep. Only an open one
+     * can fail — a refund that already succeeded is never walked back by a late error.
+     *
+     * @param paymentId - the payment
+     * @param refundId - the refund record inside it
+     * @param lastError - what the provider said
+     * @returns the payment as it now stands, or `null` if that refund was not open
+     */
+    failRefund: (paymentId, refundId, lastError) =>
+        paymentModel
+            .findOneAndUpdate(
+                {
+                    _id: toObjectId(paymentId),
+                    refunds: {
+                        $elemMatch: {
+                            _id: toObjectId(refundId),
+                            status: { $in: ['pending', 'failed'] }
+                        }
+                    }
+                },
+                { $set: { 'refunds.$.status': 'failed', 'refunds.$.lastError': lastError } },
+                { returnDocument: 'after' }
+            )
+            .exec(),
+
+    /**
+     * Payments with a refund still open, oldest first — the refund sweep's own scan.
+     * `updatedBefore` keeps it off a refund whose request is still in flight this very second.
+     *
+     * @param updatedBefore - only payments untouched since at least this instant
+     * @param limit - how many to return at most
+     * @returns the payments to retry
+     */
+    findWithOpenRefunds: (updatedBefore: Date, limit: number) =>
+        paymentModel
+            .find({
+                refunds: { $elemMatch: { status: { $in: ['pending', 'failed'] } } },
                 updatedAt: { $lte: updatedBefore }
             })
             .sort({ updatedAt: 1 })

@@ -4,7 +4,7 @@ info:
     version: '1.0.0'
 
 x-error-codes:
-    ORDER_CREDIT_NOTE_NOT_ISSUED: { status: 404, description: 'The order exists but no credit note has been issued for it yet.' }
+    ORDER_CREDIT_NOTE_NOT_ISSUED: { status: 404, description: 'The order exists but has no such credit note.' }
     ORDER_INVOICE_NOT_ISSUED: { status: 404, description: 'The order exists but no invoice has been issued for it yet.' }
 
 paths:
@@ -43,20 +43,51 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /orders/{id}/credit-note:
+    /orders/{id}/credit-notes:
         get:
             tags: [Invoicing]
-            summary: Download the order's credit note (PDF)
+            summary: List the order's credit notes
             description: >-
-                The frozen credit note for the order identified by `{id}`, as a binary PDF —
-                issued once a refund on this order's payment actually lands. Refuses with `404`
-                for an order with no credit note (never refunded, or nothing to reverse in the
-                first place).
+                One entry per refund that has settled on this order's payment, oldest first — a
+                full refund and each part of a partial one each have their own credit note. Empty
+                for an order never refunded, or with no invoice to reverse. `id` is what
+                `GET /orders/{id}/credit-notes/{creditNoteId}` downloads.
+            operationId: listOrderCreditNotes
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The credit notes issued for the order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreditNoteListEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /orders/{id}/credit-notes/{creditNoteId}:
+        get:
+            tags: [Invoicing]
+            summary: Download one credit note (PDF)
+            description: >-
+                The frozen credit note `{creditNoteId}` of the order `{id}`, as a binary PDF.
+                Refuses with `404` for a credit note that does not exist or belongs to another
+                order — the two are indistinguishable on purpose.
             operationId: getOrderCreditNote
             security:
                 - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                - name: creditNoteId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The credit note, from `GET /orders/{id}/credit-notes`
             responses:
                 '200':
                     description: Credit note PDF
@@ -67,7 +98,7 @@ paths:
                                 format: binary
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # `errors[].code` is `ORDER_CREDIT_NOTE_NOT_ISSUED` for an order that exists but has
-                # none; `orders.not-found` for a genuinely unknown/inaccessible order.
+                # no such credit note; `orders.not-found` for a genuinely unknown/inaccessible order.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -75,6 +106,48 @@ paths:
 
 components:
     schemas:
+        # One row of `GET /orders/{id}/credit-notes` — enough to list and to pick one to download,
+        # never the frozen document itself (lines, seller identity, VAT), which stays in the PDF.
+        CreditNoteSummary:
+            type: object
+            additionalProperties: false
+            required: [id, number, issuedAt, currency, grandTotal, refundId]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                number:
+                    type: string
+                    description: The credit note's own number, in its own yearly series.
+                issuedAt:
+                    type: string
+                    format: date-time
+                currency:
+                    type: string
+                    description: ISO-4217 currency code (e.g. EUR)
+                grandTotal:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: The gross amount this credit note reverses.
+                refundId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+
+        CreditNoteListEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CreditNoteSummary'
+
         # `POST /account/export`'s own row for one issued document — never the full frozen
         # document (lines, seller identity, VAT breakdown): an export answers "what did I buy
         # invoices for", not a reprint of the PDF itself, which stays behind the download routes.

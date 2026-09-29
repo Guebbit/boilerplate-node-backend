@@ -1879,8 +1879,10 @@ paths:
     # `addresses` sharing `/account` with `account` — see docs/api/contract-fragmentation.md)
     /orders/{id}/invoice:
         $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1invoice'
-    /orders/{id}/credit-note:
-        $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1credit-note'
+    /orders/{id}/credit-notes:
+        $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1credit-notes'
+    /orders/{id}/credit-notes/{creditNoteId}:
+        $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1credit-notes~1{creditNoteId}'
 
     # ---------- payments ----------
     /payments/methods:

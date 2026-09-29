@@ -150,16 +150,17 @@ export const fakePaymentProvider: PaymentProvider = {
         return Promise.resolve(state);
     },
 
-    // `idempotencyKey` is unused here: this fake never leaves the process, so there is no second
-    // network attempt for it to deduplicate — a real provider's own client sends it as a request
-    // header instead.
+    // This fake never leaves the process, so there is no second network attempt to deduplicate —
+    // a real provider's own client sends `idempotencyKey` as a request header instead.
     refund: (providerRef, charge, { idempotencyKey }) => {
         outcomes.delete(providerRef);
         // Stryker disable next-line all
         logger.info(
             `[fake-psp] refund ${charge.amount} ${charge.currency} on ${providerRef} (${idempotencyKey})`
         );
-        return Promise.resolve();
+        // Derived from the key, like a real provider's idempotent replay: the same key answers
+        // the same refund id.
+        return Promise.resolve({ refundRef: `re_fake_${idempotencyKey}` });
     },
 
     cancel: (providerRef, { reason }) => {

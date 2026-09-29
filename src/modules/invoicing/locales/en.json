@@ -29,7 +29,8 @@
                 "grand-total": "Grand total",
                 "vat-number": "VAT number: {{number}}",
                 "vat-number-missing": "VAT number not configured"
-            }
+            },
+            "partial-refund-line": "Refund"
         }
     }
 }

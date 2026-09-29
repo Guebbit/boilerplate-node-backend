@@ -23,18 +23,23 @@ declare module '@kernel/events' {
         'payment.failed': { paymentId: string; orderId: string };
 
         /**
-         * A `succeeded` payment moved to `refunded` — emitted from `./services/refunds.ts`'s
-         * `markRefunded`, on the same at-most-once write, whether an operator asked for it
-         * (`refundByOrder`) or the automatic `ORDER_REFUND_OWED` compensation did. `invoicing` is
-         * the one listener today, issuing the order's credit note from this fact — see
-         * `docs/modules/invoicing.md`. Absent for a hand-paid refund left for an operator
-         * (`leaveForOperator`): the payment never actually moved to `refunded` there.
+         * One refund settled — emitted from `./services/refunds.ts`'s `settleRefund`, on the same
+         * at-most-once write, whether an operator asked for it (`refundByOrder`) or the automatic
+         * `ORDER_REFUND_OWED` compensation did. A payment can raise it more than once: each partial
+         * refund is its own fact. `invoicing` is the listener that issues a credit note from it —
+         * see `docs/modules/invoicing.md`. Absent for a hand-paid refund left for an operator
+         * (`leaveForOperator`): no refund record exists there.
+         *
+         * `amount` is THIS refund's, not the payment's. `full` says the refund is the whole payment,
+         * the one case where a credit note mirrors the invoice instead of apportioning it.
          */
         'payment.refunded': {
             paymentId: string;
             orderId: string;
+            refundId: string;
             amount: number;
             currency: string;
+            full: boolean;
         };
     }
 }

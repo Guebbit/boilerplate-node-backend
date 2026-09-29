@@ -42,24 +42,55 @@ const insertInvoice = (fields: FrozenTaxDocument): Promise<InvoiceDocument> =>
     });
 
 /**
- * The credit note for an order, if one has been issued.
+ * Every credit note issued for an order, oldest first — one per refund.
  * @param orderId - the order to look up
  */
-const findCreditNoteByOrderId = (orderId: string): Promise<CreditNoteDocument | null> =>
-    creditNoteModel.findOne({ orderId: new Types.ObjectId(orderId) }).exec();
+const findCreditNotesByOrderId = (orderId: string): Promise<CreditNoteDocument[]> =>
+    creditNoteModel
+        .find({ orderId: new Types.ObjectId(orderId) })
+        .sort({ issuedAt: 1, _id: 1 })
+        .exec();
 
 /**
- * Insert a new credit note — same idempotent-on-`orderId` guarantee as {@link insertInvoice}, for
- * the same reason: `PAYMENT_REFUNDED` is fired from an at-most-once write, but the event bus
+ * One credit note, addressed within its order — an id that belongs to another order is `null`, the
+ * same as an id that does not exist.
+ * @param orderId - the order the credit note must belong to
+ * @param creditNoteId - the credit note
+ */
+const findCreditNoteById = (
+    orderId: string,
+    creditNoteId: string
+): Promise<CreditNoteDocument | null> =>
+    creditNoteModel
+        .findOne({
+            _id: new Types.ObjectId(creditNoteId),
+            orderId: new Types.ObjectId(orderId)
+        })
+        .exec();
+
+/**
+ * The credit note issued for one refund, if any.
+ * @param refundId - the `payments` refund record
+ */
+const findCreditNoteByRefundId = (refundId: string): Promise<CreditNoteDocument | null> =>
+    creditNoteModel.findOne({ refundId }).exec();
+
+/**
+ * Insert a new credit note — idempotent on `refundId`, for the same reason as
+ * {@link insertInvoice}: `PAYMENT_REFUNDED` is fired from an at-most-once write, but the event bus
  * itself promises no de-duplication of its own.
- * @param fields - every frozen field, plus the invoice this credit note reverses
+ * @param fields - every frozen field, plus the invoice this credit note reverses and its refund
  */
 const insertCreditNote = (
-    fields: FrozenTaxDocument & { invoiceId: Types.ObjectId; invoiceNumber: string }
+    fields: FrozenTaxDocument & {
+        invoiceId: Types.ObjectId;
+        invoiceNumber: string;
+        refundId: string;
+    }
 ): Promise<CreditNoteDocument> =>
     creditNoteModel.create(fields).catch((error: unknown) => {
         if (!isDuplicateKey(error)) throw error;
-        return findCreditNoteByOrderId(String(fields.orderId)).then((existing) => {
+        return findCreditNoteByRefundId(fields.refundId).then((existing) => {
             if (!existing) throw error;
             return existing;
         });
@@ -90,7 +121,9 @@ const incrementCounter = (
 export const invoicingRepository = {
     findInvoiceByOrderId,
     insertInvoice,
-    findCreditNoteByOrderId,
+    findCreditNotesByOrderId,
+    findCreditNoteById,
+    findCreditNoteByRefundId,
     insertCreditNote,
     incrementInvoiceNumberCounter: (year: number): Promise<number> =>
         incrementCounter(invoiceNumberCounterModel, year),

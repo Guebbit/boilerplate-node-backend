@@ -1,18 +1,23 @@
 /**
  * @module
  * Giving money back — the operator action (`refundByOrder`) and the `ORDER_REFUND_OWED` listener's
- * compensation (`refundForOrder`), both through the one conditional write (`performRefund`) that
- * makes a refund at-most-once. Nothing else in this module may move money out.
+ * compensation (`refundForOrder`), both through `performRefund`. Nothing else in this module may
+ * move money out.
  *
- * Order:    the provider is asked FIRST, and the status moves only once it confirms. A rejection
- *           leaves the payment `succeeded` — the one state the retry sweep (`ORDER_REFUND_OWED`,
- *           see `../module.ts`) can still act on — instead of recording a refund as done before
- *           anyone asked, with no way back once the provider says no.
+ * Record:   a refund is a row on the payment, opened BEFORE the provider is asked. Opening is one
+ *           conditional write that also raises `amountRefunded`, so two racing refunds cannot
+ *           return more than was paid.
+ * Order:    the provider is asked next, and the record settles only once it confirms. A refusal
+ *           leaves the record `failed` — open, retried by the sweep with the SAME idempotency key
+ *           — instead of recording money as returned before anyone asked.
+ * Full:     the payment moves `succeeded → refunded` only when the records add up to `amount`. A
+ *           partial refund leaves it `succeeded`, which is what keeps the rest refundable.
  * Provider: dispatched on the PAYMENT's own `provider`, never the deployment's configured one — a
  *           `manual` payment has no provider to ask, and a real PSP refund must go back to
  *           whichever provider actually took the money, even if the deployment has since switched.
  */
 
+import { Types } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { t } from '@infrastructure/i18n';
 import {
@@ -26,14 +31,52 @@ import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { emitDomainEvent } from '@kernel/events';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
+import {
+    toMinorUnits,
+    toDecimalAmount,
+    addMoney,
+    subtractMoney,
+    type Money
+} from '@modules/orders';
 import { paymentsAuditActions } from '../audit';
 import { providerNamed } from '../providers';
 import { paymentRepository } from '../repository';
 import { PAYMENT_REFUNDED } from '../events';
-import type { PaymentDocument } from '../model';
+import type { PaymentDocument, RefundRecord, RefundReason } from '../model';
 import { REFUNDABLE_PAYMENT_STATUS } from '../domain';
 import { callerScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
+
+/** What one refund is asked to do. */
+export interface RefundRequest {
+    /** A decimal in the payment's currency; absent means everything still refundable. */
+    amount?: number;
+    /** Why the money goes back — recorded on the refund. */
+    reason: RefundReason;
+}
+
+/** The request the automatic callers make: everything left, for a cancellation. */
+const CANCELLATION_REQUEST: RefundRequest = Object.freeze({ reason: 'cancellation' });
+
+/** A refund that was just opened, with the payment as it stood right after. */
+interface OpenedRefund {
+    payment: PaymentDocument;
+    refund: RefundRecord;
+}
+
+/** How long a provider error is kept on the record — enough to diagnose, not a log dump. */
+const MAX_ERROR_LENGTH = 500;
+
+/**
+ * What is still refundable on a payment, in minor units: what was paid minus what has been asked
+ * back (pending counts — see `PaymentDocument.amountRefunded`).
+ * @param payment - the payment
+ */
+export const remainingOf = (payment: PaymentDocument): Money =>
+    subtractMoney(
+        toMinorUnits(payment.amount, payment.currency),
+        toMinorUnits(payment.amountRefunded, payment.currency)
+    );
 
 /**
  * Record, unattended, that a hand-paid order's refund is left for an operator — the
@@ -62,104 +105,318 @@ const leaveForOperator = (orderId: string, payment: PaymentDocument): Promise<Pa
 };
 
 /**
- * Move a `succeeded` payment to `refunded`, once the money has actually moved (or, for a hand-paid
- * one, once an operator says it has). The conditional write IS the idempotence: a second call
- * finds nothing left in `succeeded` and answers `null`.
- * @param orderId - the order whose payment is moving
- * @param context - present only for the admin request; audited only then
- * @param extra - `{ refundedByHand: true }` for the admin confirming a hand-paid refund
- * @param auditOutcome - `failure` for the corrupted-row case below, where the status moves but no
- *   money actually went back — an unconditional `success` there would misrepresent the audit trail
+ * Open a refund on a payment: reserve the amount and append its record in one conditional write.
+ *
+ * A miss means another write moved `amountRefunded` between the caller's read and this one — so the
+ * payment is re-read and the whole check runs again against what is really left, instead of
+ * refunding from a stale figure. Each miss means someone else made progress, so it ends.
+ *
+ * @param payment - the payment as the caller read it
+ * @param request - the amount (absent = everything left) and the reason
+ * @returns the opened record and the payment after it, or `null` when nothing (or not that much)
+ *   is left to refund
  */
-const markRefunded = (
-    orderId: string,
+const openRefund = (
+    payment: PaymentDocument,
+    request: RefundRequest
+): Promise<OpenedRefund | null> => {
+    const { currency, _id: paymentId, orderId, amountRefunded } = payment;
+    const remaining = remainingOf(payment);
+    const amount =
+        request.amount === undefined ? remaining : toMinorUnits(request.amount, currency);
+    if (amount <= 0 || amount > remaining) return Promise.resolve(null);
+
+    const refundId = new Types.ObjectId();
+    const refund = {
+        _id: refundId,
+        amount: toDecimalAmount(amount, currency),
+        currency,
+        status: 'pending' as const,
+        reason: request.reason,
+        // One key per RECORD, not per payment: two different partial refunds must not be taken
+        // for one by the provider, while a retry of this one must be.
+        idempotencyKey: `refund:${String(paymentId)}:${String(refundId)}`
+    };
+    const newTotal = addMoney(toMinorUnits(amountRefunded, currency), amount);
+
+    return paymentRepository
+        .addRefund(String(paymentId), amountRefunded, toDecimalAmount(newTotal, currency), refund)
+        .then((updated) => {
+            // `createdAt` is stamped by mongoose on insert; the record this write appended is
+            // otherwise exactly `refund` — one cast for the one field the compiler cannot see.
+            if (updated) return { payment: updated, refund: refund as RefundRecord };
+            return paymentRepository
+                .findByOrderId(String(orderId))
+                .then((fresh) =>
+                    fresh?.status === REFUNDABLE_PAYMENT_STATUS ? openRefund(fresh, request) : null
+                );
+        });
+};
+
+/**
+ * Whether every unit of a payment has gone back: the records add up to `amount`, and none is
+ * still open.
+ * @param payment - the payment, after a refund just settled
+ */
+const isFullyRefunded = (payment: PaymentDocument): boolean =>
+    remainingOf(payment) === 0 && payment.refunds.every((refund) => refund.status === 'succeeded');
+
+/**
+ * Tell the rest of the system a refund landed: the log line, the audit row, and the fact
+ * `invoicing` issues a credit note from and `webhooks` fans out.
+ *
+ * Fire-and-forget, same reasoning as `PAYMENT_SUCCEEDED` in `./settlement.ts`: a slow or failing
+ * listener must not delay this call's own caller. Emitted even for the corrupted-row case
+ * (`outcome: 'failure'`) — `invoicing` cannot see that distinction, and a credit note is owed
+ * either way.
+ *
+ * @param payment - the payment after the refund settled
+ * @param refund - the record that settled
+ * @param context - present only for the admin request; audited only then
+ * @param outcome - `failure` when the status moved but no money actually went back
+ */
+const announceRefund = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
     context: CallerContext | undefined,
-    extra?: Partial<PaymentDocument>,
-    auditOutcome: 'success' | 'failure' = 'success'
+    outcome: 'success' | 'failure'
+): void => {
+    const orderId = String(payment.orderId);
+    // Stryker disable all
+    logger.info(
+        outcome === 'success'
+            ? `Payment for order ${orderId} refunded (${refund.amount} of ${payment.amount} ${payment.currency})`
+            : `Payment for order ${orderId} marked refunded with no money actually returned — see the error logged just before this`
+    );
+    // Stryker restore all
+    recordAudit(context, {
+        action: paymentsAuditActions.ADMIN_PAYMENT_REFUNDED,
+        outcome,
+        target_type: 'order',
+        target_id: orderId,
+        metadata: { refundId: String(refund._id), amount: refund.amount }
+    });
+    void emitDomainEvent(PAYMENT_REFUNDED, {
+        paymentId: String(payment._id),
+        orderId,
+        refundId: String(refund._id),
+        amount: refund.amount,
+        currency: refund.currency,
+        full:
+            toMinorUnits(refund.amount, refund.currency) ===
+            toMinorUnits(payment.amount, payment.currency)
+    });
+};
+
+/**
+ * Settle one open refund, and move the payment to `refunded` if that was the last of it. The
+ * conditional write IS the idempotence: a second caller (the sweep racing the request) finds the
+ * record already `succeeded` and answers `null`, so the announcement fires once.
+ *
+ * @param payment - the payment the refund belongs to
+ * @param refund - the record being settled
+ * @param fields - the provider's refund id, or `refundedByHand` for an operator's own report
+ * @param context - present only for the admin request
+ * @param outcome - `failure` for the corrupted-row case
+ * @returns the payment as it now stands, or `null` when another caller settled it first
+ */
+const settleRefund = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    fields: { providerRefundRef?: string; refundedByHand?: true },
+    context: CallerContext | undefined,
+    outcome: 'success' | 'failure' = 'success'
 ): Promise<PaymentDocument | null> =>
     paymentRepository
-        .updateStatusIfIn(orderId, [REFUNDABLE_PAYMENT_STATUS], 'refunded', extra)
-        .then((updated) => {
-            if (!updated) return null;
-            // Stryker disable all
-            logger.info(
-                auditOutcome === 'success'
-                    ? `Payment for order ${orderId} refunded (${updated.amount} ${updated.currency})`
-                    : `Payment for order ${orderId} marked refunded with no money actually returned — see the error logged just before this`
-            );
-            // Stryker restore all
-            recordAudit(context, {
-                action: paymentsAuditActions.ADMIN_PAYMENT_REFUNDED,
-                outcome: auditOutcome,
-                target_type: 'order',
-                target_id: orderId
+        .settleRefund(String(payment._id), String(refund._id), fields)
+        .then((settled) => {
+            if (!settled) return null;
+            const finished = isFullyRefunded(settled)
+                ? paymentRepository
+                      .updateStatusIfIn(
+                          String(settled.orderId),
+                          [REFUNDABLE_PAYMENT_STATUS],
+                          'refunded'
+                      )
+                      .then((moved) => moved ?? settled)
+                : Promise.resolve(settled);
+            return finished.then((final) => {
+                announceRefund(final, refund, context, outcome);
+                return final;
             });
-            // Fire-and-forget, same reasoning as `PAYMENT_SUCCEEDED` in `./settlement.ts`:
-            // `invoicing` issues the order's credit note from this fact, and a slow or failing
-            // listener there must not delay this call's own caller. Emitted even for the
-            // corrupted-row case (`auditOutcome: 'failure'`) — `invoicing` cannot see that
-            // distinction and a credit note is owed either way, once the payment reads `refunded`.
-            void emitDomainEvent(PAYMENT_REFUNDED, {
-                paymentId: String(updated._id),
-                orderId,
-                amount: updated.amount,
-                currency: updated.currency
-            });
-            return updated;
         });
 
 /**
+ * Ask the provider to return one refund's money, and record its answer. A refusal marks the record
+ * `failed` and rethrows, so the caller (the `ORDER_REFUND_OWED` listener) keeps its own retry
+ * marker and the sweep finds the record open.
+ *
+ * @param payment - the payment (never `manual`, never without a `providerRef`)
+ * @param refund - the record to send
+ * @param providerRef - the provider's own id for the payment
+ * @param context - present only for the admin request
+ */
+const sendToProvider = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    providerRef: string,
+    context: CallerContext | undefined
+): Promise<PaymentDocument | null> =>
+    providerNamed(payment.provider)
+        .refund(
+            providerRef,
+            { amount: refund.amount, currency: refund.currency },
+            { idempotencyKey: refund.idempotencyKey }
+        )
+        .then(
+            ({ refundRef }) =>
+                settleRefund(payment, refund, { providerRefundRef: refundRef }, context),
+            (error: unknown) =>
+                paymentRepository
+                    .failRefund(
+                        String(payment._id),
+                        String(refund._id),
+                        (error instanceof Error ? error.message : String(error)).slice(
+                            0,
+                            MAX_ERROR_LENGTH
+                        )
+                    )
+                    .then(() => {
+                        throw error;
+                    })
+        );
+
+/**
+ * Carry one open refund to its end: settle it by hand, log the impossible row, or ask the provider.
+ *
+ * @param payment - the payment the refund belongs to
+ * @param refund - the record to carry through
+ * @param context - present only for the admin request. Also what tells a hand-paid refund apart
+ *   from the automatic path: only the operator's own call may say the cash went back
+ * @returns the payment after the refund settled, or `null` when it did not settle here
+ */
+const attemptRefund = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    context: CallerContext | undefined
+): Promise<PaymentDocument | null> => {
+    // Money recorded by hand has no provider to ask.
+    if (payment.provider === 'manual')
+        return context
+            ? settleRefund(payment, refund, { refundedByHand: true }, context)
+            : Promise.resolve(null);
+
+    if (!payment.providerRef) {
+        // Only a `succeeded` payment reaches here, and nothing can succeed before the provider
+        // has been asked for an intent — so this is a corrupted row, not a reachable state. Loud,
+        // and the record still settles: leaving it open would invite a second attempt at the same
+        // impossible refund.
+        // Stryker disable all
+        logger.error({
+            message: 'Refunded a payment carrying no provider reference — money was NOT returned.',
+            orderId: String(payment.orderId)
+        });
+        // Stryker restore all
+        return settleRefund(payment, refund, {}, context, 'failure');
+    }
+
+    return sendToProvider(payment, refund, payment.providerRef, context);
+};
+
+/**
+ * Finish every refund a payment still has open — the same records, the same idempotency keys, so a
+ * provider that already returned the money answers with the refund it already made.
+ *
+ * @param payment - the payment
+ * @param context - present only for the admin request
+ * @returns the payment after the last one, and whether any settled here
+ */
+export const settleOpenRefunds = async (
+    payment: PaymentDocument,
+    context?: CallerContext
+): Promise<{ payment: PaymentDocument; settled: boolean }> => {
+    let current = payment;
+    let settled = false;
+
+    for (const refund of payment.refunds) {
+        if (refund.status === 'succeeded') continue;
+        const after = await attemptRefund(current, refund, context);
+        if (!after) continue;
+        current = after;
+        settled = true;
+    }
+
+    return { payment: current, settled };
+};
+
+/**
  * Refund an order's payment — the operator action, and the listener's compensation.
+ *
+ * Any refund still open is finished first, so a retried cancel completes the refund it already
+ * started instead of opening a second one for the same money.
  *
  * @param orderId - the order whose payment is being returned
  * @param context - present only for the admin request (`refundByOrder`); the `ORDER_REFUND_OWED`
  *  listener (`refundForOrder`) has none. Also what tells a hand-paid refund apart from the two
  *  callers: present means the operator asked (audited `success`), absent means the automatic
  *  listener did (left for an operator, audited `PAYMENT_REFUND_OWED_BY_HAND` instead).
- * @returns the payment as it now stands — `refunded` on success, still `succeeded` when a hand-paid
- *   refund is left for an operator — or `null` when there was nothing to return
+ * @param request - the amount and the reason; omitted, it is everything left, for a cancellation
+ * @returns the payment as it now stands — `refunded` once all of it is back, still `succeeded`
+ *   after a partial refund or when a hand-paid refund is left for an operator — or `null` when
+ *   there was nothing to return
  */
 export const performRefund = (
     orderId: string,
-    context?: CallerContext
+    context?: CallerContext,
+    request?: RefundRequest
 ): Promise<PaymentDocument | null> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {
         if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) return null;
 
-        // Money recorded by hand has no provider to ask. Only the operator's own call (`context`
-        // present) may say the cash went back; the automatic listener leaves it standing.
-        if (payment.provider === 'manual')
-            return context
-                ? markRefunded(orderId, context, { refundedByHand: true })
-                : leaveForOperator(orderId, payment);
+        // Only the operator's own call (`context` present) may say hand-paid cash went back; the
+        // automatic listener leaves it standing.
+        if (payment.provider === 'manual' && !context) return leaveForOperator(orderId, payment);
 
-        if (!payment.providerRef) {
-            // Only a `succeeded` payment reaches here, and nothing can succeed before the
-            // provider has been asked for an intent — so this is a corrupted row, not a
-            // reachable state. Loud, and the status still moves: leaving it `succeeded` would
-            // invite a second attempt at the same impossible refund.
-            // Stryker disable all
-            logger.error({
-                message:
-                    'Refunded a payment carrying no provider reference — money was NOT returned.',
-                orderId
-            });
-            // Stryker restore all
-            return markRefunded(orderId, context, undefined, 'failure');
-        }
+        return settleOpenRefunds(payment, context).then(({ payment: current, settled }) => {
+            if (remainingOf(current) <= 0) return settled ? current : null;
 
-        // The idempotency key is what makes a RETRY safe at the provider itself: two calls
-        // for this payment — a redelivered retry, an operator's double-click — carry the same key,
-        // so the provider returns the same refund instead of returning the money twice. A rejection
-        // here propagates: the payment stays `succeeded`, exactly what the retry sweep needs.
-        return providerNamed(payment.provider)
-            .refund(
-                payment.providerRef,
-                { amount: payment.amount, currency: payment.currency },
-                { idempotencyKey: `refund:${String(payment._id)}` }
-            )
-            .then(() => markRefunded(orderId, context));
+            return openRefund(current, request ?? CANCELLATION_REQUEST).then((opened) =>
+                opened ? attemptRefund(opened.payment, opened.refund, context) : null
+            );
+        });
     });
+
+/**
+ * The 422 an operator's amount earns, if any — checked against the payment BEFORE anything is
+ * written, so a wrong number never opens a record.
+ *
+ * @param payment - the payment the refund is for
+ * @param body - the request's `amount` and `currency`
+ * @returns the refusal, or `undefined` when the request is fine
+ */
+const refusalFor = (
+    payment: PaymentDocument,
+    body: { amount?: number; currency?: string }
+): ResponseReject | undefined => {
+    const { amount, currency } = body;
+    if (currency !== undefined && currency !== payment.currency)
+        return generateReject(422, [t('payments.refund-currency-mismatch')]);
+    if (amount === undefined) return undefined;
+
+    const minor = toMinorUnits(amount, payment.currency);
+    // A decimal the currency has no minor unit for (0.001 EUR) would round to a different amount
+    // than the one the operator typed — refused rather than quietly changed.
+    if (toDecimalAmount(minor, payment.currency) !== amount)
+        return generateReject(422, [t('payments.refund-invalid-amount')]);
+    if (payment.status === REFUNDABLE_PAYMENT_STATUS && minor > remainingOf(payment))
+        return generateReject(422, [
+            {
+                code: ERROR_CODES.PAYMENT_REFUND_EXCEEDS_REMAINING,
+                message: t('payments.refund-exceeds-remaining')
+            }
+        ]);
+    return undefined;
+};
 
 /**
  * `POST /payments/order/:orderId/refund` — the operator returning money on its own, separate
@@ -168,37 +425,40 @@ export const performRefund = (
  * @param orderId - the order whose payment is being returned
  * @param authContext - the caller, for the read that distinguishes 404 from 409
  * @param context - the caller context to audit the refund against
- * @returns the refunded payment, or a refusal naming which case it was
+ * @param body - the optional `amount` (absent = everything left) and its `currency`
+ * @returns the payment as it now stands, or a refusal naming which case it was
  */
 export const refundByOrder = (
     orderId: string,
     authContext: AuthContext | undefined,
-    context: CallerContext
+    context: CallerContext,
+    body: { amount?: number; currency?: string } = {}
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    performRefund(orderId, context).then((refunded) => {
-        if (refunded) return generateSuccess(refunded, 200, t('payments.refund-success'));
+    paymentRepository.findByOrderId(orderId, callerScope(authContext)).then((payment) => {
+        if (!payment) return generateReject(404, [t('payments.not-found')]);
 
-        // Nothing moved. Which refusal it was is a second read, exactly as the order cancel does:
-        // the decision is already made, and this only chooses the sentence.
-        return paymentRepository.findByOrderId(orderId, callerScope(authContext)).then((payment) =>
-            payment
-                ? generateReject(409, [
-                      {
-                          code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE,
-                          message: t('payments.not-refundable')
-                      }
-                  ])
-                : generateReject(404, [t('payments.not-found')])
+        const invalid = refusalFor(payment, body);
+        if (invalid) return invalid;
+
+        return performRefund(orderId, context, { amount: body.amount, reason: 'goodwill' }).then(
+            (refunded) =>
+                refunded
+                    ? generateSuccess(refunded, 200, t('payments.refund-success'))
+                    : generateReject(409, [
+                          {
+                              code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE,
+                              message: t('payments.not-refundable')
+                          }
+                      ])
         );
     });
 
 /**
  * `ORDER_REFUND_OWED`'s listener: give the money back if any was taken.
  *
- * The conditional `succeeded → refunded` move is the idempotence — a second event, or a cancel
- * of a never-paid order, finds nothing in `succeeded` and does nothing. Unattended, so a real
- * PSP refund's outcome is only logged — but a hand-paid order still gets its own audit row
- * (`leaveForOperator`), since that one needs a human to act on it.
+ * Idempotent: a second event, or a cancel of a never-paid order, finds nothing left to return and
+ * does nothing. Unattended, so a real PSP refund's outcome is only logged — but a hand-paid order
+ * still gets its own audit row (`leaveForOperator`), since that one needs a human to act on it.
  *
  * @param orderId - the order that was cancelled
  */

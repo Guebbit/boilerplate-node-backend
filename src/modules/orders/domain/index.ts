@@ -7,10 +7,22 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-// `toMinorUnits`/`toDecimalAmount` are deliberately absent: `sumLineItems`/`orderTaxBreakdown` are
-// their only callers, and `money.property.test.ts` is where their own property tests reach them.
-// A barrel line would make them look like a rule other modules may call directly.
 export { sumLineItems, orderTotal } from './totals';
+
+/**
+ * Integer money arithmetic, published because `payments` and `returns` both do sums on refunds
+ * and must not redo them in floating point: a decimal amount goes in through `toMinorUnits`, comes
+ * out through `toDecimalAmount`, and everything between stays exact.
+ */
+export {
+    toMinorUnits,
+    toDecimalAmount,
+    addMoney,
+    subtractMoney,
+    apportion,
+    NO_MONEY
+} from './money';
+export type { Money } from './money';
 
 export { checkOrderLines, isShippedItem, isDigitalOnlyOrder } from './rules';
 export type { ShippableLineCandidate } from './rules';

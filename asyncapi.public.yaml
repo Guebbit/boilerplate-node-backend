@@ -128,7 +128,7 @@ channels:
                 $ref: '#/components/messages/PaymentFailedEvent'
     payment.refunded:
         address: payment.refunded
-        description: A succeeded payment was refunded.
+        description: A refund on a payment settled — the whole payment, or a part of it.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
         messages:
@@ -214,9 +214,9 @@ operations:
         action: send
         channel:
             $ref: '#/channels/payment.refunded'
-        summary: A `succeeded` payment moved to `refunded`.
+        summary: A refund on a payment settled.
         description: >-
-            One-to-one with the `payment.refunded` domain event — see `payments/services/refunds.ts`'s `markRefunded`. Fired whether an operator asked for the refund directly or the `ORDER_REFUND_OWED` retry sweep completed it; never fired for a hand-paid refund left for an operator to confirm by hand.
+            One-to-one with the `payment.refunded` domain event — see `payments/services/refunds.ts`'s `settleRefund`. Fired once per refund, whether an operator asked for it directly or the `ORDER_REFUND_OWED` retry sweep completed it; never fired for a hand-paid refund left for an operator to confirm by hand.
         messages:
             - $ref: '#/channels/payment.refunded/messages/PaymentRefundedEvent'
 components:
@@ -406,6 +406,7 @@ components:
             required:
                 - paymentId
                 - orderId
+                - refundId
                 - amount
                 - currency
             properties:
@@ -413,9 +414,13 @@ components:
                     type: string
                 orderId:
                     type: string
+                refundId:
+                    type: string
+                    description: >-
+                        The refund record this delivery is about. A payment can be refunded in parts, so one payment can raise this event more than once.
                 amount:
                     type: number
-                    description: The refunded amount — the payment's own `amount`, two decimal places.
+                    description: This refund's amount, two decimal places — the payment's own `amount` for a full refund.
                 currency:
                     type: string
                     description: ISO-4217, e.g. `EUR`.
