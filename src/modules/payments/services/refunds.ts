@@ -172,10 +172,13 @@ const isFullyRefunded = (payment: PaymentDocument): boolean =>
  * @param payment - the payment after a refund settled
  */
 const reportRefundedToOrder = (payment: PaymentDocument): void => {
-    void orderService
-        .markPaymentStatus(
-            String(payment.orderId),
-            payment.status === 'refunded' ? 'refunded' : 'partially_refunded'
+    // Started inside a promise so a synchronous throw (a malformed id) is reported, not raised.
+    void Promise.resolve()
+        .then(() =>
+            orderService.markPaymentStatus(
+                String(payment.orderId),
+                payment.status === 'refunded' ? 'refunded' : 'partially_refunded'
+            )
         )
         .catch((error: unknown) => {
             // Stryker disable all
