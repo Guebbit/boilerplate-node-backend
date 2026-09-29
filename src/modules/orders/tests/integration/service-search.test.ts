@@ -277,6 +277,17 @@ describe('orderService.search — current (live) image', () => {
         expect(items[0].items[0].current).toEqual({ imageUrl: '/images/replaced.jpg' });
     });
 
+    it('resolves an empty object for a product that never had a picture', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+
+        await createOrder(user, [toOrderItem(product, 1)]);
+
+        const { items } = await orderService.search({});
+
+        expect(items[0].items[0].current).toEqual({});
+    });
+
     it('resolves null once the product has been hard-deleted', async () => {
         const user = await createUser();
         const product = await createProduct({ imageUrl: '/images/doomed.jpg' });
