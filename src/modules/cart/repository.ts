@@ -22,6 +22,12 @@ import {
 /** How {@link upsertLine} treats a quantity for a line already in the cart. */
 export type CartLineMode = 'set' | 'add';
 
+/** A line write's outcome: the cart after it, and whether it created the line rather than changing one. */
+export interface LineWrite {
+    cart: CartDocument;
+    created: boolean;
+}
+
 /**
  * What {@link upsertLine} resolves to in `'add'` mode when the increment would push a line past
  * {@link CART_LINE_MAX} — there is nothing to return, since nothing was written.
@@ -40,14 +46,15 @@ const pushNewLine = (
     owner: QueryFilter<CartDocument>,
     line: Types.ObjectId,
     quantity: number
-): Promise<CartDocument> =>
+): Promise<LineWrite> =>
     cartModel
         .findOneAndUpdate(
             { ...owner, 'items.productId': { $ne: line } },
             { $push: { items: { productId: line, quantity } }, $inc: { __v: 1 } },
             { upsert: true, returnDocument: 'after' }
         )
-        .exec();
+        .exec()
+        .then((cart) => ({ cart, created: true }));
 
 /**
  * The `'set'` miss: the line already holds exactly `quantity` (a no-op — the cart comes back
@@ -59,11 +66,13 @@ const unchangedOrPushed = (
     owner: QueryFilter<CartDocument>,
     line: Types.ObjectId,
     quantity: number
-): Promise<CartDocument> =>
+): Promise<LineWrite> =>
     cartModel
         .findOne({ ...owner, items: { $elemMatch: { productId: line, quantity } } })
         .exec()
-        .then((unchanged) => unchanged ?? pushNewLine(owner, line, quantity));
+        .then((unchanged) =>
+            unchanged ? { cart: unchanged, created: false } : pushNewLine(owner, line, quantity)
+        );
 
 /**
  * Set or increment one cart line, creating the cart if the user has none.
@@ -89,7 +98,7 @@ const upsertLine = (
     quantity: number,
     mode: CartLineMode,
     attemptsLeft = 3
-): Promise<CartDocument | typeof QUANTITY_LIMIT> => {
+): Promise<LineWrite | typeof QUANTITY_LIMIT> => {
     const owner = { userId: toObjectId(userId) };
     const line = toObjectId(productId);
 
@@ -127,14 +136,14 @@ const upsertLine = (
             // Explicit generic: without it, TS infers this callback's return type from the OUTER
             // function's declared return rather than its own body, and drops the `QUANTITY_LIMIT`
             // branch below.
-            .then<CartDocument | typeof QUANTITY_LIMIT>((cart) => {
-                if (cart) return cart;
+            .then<LineWrite | typeof QUANTITY_LIMIT>((cart) => {
+                if (cart) return { cart, created: false };
                 if (mode === 'set') return unchangedOrPushed(owner, line, quantity);
 
                 return cartModel
                     .findOne({ ...owner, 'items.productId': line })
                     .exec()
-                    .then<CartDocument | typeof QUANTITY_LIMIT>((existing) => {
+                    .then<LineWrite | typeof QUANTITY_LIMIT>((existing) => {
                         const currentQuantity = existing?.items.find((item) =>
                             item.productId.equals(line)
                         )?.quantity;
@@ -171,7 +180,7 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
         productId: string,
         quantity: number,
         mode: CartLineMode
-    ) => Promise<CartDocument | typeof QUANTITY_LIMIT>;
+    ) => Promise<LineWrite | typeof QUANTITY_LIMIT>;
     removeLine: (userId: string, productId: string) => Promise<CartDocument | null>;
     clearLines: (userId: string) => Promise<CartDocument | null>;
     clearLinesIfUnchanged: (userId: string, version: number) => Promise<CartDocument | null>;
@@ -192,7 +201,7 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
      */
     findByUserId: (userId: string) => cartModel.findOne({ userId: toObjectId(userId) }).exec(),
 
-    /** Set or increment a line's quantity, creating the cart and the line as needed. */
+    /** Set or increment a line's quantity, creating the cart and the line as needed; says which. */
     upsertLine,
 
     /**

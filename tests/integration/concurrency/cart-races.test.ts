@@ -33,10 +33,10 @@ setupTestDb();
 
 describe('R3 — concurrent writes of the SAME product', () => {
     /*
-     * `POST /cart` and `PUT /cart/:productId` both call `cartItemSetById`, i.e. they SET the
-     * quantity rather than incrementing it. `upsertLine`'s `add` mode exists and is exercised by
-     * the unit suite, but no route reaches it — so the invariant here is "one cart, one line",
-     * not a sum. Asserting a sum would be asserting semantics the API does not have.
+     * `POST /cart` ADDS (WM-D6): every participant's increment must land, so the line holds their
+     * sum, and exactly one of them — whoever created the line — is answered 201. Two participants
+     * both concluding "absent" and both appending is the failure the `$ne`-in-filter guard
+     * prevents; a lost increment is the one the filtered `$inc` prevents.
      */
     it('leaves one cart holding one line, never the same product twice', async () => {
         const { user, bearer } = await authenticateAs();
@@ -50,8 +50,9 @@ describe('R3 — concurrent writes of the SAME product', () => {
         );
 
         expectNoServerErrors(results);
-        // Every participant should get an answer, not just the one that created the cart.
-        expect(countStatus(results, 200) + countStatus(results, 201)).toBe(RACE_SIZE);
+        // Every participant gets an answer, and only the one that created the line got a 201.
+        expect(countStatus(results, 201)).toBe(1);
+        expect(countStatus(results, 200)).toBe(RACE_SIZE - 1);
 
         // One cart document — the unique `userId` index plus the retry, working together.
         expect(await cartModel.countDocuments({ userId: user._id })).toBe(1);
@@ -60,7 +61,7 @@ describe('R3 — concurrent writes of the SAME product', () => {
         // The line, once. Two participants both concluding "absent" and both appending is the
         // failure the `$ne`-in-filter guard prevents.
         expect(cart?.items).toHaveLength(1);
-        expect(cart?.items[0]?.quantity).toBe(1);
+        expect(cart?.items[0]?.quantity).toBe(RACE_SIZE);
     });
 });
 

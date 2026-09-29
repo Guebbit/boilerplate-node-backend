@@ -6,16 +6,16 @@
 import type { Request, Response } from 'express';
 import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '../services';
-import { successResponse } from '@infrastructure/http/response';
+import { createdResponse, successResponse } from '@infrastructure/http/response';
 import type { CartResponse, UpdateCartItemByIdRequest } from '@types';
 import { requireObjectId, readInput, callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * PUT /cart/:productId
- * Set the quantity of a specific cart item. Returns the updated cart.
- * Creates a line as readily as `POST /cart` does, so it shares the same 404 for a product the
- * storefront wouldn't show, from the same place: `cartItemSetById`.
+ * Set the quantity of a specific cart item. Returns the updated cart — 201 when it created the
+ * line (RFC 9110 §9.3.4), 200 when it wrote one already there. Shares `POST /cart`'s 404 for a
+ * product the storefront wouldn't show, from the same place: `upsertCartItem`.
  */
 export const putCartItem = (
     request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>,
@@ -37,7 +37,9 @@ export const putCartItem = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse<CartResponse>(response, result.data);
+            if (result.status === 201)
+                createdResponse<CartResponse>(response, result.data, `/cart/${productId}`);
+            else successResponse<CartResponse>(response, result.data);
         })
         .catch(catchAs(response, 'updateCartItemById'));
 };

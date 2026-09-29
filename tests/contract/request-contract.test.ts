@@ -47,7 +47,7 @@ import {
     CreateUserBody,
     CreateProductBody,
     CreateOrderBody,
-    UpsertCartItemBody,
+    AddCartItemBody,
     CreateFeedbackRequestBody,
     SignupBody,
     LoginBody
@@ -217,7 +217,7 @@ describe('POST /orders (contract-derived)', () => {
 describe('POST /cart (contract-derived)', () => {
     it('accepts a payload the contract declares legal', async () => {
         const [{ bearer }, product] = await Promise.all([authenticateAs('user'), createProduct()]);
-        const payload = { ...validPayload(UpsertCartItemBody), productId: String(product._id) };
+        const payload = { ...validPayload(AddCartItemBody), productId: String(product._id) };
 
         const response = await api().post('/cart').set('Authorization', bearer).send(payload);
 
@@ -225,7 +225,7 @@ describe('POST /cart (contract-derived)', () => {
         expect(response.status).toBeLessThan(300);
     });
 
-    it.each(invalidPayloads(UpsertCartItemBody))(
+    it.each(invalidPayloads(AddCartItemBody))(
         'rejects a payload where $field is $violation',
         async ({ field, payload }) => {
             const [{ bearer }, product] = await Promise.all([
