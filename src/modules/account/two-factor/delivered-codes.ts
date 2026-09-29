@@ -5,7 +5,7 @@
  * database, so the TTL/attempt/cooldown rules can be tested against a fixed clock.
  */
 
-import { createHmac, randomInt } from 'node:crypto';
+import { createHmac, hkdfSync, randomInt } from 'node:crypto';
 import type { TwoFactorMethodRecord } from '@modules/users';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
 import { getTotpEncryptionKeyRing } from '../session/config';
@@ -29,8 +29,9 @@ export const DELIVERED_CODE_RESEND_SECONDS = 30;
 export const DELIVERED_CODE_MAX_ATTEMPTS = 5;
 
 /**
- * A delivered code's stored form — HMAC-SHA256 under `NODE_TOTP_ENCRYPTION_KEY`, not a bare
- * digest. Six digits is a space of one million: a plain sha256 of one is recoverable from a
+ * A delivered code's stored form — HMAC-SHA256 under an HKDF subkey of `NODE_TOTP_ENCRYPTION_KEY`
+ * (info `delivered-code`), not a bare digest. The subkey keeps that key from serving as both the
+ * AES input and the MAC key: one key, one purpose (NIST SP 800-57 §5.2). Six digits is a space of one million: a plain sha256 of one is recoverable from a
  * database dump in milliseconds, while an HMAC is not without the key, which lives in the
  * environment rather than the database. Not entropy stretching — blast-radius reduction.
  *
@@ -43,7 +44,14 @@ export const DELIVERED_CODE_MAX_ATTEMPTS = 5;
  * @returns the hex digest to store in the entry's `codeHash`
  */
 export const hashDeliveredCode = (code: string): string =>
-    createHmac('sha256', getTotpEncryptionKeyRing()[0].key).update(code).digest('hex');
+    // Node: HKDF-SHA256 (RFC 5869); args are digest, key material, salt, info, length in bytes.
+    // https://nodejs.org/api/crypto.html#cryptohkdfsyncdigest-ikm-salt-info-keylen
+    createHmac(
+        'sha256',
+        Buffer.from(hkdfSync('sha256', getTotpEncryptionKeyRing()[0].key, '', 'delivered-code', 32))
+    )
+        .update(code)
+        .digest('hex');
 
 /** A fresh zero-padded code, from the CSPRNG rather than `Math.random`. */
 export const generateDeliveredCode = (): string =>

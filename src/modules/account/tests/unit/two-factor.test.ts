@@ -6,7 +6,8 @@
  * and attempt ceiling are driven against an injected clock rather than a timer.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
+import { getTotpEncryptionKeyRing } from '../../session/config';
 import { generate, generateSecret } from 'otplib';
 import type { TwoFactorMethodRecord } from '@modules/users';
 import {
@@ -203,5 +204,13 @@ describe('delivered codes — the shared machinery behind email, and every chann
         // which a plain digest surrenders to anyone holding a database dump.
         expect(record.codeHash).toBe(hashDeliveredCode('123456'));
         expect(record.codeHash).not.toBe(createHash('sha256').update('123456').digest('hex'));
+    });
+
+    it('does not MAC under the raw AES key: one key, one purpose', () => {
+        const rawKeyMac = createHmac('sha256', getTotpEncryptionKeyRing()[0].key)
+            .update('123456')
+            .digest('hex');
+
+        expect(hashDeliveredCode('123456')).not.toBe(rawKeyMac);
     });
 });
