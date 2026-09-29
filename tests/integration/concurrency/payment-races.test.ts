@@ -88,7 +88,7 @@ const orderAwaitingPayment = async (productId: string, quantity: number) => {
         .send({ shippingMethodId: 'pickup' });
     const checkout = await api().post('/cart/checkout').set('Authorization', bearer).send({});
     if (checkout.status !== 201) throw new Error(`checkout: ${JSON.stringify(checkout.body)}`);
-    const orderId = String(checkout.body.data.order.id);
+    const orderId = String(checkout.body.data.id);
 
     const intent = await api()
         .post('/payments/intent')

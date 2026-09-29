@@ -235,7 +235,7 @@ paths:
         post:
             tags: [Orders]
             summary: Checkout (place order from cart)
-            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. Optional order notes can be supplied in the request body. Returns the created order. The order's email is always the authenticated caller's own — checkout is account-bound; a future guest checkout would bring an `email` field back.
+            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. Optional order notes can be supplied in the request body. Answers 201 with the created order itself as `data` — the same shape `POST /orders` answers — and its `Location`. The order's email is always the authenticated caller's own — checkout is account-bound; a future guest checkout would bring an `email` field back.
             operationId: checkout
             security:
                 - bearerAuth: []
@@ -260,12 +260,12 @@ paths:
                         PayOrder:
                             operationId: createPaymentIntent
                             parameters:
-                                orderId: '$response.body#/data/order/id'
+                                orderId: '$response.body#/data/id'
                             description: The new order's id is the `orderId` to freeze into a payment intent.
                         CancelOrder:
                             operationId: cancelOrderById
                             parameters:
-                                id: '$response.body#/data/order/id'
+                                id: '$response.body#/data/id'
                             description: The new order's id can be cancelled directly.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # An `addressId` that names none of the caller's saved addresses — the checkout
@@ -369,7 +369,7 @@ components:
                 message:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
-                    $ref: '#/components/schemas/CheckoutResponse'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
 
         CartQuantity:
             type: integer
@@ -574,15 +574,5 @@ components:
                         `summary.itemsTotal` — empty whenever `required` is `false`.
                         `GET /delivery/methods` remains the full, unfiltered catalogue this is
                         drawn from.
-
-        CheckoutResponse:
-            type: object
-            additionalProperties: false
-            required: [order]
-            properties:
-                order:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
-                message:
-                    type: string
 
         # ---------- Observability ----------

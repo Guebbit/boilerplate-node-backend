@@ -385,7 +385,12 @@ describe('POST /cart/checkout', () => {
             .send({ shippingMethodId: 'pickup' });
         const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
+        // WM-D14: `data` is the created order itself, as `POST /orders` answers it — not a
+        // wrapper — and `Location` names it.
         expect(response.status).toBe(201);
+        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.data.order).toBeUndefined();
+        expect(response.headers.location).toBe(`/orders/${String(response.body.data.id)}`);
     });
 
     /*
@@ -448,7 +453,7 @@ describe('POST /cart/checkout', () => {
             .send({ notes: 'Leave with the concierge' });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.order.notes).toBe('Leave with the concierge');
+        expect(response.body.data.notes).toBe('Leave with the concierge');
     });
 
     it('matches the error contract for an unrecognised payment method value', async () => {
@@ -615,9 +620,9 @@ describe('POST /cart/checkout', () => {
                     .send({ paymentMethod: 'bank_transfer' });
 
                 expect(response.status).toBe(201);
-                expect(response.body.data.order.paymentMethod).toBe('bank_transfer');
-                expect(response.body.data.order.payBy).toEqual(expect.any(String));
-                expect(response.body.data.order.transferInstructions).toEqual({
+                expect(response.body.data.paymentMethod).toBe('bank_transfer');
+                expect(response.body.data.payBy).toEqual(expect.any(String));
+                expect(response.body.data.transferInstructions).toEqual({
                     beneficiary: 'Guebbit Shop',
                     // Grouped into 4s for display — see `bankTransferIbanFriendly`.
                     iban: 'DE89 3704 0044 0532 0130 00',

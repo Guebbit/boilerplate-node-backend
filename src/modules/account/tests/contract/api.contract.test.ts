@@ -1259,7 +1259,7 @@ describe('the address book: /account/addresses', () => {
         const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
         expect(response.status).toBe(201);
-        expect(response.body.data.order.shippingAddress).toMatchObject({
+        expect(response.body.data.shippingAddress).toMatchObject({
             fullName: 'Ada Lovelace',
             street: 'Via Roma 1'
         });
