@@ -182,6 +182,28 @@ describe('POST /users', () => {
         expect(response.status).toBe(422);
     });
 
+    /*
+     * Every one of these is a real column the create path would have written from a raw body:
+     * unverifying the account, consenting on the user's behalf, or a plaintext phone the
+     * presenter cannot decrypt — a 500 on this response and on every later read of the user.
+     */
+    it.each([
+        ['verifiedAt', { verifiedAt: null }],
+        ['analyticsConsent', { analyticsConsent: true }],
+        ['phone', { phone: '+390000000000' }]
+    ])('refuses an undeclared %s with a 422 and creates nobody', async (_field, extra) => {
+        const { bearer } = await authenticateAs('admin');
+        const email = 'undeclared-field@example.com';
+
+        const response = await api()
+            .post('/users')
+            .set('Authorization', bearer)
+            .send({ email, username: 'undeclaredfield', password: PLAIN_PASSWORD, ...extra });
+
+        expect(response.status).toBe(422);
+        expect(await userRepository.findOne({ email })).toBeNull();
+    });
+
     // The breach check on create (and that it creates no user row) is table-driven across every
     // password-set path now, in `tests/contract/password-set-paths.test.ts`.
 });

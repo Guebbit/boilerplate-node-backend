@@ -10,8 +10,10 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 import { userService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { parseBody } from '@infrastructure/http/controller';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { readUploadedImage } from '@infrastructure/http/uploads';
+import { CreateUserBody } from '@api/schemas.zod';
 import type { CreateUserRequest, CreateUserRequestMultipart, User } from '@types';
 
 /**
@@ -29,22 +31,25 @@ export const createUser = (
     >,
     response: Response
 ) => {
-    // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
-    // `booleans` are the fields whose type a multipart body cannot carry.
-    // `role` needs no coercion — it arrives as the string it is, on every surface.
-    const { active, sendSetupEmail } = readInput(request, {
-        surface: 'create',
-        booleans: ['active', 'sendSetupEmail']
-    });
-    // `?? {}`: express 5 leaves `request.body` unset when no parser matched the content-type,
-    // and multer does not fill it in on a non-multipart body either. No cast needed: `role` is
-    // already on every branch of `request.body`'s own generated type, declared above.
-    const { role } = request.body ?? {};
-
     // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`), and `undefined` already means "no change" to `zodUserSchema`'s
     // `.optional()` field the same way an absent key does — a defaulted empty string would
     // reach the validator as a rejected value instead of the no-op it is meant to be.
     const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
+
+    /*
+     * The contract's own strict schema, and from here on ONLY its output: an undeclared key is a
+     * 422, never a column. `create` writes whatever it is handed, so a raw body here let an
+     * operator set `verifiedAt`, `analyticsConsent` or an unencrypted `phone` straight onto the
+     * document. `readInput` decodes the booleans a multipart body carries as strings — see
+     * docs/theory/request-input.md.
+     */
+    const body = parseBody(
+        CreateUserBody,
+        readInput(request, { surface: 'create', booleans: ['active', 'sendSetupEmail'] }),
+        response
+    );
+    if (!body) return deleteUpload();
+    const { role, active, sendSetupEmail } = body;
 
     /**
      * `false`: password is never required at this schema layer. A create may satisfy it via
@@ -53,7 +58,7 @@ export const createUser = (
      */
     const errors = userService.validateData(
         {
-            ...request.body,
+            ...body,
             imageUrl,
             role,
             active
@@ -80,15 +85,9 @@ export const createUser = (
     return userService
         .create(
             {
-                /*
-                 * Named off the SERVICE's own parameter rather than off `../model`: what this
-                 * body has to satisfy is what `create` accepts, and a controller that names
-                 * the stored shape starts changing every time the schema does. After
-                 * validation it is compatible for sure.
-                 */
-                ...(request.body as Parameters<typeof userService.create>[0]),
+                ...body,
                 ...validated,
-                sendSetupEmail: sendSetupEmail as boolean | undefined
+                sendSetupEmail
             },
             callerContextOf(request)
         )
