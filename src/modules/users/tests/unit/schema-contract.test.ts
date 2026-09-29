@@ -64,11 +64,10 @@ describe('userSchema — what a user must carry', () => {
         expect(defaultOf(userSchema, 'verifiedAt')).toBeNull();
     });
 
-    it('gives a new user the configured locale and avatar', () => {
+    it('gives a new user the configured locale and no avatar', () => {
         expect(defaultOf(userSchema, 'locale')).toBe(process.env.NODE_DEFAULT_LOCALE ?? 'en');
-        expect(defaultOf(userSchema, 'imageUrl')).toBe(
-            process.env.NODE_DEFAULT_IMAGE_USER ?? '/images/system/placeholder-user.png'
-        );
+        // A default here would put a placeholder in the database; the client draws its own.
+        expect(defaultOf(userSchema, 'imageUrl')).toBeUndefined();
     });
 
     /*
@@ -76,24 +75,24 @@ describe('userSchema — what a user must carry', () => {
      * the hardcoded fallbacks, so a wrong expression would still pass. Defaults are captured at
      * module load, so telling them apart means reloading the module with a different environment.
      */
-    it.each([
-        ['NODE_DEFAULT_LOCALE', 'locale', 'it'],
-        ['NODE_DEFAULT_IMAGE_USER', 'imageUrl', 'https://cdn.example.test/avatar.png']
-    ])('prefers %s over the built-in fallback', async (variable, path, configured) => {
-        const original = process.env[variable];
-        process.env[variable] = configured;
+    it.each([['NODE_DEFAULT_LOCALE', 'locale', 'it']])(
+        'prefers %s over the built-in fallback',
+        async (variable, path, configured) => {
+            const original = process.env[variable];
+            process.env[variable] = configured;
 
-        try {
-            await jest.isolateModulesAsync(async () => {
-                const reloaded = await import('@modules/users/model');
+            try {
+                await jest.isolateModulesAsync(async () => {
+                    const reloaded = await import('@modules/users/model');
 
-                expect(defaultOf(reloaded.userSchema, path)).toBe(configured);
-            });
-        } finally {
-            if (original === undefined) delete process.env[variable];
-            else process.env[variable] = original;
+                    expect(defaultOf(reloaded.userSchema, path)).toBe(configured);
+                });
+            } finally {
+                if (original === undefined) delete process.env[variable];
+                else process.env[variable] = original;
+            }
         }
-    });
+    );
 
     it('starts a user with an empty token list rather than an absent one', () => {
         expect(defaultOf(userSchema, 'tokens')).toEqual([]);

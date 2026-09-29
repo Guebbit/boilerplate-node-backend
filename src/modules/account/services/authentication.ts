@@ -33,7 +33,6 @@ import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import {
     zodUserSchema,
     userService,
-    DEFAULT_USER_IMAGE_URL,
     type TokenType,
     type UserDocument
 } from '@modules/users';
@@ -370,7 +369,6 @@ const guardEmailPolicy = (input: SignupInput): Promise<ResponseSuccess<UserDocum
                   userService.buildSignupDecoy({
                       email: input.email,
                       username: input.username,
-                      imageUrl: DEFAULT_USER_IMAGE_URL,
                       analyticsConsent: input.analyticsConsent,
                       termsAccepted: input.termsAccepted
                   })
@@ -394,7 +392,6 @@ const createAccountIfEmailFree = (
                 .registerSelfService({
                     username: input.username,
                     email: input.email,
-                    imageUrl: DEFAULT_USER_IMAGE_URL,
                     password: input.password,
                     analyticsConsent: input.analyticsConsent,
                     termsAccepted: input.termsAccepted,
