@@ -103,6 +103,35 @@ describe('the revision counter', () => {
         expect(await revisionOf('es')).toBe(1);
     });
 
+    /*
+     * The same write sent twice (a PUT, a re-run import) must leave the revision where the first
+     * one put it, or every client re-downloads a dictionary that did not change.
+     */
+    it('does NOT move when an edit repeats the value already stored', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito' });
+        const entry = await localeEntryRepository.findOne({ locale: 'es' });
+
+        const { revision } = await localeEntryRepository.saveEntryValue(entry!, 'Carrito');
+
+        expect(revision).toBe(0);
+        expect(await revisionOf('es')).toBe(0);
+    });
+
+    it('does NOT move when an import changes nothing, and counts nothing as updated', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito' });
+
+        const { counts, revision } = await localeEntryRepository.importEntries(
+            'es',
+            FRONTEND,
+            [{ key: 'cart.title', value: 'Carrito' }],
+            { replace: true }
+        );
+
+        expect(counts).toEqual({ created: 0, updated: 0, removed: 0 });
+        expect(revision).toBe(0);
+        expect(await revisionOf('es')).toBe(0);
+    });
+
     it('does NOT move on a read', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
 

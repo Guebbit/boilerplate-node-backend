@@ -155,6 +155,30 @@ const bumpRevision = (tag: string): Promise<number> =>
         .exec()
         .then((updated) => updated?.revision ?? 0);
 
+/**
+ * Every key of one language, with the value it holds — what an import diffs against, so a key
+ * re-sent with its current value is neither written nor counted.
+ */
+const valuesByKey = (locale: string, tenant: LocaleTenant): Promise<Map<string, string>> =>
+    localeEntryModel
+        .find({ locale, tenant })
+        .select({ key: 1, value: 1, _id: 0 })
+        .lean<{ key: string; value: string }[]>()
+        .exec()
+        .then((rows) => new Map(rows.map(({ key, value }) => [key, value])));
+
+/**
+ * A language's revision as it stands — what a write that changed nothing answers with. Bumping
+ * instead would make every client re-download a dictionary that did not move.
+ */
+const currentRevision = (tag: string): Promise<number> =>
+    localeModel
+        .findOne({ tag })
+        .select({ revision: 1 })
+        .lean<{ revision?: number }>()
+        .exec()
+        .then((language) => language?.revision ?? 0);
+
 /** Insert one entry, and bump. */
 const createEntry = (
     locale: string,
@@ -169,11 +193,13 @@ const createEntry = (
         })
         .then((entry) => bumpRevision(locale).then((revision) => ({ entry, revision })));
 
-/** Change one entry's value, and bump. */
+/** Change one entry's value, and bump — or, for the value it already holds, neither. */
 const saveEntryValue = (
     entry: LocaleEntryDocument,
     value: string
 ): Promise<{ entry: LocaleEntryDocument; revision: number }> => {
+    if (entry.value === value)
+        return currentRevision(entry.locale).then((revision) => ({ entry, revision }));
     entry.value = value;
     return entryBase
         .save(entry)
@@ -187,7 +213,8 @@ const removeEntry = (entry: LocaleEntryDocument): Promise<number> =>
     entryBase.deleteOne(entry).then(() => bumpRevision(entry.locale));
 
 /**
- * Write a whole set of entries, and bump once for the batch.
+ * Write a whole set of entries, and bump once for the batch — unless the batch changed nothing,
+ * so the same import sent twice leaves the revision where the first one put it.
  *
  * `replace` is the only difference between the two bulk routes — a single `deleteMany` of keys the
  * caller did not send. One `bulkWrite` rather than a loop of upserts: five hundred keys is the
@@ -205,15 +232,18 @@ const importEntries = async (
     inputs: EntryInput[],
     { replace }: { replace: boolean }
 ): Promise<{ counts: ImportCounts; revision: number }> => {
-    const existing = new Set(await listKeys(locale, tenant));
+    const existing = await valuesByKey(locale, tenant);
     const incoming = new Map(inputs.map(({ key, value }) => [key, value]));
 
-    const removedKeys = replace ? [...existing].filter((key) => !incoming.has(key)) : [];
+    const removedKeys = replace ? [...existing.keys()].filter((key) => !incoming.has(key)) : [];
+    // Only what actually differs is written — `timestamps` would otherwise stamp `updatedAt` on
+    // an unchanged row, and "updated" would count keys re-sent with the value they already had.
+    const changedEntries = [...incoming].filter(([key, value]) => existing.get(key) !== value);
 
     await withTransaction(async (session) => {
-        if (inputs.length > 0)
+        if (changedEntries.length > 0)
             await localeEntryModel.bulkWrite(
-                [...incoming].map(([key, value]) => ({
+                changedEntries.map(([key, value]) => ({
                     updateOne: {
                         filter: { locale, tenant, key },
                         update: { $set: { value }, $setOnInsert: { locale, tenant, key } },
@@ -229,15 +259,18 @@ const importEntries = async (
                 .exec();
     });
 
-    const created = [...incoming.keys()].filter((key) => !existing.has(key)).length;
+    const created = changedEntries.filter(([key]) => !existing.has(key)).length;
+    const counts = {
+        created,
+        updated: changedEntries.length - created,
+        removed: removedKeys.length
+    };
 
     return {
-        counts: {
-            created,
-            updated: incoming.size - created,
-            removed: removedKeys.length
-        },
-        revision: await bumpRevision(locale)
+        counts,
+        revision: await (changedEntries.length + removedKeys.length > 0
+            ? bumpRevision(locale)
+            : currentRevision(locale))
     };
 };
 
