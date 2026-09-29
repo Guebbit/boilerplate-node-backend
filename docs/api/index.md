@@ -38,6 +38,7 @@ flowchart LR
 | Know who owns which fragment | [Contract Ownership & Fragmentation](./contract-fragmentation.md) |
 | Change SSE/event/queue contracts | [AsyncAPI Workflow](./asyncapi-workflow.md) |
 | Understand route style and response patterns | [REST patterns used here](#rest-patterns-used-here) |
+| Know what POST, PUT and PATCH must do, and the status each answers | [Write Methods](./write-methods.md) |
 | Understand the app layers behind the API | [Theory / Layers](../theory/layers.md) |
 | Understand runtime, cache, and observability tools around the API | [Tools](../tools/) |
 

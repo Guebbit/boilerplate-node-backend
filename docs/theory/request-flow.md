@@ -184,38 +184,39 @@ Heavy tasks (email, PDF generation) are pushed to [RabbitMQ](../tools/rabbitmq.m
 
 ## PUT replaces, PATCH merges
 
+The rules themselves — what each verb means, the status it answers, `null` versus `''`, the
+415 guard — are on [Write Methods](../api/write-methods.md). This section is the mechanism.
+
 Most resources with an update answer both verbs through one shared controller —
 `createUpdateController` in `@infrastructure/surfaces/create-update-controller`. The verb only
 changes the front of the pipeline; the module's own `update(id, changes)` never learns which one
 produced the change-set.
 
-**Exceptions:**
+**Not factory-backed:**
 
 - **Entity translations** (`PUT`/`PATCH /locales/translations/{entityType}/{id}`) and the locale
-  entries bulk import (`PUT`/`PATCH /locales/{locale}/entries`) are hand-written, not
-  factory-backed — both share one body schema across the two verbs instead of a `Replace*`/`Update*`
-  pair, since replace/merge only changes what an untouched key means, never which fields a caller
-  may send.
-- **`PUT /locales/{locale}/entries/{entryId}`** and **`PUT /cart/{productId}`** are PUT-only —
-  neither resource has a PATCH.
+  entries bulk import (`PUT`/`PATCH /locales/{locale}/tenants/{tenant}/entries`) are hand-written.
+  Their bodies differ by verb where it matters: a PATCH locale entry merges field by field (a
+  `null` clears one), a PUT states each locale whole.
+- **PUT-only resources** — `PUT /locales/{locale}/entries/{entryId}`, `PUT /cart/{productId}`,
+  `PUT /cart/shipping-method`, `PUT /wishlist/{productId}`, `PUT /account/addresses/{id}/default` —
+  have no PATCH.
 
 ```mermaid
 flowchart LR
-    P["PUT body"] --> VR["validate<br/>Replace*Request"] --> F["fill every omitted<br/>nullable field with null"] --> U
+    P["PUT body"] --> VR["validate<br/>Replace*Request"] --> F["fill every omitted<br/>nullable field with null<br/>(minus keptWhenOmitted)"] --> C["completeReplace<br/>(a keyed map's stored keys → null)"] --> U
     M["PATCH body"] --> VP["validate<br/>Update*Request"] --> U["module's update(id, changes)"]
     U --> S["value → $set<br/>null → $unset"]
 ```
 
-| Verb  | The body is                              | An omitted field                     | `null`           |
-| ----- | ---------------------------------------- | ------------------------------------ | ---------------- |
-| PUT   | the whole new resource (RFC 9110 §9.3.4) | cleared — unless it cannot be `null` | clears the field |
-| PATCH | only what changes (RFC 7396)             | left alone                           | clears the field |
-
-- **`null` is the one way to say "clear this field".** `''` is never a synonym: every optional
-  free-text field in the contract carries `minLength: 1`, so a blank string is a 422.
-- **A field that cannot be `null` cannot be cleared** — a password, a consent flag, an address's
-  `default`. A PUT that omits one leaves it unchanged. The factory reads which fields those are
-  off the schema itself (`clearableFields`), so nobody keeps the list by hand.
+- **The factory reads the clearable fields off the schema itself** (`clearableFields`: every field
+  that accepts `null`), so nobody keeps the list by hand. A field that cannot be `null` is
+  required by the PUT schema instead.
+- **`keptWhenOmitted`** names fields outside the PUT representation that are nullable yet must
+  survive an omission — `imageUrl`, whose only writer is an upload.
+- **`completeReplace`** is the PUT-only hook for a keyed map the schema alone cannot name: a
+  product's `translations` sets every stored locale the body left out to `null`, the signal a
+  PATCH uses to delete one.
 - **A cleared field is unset on disk, never a stored `null`.** `clearedOrValue`
   (`@infrastructure/persistence/changes`) turns the change-set's `null` into `undefined`, which
   `.save()` writes as `$unset`.

@@ -339,6 +339,7 @@ export default withMermaid(
                         items: [
                             { text: 'Overview', link: '/api/' },
                             { text: 'Endpoints', link: '/api/endpoints' },
+                            { text: 'Write Methods', link: '/api/write-methods' },
                             { text: 'Observability Endpoints', link: '/api/observability' },
                             { text: 'OpenAPI Workflow', link: '/api/openapi-workflow' },
                             {

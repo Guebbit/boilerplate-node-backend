@@ -99,7 +99,7 @@ declaring a body on its GET.
 | `POST /users`                                                           | `active`, `sendSetupEmail`                      | body                                       | boolean; decoded only on multipart                                                         |
 |                                                                         | everything else                                 | body                                       | untouched                                                                                  |
 | `POST /cart`                                                            | `productId`, `quantity`                         | body                                       | Zod, then `isValidObjectId`                                                                |
-| `PUT /cart/:productId`                                                  | `productId`                                     | params, body                               | first non-empty wins, then `isValidObjectId`                                               |
+| `PUT /cart/:productId`                                                  | `productId`                                     | params                                     | then `isValidObjectId`                                                                     |
 |                                                                         | `quantity`                                      | body                                       | Zod                                                                                        |
 | `DELETE /cart/:productId`                                               | `productId`                                     | params, body                               | first non-empty wins, then `isValidObjectId`                                               |
 | `GET /feedback`, `POST /feedback/search`                                | `page`, `pageSize`                              | body, query                                | merged, then the shared pagination schema                                                  |
@@ -108,6 +108,7 @@ declaring a body on its GET.
 | `GET /inventory/movements`                                              | `productId`                                     | query                                      | first non-empty wins                                                                       |
 |                                                                         | `page`, `pageSize`, `reason`                    | query                                      | then Zod                                                                                   |
 | `GET /locales/{locale}/entries`                                         | `page`, `pageSize`, `text`, `tenant`            | query                                      | then the shared pagination schema                                                          |
+| `GET /locales/{locale}/tenants/{tenant}/entries`                        | `tenant`                                        | params                                     | overrides any `?tenant=`; the rest as above                                                |
 | `GET /observability/audit`                                              | `actor`, `action`, `outcome`, `since`           | query                                      | first non-empty wins                                                                       |
 |                                                                         | `page`, `pageSize`                              | query                                      | then the shared pagination schema                                                          |
 
@@ -328,8 +329,8 @@ there, and per-operation declarations are what would remove it.
   on those routes is unreachable rather than undocumented.
 - **`DELETE /cart/{productId}` read a body it could never use.** Same unreachability, but here the
   spec was already right and the code was making the false claim, so the declaration lost `body`
-  rather than the spec gaining one. `PUT /cart/{productId}` keeps it, because
-  `UpdateCartItemByIdRequest` genuinely declares `productId`.
+  rather than the spec gaining one. `PUT /cart/{productId}` lost its body `productId` the same way:
+  the path segment always won, so the field was declared and ignored.
 - **`GET /feedback` declared a JSON body and no query parameters** while the controller read both.
   The query parameters were declared first and the body kept, on the reasoning that it was read and
   had no `POST /feedback/search` sibling to carry the DTO form. That reasoning was wrong twice
