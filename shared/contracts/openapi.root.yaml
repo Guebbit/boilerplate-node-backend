@@ -490,6 +490,15 @@ components:
                 path relative to the API host, which is not a valid absolute URI. `minLength: 1`:
                 `''` is never a synonym for "no image" — only `null` is, on a field that allows
                 it.
+        ImageRemoval:
+            nullable: true
+            enum: [null]
+            description: >-
+                Write-side `imageUrl`: the ONLY accepted value is `null`, meaning "remove the
+                current image". A new image is sent as multipart `imageUpload` bytes. A client
+                never names a path in this server's store, because it cannot know which files
+                are its own (a path would let one record delete another's file).
+                Responses carry the real path under `ImageUrl`.
         ThumbnailUrl:
             type: string
             format: uri-reference

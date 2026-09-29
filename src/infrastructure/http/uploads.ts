@@ -29,10 +29,9 @@ export interface RequestImage {
     /**
      * The url to persist: this request's upload if it carried one and it was digested inline
      * (no broker configured), the pending-image placeholder if a broker will digest it later, or
-     * the body's own `imageUrl` otherwise — a string, absent, or `null` (the caller clearing the
-     * image). An upload always wins
-     * over the body's own value when both are present: the caller sent bytes, which is a
-     * stronger statement of intent than whatever the JSON body also happened to say.
+     * the body's `imageUrl` otherwise — `null` (the caller removing the image) or absent. A string
+     * from the body is never passed on. An upload always wins over a body `null` when both are
+     * present: the caller sent bytes, which is a stronger statement of intent.
      */
     imageUrl: string | null | undefined;
     /**
@@ -60,10 +59,8 @@ export interface RequestImage {
 /**
  * Read the image a write request carries, and the undo for it.
  *
- * An uploaded file outranks a body `imageUrl` — a caller that sent bytes meant those bytes. Never
- * destructure a `''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`); `undefined`
- * means "no change" to every `.optional()` update schema, and `null` (on the no-upload/body-only
- * path) means "clear it".
+ * An uploaded file outranks a body `imageUrl: null` — a caller that sent bytes meant those bytes.
+ * `undefined` means "no change" and `null` (no upload, body-only) means "remove it".
  *
  * @param request - an Express request already through the upload middleware
  */
@@ -105,10 +102,10 @@ export const readUploadedImage = (
     const bodyImageUrl = bodyRecordOf(request).imageUrl;
 
     return {
-        // Non-string, non-null values (number, bool, …) must reach the validator untouched so
-        // zod can reject them with the correct i18n message — coercing them away here would mask
-        // the type error (200 instead of 422). `null` is a body clearing the image.
-        imageUrl: bodyImageUrl as string | null | undefined,
+        // Only the literal `null` ("remove") is honoured. The contract refuses any other body
+        // value before a controller runs; a string that got here anyway is dropped rather than
+        // trusted, since a client-named path is what lets one record delete another's file.
+        imageUrl: bodyImageUrl === null ? null : undefined,
         thumbnailUrl: undefined,
         pendingImageKey: undefined,
         deleteUpload: () => Promise.resolve(false)
@@ -133,7 +130,7 @@ export type ImageChanges = Pick<RequestImage, 'imageUrl' | 'thumbnailUrl' | 'pen
  */
 export const writeWithUploadedImage = <TResult extends { success: boolean }>(
     request: Parameters<typeof readUploadedImage>[0],
-    changedImageUrl: string | null | undefined,
+    changedImageUrl: null | undefined,
     write: (image: ImageChanges) => Promise<TResult>
 ): Promise<TResult> => {
     const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);

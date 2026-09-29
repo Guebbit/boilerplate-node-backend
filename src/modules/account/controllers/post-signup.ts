@@ -1,16 +1,13 @@
 /**
  * @module
- * `POST /account/signup` controller — thin HTTP adapter over `accountService.signup`, plus the
- * uploaded-image cleanup that has to run on every path except a genuine registration: failure, and
- * the 201 rung 2 fabricates for a refused address, which the caller cannot tell apart from a real
- * one.
+ * `POST /account/signup` controller — thin HTTP adapter over `accountService.signup`. JSON only:
+ * no image arrives here, because a stranger writes nothing to the store before registering.
  */
 
 import type { Request, Response } from 'express';
 import { accountService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { readUploadedImage } from '@infrastructure/http/uploads';
-import type { SignupRequest, SignupRequestMultipart, User } from '@types';
+import type { SignupRequest, User } from '@types';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authSignupTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -28,7 +25,7 @@ export const postSignup = (
     // `| undefined`: express 5 leaves `request.body` unset when no parser matched the
     // content-type, and multer is no protection — it calls `next()` untouched on a non-multipart
     // body. See the guard on the destructure below.
-    request: Request<unknown, unknown, SignupRequest | SignupRequestMultipart | undefined>,
+    request: Request<unknown, unknown, SignupRequest | undefined>,
     response: Response
 ) => {
     /*
@@ -37,8 +34,8 @@ export const postSignup = (
      * answer first in Zod's own English (`tests/integration/locale.test.ts` asserts it doesn't).
      */
     /*
-     * Defaulted rather than passed through as `undefined`, for the reason the `imageUrl` default
-     * below gives: `signup` hands these straight to `zodUserSchema`, which wants strings. An
+     * Defaulted rather than passed through as `undefined`: `signup` hands these straight to
+     * `zodUserSchema`, which wants strings. An
      * absent body therefore answers the same translated 422 a body of empty fields does, instead
      * of throwing — `false` for the terms because a request nobody sent accepted nothing.
      */
@@ -51,10 +48,6 @@ export const postSignup = (
         termsAccepted = false
     } = request.body ?? {};
 
-    // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`), and `undefined` already means "not provided" to `zodUserSchema`'s
-    // `.optional()` field, same as an absent key.
-    const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
-
     return accountService
         .signup(
             {
@@ -63,25 +56,16 @@ export const postSignup = (
                 password,
                 passwordConfirm,
                 analyticsConsent,
-                termsAccepted,
-                // `null` has no meaning on signup — there is no existing account to CLEAR an
-                // image from — but `readUploadedImage` reads the raw body ahead of any schema
-                // validation, so a caller could still send one. Coalesced away to `undefined`,
-                // same as an absent field: `SignupInput.imageUrl`'s own docblock is the contract.
-                imageUrl: imageUrl ?? undefined,
-                thumbnailUrl,
-                pendingImageKey
+                termsAccepted
             },
             callerContextOf(request)
         )
         .then((result) => {
-            if (!result.success)
-                return deleteUpload()
-                    .catch(() => undefined)
-                    .then(() => {
-                        authSignupTotal.inc({ status: 'failure' });
-                        rejectResponse(response, result.status, result.errors);
-                    });
+            if (!result.success) {
+                authSignupTotal.inc({ status: 'failure' });
+                rejectResponse(response, result.status, result.errors);
+                return;
+            }
 
             const { data } = result;
 
@@ -89,22 +73,14 @@ export const postSignup = (
             // account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
             if (data.isNew) {
                 // Rung 2 refused this address — `signup` still hands back an unsaved document so
-                // this answers exactly like a real signup. No verification email, and the upload
-                // is discarded same as any other refusal.
+                // this answers exactly like a real signup, minus the verification email.
                 logAntibotRefusal('email-policy', request.method, request.path, 201);
                 authSignupTotal.inc({ status: 'refused' });
-                return deleteUpload()
-                    .catch(() => undefined)
-                    .then(() => {
-                        // SIGNUP_DEFAULT_ROLE, not read off a membership that was never written
-                        // (this document is never saved) — exactly what a genuine signup's response
-                        // shows, which is the whole point of this branch being indistinguishable.
-                        successResponse<User>(
-                            response,
-                            userService.toUser(data, SIGNUP_DEFAULT_ROLE),
-                            201
-                        );
-                    });
+                // SIGNUP_DEFAULT_ROLE, not read off a membership that was never written (this
+                // document is never saved) — exactly what a genuine signup's response shows,
+                // which is the whole point of this branch being indistinguishable.
+                successResponse<User>(response, userService.toUser(data, SIGNUP_DEFAULT_ROLE), 201);
+                return;
             }
 
             // Registration successful
@@ -138,8 +114,5 @@ export const postSignup = (
         .catch((error: unknown) => {
             authSignupTotal.inc({ status: 'failure' });
             rejectDatabaseError(response, 'signup', error);
-            // The response is already sent — a rejected cleanup must not become an unhandled
-            // promise rejection on top of it.
-            return deleteUpload().catch(() => undefined);
         });
 };

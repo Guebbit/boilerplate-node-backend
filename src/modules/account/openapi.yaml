@@ -682,7 +682,7 @@ paths:
         post:
             tags: [Auth]
             summary: Signup
-            description: 'Registers a new user account with optional image upload. Returns the newly created user profile on success, and signs the caller in — the refresh cookie is set here, so a client reaches a usable access token through `GET /account/refresh` rather than by calling `POST /account/login` again. The new account holds `unverified` until `POST /account/verify-confirm` proves the address — it browses freely and is stopped only at `cart.checkout`.'
+            description: 'Registers a new user account. Takes no image — a stranger writes nothing to the store before registering; the signed-in caller sets an avatar with `PATCH /account`. Returns the newly created user profile on success, and signs the caller in — the refresh cookie is set here, so a client reaches a usable access token through `GET /account/refresh` rather than by calling `POST /account/login` again. The new account holds `unverified` until `POST /account/verify-confirm` proves the address — it browses freely and is stopped only at `cart.checkout`.'
             operationId: signup
             security: []
             parameters:
@@ -694,9 +694,6 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/SignupRequest'
-                    multipart/form-data:
-                        schema:
-                            $ref: '#/components/schemas/SignupRequestMultipart'
             responses:
                 '201':
                     description: Created
@@ -1269,8 +1266,6 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 passwordConfirm:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
-                imageUrl:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
                 # Must be `true` — the checkbox gating the Terms of Service / Privacy Policy.
                 # Server-enforced (see `accountService.signup`), not just a client-side gate.
                 termsAccepted:
@@ -1281,31 +1276,6 @@ components:
                 # alone" reading at signup, unlike `UpdateAccountRequest`'s.
                 analyticsConsent:
                     type: boolean
-
-        SignupRequestMultipart:
-            type: object
-            additionalProperties: false
-            required: [email, username, password, passwordConfirm, termsAccepted]
-            properties:
-                email:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
-                username:
-                    type: string
-                    minLength: 3
-                password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
-                passwordConfirm:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
-                termsAccepted:
-                    type: boolean
-                    enum: [true]
-                analyticsConsent:
-                    type: boolean
-                imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
-                    type: string
-                    format: binary
-                    description: Optional user profile image
 
         PasswordResetRequest:
             type: object
@@ -1359,9 +1329,7 @@ components:
                 # `null` removes the image. Omitted leaves it unchanged; `''` is
                 # invalid (`ImageUrl`'s own `minLength: 1`), never a third spelling of "no image".
                 imageUrl:
-                    nullable: true
-                    allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 phone:
                     type: string
                     minLength: 1
@@ -1421,9 +1389,7 @@ components:
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 imageUrl:
-                    nullable: true
-                    allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 phone:
                     type: string
                     minLength: 1

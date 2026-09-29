@@ -35,18 +35,10 @@ export const { replace: replaceProduct, update: updateProduct } = createUpdateCo
         jsonFields: ['translations']
     },
     update: (id, changes, request) =>
-        // `thumbnailUrl`/`pendingImageKey` are server-derived, never on the contract — carried
-        // PAST the factory's `strictObject` validation (which would refuse them as unknown fields
-        // if merged into `changes` instead) as `writeUpdate`'s own `imageExtras` parameter. Only
-        // `imageUrl` is a real contract field, so only it joins `changes`.
-        writeWithUploadedImage(
-            request,
-            changes.imageUrl,
-            ({ imageUrl, thumbnailUrl, pendingImageKey }) =>
-                productService.writeUpdate(id, { ...changes, imageUrl }, callerContextOf(request), {
-                    thumbnailUrl,
-                    pendingImageKey
-                })
+        // The image fields are server-decided (the body's `imageUrl` can only be `null`) —
+        // carried PAST the factory's validation as `writeUpdate`'s own `imageExtras` parameter.
+        writeWithUploadedImage(request, changes.imageUrl, (image) =>
+            productService.writeUpdate(id, changes, callerContextOf(request), image)
         ),
     present: (product) => productService.toProduct(product)
 });

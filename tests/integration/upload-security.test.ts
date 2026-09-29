@@ -1,10 +1,9 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
-import { api } from '@tests/http';
+import { api, authenticateAs } from '@tests/http';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
-import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { maxUploadBytes } from '@infrastructure/http/middlewares/upload';
 
 /**
@@ -16,8 +15,9 @@ import { maxUploadBytes } from '@infrastructure/http/middlewares/upload';
  * drive the real route and assert on the filesystem, because the question is not "what did the
  * API answer" but "what is now stored".
  *
- * `POST /account/signup` is the subject: it is the one upload route reachable without a token,
- * which makes it the one an unauthenticated attacker would use.
+ * `PATCH /account` is the subject: an avatar is the one upload every ordinary account can make.
+ * `POST /account/signup` takes no file at all — the last describe block pins that, because a
+ * stranger with a mailbox generator would otherwise write to disk at no cost.
  */
 
 // `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
@@ -56,18 +56,22 @@ const uploadedFiles = () =>
           )
         : [];
 
-const signupWith = (content: Buffer | string, filename: string, contentType: string) =>
-    api()
-        .post('/account/signup')
-        .field('email', `upload-${Date.now()}@example.com`)
-        .field('username', 'uploader')
-        .field('password', PLAIN_PASSWORD)
-        .field('passwordConfirm', PLAIN_PASSWORD)
-        .field('termsAccepted', 'true')
+/** A signed-in account uploading `content` as its avatar, claiming `contentType`. */
+const uploadAvatarWith = async (
+    content: Buffer | string,
+    filename: string,
+    contentType: string
+) => {
+    const { bearer } = await authenticateAs('user');
+
+    return api()
+        .patch('/account')
+        .set('Authorization', bearer)
         .attach('imageUpload', Buffer.isBuffer(content) ? content : Buffer.from(content), {
             filename,
             contentType
         });
+};
 
 setupTestDb();
 
@@ -90,7 +94,7 @@ describe('upload content validation', () => {
         ],
         ['a PHP snippet', '<?php system($_GET["c"]); ?>']
     ])('rejects %s disguised as a PNG, and stores nothing', async (_label, content) => {
-        const response = await signupWith(content, 'avatar.png', 'image/png');
+        const response = await uploadAvatarWith(content, 'avatar.png', 'image/png');
 
         expect(response.status).toBe(422);
         // The decisive assertion: not the status, but that the disguised file is not on disk.
@@ -98,9 +102,9 @@ describe('upload content validation', () => {
     });
 
     it('accepts a real PNG', async () => {
-        const response = await signupWith(PNG_BYTES, 'avatar.png', 'image/png');
+        const response = await uploadAvatarWith(PNG_BYTES, 'avatar.png', 'image/png');
 
-        expect(response.status).toBe(201);
+        expect(response.status).toBe(200);
         expect(uploadedFiles()).toHaveLength(1);
     });
 
@@ -110,9 +114,9 @@ describe('upload content validation', () => {
      * error, by multer's contract — so what matters is that nothing was stored.
      */
     it('drops a real image declared as a non-image, without storing it', async () => {
-        const response = await signupWith(PNG_BYTES, 'avatar.png', 'application/pdf');
+        const response = await uploadAvatarWith(PNG_BYTES, 'avatar.png', 'application/pdf');
 
-        expect(response.status).toBe(201);
+        expect(response.status).toBe(200);
         expect(uploadedFiles()).toEqual([]);
     });
 
@@ -125,7 +129,7 @@ describe('upload content validation', () => {
         // repeating the default would be guessing at a value it cannot see.
         const oversized = Buffer.concat([PNG_BYTES, Buffer.alloc(maxUploadBytes() + 1024)]);
 
-        const response = await signupWith(oversized, 'huge.png', 'image/png');
+        const response = await uploadAvatarWith(oversized, 'huge.png', 'image/png');
 
         expect(response.status).toBe(400);
         expect(uploadedFiles()).toEqual([]);
@@ -139,7 +143,7 @@ describe('upload content validation', () => {
  */
 describe('serving the upload directory', () => {
     it('serves a stored image with an image content type', async () => {
-        const uploaded = await signupWith(PNG_BYTES, 'avatar.png', 'image/png');
+        const uploaded = await uploadAvatarWith(PNG_BYTES, 'avatar.png', 'image/png');
         const imageUrl = uploaded.body.data.imageUrl as string;
 
         const response = await api().get(imageUrl);
@@ -161,7 +165,7 @@ describe('serving the upload directory', () => {
      * execute. Stored XSS that passes a content check cleanly.
      */
     it('never serves an uploaded file as html, whatever it was named', async () => {
-        const uploaded = await signupWith(PNG_BYTES, 'payload.html', 'image/png');
+        const uploaded = await uploadAvatarWith(PNG_BYTES, 'payload.html', 'image/png');
         const imageUrl = uploaded.body.data.imageUrl as string;
 
         expect(imageUrl.endsWith('.png')).toBe(true);
@@ -196,4 +200,20 @@ describe('serving the upload directory', () => {
             expect(response.status).toBeGreaterThanOrEqual(400);
         }
     );
+});
+
+describe('signup takes no upload', () => {
+    it('refuses a multipart signup and writes nothing', async () => {
+        const response = await api()
+            .post('/account/signup')
+            .field('email', 'stranger@example.com')
+            .field('username', 'stranger')
+            .field('password', 'Aa1!aaaaaaaa')
+            .field('passwordConfirm', 'Aa1!aaaaaaaa')
+            .field('termsAccepted', 'true')
+            .attach('imageUpload', PNG_BYTES, { filename: 'a.png', contentType: 'image/png' });
+
+        expect(response.status).toBeGreaterThanOrEqual(400);
+        expect(uploadedFiles()).toEqual([]);
+    });
 });

@@ -393,7 +393,7 @@ components:
                     type: boolean
                     default: true
                 imageUrl:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 locale:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
 
@@ -449,9 +449,7 @@ components:
                 # `null` removes the image. Omitted leaves it unchanged; `''` is
                 # invalid (`ImageUrl`'s own `minLength: 1`), never a third spelling of "no image".
                 imageUrl:
-                    nullable: true
-                    allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 # `null` clears the override, falling back to the deployment default/negotiated locale.
                 locale:
                     nullable: true
@@ -520,9 +518,7 @@ components:
                 active:
                     type: boolean
                 imageUrl:
-                    nullable: true
-                    allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 locale:
                     nullable: true
                     allOf:

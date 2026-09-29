@@ -201,19 +201,27 @@ export const softDeleteOrder = (owner: Caller, orderId: string): Promise<void> =
     owner.call('DELETE', `/orders/${orderId}`).then(() => undefined);
 
 /**
- * Replace a product's picture — a plain JSON `PATCH`, not the multipart upload route: the
- * contract accepts `imageUrl` as a string directly, so this needs no file to actually decode.
- * The point is the CHANGE, not the picture — an order placed against the old `imageUrl` must
- * resolve this new one live, never the one the buyer originally saw.
+ * A 1x1 PNG. The server digests every upload, so the bytes must genuinely decode; the picture
+ * itself is beside the point of the flow that sends it.
+ */
+const TINY_PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    'base64'
+);
+
+/**
+ * Replace a product's picture through the multipart upload route — the only way to name one,
+ * since `imageUrl` on a write body is `null`-only. The point is the CHANGE, not the picture — an
+ * order placed against the old `imageUrl` must resolve this new one live, never the one the
+ * buyer originally saw.
  *
  * @param owner - a caller holding `products.any.update`
  */
-export const replaceProductImage = (
-    owner: Caller,
-    productId: string,
-    imageUrl: string
-): Promise<void> =>
-    owner.call('PATCH', `/products/${productId}`, { imageUrl }).then(() => undefined);
+export const replaceProductImage = (owner: Caller, productId: string): Promise<void> => {
+    const form = new FormData();
+    form.append('imageUpload', new Blob([TINY_PNG], { type: 'image/png' }), 'replacement.png');
+    return owner.call('PATCH', `/products/${productId}`, form).then(() => undefined);
+};
 
 /**
  * Hard-delete a product — the row is gone, not merely hidden. An order line that named it keeps

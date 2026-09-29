@@ -314,10 +314,9 @@ export const refreshAccessToken = (
         });
 
 /**
- * Everything `POST /account/signup` collects: the submitted fields, plus the image paths
- * `readUploadedImage` derived from the multipart body. One object rather than a positional list
- * because half of these are optional and two are booleans — an argument order nothing but a
- * comment would keep honest.
+ * Everything `POST /account/signup` collects. One object rather than a positional list because
+ * some of these are optional and two are booleans — an argument order nothing but a comment
+ * would keep honest. No image: signup takes none, the new account starts on the default one.
  */
 export interface SignupInput {
     /** The submitted address; `zodUserSchema` owns its shape. */
@@ -344,24 +343,6 @@ export interface SignupInput {
      * route — neither of which shows this checkbox — aren't forced to restate it.
      */
     termsAccepted: boolean;
-
-    /**
-     * Not `| null`: the contract declares `imageUrl` a plain (nullable-free) string on
-     * `SignupRequest` — there is no existing account to clear an image FROM at signup — so
-     * `undefined` is the only absence a caller here ever has to coalesce away, into
-     * {@link DEFAULT_USER_IMAGE_URL} rather than `''`, which is invalid input on every OTHER
-     * route (`ImageUrl`'s own `minLength: 1`).
-     */
-    imageUrl: string | undefined;
-
-    /**
-     * Set together with `imageUrl` by `readUploadedImage` — never independently, and never part
-     * of the validated schema: both are server-derived, not client input.
-     */
-    thumbnailUrl: string | undefined;
-
-    /** The staged upload's storage key, handed to the image worker once the account exists. */
-    pendingImageKey: string | undefined;
 }
 
 /**
@@ -389,8 +370,7 @@ const guardEmailPolicy = (input: SignupInput): Promise<ResponseSuccess<UserDocum
                   userService.buildSignupDecoy({
                       email: input.email,
                       username: input.username,
-                      imageUrl: input.imageUrl ?? DEFAULT_USER_IMAGE_URL,
-                      thumbnailUrl: input.thumbnailUrl,
+                      imageUrl: DEFAULT_USER_IMAGE_URL,
                       analyticsConsent: input.analyticsConsent,
                       termsAccepted: input.termsAccepted
                   })
@@ -414,9 +394,7 @@ const createAccountIfEmailFree = (
                 .registerSelfService({
                     username: input.username,
                     email: input.email,
-                    imageUrl: input.imageUrl ?? DEFAULT_USER_IMAGE_URL,
-                    thumbnailUrl: input.thumbnailUrl,
-                    pendingImageKey: input.pendingImageKey,
+                    imageUrl: DEFAULT_USER_IMAGE_URL,
                     password: input.password,
                     analyticsConsent: input.analyticsConsent,
                     termsAccepted: input.termsAccepted,
@@ -457,15 +435,7 @@ export const signup = (
     input: SignupInput,
     callerContext: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const {
-        email,
-        username,
-        password,
-        passwordConfirm,
-        analyticsConsent,
-        termsAccepted,
-        imageUrl
-    } = input;
+    const { email, username, password, passwordConfirm, analyticsConsent, termsAccepted } = input;
 
     const parseResult = zodUserSchema
         .extend({
@@ -491,7 +461,6 @@ export const signup = (
         .safeParse({
             email,
             username,
-            imageUrl,
             password,
             passwordConfirm,
             analyticsConsent,

@@ -494,11 +494,7 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
         ])
     );
     // 121 gets no edit at all — `order.imageUnchanged` is the control the other two contrast with.
-    await replaceProductImage(
-        owner,
-        fillerProductId(122),
-        '/images/system/placeholder-product.png'
-    );
+    await replaceProductImage(owner, fillerProductId(122));
     await hardDeleteProduct(owner, fillerProductId(123));
 
     /*

@@ -460,6 +460,16 @@ const prefixTranslationErrors = (rejection: ResponseReject): ResponseReject => (
 });
 
 /**
+ * The image fields the server decided for a product write — never part of the contract body, so
+ * they join only after validation. `imageUrl` is the upload pipeline's path, `null` to remove.
+ */
+interface ProductImageExtras {
+    imageUrl?: string | null;
+    thumbnailUrl?: string;
+    pendingImageKey?: string;
+}
+
+/**
  * Create a product and its translation rows in one operation — the create door of the
  * multilingual product write surface. Two validations run before anything is WRITTEN: the product
  * fields' shape (`zodProductCreateSchema`, which also refuses a missing/`null` fallback locale)
@@ -469,14 +479,14 @@ const prefixTranslationErrors = (rejection: ResponseReject): ResponseReject => (
  * both validations have already passed, not that the product write and the translations write
  * that follow are atomic with each other.
  *
- * `imageExtras` (`thumbnailUrl`/`pendingImageKey`) is server-derived, never part of the contract
- * body, so it never passes through `zodProductCreateSchema` — merged in only once validation has
+ * `imageExtras` (`imageUrl`/`thumbnailUrl`/`pendingImageKey`) is server-derived, never part of the
+ * contract body's string values, so it never passes through `zodProductCreateSchema` — merged in only once validation has
  * already succeeded, the same order the controller keeps for its own merge.
  */
 export const writeCreate = async (
     data: Record<string, unknown>,
     context: CallerContext,
-    imageExtras: { thumbnailUrl?: string; pendingImageKey?: string } = {}
+    imageExtras: ProductImageExtras = {}
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> => {
     const parsed = zodProductCreateSchema.safeParse(data);
     if (!parsed.success) return generateReject(422, validationErrors(parsed.error));
@@ -496,6 +506,8 @@ export const writeCreate = async (
         {
             ...productFields,
             ...imageExtras,
+            // `null` on a create means no image: the schema default applies to `undefined` only.
+            imageUrl: imageExtras.imageUrl ?? undefined,
             title: fallbackEntry.title,
             description: fallbackEntry.description ?? ''
         },
@@ -522,7 +534,7 @@ export const writeUpdate = async (
     id: string,
     data: z.infer<typeof zodProductUpdateSchema>,
     context: CallerContext,
-    imageExtras: { thumbnailUrl?: string; pendingImageKey?: string } = {}
+    imageExtras: ProductImageExtras = {}
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> => {
     const { translations, ...productFields } = data;
 

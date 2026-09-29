@@ -57,10 +57,7 @@ describe('accountService.signup', () => {
                 password: PLAIN_PASSWORD,
                 passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
-                termsAccepted: true,
-                imageUrl: undefined,
-                thumbnailUrl: undefined,
-                pendingImageKey: undefined
+                termsAccepted: true
             },
             testCallerContext
         );
@@ -77,10 +74,7 @@ describe('accountService.signup', () => {
                 password: PLAIN_PASSWORD,
                 passwordConfirm: 'Different1!',
                 analyticsConsent: undefined,
-                termsAccepted: true,
-                imageUrl: undefined,
-                thumbnailUrl: undefined,
-                pendingImageKey: undefined
+                termsAccepted: true
             },
             testCallerContext
         );
@@ -99,10 +93,7 @@ describe('accountService.signup', () => {
                 password: PLAIN_PASSWORD,
                 passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
-                termsAccepted: true,
-                imageUrl: undefined,
-                thumbnailUrl: undefined,
-                pendingImageKey: undefined
+                termsAccepted: true
             },
             testCallerContext
         );
@@ -119,10 +110,7 @@ describe('accountService.signup', () => {
                 password: PLAIN_PASSWORD,
                 passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
-                termsAccepted: true,
-                imageUrl: undefined,
-                thumbnailUrl: undefined,
-                pendingImageKey: undefined
+                termsAccepted: true
             },
             testCallerContext
         );
@@ -141,10 +129,7 @@ describe('accountService.signup', () => {
                 password: 'abc',
                 passwordConfirm: 'abc',
                 analyticsConsent: undefined,
-                termsAccepted: true,
-                imageUrl: undefined,
-                thumbnailUrl: undefined,
-                pendingImageKey: undefined
+                termsAccepted: true
             },
             testCallerContext
         );
@@ -165,10 +150,7 @@ describe('accountService.signup', () => {
                 password: 'Password1!',
                 passwordConfirm: 'Password1!',
                 analyticsConsent: undefined,
-                termsAccepted: true,
-                imageUrl: undefined,
-                thumbnailUrl: undefined,
-                pendingImageKey: undefined
+                termsAccepted: true
             },
             testCallerContext
         );
