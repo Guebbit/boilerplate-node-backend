@@ -105,6 +105,20 @@ JWT rotation above makes for a session mid-refresh.
 need attention. Needs a "rotated since X" timestamp somewhere first, which nothing here writes
 today — a follow-on, not part of this runbook.
 
+## Pseudonymised identifiers
+
+One primitive, `pseudonymise(purpose, value)` (`src/infrastructure/security/pseudonymise.ts`), keys every hash of an identifier or a secret that must be comparable but not readable.
+
+| Purpose       | Used for                                | Why not a bare hash                                                                                           |
+| ------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `idempotency` | the request fingerprint stored for 24 h | `POST /signup` bodies carry the plaintext password; a bare SHA-256 lets a Mongo dump be guessed at hash speed |
+| `rate-limit`  | the submitted-email budget key in Redis | a Redis snapshot must not hand over the user list                                                             |
+| `log`         | personal fields in log lines            | see [Winston](./winston.md#personal-data)                                                                     |
+
+- **Scheme:** HMAC-SHA256 under a subkey HKDF-derived (RFC 5869) from `NODE_PSEUDONYM_KEY`, one subkey per purpose, so a digest made for one purpose cannot be replayed as another's.
+- **Standard:** EDPB Guidelines 01/2025 ¶88-89 and ¶117-118, ENISA pseudonymisation techniques (2019) §7.3, NIST SP 800-57 §5.2.
+- **Rotation:** a single value, no ring. Changing it costs, once: identity rate-limit budgets reset (at most one window), log digests stop correlating across the change, and a retry with the same `Idempotency-Key` across the change answers `422` for at most 24 h.
+
 ## Machine-to-machine credentials
 
 A JWT proves a PERSON signed in; a partner integration or a webhook consumer calling back into the
@@ -271,7 +285,7 @@ delivered method armed, because a mailed code has an SMTP queue and an app switc
 | what             | form                                                               | why                                                                                                                            |
 | ---------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | a device secret  | AES-256-GCM, key from `NODE_TOTP_ENCRYPTION_KEY`, version-prefixed | must be recoverable to recompute a code against; the prefix lets a future key rotation decrypt old rows with their own key     |
-| a delivered code | HMAC-SHA256 under the same key                                     | six digits is a space of one million — a bare digest falls to anyone holding a database dump, an HMAC does not without the key |
+| a delivered code | HMAC-SHA256 under an HKDF subkey of the same key                   | six digits is a space of one million — a bare digest falls to anyone holding a database dump, an HMAC does not without the key |
 | backup codes     | scrypt, one salt per account                                       | 40 bits per code needs stretching — NIST 800-63B's "look-up secret" rule below 112 bits                                        |
 
 ### The controls, and which attack each one answers
@@ -394,30 +408,30 @@ Every budget above, as declared data (`RateLimitBudget` on the owning module's m
 
 <!-- rate-limit-budgets:start -->
 
-| Budget                                  | Owner            | Env var                                | Default | Window                      | Keyed by                                                                             | Audited |
-| --------------------------------------- | ---------------- | -------------------------------------- | ------- | --------------------------- | ------------------------------------------------------------------------------------ | ------- |
-| Credential guesses — per account        | `account`        | `NODE_AUTH_RATE_LIMIT_MAX`             | 10      | `NODE_RATE_LIMIT_WINDOW_MS` | the named account, hashed                                                            | yes     |
-| Credential guesses — per address        | `account`        | `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX`     | 30      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                              | yes     |
-| Credential guesses — per address block  | `account`        | `NODE_AUTH_RATE_LIMIT_BLOCK_MAX`       | 100     | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /64)                                                   | yes     |
-| Password-strength checks                | `account`        | `NODE_PASSWORD_CHECK_RATE_LIMIT_MAX`   | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                              | yes     |
-| Signups — per email                     | `account`        | `NODE_SIGNUP_RATE_LIMIT_MAX`           | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | the submitted email, normalised and hashed (falls back to address block when absent) | yes     |
-| Signups — per address                   | `account`        | `NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX`   | 15      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                              | yes     |
-| Signups — per address block             | `account`        | `NODE_SIGNUP_RATE_LIMIT_BLOCK_MAX`     | 40      | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /64)                                                   | yes     |
-| Password resets — per email             | `account`        | `NODE_RESET_RATE_LIMIT_MAX`            | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | the submitted email, normalised and hashed (falls back to address block when absent) | yes     |
-| Password resets — per address           | `account`        | `NODE_RESET_RATE_LIMIT_ADDRESS_MAX`    | 15      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                              | yes     |
-| Password resets — per address block     | `account`        | `NODE_RESET_RATE_LIMIT_BLOCK_MAX`      | 40      | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /64)                                                   | yes     |
-| MFA challenge guesses                   | `account`        | `NODE_MFA_CHALLENGE_MAX`               | 5       | 600000ms                    | the challenge string, hashed (falls back to address block when absent)               | yes     |
-| MFA code deliveries                     | `account`        | `NODE_MFA_SEND_MAX`                    | 3       | 600000ms                    | the challenge string, hashed (falls back to address block when absent)               | yes     |
-| Contact submissions — per address       | `feedback`       | `NODE_SUBMISSION_RATE_LIMIT_MAX`       | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                              | yes     |
-| Contact submissions — per email         | `feedback`       | `NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX` | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | the submitted email, normalised and hashed (falls back to address block when absent) | yes     |
-| Contact submissions — per address block | `feedback`       | `NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX` | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /64)                                                   | yes     |
-| Invoice / credit-note renders           | `invoicing`      | `NODE_INVOICING_RATE_LIMIT_MAX`        | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account                                                            | yes     |
-| Payment webhook deliveries              | `payments`       | `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX`  | 60      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                              | yes     |
-| Payment confirm attempts                | `payments`       | `NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX`  | 5       | 3600000ms                   | the authenticated account                                                            | yes     |
-| Payment confirm declines                | `payments`       | `NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX`  | 3       | 3600000ms                   | the authenticated account                                                            | yes     |
-| Browsing (global)                       | `infrastructure` | `NODE_RATE_LIMIT_MAX`                  | 100     | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                              | no      |
-| Api-key requests                        | `infrastructure` | `NODE_API_KEY_RATE_LIMIT_MAX`          | 120     | `NODE_RATE_LIMIT_WINDOW_MS` | the api-key credential                                                               | yes     |
-| Image uploads                           | `infrastructure` | `NODE_UPLOAD_RATE_LIMIT_MAX`           | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                              | yes     |
+| Budget                                  | Owner            | Env var                                | Default | Window                      | Keyed by                                                                                    | Audited |
+| --------------------------------------- | ---------------- | -------------------------------------- | ------- | --------------------------- | ------------------------------------------------------------------------------------------- | ------- |
+| Credential guesses — per account        | `account`        | `NODE_AUTH_RATE_LIMIT_MAX`             | 10      | `NODE_RATE_LIMIT_WINDOW_MS` | the submitted email, normalised and pseudonymised (falls back to address block when absent) | yes     |
+| Credential guesses — per address        | `account`        | `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX`     | 30      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                                     | yes     |
+| Credential guesses — per address block  | `account`        | `NODE_AUTH_RATE_LIMIT_BLOCK_MAX`       | 100     | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /64)                                                          | yes     |
+| Password-strength checks                | `account`        | `NODE_PASSWORD_CHECK_RATE_LIMIT_MAX`   | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                                     | yes     |
+| Signups — per email                     | `account`        | `NODE_SIGNUP_RATE_LIMIT_MAX`           | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | the submitted email, normalised and pseudonymised (falls back to address block when absent) | yes     |
+| Signups — per address                   | `account`        | `NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX`   | 15      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                                     | yes     |
+| Signups — per address block             | `account`        | `NODE_SIGNUP_RATE_LIMIT_BLOCK_MAX`     | 40      | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /64)                                                          | yes     |
+| Password resets — per email             | `account`        | `NODE_RESET_RATE_LIMIT_MAX`            | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | the submitted email, normalised and pseudonymised (falls back to address block when absent) | yes     |
+| Password resets — per address           | `account`        | `NODE_RESET_RATE_LIMIT_ADDRESS_MAX`    | 15      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                                     | yes     |
+| Password resets — per address block     | `account`        | `NODE_RESET_RATE_LIMIT_BLOCK_MAX`      | 40      | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /64)                                                          | yes     |
+| MFA challenge guesses                   | `account`        | `NODE_MFA_CHALLENGE_MAX`               | 5       | 600000ms                    | the challenge string, hashed (falls back to address block when absent)                      | yes     |
+| MFA code deliveries                     | `account`        | `NODE_MFA_SEND_MAX`                    | 3       | 600000ms                    | the challenge string, hashed (falls back to address block when absent)                      | yes     |
+| Contact submissions — per address       | `feedback`       | `NODE_SUBMISSION_RATE_LIMIT_MAX`       | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                                     | yes     |
+| Contact submissions — per email         | `feedback`       | `NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX` | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | the submitted email, normalised and pseudonymised (falls back to address block when absent) | yes     |
+| Contact submissions — per address block | `feedback`       | `NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX` | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /64)                                                          | yes     |
+| Invoice / credit-note renders           | `invoicing`      | `NODE_INVOICING_RATE_LIMIT_MAX`        | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account                                                                   | yes     |
+| Payment webhook deliveries              | `payments`       | `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX`  | 60      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                                     | yes     |
+| Payment confirm attempts                | `payments`       | `NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX`  | 5       | 3600000ms                   | the authenticated account                                                                   | yes     |
+| Payment confirm declines                | `payments`       | `NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX`  | 3       | 3600000ms                   | the authenticated account                                                                   | yes     |
+| Browsing (global)                       | `infrastructure` | `NODE_RATE_LIMIT_MAX`                  | 100     | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                                     | no      |
+| Api-key requests                        | `infrastructure` | `NODE_API_KEY_RATE_LIMIT_MAX`          | 120     | `NODE_RATE_LIMIT_WINDOW_MS` | the api-key credential                                                                      | yes     |
+| Image uploads                           | `infrastructure` | `NODE_UPLOAD_RATE_LIMIT_MAX`           | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                                     | yes     |
 
 <!-- rate-limit-budgets:end -->
 

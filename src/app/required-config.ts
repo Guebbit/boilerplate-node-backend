@@ -7,7 +7,7 @@
  *
  * Groups:
  *
- * - `NODE_URL` / `NODE_CORS_ORIGIN` / `NODE_LOG_HASH_KEY` — this application's own, never a
+ * - `NODE_URL` / `NODE_CORS_ORIGIN` / `NODE_PSEUDONYM_KEY` — this application's own, never a
  *   module's.
  * - The SMTP companions, since the kernel must not name the mail adapter directly — the probe
  *   itself lives with the adapter (`adapters/mailer.ts#missingSmtpCompanions`), this file only
@@ -75,17 +75,17 @@ const invalidEmailPolicy = (): string[] => {
  * Both are the app's own. The shop's jurisdiction and its two VAT rates are NOT — `orders` and
  * `products` declare those on their own manifests, so deleting either module deletes its gate.
  *
- * `NODE_LOG_HASH_KEY` (`adapters/logger.ts`) is production-only too: outside production the
- * logger falls back to its own non-secret dev key, since there is nothing to protect on a
+ * `NODE_PSEUDONYM_KEY` (`src/infrastructure/security/pseudonymise.ts`) is production-only too: outside production
+ * it falls back to a non-secret dev key, since there is nothing to protect on a
  * machine that already has this source tree.
  */
 const APP_REQUIRED_CONFIG: readonly RequiredConfig[] = [
     { key: 'NODE_URL', minLength: 1 },
     { key: 'NODE_CORS_ORIGIN', minLength: 1, productionOnly: true },
     {
-        key: 'NODE_LOG_HASH_KEY',
+        key: 'NODE_PSEUDONYM_KEY',
         minLength: 16,
-        placeholder: 'your-log-hash-key-here',
+        placeholder: 'your-pseudonym-key-here',
         productionOnly: true
     }
 ];

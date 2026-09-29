@@ -208,12 +208,12 @@ why `db:bootstrap` syncs before the server starts.
 
 ## Configuration
 
-| Env var                    | Effect                                                                                                   |
-| -------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `NODE_LOG_LEVEL`           | logger level (`error`, `warn`, `info`, `debug`, …). Defaults to `info` in production, `debug` elsewhere. |
-| `NODE_SERVICE_NAME`        | tag on every log entry. Useful when several services ship logs to the same aggregator.                   |
-| `NODE_LOG_PERSONAL_FIELDS` | `hash` (default), `redact`, or `plain` — see [Personal data](#personal-data) below.                      |
-| `NODE_LOG_HASH_KEY`        | HMAC key for `hash` mode. Required in production; unset elsewhere uses a fixed dev key.                  |
+| Env var                    | Effect                                                                                                                                                                           |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_LOG_LEVEL`           | logger level (`error`, `warn`, `info`, `debug`, …). Defaults to `info` in production, `debug` elsewhere.                                                                         |
+| `NODE_SERVICE_NAME`        | tag on every log entry. Useful when several services ship logs to the same aggregator.                                                                                           |
+| `NODE_LOG_PERSONAL_FIELDS` | `hash` (default), `redact`, or `plain` — see [Personal data](#personal-data) below.                                                                                              |
+| `NODE_PSEUDONYM_KEY`       | Root secret for `hash` mode (and every other [pseudonymised identifier](./security.md#pseudonymised-identifiers)). Required in production; unset elsewhere uses a fixed dev key. |
 
 ## Redaction
 
@@ -223,11 +223,11 @@ why `db:bootstrap` syncs before the server starts.
 
 A second, separate list — `PERSONAL_FIELDS` (`email`, `ip`, `phone`, `street`, `zip`, `fullName`) — covers fields that are personal data without being credentials. Data minimisation applies to logs the same as it applies to collections, and these flow into Winston, and from there into [Loki](./loki.md), same as everything else.
 
-Kept apart from `SENSITIVE_FIELDS` on purpose: a credential is always replaced outright, never kept in any form. A personal field defaults to **hashed** instead (`NODE_LOG_PERSONAL_FIELDS=hash`, HMAC-SHA256 under `NODE_LOG_HASH_KEY`, truncated to 12 hex characters, `hmac:`-prefixed — not `sha256:`, since the algorithm name alone can't tell a reader the digest is keyed) — the same input always produces the same digest, so a trace stays followable ("did this user's requests all fail the same way") without the log line being readable on its own. The hash is keyed rather than bare: an unkeyed `sha256(email)` or `sha256(ip)` is brute-forced from a breach list or the whole IPv4 space in seconds, which is GDPR pseudonymisation in name only. `redact` drops it entirely, like a credential; `plain` leaves it untouched, for local development where the log never leaves the machine.
+Kept apart from `SENSITIVE_FIELDS` on purpose: a credential is always replaced outright, never kept in any form. A personal field defaults to **hashed** instead (`NODE_LOG_PERSONAL_FIELDS=hash`, HMAC-SHA256 under the `log` subkey of `NODE_PSEUDONYM_KEY`, truncated to 12 hex characters, `hmac:`-prefixed — not `sha256:`, since the algorithm name alone can't tell a reader the digest is keyed) — the same input always produces the same digest, so a trace stays followable ("did this user's requests all fail the same way") without the log line being readable on its own. The hash is keyed rather than bare: an unkeyed `sha256(email)` or `sha256(ip)` is brute-forced from a breach list or the whole IPv4 space in seconds, which is GDPR pseudonymisation in name only. `redact` drops it entirely, like a credential; `plain` leaves it untouched, for local development where the log never leaves the machine.
 
 The private setting (`hash`) is the default deliberately: a boilerplate's default config is the one most deployments never revisit.
 
-**Rotating `NODE_LOG_HASH_KEY` breaks correlation across the change.** The same user's digest before and after a rotation is two different values — by design, since the whole point of keying the hash is that nobody without the key can link one either. Rotate it only alongside a reason to, and expect an operator tracing an incident spanning the rotation to see it as two different "users".
+**Rotating `NODE_PSEUDONYM_KEY` breaks correlation across the change.** The same user's digest before and after a rotation is two different values — by design, since the whole point of keying the hash is that nobody without the key can link one either. Rotate it only alongside a reason to, and expect an operator tracing an incident spanning the rotation to see it as two different "users".
 
 ## Works with
 

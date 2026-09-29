@@ -6,6 +6,7 @@
  * 409/422/replay outcomes — is covered in `tests/contract/idempotency.test.ts`.
  */
 
+import { createHash } from 'node:crypto';
 import { asStub } from '@tests/stub';
 import { makeResponseStub } from '@tests/express';
 import type { Request } from 'express';
@@ -113,6 +114,20 @@ describe('idempotencyKey', () => {
 
         const [[first], [second]] = create.mock.calls as [{ fingerprint: string }][];
         expect(first.fingerprint).not.toBe(second.fingerprint);
+    });
+
+    it('never stores a bare hash of the body: a password in it is not guessable from a dump', async () => {
+        const body = { email: 'a@b.c', password: 'hunter2hunter2' };
+        const bare = createHash('sha256')
+            .update(
+                `POST /signup\n${JSON.stringify({ email: body.email, password: body.password })}`
+            )
+            .digest('hex');
+        idempotencyKey(makeRequest('key-1', body, '/signup'), makeResponseStub(), jest.fn());
+        await flush();
+        const [[claim]] = create.mock.calls as [{ fingerprint: string }][];
+        expect(claim.fingerprint).not.toBe(bare);
+        expect(claim.fingerprint).toMatch(/^[\da-f]{64}$/);
     });
 
     it('fingerprints two resources behind one route template differently', async () => {

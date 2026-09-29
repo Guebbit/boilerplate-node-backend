@@ -9,6 +9,7 @@
  * route, not a shared budget — and is pinned in that module's own
  * `tests/unit/metrics-scraper.test.ts`.
  */
+import { createHash } from 'node:crypto';
 import type { Request } from 'express';
 import { asStub } from '@tests/stub';
 import {
@@ -75,6 +76,14 @@ describe("the global budget's skip", () => {
 });
 
 describe('identityOf', () => {
+    it('never keys on a bare sha256 of the email — a Redis dump must not be dictionary-attackable', () => {
+        const bare = createHash('sha256').update('ada@example.com').digest('hex');
+        const key = identityOf(requestWith({ email: 'ada@example.com' }, '1.2.3.4'));
+
+        expect(key).toMatch(/^[\da-f]{64}$/);
+        expect(key).not.toBe(bare);
+    });
+
     it('buckets one account the same however its email is cased', () => {
         expect(identityOf(requestWith({ email: 'Ada@Example.com' }, '1.2.3.4'))).toBe(
             identityOf(requestWith({ email: 'ada@example.com ' }, '5.6.7.8'))

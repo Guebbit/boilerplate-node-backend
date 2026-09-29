@@ -43,7 +43,7 @@ const CREDENTIAL_IDENTITY_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_AUTH_RATE_LIMIT_MAX',
     defaultMax: 10,
     windowMs: 'shared',
-    keyedBy: 'the named account, hashed',
+    keyedBy: KEYED_BY_SUBMITTED_EMAIL,
     bounds:
         'Failed attempts against ONE account — defeats a botnet spreading guesses. The smallest ' +
         'of the three, since guessing at one account is the attack and someone signing in on ' +
