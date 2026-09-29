@@ -221,9 +221,13 @@ const setProjection = (
 ): Promise<boolean> => {
     const $set: Record<string, string> = {};
     const $unset: Record<string, 1> = {};
-    for (const [key, value] of Object.entries(fields))
+    // `in`, not a truthiness check: a key present as `undefined` means clear, absent means leave.
+    for (const key of ['paymentStatus', 'returnStatus'] as const) {
+        if (!(key in fields)) continue;
+        const value = fields[key];
         if (value === undefined) $unset[key] = 1;
         else $set[key] = value;
+    }
 
     return orderModel
         .updateOne(

@@ -137,25 +137,25 @@ describe('a withdrawal before dispatch', () => {
     });
 });
 
-describe('goods excluded from the right of withdrawal (Art. 16)', () => {
-    /** A delivered order of one withdrawable shirt and one excluded engraved mug. */
-    const orderWithExcluded = async () => {
-        customers += 1;
-        const user = await createUser({ email: `customer-${customers}@example.com` });
-        const shirt = await createProduct({ title: 'Shirt', price: 30 });
-        const engraved = await createProduct({
-            title: 'Engraved mug',
-            price: 10,
-            noWithdrawal: true
-        });
-        const order = await createOrder(user, [toOrderItem(shirt, 1), toOrderItem(engraved, 1)], {
-            status: OrderStatus.delivered
-        });
-        const orderId = String(order._id);
-        await setWithdrawUntil(orderId, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
-        return { user, shirt, engraved, orderId };
-    };
+/** A delivered order of one withdrawable shirt and one excluded engraved mug. */
+const orderWithExcluded = async () => {
+    customers += 1;
+    const user = await createUser({ email: `customer-${customers}@example.com` });
+    const shirt = await createProduct({ title: 'Shirt', price: 30 });
+    const engraved = await createProduct({
+        title: 'Engraved mug',
+        price: 10,
+        noWithdrawal: true
+    });
+    const order = await createOrder(user, [toOrderItem(shirt, 1), toOrderItem(engraved, 1)], {
+        status: OrderStatus.delivered
+    });
+    const orderId = String(order._id);
+    await setWithdrawUntil(orderId, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    return { user, shirt, engraved, orderId };
+};
 
+describe('goods excluded from the right of withdrawal (Art. 16)', () => {
     it('leaves the excluded line out of a withdrawal that names no lines', async () => {
         const { user, shirt, orderId } = await orderWithExcluded();
 
@@ -205,7 +205,8 @@ describe('goods excluded from the right of withdrawal (Art. 16)', () => {
         );
 
         expect(outcome.kind === 'refused' && outcome.reject.status).toBe(422);
-        expect((await readOrder(String(order._id)))?.status).toBe(OrderStatus.paid);
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.paid);
     });
 });
 

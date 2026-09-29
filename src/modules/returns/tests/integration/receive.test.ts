@@ -111,23 +111,29 @@ const paymentOf = async (orderId: string) => {
     return result.data;
 };
 
-describe('the statuses the order shows beside its own', () => {
-    /** The order as the wire serves it — the projections resolved. */
-    const wireOrder = async (orderId: string) => (await readOrder(orderId))?.toJSON();
+/** The order as the wire serves it — the projections resolved, or a loud failure. */
+const wireOrder = (orderId: string) =>
+    readOrder(orderId).then((order) => {
+        if (!order) throw new Error('no order');
+        return order.toJSON();
+    });
 
+describe('the statuses the order shows beside its own', () => {
     it('follows the return from requested through approved to returned', async () => {
         const fixture = await paidAndDelivered();
-        expect((await wireOrder(fixture.orderId))?.returnStatus).toBe('none');
-        expect((await wireOrder(fixture.orderId))?.paymentStatus).toBe('paid');
-        expect((await wireOrder(fixture.orderId))?.fulfillmentStatus).toBe('fulfilled');
+        const before = await wireOrder(fixture.orderId);
+        expect(before.returnStatus).toBe('none');
+        expect(before.paymentStatus).toBe('paid');
+        expect(before.fulfillmentStatus).toBe('fulfilled');
 
         const id = await approvedReturn(fixture, 'defective');
-        expect((await wireOrder(fixture.orderId))?.returnStatus).toBe('in_progress');
+        const approved = await wireOrder(fixture.orderId);
+        expect(approved.returnStatus).toBe('in_progress');
 
         await receiveReturn(id, {}, testCallerContext);
         const after = await wireOrder(fixture.orderId);
-        expect(after?.returnStatus).toBe('returned');
-        expect(after?.paymentStatus).toBe('refunded');
+        expect(after.returnStatus).toBe('returned');
+        expect(after.paymentStatus).toBe('refunded');
     });
 
     it('reads partially returned and partially refunded after taking back one line', async () => {
@@ -138,10 +144,13 @@ describe('the statuses the order shows beside its own', () => {
 
         await receiveReturn(id, {}, testCallerContext);
 
-        await waitFor(
-            async () => (await wireOrder(fixture.orderId))?.paymentStatus === 'partially_refunded'
+        await waitFor(() =>
+            wireOrder(fixture.orderId).then(
+                ({ paymentStatus }) => paymentStatus === 'partially_refunded'
+            )
         );
-        expect((await wireOrder(fixture.orderId))?.returnStatus).toBe('partially_returned');
+        const after = await wireOrder(fixture.orderId);
+        expect(after.returnStatus).toBe('partially_returned');
     });
 });
 

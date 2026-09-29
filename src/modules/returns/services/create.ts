@@ -255,7 +255,9 @@ export const createReturn = (
         // Art. 16: goods the product marks as excluded cannot be withdrawn from. A cancel before
         // dispatch takes the whole order, so one such line keeps the whole withdrawal out.
         const excluded = new Set(
-            order.items.filter(isExcludedFromWithdrawal).map((item) => String(item.product._id))
+            order.items
+                .filter((item) => isExcludedFromWithdrawal(item))
+                .map((item) => String(item.product._id))
         );
         const beforeDispatch = isBeforeDispatch(order.status);
         if (input.reason === 'withdrawal' && beforeDispatch)
