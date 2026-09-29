@@ -948,7 +948,7 @@ describe('orderConfirm', () => {
             zip: '41121',
             country: 'IT'
         });
-        const addressId = added.success ? added.data.addresses[0]?.id : undefined;
+        const addressId = added.success ? added.data.id : undefined;
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 

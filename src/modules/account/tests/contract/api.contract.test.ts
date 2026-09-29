@@ -1022,29 +1022,32 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(HOME);
-        expect(added.status).toBe(200);
-        expect(added.body.data.addresses[0].default).toBe(true);
+        expect(added.status).toBe(201);
+        expect(added.headers.location).toBe(`/account/addresses/${String(added.body.data.id)}`);
+        expect(added.body.data.default).toBe(true);
 
         const second = await api()
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send({ ...HOME, label: 'office', street: 'Via Milano 2', default: true });
-        expect(second.status).toBe(200);
-        const defaults = second.body.data.addresses.filter(
-            ({ default: d }: { default: boolean }) => d
-        );
-        expect(defaults.map(({ label }: { label: string }) => label)).toEqual(['office']);
+        expect(second.status).toBe(201);
+        expect(second.body.data).toMatchObject({ label: 'office', default: true });
 
         const listed = await api().get('/account/addresses').set('Authorization', bearer);
         expect(listed.status).toBe(200);
         expect(listed.body.data.addresses).toHaveLength(2);
+        const defaults = listed.body.data.addresses.filter(
+            ({ default: d }: { default: boolean }) => d
+        );
+        expect(defaults.map(({ label }: { label: string }) => label)).toEqual(['office']);
 
-        const officeId = defaults[0].id as string;
+        const officeId = second.body.data.id as string;
         const updated = await api()
             .patch(`/account/addresses/${officeId}`)
             .set('Authorization', bearer)
             .send({ city: 'Bologna' });
         expect(updated.status).toBe(200);
+        expect(updated.body.data).toMatchObject({ id: officeId, city: 'Bologna' });
 
         const removed = await api()
             .delete(`/account/addresses/${officeId}`)
@@ -1065,9 +1068,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send({ ...HOME, label: 'office', street: 'Via Milano 2' });
-        const officeId = second.body.data.addresses.find(
-            ({ label }: { label: string }) => label === 'office'
-        ).id as string;
+        const officeId = second.body.data.id as string;
         const send = () =>
             api().put(`/account/addresses/${officeId}/default`).set('Authorization', bearer);
 
@@ -1091,7 +1092,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(HOME);
-        const addressId = added.body.data.addresses[0].id as string;
+        const addressId = added.body.data.id as string;
 
         const response = await api()
             .patch(`/account/addresses/${addressId}`)
@@ -1155,7 +1156,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(HOME);
-        const addressId = added.body.data.addresses[0].id as string;
+        const addressId = added.body.data.id as string;
 
         const response = await api()
             .put(`/account/addresses/${addressId}`)
@@ -1169,9 +1170,8 @@ describe('the address book: /account/addresses', () => {
             });
 
         expect(response.status).toBe(200);
-        const replaced = response.body.data.addresses.find(
-            (a: { id: string }) => a.id === addressId
-        );
+        const replaced = response.body.data as { id: string; city: string; label?: string };
+        expect(replaced.id).toBe(addressId);
         expect(replaced.city).toBe('Torino');
         // Omitted on a PUT — RFC 9110 clears it, not "leaves it alone".
         expect(replaced.label).toBeUndefined();
@@ -1183,7 +1183,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(HOME);
-        const addressId = added.body.data.addresses[0].id as string;
+        const addressId = added.body.data.id as string;
 
         const response = await api()
             .put(`/account/addresses/${addressId}`)
@@ -1199,7 +1199,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(HOME);
-        const addressId = added.body.data.addresses[0].id as string;
+        const addressId = added.body.data.id as string;
 
         const response = await api()
             .patch(`/account/addresses/${addressId}`)
@@ -1207,9 +1207,7 @@ describe('the address book: /account/addresses', () => {
             .send({ label: null });
 
         expect(response.status).toBe(200);
-        const patched = response.body.data.addresses.find(
-            (a: { id: string }) => a.id === addressId
-        );
+        const patched = response.body.data as { label?: string; city: string };
         expect(patched.label).toBeUndefined();
         expect(patched.city).toBe(HOME.city);
     });
@@ -1220,7 +1218,7 @@ describe('the address book: /account/addresses', () => {
             .post('/account/addresses')
             .set('Authorization', bearer)
             .send(HOME);
-        const addressId = added.body.data.addresses[0].id as string;
+        const addressId = added.body.data.id as string;
 
         const response = await api()
             .patch(`/account/addresses/${addressId}`)

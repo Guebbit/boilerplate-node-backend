@@ -14,7 +14,7 @@ export interface AddressesView {
 }
 
 /** One stored entry, mapped to the contract's `Address` — `_id` becomes `id`, optionals omitted rather than `undefined`. */
-const presentAddress = (item: AddressItem): Address => ({
+export const presentAddress = (item: AddressItem): Address => ({
     id: String(item._id),
     ...(item.label === undefined ? {} : { label: item.label }),
     fullName: item.fullName,

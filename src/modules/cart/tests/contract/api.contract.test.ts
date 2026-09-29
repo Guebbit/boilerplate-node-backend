@@ -413,7 +413,7 @@ describe('POST /cart/checkout', () => {
             zip: '41121',
             country: 'IT'
         });
-        const addressId = address.body.data.addresses[0].id as string;
+        const addressId = address.body.data.id as string;
 
         await api()
             .put('/cart/shipping-method')
@@ -439,7 +439,7 @@ describe('POST /cart/checkout', () => {
             zip: 'SW1A 1AA',
             country: 'GB'
         });
-        const addressId = address.body.data.addresses[0].id as string;
+        const addressId = address.body.data.id as string;
 
         await api()
             .put('/cart/shipping-method')

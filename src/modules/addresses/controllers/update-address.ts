@@ -14,7 +14,7 @@ import { addressUpdate } from '../service';
 
 /**
  * `PUT` and `PATCH /account/addresses/:addressId` — one handler pair over `addressUpdate`, which
- * answers the caller's whole address book.
+ * answers the entry it wrote.
  */
 export const { replace: replaceAddress, update: updateAddress } = createUpdateController({
     entity: 'address',
