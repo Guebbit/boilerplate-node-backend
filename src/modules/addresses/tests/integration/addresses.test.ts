@@ -59,10 +59,40 @@ describe('the one-default invariant', () => {
 
         const view = await addressService.addressesGet(user.id);
         const office = view.addresses.find(({ label }) => label === 'office');
-        await addressService.addressUpdate(user.id, office!.id, { default: true });
+        const answer = await addressService.addressSetDefault(user.id, office!.id);
 
         const after = await defaults(user.id);
         expect(after.map(({ label }) => label)).toEqual(['office']);
+        expect(answer.data).toMatchObject({ label: 'office', default: true });
+    });
+
+    it('setting the default twice is the same state as once', async () => {
+        const user = await createUser();
+        await addressService.addressAdd(user.id, HOME);
+        await addressService.addressAdd(user.id, OFFICE);
+        const view = await addressService.addressesGet(user.id);
+        const office = view.addresses.find(({ label }) => label === 'office');
+
+        await addressService.addressSetDefault(user.id, office!.id);
+        const again = await addressService.addressSetDefault(user.id, office!.id);
+
+        expect(again.success).toBe(true);
+        const holders = await defaults(user.id);
+        expect(holders.map(({ label }) => label)).toEqual(['office']);
+    });
+
+    it("answers 404 for an entry that is not the caller's", async () => {
+        const owner = await createUser({ email: 'owner2@example.com', username: 'ownerb' });
+        const stranger = await createUser({
+            email: 'stranger2@example.com',
+            username: 'strangerb'
+        });
+        await addressService.addressAdd(owner.id, HOME);
+        const view = await addressService.addressesGet(owner.id);
+
+        const answer = await addressService.addressSetDefault(stranger.id, view.addresses[0].id);
+
+        expect(answer.status).toBe(404);
     });
 
     it('adding with `default: true` demotes the holder in the same write', async () => {
@@ -75,15 +105,12 @@ describe('the one-default invariant', () => {
         expect(holders.map(({ label }) => label)).toEqual(['office']);
     });
 
-    it('`default: false` on an update leaves the assignment alone', async () => {
+    it('an ordinary edit leaves the assignment alone', async () => {
         const user = await createUser();
         await addressService.addressAdd(user.id, HOME);
         const view = await addressService.addressesGet(user.id);
 
-        await addressService.addressUpdate(user.id, view.addresses[0].id, {
-            default: false,
-            city: 'Bologna'
-        });
+        await addressService.addressUpdate(user.id, view.addresses[0].id, { city: 'Bologna' });
 
         expect(await defaults(user.id)).toHaveLength(1);
     });

@@ -1746,6 +1746,8 @@ paths:
         $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses'
     /account/addresses/{addressId}:
         $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses~1{addressId}'
+    /account/addresses/{addressId}/default:
+        $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses~1{addressId}~1default'
     /account/verify-request:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-request'
     /account/verify-confirm:

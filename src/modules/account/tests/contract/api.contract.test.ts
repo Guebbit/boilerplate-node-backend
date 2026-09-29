@@ -154,16 +154,28 @@ describe('PUT /account', () => {
     // A PUT body IS the new resource (RFC 9110 §9.3.4) — `email`/`username` are
     // the Replace schema's `required` set, and an omitted optional field (`locale`, `phone`, …)
     // is cleared rather than left alone.
-    it('replaces the profile, requiring email and username', async () => {
+    it('replaces the profile, requiring email, username and analyticsConsent', async () => {
         const { user, bearer } = await authenticateAs('user');
 
         const response = await api()
             .put('/account')
             .set('Authorization', bearer)
-            .send({ email: user.email, username: 'replaced-self' });
+            .send({ email: user.email, username: 'replaced-self', analyticsConsent: false });
 
         expect(response.status).toBe(200);
         expect(response.body.data.username).toBe('replaced-self');
+    });
+
+    // Consent has no cleared state, so a PUT that forgets it is refused, never read as "no".
+    it('refuses a body missing analyticsConsent, leaving the stored consent alone', async () => {
+        const { user, bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: user.email, username: user.username });
+
+        expect(response.status).toBe(422);
     });
 
     it('refuses a body missing the required username', async () => {
@@ -214,10 +226,11 @@ describe("PUT /account's step-up depends on whether the email actually changes (
         const { user, jwtCookie } = await loginRemembered();
         const bearer = await staleButRefreshedBearer(jwtCookie);
 
-        const response = await api()
-            .put('/account')
-            .set('Authorization', bearer)
-            .send({ email: user.email.toUpperCase(), username: user.username });
+        const response = await api().put('/account').set('Authorization', bearer).send({
+            email: user.email.toUpperCase(),
+            username: user.username,
+            analyticsConsent: false
+        });
 
         expect(response.status).toBe(200);
     });
@@ -227,10 +240,11 @@ describe("PUT /account's step-up depends on whether the email actually changes (
         const { user, jwtCookie } = await loginRemembered();
         const bearer = await staleButRefreshedBearer(jwtCookie);
 
-        const response = await api()
-            .put('/account')
-            .set('Authorization', bearer)
-            .send({ email: 'brand-new@example.com', username: user.username });
+        const response = await api().put('/account').set('Authorization', bearer).send({
+            email: 'brand-new@example.com',
+            username: user.username,
+            analyticsConsent: false
+        });
 
         expect(response.status).toBe(401);
     });
@@ -1040,6 +1054,61 @@ describe('the address book: /account/addresses', () => {
         expect(
             removed.body.data.addresses.map(({ default: d }: { default: boolean }) => d)
         ).toEqual([true]);
+    });
+
+    // The default is the book's pointer (WM-D4): an idempotent action of its own, not a field of
+    // one address, so it leaves the PUT and PATCH bodies and answers the address itself.
+    it('moves the default with PUT .../default, and repeating it changes nothing', async () => {
+        const { bearer } = await authenticateAs('user');
+        await api().post('/account/addresses').set('Authorization', bearer).send(HOME);
+        const second = await api()
+            .post('/account/addresses')
+            .set('Authorization', bearer)
+            .send({ ...HOME, label: 'office', street: 'Via Milano 2' });
+        const officeId = second.body.data.addresses.find(
+            ({ label }: { label: string }) => label === 'office'
+        ).id as string;
+        const send = () =>
+            api().put(`/account/addresses/${officeId}/default`).set('Authorization', bearer);
+
+        const first = await send();
+        const again = await send();
+
+        expect(first.status).toBe(200);
+        expect(first.body.data).toMatchObject({ id: officeId, default: true });
+        expect(again.body.data).toEqual(first.body.data);
+        const listed = await api().get('/account/addresses').set('Authorization', bearer);
+        expect(
+            listed.body.data.addresses
+                .filter(({ default: d }: { default: boolean }) => d)
+                .map(({ label }: { label: string }) => label)
+        ).toEqual(['office']);
+    });
+
+    it('refuses `default` in a PUT or PATCH body — it is no longer a field of one address', async () => {
+        const { bearer } = await authenticateAs('user');
+        const added = await api()
+            .post('/account/addresses')
+            .set('Authorization', bearer)
+            .send(HOME);
+        const addressId = added.body.data.addresses[0].id as string;
+
+        const response = await api()
+            .patch(`/account/addresses/${addressId}`)
+            .set('Authorization', bearer)
+            .send({ default: true });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('404s the default action for an entry the caller does not hold', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .put(`/account/addresses/${MISSING_ID}/default`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
     });
 
     it('matches the error contract for an invalid body', async () => {

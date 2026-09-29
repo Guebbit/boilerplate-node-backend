@@ -50,6 +50,7 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
         addressId: string,
         changes: UpdateAddressRequest
     ) => Promise<AddressBookDocument | null>;
+    setDefault: (userId: string, addressId: string) => Promise<AddressBookDocument | null>;
     removeEntry: (userId: string, addressId: string) => Promise<AddressBookDocument | null>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
 } = {
@@ -105,9 +106,8 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
 
     /**
      * Edit one entry of the caller's own book. Resolves `null` when the book or entry is absent,
-     * so the controller answers the same 404 an invented id gets. `default: true` claims the
-     * slot; `false`/absent leaves the assignment alone (demoting without a successor would leave
-     * the book with none).
+     * so the controller answers the same 404 an invented id gets. The default assignment is not
+     * an edit of one entry — it is the book's pointer, moved by {@link setDefault}.
      */
     updateEntry: async (userId: string, addressId: string, changes: UpdateAddressRequest) => {
         const book = await addressBookModel.findOne({ userId: toObjectId(userId) }).exec();
@@ -125,10 +125,23 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
         if (changes.country !== undefined) entry.country = encryptPii(changes.country);
         if (changes.phone !== undefined)
             entry.phone = changes.phone === null ? undefined : encryptPii(changes.phone);
-        if (changes.default === true) {
-            for (const item of book.items) item.default = false;
-            entry.default = true;
-        }
+
+        return book.save().then(decryptBook);
+    },
+
+    /**
+     * Move the book's default pointer to one entry, demoting the holder in the same write.
+     * Idempotent: the entry that already holds it is not saved again. Resolves `null` when the
+     * book or entry is absent, the same 404 an invented id gets.
+     */
+    setDefault: async (userId: string, addressId: string) => {
+        const book = await addressBookModel.findOne({ userId: toObjectId(userId) }).exec();
+        const entry = book?.items.find((item) => String(item._id) === addressId);
+        if (!book || !entry) return null;
+        if (entry.default) return decryptBook(book);
+
+        for (const item of book.items) item.default = false;
+        entry.default = true;
 
         return book.save().then(decryptBook);
     },

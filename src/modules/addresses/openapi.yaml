@@ -49,7 +49,7 @@ paths:
         put:
             tags: [Account]
             summary: Replace an address
-            description: Replaces every writable field of one entry of the caller's own book (RFC 9110 §9.3.4, an omitted optional field is cleared). `default true` claims the default slot and demotes the previous holder; `default false` and an absent `default` both leave the assignment alone — demoting without naming a successor would leave the book with none.
+            description: Replaces every writable field of one entry of the caller's own book (RFC 9110 §9.3.4, an omitted optional field is cleared). The default assignment is not part of the address — it is the book's pointer, moved by `PUT /account/addresses/{addressId}/default`, so `default` is not accepted here.
             operationId: replaceAddress
             security:
                 - bearerAuth: []
@@ -82,7 +82,7 @@ paths:
         patch:
             tags: [Account]
             summary: Update an address
-            description: Merges the given fields into one entry of the caller's own book (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). `default true` claims the default slot and demotes the previous holder; `default false` and an absent `default` both leave the assignment alone — demoting without naming a successor would leave the book with none.
+            description: Merges the given fields into one entry of the caller's own book (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). The default assignment is not part of the address — it is the book's pointer, moved by `PUT /account/addresses/{addressId}/default`, so `default` is not accepted here.
             operationId: updateAddress
             security:
                 - bearerAuth: []
@@ -137,6 +137,35 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/AddressesEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/addresses/{addressId}/default:
+        put:
+            tags: [Account]
+            summary: Make an address the default
+            description: Makes one entry of the caller's own book the default — the one checkout ships to when no `addressId` is named — and demotes the previous holder in the same write. The URI is the whole statement, so there is no body and repeating it changes nothing (RFC 9110 §9.3.4). Answers the entry, now `default true`; the demoted entry is another row, so a client showing the book refetches it. Shopify's `PUT /customers/{id}/addresses/{address_id}/default` is the same shape.
+            operationId: setDefaultAddress
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: addressId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Address identifier from `GET /account/addresses`
+            responses:
+                '200':
+                    description: The address, now the default
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Well-formed id that names none of the CALLER's addresses — someone else's
+                # entry answers the same 404 as an invented one.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -198,10 +227,9 @@ components:
                 phone:
                     type: string
                     minLength: 1
-                # On create: `true` claims the default slot, absent means "first entry becomes
-                # default, later ones do not". On update: `true` claims the slot, `false` and
-                # absent both leave the assignment alone — demoting the default without naming
-                # a successor would leave the book with none.
+                # `true` claims the default slot, absent means "first entry becomes default, later
+                # ones do not". Only a create names it — afterwards the default is the book's
+                # pointer, moved by `PUT /account/addresses/{addressId}/default`.
                 default:
                     type: boolean
 
@@ -236,10 +264,6 @@ components:
                     type: string
                     minLength: 1
                     nullable: true
-                # Absent and `false` are both "no promotion asked" — see this operation's own
-                # description.
-                default:
-                    type: boolean
 
         # PUT /account/addresses/{addressId} — RFC 9110 §9.3.4: the body IS the new resource, so
         # every writable field this resource has must be nameable and the identity fields are
@@ -271,9 +295,6 @@ components:
                     type: string
                     minLength: 1
                     nullable: true
-                # Not nullable, so a PUT that omits it leaves the default assignment alone.
-                default:
-                    type: boolean
 
         AddressesResponse:
             type: object
@@ -298,3 +319,17 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/AddressesResponse'
+
+        AddressEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Address'

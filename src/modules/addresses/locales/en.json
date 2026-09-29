@@ -2,6 +2,7 @@
     "addresses": {
         "added": "Address saved.",
         "updated": "Address updated.",
+        "default-set": "Default address updated.",
         "removed": "Address removed.",
         "not-found": "The requested address was not found"
     }

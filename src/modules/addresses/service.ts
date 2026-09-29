@@ -13,10 +13,10 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import type { AddressInput, UpdateAddressRequest } from '@types';
+import type { Address, AddressInput, UpdateAddressRequest } from '@types';
 import { addressBookRepository } from './repository';
 import type { AddressItem } from './model';
-import { presentAddresses, type AddressesView } from './presenter';
+import { presentAddressOf, presentAddresses, type AddressesView } from './presenter';
 
 /** Get the user's book. Absence and emptiness are the same state — an empty view, never 404. */
 export const addressesGet = (userId: string): Promise<AddressesView> =>
@@ -40,6 +40,20 @@ export const addressUpdate = (
     addressBookRepository.updateEntry(userId, addressId, changes).then((book) => {
         if (!book) return generateReject(404, [t('addresses.not-found')]);
         return generateSuccess(presentAddresses(book), 200, t('addresses.updated'));
+    });
+
+/**
+ * Make one entry the book's default, demoting the holder. Answers the entry, now `default: true`;
+ * the demoted one is a different row, so a client that shows the book refetches it.
+ */
+export const addressSetDefault = (
+    userId: string,
+    addressId: string
+): Promise<ResponseSuccess<Address> | ResponseReject> =>
+    addressBookRepository.setDefault(userId, addressId).then((book) => {
+        const address = presentAddressOf(book, addressId);
+        if (!address) return generateReject(404, [t('addresses.not-found')]);
+        return generateSuccess(address, 200, t('addresses.default-set'));
     });
 
 /** Remove one entry; the repository keeps the one-default invariant. */
