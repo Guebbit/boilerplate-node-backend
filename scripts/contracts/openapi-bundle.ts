@@ -52,6 +52,7 @@ const MODULE_ORDER = [
     'payments',
     'invoicing',
     'delivery',
+    'returns',
     'inventory',
     'webhooks',
     'api-keys'

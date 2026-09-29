@@ -1,6 +1,6 @@
 /**
  * @module
- * `GET /orders/{id}/invoice` and `/credit-note` over real HTTP — the gate B16 asked for: 404 for
+ * `GET /orders/{id}/invoice` and `/credit-notes` over real HTTP — the gate B16 asked for: 404 for
  * an order that has not been invoiced yet, 200 once it has, and the same ownership scope every
  * other order read already enforces.
  */
@@ -135,14 +135,42 @@ describe('GET /orders/{id} — the actions.invoice flag', () => {
     });
 });
 
-describe('GET /orders/{id}/credit-note', () => {
-    it('refuses an order with no credit note with 404 ORDER_CREDIT_NOTE_NOT_ISSUED', async () => {
+describe('GET /orders/{id}/credit-notes', () => {
+    it('lists nothing for an order never refunded', async () => {
         const { bearer, user } = await authenticateAs('user');
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
         const response = await api()
-            .get(`/orders/${String(order._id)}/credit-note`)
+            .get(`/orders/${String(order._id)}/credit-notes`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual([]);
+    });
+
+    it("refuses someone else's order with 404", async () => {
+        const { user } = await authenticateAs('user');
+        const { bearer: strangerBearer } = await authenticateAnotherUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+
+        const response = await api()
+            .get(`/orders/${String(order._id)}/credit-notes`)
+            .set('Authorization', strangerBearer);
+
+        expect(response.status).toBe(404);
+    });
+});
+
+describe('GET /orders/{id}/credit-notes/{creditNoteId}', () => {
+    it('refuses a credit note the order does not have with 404 ORDER_CREDIT_NOTE_NOT_ISSUED', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+
+        const response = await api()
+            .get(`/orders/${String(order._id)}/credit-notes/${'a'.repeat(24)}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);

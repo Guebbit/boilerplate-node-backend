@@ -10,7 +10,12 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
-import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
+import {
+    createOrder,
+    forceOrderStatus,
+    readOrder,
+    toOrderItem
+} from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
@@ -627,6 +632,35 @@ describe('cancelling a paid order restocks its units (B2)', () => {
         const second = await orderService.cancelById(String(order._id), auth(user));
         expect(second.success).toBe(false);
         expect(asReject(second).status).toBe(409);
+    });
+
+    it('rolls the status, the hold and the counters back together when the restock throws (D3)', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        await payFor(String(order._id), user);
+        const restock = inventoryService.restockForOrder;
+        // The real restock runs to completion, THEN throws — the worst case: counters already
+        // moved inside the transaction, so only a rollback puts them back.
+        jest.spyOn(inventoryService, 'restockForOrder').mockImplementationOnce(
+            async (orderId, session) => {
+                await restock(orderId, session);
+                throw new Error('connection reset');
+            }
+        );
+
+        await expect(orderService.cancelById(String(order._id), auth(user))).rejects.toThrow(
+            'connection reset'
+        );
+
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe('paid');
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+        const movements = await inventoryService.listMovements({ productId: String(product._id) });
+        expect(movements.items.filter((row) => row.reason === 'restock')).toHaveLength(0);
+
+        // Nothing was half-done, so the same cancel simply works when retried.
+        const retried = await orderService.cancelById(String(order._id), auth(user));
+        expect(retried.success).toBe(true);
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
     });
 });
 

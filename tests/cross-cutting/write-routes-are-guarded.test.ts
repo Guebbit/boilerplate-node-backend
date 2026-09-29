@@ -66,6 +66,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: 'the same read-as-POST, but the orders router blanket-authenticates every route'
     },
+    'returns POST /': {
+        requiresAuth: true,
+        reason: "opening a return on the caller's own order, the withdrawal button included — the service scopes it to the buyer, an operator cannot exercise a consumer's right"
+    },
     'orders POST /:id/cancel': {
         requiresAuth: true,
         reason: 'the one order write a customer may make — the service scopes it to their own order'

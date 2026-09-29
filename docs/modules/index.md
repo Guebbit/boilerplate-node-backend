@@ -56,6 +56,7 @@ flowchart TD
     orders
     payments
     products
+    returns
     users
     webhooks
     wishlist
@@ -81,6 +82,10 @@ flowchart TD
     payments --> inventory
     payments --> orders
     payments --> users
+    returns --> delivery
+    returns --> inventory
+    returns --> orders
+    returns --> payments
     users --> access
     webhooks --> users
     wishlist --> cart
@@ -91,23 +96,24 @@ flowchart TD
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
-    class addresses,delivery,inventory,invoicing,payments,webhooks,wishlist supporting;
+    class addresses,delivery,inventory,invoicing,payments,returns,webhooks,wishlist supporting;
     class access,account,api_keys,audit_logs,observability,users generic;
     class antibot,feedback,locales isolated;
 ```
 
 |                 | Reaches                                                | Reached by                                          |
 | --------------- | ------------------------------------------------------ | --------------------------------------------------- |
+| `orders`        | inventory, products, users                             | cart, delivery, invoicing, payments, returns        |
 | `cart`          | addresses, delivery, orders, payments, products, users | wishlist                                            |
-| `orders`        | inventory, products, users                             | cart, delivery, invoicing, payments                 |
 | `users`         | access                                                 | account, api-keys, cart, orders, payments, webhooks |
-| `payments`      | inventory, orders, users                               | cart, invoicing                                     |
+| `payments`      | inventory, orders, users                               | cart, invoicing, returns                            |
+| `inventory`     | products                                               | orders, payments, returns                           |
 | `products`      | —                                                      | cart, inventory, orders, wishlist                   |
+| `returns`       | delivery, inventory, orders, payments                  | —                                                   |
 | `access`        | —                                                      | account, api-keys, users                            |
-| `inventory`     | products                                               | orders, payments                                    |
+| `delivery`      | orders                                                 | cart, returns                                       |
 | `account`       | access, users                                          | —                                                   |
 | `api-keys`      | access, users                                          | —                                                   |
-| `delivery`      | orders                                                 | cart                                                |
 | `invoicing`     | orders, payments                                       | —                                                   |
 | `wishlist`      | cart, products                                         | —                                                   |
 | `addresses`     | —                                                      | cart                                                |
@@ -210,7 +216,7 @@ is written down nowhere else in either repository.
 | --------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `audit-logs`    | `observability`            | This module owns the trail and its own `GET /audit`; `observability` mounts a second, platform-scoped read (`GET /observability/audit`) over the same collection, and the screen that renders either is the frontend's `observability` module. |
 | `addresses`     | `account`                  | The frontend keeps the address book inside `account` rather than its own module — see the pairing test's own reason for it.                                                                                                                    |
-| `invoicing`     | `orders`                   | No screen of its own — `GET /orders/{id}/invoice` and `/credit-note` are two buttons on the frontend's own order detail page.                                                                                                                  |
+| `invoicing`     | `orders`                   | No screen of its own — `GET /orders/{id}/invoice` and `/credit-notes` are two buttons on the frontend's own order detail page.                                                                                                                 |
 | everything else | the same name              | —                                                                                                                                                                                                                                              |
 
 And one frontend module answers to nothing here: `demo`, a client-side showcase of the shared UI

@@ -349,6 +349,7 @@ export const update = (
     // sparse index (`sku_1` on `productSchema`) is what turns a collision into a 409, not this.
     if (data.sku !== undefined) product.sku = clearedOrValue(data.sku);
     if (data.requiresShipping !== undefined) product.requiresShipping = data.requiresShipping;
+    if (data.noWithdrawal !== undefined) product.noWithdrawal = data.noWithdrawal;
 
     // If a new image was uploaded, update the url, thumbnail and pending key together — see
     // `applyImageWriteback`'s own docblock for the gate shared with `users`' own `update`.

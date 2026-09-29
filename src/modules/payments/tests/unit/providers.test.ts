@@ -114,7 +114,18 @@ describe('fakePaymentProvider.refund', () => {
     it('always succeeds — there is no outside ledger to disagree', async () => {
         await expect(
             fakePaymentProvider.refund('fake_pi_h', charge, { idempotencyKey: 'refund:payment-1' })
-        ).resolves.toBeUndefined();
+        ).resolves.toEqual({ refundRef: 're_fake_refund:payment-1' });
+    });
+
+    it('answers the same refund id for the same idempotency key', async () => {
+        const first = await fakePaymentProvider.refund('fake_pi_h', charge, {
+            idempotencyKey: 'k'
+        });
+        const second = await fakePaymentProvider.refund('fake_pi_h', charge, {
+            idempotencyKey: 'k'
+        });
+
+        expect(second).toEqual(first);
     });
 });
 

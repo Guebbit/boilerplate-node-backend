@@ -29,6 +29,13 @@ import {
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
 import { isPayable } from './domain/lifecycle';
+import {
+    fulfillmentStatusOf,
+    paymentStatusOf,
+    returnStatusOf,
+    type StampedPaymentStatus,
+    type StampedReturnStatus
+} from './domain/projections';
 import { orderCurrency } from './config';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
@@ -114,6 +121,9 @@ export interface OrderDocument
             | 'orderNumber'
             | 'currency'
             | 'transferInstructions'
+            | 'paymentStatus'
+            | 'fulfillmentStatus'
+            | 'returnStatus'
         >,
         Document {
     /**
@@ -165,6 +175,24 @@ export interface OrderDocument
      * Absent on an order that has never reached `paid`.
      */
     paidAt?: Date;
+    /**
+     * The last instant a withdrawal is valid, frozen when its clock starts: delivery for goods,
+     * `paidAt` for digital content (Art. 9(2)). Absent until then — the right already exists, the
+     * window has no end yet — and never recomputed, so a config change cannot move a promise
+     * already made. Internal: clients read it as `actions.withdrawUntil`.
+     */
+    withdrawUntil?: Date;
+    /**
+     * The refund state of the money, stamped by `payments` through `services/status.ts`'s
+     * `markPaymentStatus`. Absent until a refund exists — `paid`/`unpaid` are derived from `paidAt`
+     * on read, so nothing here can disagree with it. The wire's `paymentStatus` is derived from this.
+     */
+    paymentStatus?: StampedPaymentStatus;
+    /**
+     * Where any return stands, stamped by `returns` through `markReturnStatus`. Absent while none
+     * holds goods. The wire's `returnStatus` is derived from this.
+     */
+    returnStatus?: StampedReturnStatus;
     /**
      * What the cancel decided but has not yet seen through. Written in the same conditional write
      * that moves the status, so the intent and the decision cannot come apart; emptied once the
@@ -249,6 +277,8 @@ const orderLineProductSchema = new Schema(
         tags: { type: [String] },
         active: { type: Boolean },
         requiresShipping: { type: Boolean },
+        /** Art. 16 exclusion, frozen the same as every other line field — see `Product.noWithdrawal`. */
+        noWithdrawal: { type: Boolean },
         /** SH4, frozen the same as every other line field — see `Product.sku`. No uniqueness
          * constraint here: the constraint is on the CATALOGUE, and a frozen copy is history. */
         sku: { type: String },
@@ -377,6 +407,19 @@ export const orderSchema = new Schema<OrderDocument>(
          */
         paidAt: {
             type: Date
+        },
+        // Frozen once, when the withdrawal clock starts — see the interface field's own comment.
+        withdrawUntil: {
+            type: Date
+        },
+        // Stamped by the owning module, never by `orders` itself — see the interface fields.
+        paymentStatus: {
+            type: String,
+            enum: ['partially_refunded', 'refunded']
+        },
+        returnStatus: {
+            type: String,
+            enum: ['requested', 'in_progress', 'partially_returned', 'returned']
         },
         /*
          * ISO-4217, frozen from `shopCurrency()` at the same moment `orderNumber` is minted —
@@ -585,6 +628,24 @@ const applyTransferInstructions = (serialized: Record<string, unknown>) => {
 };
 
 /**
+ * The three statuses beside `status`, resolved from what is stored — and `paidAt` stripped, since
+ * this is its last reader. It is not in `omit` for that reason: `omit` runs before `after`, and the
+ * `paid`/`unpaid` half of `paymentStatus` is derived from it.
+ * @param serialized - the order as it is being serialized
+ */
+const applyOrderProjections = (serialized: Record<string, unknown>) => {
+    serialized.paymentStatus = paymentStatusOf(
+        serialized.paymentStatus as StampedPaymentStatus | undefined,
+        serialized.paidAt as Date | undefined
+    );
+    serialized.fulfillmentStatus = fulfillmentStatusOf(serialized.status as OrderStatus);
+    serialized.returnStatus = returnStatusOf(
+        serialized.returnStatus as StampedReturnStatus | undefined
+    );
+    delete serialized.paidAt;
+};
+
+/**
  * Normalizes a serialized order: the shared `_id` → `id` and `__v` removal, plus this
  * collection's own jobs — cleaning up the embedded items, deriving the totals, and computing
  * `transferInstructions`. Exported so aggregate results (which bypass `toJSON`) can be mapped
@@ -595,10 +656,11 @@ export const applyOrderTransform = applySerialization(orderSchema, {
     // neither part of the `Order` contract — same reasoning as `users`' `pendingImageKey`/
     // `inactivityWarnedAt`. `statusOverrides` is staff-only history (who overrode the status, and
     // why) — never the owning customer's to read off their own order. `paidAt` is internal
-    // bookkeeping too — see the schema field's own comment. `transferReference` is NOT
+    // bookkeeping too — see the schema field's own comment — and is stripped in
+    // `applyOrderProjections`, not here. `transferReference` is NOT
     // listed here: `omit` runs before `after` below, and `applyTransferInstructions` still needs
     // to read it — it strips the raw field itself, once it no longer does.
-    omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides', 'paidAt'],
+    omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides', 'withdrawUntil'],
     after: (serialized) => {
         applyOrderItems(serialized);
         // Resolved once, not read twice: an order predating `currency` falls back to the shop's
@@ -607,6 +669,7 @@ export const applyOrderTransform = applySerialization(orderSchema, {
         applyOrderTotals(serialized, currency);
         applyOrderTax(serialized, currency);
         applyTransferInstructions(serialized);
+        applyOrderProjections(serialized);
     }
 });
 

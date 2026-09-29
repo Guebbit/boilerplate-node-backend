@@ -6,7 +6,10 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { seedOrder, readOrder } from '@modules/orders/tests/factories';
+import { seedOrder, readOrder, createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
+import { withEnvironment } from '@tests/environment';
 import {
     markPaid,
     markProcessing,
@@ -15,6 +18,7 @@ import {
     markFulfilled
 } from '../../services/status';
 import { orderService } from '../../services';
+import { orderModel } from '../../model';
 import { ORDER_STATUS_CHANGED } from '../../events';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { OrderStatus } from '@types';
@@ -116,7 +120,7 @@ describe('markDelivered', () => {
         const events: unknown[] = [];
         onDomainEvent(ORDER_STATUS_CHANGED, (payload) => events.push(payload));
 
-        const updated = await markDelivered(String(order._id));
+        const updated = await markDelivered(String(order._id), new Date());
 
         expect(updated?.status).toBe(OrderStatus.delivered);
         expect(events).toEqual([
@@ -127,10 +131,30 @@ describe('markDelivered', () => {
     it('refuses from processing — a parcel must be shipped first', async () => {
         const order = await seedOrder(OrderStatus.processing);
 
-        const updated = await markDelivered(String(order._id));
+        const updated = await markDelivered(String(order._id), new Date());
 
         expect(updated).toBeNull();
     });
+
+    it('freezes the withdrawal deadline 14 days after the delivery it was told about', async () => {
+        const order = await seedOrder(OrderStatus.shipped);
+
+        const updated = await markDelivered(String(order._id), new Date('2026-03-01T10:00:00Z'));
+
+        expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-15T10:00:00.000Z');
+    });
+
+    it('honours a longer period a deployment offers', () =>
+        withEnvironment('NODE_WITHDRAWAL_PERIOD_DAYS', '30', async () => {
+            const order = await seedOrder(OrderStatus.shipped);
+
+            const updated = await markDelivered(
+                String(order._id),
+                new Date('2026-03-01T10:00:00Z')
+            );
+
+            expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-31T10:00:00.000Z');
+        }));
 });
 
 describe('markFulfilled', () => {
@@ -147,6 +171,22 @@ describe('markFulfilled', () => {
         ]);
     });
 
+    it("counts a digital order's withdrawal period from payment, not from fulfilment", async () => {
+        const user = await createUser();
+        const product = await createProduct({ requiresShipping: false });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.processing
+        });
+        await orderModel.updateOne(
+            { _id: order._id },
+            { paidAt: new Date('2026-03-01T10:00:00Z') }
+        );
+
+        const updated = await markFulfilled(String(order._id));
+
+        expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-15T10:00:00.000Z');
+    });
+
     it('refuses from paid — the digital-only door still needs `start` first', async () => {
         const order = await seedOrder(OrderStatus.paid);
 
@@ -161,7 +201,7 @@ describe('markFulfilled', () => {
         const order = await seedOrder(OrderStatus.processing);
 
         await markFulfilled(String(order._id));
-        const viaShippedDoor = await markDelivered(String(order._id));
+        const viaShippedDoor = await markDelivered(String(order._id), new Date());
 
         expect(viaShippedDoor).toBeNull();
     });

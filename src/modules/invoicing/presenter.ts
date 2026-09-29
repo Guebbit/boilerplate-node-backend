@@ -1,10 +1,11 @@
 /**
  * @module
  * The one place this module's frozen documents become JSON — `POST /account/export`'s own
- * section. Every other read this module serves answers a rendered PDF (`get-order-invoice.ts`,
- * `get-order-credit-note.ts`), never a JSON document, so this is the only wire shape it owns.
+ * section, and the credit-note list. Every other read this module serves answers a rendered PDF
+ * (`get-order-invoice.ts`, `get-order-credit-note.ts`), never the frozen document itself.
  */
 
+import type { CreditNoteSummary } from '@types';
 import type { InvoiceDocument, CreditNoteDocument } from './model';
 
 /** One issued document, in export-wire shape — never the full internal document. */
@@ -25,4 +26,14 @@ export const presentExportedDocument = (
     issuedAt: document.issuedAt,
     currency: document.currency,
     grandTotal: document.grandTotal
+});
+
+/** Formats a credit note as one row of the per-order list. */
+export const presentCreditNoteSummary = (creditNote: CreditNoteDocument): CreditNoteSummary => ({
+    id: String(creditNote._id),
+    number: creditNote.number,
+    issuedAt: creditNote.issuedAt.toISOString(),
+    currency: creditNote.currency,
+    grandTotal: creditNote.grandTotal,
+    refundId: creditNote.refundId
 });

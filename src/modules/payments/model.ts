@@ -13,6 +13,45 @@ import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { PaymentStatus, PaymentMethod } from '@types';
 
+/** Why money went back — the vocabulary `RefundReason` in the contract publishes. */
+export type RefundReason = 'cancellation' | 'goodwill' | 'return';
+
+/** Where one refund attempt stands. `failed` is retryable: the sweep tries the same key again. */
+export type RefundStatus = 'pending' | 'succeeded' | 'failed';
+
+/**
+ * One attempt to give money back — a record per attempt, the way Stripe keeps a `Refund` per
+ * request. The payment's own `status` says whether it is fully returned; these say how, when and
+ * how much each time.
+ */
+export interface RefundRecord {
+    _id: Types.ObjectId;
+    /** Decimal, in the payment's own currency — at most what was still refundable when it was opened. */
+    amount: number;
+    /** Copied from the payment at the time, so a record reads on its own. */
+    currency: string;
+    status: RefundStatus;
+    reason: RefundReason;
+    /**
+     * What makes a retry of THIS refund safe at the provider: the same key returns the same refund
+     * instead of returning the money twice. Never published.
+     */
+    idempotencyKey: string;
+    /**
+     * The return this refund pays for, when `reason` is `return` — how `returns` finds the return
+     * to close once the refund lands, even when it lands later (a sweep retried it). A plain id,
+     * not a reference: `payments` knows nothing of `returns`.
+     */
+    returnId?: string;
+    /** The provider's id for the refund, once it answered. Never published, like `providerRef`. */
+    providerRefundRef?: string;
+    /** What the provider last said when it refused. Never published: it is the provider's wording. */
+    lastError?: string;
+    /** When the money was confirmed back, or (for a hand-paid one) reported back. */
+    settledAt?: Date;
+    createdAt: Date;
+}
+
 /**
  * Payment Document interface.
  */
@@ -57,6 +96,14 @@ export interface PaymentDocument extends Document {
      */
     refundedByHand?: boolean;
     /**
+     * Everything asked back so far, pending and succeeded both — Stripe's `amount_refunded`. It
+     * counts a refund the moment it is opened, which is what stops two racing partial refunds
+     * from returning more than the customer paid.
+     */
+    amountRefunded: number;
+    /** One record per refund attempt, oldest first. */
+    refunds: RefundRecord[];
+    /**
      * Effects still owed for this payment's current `succeeded` write — hidden from the API, like
      * `providerRef`. Set in the SAME write that moves the payment to `succeeded`, so a crash
      * before the effect actually runs (today, only `commit`: taking the held stock) leaves a
@@ -74,6 +121,22 @@ export type PaymentEffect = 'commit';
 
 /** Payment Document model type. Queries live in `./repository`, rules in `./service`. */
 export type PaymentModel = Model<PaymentDocument>;
+
+/** One refund attempt, embedded. Addressed by its own `_id` — the settle and fail writes match on it. */
+const refundSchema = new Schema<RefundRecord>(
+    {
+        amount: { type: Number, required: true, min: 0 },
+        currency: { type: String, required: true },
+        status: { type: String, enum: ['pending', 'succeeded', 'failed'], default: 'pending' },
+        reason: { type: String, enum: ['cancellation', 'goodwill', 'return'], required: true },
+        idempotencyKey: { type: String, required: true },
+        returnId: { type: String },
+        providerRefundRef: { type: String },
+        lastError: { type: String },
+        settledAt: { type: Date }
+    },
+    { timestamps: { createdAt: true, updatedAt: false } }
+);
 
 /** Mongoose schema for persisted payment documents. */
 export const paymentSchema = new Schema<PaymentDocument>(
@@ -134,6 +197,16 @@ export const paymentSchema = new Schema<PaymentDocument>(
         refundedByHand: {
             type: Boolean
         },
+        amountRefunded: {
+            type: Number,
+            required: true,
+            default: 0,
+            min: 0
+        },
+        refunds: {
+            type: [refundSchema],
+            default: []
+        },
         pendingEffects: {
             type: [String],
             enum: ['commit']
@@ -152,6 +225,24 @@ paymentSchema.index(
     { name: 'payments_pendingEffects_updatedAt' }
 );
 
+/** The keys of an embedded refund that never reach the wire. */
+const REFUND_INTERNAL_KEYS = ['_id', 'providerRefundRef', 'idempotencyKey', 'lastError'] as const;
+
+/**
+ * A refund record as the contract publishes it: `_id` → `id`, and the provider-facing bookkeeping
+ * (its own refund id, the idempotency key, its error wording) left behind.
+ *
+ * @param refund - one embedded refund, as a plain object
+ * @returns the same record without the fields no client operation reads
+ */
+const wireRefund = (refund: Record<string, unknown>): Record<string, unknown> => {
+    const wire: Record<string, unknown> = { ...refund, id: String(refund._id ?? refund.id) };
+    for (const key of REFUND_INTERNAL_KEYS)
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- stripping caller-named keys from a plain record is the whole job
+        delete wire[key];
+    return wire;
+};
+
 /**
  * Normalizes a serialized payment: `_id` → `id`, drops `__v`, and strips `providerRef`. Owed to the
  * repository factory for its lean reads (see `normalize` in
@@ -163,7 +254,16 @@ paymentSchema.index(
  * fail the spec as well as publish it.
  */
 export const applyPaymentTransform = applySerialization(paymentSchema, {
-    omit: ['providerRef', 'pendingEffects']
+    omit: ['providerRef', 'pendingEffects'],
+    after: (serialized) => {
+        // The embedded refunds get the same treatment a top-level document does, by hand: the lean
+        // path never runs the subschema's own transform, and the `toJSON` path runs it on
+        // documents already turned to plain objects — one loop serves both.
+        if (Array.isArray(serialized.refunds))
+            serialized.refunds = serialized.refunds.map((refund: Record<string, unknown>) =>
+                wireRefund(refund)
+            );
+    }
 });
 
 /**

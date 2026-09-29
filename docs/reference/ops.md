@@ -183,11 +183,11 @@ this sweep re-announces for whatever is still owed past `NODE_ORDER_EFFECT_RETRY
 (default 5). Run it on the same schedule as the `reap:*` jobs; it is safe to repeat, since a second
 pass over a settled order refunds nothing.
 
-The stock half of a cancel is NOT covered here, and only partly heals on its own. A `held`
-reservation keeps its `expiresAt`, and `npm run sweep:reservations` (below) reclaims it. A PAID
-order's hold is `committed`, not `held`: `cancelById` restocks it directly instead of releasing it,
-and if that restock throws, nothing — not this sweep, not `sweep:reservations` — ever retries it.
-Those units are lost from sale for good, and `ORDER_CANCELLED` never fires for that cancel.
+The stock half of a cancel is not covered here, because it cannot half-happen: the status move,
+the hold's release and a paid order's restock are one `withTransaction`. A restock that throws
+rolls the status back with it — the order stays `paid`, the counters stay put, and the cancel can
+simply be retried. Only the catalogue's stock cache is refreshed after the commit, and the next
+stock transition on a product corrects it if that one write is lost.
 
 `npm run sweep:reservations` is what heals a `held` hold's own expiry: it expires every hold
 past its `expiresAt` and, through `orders`' own `RESERVATION_EXPIRED` listener, cancels the order

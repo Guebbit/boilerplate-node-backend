@@ -138,13 +138,16 @@ const ownerScope = (userId: string): Record<string, unknown> => ({
  *   status. Single-document atomicity is what makes them exactly as durable as the move that
  *   decided them; a second write could be the one that is lost. Only the cancel passes any —
  *   `delivery`'s shipped move has nothing that needs retrying.
+ * @param session - joins the write to the caller's transaction — a cancel moves the status, the
+ *   hold and the stock together or not at all
  */
 const updateStatusIfIn = (
     id: string,
     from: readonly string[],
     to: string,
     scope?: Record<string, unknown>,
-    effects?: readonly OrderPendingEffect[]
+    effects?: readonly OrderPendingEffect[],
+    session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
@@ -157,7 +160,7 @@ const updateStatusIfIn = (
                 status: { $in: [...from] }
             } as QueryFilter<OrderDocument>,
             { $set: { status: to, ...(effects?.length ? { pendingEffects: [...effects] } : {}) } },
-            { returnDocument: 'after' }
+            { returnDocument: 'after', session }
         )
         .exec();
 
@@ -182,6 +185,63 @@ const markPaid = (id: string, from: OrderStatus): Promise<OrderDocument | null> 
         .exec();
 
 /**
+ * Move an order to `delivered` and freeze its withdrawal deadline in the SAME write — the deadline
+ * is a fact about the moment of delivery, so it lands with it or not at all, like `paidAt` does
+ * with `paid`. Its own function rather than a call through {@link updateStatusIfIn}, whose `$set`
+ * has no slot for a stamp.
+ * @param id - the order that arrived
+ * @param from - the status this move must currently be in
+ * @param withdrawUntil - the last instant a withdrawal is valid
+ * @returns the order as it now stands, or `null` if it was not in `from`
+ */
+const markDelivered = (
+    id: string,
+    from: OrderStatus,
+    withdrawUntil: Date
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
+            { $set: { status: OrderStatus.delivered, withdrawUntil } },
+            { returnDocument: 'after' }
+        )
+        .exec();
+
+/**
+ * Write one of the projections another module owns (`paymentStatus`, `returnStatus`). Unconditional
+ * on purpose: a projection is a report of a fact the owner already decided, so a repeat writes the
+ * same value, and `undefined` clears it — "no return holds goods" is the absence of the field.
+ * @param id - the order
+ * @param fields - the projection(s) to set; a key set to `undefined` is unset
+ * @returns whether an order was found
+ */
+const setProjection = (
+    id: string,
+    fields: { paymentStatus?: string | undefined; returnStatus?: string | undefined }
+): Promise<boolean> => {
+    const $set: Record<string, string> = {};
+    const $unset: Record<string, 1> = {};
+    // `in`, not a truthiness check: a key present as `undefined` means clear, absent means leave.
+    for (const key of ['paymentStatus', 'returnStatus'] as const) {
+        if (!(key in fields)) continue;
+        const value = fields[key];
+        if (value === undefined) $unset[key] = 1;
+        else $set[key] = value;
+    }
+
+    return orderModel
+        .updateOne(
+            { _id: toObjectId(id) },
+            {
+                ...(Object.keys($set).length > 0 ? { $set } : {}),
+                ...(Object.keys($unset).length > 0 ? { $unset } : {})
+            }
+        )
+        .exec()
+        .then(({ matchedCount }) => matchedCount > 0);
+};
+
+/**
  * Move an order to `to` from any status in `from`, appending one override-history entry in the
  * SAME write — an override's history entry and the status move it describes must never come
  * apart, the same reasoning {@link updateStatusIfIn}'s `effects` parameter already follows for
@@ -191,18 +251,24 @@ const markPaid = (id: string, from: OrderStatus): Promise<OrderDocument | null> 
  * @param from - every status this override may legally have started from
  * @param to - the status being written
  * @param entry - the override-history entry to append
+ * @param withdrawUntil - the withdrawal deadline to freeze in the same write, for a move into
+ *   `delivered`; absent for every other destination
  * @returns the order as it now stands, or `null` if `id`'s current status was not in `from`
  */
 const applyStatusOverride = (
     id: string,
     from: readonly OrderStatus[],
     to: OrderStatus,
-    entry: OrderStatusOverride
+    entry: OrderStatusOverride,
+    withdrawUntil?: Date
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
             { _id: toObjectId(id), status: { $in: [...from] } } as QueryFilter<OrderDocument>,
-            { $set: { status: to }, $push: { statusOverrides: entry } },
+            {
+                $set: { status: to, ...(withdrawUntil ? { withdrawUntil } : {}) },
+                $push: { statusOverrides: entry }
+            },
             { returnDocument: 'after' }
         )
         .exec();
@@ -487,14 +553,25 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         from: readonly string[],
         to: string,
         scope?: Record<string, unknown>,
-        effects?: readonly OrderPendingEffect[]
+        effects?: readonly OrderPendingEffect[],
+        session?: ClientSession
     ) => Promise<OrderDocument | null>;
     markPaid: (id: string, from: OrderStatus) => Promise<OrderDocument | null>;
+    setProjection: (
+        id: string,
+        fields: { paymentStatus?: string | undefined; returnStatus?: string | undefined }
+    ) => Promise<boolean>;
+    markDelivered: (
+        id: string,
+        from: OrderStatus,
+        withdrawUntil: Date
+    ) => Promise<OrderDocument | null>;
     applyStatusOverride: (
         id: string,
         from: readonly OrderStatus[],
         to: OrderStatus,
-        entry: OrderStatusOverride
+        entry: OrderStatusOverride,
+        withdrawUntil?: Date
     ) => Promise<OrderDocument | null>;
     findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
     findPendingByProductId: (productId: string) => Promise<OrderDocument[]>;
@@ -517,6 +594,8 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     ownerScope,
     updateStatusIfIn,
     markPaid,
+    markDelivered,
+    setProjection,
     applyStatusOverride,
     findWithPendingEffects,
     findPendingByProductId,

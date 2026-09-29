@@ -63,8 +63,8 @@ export const stripContractPathCensus = (
 };
 
 /**
- * Edit `AccountExportResponse` in `shared/contracts/openapi.root.yaml`: drop the fields six shop
- * modules contribute (`orders`, `payments`, `shipments`, `cart`, `wishlist`, `invoicing`) from both
+ * Edit `AccountExportResponse` in `shared/contracts/openapi.root.yaml`: drop the fields seven shop
+ * modules contribute (`orders`, `payments`, `shipments`, `cart`, `wishlist`, `invoicing`, `returns`) from both
  * `required` and `properties` — `account`'s own export service already reads its section list off
  * `enabledModules` (`src/modules/account/services/personal-data-registry.ts`) and simply omits a
  * section no module registers, so only the CONTRACT is behind once those modules are gone.
@@ -83,7 +83,7 @@ export const stripAccountExportSchema = (repoRoot: string): RemovalNote => {
     };
 
     mustReplace(
-        '                    exportedAt,\n                    profile,\n                    roles,\n                    addresses,\n                    orders,\n                    payments,\n                    shipments,\n                    cart,\n                    wishlist,\n                    sessions,\n                    auditLog,\n                    apiKeys,\n                    invoicing\n                ]',
+        '                    exportedAt,\n                    profile,\n                    roles,\n                    addresses,\n                    orders,\n                    payments,\n                    shipments,\n                    cart,\n                    wishlist,\n                    sessions,\n                    auditLog,\n                    apiKeys,\n                    invoicing,\n                    returns\n                ]',
         '                    exportedAt,\n                    profile,\n                    roles,\n                    addresses,\n                    sessions,\n                    auditLog,\n                    apiKeys\n                ]'
     );
     mustReplace(
@@ -107,13 +107,13 @@ export const stripAccountExportSchema = (repoRoot: string): RemovalNote => {
         ''
     );
     mustReplace(
-        "                # Every invoice/credit note issued for one of this account's OWN orders — collected\n                # by `orderId`, since neither collection is itself keyed by `userId`. Empty arrays,\n                # never absent, for an account with no paid orders yet.\n                invoicing:\n                    type: object\n                    additionalProperties: false\n                    required: [invoices, creditNotes]\n                    properties:\n                        invoices:\n                            type: array\n                            items:\n                                $ref: '../../src/modules/invoicing/openapi.yaml#/components/schemas/ExportInvoiceDocument'\n                        creditNotes:\n                            type: array\n                            items:\n                                $ref: '../../src/modules/invoicing/openapi.yaml#/components/schemas/ExportInvoiceDocument'\n",
+        "                # Every invoice/credit note issued for one of this account's OWN orders — collected\n                # by `orderId`, since neither collection is itself keyed by `userId`. Empty arrays,\n                # never absent, for an account with no paid orders yet.\n                invoicing:\n                    type: object\n                    additionalProperties: false\n                    required: [invoices, creditNotes]\n                    properties:\n                        invoices:\n                            type: array\n                            items:\n                                $ref: '../../src/modules/invoicing/openapi.yaml#/components/schemas/ExportInvoiceDocument'\n                        creditNotes:\n                            type: array\n                            items:\n                                $ref: '../../src/modules/invoicing/openapi.yaml#/components/schemas/ExportInvoiceDocument'\n                # Every return on one of this account's OWN orders — a withdrawal included — found by\n                # `orderId`, since a return is keyed by the order and never by the user. Empty, never\n                # absent, for an account that has returned nothing.\n                returns:\n                    type: array\n                    items:\n                        $ref: '../../src/modules/returns/openapi.yaml#/components/schemas/ExportReturn'\n",
         ''
     );
 
     writeFileSync(file, content);
     return {
         file: label,
-        detail: 'dropped orders/payments/shipments/cart/wishlist/invoicing from AccountExportResponse'
+        detail: 'dropped orders/payments/shipments/cart/wishlist/invoicing/returns from AccountExportResponse'
     };
 };

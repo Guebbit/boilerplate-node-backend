@@ -36,6 +36,7 @@ import { router as observabilityRouter } from '@modules/observability/routes';
 import { router as ordersRouter } from '@modules/orders/routes';
 import { router as paymentsRouter } from '@modules/payments/routes';
 import { router as productsRouter } from '@modules/products/routes';
+import { router as returnsRouter } from '@modules/returns/routes';
 import { router as usersRouter } from '@modules/users/routes';
 import { router as webhooksRouter } from '@modules/webhooks/routes';
 import { router as wishlistRouter } from '@modules/wishlist/routes';
@@ -57,6 +58,7 @@ export const ROUTED_MODULES: Record<string, Router> = {
     orders: ordersRouter,
     payments: paymentsRouter,
     products: productsRouter,
+    returns: returnsRouter,
     users: usersRouter,
     webhooks: webhooksRouter,
     wishlist: wishlistRouter

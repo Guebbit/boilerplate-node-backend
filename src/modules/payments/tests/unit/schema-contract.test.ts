@@ -28,6 +28,7 @@ describe('paymentSchema', () => {
         // recording one by hand) sets it, so there is never a row that does not say how.
         expect(requiredPaths(paymentSchema)).toEqual([
             'amount',
+            'amountRefunded',
             'currency',
             'method',
             'orderId',

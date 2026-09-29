@@ -15,6 +15,9 @@
         "received-at-future": "The date the money arrived cannot be in the future.",
         "offline-recorded": "Payment recorded — the order is paid.",
         "webhook-accepted": "Accepted.",
-        "webhook-unverified": "That delivery could not be verified."
+        "webhook-unverified": "That delivery could not be verified.",
+        "refund-exceeds-remaining": "That is more than is left to refund on this payment.",
+        "refund-currency-mismatch": "The refund's currency is not the payment's currency.",
+        "refund-invalid-amount": "That is not a valid amount in the payment's currency."
     }
 }

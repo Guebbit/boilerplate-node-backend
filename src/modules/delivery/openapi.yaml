@@ -260,6 +260,29 @@ components:
                         Every country this deployment ships a physical order to
                         (`NODE_SHIP_TO_COUNTRIES`) — checkout refuses a method that
                         `requiresAddress` once the resolved address falls outside it.
+                returnAddress:
+                    $ref: '#/components/schemas/ReturnAddress'
+
+        ReturnAddress:
+            type: object
+            additionalProperties: false
+            required: [street, city, zip, country]
+            description: >-
+                Where returned goods are sent. Absent from `ShippingMethodsResponse` until a
+                deployment configures one (`NODE_RETURN_ADDRESS_*`) — a customer is told where to
+                post goods back only once there is somewhere to post them.
+            properties:
+                name:
+                    type: string
+                    description: Who the parcel is addressed to.
+                street:
+                    type: string
+                city:
+                    type: string
+                zip:
+                    type: string
+                country:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
 
         ShippingMethodsResponseEnvelope:
             type: object

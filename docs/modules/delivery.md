@@ -19,8 +19,10 @@ flowchart LR
     delivery["delivery<br/><i>this module</i>"]
     cart["cart"]
     orders["orders"]
+    returns["returns"]
 
     cart --> delivery
+    returns --> delivery
     delivery --> orders
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -28,6 +30,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
+    class returns supporting;
     class delivery centre;
 ```
 
@@ -109,6 +112,18 @@ so staff move it `processing → delivered` directly, with no parcel record at a
 order with even one physical line (`ORDER_NOT_DIGITAL_ONLY`); `ship` itself refuses a digital-only
 order the other way (`ORDER_NOTHING_TO_SHIP`), so the two doors never overlap on what they accept.
 No `forced` variant: there is no ordinary gate here for an override to skip past.
+
+## The return address
+
+`delivery` owns where returned goods are sent, the same way it owns every other carrier-facing fact.
+`NODE_RETURN_ADDRESS_STREET`, `_CITY`, `_ZIP` and `_COUNTRY` (and optionally `_NAME`) must ALL be set —
+partial config counts as none, since a customer told to post a parcel to half an address is worse off
+than one told nothing yet. `GET /delivery/methods` serves it as `returnAddress` once configured, and
+[`returns`](./returns.md) names it in the approval notice.
+
+The same module answers "what would standard delivery have cost?" (`cheapestStandardShipping`,
+`domain/rates.ts`): a withdrawal refunds delivery only up to that, and `pickup` — collection, not
+delivery — never counts, which `requiresAddress: false` already says.
 
 ## Related pages
 

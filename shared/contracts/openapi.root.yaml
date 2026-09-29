@@ -168,6 +168,8 @@ tags:
     - name: Invoicing
       description: The frozen invoice and credit-note PDFs — issued at payment and at refund, never before.
     - name: Delivery
+    - name: Returns
+      description: Sending goods back — including the EU withdrawal button, which is a return with `reason` `withdrawal`.
     - name: Inventory
     - name: Feedback
     - name: System
@@ -966,6 +968,11 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                # Art. 16 CRD: personalised, sealed-hygiene or perishable goods carry no right of
+                # withdrawal. Frozen onto each order line; `returns` refuses those lines.
+                noWithdrawal:
+                    type: boolean
+                    default: false
                 # Grams. Absent counts as 0 for shipping-method filtering (`GET /delivery/methods`,
                 # checkout's weight-range refusal) — a product missing this is silently routed as
                 # weightless, not refused, so the admin form warns rather than requiring it outright.
@@ -1080,6 +1087,9 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                # Art. 16 CRD, frozen at order-creation time — `returns` refuses a line marked so.
+                noWithdrawal:
+                    type: boolean
                 sku:
                     $ref: '#/components/schemas/Sku'
                 # Grams, frozen at order-creation time — same convention as `Product.weight`,
@@ -1193,10 +1203,50 @@ components:
                 Where an order is in its lifecycle. The set is closed here; which value may FOLLOW
                 which is the server's own lifecycle rules, answered per caller by `OrderActions`.
 
+        OrderPaymentStatus:
+            type: string
+            enum: [unpaid, paid, partially_refunded, refunded]
+            description: >-
+                Where the order's MONEY stands, beside `status` — Shopify's `financial_status`.
+                `unpaid` until a payment lands; `paid`; then `partially_refunded` once some but not
+                all of it went back, and `refunded` once all of it did. Read-only: `payments`
+                stamps the refund states, `orders` derives the first two.
+
+        OrderFulfillmentStatus:
+            type: string
+            enum: [unfulfilled, in_progress, shipped, fulfilled]
+            description: >-
+                Where the goods stand, beside `status` — Shopify's `fulfillment_status`. Derived
+                from `status` alone: `unfulfilled` before work starts (and for a cancelled order),
+                `in_progress` while being prepared, `shipped` once handed to the carrier,
+                `fulfilled` on arrival. Read-only.
+
+        OrderReturnStatus:
+            type: string
+            enum: [none, requested, in_progress, partially_returned, returned]
+            description: >-
+                Where any return on the order stands — Shopify's `returnStatus`. `none` when no
+                return holds goods; `requested` while one awaits staff; `in_progress` once approved
+                and awaiting its goods; `partially_returned` / `returned` once received goods cover
+                some / every unit on the order. Read-only: `returns` stamps it, and `delivered`
+                stays terminal — a return is its own object, not an order status.
+
         OrderActions:
             type: object
             additionalProperties: false
-            required: [transitions, cancel, pay, start, ship, deliver, fulfill, override, invoice]
+            required:
+                [
+                    transitions,
+                    cancel,
+                    pay,
+                    start,
+                    ship,
+                    deliver,
+                    fulfill,
+                    override,
+                    invoice,
+                    withdraw
+                ]
             description: >-
                 What the requesting caller may do to this order, decided by the server. A client
                 renders its controls from this rather than re-implementing the lifecycle: the rules
@@ -1257,6 +1307,23 @@ components:
                         destination for this caller right now — empty for anyone without
                         `orders.any.override`, or once the order has left every overridable status.
                     example: [processing, shipped, delivered]
+                withdraw:
+                    type: boolean
+                    description: >-
+                        Whether the "withdraw from contract here" button is offered — EU Consumer
+                        Rights Directive Art. 11a. `true` for the order's own buyer while the order
+                        is withdrawable (paid or awaiting payment, in the shop's hands or on its way,
+                        or delivered) and the withdrawal window has not closed. Always `false` for
+                        anyone else, an operator included: the right is the consumer's. The client
+                        never counts the days — the server says when. Made with
+                        `POST /returns` and `reason: withdrawal`.
+                withdrawUntil:
+                    type: string
+                    format: date-time
+                    description: >-
+                        The last instant a withdrawal is valid, frozen when the period started —
+                        delivery for goods, payment for digital content. Absent before that: the
+                        right already exists, the window has no end yet.
                 invoice:
                     type: boolean
                     description: >-
@@ -1306,6 +1373,9 @@ components:
                     totalQuantity,
                     totalPrice,
                     status,
+                    paymentStatus,
+                    fulfillmentStatus,
+                    returnStatus,
                     netTotal,
                     taxTotal,
                     shippingNetAmount,
@@ -1447,6 +1517,16 @@ components:
                     $ref: '#/components/schemas/OrderTransferInstructions'
                 status:
                     $ref: '#/components/schemas/OrderStatus'
+                # Three read-only projections beside `status`, so a client never infers "was this
+                # refunded?" or "did a return come back?" from `status` — which `delivered` keeps
+                # terminal on purpose. Each says where one object stands: the money, the goods, and
+                # any return. See docs/modules/orders.md#the-status-projections.
+                paymentStatus:
+                    $ref: '#/components/schemas/OrderPaymentStatus'
+                fulfillmentStatus:
+                    $ref: '#/components/schemas/OrderFulfillmentStatus'
+                returnStatus:
+                    $ref: '#/components/schemas/OrderReturnStatus'
                 # Computed per CALLER, not stored: what this requester may do to this order right
                 # now. Present on every response carrying ONE order — the read, the writes and the
                 # cancel — so a client that replaces its cached record from a write does not lose
@@ -1490,7 +1570,8 @@ components:
                     sessions,
                     auditLog,
                     apiKeys,
-                    invoicing
+                    invoicing,
+                    returns
                 ]
             properties:
                 exportedAt:
@@ -1579,6 +1660,13 @@ components:
                             type: array
                             items:
                                 $ref: '../../src/modules/invoicing/openapi.yaml#/components/schemas/ExportInvoiceDocument'
+                # Every return on one of this account's OWN orders — a withdrawal included — found by
+                # `orderId`, since a return is keyed by the order and never by the user. Empty, never
+                # absent, for an account that has returned nothing.
+                returns:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/returns/openapi.yaml#/components/schemas/ExportReturn'
 
         AccountExportEnvelope:
             type: object
@@ -1878,8 +1966,10 @@ paths:
     # `addresses` sharing `/account` with `account` — see docs/api/contract-fragmentation.md)
     /orders/{id}/invoice:
         $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1invoice'
-    /orders/{id}/credit-note:
-        $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1credit-note'
+    /orders/{id}/credit-notes:
+        $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1credit-notes'
+    /orders/{id}/credit-notes/{creditNoteId}:
+        $ref: '../../src/modules/invoicing/openapi.yaml#/paths/~1orders~1{id}~1credit-notes~1{creditNoteId}'
 
     # ---------- payments ----------
     /payments/methods:
@@ -1914,6 +2004,18 @@ paths:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1deliver'
     /delivery/order/{orderId}/fulfill:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1fulfill'
+
+    # ---------- returns ----------
+    /returns:
+        $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns'
+    /returns/{id}:
+        $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1{id}'
+    /returns/{id}/approve:
+        $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1{id}~1approve'
+    /returns/{id}/decline:
+        $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1{id}~1decline'
+    /returns/{id}/receive:
+        $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1{id}~1receive'
 
     # ---------- inventory ----------
     /inventory/levels:

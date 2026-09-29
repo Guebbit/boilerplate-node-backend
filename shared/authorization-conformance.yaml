@@ -53,6 +53,9 @@ admin-permissions: &admin_permissions
     - delivery.any.read
     - delivery.any.update
     - delivery.any.start
+    - returns.any.read
+    - returns.any.update
+    - returns.any.receive
     - feedback.any.read
     - feedback.any.update
     - feedback.any.delete

@@ -16,7 +16,8 @@ import {
     orderActionsFor,
     statusesLeadingTo,
     overridableTargetsFrom,
-    isDigitalOnlyOrder
+    isDigitalOnlyOrder,
+    canWithdraw
 } from '../domain';
 import type { OrderActor } from '../domain';
 import { resolveCurrentImages } from './current';
@@ -109,6 +110,28 @@ const deliveryAndOverrideActions = (
 };
 
 /**
+ * The withdrawal button, decided here so no client counts days: offered to the order's own buyer
+ * while the order is withdrawable and the window, if it has started, is still open. An operator
+ * reading someone else's order is not offered it — the right is the consumer's to exercise.
+ * `withdrawUntil` rides along only once the clock has started, so a client can say "until 12 June"
+ * without ever computing it.
+ * @param order - the order being served
+ * @param authContext - the caller, or `undefined` for no request behind this read
+ */
+const withdrawalActions = (
+    order: OrderDocument,
+    authContext: AuthContext | undefined
+): Pick<OrderActions, 'withdraw' | 'withdrawUntil'> => {
+    const isBuyer = String(order.userId) === authContext?.id;
+    return {
+        // Nothing left to send back once every unit has: `returnStatus` is the projection `returns`
+        // stamps, the only way this module can know.
+        withdraw: isBuyer && canWithdraw(order, new Date()) && order.returnStatus !== 'returned',
+        ...(order.withdrawUntil ? { withdrawUntil: order.withdrawUntil.toISOString() } : {})
+    };
+};
+
+/**
  * The single-order response body: the order as it serializes, plus what this caller may do to
  * it — `actions` must ride on the wire shape or the schema's transform drops it. `async` for
  * `resolveCurrentImages`'s `$in` lookup — the one thing here that isn't a synchronous transform.
@@ -126,6 +149,7 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
                 isDigitalOnlyOrder(order.items),
                 authContext
             ),
+            ...withdrawalActions(order, authContext),
             // `paidAt` is stamped in the SAME write that moves an order to `paid`
             // (`repository.ts#markPaid`), so it is a same-module, no-dependency proxy for "an
             // invoice was issued" — `invoicing` freezes one from the very same transition, in its

@@ -29,7 +29,8 @@ import type { OrderDocument, OrderStatusOverride } from '../model';
 import { orderRepository } from '../repository';
 import { ORDER_STATUS_CHANGED } from '../events';
 import { ordersAuditActions } from '../audit';
-import { canOverrideTo, statusesOverridableInto } from '../domain';
+import { canOverrideTo, statusesOverridableInto, withdrawUntilFrom } from '../domain';
+import { withdrawalPeriodDays } from '../config';
 import { inventoryService } from '@modules/inventory';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -81,36 +82,46 @@ const applyOverride = (
         at: new Date()
     };
 
-    return orderRepository.applyStatusOverride(orderId, allowedFrom, to, entry).then((updated) => {
-        if (!updated) return null;
+    // An override into `delivered` never passes through `markDelivered`, so no delivery timestamp
+    // exists: the deadline is counted from the override itself, which is when the shop says the
+    // order arrived.
+    const withdrawUntil =
+        to === OrderStatus.delivered
+            ? withdrawUntilFrom(entry.at, withdrawalPeriodDays())
+            : undefined;
 
-        /*
-         * The override is the escape hatch for an order paid offline —
-         * `payments/services/settlement.ts` never ran for it, so nothing has claimed its
-         * reservation yet. `commitForOrder` is
-         * idempotent (`held → committed`, a no-op once already committed), so calling it
-         * unconditionally whenever the order started at `pending` is safe even against the race
-         * `observedFrom`'s own docblock describes: worst case this is a harmless replay of a
-         * commit settlement already made. An override starting anywhere past `pending` skips this
-         * — settlement already committed it on the way to `paid`.
-         */
-        const commit =
-            observedFrom === OrderStatus.pending
-                ? inventoryService.commitForOrder(orderId)
-                : Promise.resolve();
+    return orderRepository
+        .applyStatusOverride(orderId, allowedFrom, to, entry, withdrawUntil)
+        .then((updated) => {
+            if (!updated) return null;
 
-        void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from: observedFrom, to });
+            /*
+             * The override is the escape hatch for an order paid offline —
+             * `payments/services/settlement.ts` never ran for it, so nothing has claimed its
+             * reservation yet. `commitForOrder` is
+             * idempotent (`held → committed`, a no-op once already committed), so calling it
+             * unconditionally whenever the order started at `pending` is safe even against the race
+             * `observedFrom`'s own docblock describes: worst case this is a harmless replay of a
+             * commit settlement already made. An override starting anywhere past `pending` skips this
+             * — settlement already committed it on the way to `paid`.
+             */
+            const commit =
+                observedFrom === OrderStatus.pending
+                    ? inventoryService.commitForOrder(orderId)
+                    : Promise.resolve();
 
-        recordAudit(context, {
-            action: ordersAuditActions.ORDER_STATUS_OVERRIDDEN,
-            outcome: 'success',
-            target_type: 'order',
-            target_id: orderId,
-            metadata: { mode, from: observedFrom, to, reason }
+            void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from: observedFrom, to });
+
+            recordAudit(context, {
+                action: ordersAuditActions.ORDER_STATUS_OVERRIDDEN,
+                outcome: 'success',
+                target_type: 'order',
+                target_id: orderId,
+                metadata: { mode, from: observedFrom, to, reason }
+            });
+
+            return commit.then(() => updated);
         });
-
-        return commit.then(() => updated);
-    });
 };
 
 /** The one 409 both refusal points in {@link overrideStatus} answer with — a status that is not a legal override target. */

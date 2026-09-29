@@ -1,7 +1,8 @@
 /**
  * @module
  * Invoicing's own rate-limit budget: `invoicingLimiter`, on `GET /orders/:id/invoice` and
- * `GET /orders/:id/credit-note` — one budget for both, since both spawn the same Chromium launch.
+ * `GET /orders/:id/credit-notes/:creditNoteId` — one budget for both, since both spawn the same
+ * Chromium launch.
  * Data (`RateLimitBudget`, declared on `./module.ts`'s `rateLimits`) turned into middleware by
  * `buildRateLimiter` (`@infrastructure/http/middlewares/rate-limit`), the same factory every other
  * module's budgets go through.
@@ -30,7 +31,7 @@ const INVOICING_RENDER_BUDGET: RateLimitBudget = {
     windowMs: 'shared',
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
     bounds:
-        'Renders against `GET /orders/{id}/invoice` and `GET /orders/{id}/credit-note`, keyed on ' +
+        'Renders against `GET /orders/{id}/invoice` and `GET /orders/{id}/credit-notes/{creditNoteId}`, keyed on ' +
         'the ACCOUNT — every hit spawns a Chromium launch, so an address-keyed budget would let ' +
         'one signed-in account behind a shared address starve every other caller on it.',
     audited: true,

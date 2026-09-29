@@ -9,7 +9,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import type { Lean } from '@infrastructure/persistence/create-repository';
-import type { ExportPayment } from '@types';
+import type { ExportPayment, Refund } from '@types';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 
@@ -59,6 +59,19 @@ const toExportPayment = (payment: Lean<PaymentDocument>): ExportPayment => ({
     orderId: String(payment.orderId),
     amount: payment.amount,
     currency: payment.currency,
+    amountRefunded: payment.amountRefunded,
+    refunds: payment.refunds.map(
+        (refund): Refund => ({
+            id: String(refund._id),
+            amount: refund.amount,
+            currency: refund.currency,
+            status: refund.status,
+            reason: refund.reason,
+            ...(refund.returnId ? { returnId: refund.returnId } : {}),
+            ...(refund.settledAt ? { settledAt: refund.settledAt.toISOString() } : {}),
+            createdAt: refund.createdAt.toISOString()
+        })
+    ),
     status: payment.status,
     provider: payment.provider,
     ...(payment.cardLast4 === undefined ? {} : { cardLast4: payment.cardLast4 }),

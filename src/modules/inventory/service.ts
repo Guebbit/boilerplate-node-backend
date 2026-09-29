@@ -7,6 +7,7 @@
  */
 
 import { Types } from 'mongoose';
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import {
@@ -75,6 +76,29 @@ export interface MovementFilters {
 const SWEEP_BATCH_SIZE = 200;
 
 /**
+ * Bring the catalogue's synced copy of one product's counters into step with the ledger's.
+ *
+ * Never fails the caller: the transition it follows already committed, and the next transition on
+ * this product corrects the cache regardless.
+ *
+ * @param productId - the product whose cached counters are being refreshed
+ */
+const syncStockCache = async (productId: string): Promise<void> => {
+    const level = await stockLevelRepository.findByProductId(productId);
+    if (level)
+        await productService
+            .syncStockCache(productId, { onHand: level.onHand, reserved: level.reserved })
+            .catch((error: unknown) => {
+                // Stryker disable all
+                logger.error({
+                    message: `Inventory: could not sync the catalogue's stock cache for product ${productId}`,
+                    error
+                });
+                // Stryker restore all
+            });
+};
+
+/**
  * Move one product's counters and record why, or do neither.
  *
  * The chokepoint every stock change in the application passes through. `ensure` guarantees a row
@@ -88,17 +112,21 @@ const SWEEP_BATCH_SIZE = 200;
  * @param productId - the product whose counters move
  * @param quantity - how many units; signed only for `adjust`
  * @param context - what to record on the row beyond the deltas
+ * @param session - the caller's transaction. Given one, every read and write joins it, and the
+ *   catalogue's stock cache is NOT synced here: that write leaves this module and cannot roll
+ *   back, so the caller runs {@link refreshStockCacheForOrder} once its transaction commits
  * @returns whether the counters actually moved
  */
 const applyTransition = async (
     reason: StockMovementReason,
     productId: string,
     quantity: number,
-    context: { reference?: string; note?: string } = {}
+    context: { reference?: string; note?: string } = {},
+    session?: ClientSession
 ): Promise<boolean> => {
     // Only read the product back when this product has no level row yet — the common case (every
     // transition after the first) skips it entirely.
-    if (!(await stockLevelRepository.findByProductId(productId))) {
+    if (!(await stockLevelRepository.findByProductId(productId, session))) {
         /*
          * `release`/`expire`/`commit` read "no row" as "nothing to move", not a failure: a
          * product's level row is deleted alongside it (see `module.ts`'s `PRODUCT_DELETED`
@@ -112,33 +140,29 @@ const applyTransition = async (
             return true;
         }
 
-        await stockLevelRepository.ensure(productId);
+        await stockLevelRepository.ensure(productId, session);
     }
     const delta = counterDeltaFor(reason, quantity);
-    const moved = await stockLevelRepository.applyDelta(productId, reason, quantity, delta);
+    const moved = await stockLevelRepository.applyDelta(
+        productId,
+        reason,
+        quantity,
+        delta,
+        session
+    );
     if (!moved) return false;
 
-    await stockMovementRepository.create({
-        productId: new Types.ObjectId(productId),
-        reason,
-        ...delta,
-        ...context
-    });
+    await stockMovementRepository.create(
+        {
+            productId: new Types.ObjectId(productId),
+            reason,
+            ...delta,
+            ...context
+        },
+        session
+    );
 
-    const level = await stockLevelRepository.findByProductId(productId);
-    if (level)
-        await productService
-            .syncStockCache(productId, { onHand: level.onHand, reserved: level.reserved })
-            .catch((error: unknown) => {
-                // Never fails the transition that already committed — see the docblock above.
-                // The next transition on this product corrects the cache regardless.
-                // Stryker disable all
-                logger.error({
-                    message: `Inventory: could not sync the catalogue's stock cache for product ${productId}`,
-                    error
-                });
-                // Stryker restore all
-            });
+    if (!session) await syncStockCache(productId);
 
     return true;
 };
@@ -307,17 +331,23 @@ export const reserveForOrder = async (
  * @param verb - the same word, past tense, for the one log line a refusal writes
  * @param orderId - the order the claimed hold belonged to
  * @param items - the lines it carried
+ * @param session - the caller's transaction, when the whole cancel is one
  */
 const applyToEveryLine = async (
     reason: StockMovementReason,
     verb: string,
     orderId: string,
-    items: readonly ReservationItem[]
+    items: readonly ReservationItem[],
+    session?: ClientSession
 ): Promise<void> => {
     for (const { productId, quantity } of items) {
-        const applied = await applyTransition(reason, String(productId), quantity, {
-            reference: orderId
-        });
+        const applied = await applyTransition(
+            reason,
+            String(productId),
+            quantity,
+            { reference: orderId },
+            session
+        );
         if (!applied)
             // Stryker disable all
             logger.error(
@@ -387,18 +417,20 @@ export const commitForOrder = async (orderId: string): Promise<boolean> => {
  *
  * @param orderId - the order giving up its units
  * @param reason - `release` for a cancellation, `expire` for a hold that timed out
+ * @param session - the caller's transaction; see {@link refreshStockCacheForOrder}
  * @returns whether this call was the one that released
  */
 export const releaseForOrder = async (
     orderId: string,
     // The two literals rather than the whole enum: only these end a hold without a sale, and
     // naming the pair stops a caller passing `commit` to a function that would record a sale.
-    reason: 'release' | 'expire' = StockMovementReason.release
+    reason: 'release' | 'expire' = StockMovementReason.release,
+    session?: ClientSession
 ): Promise<boolean> => {
-    const hold = await reservationRepository.claimStatus(orderId, 'held', 'released');
+    const hold = await reservationRepository.claimStatus(orderId, 'held', 'released', session);
     if (!hold) return false;
 
-    await applyToEveryLine(reason, reason, orderId, hold.items);
+    await applyToEveryLine(reason, reason, orderId, hold.items, session);
     return true;
 };
 
@@ -413,14 +445,83 @@ export const releaseForOrder = async (
  * see `orders/services/cancel.ts`.
  *
  * @param orderId - the order whose committed units are coming back
+ * @param session - the caller's transaction; see {@link refreshStockCacheForOrder}
  * @returns whether this call was the one that restocked
  */
-export const restockForOrder = async (orderId: string): Promise<boolean> => {
-    const hold = await reservationRepository.claimStatus(orderId, 'committed', 'restocked');
+export const restockForOrder = async (
+    orderId: string,
+    session?: ClientSession
+): Promise<boolean> => {
+    const hold = await reservationRepository.claimStatus(
+        orderId,
+        'committed',
+        'restocked',
+        session
+    );
     if (!hold) return false;
 
-    await applyToEveryLine(StockMovementReason.restock, 'restock', orderId, hold.items);
+    await applyToEveryLine(StockMovementReason.restock, 'restock', orderId, hold.items, session);
     return true;
+};
+
+/**
+ * Bring the catalogue's stock cache into step for every line of an order's hold — the step a
+ * caller that passed a `session` to {@link releaseForOrder} or {@link restockForOrder} owes once
+ * its transaction has committed. The cache write leaves this module and cannot roll back, so it
+ * waits for the commit instead of running inside it.
+ *
+ * @param orderId - the order whose hold just moved
+ */
+export const refreshStockCacheForOrder = (orderId: string): Promise<void> =>
+    reservationRepository.findByOrderId(orderId).then(async (hold) => {
+        for (const { productId } of hold?.items ?? []) await syncStockCache(String(productId));
+    });
+
+/**
+ * Put returned goods back on the shelf — units a customer sent back and staff received. Unlike
+ * {@link restockForOrder} this claims no reservation: the order's hold was `committed` when it was
+ * paid and stays that way, and it is the RETURN's own once-only move (`approved → received`) that
+ * makes this at-most-once, so the caller runs both in one transaction. Each line becomes one
+ * `restock` movement in the ledger, referencing the order and naming the return.
+ *
+ * A line the counters refuse throws, unlike the hold's own loop: here the caller's transaction is
+ * the atomicity, and a return half-restocked is worse than one that did not happen.
+ *
+ * @param lines - what came back
+ * @param context - `reference` names the order; `note` names the return
+ * @param session - the caller's transaction; see {@link refreshStockCacheForProducts}
+ * @throws {Error} when a line's counters refuse the restock
+ */
+export const restockReturnedLines = async (
+    lines: readonly { productId: string; quantity: number }[],
+    context: { reference: string; note: string },
+    session?: ClientSession
+): Promise<void> => {
+    for (const { productId, quantity } of lines) {
+        const applied = await applyTransition(
+            StockMovementReason.restock,
+            productId,
+            quantity,
+            context,
+            session
+        );
+        if (!applied)
+            throw new Error(
+                `Inventory: could not restock ${quantity} of product ${productId} for ${context.note}`
+            );
+    }
+};
+
+/**
+ * Bring the catalogue's stock cache into step for these products — what a caller of
+ * {@link restockReturnedLines} inside a transaction owes once it has committed.
+ *
+ * @param productIds - the products whose counters just moved
+ */
+export const refreshStockCacheForProducts = async (
+    productIds: readonly string[]
+): Promise<void> => {
+    for (const productId of new Set(productIds)) await syncStockCache(productId);
 };
 
 /**
@@ -731,6 +832,9 @@ export const inventoryService = {
     commitForOrder,
     releaseForOrder,
     restockForOrder,
+    refreshStockCacheForOrder,
+    restockReturnedLines,
+    refreshStockCacheForProducts,
     extendHoldForOrder,
     isStockBoundToOrder,
     runReservationSweep,

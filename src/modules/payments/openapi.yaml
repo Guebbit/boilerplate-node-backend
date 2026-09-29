@@ -8,7 +8,8 @@ x-error-codes:
     PAYMENT_DECLINED: { status: 409, description: 'The card issuer or gateway declined the charge.' }
     PAYMENT_IN_FLIGHT: { status: 409, description: 'Another payment attempt for this order is already being recorded.' }
     PAYMENT_NOT_CONFIRMABLE: { status: 409, description: 'The payment is not in a state this confirmation can apply to.' }
-    PAYMENT_NOT_REFUNDABLE: { status: 409, description: 'The payment is not in a state that can still be refunded.' }
+    PAYMENT_NOT_REFUNDABLE: { status: 409, description: 'The payment is not in a state that can still be refunded, or nothing of it is left to refund.' }
+    PAYMENT_REFUND_EXCEEDS_REMAINING: { status: 422, description: 'The refund asks for more than the payment still has left to give back.' }
     PAYMENT_ORDER_NOT_PAYABLE: { status: 409, description: 'The order is not in a state that can still accept a payment.' }
 
 paths:
@@ -159,13 +160,18 @@ paths:
             tags: [Payments]
             summary: Refund an order's payment
             description: >-
-                Returns the money without touching the order's status — the operator action for a
+                Returns money without touching the order's status — the operator action for a
                 goodwill refund, and the second half of "cancel and refund" when a client sends both.
-                Admin only. The write is conditional on the payment still being `succeeded`, so a
-                double submit refunds once and answers 409 the second time. Requires a session that
-                has re-proved itself within the last few minutes — a valid-but-stale token answers
-                401 with `errors[].code` `REAUTH_REQUIRED`, and the caller re-authenticates and
-                retries the same request.
+                Admin only. Without a body it returns everything still refundable; with an `amount`
+                it returns that part, and the payment stays `succeeded` until the parts add up to
+                what was paid. Each call is one `Refund` record on the payment. Answers 200 with
+                the payment as it now stands: `refunds` carries the new record, `amountRefunded`
+                the running total. The reservation of the amount is conditional on the payment
+                still having that much left, so a double submit cannot return the money twice — the
+                second call answers 409 (nothing left) or 422 (asks for more than is left).
+                Requires a session that has re-proved itself within the last few minutes — a
+                valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
+                caller re-authenticates and retries the same request.
             operationId: refundPaymentByOrder
             security:
                 - bearerAuth: []
@@ -177,9 +183,15 @@ paths:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                   description: The order whose payment is being returned
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RefundPaymentRequest'
             responses:
                 '200':
-                    description: The payment, `refunded`
+                    description: The payment — `refunded` once fully returned, still `succeeded` after a partial refund
                     content:
                         application/json:
                             schema:
@@ -404,7 +416,7 @@ components:
         Payment:
             type: object
             additionalProperties: false
-            required: [id, orderId, amount, currency, status, provider, method]
+            required: [id, orderId, amount, currency, status, provider, method, amountRefunded, refunds]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -423,16 +435,31 @@ components:
                 currency:
                     type: string
                     description: ISO-4217 currency code (e.g. EUR)
+                amountRefunded:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: >-
+                        How much of `amount` has been asked back, pending and succeeded together —
+                        the same reading as Stripe's `amount_refunded`. Counted when a refund is
+                        opened, so two racing partial refunds cannot return more than was paid.
+                refunds:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Refund'
+                    description: One record per refund attempt, oldest first.
                 status:
                     type: string
                     enum: [requires_confirmation, requires_action, processing, succeeded, declined, refunded]
                     description: >-
-                        The provider-facing lifecycle. `requires_action` means the bank wants a
+                        The provider-facing lifecycle. `refunded` means every unit of `amount` has
+                        gone back; a partly refunded payment stays `succeeded` and says so in
+                        `amountRefunded`. `requires_action` means the bank wants a
                         challenge answered in the browser (3-D Secure) and `processing` that the
                         provider has taken the payment but not settled it — both are in flight, and
                         `POST /payments/{id}/sync` is what resolves them without waiting for the
                         webhook. `declined` is retryable: the confirm endpoint accepts the same
-                        payment again with another method. `refunded` is terminal. Full transition
+                        payment again with another method. Full transition
                         table: docs/modules/payments.md#status-transitions
                 provider:
                     type: string
@@ -489,6 +516,72 @@ components:
                     type: string
                     format: date-time
 
+        Refund:
+            type: object
+            additionalProperties: false
+            required: [id, amount, currency, status, reason, createdAt]
+            description: >-
+                One attempt to give money back — a record per attempt, not a field on the payment.
+                The provider's own refund id, the idempotency key and the provider's error wording
+                are stored but never published.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                amount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: The amount returned, in the payment's own `currency`.
+                currency:
+                    type: string
+                    description: ISO-4217 currency code, copied from the payment.
+                status:
+                    type: string
+                    enum: [pending, succeeded, failed]
+                    description: >-
+                        `pending` while the provider is being asked; `failed` when it refused — a
+                        sweep retries the same refund with the same idempotency key; `succeeded`
+                        once the money is confirmed back (or, for a hand-paid payment, reported
+                        back by the operator).
+                reason:
+                    $ref: '#/components/schemas/RefundReason'
+                # The return this refund pays for — present when `reason` is `return`.
+                returnId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                settledAt:
+                    type: string
+                    format: date-time
+                    description: When the refund succeeded. Absent while it has not.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        RefundReason:
+            type: string
+            enum: [cancellation, goodwill, return]
+            description: >-
+                Why the money went back. `cancellation` — the order was cancelled after payment;
+                `return` — goods came back and were received; `goodwill` — an operator chose to.
+
+        RefundPaymentRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                amount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    exclusiveMinimum: true
+                    description: >-
+                        How much to return, a decimal in the payment's own currency. Absent means
+                        everything still refundable.
+                currency:
+                    type: string
+                    description: >-
+                        ISO-4217 code of `amount`. Optional; when sent it must equal the payment's
+                        own currency, so an amount written in another unit is refused instead of
+                        being read as this one.
+
         PaymentActions:
             type: object
             additionalProperties: false
@@ -508,8 +601,8 @@ components:
                     type: boolean
                     description: >-
                         Whether `POST /payments/order/{orderId}/refund` would be accepted. False
-                        once refunded, which is what greys the control out rather than letting the
-                        operator discover it by clicking.
+                        once fully refunded, which is what greys the control out rather than letting
+                        the operator discover it by clicking.
 
         PaymentWebhookEvent:
             type: object
@@ -664,7 +757,7 @@ components:
         ExportPayment:
             type: object
             additionalProperties: false
-            required: [id, orderId, amount, currency, status, provider]
+            required: [id, orderId, amount, currency, status, provider, amountRefunded, refunds]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -676,6 +769,14 @@ components:
                     minimum: 0
                 currency:
                     type: string
+                amountRefunded:
+                    type: number
+                    format: double
+                    minimum: 0
+                refunds:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Refund'
                 status:
                     type: string
                     enum: [requires_confirmation, requires_action, processing, succeeded, declined, refunded]

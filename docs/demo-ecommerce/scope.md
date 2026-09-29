@@ -34,10 +34,9 @@ Decided, or partly built, but not the whole story yet:
 
 - **Product variants.** A single SKU per product today; size/colour variants are a planned
   extension, not a redesign.
-- **Returns, partial refunds, and a withdrawal button.** The law changed in mid-2026 to require an
-  explicit "withdraw from this order" action on every EU-facing shop, with its own confirmation
-  step and a written acknowledgement — that's being built, alongside partial refunds for the cases
-  a full refund doesn't fit (an express-shipping surcharge, for instance).
+- **A consent step for digital content.** Returns, partial refunds, the EU withdrawal button and
+  the per-product exclusions are built (see [`returns`](../modules/returns.md)); what is left is the
+  checkout acknowledgement that ends the withdrawal right once a download starts.
 - **Discounts and coupons**, once returns and the invoice lifecycle are settled — a discount has to
   net out of the same VAT breakdown both of those already touch.
 - **Guest checkout**, and editing an order as a draft rather than a separate follow-up action.

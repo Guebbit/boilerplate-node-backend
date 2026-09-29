@@ -4,5 +4,11 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-export { SHIPPING_METHODS, findShippingMethod, priceShipping, methodFitsWeight } from './rates';
+export {
+    SHIPPING_METHODS,
+    findShippingMethod,
+    priceShipping,
+    methodFitsWeight,
+    cheapestStandardShipping
+} from './rates';
 export type { StaticShippingMethod } from './rates';

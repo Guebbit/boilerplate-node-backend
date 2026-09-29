@@ -16,7 +16,7 @@ Both are optional: they only activate when the relevant env vars / browser binar
 | Email triggers   | `src/modules/account/controllers/post-reset-request.ts` (password reset)                                                                                                        |
 | Email copy       | `src/modules/<name>/emails.ts`                                                                                                                                                  |
 | HTML templates   | `src/modules/<name>/templates/*.ejs` — one directory per owning module (`AppModule.templates`); `shared/templates/layouts/*.ejs` holds only the include partials no module owns |
-| PDF rendering    | `src/modules/invoicing/services/render.ts` — `GET /orders/{id}/invoice` and `/credit-note` both render through it; see [invoicing](../modules/invoicing.md)                     |
+| PDF rendering    | `src/modules/invoicing/services/render.ts` — `GET /orders/{id}/invoice` and `/credit-notes/{creditNoteId}` both render through it; see [invoicing](../modules/invoicing.md)     |
 
 ## Email pipeline
 
@@ -99,7 +99,7 @@ flowchart LR
     PDF --> Response[HTTP response]
 ```
 
-`puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable, `GET /orders/{id}/invoice` and `/credit-note` both answer `500` — see [Hosting](./hosting.md) and `docker/Dockerfile.production`'s own `INSTALL_CHROMIUM` note. The placed-order email carries no invoice at all (nothing is invoiced yet at that point), so it is unaffected either way.
+`puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable, `GET /orders/{id}/invoice` and `/credit-notes/{creditNoteId}` both answer `500` — see [Hosting](./hosting.md) and `docker/Dockerfile.production`'s own `INSTALL_CHROMIUM` note. The placed-order email carries no invoice at all (nothing is invoiced yet at that point), so it is unaffected either way.
 
 **Shutdown waits for a render in flight.** A caller downloading an invoice or credit note can have
 a process reach its exit mid-render. Exiting there orphans the Chromium it launched, and its

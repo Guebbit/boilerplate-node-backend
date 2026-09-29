@@ -7,10 +7,22 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-// `toMinorUnits`/`toDecimalAmount` are deliberately absent: `sumLineItems`/`orderTaxBreakdown` are
-// their only callers, and `money.property.test.ts` is where their own property tests reach them.
-// A barrel line would make them look like a rule other modules may call directly.
 export { sumLineItems, orderTotal } from './totals';
+
+/**
+ * Integer money arithmetic, published because `payments` and `returns` both do sums on refunds
+ * and must not redo them in floating point: a decimal amount goes in through `toMinorUnits`, comes
+ * out through `toDecimalAmount`, and everything between stays exact.
+ */
+export {
+    toMinorUnits,
+    toDecimalAmount,
+    addMoney,
+    subtractMoney,
+    apportion,
+    NO_MONEY
+} from './money';
+export type { Money } from './money';
 
 export { checkOrderLines, isShippedItem, isDigitalOnlyOrder } from './rules';
 export type { ShippableLineCandidate } from './rules';
@@ -36,3 +48,16 @@ export type { OrderTaxBreakdown, LineTaxBreakdown, TaxableLineItem, TaxRateSumma
 
 /** The RF creditor reference `placeOrder` mints for a `bank_transfer` order, and its admin-side parse. */
 export { buildReference, parseReference } from './transfer-reference';
+
+/** The right of withdrawal: when the window closes, and whether the button shows. */
+export {
+    canWithdraw,
+    isBeforeDispatch,
+    isExcludedFromWithdrawal,
+    withdrawUntilFrom
+} from './withdrawal';
+export type { WithdrawalCandidate, WithdrawableLine } from './withdrawal';
+
+/** The three statuses beside `status`: the money, the goods, any return. */
+export { fulfillmentStatusOf, paymentStatusOf, returnStatusOf } from './projections';
+export type { StampedPaymentStatus, StampedReturnStatus } from './projections';

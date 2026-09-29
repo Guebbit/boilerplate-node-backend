@@ -24,15 +24,15 @@ export const collectPersonalData = (
             orders.map((order) =>
                 Promise.all([
                     invoicingRepository.findInvoiceByOrderId(order.id),
-                    invoicingRepository.findCreditNoteByOrderId(order.id)
+                    invoicingRepository.findCreditNotesByOrderId(order.id)
                 ])
             )
         ).then((pairs) => ({
             invoices: pairs.flatMap(([invoice]) =>
                 invoice ? [presentExportedDocument(invoice)] : []
             ),
-            creditNotes: pairs.flatMap(([, creditNote]) =>
-                creditNote ? [presentExportedDocument(creditNote)] : []
+            creditNotes: pairs.flatMap(([, creditNotes]) =>
+                creditNotes.map((note) => presentExportedDocument(note))
             )
         }))
     );

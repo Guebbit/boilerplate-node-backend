@@ -109,12 +109,36 @@ channels:
                 $ref: '#/components/messages/PaymentFailedEvent'
     payment.refunded:
         address: payment.refunded
-        description: A succeeded payment was refunded.
+        description: A refund on a payment settled — the whole payment, or a part of it.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
         messages:
             PaymentRefundedEvent:
                 $ref: '#/components/messages/PaymentRefundedEvent'
+    return.requested:
+        address: return.requested
+        description: A return was opened for goods that had shipped — a withdrawal or a request.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ReturnRequestedEvent:
+                $ref: '#/components/messages/ReturnRequestedEvent'
+    return.received:
+        address: return.received
+        description: Returned goods arrived and went back on sale.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ReturnReceivedEvent:
+                $ref: '#/components/messages/ReturnReceivedEvent'
+    return.closed:
+        address: return.closed
+        description: A return finished — the money went back.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ReturnClosedEvent:
+                $ref: '#/components/messages/ReturnClosedEvent'
 operations:
     webhookOrderCreated:
         action: send
@@ -175,14 +199,46 @@ operations:
         action: send
         channel:
             $ref: '#/channels/payment.refunded'
-        summary: A `succeeded` payment moved to `refunded`.
+        summary: A refund on a payment settled.
         description: >-
             One-to-one with the `payment.refunded` domain event — see `payments/services/refunds.ts`'s
-            `markRefunded`. Fired whether an operator asked for the refund directly or the
+            `settleRefund`. Fired once per refund, whether an operator asked for it directly or the
             `ORDER_REFUND_OWED` retry sweep completed it; never fired for a hand-paid refund left
             for an operator to confirm by hand.
         messages:
             - $ref: '#/channels/payment.refunded/messages/PaymentRefundedEvent'
+    webhookReturnRequested:
+        action: send
+        channel:
+            $ref: '#/channels/return.requested'
+        summary: A return was opened for goods that had shipped.
+        description: >-
+            One-to-one with the `return.requested` domain event — see `returns/services/create.ts`.
+            Never fired for a withdrawal before dispatch: that has no return row, it is a cancel
+            and `order.cancelled` says so.
+        messages:
+            - $ref: '#/channels/return.requested/messages/ReturnRequestedEvent'
+    webhookReturnReceived:
+        action: send
+        channel:
+            $ref: '#/channels/return.received'
+        summary: Returned goods arrived and went back on sale.
+        description: >-
+            One-to-one with the `return.received` domain event — see `returns/services/receive.ts`.
+            The stock movement and the status move committed together before this fired.
+        messages:
+            - $ref: '#/channels/return.received/messages/ReturnReceivedEvent'
+    webhookReturnClosed:
+        action: send
+        channel:
+            $ref: '#/channels/return.closed'
+        summary: A return finished — the money went back.
+        description: >-
+            One-to-one with the `return.closed` domain event — see `returns/services/close.ts`.
+            Fired when the refund settles: straight after the goods were received, or later when
+            the payment sweep completed a refund the provider first refused.
+        messages:
+            - $ref: '#/channels/return.closed/messages/ReturnClosedEvent'
 components:
     messages:
         OrderCreatedEvent:
@@ -234,6 +290,27 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/PaymentRefundedEnvelope'
+        ReturnReceivedEvent:
+            name: ReturnReceivedEvent
+            title: Return received
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ReturnReceivedEnvelope'
+        ReturnClosedEvent:
+            name: ReturnClosedEvent
+            title: Return closed
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ReturnClosedEnvelope'
+        ReturnRequestedEvent:
+            name: ReturnRequestedEvent
+            title: Return requested
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ReturnRequestedEnvelope'
     schemas:
         WebhookHeaders:
             type: object
@@ -295,6 +372,7 @@ components:
             required:
                 - paymentId
                 - orderId
+                - refundId
                 - amount
                 - currency
             properties:
@@ -302,9 +380,59 @@ components:
                     type: string
                 orderId:
                     type: string
+                refundId:
+                    type: string
+                    description: >-
+                        The refund record this delivery is about. A payment can be refunded in
+                        parts, so one payment can raise this event more than once.
                 amount:
                     type: number
-                    description: The refunded amount — the payment's own `amount`, two decimal places.
+                    description: This refund's amount, two decimal places — the payment's own `amount` for a full refund.
+                currency:
+                    type: string
+                    description: ISO-4217, e.g. `EUR`.
+            additionalProperties: false
+        ReturnRequestedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - reason
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                reason:
+                    type: string
+                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
+            additionalProperties: false
+        ReturnReceivedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        ReturnClosedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - refundAmount
+                - currency
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                refundAmount:
+                    type: number
+                    description: What went back to the customer for this return, two decimal places.
                 currency:
                     type: string
                     description: ISO-4217, e.g. `EUR`.
@@ -436,4 +564,58 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/PaymentRefundedPayload'
+            additionalProperties: false
+        ReturnRequestedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ReturnRequestedEventType
+                    type: string
+                    enum:
+                        - return.requested
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ReturnRequestedPayload'
+            additionalProperties: false
+        ReturnReceivedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ReturnReceivedEventType
+                    type: string
+                    enum:
+                        - return.received
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ReturnReceivedPayload'
+            additionalProperties: false
+        ReturnClosedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ReturnClosedEventType
+                    type: string
+                    enum:
+                        - return.closed
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ReturnClosedPayload'
             additionalProperties: false

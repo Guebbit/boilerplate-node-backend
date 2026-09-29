@@ -13,7 +13,13 @@ import { OrderStatus } from '@types';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import { ORDER_STATUS_CHANGED } from '../events';
-import { statusesLeadingTo } from '../domain';
+import {
+    statusesLeadingTo,
+    withdrawUntilFrom,
+    type StampedPaymentStatus,
+    type StampedReturnStatus
+} from '../domain';
+import { withdrawalPeriodDays } from '../config';
 
 /**
  * Move an order to `to`, from whichever status `ORDER_LIFECYCLE` says a `system` report may
@@ -83,13 +89,47 @@ export const markShipped = (orderId: string): Promise<OrderDocument | null> =>
     markSystemMove(orderId, OrderStatus.shipped);
 
 /**
+ * Move an order to `delivered` and freeze its withdrawal deadline, in one write, then announce it.
+ * Shared by the two ways an order arrives: a parcel handed over, and a digital order fulfilled.
+ * @param orderId - the order that arrived
+ * @param from - the status it must currently be in
+ * @param withdrawUntil - the last instant a withdrawal is valid
+ * @returns the order as it now stands, or `null` if it was not in `from`
+ */
+const markArrived = (
+    orderId: string,
+    from: OrderStatus,
+    withdrawUntil: Date
+): Promise<OrderDocument | null> =>
+    orderRepository.markDelivered(orderId, from, withdrawUntil).then((updated) => {
+        if (updated)
+            void emitDomainEvent(ORDER_STATUS_CHANGED, {
+                orderId,
+                from,
+                to: OrderStatus.delivered
+            });
+        return updated;
+    });
+
+/**
  * Report that a parcel arrived. `delivery`'s delivery door calls this only after it has recorded
  * the arrival.
+ *
+ * The withdrawal period starts here, for goods (Consumer Rights Directive Art. 9(2)(b)): `orders`
+ * cannot read `delivery`'s own timestamp, so the door hands it over, and the deadline is frozen
+ * with the status — the same "freeze the fact at the moment it happens" rule `shippingCost` and
+ * `currency` follow.
  * @param orderId - the order the parcel belongs to
+ * @param deliveredAt - when the parcel arrived, as `delivery` recorded it
  * @returns the order as it now stands, or `null` if it was not awaiting arrival
  */
-export const markDelivered = (orderId: string): Promise<OrderDocument | null> =>
-    markSystemMove(orderId, OrderStatus.delivered);
+export const markDelivered = (
+    orderId: string,
+    deliveredAt: Date
+): Promise<OrderDocument | null> => {
+    const [from] = statusesLeadingTo(OrderStatus.delivered, 'system');
+    return markArrived(orderId, from, withdrawUntilFrom(deliveredAt, withdrawalPeriodDays()));
+};
 
 /**
  * Report that a digital-only order was marked fulfilled by staff — `delivery`'s own door for this
@@ -105,11 +145,41 @@ export const markDelivered = (orderId: string): Promise<OrderDocument | null> =>
  * @param orderId - the order marked fulfilled
  * @returns the order as it now stands, or `null` if it was not awaiting fulfilment
  */
-export const markFulfilled = (orderId: string): Promise<OrderDocument | null> => {
-    const from = OrderStatus.processing;
-    const to = OrderStatus.delivered;
-    return orderRepository.updateStatusIfIn(orderId, [from], to).then((updated) => {
-        if (updated) void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from, to });
-        return updated;
+export const markFulfilled = (orderId: string): Promise<OrderDocument | null> =>
+    orderRepository.findById(orderId).then((order) => {
+        if (!order) return null;
+        // Digital content: the period runs from the conclusion of the contract, not from the
+        // moment staff marked it fulfilled (Art. 9(2)(a)) — `paidAt` is that moment here.
+        const start = order.paidAt ?? new Date();
+        return markArrived(
+            orderId,
+            OrderStatus.processing,
+            withdrawUntilFrom(start, withdrawalPeriodDays())
+        );
     });
-};
+
+/**
+ * Report where an order's money stands once a refund exists. `payments`' own door for this — the
+ * order cannot ask `payments`, so `payments` tells it, the same shape as {@link markShipped}. Only
+ * the two refund states are reported: `unpaid` and `paid` are derived from `paidAt` on read.
+ *
+ * @param orderId - the order whose payment was refunded
+ * @param paymentStatus - `partially_refunded` while some of the money is still with the shop,
+ *   `refunded` once all of it went back
+ */
+export const markPaymentStatus = (
+    orderId: string,
+    paymentStatus: StampedPaymentStatus
+): Promise<boolean> => orderRepository.setProjection(orderId, { paymentStatus });
+
+/**
+ * Report where the order's returns stand. `returns`' own door for this. `undefined` clears it: no
+ * return holds goods, which is the `none` a reader sees.
+ *
+ * @param orderId - the order the returns belong to
+ * @param returnStatus - the state to show, or `undefined` for none
+ */
+export const markReturnStatus = (
+    orderId: string,
+    returnStatus: StampedReturnStatus | undefined
+): Promise<boolean> => orderRepository.setProjection(orderId, { returnStatus });

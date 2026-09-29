@@ -59,6 +59,7 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
             data: {
                 paymentId: payload.paymentId,
                 orderId: payload.orderId,
+                refundId: payload.refundId,
                 amount: payload.amount,
                 currency: payload.currency
             }

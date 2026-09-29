@@ -27,6 +27,7 @@ import observability from './modules/observability/module';
 import orders from './modules/orders/module';
 import payments from './modules/payments/module';
 import products from './modules/products/module';
+import returns from './modules/returns/module';
 import users from './modules/users/module';
 import webhooks from './modules/webhooks/module';
 import wishlist from './modules/wishlist/module';
@@ -49,6 +50,7 @@ export const enabledModules: AppModule[] = [
     orders,
     payments,
     products,
+    returns,
     users,
     webhooks,
     wishlist
@@ -105,6 +107,7 @@ export type ModuleName =
     | 'orders'
     | 'payments'
     | 'products'
+    | 'returns'
     | 'users'
     | 'webhooks'
     | 'wishlist';

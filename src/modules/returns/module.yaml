@@ -1,0 +1,7 @@
+subdomain: supporting
+group: shop
+dependsOn:
+    - delivery # the return address, and the cheapest standard delivery a withdrawal refunds
+    - inventory # putting received goods back on sale
+    - orders # the order a return is about: its lines, its owner, and the cancel a pre-dispatch withdrawal becomes
+    - payments # the refund for received goods, and PAYMENT_REFUNDED — the fact that closes a return

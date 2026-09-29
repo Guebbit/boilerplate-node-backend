@@ -35,6 +35,7 @@ export const presentProduct = (document: ProductDocument): Product => {
         ...(document.requiresShipping === undefined
             ? {}
             : { requiresShipping: document.requiresShipping }),
+        ...(document.noWithdrawal === undefined ? {} : { noWithdrawal: document.noWithdrawal }),
         ...(document.weight === undefined ? {} : { weight: document.weight }),
         ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
         ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),

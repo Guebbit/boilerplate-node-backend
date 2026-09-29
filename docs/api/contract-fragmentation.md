@@ -177,7 +177,7 @@ hit them first:
   operations are tagged `Account` too — fragmenting by `basePath` still splits them correctly,
   since `addresses`' own paths (`/account/addresses*`) never overlap `account`'s.
 - **`orders` and `invoicing` share a `basePath`, but NOT a tag.** Both mount at `/orders`;
-  `invoicing`'s two paths (`/orders/{id}/invoice`, `/orders/{id}/credit-note`) are tagged
+  `invoicing`'s two paths (`/orders/{id}/invoice`, `/orders/{id}/credit-notes`) are tagged
   `Invoicing` rather than `Orders`, since download-a-frozen-document is a different concern from
   the order resource itself — fragmenting by `basePath` still splits the two files correctly.
 - **`access` has no HTTP surface of its own** — headless by design, the one module whose manifest

@@ -14,6 +14,7 @@ import { inventoryService } from '@modules/inventory';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 import { paymentEffectRetryMinutes } from '../config';
+import { settleOpenRefunds } from './refunds';
 
 /** How many payments one sweep pass retries before asking to be run again. */
 const SWEEP_BATCH_SIZE = 200;
@@ -82,6 +83,44 @@ export const retryPendingEffects = async (): Promise<number> => {
     if (due.length > 0)
         // Stryker disable next-line all
         logger.info(`Payment effect sweep: ${settled} of ${due.length} owed effects settled`);
+
+    return settled;
+};
+
+/**
+ * Retry every refund the provider refused, or that died before it was answered — the refund half
+ * of the sweep. The same records and the same idempotency keys are sent again, so a provider that
+ * already returned the money answers with the refund it already made instead of returning it twice.
+ *
+ * A hand-paid refund is never finished here: only an operator's own call may say the cash went back.
+ *
+ * @returns how many payments had at least one refund settled
+ */
+export const retryOpenRefunds = async (): Promise<number> => {
+    const cutoff = new Date(Date.now() - paymentEffectRetryMinutes() * 60_000);
+    const due = await paymentRepository.findWithOpenRefunds(cutoff, SWEEP_BATCH_SIZE);
+
+    let settled = 0;
+    for (const payment of due) {
+        const outcome = await settleOpenRefunds(payment).catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not retry the open refund for order ${String(payment.orderId)} — it stays open, and the next sweep tries again`,
+                error
+            });
+            // Stryker restore all
+            return undefined;
+        });
+        if (outcome?.settled) settled += 1;
+    }
+
+    // A full batch means more is waiting. Said out loud, so a truncated run is not read as done.
+    if (due.length === SWEEP_BATCH_SIZE)
+        // Stryker disable all
+        logger.warn(
+            `Payment refund sweep: hit the ${SWEEP_BATCH_SIZE}-payment batch cap — run it again to continue`
+        );
+    // Stryker restore all
 
     return settled;
 };

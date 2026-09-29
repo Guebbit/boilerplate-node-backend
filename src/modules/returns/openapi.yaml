@@ -1,0 +1,491 @@
+openapi: 3.0.3
+info:
+    title: returns — module contract
+    version: '1.0.0'
+
+x-error-codes:
+    RETURN_DEDUCTION_INVALID: { status: 422, description: 'The handling deduction is more than the refund is worth.' }
+    RETURN_LINES_INVALID: { status: 422, description: 'A line names a product that is not on the order, asks for more than is left of it, is excluded from the right of withdrawal (Art. 16), or nothing on the order is left to return.' }
+    RETURN_NOT_RECEIVABLE: { status: 409, description: 'The return is not an approved one awaiting its goods.' }
+    RETURN_NOT_DECIDABLE: { status: 409, description: 'The return has already been decided.' }
+    RETURN_ORDER_NOT_RETURNABLE: { status: 409, description: 'The order is not in a state a return can be opened on — cancelled, or (for a reason other than withdrawal) still in the shop''s hands.' }
+    RETURN_WINDOW_CLOSED: { status: 409, description: 'The withdrawal period for this order has ended.' }
+
+paths:
+    /returns:
+        get:
+            tags: [Returns]
+            summary: List returns (paginated)
+            description: >-
+                Staff (`returns.any.read`) see every return; anyone else sees the returns on their
+                own orders. Filter by `orderId` to see one order's, which is how an order page
+                shows what has happened to a withdrawal.
+            operationId: listReturns
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: orderId
+                  in: query
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - name: status
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/ReturnStatus'
+                - name: reason
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/ReturnReason'
+            responses:
+                '200':
+                    description: A page of returns
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReturnsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [Returns]
+            summary: Open a return, or withdraw from the contract
+            description: >-
+                The customer's one door for sending goods back — and the EU "withdraw from
+                contract here" button (Consumer Rights Directive Art. 11a): a withdrawal is a
+                return with `reason: withdrawal`, not a separate endpoint.
+
+                What follows depends on where the goods are. Once they have shipped, a return is
+                written (201, with `Location`) — a withdrawal is born `approved`, any other reason
+                waits for staff — and the customer gets an acknowledgement email carrying the exact
+                date and time. Before dispatch there is nothing to send back, so a withdrawal
+                cancels the order instead: refunded in full, stock released, acknowledgement mailed,
+                and the answer is the cancelled `Order` (200), not a `Return`. `Order.actions.withdraw`
+                says whether the button is offered; the client never counts the days.
+
+                Only the order's own buyer may do this, an operator included. Sending `Idempotency-Key`
+                makes a retry safe.
+            operationId: createReturn
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateReturnRequest'
+            responses:
+                '201':
+                    description: The return, opened
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReturnEnvelope'
+                '200':
+                    description: A withdrawal before dispatch — the order is cancelled and refunded in full; no return exists
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../orders/openapi.yaml#/components/schemas/OrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Not the caller's order, or no such order.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `RETURN_ORDER_NOT_RETURNABLE`, `RETURN_WINDOW_CLOSED` — or `Idempotency-Key` names a
+                # request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # `RETURN_LINES_INVALID`, or a malformed body.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /returns/{id}:
+        get:
+            tags: [Returns]
+            summary: Get a return
+            description: >-
+                One return with the caller's `actions`. A return on someone else's order answers
+                404, the same as one that does not exist.
+            operationId: getReturnById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The return
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReturnEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /returns/{id}/approve:
+        post:
+            tags: [Returns]
+            summary: Approve a return request
+            description: >-
+                Staff accept a `requested` return; the customer is told they may send the goods
+                back. The write is conditional on the return still being `requested`, so two staff
+                members deciding at once cannot both win — the second answers 409.
+            operationId: approveReturn
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The return, `approved`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReturnEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `RETURN_NOT_DECIDABLE`
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /returns/{id}/decline:
+        post:
+            tags: [Returns]
+            summary: Decline a return request
+            description: >-
+                Staff refuse a `requested` return, saying why — the customer is mailed the reason.
+                Same conditional write as `approve`.
+            operationId: declineReturn
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeclineReturnRequest'
+            responses:
+                '200':
+                    description: The return, `declined`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReturnEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /returns/{id}/receive:
+        post:
+            tags: [Returns]
+            summary: Record that the returned goods arrived
+            description: >-
+                The warehouse (or a manager) says the goods are back: the units go on sale again,
+                the customer is owed the money for them, and the return finishes. Requires an
+                `approved` return — a withdrawal is born approved, anything else was approved by
+                staff first. The status move and the restock are one transaction, so a return is
+                never half-received; the move is conditional, so a second click answers 409.
+
+                What is refunded: the returned lines, plus the delivery paid when the return
+                carries every unit on the order (a withdrawal gets back up to the cheapest standard
+                delivery on offer; faulty or wrong goods get all of it), less an optional
+                `handlingDeduction` for damage the customer caused (Art. 14(2)). The amount is fixed
+                when the goods are received and shown as `refundAmount`. If the payment provider
+                refuses, the return stays `received` and the refund is retried by the payment sweep;
+                the return closes when it lands. Sends `Idempotency-Key`-safe retries. Requires a
+                session that has re-proved itself within the last few minutes — a valid-but-stale
+                token answers 401 with `errors[].code` `REAUTH_REQUIRED`.
+            operationId: receiveReturn
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReceiveReturnRequest'
+            responses:
+                '200':
+                    description: The return — `closed` once the money went back, `received` while a refused refund waits for the sweep
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReturnEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `RETURN_NOT_RECEIVABLE` — or `Idempotency-Key` names a request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # `RETURN_DEDUCTION_INVALID`, or a malformed body.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        ReturnStatus:
+            type: string
+            enum: [requested, approved, declined, received, closed]
+            description: >-
+                Where a return stands: `requested → approved → received → closed`, or `requested →
+                declined`. A withdrawal is born `approved`. Which move may follow which is the
+                server's rule, answered per caller by `Return.actions`.
+
+        ReturnReason:
+            type: string
+            enum: [withdrawal, defective, wrong_item, other]
+            description: >-
+                Why the goods come back. `withdrawal` is the EU right of withdrawal — the same object
+                a faulty-goods return uses, with a legal deadline and an acknowledgement attached.
+
+        ReturnLine:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity, title, unitPrice]
+            description: One line of a return — a snapshot of what is coming back, so it reads the same later.
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+                title:
+                    type: string
+                    description: The product's title as the order froze it.
+                unitPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: The gross unit price the order froze.
+
+        ReturnActions:
+            type: object
+            additionalProperties: false
+            required: [approve, decline, receive]
+            description: >-
+                What the requesting caller may do to this return, decided by the server, so a client
+                renders its controls from this rather than re-implementing the lifecycle.
+            properties:
+                approve:
+                    type: boolean
+                    description: Whether `POST /returns/{id}/approve` would be accepted.
+                decline:
+                    type: boolean
+                    description: Whether `POST /returns/{id}/decline` would be accepted.
+                receive:
+                    type: boolean
+                    description: Whether `POST /returns/{id}/receive` would be accepted.
+
+        Return:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, currency, status, reason, lines, returnPostage, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderNumber:
+                    type: string
+                    description: The order's human number, when it has one.
+                currency:
+                    type: string
+                    description: ISO-4217 code of the order's own currency.
+                status:
+                    $ref: '#/components/schemas/ReturnStatus'
+                reason:
+                    $ref: '#/components/schemas/ReturnReason'
+                note:
+                    type: string
+                    maxLength: 1000
+                    description: What the customer wrote. Free text.
+                lines:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ReturnLine'
+                returnPostage:
+                    type: string
+                    enum: [consumer, shop]
+                    description: >-
+                        Who pays to send the goods back — frozen when the return was opened, from the
+                        shop's configuration, so it is what the customer was told beforehand (Art.
+                        14(1)).
+                declineReason:
+                    type: string
+                    description: Why staff declined. Present only on a `declined` return.
+                decidedAt:
+                    type: string
+                    format: date-time
+                    description: When staff decided it — or, for a withdrawal, when it was opened already approved.
+                receivedAt:
+                    type: string
+                    format: date-time
+                    description: When the goods arrived and went back on sale.
+                handlingDeduction:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: >-
+                        An amount kept back from the refund for handling damage (Art. 14(2)),
+                        entered when the goods were received. Absent when nothing was kept.
+                refundAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: What the customer is owed for this return, fixed when the goods were received.
+                closedAt:
+                    type: string
+                    format: date-time
+                    description: When the money went back and the return finished.
+                # Computed per CALLER, not stored — present on every response carrying ONE return.
+                actions:
+                    $ref: '#/components/schemas/ReturnActions'
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        CreateReturnRequest:
+            type: object
+            additionalProperties: false
+            required: [orderId, reason]
+            properties:
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                reason:
+                    $ref: '#/components/schemas/ReturnReason'
+                note:
+                    type: string
+                    minLength: 1
+                    maxLength: 1000
+                lines:
+                    type: array
+                    minItems: 1
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [productId, quantity]
+                        properties:
+                            productId:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                            quantity:
+                                type: integer
+                                minimum: 1
+                    description: >-
+                        What comes back. Absent means everything on the order that is still left to
+                        return — the usual shape of a withdrawal.
+
+        ReceiveReturnRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                handlingDeduction:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: >-
+                        Handling damage to keep back from the refund (Art. 14(2)), a decimal in the
+                        return's currency. Absent means none. More than the refund is worth is refused.
+
+        DeclineReturnRequest:
+            type: object
+            additionalProperties: false
+            required: [reason]
+            properties:
+                reason:
+                    type: string
+                    minLength: 1
+                    maxLength: 500
+                    description: What the customer is told. Required — a refusal nobody explains is not one.
+
+        ReturnEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Return'
+
+        ReturnsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Return'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        ReturnsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ReturnsResponse'
+
+        # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`) — what the customer
+        # wrote and where it stands. Staff's decision reason and the frozen unit prices are left
+        # out: an export answers "what did I ask for", not a copy of the shop's working records.
+        ExportReturn:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, status, reason, lines]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                status:
+                    $ref: '#/components/schemas/ReturnStatus'
+                reason:
+                    $ref: '#/components/schemas/ReturnReason'
+                note:
+                    type: string
+                lines:
+                    type: array
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [productId, quantity, title]
+                        properties:
+                            productId:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                            quantity:
+                                type: integer
+                                minimum: 1
+                            title:
+                                type: string
+                createdAt:
+                    type: string
+                    format: date-time

@@ -173,6 +173,15 @@ export const transferInstructionsFor = (reference: string): OrderTransferInstruc
 export const orderEffectRetryMinutes = (): number =>
     environmentNumber('NODE_ORDER_EFFECT_RETRY_MINUTES', 5, 0);
 
+/**
+ * How many days a consumer has to withdraw. 14 is the law's floor (Consumer Rights Directive
+ * Art. 9); a deployment may offer longer, never shorter — hence the minimum. Read per call, like
+ * every getter here.
+ * @returns the withdrawal period, in days
+ */
+export const withdrawalPeriodDays = (): number =>
+    environmentNumber('NODE_WITHDRAWAL_PERIOD_DAYS', 14, 14);
+
 /** This module's env var for its one frontend link — `.env-example` documents the default. */
 const ORDER_LINK_ENV_VAR = 'NODE_FRONTEND_LINK_ORDER';
 

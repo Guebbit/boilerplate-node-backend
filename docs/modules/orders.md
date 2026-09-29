@@ -23,12 +23,14 @@ flowchart LR
     invoicing["invoicing"]
     payments["payments"]
     products["products"]
+    returns["returns"]
     users["users"]
 
     cart --> orders
     delivery --> orders
     invoicing --> orders
     payments --> orders
+    returns --> orders
     orders --> inventory
     orders --> products
     orders --> users
@@ -43,7 +45,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class delivery,inventory,invoicing,payments supporting;
+    class delivery,inventory,invoicing,payments,returns supporting;
     class users generic;
     class orders centre;
 ```
@@ -203,7 +205,7 @@ knows the order is still `pending` from its own point of view.
 order alone. The actual tax invoice — a frozen document, its own numbering series, credit notes on
 refund — is [`invoicing`](./invoicing.md), a module this one has no import of and no wiring for:
 `invoicing` depends on `orders`, never the reverse, and reaches its own `GET /orders/{id}/invoice`
-and `GET /orders/{id}/credit-note` by sharing this module's `/orders` basePath (the same pattern
+and `GET /orders/{id}/credit-notes` by sharing this module's `/orders` basePath (the same pattern
 [`addresses`](./addresses.md) uses on `/account`).
 
 The only trace of that relationship here is `paidAt` (`model.ts`), stamped by `services/status.ts`'s
@@ -214,12 +216,39 @@ The only trace of that relationship here is `paidAt` (`model.ts`), stamped by `s
 The placed-order email carries no invoice: nothing is invoiced yet at that point, whatever the
 payment method — see [`invoicing`](./invoicing.md) for what changed and why.
 
+## The withdrawal window
+
+The EU right of withdrawal (Consumer Rights Directive Art. 9 and 11a) is decided here and made in
+[`returns`](./returns.md#the-withdrawal-button). `orders` cannot import `returns`, `payments` or `delivery`, so what it
+owns is the clock and the button:
+
+```mermaid
+flowchart LR
+    paid["paid<br/><i>right exists, no end yet</i>"] --> shipped["shipped<br/><i>still no end</i>"]
+    shipped -- "markDelivered(deliveredAt)" --> goods["delivered<br/><i>withdrawUntil = deliveredAt + 14d</i>"]
+    paid -- "markFulfilled (digital)" --> digital["delivered<br/><i>withdrawUntil = paidAt + 14d</i>"]
+```
+
+- **`withdrawUntil` is frozen, never recomputed** — the same "freeze the fact at the moment it
+  happens" rule `shippingCost` and `currency` follow, so a config change cannot move a promise
+  already made. Goods count from delivery (Art. 9(2)(b)); digital content from the conclusion of the
+  contract (Art. 9(2)(a)), which is `paidAt` here. `delivery` reports the timestamp through
+  `markDelivered(orderId, deliveredAt)`; `orders` cannot read `delivery`'s own.
+- **Before either has happened the window has no end** — the right exists from the moment the
+  contract is concluded, so `withdrawUntil` is absent, not far in the future.
+- **The button is server-driven.** `OrderActions.withdraw` is true for the order's own buyer (not an
+  operator reading it) while the status is withdrawable and the window is open; `withdrawUntil`
+  rides along once the clock has started. A client never counts days.
+- An admin override into `delivered` starts the clock at the override, since no delivery timestamp
+  exists for it.
+
 ## Configuration
 
-| Variable                 | Default             | Meaning                                                                                                                                                                                          |
-| ------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NODE_SHOP_COUNTRY`      | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it                          |
-| `NODE_SHIP_TO_COUNTRIES` | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
+| Variable                      | Default             | Meaning                                                                                                                                                                                          |
+| ----------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_SHOP_COUNTRY`           | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it                          |
+| `NODE_SHIP_TO_COUNTRIES`      | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
+| `NODE_WITHDRAWAL_PERIOD_DAYS` | `14`                | Days a consumer has to withdraw. 14 is the legal minimum, so a smaller value is refused at read; a shop may offer longer                                                                         |
 
 The seller's own legal identity for invoicing (VAT number, legal name, street address) is
 [`invoicing`'s own configuration](./invoicing.md#configuration), not this module's — `orders` keeps
