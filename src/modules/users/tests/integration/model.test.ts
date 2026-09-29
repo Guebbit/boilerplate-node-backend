@@ -133,7 +133,6 @@ describe('user credential exposure', () => {
                 'createdAt',
                 'email',
                 'id',
-                'imageUrl',
                 // The user's preferred language. Public rather than stripped: the client shows
                 // it in the profile and writes it back, and it is in the `User` contract.
                 'locale',
