@@ -52,11 +52,11 @@ export const createProduct = (
                 weight,
                 categories,
                 tags,
-                translations,
-                imageUrl
+                translations
             },
             callerContextOf(request),
-            { thumbnailUrl, pendingImageKey }
+            // Server-decided, so it never rides in the body the schema validates.
+            { imageUrl, thumbnailUrl, pendingImageKey }
         )
         .then((result) => {
             if (!result.success)

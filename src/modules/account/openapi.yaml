@@ -1269,8 +1269,6 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 passwordConfirm:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
-                imageUrl:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
                 # Must be `true` — the checkbox gating the Terms of Service / Privacy Policy.
                 # Server-enforced (see `accountService.signup`), not just a client-side gate.
                 termsAccepted:
@@ -1359,9 +1357,7 @@ components:
                 # `null` removes the image. Omitted leaves it unchanged; `''` is
                 # invalid (`ImageUrl`'s own `minLength: 1`), never a third spelling of "no image".
                 imageUrl:
-                    nullable: true
-                    allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 phone:
                     type: string
                     minLength: 1
@@ -1421,9 +1417,7 @@ components:
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 imageUrl:
-                    nullable: true
-                    allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 phone:
                     type: string
                     minLength: 1

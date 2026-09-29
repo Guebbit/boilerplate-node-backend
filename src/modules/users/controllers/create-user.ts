@@ -59,7 +59,6 @@ export const createUser = (
     const errors = userService.validateData(
         {
             ...body,
-            imageUrl,
             role,
             active
         },
@@ -77,9 +76,9 @@ export const createUser = (
     // records what the validator just established rather than assuming it. `thumbnailUrl` is on
     // `User` itself (readOnly on the contract); `pendingImageKey` is not, so it joins via an
     // intersection — both are server-derived, never client-supplied.
-    const validated = { imageUrl, role, active, thumbnailUrl, pendingImageKey } as Pick<
+    const validated = { role, active, thumbnailUrl, pendingImageKey } as Pick<
         User,
-        'imageUrl' | 'role' | 'active' | 'thumbnailUrl'
+        'role' | 'active' | 'thumbnailUrl'
     > & { pendingImageKey?: string };
 
     return userService
@@ -87,6 +86,8 @@ export const createUser = (
             {
                 ...body,
                 ...validated,
+                // Server-decided, so it joins only after the body was validated as `null`-only.
+                imageUrl,
                 sendSetupEmail
             },
             callerContextOf(request)

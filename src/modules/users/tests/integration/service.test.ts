@@ -87,6 +87,15 @@ const expectCreated = async (
     return (result as ResponseSuccess<UserDocument>).data;
 };
 
+/** Validates an otherwise valid create body that carries only the given `imageUrl`. */
+const withImage = (imageUrl: string | null) =>
+    userService.validateData({
+        email: 'valid@example.com',
+        username: 'validuser',
+        password: PLAIN_PASSWORD,
+        imageUrl
+    });
+
 describe('userService.validateData', () => {
     it('returns an empty array for valid user data', () => {
         const errors = userService.validateData({
@@ -154,17 +163,10 @@ describe('userService.validateData', () => {
         expect(errors).toHaveLength(0);
     });
 
-    // The contract says `uri-reference`, not `uri`: an uploaded avatar is stored as a path
-    // relative to the API host, so requiring an absolute URL here would reject every upload.
-    it('accepts a server-relative upload path as the imageUrl', () => {
-        const errors = userService.validateData({
-            email: 'valid@example.com',
-            username: 'validuser',
-            password: PLAIN_PASSWORD,
-            imageUrl: '/uploads/1700000000-avatar.jpg'
-        });
-
-        expect(errors).toHaveLength(0);
+    // A client never names a path in the image store — it can only remove one with `null`.
+    it('refuses a path as the imageUrl, and accepts null', () => {
+        expect(withImage('/uploads/1700000000-avatar.jpg')).toHaveLength(1);
+        expect(withImage(null)).toHaveLength(0);
     });
 
     // Not strict: a PUT body legitimately carries `id`, which is not part of the user schema.

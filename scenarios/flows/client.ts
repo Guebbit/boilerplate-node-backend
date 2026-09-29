@@ -95,8 +95,15 @@ const send = (
 ): Promise<Attempt> =>
     fetch(`${baseUrl}${path}`, {
         method,
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body)
+        // A `FormData` body is a multipart upload: fetch must set its own boundary header, so the
+        // JSON content type is dropped for it. https://developer.mozilla.org/docs/Web/API/FormData
+        headers:
+            body instanceof FormData
+                ? Object.fromEntries(
+                      Object.entries(headers).filter(([name]) => name !== 'content-type')
+                  )
+                : headers,
+        body: body === undefined || body instanceof FormData ? body : JSON.stringify(body)
     }).then(readAttempt);
 
 /**

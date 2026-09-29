@@ -27,7 +27,12 @@ import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-
 import { zodUserSchema, TokenType, hashToken, DEFAULT_USER_IMAGE_URL } from './model';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import type { UserDocument, Token, UserWire } from './model';
-import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
+import type {
+    CreateUserRequest,
+    SearchUsersRequest,
+    UpdateUserByIdRequest,
+    WithServerImage
+} from '@types';
 import { userRepository } from './repository';
 import { presentUser, presentUserWithCurrentRole } from './presenter';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
@@ -121,7 +126,7 @@ const nonBlankPassword = (password?: string): boolean =>
  *   whole create, and the controller reads `result.success` rather than a thrown error.
  */
 export const create = (
-    data: CreateUserRequest & {
+    data: WithServerImage<CreateUserRequest> & {
         /** Set alongside the pending-image placeholder — see `readUploadedImage`. */
         pendingImageKey?: string;
     },
@@ -152,7 +157,13 @@ export const create = (
         const role = data.role ?? VERIFIED_CUSTOMER_ROLE;
 
         return userRepository
-            .create({ verifiedAt: new Date(), ...data, password })
+            .create({
+                verifiedAt: new Date(),
+                ...data,
+                // `null` on a create means no image: the schema default applies to `undefined` only.
+                imageUrl: data.imageUrl ?? undefined,
+                password
+            })
             .then((user) =>
                 /*
                  * The membership is the ONLY grant — there is no column beside it.
@@ -220,7 +231,7 @@ export const create = (
  */
 export const update = (
     user: UserDocument,
-    data: UpdateUserByIdRequest & {
+    data: WithServerImage<UpdateUserByIdRequest> & {
         /** Not on `UpdateUserByIdRequest` — `readOnly` on the contract, set only by the server. */
         thumbnailUrl?: string;
         /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
@@ -398,7 +409,10 @@ export const updateById = (
     id: string,
     // `thumbnailUrl`/`pendingImageKey`: not on the contract, server-derived — see `update()`'s
     // own docblock for why each rides along the same way.
-    data: UpdateUserByIdRequest & { thumbnailUrl?: string; pendingImageKey?: string },
+    data: WithServerImage<UpdateUserByIdRequest> & {
+        thumbnailUrl?: string;
+        pendingImageKey?: string;
+    },
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     // Credentials included: `data.password`, when present, is assigned onto this document.

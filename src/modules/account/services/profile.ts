@@ -271,7 +271,6 @@ const zodProfileSchema = zodUserSchema
     .pick({ email: true, username: true })
     .extend({
         locale: UpdateAccountBody.shape.locale,
-        imageUrl: UpdateAccountBody.shape.imageUrl,
         phone: UpdateAccountBody.shape.phone,
         website: UpdateAccountBody.shape.website,
         // Absence still means "leave it alone", same as every other field here, not "withdraw
@@ -282,6 +281,9 @@ const zodProfileSchema = zodUserSchema
         // server, not the client, produces them. They ride along here only because the controller
         // passes them from its own `readUploadedImage` call, the same way `imageUrl` does when an
         // upload — rather than a body value — is what set it.
+        // The server-decided path (`readUploadedImage`), or `null` to remove — never a client's
+        // own string: the wire schema only lets the body carry `null`.
+        imageUrl: z.string().min(1).nullable().optional(),
         thumbnailUrl: z.string().optional(),
         pendingImageKey: z.string().optional()
     })

@@ -71,12 +71,20 @@ const titlesOf = (items: { title: string }[]): string[] => items.map(({ title })
 /** A valid fallback-locale entry — every positive-path test spreads this in. */
 const FALLBACK_TRANSLATIONS = { translations: { en: { title: 'A Valid Product' } } };
 
+/** Validates a create body that carries only the given `imageUrl`. */
+const withImage = (imageUrl: string | null) =>
+    productService.validateCreateData({
+        ...FALLBACK_TRANSLATIONS,
+        price: 10,
+        imageUrl,
+        active: true
+    });
+
 describe('productService.validateCreateData', () => {
     it('returns an empty array for valid product data', () => {
         const errors = productService.validateCreateData({
             translations: { en: { title: 'A Valid Product', description: 'Some description' } }, // >= 5 chars
             price: 19.99,
-            imageUrl: 'https://example.com/product.jpg',
             active: true
         });
 
@@ -87,7 +95,6 @@ describe('productService.validateCreateData', () => {
         const errors = productService.validateCreateData({
             translations: { en: { title: 'Abc' } }, // < 5 chars
             price: 9.99,
-            imageUrl: 'https://example.com/img.jpg',
             active: true
         });
 
@@ -95,11 +102,10 @@ describe('productService.validateCreateData', () => {
     });
 
     it('returns an error when the title is missing', () => {
-        // price and imageUrl are valid so the only failure is the title
+        // price is valid so the only failure is the title
         const errors = productService.validateCreateData({
             translations: { en: { title: '' } },
             price: 9.99,
-            imageUrl: 'https://example.com/img.jpg',
             active: true
         });
 
@@ -125,7 +131,6 @@ describe('productService.validateCreateData', () => {
         const errors = productService.validateCreateData({
             ...FALLBACK_TRANSLATIONS,
             price: -1,
-            imageUrl: '/uploads/img.jpg',
             active: true
         });
 
@@ -136,7 +141,6 @@ describe('productService.validateCreateData', () => {
         const errors = productService.validateCreateData({
             translations: { en: { title: 'A Free Product' } },
             price: 0,
-            imageUrl: '/uploads/img.jpg',
             active: true
         });
 
@@ -150,7 +154,6 @@ describe('productService.validateCreateData', () => {
         const errors = productService.validateCreateData({
             ...FALLBACK_TRANSLATIONS,
             price: 10,
-            imageUrl: '/uploads/img.jpg',
             active: 'not-a-boolean'
         });
 
@@ -161,7 +164,6 @@ describe('productService.validateCreateData', () => {
         const errors = productService.validateCreateData({
             ...FALLBACK_TRANSLATIONS,
             price: 10,
-            imageUrl: '/uploads/img.jpg',
             active: true,
             [field]: 42
         });
@@ -178,17 +180,10 @@ describe('productService.validateCreateData', () => {
         expect(errors.length).toBeGreaterThan(0);
     });
 
-    // The contract says `uri-reference`, not `uri`: an uploaded image is stored as a path
-    // relative to the API host, so requiring an absolute URL here would reject every upload.
-    it('accepts a server-relative upload path as the imageUrl', () => {
-        const errors = productService.validateCreateData({
-            ...FALLBACK_TRANSLATIONS,
-            price: 10,
-            imageUrl: '/uploads/1700000000-photo.jpg',
-            active: true
-        });
-
-        expect(errors).toHaveLength(0);
+    // A client never names a path in the image store — it can only remove one with `null`.
+    it('refuses a path as the imageUrl, and accepts null', () => {
+        expect(withImage('/uploads/1700000000-photo.jpg')).toHaveLength(1);
+        expect(withImage(null)).toHaveLength(0);
     });
 
     /**

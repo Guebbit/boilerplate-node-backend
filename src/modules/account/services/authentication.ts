@@ -457,15 +457,7 @@ export const signup = (
     input: SignupInput,
     callerContext: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const {
-        email,
-        username,
-        password,
-        passwordConfirm,
-        analyticsConsent,
-        termsAccepted,
-        imageUrl
-    } = input;
+    const { email, username, password, passwordConfirm, analyticsConsent, termsAccepted } = input;
 
     const parseResult = zodUserSchema
         .extend({
@@ -491,7 +483,6 @@ export const signup = (
         .safeParse({
             email,
             username,
-            imageUrl,
             password,
             passwordConfirm,
             analyticsConsent,

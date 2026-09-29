@@ -69,7 +69,7 @@ const messageFor = (issue: $ZodIssue): string => {
         }
 
         case 'invalid_value': {
-            return t('validation.invalid-value', { values: issue.values.join(', ') });
+            return t('validation.invalid-value', { values: issue.values.map(String).join(', ') });
         }
 
         default: {
