@@ -76,7 +76,7 @@ paths:
         post:
             tags: [Inventory]
             summary: Receive stock
-            description: Units arrive from a supplier — `onHand` rises, `reserved` does not, so the delivery becomes available immediately. The only transition that can create units, and the reason a shop that has sold out can sell again. Send an `Idempotency-Key`: a retried receipt with the same key replays the first answer instead of counting the delivery twice.
+            description: Units arrive from a supplier — `onHand` rises, `reserved` does not, so the delivery becomes available immediately. The only transition that can create units, and the reason a shop that has sold out can sell again. Send an `Idempotency-Key` — a retried receipt with the same key replays the first answer instead of counting the delivery twice.
             operationId: receiveStock
             security:
                 - bearerAuth: []
@@ -107,7 +107,7 @@ paths:
         post:
             tags: [Inventory]
             summary: Adjust stock
-            description: A stocktake correction — signed, because shrinkage is the common case and it is negative. Refuses to take `onHand` below what is already reserved, because those units are promised to orders that exist — the fix for finding fewer units than were sold is to cancel orders, not to make availability negative. Send an `Idempotency-Key`: a retried correction with the same key replays the first answer instead of applying the delta twice.
+            description: A stocktake correction — signed, because shrinkage is the common case and it is negative. Refuses to take `onHand` below what is already reserved, because those units are promised to orders that exist — the fix for finding fewer units than were sold is to cancel orders, not to make availability negative. Send an `Idempotency-Key` — a retried correction with the same key replays the first answer instead of applying the delta twice.
             operationId: adjustStock
             security:
                 - bearerAuth: []
