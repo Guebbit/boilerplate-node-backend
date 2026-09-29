@@ -54,12 +54,13 @@ A log line is a copy of your data with none of your access controls on it.
 Listed because they are real rows, and because this repo cannot close them — naming the owner is
 the honest verdict.
 
-| Attack                        | How it works                                    | Owner                                                                                  |
-| ----------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Directory listing             | autoindex on a static directory                 | Closed here — `index: false`, see [Files](files-and-uploads.md#what-gets-served-back). |
-| Metadata files                | `robots.txt` listing admin paths, `sitemap.xml` | The frontend's static server.                                                          |
-| Subdomain / asset enumeration | certificate transparency logs, DNS brute force  | DNS and the domain owner.                                                              |
-| DNS zone transfer             | AXFR allowed to anyone                          | The DNS provider.                                                                      |
+| Attack                        | How it works                                    | Owner                                                                                                   |
+| ----------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Directory listing             | autoindex on a static directory                 | Closed here — `index: false`, see [Files](files-and-uploads.md#what-gets-served-back).                  |
+| Metadata files                | `robots.txt` listing admin paths, `sitemap.xml` | The frontend's static server.                                                                           |
+| Subdomain / asset enumeration | certificate transparency logs, DNS brute force  | DNS and the domain owner.                                                                               |
+| Reporting channel             | no way for a finder to reach the owner          | Closed here — `/.well-known/security.txt`, [opt-in](../../tools/security.md#reporting-a-vulnerability). |
+| DNS zone transfer             | AXFR allowed to anyone                          | The DNS provider.                                                                                       |
 
 ## Related
 
