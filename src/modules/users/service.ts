@@ -42,7 +42,13 @@ import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import { assignRole, assertCanGrant, revokeAllOf, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
+import {
+    assignRole,
+    assertCanGrant,
+    revokeAllOf,
+    rolesOf,
+    VERIFIED_CUSTOMER_ROLE
+} from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
@@ -275,6 +281,25 @@ export const update = (
 };
 
 /**
+ * The role an update actually changes to, or `undefined` when it changes nothing.
+ *
+ * A PUT carries `role` every time (RFC 9110 §9.3.4), so "present" is not "changed". Re-granting
+ * the role already held would refuse a caller allowed to edit this user but never to grant that
+ * role — support editing a customer — and would audit a role change that never happened.
+ *
+ * @param user - the loaded document, before its membership is touched
+ * @param requested - `data.role` as the request sent it
+ * @returns the role to grant, or `undefined` for none
+ */
+const changedRole = (user: UserDocument, requested?: string): Promise<string | undefined> =>
+    requested === undefined
+        ? Promise.resolve(undefined)
+        : rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then(({ tenant }) =>
+              // Stored lower-cased and trimmed — the membership schema's own normalisation.
+              tenant === requested.trim().toLowerCase() ? undefined : requested
+          );
+
+/**
  * The save-and-react half of {@link update}, split out so the breach check above it reads as one
  * idea rather than the start of an even longer function.
  *
@@ -283,6 +308,22 @@ export const update = (
  *   fails would leave a row pointing at a 404.
  */
 const updateSavedUser = (
+    user: UserDocument,
+    data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
+    context: CallerContext,
+    oldImageUrl?: string
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    changedRole(user, data.role).then((role) =>
+        saveWithRole(user, { active: data.active, role }, context, oldImageUrl)
+    );
+
+/**
+ * {@link updateSavedUser} once the role is known to be a real change (or none): check the grant,
+ * save, then revoke sessions, write the membership and clean up the old avatar.
+ *
+ * @param data - `role` here is {@link changedRole}'s answer, never the raw request's
+ */
+const saveWithRole = (
     user: UserDocument,
     data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
     context: CallerContext,
@@ -378,8 +419,9 @@ export const updateById = (
                     target_id: id
                 });
                 // Deactivation is a product event as well as an administrative one: it is what a
-                // churn dashboard counts, and it is invisible in a plain "updated" signal.
-                if (data.active === false)
+                // churn dashboard counts, and it is invisible in a plain "updated" signal. Only on
+                // the flip — a PUT resends `active: false` on every save of a deactivated user.
+                if (data.active === false && wasActive !== false)
                     emitAnalyticsEvent({
                         ...buildAnalyticsBase(context),
                         distinctId: id,

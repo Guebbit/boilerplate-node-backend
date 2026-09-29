@@ -17,6 +17,8 @@ import { USER_SETUP_REQUESTED } from '../../events';
 import { userRepository } from '../../repository';
 import { usersAuditActions } from '@modules/users/audit';
 import * as auditPort from '@infrastructure/observability/audit';
+import * as analyticsPort from '@infrastructure/observability/analytics';
+import { usersAnalyticsEvents } from '../../analytics';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { assignRole, membershipsOf, rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -53,6 +55,12 @@ jest.mock('@infrastructure/observability/audit', () => {
  * `products/tests/integration/service.test.ts`: the service owes its collaborator only a
  * *stored-image handle* (`imageUrl`).
  */
+// Same reason as the audit port above: `observePort` needs a plain `jest.fn()` to hand out.
+jest.mock('@infrastructure/observability/analytics', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/analytics'),
+    emitAnalyticsEvent: jest.fn()
+}));
 jest.mock('@infrastructure/adapters/image-store', () => ({
     // `applyImageWriteback` is a pure mutation the tests below rely on for real — only the
     // filesystem-touching `remove` half needs stubbing.
@@ -666,6 +674,45 @@ describe('userService.updateById', () => {
 
         const refreshed = await userRepository.findById(id);
         expect(refreshed!.active).toBe(true);
+    });
+
+    /*
+     * A PUT carries `role` and `active` on every save. Resending what the user already has must
+     * not be a grant (support may edit a customer but could never GRANT `customer`), and must not
+     * count a second deactivation.
+     */
+    it('treats the role already held as no change: no grant check, no role audit', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({}, 'customer');
+        const id = user._id.toString();
+
+        const result = await userService.updateById(
+            id,
+            { role: 'Customer', active: true },
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        expect(auditSpy).not.toHaveBeenCalledWith(
+            // `access`'s own action name — its `audit.ts` is wiring, not published by its barrel.
+            expect.objectContaining({ action: 'access.role.assigned' })
+        );
+    });
+
+    it('counts a deactivation once, not again on every save of an inactive user', async () => {
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
+        const deactivated = expect.objectContaining({
+            event: usersAnalyticsEvents.USER_DEACTIVATED
+        });
+        const user = await createUser({ active: true });
+        const id = user._id.toString();
+
+        await userService.updateById(id, { active: false }, testCallerContext);
+        await userService.updateById(id, { active: false }, testCallerContext);
+
+        expect(
+            analyticsSpy.mock.calls.filter(([event]) => deactivated.asymmetricMatch(event))
+        ).toHaveLength(1);
     });
 
     it('records a ban, not a plain update, when active flips from true to false', async () => {
