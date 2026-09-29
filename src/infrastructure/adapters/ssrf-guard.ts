@@ -2,7 +2,8 @@
  * @module
  * SSRF guard for an outbound request this server initiates on someone else's behalf: resolve,
  * THEN validate, THEN pin, so a second DNS lookup can never answer differently once a target is
- * decided — the DNS-rebinding TOCTOU. Generic — no caller named; `webhooks` is the only one today.
+ * decided — the DNS-rebinding TOCTOU. Generic; its callers today are
+ * `webhooks` and the OAuth avatar re-host.
  *
  * Infrastructure, not `domain/`: this module does DNS I/O.
  *
