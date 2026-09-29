@@ -208,6 +208,36 @@ const markDelivered = (
         .exec();
 
 /**
+ * Write one of the projections another module owns (`paymentStatus`, `returnStatus`). Unconditional
+ * on purpose: a projection is a report of a fact the owner already decided, so a repeat writes the
+ * same value, and `undefined` clears it — "no return holds goods" is the absence of the field.
+ * @param id - the order
+ * @param fields - the projection(s) to set; a key set to `undefined` is unset
+ * @returns whether an order was found
+ */
+const setProjection = (
+    id: string,
+    fields: { paymentStatus?: string | undefined; returnStatus?: string | undefined }
+): Promise<boolean> => {
+    const $set: Record<string, string> = {};
+    const $unset: Record<string, 1> = {};
+    for (const [key, value] of Object.entries(fields))
+        if (value === undefined) $unset[key] = 1;
+        else $set[key] = value;
+
+    return orderModel
+        .updateOne(
+            { _id: toObjectId(id) },
+            {
+                ...(Object.keys($set).length > 0 ? { $set } : {}),
+                ...(Object.keys($unset).length > 0 ? { $unset } : {})
+            }
+        )
+        .exec()
+        .then(({ matchedCount }) => matchedCount > 0);
+};
+
+/**
  * Move an order to `to` from any status in `from`, appending one override-history entry in the
  * SAME write — an override's history entry and the status move it describes must never come
  * apart, the same reasoning {@link updateStatusIfIn}'s `effects` parameter already follows for
@@ -523,6 +553,10 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         session?: ClientSession
     ) => Promise<OrderDocument | null>;
     markPaid: (id: string, from: OrderStatus) => Promise<OrderDocument | null>;
+    setProjection: (
+        id: string,
+        fields: { paymentStatus?: string | undefined; returnStatus?: string | undefined }
+    ) => Promise<boolean>;
     markDelivered: (
         id: string,
         from: OrderStatus,
@@ -557,6 +591,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     updateStatusIfIn,
     markPaid,
     markDelivered,
+    setProjection,
     applyStatusOverride,
     findWithPendingEffects,
     findPendingByProductId,

@@ -32,6 +32,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { emitDomainEvent } from '@kernel/events';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import {
+    orderService,
     toMinorUnits,
     toDecimalAmount,
     addMoney,
@@ -165,6 +166,28 @@ const isFullyRefunded = (payment: PaymentDocument): boolean =>
     remainingOf(payment) === 0 && payment.refunds.every((refund) => refund.status === 'succeeded');
 
 /**
+ * Tell `orders` where the money stands now, so its `paymentStatus` reads right without `orders`
+ * ever asking here. Fire-and-forget: a projection is a report, and a failed one must not undo a
+ * refund that already went back — the next refund stamps it again.
+ * @param payment - the payment after a refund settled
+ */
+const reportRefundedToOrder = (payment: PaymentDocument): void => {
+    void orderService
+        .markPaymentStatus(
+            String(payment.orderId),
+            payment.status === 'refunded' ? 'refunded' : 'partially_refunded'
+        )
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not report the refund state to order ${String(payment.orderId)}`,
+                error
+            });
+            // Stryker restore all
+        });
+};
+
+/**
  * Tell the rest of the system a refund landed: the log line, the audit row, and the fact
  * `invoicing` issues a credit note from and `webhooks` fans out.
  *
@@ -199,6 +222,7 @@ const announceRefund = (
         target_id: orderId,
         metadata: { refundId: String(refund._id), amount: refund.amount }
     });
+    reportRefundedToOrder(payment);
     void emitDomainEvent(PAYMENT_REFUNDED, {
         paymentId: String(payment._id),
         orderId,

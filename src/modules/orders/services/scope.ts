@@ -124,7 +124,9 @@ const withdrawalActions = (
 ): Pick<OrderActions, 'withdraw' | 'withdrawUntil'> => {
     const isBuyer = String(order.userId) === authContext?.id;
     return {
-        withdraw: isBuyer && canWithdraw(order, new Date()),
+        // Nothing left to send back once every unit has: `returnStatus` is the projection `returns`
+        // stamps, the only way this module can know.
+        withdraw: isBuyer && canWithdraw(order, new Date()) && order.returnStatus !== 'returned',
         ...(order.withdrawUntil ? { withdrawUntil: order.withdrawUntil.toISOString() } : {})
     };
 };

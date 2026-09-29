@@ -24,6 +24,7 @@ import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
 import { DECIDABLE_RETURN_STATUSES } from '../domain';
 import { mailReturnNotice } from './notify';
+import { syncReturnStatus } from './projection';
 
 /**
  * What a lost race, or a request already answered, looks like: 404 for a return that does not
@@ -95,16 +96,20 @@ const decide = (
                 target_id: id,
                 metadata: { orderId: String(decided.orderId) }
             });
-            return notifyDecision(
-                decided,
-                to === 'approved' ? 'return-approved' : 'return-declined'
-            ).then(() =>
-                generateSuccess(
-                    decided,
-                    200,
-                    t(to === 'approved' ? 'returns.approved' : 'returns.declined')
+            return syncReturnStatus(String(decided.orderId))
+                .then(() =>
+                    notifyDecision(
+                        decided,
+                        to === 'approved' ? 'return-approved' : 'return-declined'
+                    )
                 )
-            );
+                .then(() =>
+                    generateSuccess(
+                        decided,
+                        200,
+                        t(to === 'approved' ? 'returns.approved' : 'returns.declined')
+                    )
+                );
         });
 
 /**

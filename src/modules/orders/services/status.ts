@@ -13,7 +13,12 @@ import { OrderStatus } from '@types';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import { ORDER_STATUS_CHANGED } from '../events';
-import { statusesLeadingTo, withdrawUntilFrom } from '../domain';
+import {
+    statusesLeadingTo,
+    withdrawUntilFrom,
+    type StampedPaymentStatus,
+    type StampedReturnStatus
+} from '../domain';
 import { withdrawalPeriodDays } from '../config';
 
 /**
@@ -152,3 +157,29 @@ export const markFulfilled = (orderId: string): Promise<OrderDocument | null> =>
             withdrawUntilFrom(start, withdrawalPeriodDays())
         );
     });
+
+/**
+ * Report where an order's money stands once a refund exists. `payments`' own door for this — the
+ * order cannot ask `payments`, so `payments` tells it, the same shape as {@link markShipped}. Only
+ * the two refund states are reported: `unpaid` and `paid` are derived from `paidAt` on read.
+ *
+ * @param orderId - the order whose payment was refunded
+ * @param paymentStatus - `partially_refunded` while some of the money is still with the shop,
+ *   `refunded` once all of it went back
+ */
+export const markPaymentStatus = (
+    orderId: string,
+    paymentStatus: StampedPaymentStatus
+): Promise<boolean> => orderRepository.setProjection(orderId, { paymentStatus });
+
+/**
+ * Report where the order's returns stand. `returns`' own door for this. `undefined` clears it: no
+ * return holds goods, which is the `none` a reader sees.
+ *
+ * @param orderId - the order the returns belong to
+ * @param returnStatus - the state to show, or `undefined` for none
+ */
+export const markReturnStatus = (
+    orderId: string,
+    returnStatus: StampedReturnStatus | undefined
+): Promise<boolean> => orderRepository.setProjection(orderId, { returnStatus });

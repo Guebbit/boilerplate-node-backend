@@ -15,3 +15,6 @@ export type { ReturnStatus, ReturnReason } from './lifecycle';
 
 export { returnableQuantities, checkRequestedLines } from './quantities';
 export type { OrderedLine, RequestedLine, LinesVerdict } from './quantities';
+
+export { projectReturnStatus } from './status-projection';
+export type { ProjectedReturn, ProjectedReturnStatus } from './status-projection';

@@ -13,6 +13,7 @@ import type { ReturnDocument } from '../model';
 import { CLOSABLE_RETURN_STATUSES } from '../domain';
 import { RETURN_CLOSED } from '../events';
 import { mailReturnNotice } from './notify';
+import { syncReturnStatus } from './projection';
 
 /**
  * Close a received return: stamp when, announce it once, and tell the customer their money went
@@ -34,8 +35,8 @@ export const closeReturn = (id: string): Promise<ReturnDocument | null> =>
                 refundAmount: closed.refundAmount ?? 0,
                 currency: closed.currency
             });
-            return orderService
-                .getById(String(closed.orderId))
+            return syncReturnStatus(String(closed.orderId))
+                .then(() => orderService.getById(String(closed.orderId)))
                 .then((order) =>
                     order
                         ? mailReturnNotice('return-closed', order, {

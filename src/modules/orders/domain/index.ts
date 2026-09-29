@@ -52,3 +52,7 @@ export { buildReference, parseReference } from './transfer-reference';
 /** The right of withdrawal: when the window closes, and whether the button shows. */
 export { canWithdraw, isBeforeDispatch, withdrawUntilFrom } from './withdrawal';
 export type { WithdrawalCandidate } from './withdrawal';
+
+/** The three statuses beside `status`: the money, the goods, any return. */
+export { fulfillmentStatusOf, paymentStatusOf, returnStatusOf } from './projections';
+export type { StampedPaymentStatus, StampedReturnStatus } from './projections';

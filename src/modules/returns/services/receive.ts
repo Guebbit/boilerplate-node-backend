@@ -40,6 +40,7 @@ import { returnsAuditActions } from '../audit';
 import { RETURN_RECEIVED } from '../events';
 import { RECEIVABLE_RETURN_STATUSES } from '../domain';
 import { closeReturn } from './close';
+import { syncReturnStatus } from './projection';
 import { refundAmountFor, type RefundBreakdown } from './refund-amount';
 
 /** What staff may enter when the goods arrive. */
@@ -203,6 +204,7 @@ export const receiveReturn = (
                     .refreshStockCacheForProducts(
                         received.lines.map(({ productId }) => String(productId))
                     )
+                    .then(() => syncReturnStatus(String(received.orderId)))
                     .then(() => {
                         recordAudit(context, {
                             action: returnsAuditActions.ADMIN_RETURN_RECEIVED,
