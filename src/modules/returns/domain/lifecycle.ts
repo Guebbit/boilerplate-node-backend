@@ -19,6 +19,9 @@ export const DECIDABLE_RETURN_STATUSES: readonly ReturnStatus[] = ['requested'];
 /** What may be received: only a return that was approved (a withdrawal is born approved). */
 export const RECEIVABLE_RETURN_STATUSES: readonly ReturnStatus[] = ['approved'];
 
+/** What may be closed: goods received whose money has not gone back yet. */
+export const CLOSABLE_RETURN_STATUSES: readonly ReturnStatus[] = ['received'];
+
 /**
  * The status a return is opened in. A withdrawal is a right the consumer exercises, not a favour
  * staff grant, so there is nothing to decide and it starts `approved`; every other reason waits

@@ -18,7 +18,8 @@ export type ReturnNoticeKind =
     | 'withdrawal-acknowledged'
     | 'return-requested'
     | 'return-approved'
-    | 'return-declined';
+    | 'return-declined'
+    | 'return-closed';
 
 /** What a notice needs to fill its copy. */
 export interface ReturnNoticeInput {
@@ -30,6 +31,16 @@ export interface ReturnNoticeInput {
     at: Date;
     /** Staff's reason, on a decline. */
     declineReason?: string;
+    /** What went back, on a closed return. */
+    refund?: { amount: number; currency: string };
+    /** Where to send the goods, on an approval — absent until the deployment configures one. */
+    returnAddress?: {
+        name?: string;
+        street: string;
+        city: string;
+        zip: string;
+        country: string;
+    };
 }
 
 /**
@@ -65,11 +76,32 @@ export const returnNoticeEmail = (
     const parameters = {
         order: input.orderRef,
         date: stamp(locale, input.at),
-        reason: input.declineReason ?? ''
+        reason: input.declineReason ?? '',
+        amount: input.refund
+            ? new Intl.NumberFormat(locale, {
+                  style: 'currency',
+                  currency: input.refund.currency
+              }).format(input.refund.amount)
+            : ''
     };
-    // A declined return says nothing about postage — there is no return to post.
+    // Neither a decline nor a closing says anything about postage — there is nothing left to post.
     const postage =
-        kind === 'return-declined' ? undefined : t(`returns.email.postage-${input.returnPostage}`);
+        kind === 'return-declined' || kind === 'return-closed'
+            ? undefined
+            : t(`returns.email.postage-${input.returnPostage}`);
+    const { returnAddress } = input;
+    const address = returnAddress
+        ? t('returns.email.return-address', {
+              address: [
+                  returnAddress.name,
+                  returnAddress.street,
+                  `${returnAddress.zip} ${returnAddress.city}`,
+                  returnAddress.country
+              ]
+                  .filter(Boolean)
+                  .join(', ')
+          })
+        : undefined;
 
     return {
         template: 'returns.notice',
@@ -81,6 +113,7 @@ export const returnNoticeEmail = (
             greeting: t('returns.email.greeting', { name }),
             body: t(`returns.email.${kind}.body`, parameters),
             postage,
+            address,
             footer: t('email.footer')
         }
     };

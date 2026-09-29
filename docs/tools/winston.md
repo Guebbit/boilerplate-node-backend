@@ -157,6 +157,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `products`       | `ADMIN_PRODUCT_UPDATED`                     | `admin.product.updated`                     | `product`              |
 | `returns`        | `ADMIN_RETURN_APPROVED`                     | `admin.return.approved`                     | `return`               |
 | `returns`        | `ADMIN_RETURN_DECLINED`                     | `admin.return.declined`                     | `return`               |
+| `returns`        | `ADMIN_RETURN_RECEIVED`                     | `admin.return.received`                     | `return`               |
 | `returns`        | `RETURN_REQUESTED`                          | `return.requested`                          | `return`               |
 | `users`          | `ADMIN_USER_2FA_DISABLED`                   | `admin.user.two_factor_disabled`            | `user`                 |
 | `users`          | `ADMIN_USER_BANNED`                         | `admin.user.banned`                         | —                      |

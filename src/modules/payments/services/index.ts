@@ -28,7 +28,7 @@ import {
     applyWebhookDelivery,
     applyWebhookSettlement
 } from './settlement';
-import { refundByOrder, refundForOrder } from './refunds';
+import { refundByOrder, refundForOrder, refundForReturn } from './refunds';
 import { retryPendingEffects, retryOpenRefunds } from './effects';
 import { recordOfflinePayment } from './offline';
 import { getForOrder } from './view';
@@ -54,7 +54,7 @@ export {
     applyWebhookDelivery,
     applyWebhookSettlement
 } from './settlement';
-export { performRefund, refundByOrder, refundForOrder } from './refunds';
+export { performRefund, refundByOrder, refundForOrder, refundForReturn } from './refunds';
 export { retryPendingEffects, retryOpenRefunds } from './effects';
 export { recordOfflinePayment, type OfflinePaymentInput } from './offline';
 export { getForOrder, withActions } from './view';
@@ -79,6 +79,7 @@ export const paymentService = {
     getForOrder,
     refundForOrder,
     refundByOrder,
+    refundForReturn,
     retryPendingEffects,
     retryOpenRefunds,
     recordOfflinePayment,

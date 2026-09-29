@@ -68,3 +68,22 @@ export const priceShipping = (method: StaticShippingMethod, itemsTotal: number):
 export const methodFitsWeight = (method: StaticShippingMethod, weight: number): boolean =>
     (method.minWeight === undefined || weight >= method.minWeight) &&
     (method.maxWeight === undefined || weight <= method.maxWeight);
+
+/**
+ * What the cheapest STANDARD delivery would have cost against an items total — the ceiling on
+ * what a withdrawal refunds of the shipping paid (Consumer Rights Directive Art. 13(2): a
+ * surcharge over the cheapest standard delivery the trader offers is not refunded).
+ *
+ * Only methods that deliver count: `requiresAddress: false` (`pickup`) is collection, not
+ * delivery, and would otherwise always win at zero. On an order big enough for standard to be free
+ * the answer is zero, so a paid express upgrade stays entirely with the shop.
+ *
+ * @param itemsTotal - the order's lines total
+ * @returns the cheapest delivery price on offer, or `0` when nothing delivers at all
+ */
+export const cheapestStandardShipping = (itemsTotal: number): number => {
+    const prices = SHIPPING_METHODS.filter(({ requiresAddress }) => requiresAddress).map((method) =>
+        priceShipping(method, itemsTotal)
+    );
+    return prices.length > 0 ? Math.min(...prices) : 0;
+};

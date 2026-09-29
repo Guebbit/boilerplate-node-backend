@@ -21,23 +21,26 @@ flowchart LR
     inventory["inventory"]
     invoicing["invoicing"]
     orders["orders"]
+    returns["returns"]
     users["users"]
 
     cart --> payments
     invoicing --> payments
+    returns --> payments
     payments --> inventory
     payments --> orders
     payments --> users
     orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
     payments -. "payment.refunded" .-> invoicing
+    payments -. "payment.refunded" .-> returns
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class inventory,invoicing supporting;
+    class inventory,invoicing,returns supporting;
     class users generic;
     class payments centre;
 ```
@@ -285,6 +288,10 @@ sequenceDiagram
 - **The default is everything left.** `POST /payments/order/{orderId}/refund` with no body returns
   all that is still refundable; with an `amount` it returns that part. More than what is left is a
   422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); nothing left is a 409.
+- **A refund can pay for a return.** `refundForReturn` (called by [`returns`](./returns.md) when goods
+  are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
+  payment has left. `payment.refunded` carries the `returnId`, so `returns` closes the return when
+  the refund lands — including later, when the sweep completes one the provider first refused.
 - **A credit note per refund.** `payment.refunded` carries `refundId`, this refund's `amount` and
   `full`; `invoicing` issues from it ([`invoicing`](./invoicing.md)).
 

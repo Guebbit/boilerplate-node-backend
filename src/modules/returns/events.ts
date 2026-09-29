@@ -14,8 +14,31 @@ declare module '@kernel/events' {
          * is `order.cancelled`.
          */
         'return.requested': { returnId: string; orderId: string; reason: string };
+
+        /**
+         * The goods arrived and went back on sale — one `restock` movement per line, in the same
+         * transaction as the status move.
+         */
+        'return.received': { returnId: string; orderId: string };
+
+        /**
+         * The return is finished: the money went back (or there was none to return). Fires when
+         * the refund settles — straight away, or later when the payment sweep completes it.
+         */
+        'return.closed': {
+            returnId: string;
+            orderId: string;
+            refundAmount: number;
+            currency: string;
+        };
     }
 }
 
 /** See `DomainEventMap['return.requested']` above. */
 export const RETURN_REQUESTED = 'return.requested';
+
+/** See `DomainEventMap['return.received']` above. */
+export const RETURN_RECEIVED = 'return.received';
+
+/** See `DomainEventMap['return.closed']` above. */
+export const RETURN_CLOSED = 'return.closed';

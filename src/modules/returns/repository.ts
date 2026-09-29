@@ -5,6 +5,7 @@
  * and the per-order reads the quantity check needs.
  */
 
+import type { ClientSession } from 'mongoose';
 import { returnModel, applyReturnTransform } from './model';
 import type { ReturnDocument } from './model';
 import type { ReturnStatus } from './domain';
@@ -16,7 +17,17 @@ import {
 import type { Return } from '@types';
 
 /** The fields a lifecycle move may stamp in the same write as its status. */
-export type ReturnStamp = Partial<Pick<ReturnDocument, 'declineReason' | 'decidedAt'>>;
+export type ReturnStamp = Partial<
+    Pick<
+        ReturnDocument,
+        | 'declineReason'
+        | 'decidedAt'
+        | 'receivedAt'
+        | 'handlingDeduction'
+        | 'refundAmount'
+        | 'closedAt'
+    >
+>;
 
 /** Return CRUD, plus the conditional status move and the per-order reads. */
 export const returnRepository: Repository<ReturnDocument, Return> & {
@@ -24,7 +35,8 @@ export const returnRepository: Repository<ReturnDocument, Return> & {
         id: string,
         from: readonly ReturnStatus[],
         to: ReturnStatus,
-        stamp?: ReturnStamp
+        stamp?: ReturnStamp,
+        session?: ClientSession
     ) => Promise<ReturnDocument | null>;
     findByOrderId: (orderId: string) => Promise<ReturnDocument[]>;
     findByOrderIds: (orderIds: readonly string[]) => Promise<ReturnDocument[]>;
@@ -46,14 +58,16 @@ export const returnRepository: Repository<ReturnDocument, Return> & {
      * @param from - the statuses this move may start from
      * @param to - the status being written
      * @param stamp - facts that belong to this move, written in the SAME statement
+     * @param session - the caller's transaction, when this move belongs to one (receiving goods
+     *   moves the status and the stock together)
      * @returns the return as it now stands, or `null` if it was not in `from`
      */
-    claimStatus: (id, from, to, stamp = {}) =>
+    claimStatus: (id, from, to, stamp = {}, session) =>
         returnModel
             .findOneAndUpdate(
                 { _id: toObjectId(id), status: { $in: [...from] } },
                 { $set: { status: to, ...stamp } },
-                { returnDocument: 'after' }
+                { returnDocument: 'after', session }
             )
             .exec(),
 

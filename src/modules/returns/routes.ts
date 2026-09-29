@@ -4,6 +4,9 @@
  * says what it needs: the customer's own doors (open, list, read) need only a session and are
  * scoped to their own orders by the service, the staff doors need the key that names the action.
  *
+ * Money:     `POST /returns/:id/receive` pays the customer back, so its key carries a fresh-session
+ *            tier (`stepUp: critical`) that `requirePermission` demands and audits.
+ *
  * `POST /returns` carries the account-keyed budget and an `Idempotency-Key`: it opens a row staff
  * must read, and a retried request must open it once.
  *
@@ -19,6 +22,7 @@ import { postReturn } from './controllers/post-return';
 import { getReturns } from './controllers/get-returns';
 import { getReturnById } from './controllers/get-return-by-id';
 import { postReturnApprove, postReturnDecline } from './controllers/post-return-decision';
+import { postReturnReceive } from './controllers/post-return-receive';
 
 /** Express router for returns. */
 export const router = Router();
@@ -37,3 +41,13 @@ router.get('/:id', privateNoCache, getReturnById);
 // POST /returns/:id/approve and /decline — staff decide a `requested` return.
 router.post('/:id/approve', requirePermission('returns.any.update'), postReturnApprove);
 router.post('/:id/decline', requirePermission('returns.any.update'), postReturnDecline);
+
+// POST /returns/:id/receive — the goods arrived. `returns.any.receive` carries `stepUp: critical` in
+// `shared/authorization-keys.yaml`: receiving pays the customer back. The `Idempotency-Key` makes a
+// retried receipt land once, though the conditional move already guarantees the restock does.
+router.post(
+    '/:id/receive',
+    requirePermission('returns.any.receive'),
+    idempotencyKey,
+    postReturnReceive
+);

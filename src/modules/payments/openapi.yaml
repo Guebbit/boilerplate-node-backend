@@ -545,6 +545,9 @@ components:
                         back by the operator).
                 reason:
                     $ref: '#/components/schemas/RefundReason'
+                # The return this refund pays for — present when `reason` is `return`.
+                returnId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 settledAt:
                     type: string
                     format: date-time

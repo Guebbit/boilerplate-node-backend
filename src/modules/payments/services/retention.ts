@@ -67,6 +67,7 @@ const toExportPayment = (payment: Lean<PaymentDocument>): ExportPayment => ({
             currency: refund.currency,
             status: refund.status,
             reason: refund.reason,
+            ...(refund.returnId ? { returnId: refund.returnId } : {}),
             ...(refund.settledAt ? { settledAt: refund.settledAt.toISOString() } : {}),
             createdAt: refund.createdAt.toISOString()
         })

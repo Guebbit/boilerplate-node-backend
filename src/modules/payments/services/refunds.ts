@@ -53,6 +53,8 @@ export interface RefundRequest {
     amount?: number;
     /** Why the money goes back — recorded on the refund. */
     reason: RefundReason;
+    /** The return this pays for, when `reason` is `return` — recorded so it can be closed later. */
+    returnId?: string;
 }
 
 /** The request the automatic callers make: everything left, for a cancellation. */
@@ -133,6 +135,7 @@ const openRefund = (
         currency,
         status: 'pending' as const,
         reason: request.reason,
+        ...(request.returnId ? { returnId: request.returnId } : {}),
         // One key per RECORD, not per payment: two different partial refunds must not be taken
         // for one by the provider, while a retry of this one must be.
         idempotencyKey: `refund:${String(paymentId)}:${String(refundId)}`
@@ -200,6 +203,7 @@ const announceRefund = (
         paymentId: String(payment._id),
         orderId,
         refundId: String(refund._id),
+        ...(refund.returnId ? { returnId: refund.returnId } : {}),
         amount: refund.amount,
         currency: refund.currency,
         full:
@@ -464,3 +468,38 @@ export const refundByOrder = (
  */
 export const refundForOrder = (orderId: string): Promise<void> =>
     performRefund(orderId).then(() => undefined);
+
+/**
+ * Give back the money for goods a customer returned — `returns`' one door into the refund. The
+ * amount is clamped to what the payment still has left, so a goodwill refund made earlier can
+ * never make a return over-refund; the refund is recorded as `return` and carries `returnId`, so
+ * `returns` can close the return when the money lands — now, or later when the sweep finishes it.
+ *
+ * A provider refusal throws after the refund is recorded as `failed`: the sweep will retry it and
+ * `returns` will hear of it then.
+ *
+ * @param orderId - the returned order
+ * @param input - which return this pays for, and how much (a decimal in the payment's currency)
+ * @param context - the staff member who received the goods, audited on the refund
+ * @returns the payment as it now stands, or `null` when there is nothing to return — no succeeded
+ *   payment, nothing left of it, or a zero amount
+ */
+export const refundForReturn = (
+    orderId: string,
+    input: { returnId: string; amount: number },
+    context: CallerContext
+): Promise<PaymentDocument | null> =>
+    paymentRepository.findByOrderId(orderId).then((payment) => {
+        if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) return null;
+
+        const wanted = toMinorUnits(input.amount, payment.currency);
+        // `Math.min` returns a plain number; both operands are `Money`, so the result still is.
+        const amount = Math.min(wanted, remainingOf(payment)) as Money;
+        if (amount <= 0) return null;
+
+        return performRefund(orderId, context, {
+            amount: toDecimalAmount(amount, payment.currency),
+            reason: 'return',
+            returnId: input.returnId
+        });
+    });

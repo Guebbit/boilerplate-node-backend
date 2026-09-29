@@ -216,3 +216,83 @@ describe('POST /returns/{id}/approve and /decline', () => {
         expect(response.status).toBe(404);
     });
 });
+
+/** A withdrawal on a delivered order, and the warehouse account that receives it. */
+const withdrawn = async () => {
+    const { bearer, orderId } = await customerWithOrder(OrderStatus.delivered);
+    const created = await api()
+        .post('/returns')
+        .set('Authorization', bearer)
+        .send({ orderId, reason: 'withdrawal' });
+    const { bearer: warehouse } = await authenticateAsRole('warehouse');
+    return { customer: bearer, warehouse, id: String(created.body.data.id) };
+};
+
+describe('POST /returns/{id}/receive', () => {
+    it('records the goods arriving: 200, and the return moves on', async () => {
+        const { warehouse, id } = await withdrawn();
+
+        const response = await api()
+            .post(`/returns/${id}/receive`)
+            .set('Authorization', warehouse)
+            .send({});
+
+        expect(response.status).toBe(200);
+        // No payment stands behind a hand-built fixture order, so there is nothing to wait for.
+        expect(response.body.data.status).toBe('closed');
+        expect(response.body.data.receivedAt).toEqual(expect.any(String));
+    });
+
+    it('takes no body at all', async () => {
+        const { warehouse, id } = await withdrawn();
+
+        const response = await api().post(`/returns/${id}/receive`).set('Authorization', warehouse);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('answers 409 RETURN_NOT_RECEIVABLE for a second receipt', async () => {
+        const { warehouse, id } = await withdrawn();
+        await api().post(`/returns/${id}/receive`).set('Authorization', warehouse);
+
+        const response = await api().post(`/returns/${id}/receive`).set('Authorization', warehouse);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('RETURN_NOT_RECEIVABLE');
+    });
+
+    it('refuses a deduction the refund cannot bear with 422 RETURN_DEDUCTION_INVALID', async () => {
+        const { warehouse, id } = await withdrawn();
+
+        const response = await api()
+            .post(`/returns/${id}/receive`)
+            .set('Authorization', warehouse)
+            .send({ handlingDeduction: 1_000_000 });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].code).toBe('RETURN_DEDUCTION_INVALID');
+    });
+
+    it('is forbidden to the customer and to a role that only decides', async () => {
+        const { customer, id } = await withdrawn();
+        const { bearer: support } = await authenticateAsRole('support');
+
+        const asCustomer = await api()
+            .post(`/returns/${id}/receive`)
+            .set('Authorization', customer);
+        const asSupport = await api().post(`/returns/${id}/receive`).set('Authorization', support);
+
+        expect(asCustomer.status).toBe(403);
+        expect(asSupport.status).toBe(403);
+    });
+
+    it('answers 404 for a return that does not exist', async () => {
+        const { bearer } = await authenticateAsRole('warehouse');
+
+        const response = await api()
+            .post(`/returns/${'a'.repeat(24)}/receive`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+});

@@ -81,3 +81,45 @@ describe('returnNoticeEmail — the other notices', () => {
         expect(data.greeting).toContain('Ada');
     });
 });
+
+describe('returnNoticeEmail — closing and the return address', () => {
+    it('says what was refunded, formatted for the recipient', () => {
+        const { data } = returnNoticeEmail('return-closed', 'en', 'Ada', {
+            ...INPUT,
+            refund: { amount: 62.5, currency: 'EUR' }
+        });
+
+        expect(data.body).toContain('€62.50');
+        expect(data.postage).toBeUndefined();
+    });
+
+    it('formats the amount the way the customer’s language does', () => {
+        const { data } = returnNoticeEmail('return-closed', 'it', 'Ada', {
+            ...INPUT,
+            refund: { amount: 62.5, currency: 'EUR' }
+        });
+
+        expect(data.body).toContain('62,50');
+    });
+
+    it('tells the customer where to send the goods when there is an address', () => {
+        const { data } = returnNoticeEmail('return-approved', 'en', 'Ada', {
+            ...INPUT,
+            returnAddress: {
+                name: 'Returns',
+                street: 'Via Roma 1',
+                city: 'Milano',
+                zip: '20100',
+                country: 'IT'
+            }
+        });
+
+        expect(data.address).toBe('Send the goods to: Returns, Via Roma 1, 20100 Milano, IT');
+    });
+
+    it('leaves the address out when there is none', () => {
+        const { data } = returnNoticeEmail('return-approved', 'en', 'Ada', INPUT);
+
+        expect(data.address).toBeUndefined();
+    });
+});

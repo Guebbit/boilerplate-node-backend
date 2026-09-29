@@ -32,7 +32,14 @@
             "return-declined": {
                 "subject": "Il tuo reso è stato rifiutato",
                 "body": "Non abbiamo potuto accettare il tuo reso per l'ordine {{order}}. Motivo: {{reason}}"
+            },
+            "return-address": "Spedisci la merce a: {{address}}",
+            "return-closed": {
+                "subject": "Il tuo reso è stato rimborsato",
+                "body": "Abbiamo ricevuto il tuo reso per l'ordine {{order}} e rimborsato {{amount}}."
             }
-        }
+        },
+        "received": "Reso ricevuto — la merce è di nuovo in vendita.",
+        "deduction-too-high": "La trattenuta per la gestione supera il valore del rimborso."
     }
 }

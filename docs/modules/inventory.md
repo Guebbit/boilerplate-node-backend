@@ -22,9 +22,11 @@ flowchart LR
     orders["orders"]
     payments["payments"]
     products["products"]
+    returns["returns"]
 
     orders --> inventory
     payments --> inventory
+    returns --> inventory
     inventory --> products
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
@@ -35,7 +37,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders,products core;
-    class payments supporting;
+    class payments,returns supporting;
     class inventory centre;
 ```
 
@@ -49,12 +51,13 @@ synced copy of `onHand`/`reserved` on its own document purely so a catalogue rea
 join; that copy is never the source of truth and this module never reads it back. **Every change
 to a stock count is a transition here.**
 
-| Transition        | Fired by                                               | What it does                                          |
-| ----------------- | ------------------------------------------------------ | ----------------------------------------------------- |
-| `reserveForOrder` | checkout, admin order create                           | units held, not sold                                  |
-| `commitForOrder`  | payment confirmed                                      | units leave                                           |
-| `releaseForOrder` | order cancelled, or the sweep (a stale hold timed out) | units come back                                       |
-| `restockForOrder` | a PAID order cancelled                                 | the units `commitForOrder` already sold come back too |
+| Transition             | Fired by                                                            | What it does                                                                                                                               |
+| ---------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `reserveForOrder`      | checkout, admin order create                                        | units held, not sold                                                                                                                       |
+| `commitForOrder`       | payment confirmed                                                   | units leave                                                                                                                                |
+| `releaseForOrder`      | order cancelled, or the sweep (a stale hold timed out)              | units come back                                                                                                                            |
+| `restockForOrder`      | a PAID order cancelled                                              | the units `commitForOrder` already sold come back too                                                                                      |
+| `restockReturnedLines` | goods a customer sent back are received ([`returns`](./returns.md)) | the returned lines go back on `onHand`, one `restock` movement each — no reservation claimed; the return's own once-only move is the guard |
 
 ::: warning Exactly-once, by construction
 Each transition claims the reservation's status **conditionally**, so a cancel racing the sweep — or

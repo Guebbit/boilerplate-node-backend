@@ -10,7 +10,7 @@
  * `kernel/registry.ts` and wires the generic subscriber from them — nothing here hardcodes which
  * domain events fire which public ones. Each underlying domain event is then emitted with a
  * synthetic payload, and the `eventType` a delivery row was created with is read back. If the SET
- * of eventTypes this produces is exactly the catalogue's eight names — no more, no fewer — both
+ * of eventTypes this produces is exactly the catalogue's ten names — no more, no fewer — both
  * directions hold at once.
  */
 
@@ -25,7 +25,7 @@ import { PAYMENT_SUCCEEDED, PAYMENT_FAILED, PAYMENT_REFUNDED } from '@modules/pa
 import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
 import returnsModule from '@modules/returns/module';
-import { RETURN_REQUESTED } from '@modules/returns';
+import { RETURN_REQUESTED, RETURN_RECEIVED, RETURN_CLOSED } from '@modules/returns';
 import {
     webhookSubscriptionRepository,
     webhookDeliveryRepository
@@ -76,12 +76,12 @@ describe('every public webhook event has exactly one producer, and no producer n
         resetDomainEvents();
     });
 
-    it('the eight declared events are produced, and nothing else is', async () => {
+    it('the ten declared events are produced, and nothing else is', async () => {
         await createCatchAllSubscription();
 
         // The six domain-event emits the registered modules' `publicEvents` declarations project
         // from — `order.paid`/`order.shipped` both derive from `ORDER_STATUS_CHANGED`, which is
-        // why seven emits produce eight public event types.
+        // why nine emits produce ten public event types.
         await emitDomainEvent(ORDER_CREATED, { orderId: ORDER_ID });
         await emitDomainEvent(ORDER_STATUS_CHANGED, {
             orderId: ORDER_ID,
@@ -109,6 +109,13 @@ describe('every public webhook event has exactly one producer, and no producer n
             orderId: ORDER_ID,
             reason: 'withdrawal'
         });
+        await emitDomainEvent(RETURN_RECEIVED, { returnId: 'q'.repeat(24), orderId: ORDER_ID });
+        await emitDomainEvent(RETURN_CLOSED, {
+            returnId: 'q'.repeat(24),
+            orderId: ORDER_ID,
+            refundAmount: 20,
+            currency: 'EUR'
+        });
 
         const deliveries = await webhookDeliveryRepository.findAll({}, { limit: 100 });
         const produced = new Set(deliveries.map((delivery) => delivery.eventType));
@@ -116,7 +123,7 @@ describe('every public webhook event has exactly one producer, and no producer n
         expect([...produced].toSorted()).toEqual(declaredCatalogue().toSorted());
     });
 
-    it('the catalogue names exactly the eight events v1 fixes — no silent addition or removal', () => {
+    it('the catalogue names exactly the ten events v1 fixes — no silent addition or removal', () => {
         expect(declaredCatalogue().toSorted()).toEqual(
             [
                 'order.cancelled',
@@ -126,6 +133,8 @@ describe('every public webhook event has exactly one producer, and no producer n
                 'payment.failed',
                 'payment.refunded',
                 'payment.succeeded',
+                'return.closed',
+                'return.received',
                 'return.requested'
             ].toSorted()
         );

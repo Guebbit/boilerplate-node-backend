@@ -37,6 +37,8 @@ declare module '@kernel/events' {
             paymentId: string;
             orderId: string;
             refundId: string;
+            /** The return this refund pays for, when it is one — `returns` closes it on this. */
+            returnId?: string;
             amount: number;
             currency: string;
             full: boolean;

@@ -4,9 +4,11 @@
 **Owns** — the `Return` collection, outright: the request to send goods back, its lines, and where it
 stands. A withdrawal is one of these.
 **Depends on** — [`orders`](./orders.md) (the order a return is about, its owner, and the cancel a
-withdrawal before dispatch becomes).
+withdrawal before dispatch becomes), [`inventory`](./inventory.md) (received goods back on sale),
+[`payments`](./payments.md) (the refund, and `payment.refunded` closing the return) and
+[`delivery`](./delivery.md) (the return address, and the delivery a withdrawal refunds).
 **Breaks if you change** — `orders`' `OrderActions.withdraw`/`withdrawUntil` (the button reads them)
-and `cancelById`'s `withdrawal` option.
+and `cancelById`'s `withdrawal` option; `payments`' `refundForReturn` and the `returnId` on a refund.
 :::
 
 ## Its neighbourhood
@@ -20,15 +22,23 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     returns["returns<br/><i>this module</i>"]
+    delivery["delivery"]
+    inventory["inventory"]
     orders["orders"]
+    payments["payments"]
 
+    returns --> delivery
+    returns --> inventory
     returns --> orders
+    returns --> payments
+    payments -. "payment.refunded" .-> returns
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
+    class delivery,inventory,payments supporting;
     class returns centre;
 ```
 
@@ -111,6 +121,53 @@ gains is a second record for units that already have one — money is capped sep
 payment (`amountRefunded`), so it cannot be returned twice.
 :::
 
+## What the customer gets back
+
+Receiving is where the two clocks meet, and they are kept apart on purpose:
+
+```mermaid
+sequenceDiagram
+    participant W as warehouse
+    participant R as returns
+    participant I as inventory
+    participant P as payments
+    W->>R: POST /returns/{id}/receive
+    R->>R: one transaction
+    R->>I: approved → received, and one restock per line
+    Note over R,I: commit — the goods are back on sale
+    R->>P: open a refund carrying the returnId, then ask the provider
+    alt the money went back
+        P-->>R: settled — return closed
+    else the provider refused
+        P-->>R: failed, still open
+        Note over P,R: the payment sweep retries the same refund; payment.refunded closes the return
+    end
+```
+
+- **Received is a fact about a parcel; closed is a fact about money.** The status move and the
+  restock are ONE transaction, so units are never on the shelf behind a return that reads `approved`
+  nor missing from it behind one that reads `received`. Money cannot roll back, so it is not in it:
+  the refund is opened on the payment first and carries this return's id, so a refund the provider
+  refused is retried by the payment sweep and closes the return when it lands. A return is never stuck
+  `received` for a reason nobody is retrying.
+- **Restock happens on `received`, not on refund** — two facts, two moments. No reservation is
+  claimed: the order's hold was `committed` at payment and stays that way.
+- **The amount** is the returned lines at the price the order froze, plus refundable delivery, less
+  an optional handling deduction (Art. 14(2)) staff enter at receipt. It is fixed then and shown as
+  `refundAmount`. `src/modules/returns/services/refund-amount.ts` is pure integer arithmetic.
+- **Delivery is refunded only on a full return** — one carrying every unit on the order — and never
+  twice. For a withdrawal it is capped at the cheapest standard delivery the shop offers, so a paid
+  express upgrade stays with the shop (Art. 13(2)); on a €150 express order, where standard would
+  have been free, the refundable delivery is zero. `pickup` is collection, not delivery, and does
+  not count. Goods that were faulty or not what was ordered are the seller's own doing: the whole
+  delivery goes back.
+- **The refund is clamped to what the payment has left**, so a goodwill refund made earlier can
+  never make a return over-refund. The credit note follows the refund
+  ([`invoicing`](./invoicing.md)).
+- **Return postage** follows `NODE_RETURN_POSTAGE_PAYER`. It changes what the customer is told, not the
+  refund: with `consumer` the customer posts at their own cost (Art. 14(1), told beforehand), with
+  `shop` the shop covers it.
+
 ## GDPR
 
 `personalData` is a required manifest field. A return is keyed by `orderId` and **never** by
@@ -141,6 +198,8 @@ decision of whether the return was owed.
 | ----------------------------- | ---------- | ----------------------------------------------------------------------------------------------- |
 | `NODE_RETURN_POSTAGE_PAYER`   | `consumer` | Who pays to send the goods back: `consumer` or `shop`. Frozen on each return; drives the notice |
 | `NODE_RETURNS_RATE_LIMIT_MAX` | `20`       | Returns opened per window, per account                                                          |
+
+The return address is [`delivery`'s](./delivery.md#the-return-address) (`NODE_RETURN_ADDRESS_*`).
 
 ## Related pages
 

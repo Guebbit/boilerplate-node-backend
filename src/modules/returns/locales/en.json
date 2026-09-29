@@ -32,7 +32,14 @@
             "return-declined": {
                 "subject": "Your return was declined",
                 "body": "We could not accept your return for order {{order}}. Reason: {{reason}}"
+            },
+            "return-address": "Send the goods to: {{address}}",
+            "return-closed": {
+                "subject": "Your return was refunded",
+                "body": "We received your return for order {{order}} and refunded {{amount}}."
             }
-        }
+        },
+        "received": "Return received — the goods are back on sale.",
+        "deduction-too-high": "The handling deduction is more than the refund is worth."
     }
 }

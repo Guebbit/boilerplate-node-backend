@@ -1966,6 +1966,8 @@ paths:
         $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1{id}~1approve'
     /returns/{id}/decline:
         $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1{id}~1decline'
+    /returns/{id}/receive:
+        $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1{id}~1receive'
 
     # ---------- inventory ----------
     /inventory/levels:

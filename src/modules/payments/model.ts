@@ -37,6 +37,12 @@ export interface RefundRecord {
      * instead of returning the money twice. Never published.
      */
     idempotencyKey: string;
+    /**
+     * The return this refund pays for, when `reason` is `return` — how `returns` finds the return
+     * to close once the refund lands, even when it lands later (a sweep retried it). A plain id,
+     * not a reference: `payments` knows nothing of `returns`.
+     */
+    returnId?: string;
     /** The provider's id for the refund, once it answered. Never published, like `providerRef`. */
     providerRefundRef?: string;
     /** What the provider last said when it refused. Never published: it is the provider's wording. */
@@ -124,6 +130,7 @@ const refundSchema = new Schema<RefundRecord>(
         status: { type: String, enum: ['pending', 'succeeded', 'failed'], default: 'pending' },
         reason: { type: String, enum: ['cancellation', 'goodwill', 'return'], required: true },
         idempotencyKey: { type: String, required: true },
+        returnId: { type: String },
         providerRefundRef: { type: String },
         lastError: { type: String },
         settledAt: { type: Date }

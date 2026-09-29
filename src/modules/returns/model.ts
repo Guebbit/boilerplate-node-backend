@@ -48,6 +48,17 @@ export interface ReturnDocument extends Document {
     declineReason?: string;
     /** When staff approved or declined it — or, for a withdrawal, when it was opened approved. */
     decidedAt?: Date;
+    /** When the goods arrived and went back on sale. */
+    receivedAt?: Date;
+    /**
+     * An amount staff kept back for handling that lowered the goods' value (Art. 14(2)) — entered
+     * when the goods were received. Decimal, in the return's currency.
+     */
+    handlingDeduction?: number;
+    /** What the customer is owed for this return, decided when the goods were received. */
+    refundAmount?: number;
+    /** When the money went back and the return was finished. */
+    closedAt?: Date;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -86,7 +97,11 @@ export const returnSchema = new Schema<ReturnDocument>(
         lines: { type: [returnLineSchema], required: true },
         returnPostage: { type: String, enum: ['consumer', 'shop'], required: true },
         declineReason: { type: String, maxlength: 500 },
-        decidedAt: { type: Date }
+        decidedAt: { type: Date },
+        receivedAt: { type: Date },
+        handlingDeduction: { type: Number, min: 0 },
+        refundAmount: { type: Number, min: 0 },
+        closedAt: { type: Date }
     },
     { timestamps: true }
 );

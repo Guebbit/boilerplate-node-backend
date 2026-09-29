@@ -8,7 +8,8 @@
 export const returnsAuditActions = {
     RETURN_REQUESTED: 'return.requested',
     ADMIN_RETURN_APPROVED: 'admin.return.approved',
-    ADMIN_RETURN_DECLINED: 'admin.return.declined'
+    ADMIN_RETURN_DECLINED: 'admin.return.declined',
+    ADMIN_RETURN_RECEIVED: 'admin.return.received'
 } as const;
 
 /** Augments infrastructure's audit action map with this module's own action strings. */

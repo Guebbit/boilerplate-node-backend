@@ -12,24 +12,29 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 import { router } from '@modules/returns/routes';
 
 describe('returns routes — what is mounted', () => {
-    it('mounts the list, the open, one read, and the two decisions', () => {
+    it('mounts the list, the open, one read, the two decisions and the receipt', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /',
             'POST /',
             'GET /:id',
             'POST /:id/approve',
-            'POST /:id/decline'
+            'POST /:id/decline',
+            'POST /:id/receive'
         ]);
     });
 });
 
 describe('returns routes — authorization', () => {
-    it.each(['GET /', 'POST /', 'GET /:id', 'POST /:id/approve', 'POST /:id/decline'])(
-        '%s requires a logged-in caller',
-        (signature) => {
-            expect(guardsOn(router, signature)).toContain('isAuth');
-        }
-    );
+    it.each([
+        'GET /',
+        'POST /',
+        'GET /:id',
+        'POST /:id/approve',
+        'POST /:id/decline',
+        'POST /:id/receive'
+    ])('%s requires a logged-in caller', (signature) => {
+        expect(guardsOn(router, signature)).toContain('isAuth');
+    });
 
     it.each(['GET /', 'POST /', 'GET /:id'])(
         '%s is open to any signed-in caller — the service scopes it to their own orders',
@@ -38,9 +43,12 @@ describe('returns routes — authorization', () => {
         }
     );
 
-    it.each(['POST /:id/approve', 'POST /:id/decline'])('%s is staff’s alone', (signature) => {
-        expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
-    });
+    it.each(['POST /:id/approve', 'POST /:id/decline', 'POST /:id/receive'])(
+        '%s is staff’s alone',
+        (signature) => {
+            expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
+        }
+    );
 });
 
 describe('returns routes — rate limiting and idempotency', () => {

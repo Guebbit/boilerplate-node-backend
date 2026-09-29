@@ -18,6 +18,7 @@ import { generateReject, type ResponseReject } from '@infrastructure/http/respon
 import { recordAudit } from '@infrastructure/observability/audit';
 import { emitDomainEvent } from '@kernel/events';
 import { orderService, orderCurrency, isBeforeDispatch } from '@modules/orders';
+import { returnAddress } from '@modules/delivery';
 import type { OrderDocument } from '@modules/orders';
 import type { AuthContext, CallerContext, Order } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
@@ -207,7 +208,15 @@ const announceOpened = (
     return mailReturnNotice(
         created.reason === 'withdrawal' ? 'withdrawal-acknowledged' : 'return-requested',
         order,
-        { returnPostage: created.returnPostage, at: created.createdAt ?? new Date() }
+        {
+            returnPostage: created.returnPostage,
+            at: created.createdAt ?? new Date(),
+            // A withdrawal is approved from the start, so the customer is told where to send the
+            // goods in the same mail; any other reason hears it once staff approve.
+            ...(created.reason === 'withdrawal' && returnAddress()
+                ? { returnAddress: returnAddress() }
+                : {})
+        }
     ).then((): CreateReturnOutcome => ({ kind: 'created', created }));
 };
 

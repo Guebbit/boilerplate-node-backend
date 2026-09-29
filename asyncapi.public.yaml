@@ -142,6 +142,22 @@ channels:
         messages:
             ReturnRequestedEvent:
                 $ref: '#/components/messages/ReturnRequestedEvent'
+    return.received:
+        address: return.received
+        description: Returned goods arrived and went back on sale.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ReturnReceivedEvent:
+                $ref: '#/components/messages/ReturnReceivedEvent'
+    return.closed:
+        address: return.closed
+        description: A return finished — the money went back.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ReturnClosedEvent:
+                $ref: '#/components/messages/ReturnClosedEvent'
 operations:
     sseMetricsSnapshot:
         action: send
@@ -236,6 +252,24 @@ operations:
             One-to-one with the `return.requested` domain event — see `returns/services/create.ts`. Never fired for a withdrawal before dispatch: that has no return row, it is a cancel and `order.cancelled` says so.
         messages:
             - $ref: '#/channels/return.requested/messages/ReturnRequestedEvent'
+    webhookReturnReceived:
+        action: send
+        channel:
+            $ref: '#/channels/return.received'
+        summary: Returned goods arrived and went back on sale.
+        description: >-
+            One-to-one with the `return.received` domain event — see `returns/services/receive.ts`. The stock movement and the status move committed together before this fired.
+        messages:
+            - $ref: '#/channels/return.received/messages/ReturnReceivedEvent'
+    webhookReturnClosed:
+        action: send
+        channel:
+            $ref: '#/channels/return.closed'
+        summary: A return finished — the money went back.
+        description: >-
+            One-to-one with the `return.closed` domain event — see `returns/services/close.ts`. Fired when the refund settles: straight after the goods were received, or later when the payment sweep completed a refund the provider first refused.
+        messages:
+            - $ref: '#/channels/return.closed/messages/ReturnClosedEvent'
 components:
     messages:
         MetricsSnapshotEvent:
@@ -302,6 +336,20 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/PaymentRefundedEnvelope'
+        ReturnReceivedEvent:
+            name: ReturnReceivedEvent
+            title: Return received
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ReturnReceivedEnvelope'
+        ReturnClosedEvent:
+            name: ReturnClosedEvent
+            title: Return closed
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ReturnClosedEnvelope'
         ReturnRequestedEvent:
             name: ReturnRequestedEvent
             title: Return requested
@@ -464,6 +512,36 @@ components:
                     type: string
                     description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
             additionalProperties: false
+        ReturnReceivedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        ReturnClosedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - refundAmount
+                - currency
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                refundAmount:
+                    type: number
+                    description: What went back to the customer for this return, two decimal places.
+                currency:
+                    type: string
+                    description: ISO-4217, e.g. `EUR`.
+            additionalProperties: false
         OrderCreatedEnvelope:
             type: object
             required:
@@ -609,4 +687,40 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/ReturnRequestedPayload'
+            additionalProperties: false
+        ReturnReceivedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ReturnReceivedEventType
+                    type: string
+                    enum:
+                        - return.received
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ReturnReceivedPayload'
+            additionalProperties: false
+        ReturnClosedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ReturnClosedEventType
+                    type: string
+                    enum:
+                        - return.closed
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ReturnClosedPayload'
             additionalProperties: false

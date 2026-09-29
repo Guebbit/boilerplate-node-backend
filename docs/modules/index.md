@@ -82,7 +82,10 @@ flowchart TD
     payments --> inventory
     payments --> orders
     payments --> users
+    returns --> delivery
+    returns --> inventory
     returns --> orders
+    returns --> payments
     users --> access
     webhooks --> users
     wishlist --> cart
@@ -103,19 +106,19 @@ flowchart TD
 | `orders`        | inventory, products, users                             | cart, delivery, invoicing, payments, returns        |
 | `cart`          | addresses, delivery, orders, payments, products, users | wishlist                                            |
 | `users`         | access                                                 | account, api-keys, cart, orders, payments, webhooks |
-| `payments`      | inventory, orders, users                               | cart, invoicing                                     |
+| `payments`      | inventory, orders, users                               | cart, invoicing, returns                            |
+| `inventory`     | products                                               | orders, payments, returns                           |
 | `products`      | —                                                      | cart, inventory, orders, wishlist                   |
+| `returns`       | delivery, inventory, orders, payments                  | —                                                   |
 | `access`        | —                                                      | account, api-keys, users                            |
-| `inventory`     | products                                               | orders, payments                                    |
+| `delivery`      | orders                                                 | cart, returns                                       |
 | `account`       | access, users                                          | —                                                   |
 | `api-keys`      | access, users                                          | —                                                   |
-| `delivery`      | orders                                                 | cart                                                |
 | `invoicing`     | orders, payments                                       | —                                                   |
 | `wishlist`      | cart, products                                         | —                                                   |
 | `addresses`     | —                                                      | cart                                                |
 | `audit-logs`    | —                                                      | observability                                       |
 | `observability` | audit-logs                                             | —                                                   |
-| `returns`       | orders                                                 | —                                                   |
 | `webhooks`      | users                                                  | —                                                   |
 | `antibot`       | —                                                      | —                                                   |
 | `feedback`      | —                                                      | —                                                   |

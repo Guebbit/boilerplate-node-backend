@@ -6,6 +6,7 @@
     <h1><%= greeting %></h1>
     <p><%= body %></p>
     <% if (typeof postage !== "undefined") { %><p><%= postage %></p><% } %>
+    <% if (typeof address !== "undefined") { %><p><%= address %></p><% } %>
 </main>
 <%- include("/shared/templates/layouts/default-footer.ejs"); %>
 </body>
