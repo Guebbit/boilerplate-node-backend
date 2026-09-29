@@ -29,6 +29,13 @@ import { ERROR_CODES } from '@api/error-codes';
 export type TranslatedFields = Record<string, string>;
 
 /**
+ * One locale's WRITE, field by field (RFC 7396): a string sets the field, `null` clears it, an
+ * absent key leaves it alone. A PUT is the same thing with every field it omitted filled in as
+ * `null` before it gets here, so the write side only ever has to merge.
+ */
+export type TranslationFieldChanges = Record<string, string | null>;
+
+/**
  * One or more locales for one entity, keyed by locale tag — an object upserts that locale's row,
  * `null` deletes it. The kernel's own vocabulary for what `modules/locales`' contract calls
  * `UpsertTranslationsRequest`: a caller building this needs no import from `src/modules/*`, and
@@ -36,7 +43,7 @@ export type TranslatedFields = Record<string, string>;
  */
 export type TranslationBatch = Record<
     string,
-    { fields: TranslatedFields; origin?: 'machine' | 'human' } | null
+    { fields: TranslationFieldChanges; origin?: 'machine' | 'human' } | null
 >;
 
 /**
@@ -130,7 +137,7 @@ export interface TranslationPort {
  * implementation defaults it.
  */
 export type TranslationWriteSlot =
-    | { locale: string; kind: 'upsert'; fields: TranslatedFields }
+    | { locale: string; kind: 'upsert'; fields: TranslationFieldChanges }
     | { locale: string; kind: 'delete' };
 
 /** A validated batch, ready for {@link TranslationPort.write}. */

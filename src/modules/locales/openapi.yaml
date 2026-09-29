@@ -518,9 +518,10 @@ paths:
                 — the whole set becomes exactly what the body carries. Paired with `PATCH` on this
                 same resource, which merges instead; "does saving delete the locales I didn't
                 touch" is the question every translation tool gets wrong, so the two behaviours
-                are spelled in the METHOD rather than a flag. Same three signals as `PATCH` for a
-                key that IS in the body — see its own description — plus the implicit fourth: a
-                key that is neither in the body nor already stored never existed either way.
+                are spelled in the METHOD rather than a flag. A locale that IS in the body is
+                replaced whole: a declared field its `fields` leaves out is cleared, and no value
+                is `null`. A key that is neither in the body nor already stored never existed
+                either way.
 
                 The fallback locale (`NODE_FALLBACK_LOCALE`) must be present and non-null, same
                 invariant `POST /products` already enforces on create: a caller cannot replace the
@@ -561,16 +562,22 @@ paths:
                 MERGING semantics: a locale key absent from the body is left exactly as it is. Three
                 signals inside the map, and no way to mistake one for another:
 
-                | the body says      | the server does                                    |
-                | ------------------ | --------------------------------------------------- |
-                | key absent         | leaves that locale's row exactly as it is            |
-                | `"it": { … }`      | upserts that locale's row — created or fully replaced |
-                | `"it": null`       | deletes that locale's row                            |
+                | the body says               | the server does                                  |
+                | --------------------------- | ------------------------------------------------- |
+                | key absent                  | leaves that locale's row exactly as it is          |
+                | `"it": { "fields": { … } }` | merges field by field into the row, creating it    |
+                | `"it": null`                | deletes that locale's row                          |
 
-                An empty `fields` object is a 422, never a delete — deletion is `null`, spent
-                deliberately: a cleared form field sends `""`, never `null`, so a mis-click can
-                never delete translated work. `null` on the fallback locale is a 422: deleting it
-                would leave the entity with nothing to fall back to.
+                Inside `fields` (RFC 7396, one level down): a string sets that field, `null`
+                clears it, a field left out keeps what it has — so `{"it": {"fields": {"title":
+                "x"}}}` changes only the Italian title. The values follow the entity's own rules:
+                a product title still needs its minimum length and cannot be cleared, and `""` is
+                never a value — clear with `null`.
+
+                An empty `fields` object is a 422, never a delete — deletion is the locale's own
+                `null`, spent deliberately so a mis-click can never delete translated work. `null`
+                on the fallback locale is a 422: deleting it would leave the entity with nothing to
+                fall back to.
 
                 422 equally when a named locale does not exist or is not `active` in the `locales`
                 collection, and when `fields` names a key the `translatables` registry does not
@@ -588,10 +595,10 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpsertTranslationsRequest'
+                            $ref: '#/components/schemas/MergeTranslationsRequest'
                     application/merge-patch+json:
                         schema:
-                            $ref: '#/components/schemas/UpsertTranslationsRequest'
+                            $ref: '#/components/schemas/MergeTranslationsRequest'
             responses:
                 '200':
                     description: Every locale this entity has a row for, after the write
@@ -1363,19 +1370,45 @@ components:
                     type: object
                     additionalProperties:
                         type: string
+                        minLength: 1
                     description: >-
-                        Every key MUST be one the `translatables` registry declares for this
-                        `entityType`; an unknown key is a 422, not a silently dropped one. Empty is
-                        a 422 too — enforced at write time, not by this schema, since `minProperties`
-                        is not something the generated client validates.
+                        The locale's WHOLE set of fields. Every key MUST be one the `translatables`
+                        registry declares for this `entityType`; an unknown key is a 422, not a
+                        silently dropped one. Empty is a 422 too — enforced at write time, not by
+                        this schema, since `minProperties` is not something the generated client
+                        validates. A declared field this object leaves out is cleared: a PUT states
+                        the whole locale.
                 origin:
                     allOf:
                         - $ref: '#/components/schemas/TranslationOrigin'
                     default: human
 
-        # Shared by both `PUT` and `PATCH` — the two verbs interpret an absent key differently
-        # (untouched under PATCH, deleted under PUT), so that meaning lives in each operation's own
-        # description, not here.
+        # `PATCH`'s locale entry — RFC 7396 one level down: only the fields named change.
+        MergeTranslationRequest:
+            type: object
+            additionalProperties: false
+            required: [fields]
+            description: >-
+                One locale's changes for one entity. `origin` defaults to `human`, as it does on
+                `PUT`.
+            properties:
+                fields:
+                    type: object
+                    additionalProperties:
+                        type: string
+                        minLength: 1
+                        nullable: true
+                    description: >-
+                        Each key MUST be one the `translatables` registry declares for this
+                        `entityType`. A string sets that field, `null` clears it, a field left out
+                        keeps what it has. An empty object is a 422 — enforced at write time.
+                origin:
+                    allOf:
+                        - $ref: '#/components/schemas/TranslationOrigin'
+                    default: human
+
+        # `PUT`'s body. An absent locale key is deleted under PUT — that meaning lives in the
+        # operation's own description, not here.
         UpsertTranslationsRequest:
             type: object
             additionalProperties:
@@ -1389,10 +1422,28 @@ components:
                     in use.
             description: >-
                 One or more locales for one entity, keyed by locale tag. See the operation
-                description for what an object, a `null`, and an absent key each mean for the verb
-                in use.
+                description for what an object, a `null`, and an absent key each mean.
             example:
                 it:
                     fields:
                         title: Cuccia ortopedica in memory foam
                         description: Un supporto extra per le articolazioni durante il riposo.
+
+        # `PATCH`'s body: the same map, entries per `MergeTranslationRequest`.
+        MergeTranslationsRequest:
+            type: object
+            additionalProperties:
+                type: object
+                nullable: true
+                allOf:
+                    - $ref: '#/components/schemas/MergeTranslationRequest'
+                description: >-
+                    Merges into this locale's row when an object, deletes the row when `null`. A
+                    locale key this map does not name is left alone.
+            description: >-
+                One or more locales for one entity, keyed by locale tag. See the operation
+                description for what an object, a `null`, and an absent key each mean.
+            example:
+                it:
+                    fields:
+                        description: null

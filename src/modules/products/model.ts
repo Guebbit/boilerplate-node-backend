@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import { CreateProductBody, ReplaceProductByIdBody, UpdateProductByIdBody } from '@api/schemas.zod';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import type { TranslationFieldIssue } from '@kernel/registry';
 import { availableStock } from './domain/stock';
 import { productCurrency } from './config';
 import type { Product } from '@types';
@@ -73,11 +74,50 @@ export type ProductModel = Model<ProductDocument, Record<string, never>, unknown
 const zodProductTranslationEntry = z.strictObject({
     // Thunks, not eager calls: t() must run at parse time (post i18next.init()), see `users/model.ts`.
     title: z
-        .string()
+        .string({ error: () => t('products.field-title-required') })
         .min(1, { error: () => t('products.field-title-required') })
         .min(5, { error: () => t('products.field-title-min') }),
-    description: z.string().optional()
+    description: z
+        .string()
+        .min(1, { error: () => t('products.field-description-empty') })
+        .optional()
 });
+
+/**
+ * `PATCH`'s locale entry: RFC 7396 one level down, so every field is optional and a description
+ * may be `null` to clear it. A title has no legal cleared state — an empty locale is deleted with
+ * the locale's own `null` — so it stays a string with the same length rules as on create.
+ */
+const zodProductTranslationPatch = z.strictObject({
+    title: zodProductTranslationEntry.shape.title.optional(),
+    description: zodProductTranslationEntry.shape.description.nullable()
+});
+
+/**
+ * The rules {@link zodProductTranslationPatch} holds, as the `translatables` registry's
+ * `checkFields`: what keeps the generic translator's door from landing a title under its minimum
+ * or an empty description on a product.
+ *
+ * @param fields - one locale's changes: a string sets, `null` clears
+ * @returns one issue per broken rule, each naming its field
+ */
+export const checkProductTranslationFields = (
+    fields: Record<string, string | null>
+): TranslationFieldIssue[] => {
+    const parsed = zodProductTranslationPatch.safeParse(fields);
+    if (parsed.success) return [];
+
+    return parsed.error.issues.map((issue) => ({
+        field: String(issue.path[0] ?? ''),
+        message: issue.message
+    }));
+};
+
+/**
+ * `ProductTranslationsPatch` restated for Zod: an object merges into a locale, `null` deletes it,
+ * absence leaves it untouched.
+ */
+const zodProductTranslationsPatch = z.record(z.string(), zodProductTranslationPatch.nullable());
 
 /**
  * `ProductTranslationsWrite` restated for Zod: a locale entry upserts, `null` deletes, absence
@@ -153,7 +193,7 @@ export const zodProductUpdateSchema = UpdateProductByIdBody.extend({
         .number({ error: () => t('products.field-price-invalid') })
         .min(0, { error: () => t('products.field-price-min') })
         .optional(),
-    translations: zodProductTranslations.optional()
+    translations: zodProductTranslationsPatch.optional()
 }).superRefine((data, context) => refineFallbackLocale(data.translations, context, false));
 
 /**

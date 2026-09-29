@@ -41,7 +41,10 @@ export const productRepository: Repository<ProductDocument, Product> & {
         productId: string,
         counters: { onHand: number; reserved: number }
     ) => Promise<void>;
-    writeTranslatedFields: (productId: string, fields: Record<string, string>) => Promise<void>;
+    writeTranslatedFields: (
+        productId: string,
+        fields: Record<string, string | null>
+    ) => Promise<void>;
     existsById: (productId: string) => Promise<boolean>;
     writebackImage: ImageWriteback;
 } = {
@@ -149,9 +152,19 @@ export const productRepository: Repository<ProductDocument, Product> & {
      * product's own row is already in. Same shape as {@link syncStockCache}: another module's
      * derived write, narrowed to the fields it names, never an edit an admin made.
      */
-    writeTranslatedFields: (productId: string, fields: Record<string, string>) =>
+    writeTranslatedFields: (productId: string, fields: Record<string, string | null>) =>
         productModel
-            .updateOne({ _id: toObjectId(productId) }, { $set: fields }, { timestamps: false })
+            .updateOne(
+                { _id: toObjectId(productId) },
+                // A cleared field is an empty column: the product's own `description` has no
+                // "absent" state, only `''`.
+                {
+                    $set: Object.fromEntries(
+                        Object.entries(fields).map(([name, value]) => [name, value ?? ''])
+                    )
+                },
+                { timestamps: false }
+            )
             .exec()
             .then(() => undefined),
 

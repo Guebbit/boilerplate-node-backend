@@ -145,7 +145,30 @@ export interface TranslatableTarget {
      * (see {@link ImageTarget.writeback} for the same shape), so `locales` never has to find the
      * target's Mongoose model by collection name to reach it (SD-09).
      */
-    writeDerived: (entityId: string, fields: Record<string, string>) => Promise<void>;
+    writeDerived: (entityId: string, fields: Record<string, string | null>) => Promise<void>;
+
+    /**
+     * The OWNING module's own rules for a locale's field values — the same ones its own write
+     * door applies — so the generic translator's door cannot land a value the entity itself would
+     * refuse (a product title under its minimum). Optional: a target with no rules beyond the
+     * field names {@link fields} declares leaves it out.
+     *
+     * @param fields - the locale's changes: a string sets, `null` clears
+     * @param isFallback - whether this is the fallback locale, whose fields are the entity's own
+     * @returns one issue per broken rule; empty when the values are legal
+     */
+    checkFields?: (
+        fields: Record<string, string | null>,
+        isFallback: boolean
+    ) => TranslationFieldIssue[];
+}
+
+/** One rule a locale's field values broke — see {@link TranslatableTarget.checkFields}. */
+export interface TranslationFieldIssue {
+    /** The field the rule is about, as the target names it. */
+    field: string;
+    /** Already translated, ready to show. */
+    message: string;
 }
 
 /**

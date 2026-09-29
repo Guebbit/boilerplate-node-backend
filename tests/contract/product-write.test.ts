@@ -13,6 +13,7 @@ import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
 import { localeService } from '@modules/locales/services';
 import { productRepository } from '@modules/products/repository';
+import { checkProductTranslationFields } from '@modules/products/model';
 import { mergedResources } from '@tests/i18n-boot';
 
 setupTestDb();
@@ -30,7 +31,8 @@ beforeAll(() => {
             fields: ['title', 'description'],
             cacheTag: 'products',
             exists: productRepository.existsById,
-            writeDerived: productRepository.writeTranslatedFields
+            writeDerived: productRepository.writeTranslatedFields,
+            checkFields: checkProductTranslationFields
         }
     });
 });
@@ -282,6 +284,131 @@ describe('PATCH /products/{id}', () => {
         expect(response.body.errors.map((error: { message: string }) => error.message)).toContain(
             fieldPriceMin()
         );
+    });
+});
+
+/** Creates a product with both fields in the fallback locale, returning its id and a session. */
+const seeded = async () => {
+    const { bearer } = await authenticateAs('admin');
+    const created = await api()
+        .post('/products')
+        .set('Authorization', bearer)
+        .send({
+            price: 10,
+            translations: { en: { title: 'Cozy Bed', description: 'Extra support' } }
+        });
+    return { bearer, id: String(created.body.data.id) };
+};
+
+/** The whole `en` entry as the editor's form would read it back. */
+const readEnglish = (bearer: string, id: string) =>
+    api()
+        .get(`/products/${id}/admin`)
+        .set('Authorization', bearer)
+        .then((response) => response.body.data.translations.en as Record<string, unknown>);
+
+describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
+    it('changes only the field named — the description and its mirrored column stay', async () => {
+        const { bearer, id } = await seeded();
+
+        const response = await api()
+            .patch(`/products/${id}`)
+            .set('Authorization', bearer)
+            .send({ translations: { en: { title: 'Cozy Bed XL' } } });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.description).toBe('Extra support');
+        expect(await readEnglish(bearer, id)).toEqual({
+            title: 'Cozy Bed XL',
+            description: 'Extra support'
+        });
+    });
+
+    it('clears the description on null, in the row and in the mirrored column', async () => {
+        const { bearer, id } = await seeded();
+
+        const response = await api()
+            .patch(`/products/${id}`)
+            .set('Authorization', bearer)
+            .send({ translations: { en: { description: null } } });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.description).toBe('');
+        expect(await readEnglish(bearer, id)).toEqual({ title: 'Cozy Bed' });
+    });
+
+    it.each([
+        ['an empty description', { en: { description: '' } }],
+        ['an empty locale object', { en: {} }],
+        ['a cleared title', { en: { title: null } }]
+    ])('422s %s', async (_label, translations) => {
+        const { bearer, id } = await seeded();
+
+        const response = await api()
+            .patch(`/products/${id}`)
+            .set('Authorization', bearer)
+            .send({ translations });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('states the locale whole on a PUT: an omitted description is cleared', async () => {
+        const { bearer, id } = await seeded();
+
+        const response = await api()
+            .put(`/products/${id}`)
+            .set('Authorization', bearer)
+            .send({
+                price: 10,
+                active: true,
+                requiresShipping: true,
+                categories: [],
+                tags: [],
+                translations: { en: { title: 'Cozy Bed XL' } }
+            });
+
+        expect(response.status).toBe(200);
+        expect(await readEnglish(bearer, id)).toEqual({ title: 'Cozy Bed XL' });
+    });
+});
+
+describe('the generic translator door follows the product rules (bug W9)', () => {
+    it('refuses a title under the product minimum instead of writing it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ title: 'Cozy Bed', price: 10 });
+
+        const response = await api()
+            .patch(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ en: { fields: { title: 'abc' } } });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details.field).toBe('en.title');
+    });
+
+    it('merges one field on PATCH and replaces the locale whole on PUT', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ title: 'Cozy Bed', price: 10 });
+        const url = `/locales/translations/product/${String(product._id)}`;
+        await api()
+            .put(url)
+            .set('Authorization', bearer)
+            .send({ en: { fields: { title: 'Cozy Bed', description: 'Extra support' } } });
+
+        const merged = await api()
+            .patch(url)
+            .set('Authorization', bearer)
+            .send({ en: { fields: { title: 'Cozy Bed XL' } } });
+        const replaced = await api()
+            .put(url)
+            .set('Authorization', bearer)
+            .send({ en: { fields: { title: 'Cozy Bed XXL' } } });
+
+        expect(merged.body.data.translations[0].fields).toEqual({
+            title: 'Cozy Bed XL',
+            description: 'Extra support'
+        });
+        expect(replaced.body.data.translations[0].fields).toEqual({ title: 'Cozy Bed XXL' });
     });
 });
 

@@ -977,13 +977,13 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
         const response = await api()
             .patch(`/locales/translations/product/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ pt: { fields: { title: 'Cama' } } });
+            .send({ pt: { fields: { title: 'Cama boa' } } });
 
         expect(response.status).toBe(200);
         expect(response.body.data.translations).toHaveLength(1);
         expect(response.body.data.translations[0]).toMatchObject({
             locale: 'pt',
-            fields: { title: 'Cama' },
+            fields: { title: 'Cama boa' },
             origin: 'human'
         });
     });
@@ -1016,7 +1016,7 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
         const response = await api()
             .patch(`/locales/translations/product/${String(product._id)}`)
             .send({
-                en: { fields: { title: 'Bed' } }
+                en: { fields: { title: 'Cozy Bed' } }
             });
 
         expect(response.status).toBe(401);
@@ -1039,8 +1039,8 @@ describe('PUT /locales/translations/:entityType/:id', () => {
             .patch(`/locales/translations/product/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({
-                en: { fields: { title: 'Bed' } },
-                pt: { fields: { title: 'Cama' } }
+                en: { fields: { title: 'Cozy Bed' } },
+                pt: { fields: { title: 'Cama boa' } }
             });
 
         const response = await api()
@@ -1065,7 +1065,7 @@ describe('PUT /locales/translations/:entityType/:id', () => {
         const response = await api()
             .put(`/locales/translations/product/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ pt: { fields: { title: 'Cama' } } });
+            .send({ pt: { fields: { title: 'Cama boa' } } });
 
         expect(response.status).toBe(422);
     });

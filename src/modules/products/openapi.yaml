@@ -210,20 +210,22 @@ paths:
             summary: Edit product
             description: |
                 Updates the product identified by `{id}` in the path, merging. Every field but
-                `translations` replaces the stored value when sent; `translations` merges one
-                locale at a time — three signals, and no way to mistake one for another:
+                `translations` replaces the stored value when sent; `translations` merges (RFC
+                7396) — three signals for a locale, and one level down for its fields:
 
-                | the body says      | the server does                        |
-                | ------------------- | --------------------------------------- |
-                | `"it"` absent       | leaves the Italian row exactly as it is |
-                | `"it": { … }`       | upserts the Italian row, replacing its fields whole |
-                | `"it": null`        | deletes the Italian row                 |
+                | the body says                   | the server does                                |
+                | ------------------------------- | ----------------------------------------------- |
+                | `"it"` absent                   | leaves the Italian row exactly as it is          |
+                | `"it": { "title": "x" }`        | changes the Italian title only; the rest is kept |
+                | `"it": { "description": null }` | clears the Italian description only              |
+                | `"it": null`                    | deletes the Italian row                          |
 
                 An empty translation object is a 422, never a delete — deletion is `null`, spent
-                deliberately: a cleared form field sends `""`, never `null`, so a mis-click can
-                never delete translated work. `null` on the fallback locale is a 422: deleting it
-                would leave the product with nothing to fall back to. A validation failure names
-                the locale in its pointer, e.g. `translations.it.title`.
+                deliberately, so a mis-click can never delete translated work. `""` is never a
+                value: clear a description with `null`. A title cannot be cleared. `null` on the
+                fallback locale is a 422: deleting it would leave the product with nothing to fall
+                back to. A validation failure names the locale in its pointer, e.g.
+                `translations.it.title`.
             operationId: updateProductById
             security:
                 - bearerAuth: []
@@ -411,19 +413,62 @@ components:
                 description:
                     type: string
 
+        # `POST` and `PUT`'s locale entry: the whole locale, so `title` is required and an absent
+        # `description` is no description. `""` is never a description.
+        ProductTranslationFieldsWrite:
+            type: object
+            additionalProperties: false
+            required: [title]
+            properties:
+                title:
+                    type: string
+                description:
+                    type: string
+                    minLength: 1
+
+        # `PATCH`'s locale entry — RFC 7396 one level down: only the fields named change.
+        ProductTranslationFieldsPatch:
+            type: object
+            additionalProperties: false
+            properties:
+                title:
+                    type: string
+                    description: A title is never cleared — an empty locale is deleted with the locale's own `null`.
+                description:
+                    type: string
+                    minLength: 1
+                    nullable: true
+                    description: A string sets the description, `null` clears it, absent keeps it. `""` is a 422.
+
+        ProductTranslationsPatch:
+            type: object
+            additionalProperties:
+                type: object
+                nullable: true
+                allOf:
+                    - $ref: '#/components/schemas/ProductTranslationFieldsPatch'
+            description: >-
+                One or more locales, keyed by BCP 47 tag. A key absent from this map leaves that
+                locale untouched; a key mapped to an object merges into it field by field (the
+                fields it names change, the others keep what they have); a key mapped to null
+                deletes it. An empty object is an error. The fallback locale
+                (`NODE_FALLBACK_LOCALE`) MUST NOT be null.
+            example:
+                it:
+                    description: null
+
         ProductTranslationsWrite:
             type: object
             additionalProperties:
                 type: object
                 nullable: true
                 allOf:
-                    - $ref: '#/components/schemas/ProductTranslationFields'
+                    - $ref: '#/components/schemas/ProductTranslationFieldsWrite'
             description: >-
-                One or more locales, keyed by BCP 47 tag. A key absent from this map leaves that
-                locale untouched; a key mapped to an object upserts it; a key mapped to null
-                deletes it — never omission or an empty object, which are both errors. The
-                fallback locale (`NODE_FALLBACK_LOCALE`) MUST be present and non-null on create,
-                and MUST NOT be null on update.
+                One or more locales, keyed by BCP 47 tag, each stated WHOLE: a `PUT` replaces the
+                set, so a stored locale this map omits is deleted and a `description` a locale
+                omits is cleared. The fallback locale (`NODE_FALLBACK_LOCALE`) MUST be present and
+                non-null on create and on `PUT`.
             example:
                 en:
                     title: Orthopedic Memory Foam Dog Bed
@@ -882,7 +927,7 @@ components:
             additionalProperties: false
             properties:
                 translations:
-                    $ref: '#/components/schemas/ProductTranslationsWrite'
+                    $ref: '#/components/schemas/ProductTranslationsPatch'
                 price:
                     type: number
                     format: double
@@ -938,10 +983,10 @@ components:
             additionalProperties: false
             properties:
                 # See `CreateProductRequestMultipart.translations` above — same JSON-string-in-a-
-                # field shape, same `ProductTranslationsWrite` contents.
+                # field shape, same `ProductTranslationsPatch` contents.
                 translations:
                     type: string
-                    description: JSON-encoded `ProductTranslationsWrite`.
+                    description: JSON-encoded `ProductTranslationsPatch`.
                 price:
                     type: number
                     format: double

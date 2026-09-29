@@ -20,6 +20,8 @@ import type {
     Product,
     ProductAdmin,
     ProductTranslationFields,
+    ProductTranslationFieldsPatch,
+    ProductTranslationFieldsWrite,
     TaxClass,
     RateType
 } from '@types';
@@ -424,7 +426,7 @@ export const updateById = (
  * write through `/products/{id}` is never a machine import.
  */
 const toUpsertTranslationsRequest = (
-    translations: Record<string, ProductTranslationFields | null>
+    translations: Record<string, ProductTranslationFieldsPatch | null>
 ): TranslationBatch =>
     Object.fromEntries(
         Object.entries(translations).map(([locale, entry]) => [
@@ -433,7 +435,7 @@ const toUpsertTranslationsRequest = (
                 ? null
                 : {
                       fields: {
-                          title: entry.title,
+                          ...(entry.title === undefined ? {} : { title: entry.title }),
                           ...(entry.description === undefined
                               ? {}
                               : { description: entry.description })
@@ -499,7 +501,7 @@ export const writeCreate = async (
 
     // Guaranteed present and non-null by the schema's own refinement — a plan cannot validate
     // without it.
-    const fallbackEntry = parsed.data.translations[getFallbackLocale()] as ProductTranslationFields;
+    const fallbackEntry = parsed.data.translations[getFallbackLocale()] as ProductTranslationFieldsWrite;
     const { translations: _translations, ...productFields } = parsed.data;
 
     const product = await create(
@@ -549,7 +551,12 @@ export const writeUpdate = async (
     // `null` there is already refused by `zodProductUpdateSchema`'s own refinement.
     const fallbackEntry = translations?.[getFallbackLocale()];
     const derivedFields = fallbackEntry
-        ? { title: fallbackEntry.title, description: fallbackEntry.description ?? '' }
+        ? {
+              ...(fallbackEntry.title === undefined ? {} : { title: fallbackEntry.title }),
+              ...(fallbackEntry.description === undefined
+                  ? {}
+                  : { description: fallbackEntry.description ?? '' })
+          }
         : {};
 
     const result = await updateById(
@@ -566,8 +573,9 @@ export const writeUpdate = async (
 
 /**
  * PUT's `translations` is the whole set (RFC 9110 §9.3.4): every locale the product holds and the
- * body leaves out becomes `null` — the same signal a PATCH sends to delete one. The fallback
- * locale is never among them: the PUT schema refuses a body without it.
+ * body leaves out becomes `null` — the same signal a PATCH sends to delete one — and a description
+ * a stated locale leaves out becomes `null` too, the merge's own way to clear a field. The
+ * fallback locale is never among the deleted: the PUT schema refuses a body without it.
  *
  * @param id - the product being replaced
  * @param changes - the validated, filled PUT change-set
@@ -578,7 +586,13 @@ export const clearOmittedLocales = (
     changes: z.infer<typeof zodProductUpdateSchema>
 ): Promise<z.infer<typeof zodProductUpdateSchema>> =>
     readAllTranslations('product', id).then((stored) => {
-        const translations = { ...changes.translations };
+        // A locale the body states is stated WHOLE, so its omitted description is a cleared one.
+        const translations = Object.fromEntries(
+            Object.entries(changes.translations ?? {}).map(([locale, entry]) => [
+                locale,
+                entry === null ? null : { description: null, ...entry }
+            ])
+        );
         for (const locale of stored.keys())
             if (!(locale in translations)) translations[locale] = null;
         return { ...changes, translations };

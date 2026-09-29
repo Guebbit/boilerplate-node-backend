@@ -414,7 +414,9 @@ export const deriveSourceDigest = (fields: TranslationFields): string =>
         .digest('hex');
 
 /**
- * Write one entity's one-locale row — created if it had none, replaced if it did.
+ * Write one entity's one-locale row, field by field (RFC 7396) — created if it had none. A string
+ * sets that field, `null` unsets it, a field the change-set does not name keeps what it has, so a
+ * write to one field of a locale never costs the others.
  *
  * `sourceDigest` is the caller's job to compute (see {@link deriveSourceDigest}): the repository
  * has no opinion on what "the source" means, that is `services/translations.ts`'s reading of the
@@ -424,21 +426,32 @@ const upsertEntityLocale = (
     entityType: string,
     entityId: string,
     locale: string,
-    fields: TranslationFields,
+    fields: Record<string, string | null>,
     origin: TranslationOrigin,
     translatedBy: string | undefined,
     sourceDigest: string | undefined
-): Promise<TranslationDocument> =>
-    translationModel
+): Promise<TranslationDocument> => {
+    // `fields.<name>` paths: the field is a `Mixed` map, so a dotted `$set` touches one key only.
+    const entries = Object.entries(fields);
+    const set = Object.fromEntries(
+        entries.flatMap(([name, value]) => (value === null ? [] : [[`fields.${name}`, value]]))
+    );
+    const unset = Object.fromEntries(
+        entries.flatMap(([name, value]) => (value === null ? [[`fields.${name}`, '']] : []))
+    );
+
+    return translationModel
         .findOneAndUpdate(
             { entityType, entityId, locale },
             {
-                $set: { fields, origin, translatedBy, sourceDigest },
+                $set: { ...set, origin, translatedBy, sourceDigest },
+                ...(Object.keys(unset).length > 0 ? { $unset: unset } : {}),
                 $setOnInsert: { entityType, entityId, locale }
             },
             { upsert: true, returnDocument: 'after' }
         )
         .exec();
+};
 
 /** Delete one entity's one-locale row — a `null` in a PATCH. A no-op if it never existed. */
 const removeEntityLocale = (entityType: string, entityId: string, locale: string): Promise<void> =>
@@ -540,7 +553,7 @@ export const translationRepository: Repository<TranslationDocument, Translation>
         entityType: string,
         entityId: string,
         locale: string,
-        fields: TranslationFields,
+        fields: Record<string, string | null>,
         origin: TranslationOrigin,
         translatedBy: string | undefined,
         sourceDigest: string | undefined
