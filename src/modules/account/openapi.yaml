@@ -1353,6 +1353,7 @@ components:
                 analyticsConsent:
                     type: boolean
 
+        # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
         UpdateAccountRequestMultipart:
             type: object
             additionalProperties: false
@@ -1364,7 +1365,6 @@ components:
                     minLength: 3
                 locale:
                     type: string
-                    nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 imageUpload:
@@ -1375,11 +1375,9 @@ components:
                 phone:
                     type: string
                     minLength: 1
-                    nullable: true
                 website:
                     type: string
                     minLength: 1
-                    nullable: true
                 analyticsConsent:
                     type: boolean
 
@@ -1413,6 +1411,7 @@ components:
                 analyticsConsent:
                     type: boolean
 
+        # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
         ReplaceAccountRequestMultipart:
             type: object
             additionalProperties: false
@@ -1425,7 +1424,6 @@ components:
                     minLength: 3
                 locale:
                     type: string
-                    nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 imageUpload:
@@ -1436,11 +1434,9 @@ components:
                 phone:
                     type: string
                     minLength: 1
-                    nullable: true
                 website:
                     type: string
                     minLength: 1
-                    nullable: true
                 analyticsConsent:
                     type: boolean
 

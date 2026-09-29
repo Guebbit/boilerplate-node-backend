@@ -25,13 +25,11 @@ describe('productRepository', () => {
             expect(product.active).toBe(true);
         });
 
-        it('applies the imageUrl default when not provided', async () => {
-            // The schema sets a default imageUrl; any non-empty URL satisfies it
-            const product = await productRepository.create(
-                makeProduct({ imageUrl: 'https://example.com/custom.jpg' })
-            );
+        it('leaves imageUrl absent when none is provided', async () => {
+            // No schema default: an imageless product is an absent field, not a placeholder.
+            const product = await productRepository.create(makeProduct());
 
-            expect(product.imageUrl).toBe('https://example.com/custom.jpg');
+            expect(product.imageUrl).toBeUndefined();
         });
     });
 

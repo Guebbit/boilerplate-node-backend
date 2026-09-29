@@ -404,6 +404,7 @@ components:
                 locale:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
 
+        # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
         CreateUserRequestMultipart:
             type: object
             additionalProperties: false
@@ -475,6 +476,7 @@ components:
                     minLength: 1
                     nullable: true
 
+        # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
         UpdateUserByIdRequestMultipart:
             type: object
             additionalProperties: false
@@ -498,17 +500,14 @@ components:
                     description: Optional user profile image
                 locale:
                     type: string
-                    nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 phone:
                     type: string
                     minLength: 1
-                    nullable: true
                 website:
                     type: string
                     minLength: 1
-                    nullable: true
 
         # PUT /users/{id} — RFC 9110 §9.3.4: the body IS the new resource, so every writable field
         # this resource has must be nameable and the identity fields are genuinely required.
@@ -547,6 +546,7 @@ components:
                     minLength: 1
                     nullable: true
 
+        # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
         ReplaceUserByIdRequestMultipart:
             type: object
             additionalProperties: false
@@ -571,17 +571,14 @@ components:
                     description: Optional user profile image
                 locale:
                     type: string
-                    nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 phone:
                     type: string
                     minLength: 1
-                    nullable: true
                 website:
                     type: string
                     minLength: 1
-                    nullable: true
 
         DeleteUserRequest:
             type: object

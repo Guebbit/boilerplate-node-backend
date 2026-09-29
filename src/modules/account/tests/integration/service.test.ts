@@ -16,7 +16,7 @@ import {
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
-import { hashToken, DEFAULT_USER_IMAGE_URL } from '@modules/users';
+import { hashToken } from '@modules/users';
 import { userRepository } from '@modules/users/tests/factories';
 import { TokenType, type Token, type UserDocument } from '@modules/users';
 import { asReject, asSuccess } from '@tests/response';
@@ -207,10 +207,8 @@ describe('signup', () => {
     });
 
     // `''` is never a legal `imageUrl` (the shared `ImageUrl` schema's own `minLength: 1`) — an
-    // absent image means "the schema default", the same real, non-empty placeholder every OTHER
-    // route already promised (`orders/services/current.ts`'s `product.imageUrl!` relies on no
-    // product/user ever having an empty one).
-    it('stores an absent image as the schema default, never an empty string', async () => {
+    // absent image is an absent field, and the client draws its own placeholder.
+    it('stores an absent image as no field at all, never an empty string', async () => {
         await accountService.signup(
             {
                 email: 'noimage@example.com',
@@ -225,8 +223,8 @@ describe('signup', () => {
 
         const stored = await userRepository.findOne({ email: 'noimage@example.com' });
 
-        expect(stored?.imageUrl).toBe(DEFAULT_USER_IMAGE_URL);
-        expect(stored?.imageUrl).not.toBe('');
+        // No image is an absent field, never a placeholder and never `''`.
+        expect(stored?.imageUrl).toBeUndefined();
     });
 
     it('rejects signup with 422 when terms are not accepted', async () => {

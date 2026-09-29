@@ -134,9 +134,21 @@ records are stuck on the placeholder", with the dead-letter queue explaining why
 `public/images/system/pending.png` and `public/images/system/pending-thumb.webp` are committed,
 blank placeholders — override with `NODE_PENDING_IMAGE_URL` / `NODE_PENDING_THUMBNAIL_URL`. They
 are a real, fetchable url for the duration of the digest job, distinct from
-`NODE_DEFAULT_IMAGE_PRODUCT` / `NODE_DEFAULT_IMAGE_USER` (a record that never had an upload at
-all) and from the frontend's own "no image" placeholder — three different states worth telling
-apart.
+a record with no image at all, which has no `imageUrl` and is drawn with the frontend's own
+"no image" placeholder — two different states worth telling apart.
+
+## Clearing an image, and records with none
+
+- **`imageUrl: null` unsets the field.** `imageUrl`, `thumbnailUrl` and `pendingImageKey` are
+  removed from the document; nothing is written in their place. The old file and its thumbnail
+  are deleted only after the save has landed (`applyImageWriteback` returns the old url, the
+  service hands it to `imageStore.remove`).
+- **A record with no image has no `imageUrl` at all** — on create as much as after a clear. Reads
+  omit the field, and the frontend draws its own placeholder.
+- **A provider avatar is re-hosted once, at OAuth signup** (`adapters/remote-image.ts`): downloaded
+  through the SSRF guard (https only, pinned DNS, no redirect, 5 s, size-capped), digested like an
+  upload, and stored locally. The provider's url is never kept, so no render sends a viewer's IP to
+  that host. Any failure means the account is created without an image.
 
 ## Configuration
 

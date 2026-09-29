@@ -4,14 +4,14 @@
  * never the frozen snapshot, which carries none (`orderLineProductSchema` declares no
  * `imageUrl`/`thumbnailUrl`; see `../model`). One batched `$in` query per response,
  * however many orders or lines it holds, so a page of results costs one extra query rather than
- * one per line. `null` means the catalogue product (`product.id`) has been hard-deleted — the
- * frontend's placeholder, not a backend guess.
+ * one per line. `null` means the catalogue product (`product.id`) has been hard-deleted; a live product
+ * with no picture yields an empty object. The frontend draws the placeholder either way.
  */
 
 import { productService } from '@modules/products';
 
 /** The live picture for one order line, or `null` when its product is gone. */
-export type OrderLineCurrent = { imageUrl: string; thumbnailUrl?: string } | null;
+export type OrderLineCurrent = { imageUrl?: string; thumbnailUrl?: string } | null;
 
 /** The one thing this needs from a serialized order line: the catalogue id it was bought from. */
 interface OrderLineShape {
@@ -59,11 +59,8 @@ export const resolveCurrentImages = <T extends OrderShape>(orders: T[]): Promise
                     typeof line.product?.id === 'string' ? byId.get(line.product.id) : undefined;
                 line.current = product
                     ? {
-                          // Always present at runtime — `imageUrl` carries a schema default
-                          // (`productSchema`) that never leaves a stored product without one.
-                          // The type is optional only because the wire contract lets a caller
-                          // omit it on WRITE, not because a read can find it absent.
-                          imageUrl: product.imageUrl!,
+                          // A product with no picture carries neither field.
+                          ...(product.imageUrl ? { imageUrl: product.imageUrl } : {}),
                           ...(product.thumbnailUrl ? { thumbnailUrl: product.thumbnailUrl } : {})
                       }
                     : null;

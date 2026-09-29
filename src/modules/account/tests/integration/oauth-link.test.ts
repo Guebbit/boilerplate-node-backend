@@ -12,8 +12,10 @@ import { userRepository } from '@modules/users/tests/factories';
 import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { observePort } from '@tests/ports';
+import { rehostRemoteImage } from '@infrastructure/adapters/remote-image';
 import {
     loginOrCreateFromOAuth,
+    presentClaim,
     OAuthEmailUnverifiedError,
     OAuthAccountUnverifiedError
 } from '../../services/oauth';
@@ -49,8 +51,13 @@ jest.mock('@infrastructure/observability/analytics', () => ({
     emitAnalyticsEvent: jest.fn()
 }));
 
+/* The download is the network half; what signup does with its answer is what these tests cover. */
+jest.mock('@infrastructure/adapters/remote-image', () => ({
+    rehostRemoteImage: jest.fn().mockResolvedValue(undefined)
+}));
+
 setupTestDb();
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => jest.clearAllMocks());
 
 /** A provider identity, verified by default — the shape `exchangeCode` hands the service. */
 const identity = (overrides: Partial<OAuthIdentity> = {}): OAuthIdentity => ({
@@ -205,5 +212,61 @@ describe('loginOrCreateFromOAuth — case 3: a never-seen identity and email', (
         // providerId) together, not `providerId` alone — different providers can coincidentally
         // reuse the same subject shape without colliding.
         expect(google.user.id).not.toBe(github.user.id);
+    });
+});
+
+describe('loginOrCreateFromOAuth — the provider avatar and name at signup', () => {
+    it('treats a blank name and a blank avatar as absent', async () => {
+        const resolved = await loginOrCreateFromOAuth(
+            'google',
+            identity({ name: '   ', imageUrl: '' }),
+            testCallerContext
+        );
+
+        expect(resolved.user.username).toBe(identity().email);
+        expect(rehostRemoteImage).toHaveBeenCalledWith(undefined);
+        const stored = await userRepository.findById(resolved.user.id);
+        expect(stored?.imageUrl).toBeUndefined();
+    });
+
+    it('stores the re-hosted copy and never the provider url', async () => {
+        jest.mocked(rehostRemoteImage).mockResolvedValueOnce({
+            imageUrl: '/images/local-avatar.png',
+            thumbnailUrl: '/images/thumbs/v1/local-avatar.webp'
+        });
+
+        const resolved = await loginOrCreateFromOAuth(
+            'github',
+            identity({ imageUrl: 'https://avatars.example.test/u/1' }),
+            testCallerContext
+        );
+
+        expect(rehostRemoteImage).toHaveBeenCalledWith('https://avatars.example.test/u/1');
+        const stored = await userRepository.findById(resolved.user.id);
+        expect(stored?.imageUrl).toBe('/images/local-avatar.png');
+        expect(stored?.thumbnailUrl).toBe('/images/thumbs/v1/local-avatar.webp');
+    });
+
+    it('signs up with no image when the download fails', async () => {
+        const resolved = await loginOrCreateFromOAuth(
+            'github',
+            identity({ imageUrl: 'https://avatars.example.test/u/2' }),
+            testCallerContext
+        );
+
+        expect(resolved.outcome).toBe('signup');
+        const stored = await userRepository.findById(resolved.user.id);
+        expect(stored?.imageUrl).toBeUndefined();
+    });
+});
+
+describe('presentClaim', () => {
+    it.each([
+        [undefined, undefined],
+        ['', undefined],
+        ['  \t ', undefined],
+        ['  Ada  ', 'Ada']
+    ])('reads %j as %j', (raw, expected) => {
+        expect(presentClaim(raw)).toBe(expected);
     });
 });

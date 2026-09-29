@@ -1129,11 +1129,10 @@ components:
         # The picture, resolved LIVE from the catalogue product `OrderItem.product.id` still
         # names — never frozen, so a hard-deleted or replaced image can never leak through order
         # history. `null` means the product no longer exists; that is what lets "buy again" tell
-        # a deleted product apart from one that simply never had a picture.
+        # a deleted product apart from one that simply never had a picture (`imageUrl` absent).
         OrderLineCurrent:
             type: object
             additionalProperties: false
-            required: [imageUrl]
             properties:
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'

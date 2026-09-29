@@ -36,6 +36,7 @@ import { rolesOf } from '@modules/access';
 import * as accessPort from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { logger } from '@infrastructure/adapters/logger';
+import { imageStore } from '@infrastructure/adapters/image-store';
 
 /*
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -104,6 +105,26 @@ describe('updateProfile', () => {
         expect(response.data.locale).toBe('it');
         // Untouched fields stay put — an absent field means "leave it alone".
         expect(response.data.email).toBe('own@example.com');
+    });
+
+    it('unsets the avatar on `imageUrl: null` and deletes the old file after the save', async () => {
+        const remove = jest.spyOn(imageStore, 'remove').mockResolvedValue(true);
+        const user = await createUser({
+            imageUrl: '/images/mine.png',
+            thumbnailUrl: '/images/thumbs/v1/mine.webp'
+        });
+
+        const response = asSuccess(
+            await updateProfile(user.id, { imageUrl: null }, testCallerContext)
+        );
+
+        expect(response.data.imageUrl).toBeUndefined();
+        const stored = await userRepository.findOne({ _id: user.id });
+        expect(stored?.imageUrl).toBeUndefined();
+        expect(stored?.thumbnailUrl).toBeUndefined();
+        // The store derives the thumbnail from the main url, so one call covers both files.
+        expect(remove).toHaveBeenCalledWith('/images/mine.png');
+        remove.mockRestore();
     });
 
     it('rejects an invalid email with 422', async () => {

@@ -14,14 +14,7 @@ export * from './service';
 
 export * from './events';
 
-/** The schema, the token-type enum, the pure helpers that travel with them, and the default avatar. */
-export {
-    TokenType,
-    zodUserSchema,
-    hashToken,
-    isLiveRefreshSession,
-    normalizeEmail,
-    DEFAULT_USER_IMAGE_URL
-} from './model';
+/** The schema, the token-type enum, and the pure helpers that travel with them. */
+export { TokenType, zodUserSchema, hashToken, isLiveRefreshSession, normalizeEmail } from './model';
 
 export type * from './model';

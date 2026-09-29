@@ -56,12 +56,9 @@ describe('productSchema — what a product must carry', () => {
         expect(defaultOf(productSchema, 'tags')).toEqual([]);
     });
 
-    it('gives every product an image without requiring one', () => {
-        // A catalogue with a broken image is worse than one with a placeholder, and the
-        // environment override is what lets a deployment supply its own.
-        expect(defaultOf(productSchema, 'imageUrl')).toBe(
-            process.env.NODE_DEFAULT_IMAGE_PRODUCT ?? '/images/system/placeholder-product.png'
-        );
+    it('gives a new product no image', () => {
+        // A default would put a placeholder in the database; the client draws its own.
+        expect(defaultOf(productSchema, 'imageUrl')).toBeUndefined();
     });
 
     it('leaves the soft-delete marker unset', () => {
