@@ -133,7 +133,7 @@ JSON one.
 
 ## Content-Type: 415
 
-`express.json` parses only the types it is told to, so a body in any other type used to arrive as
+The JSON body parser handles only the types it is told to, so a body in any other type used to arrive as
 `{}` — and an all-optional PATCH schema accepts `{}`: a 200 that changed nothing.
 
 ```mermaid

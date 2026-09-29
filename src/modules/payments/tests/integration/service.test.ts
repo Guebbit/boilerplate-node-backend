@@ -945,7 +945,7 @@ describe('syncPayment', () => {
             currency: 'EUR',
             provider: 'fake'
         });
-        const {payment} = (upserted!);
+        const { payment } = upserted!;
         expect(payment.providerRef).toBeUndefined();
 
         const retrieveSpy = jest.spyOn(fakePaymentProvider, 'retrieve');
