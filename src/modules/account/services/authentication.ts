@@ -30,12 +30,7 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import {
-    zodUserSchema,
-    userService,
-    type TokenType,
-    type UserDocument
-} from '@modules/users';
+import { zodUserSchema, userService, type TokenType, type UserDocument } from '@modules/users';
 import { parseFormBoolean } from '@infrastructure/http/request';
 import type { CallerContext } from '@types';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';

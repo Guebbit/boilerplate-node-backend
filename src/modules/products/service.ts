@@ -45,11 +45,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAnalyticsEvents } from './analytics';
 import { productsAuditActions } from './audit';
 import { PRODUCT_DELETED, PRODUCT_CREATED, PRODUCT_DEACTIVATED } from './events';
-import {
-    zodProductCreateSchema,
-    zodProductReplaceSchema,
-    zodProductUpdateSchema
-} from './model';
+import { zodProductCreateSchema, zodProductReplaceSchema, zodProductUpdateSchema } from './model';
 import type { ProductDocument } from './model';
 import { presentProduct } from './presenter';
 import { productRepository } from './repository';
