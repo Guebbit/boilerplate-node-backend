@@ -273,24 +273,29 @@ export const imageStore: ImageStore = filesystemImageStore;
  * writer but the one below.
  */
 export interface ImageWritebackFields {
-    imageUrl?: string;
+    imageUrl?: string | null;
     thumbnailUrl?: string;
     pendingImageKey?: string;
 }
 
 /**
- * Applies an image replacement onto a document in place — the one gate `users` and `products`
+ * Applies an image change onto a document in place — the one gate `users` and `products`
  * both need on their `update`, so neither hand-rolls it.
  *
- * A replacement counts only when the incoming url is non-blank AND different from what's already
- * stored. That guards a JSON-only edit: the controller always sends a string for `imageUrl`
- * (`''` when nothing was uploaded, since the validation schema requires one), so without this
- * gate an edit with no upload would overwrite a real image with that empty placeholder.
+ * Three cases, by the incoming `imageUrl`:
+ *
+ * | incoming              | effect                                                       |
+ * | --------------------- | ------------------------------------------------------------ |
+ * | `undefined`           | nothing changes — an edit that never mentions the image      |
+ * | `null`                | the three fields are unset — no placeholder is written       |
+ * | a different string    | url, thumbnail and pending key are replaced together         |
+ *
+ * A blank string or the url already stored is a no-op, so a retried write deletes nothing.
  *
  * @param target - the document to mutate. `imageUrl`, `thumbnailUrl` and `pendingImageKey` are
  *   set together, all produced by the same `readUploadedImage` call on the controller
  * @param incoming - the same three fields off the incoming request
- * @returns the url the image held before this call, when a replacement happened, so the caller
+ * @returns the url the image held before this call, when it changed or was cleared, so the caller
  *   can pass it to {@link ImageStore.remove} — but only once the save has actually landed, since
  *   deleting bytes ahead of a write that might still fail would leave a row pointing at a 404.
  *   `undefined` when nothing changed, which `remove` already treats as a no-op.
@@ -299,7 +304,15 @@ export const applyImageWriteback = (
     target: ImageWritebackFields,
     incoming: ImageWritebackFields
 ): string | undefined => {
-    const oldImageUrl = target.imageUrl;
+    const oldImageUrl = target.imageUrl ?? undefined;
+
+    if (incoming.imageUrl === null) {
+        target.imageUrl = undefined;
+        target.thumbnailUrl = undefined;
+        target.pendingImageKey = undefined;
+        return oldImageUrl;
+    }
+
     const newImageUrl = incoming.imageUrl ?? '';
     if (!newImageUrl || oldImageUrl === newImageUrl) return undefined;
 

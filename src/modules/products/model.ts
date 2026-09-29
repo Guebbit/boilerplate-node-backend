@@ -197,17 +197,6 @@ export const zodProductUpdateSchema = UpdateProductByIdBody.extend({
 }).superRefine((data, context) => refineFallbackLocale(data.translations, context, false));
 
 /**
- * The image every product starts with, and the one `imageUrl: null` resets it back to — a local
- * asset, never a third-party host: a remote placeholder service is one outage away from a
- * catalogue of broken images. `/images/system/` is served by `app/static-assets.ts`, the same as
- * `NODE_PENDING_IMAGE_URL`'s own placeholder. Exported so `service.ts#update` can
- * resolve a `null` to the SAME value the schema default below would give a brand new product,
- * rather than the two ever being free to drift apart.
- */
-export const DEFAULT_PRODUCT_IMAGE_URL =
-    process.env.NODE_DEFAULT_IMAGE_PRODUCT ?? '/images/system/placeholder-product.png';
-
-/**
  * Mongoose Schema for the Product model
  */
 export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
@@ -270,9 +259,10 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: String,
             default: ''
         },
+        // No default: a product with no image has no field, and the client draws its own
+        // placeholder. `imageUrl: null` on an update unsets it.
         imageUrl: {
-            type: String,
-            default: DEFAULT_PRODUCT_IMAGE_URL
+            type: String
         },
         /*
          * Set together with `imageUrl` by `readUploadedImage` — never independently, and never by

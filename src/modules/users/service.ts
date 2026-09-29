@@ -24,7 +24,7 @@ import {
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
-import { zodUserSchema, TokenType, hashToken, DEFAULT_USER_IMAGE_URL } from './model';
+import { zodUserSchema, TokenType, hashToken } from './model';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import type { UserDocument, Token, UserWire } from './model';
 import type {
@@ -268,13 +268,9 @@ export const update = (
             if (data.active !== undefined) user.active = data.active;
             // The old url is captured before the overwrite so `updateSavedUser` can delete it once
             // the new one is durably saved — see `applyImageWriteback`'s own docblock for the gate
-            // shared with `products/service.ts`'s own `update`. `null` resolves to the default
-            // placeholder before it gets there — see `products/service.ts#update`'s own comment
-            // for why that keeps "cleared" and "set to this string" one code path.
-            const oldImageUrl = applyImageWriteback(user, {
-                ...data,
-                imageUrl: data.imageUrl === null ? DEFAULT_USER_IMAGE_URL : data.imageUrl
-            });
+            // shared with `products/service.ts`'s own `update`. `null` unsets the field, and the
+            // same old-url capture then deletes the file and its thumbnail.
+            const oldImageUrl = applyImageWriteback(user, data);
             // The preference that outlives the request — see the `locale` field on the user
             // schema. `null` clears the override — $unset on save.
             if (data.locale !== undefined) user.locale = clearedOrValue(data.locale);
@@ -833,7 +829,14 @@ const registerSelfService = (data: SelfServiceSignupFields) => userRepository.cr
 /** The fields an OAuth-vouched signup may set — see {@link registerFromOAuth}. */
 type OAuthSignupFields = Pick<
     UserDocument,
-    'email' | 'username' | 'imageUrl' | 'verifiedAt' | 'active' | 'locale' | 'oauthAccounts'
+    | 'email'
+    | 'username'
+    | 'imageUrl'
+    | 'thumbnailUrl'
+    | 'verifiedAt'
+    | 'active'
+    | 'locale'
+    | 'oauthAccounts'
 >;
 
 /**

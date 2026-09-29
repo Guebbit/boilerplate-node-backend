@@ -213,7 +213,8 @@ flowchart LR
   that accepts `null`), so nobody keeps the list by hand. A field that cannot be `null` is
   required by the PUT schema instead.
 - **`keptWhenOmitted`** names fields outside the PUT representation that are nullable yet must
-  survive an omission — `imageUrl`, whose only writer is an upload.
+  survive an omission — `imageUrl`, whose only writer is an upload. An explicit `null` still
+  clears it: the field is unset and the old file and thumbnail are deleted after the save.
 - **`completeReplace`** is the PUT-only hook for a keyed map the schema alone cannot name: a
   product's `translations` sets every stored locale the body left out to `null`, the signal a
   PATCH uses to delete one.

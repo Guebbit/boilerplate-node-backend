@@ -45,12 +45,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAnalyticsEvents } from './analytics';
 import { productsAuditActions } from './audit';
 import { PRODUCT_DELETED, PRODUCT_CREATED, PRODUCT_DEACTIVATED } from './events';
-import {
-    zodProductCreateSchema,
-    zodProductReplaceSchema,
-    zodProductUpdateSchema,
-    DEFAULT_PRODUCT_IMAGE_URL
-} from './model';
+import { zodProductCreateSchema, zodProductReplaceSchema, zodProductUpdateSchema } from './model';
 import type { ProductDocument } from './model';
 import { presentProduct } from './presenter';
 import { productRepository } from './repository';
@@ -313,10 +308,9 @@ export const create = (
 export const update = (
     product: ProductDocument,
     // `imageUrl`/`weight`/`taxClass`/`rateType`/`sku` widened to accept `null`, since the domain
-    // type `Product` states them as always a real value (`imageUrl`) or absent-means-zero/
-    // standard/unset (`weight`, `taxClass`, `rateType`, `sku`), never explicitly cleared.
-    // `imageUrl: null` resolves to {@link DEFAULT_PRODUCT_IMAGE_URL} below rather than ever
-    // reaching the document as a null; `weight`/`taxClass`/`rateType`/`sku: null` genuinely unset
+    // type `Product` states them as a real value or absent-means-zero/standard/unset, never
+    // explicitly cleared.
+    // `imageUrl: null` unsets the image; `weight`/`taxClass`/`rateType`/`sku: null` genuinely unset
     // them.
     data: Partial<Omit<Product, 'id' | 'imageUrl' | 'weight' | 'taxClass' | 'rateType' | 'sku'>> & {
         /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
@@ -358,13 +352,8 @@ export const update = (
 
     // If a new image was uploaded, update the url, thumbnail and pending key together — see
     // `applyImageWriteback`'s own docblock for the gate shared with `users`' own `update`.
-    // `null` resolves to the default placeholder before it gets there:
-    // `applyImageWriteback` only ever sees a real value, so "cleared" and "set to this string"
-    // are the SAME code path, old-image deletion included.
-    const oldImageUrl = applyImageWriteback(product, {
-        ...data,
-        imageUrl: data.imageUrl === null ? DEFAULT_PRODUCT_IMAGE_URL : data.imageUrl
-    });
+    // `imageUrl: null` unsets the field; the old-image deletion below then covers it too.
+    const oldImageUrl = applyImageWriteback(product, data);
 
     // Persist the updated document
     return productRepository.save(product).then((updatedProduct) => {

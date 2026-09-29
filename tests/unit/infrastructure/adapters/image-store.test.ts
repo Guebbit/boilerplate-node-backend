@@ -10,7 +10,7 @@ import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { filesystemImageStore } from '@infrastructure/adapters/image-store';
+import { applyImageWriteback, filesystemImageStore } from '@infrastructure/adapters/image-store';
 
 const ORIGINAL_PUBLIC_PATH = process.env.NODE_PUBLIC_PATH;
 const ORIGINAL_QUARANTINE_PATH = process.env.NODE_QUARANTINE_PATH;
@@ -239,9 +239,8 @@ describe('filesystemImageStore.remove', () => {
     });
 
     /**
-     * `NODE_DEFAULT_IMAGE_USER` / `NODE_DEFAULT_IMAGE_PRODUCT` are absolute URLs, and every row
-     * that never had an upload holds one. They belong to someone else's server, and once an
-     * S3-backed store exists they will be the normal shape of a stored value too.
+     * An absolute url names someone else's server, and once an S3-backed store exists it will be
+     * the normal shape of a stored value too.
      */
     it.each([
         'https://cdn.example.com/x.png',
@@ -384,5 +383,64 @@ describe('filesystemImageStore.remove', () => {
         } finally {
             process.chdir(originalCwd);
         }
+    });
+});
+
+/** A document holding a finished image, its thumbnail and a pending key. */
+const stored = () => ({
+    imageUrl: '/images/old.png',
+    thumbnailUrl: '/images/thumbs/v1/old.webp',
+    pendingImageKey: 'pending-key'
+});
+
+describe('applyImageWriteback', () => {
+    it('unsets all three fields on null and returns the old url', () => {
+        const target = stored();
+
+        const old = applyImageWriteback(target, { imageUrl: null });
+
+        expect(old).toBe('/images/old.png');
+        expect(target).toEqual({
+            imageUrl: undefined,
+            thumbnailUrl: undefined,
+            pendingImageKey: undefined
+        });
+    });
+
+    it('returns nothing when null clears an already-empty image', () => {
+        expect(applyImageWriteback({}, { imageUrl: null })).toBeUndefined();
+    });
+
+    it('changes nothing when the image is not mentioned', () => {
+        const target = stored();
+
+        expect(applyImageWriteback(target, {})).toBeUndefined();
+        expect(target).toEqual(stored());
+    });
+
+    it('replaces all three together for a different url', () => {
+        const target = stored();
+
+        const old = applyImageWriteback(target, {
+            imageUrl: '/images/new.png',
+            thumbnailUrl: '/images/thumbs/v1/new.webp'
+        });
+
+        expect(old).toBe('/images/old.png');
+        expect(target).toEqual({
+            imageUrl: '/images/new.png',
+            thumbnailUrl: '/images/thumbs/v1/new.webp',
+            pendingImageKey: undefined
+        });
+    });
+
+    it.each([
+        ['a blank string', ''],
+        ['the url already stored', '/images/old.png']
+    ])('is a no-op for %s', (_label, imageUrl) => {
+        const target = stored();
+
+        expect(applyImageWriteback(target, { imageUrl })).toBeUndefined();
+        expect(target).toEqual(stored());
     });
 });
