@@ -34,7 +34,8 @@ const wishlistGet = (userId: string): Promise<WishlistView> =>
  *
  * The product must exist AND be publicly visible — saving a hidden or soft-deleted product from
  * a stale tab would otherwise plant a line the storefront can never render. Adding what is
- * already saved is idempotent (`$addToSet`), so a double-click answers the same 200.
+ * already saved is idempotent (`$addToSet`), so a double-click answers the same 200 and fires no
+ * second `WISHLIST_ITEM_ADDED`.
  */
 const wishlistAdd = (
     userId: string,
@@ -43,12 +44,14 @@ const wishlistAdd = (
 ): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
     productService.findPublicById(productId).then((product) => {
         if (!product) return generateReject(404, [t('wishlist.product-not-found')]);
-        return wishlistRepository.addLine(userId, productId).then((wishlist) => {
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(context),
-                event: wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED,
-                properties: { product_id: productId }
-            });
+        return wishlistRepository.addLine(userId, productId).then(({ wishlist, added }) => {
+            // Only a product that was NOT already saved is an add — a repeated PUT is not one.
+            if (added)
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    event: wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED,
+                    properties: { product_id: productId }
+                });
             return generateSuccess(presentWishlist(wishlist), 200, t('wishlist.added'));
         });
     });

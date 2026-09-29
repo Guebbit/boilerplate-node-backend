@@ -210,7 +210,7 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "removing one item from the caller's own cart"
     },
-    'wishlist POST /': {
+    'wishlist PUT /:productId': {
         requiresAuth: true,
         reason: "saving a product to the caller's own wishlist"
     },

@@ -10,7 +10,7 @@
 import { Router } from 'express';
 import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
 import { getWishlist } from './controllers/get-wishlist';
-import { postWishlist } from './controllers/post-wishlist';
+import { putWishlistItem } from './controllers/put-wishlist-item';
 import { deleteWishlistItem } from './controllers/delete-wishlist-item';
 import { postMoveToCart } from './controllers/post-move-to-cart';
 
@@ -23,11 +23,11 @@ router.use(getAuth, isAuth);
 // GET /wishlist
 router.get('/', getWishlist);
 
-// POST /wishlist — save a product (idempotent)
-router.post('/', postWishlist);
-
 // POST /wishlist/:productId/move-to-cart — must come before the bare /:productId routes
 router.post('/:productId/move-to-cart', postMoveToCart);
+
+// PUT /wishlist/:productId — save a product. The URI is the whole statement; repeating it is a no-op.
+router.put('/:productId', putWishlistItem);
 
 // DELETE /wishlist/:productId — remove one saved product
 router.delete('/:productId', deleteWishlistItem);
