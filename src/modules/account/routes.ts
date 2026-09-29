@@ -175,8 +175,8 @@ router.post('/password', credentialLimiters, isAuth, postPasswordChange);
 
 // POST /account/password/check — advisory breach check, unauthenticated (signup needs it before
 // an account exists). `passwordCheckLimiter`, not `credentialLimiters`: this body carries no
-// email/username, so `credentialLimiters`' identity key would bucket every caller as `anonymous`
-// — one shared budget for the whole internet. Address-keyed instead, like `submissionLimiter`.
+// email/username, so `credentialLimiters`' identity key would fall back to the caller's address
+// block. Address-keyed directly instead, like `submissionLimiter`.
 router.post('/password/check', passwordCheckLimiter, postPasswordCheck);
 
 // POST /account/reauth — step-up: re-prove the password, refresh auth_time (requires auth)

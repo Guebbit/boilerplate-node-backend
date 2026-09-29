@@ -13,7 +13,6 @@
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
 
-import { createHash } from 'node:crypto';
 import { isIPv4 } from 'node:net';
 import type { Request, RequestHandler, Response } from 'express';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
@@ -25,6 +24,7 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
 import { callerContextOf } from '@infrastructure/http/request';
 import { refuseAntibot } from '@infrastructure/http/middlewares/antibot-log';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
+import { pseudonymise } from '@infrastructure/security/pseudonymise';
 import type { RateLimitBudget } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -133,7 +133,7 @@ export const KEYED_BY_ADDRESS_BLOCK = 'address block (IPv4 /24, IPv6 /64)';
 
 /** `keyedBy` label for a budget bucketed on a submitted email — see {@link identityOf}. */
 export const KEYED_BY_SUBMITTED_EMAIL =
-    'the submitted email, normalised and hashed (falls back to address block when absent)';
+    'the submitted email, normalised and pseudonymised (falls back to address block when absent)';
 
 /** `keyedBy` label for a budget bucketed on the caller's authenticated account. */
 export const KEYED_BY_AUTHENTICATED_ACCOUNT = 'the authenticated account';
@@ -169,8 +169,9 @@ export const readBodyField = (request: Request, field: string): string | undefin
  * Who a credential attempt names, normalised the way the login lookup normalises it — otherwise
  * `Ada@Example.com` and `ada@example.com` are two budgets for one account.
  *
- * Hashed because the key reaches Redis, and a `KEYS *` or RDB dump should not hand over the user
- * list.
+ * Pseudonymised (keyed HMAC, never a bare hash) because the key reaches Redis: a `KEYS *` or RDB
+ * dump must not hand over the user list, and a bare `sha256(email)` is dictionary-attacked from a
+ * breach list.
  *
  * An attempt naming nobody falls back to the caller's address block, not one shared bucket. A
  * multipart body is still unparsed when a limiter runs, so a shared bucket would let five junk
@@ -184,7 +185,7 @@ export const identityOf = (request: Request): string => {
     const identity = named ? normalizeEmail(named) : undefined;
     if (!identity) return `anon:${addressBlockOf(request)}`;
 
-    return createHash('sha256').update(identity).digest('hex');
+    return pseudonymise('rate-limit', identity);
 };
 
 /**
