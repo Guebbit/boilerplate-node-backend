@@ -115,7 +115,7 @@ write can never vary by caller.
 `translatables` declares — words only, any registered entity, and it has no way to touch anything
 else about that entity. PUT replaces the whole set (a stored locale the body doesn't name is
 deleted, and the fallback locale is required), PATCH merges — the same replace/merge split
-`/locales/{locale}/entries` already uses for its own bulk import. A product also has its own write
+`/locales/{locale}/tenants/{tenant}/entries` already uses for its own bulk import. A product also has its own write
 surface, [`POST /products` / `PUT`/`PATCH /products/{id}`](./products.md#writing-translated-content),
 which writes the SAME rows but alongside price, stock flags and the image, in one request.
 

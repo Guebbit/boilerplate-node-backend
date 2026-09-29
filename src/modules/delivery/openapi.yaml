@@ -307,6 +307,7 @@ components:
             properties:
                 trackingCode:
                     type: string
+                    minLength: 1
                     description: The carrier's handle on the parcel. Required when the order's shipping method is tracked; optional otherwise.
                 forced:
                     type: boolean

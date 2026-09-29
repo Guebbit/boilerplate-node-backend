@@ -37,9 +37,8 @@ describe('RW1 — concurrent saves of the SAME product', () => {
 
         const results = await raceN(RACE_SIZE, () =>
             api()
-                .post('/wishlist')
+                .put(`/wishlist/${String(product._id)}`)
                 .set('Authorization', bearer)
-                .send({ productId: String(product._id) })
         );
 
         expectNoServerErrors(results);
@@ -68,9 +67,8 @@ describe('RW1 — concurrent saves of DIFFERENT products', () => {
 
         const results = await raceN(RACE_SIZE, (index) =>
             api()
-                .post('/wishlist')
+                .put(`/wishlist/${String(products[index]._id)}`)
                 .set('Authorization', bearer)
-                .send({ productId: String(products[index]._id) })
         );
 
         expectNoServerErrors(results);
@@ -101,9 +99,8 @@ describe('RW2 — the FIRST save, raced', () => {
 
         const results = await raceN(RACE_SIZE, () =>
             api()
-                .post('/wishlist')
+                .put(`/wishlist/${String(product._id)}`)
                 .set('Authorization', bearer)
-                .send({ productId: String(product._id) })
         );
 
         expectNoServerErrors(results);
@@ -132,16 +129,14 @@ describe('a save and a move-to-cart on the same line', () => {
         const { user, bearer } = await authenticateAs();
         const product = await createProduct();
         await api()
-            .post('/wishlist')
-            .set('Authorization', bearer)
-            .send({ productId: String(product._id) });
+            .put(`/wishlist/${String(product._id)}`)
+            .set('Authorization', bearer);
 
         const results = await raceN(RACE_SIZE, (index) =>
             index % 2 === 0
                 ? api()
-                      .post('/wishlist')
+                      .put(`/wishlist/${String(product._id)}`)
                       .set('Authorization', bearer)
-                      .send({ productId: String(product._id) })
                 : api()
                       .post(`/wishlist/${String(product._id)}/move-to-cart`)
                       .set('Authorization', bearer)

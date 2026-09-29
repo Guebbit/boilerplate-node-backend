@@ -45,13 +45,13 @@ Stock is read-only on this surface. `onHand`, `reserved` and `available` are ser
 
 > The domain behind these routes: [`cart`](../modules/cart.md) · routes and middleware: `src/modules/cart/routes.ts`
 
-Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart/checkout` converts the cart into an order, clears the cart, records the `cartCheckoutTotal` metric and emits a `CHECKOUT_COMPLETED` analytics event.
+Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart` is "add to cart": a new product gets a line (201), one already there grows (200). `PUT /cart/{productId}` sets a quantity. `POST /cart/checkout` converts the cart into an order, clears the cart, records the `cartCheckoutTotal` metric and emits a `CHECKOUT_COMPLETED` analytics event.
 
 ## Wishlist
 
 > The domain behind these routes: [`wishlist`](../modules/wishlist.md) · routes and middleware: `src/modules/wishlist/routes.ts`
 
-Per-user saved products — ids only, joined client-side like the cart's lines. `POST /wishlist/:productId/move-to-cart` is the exit: the saved line becomes a cart line (quantity 1, incremented if already present) and leaves the wishlist.
+Per-user saved products — ids only, joined client-side like the cart's lines. `PUT /wishlist/:productId` saves one (idempotent, no body) and `DELETE` on the same URI removes it. `POST /wishlist/:productId/move-to-cart` is the exit: the saved line becomes a cart line (quantity 1, incremented if already present) and leaves the wishlist.
 
 ## Orders
 

@@ -22,6 +22,8 @@ export const { replace: replaceUser, update: updateUser } = createUpdateControll
     patchSchema: UpdateUserByIdBody,
     // The one boolean an edit carrying an avatar (multipart) sends as a string.
     input: { booleans: ['active'] },
+    // A client cannot send the current avatar back, so a PUT that omits it keeps it.
+    keptWhenOmitted: ['imageUrl'],
     update: (id, changes, request) =>
         writeWithUploadedImage(request, changes.imageUrl, (image) =>
             userService.updateById(id, { ...changes, ...image }, callerContextOf(request))

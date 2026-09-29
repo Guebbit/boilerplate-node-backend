@@ -62,7 +62,7 @@ export type CartModel = Model<CartDocument>;
 
 /**
  * Ceiling a stored cart line's quantity is held to, regardless of how many writes it took to get
- * there. `UpsertCartItemRequest`/`UpdateCartItemByIdRequest` in `openapi.yaml` bound one REQUEST
+ * there. `AddCartItemRequest`/`UpdateCartItemByIdRequest` in `openapi.yaml` bound one REQUEST
  * to the same number, but only `'add'`-mode writes (`cartRepository.upsertLine`, `./reorder`) can
  * push a line past it across several requests — this is the guard that actually holds the line.
  */

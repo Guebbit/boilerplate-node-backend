@@ -28,7 +28,7 @@ const authenticateWithCart = async (quantity = 2) => {
         .set('Authorization', bearer)
         .send({ productId: String(product._id), quantity });
 
-    if (response.status !== 200)
+    if (response.status !== 201)
         throw new Error(
             `cart setup failed: POST /cart returned ${response.status} — ${JSON.stringify(response.body)}`
         );
@@ -63,8 +63,36 @@ describe('POST /cart', () => {
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 3 });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(201);
+        expect(response.headers.location).toBe(`/cart/${String(product._id)}`);
         expect(response.body.data.summary.totalQuantity).toBe(3);
+    });
+
+    // WM-D6: "add to cart" GROWS a line already there (Shopify, commercetools) — the same button
+    // pressed twice makes two — and answers 200, because nothing was created.
+    it('grows an existing line, answering 200 with no Location', async () => {
+        const { bearer, product } = await authenticateWithCart(2);
+
+        const response = await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 3 });
+
+        expect(response.status).toBe(200);
+        expect(response.headers.location).toBeUndefined();
+        expect(response.body.data.summary.totalQuantity).toBe(5);
+    });
+
+    it('422s an add that would push a line past the per-line ceiling', async () => {
+        const { bearer, product } = await authenticateWithCart(999);
+
+        const response = await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 1 });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].code).toBe('CART_QUANTITY_LIMIT');
     });
 
     it('matches the error contract for a product that does not exist', async () => {
@@ -151,6 +179,37 @@ describe('PUT /cart/{productId}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.summary.totalQuantity).toBe(5);
+    });
+
+    // RFC 9110 §9.3.4: a PUT that creates the resource answers 201. The cart line's URI is the
+    // caller's own by construction, so this is the one PUT allowed to create.
+    it('creates a missing line with 201 and its Location', async () => {
+        const { bearer } = await authenticateAs('user');
+        const product = await createProduct();
+
+        const response = await api()
+            .put(`/cart/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ quantity: 4 });
+
+        expect(response.status).toBe(201);
+        expect(response.headers.location).toBe(`/cart/${String(product._id)}`);
+        expect(response.body.data.summary.totalQuantity).toBe(4);
+    });
+
+    it('sets rather than adds: repeating the same PUT leaves the same cart', async () => {
+        const { bearer, product } = await authenticateWithCart(2);
+        const send = () =>
+            api()
+                .put(`/cart/${String(product._id)}`)
+                .set('Authorization', bearer)
+                .send({ quantity: 5 });
+
+        const first = await send();
+        const second = await send();
+
+        expect(second.status).toBe(200);
+        expect(second.body.data.summary.totalQuantity).toBe(first.body.data.summary.totalQuantity);
     });
 
     it('matches the error contract for an invalid body', async () => {
@@ -326,7 +385,12 @@ describe('POST /cart/checkout', () => {
             .send({ shippingMethodId: 'pickup' });
         const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
+        // WM-D14: `data` is the created order itself, as `POST /orders` answers it — not a
+        // wrapper — and `Location` names it.
         expect(response.status).toBe(201);
+        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.data.order).toBeUndefined();
+        expect(response.headers.location).toBe(`/orders/${String(response.body.data.id)}`);
     });
 
     /*
@@ -389,7 +453,7 @@ describe('POST /cart/checkout', () => {
             .send({ notes: 'Leave with the concierge' });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.order.notes).toBe('Leave with the concierge');
+        expect(response.body.data.notes).toBe('Leave with the concierge');
     });
 
     it('matches the error contract for an unrecognised payment method value', async () => {
@@ -413,7 +477,7 @@ describe('POST /cart/checkout', () => {
             zip: '41121',
             country: 'IT'
         });
-        const addressId = address.body.data.addresses[0].id as string;
+        const addressId = address.body.data.id as string;
 
         await api()
             .put('/cart/shipping-method')
@@ -439,7 +503,7 @@ describe('POST /cart/checkout', () => {
             zip: 'SW1A 1AA',
             country: 'GB'
         });
-        const addressId = address.body.data.addresses[0].id as string;
+        const addressId = address.body.data.id as string;
 
         await api()
             .put('/cart/shipping-method')
@@ -556,9 +620,9 @@ describe('POST /cart/checkout', () => {
                     .send({ paymentMethod: 'bank_transfer' });
 
                 expect(response.status).toBe(201);
-                expect(response.body.data.order.paymentMethod).toBe('bank_transfer');
-                expect(response.body.data.order.payBy).toEqual(expect.any(String));
-                expect(response.body.data.order.transferInstructions).toEqual({
+                expect(response.body.data.paymentMethod).toBe('bank_transfer');
+                expect(response.body.data.payBy).toEqual(expect.any(String));
+                expect(response.body.data.transferInstructions).toEqual({
                     beneficiary: 'Guebbit Shop',
                     // Grouped into 4s for display — see `bankTransferIbanFriendly`.
                     iban: 'DE89 3704 0044 0532 0130 00',
@@ -598,7 +662,7 @@ describe('POST /cart/reorder/{orderId}', () => {
             .post('/cart')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 2 });
-        expect(seeded.status).toBe(200);
+        expect(seeded.status).toBe(201);
 
         // The same product arrives again via a reorder of an old order holding 3 of it.
         const order = await createOrder(user, [toOrderItem(product, 3)]);

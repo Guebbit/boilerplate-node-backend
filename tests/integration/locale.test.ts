@@ -3,17 +3,22 @@
  *
  * `POST /account/signup` is the subject because its validation rejects before any repository call,
  * so these drive the real middleware stack — `attachLocale`, the routes, the Zod thunks and the
- * error shaping in `rejectResponse` — with no database, Redis or queue.
+ * error shaping in `rejectResponse` — with no Redis or queue. The one multipart case needs a
+ * database to sign a caller in.
  *
  * The concurrency case is the one that matters most: it is what stops `@infrastructure/i18n` being
  * "simplified" into an `i18next.changeLanguage()` call, which mutates one global and is async, so
  * two overlapping requests in different languages would answer each other's.
  */
-import { api } from '@tests/http';
+import { api, authenticateAs } from '@tests/http';
+import { setupTestDb } from '@tests/setup-test-db';
 import enUsers from '@modules/users/locales/en.json';
 import itUsers from '@modules/users/locales/it.json';
 import enShared from '../../src/locales/en.json';
 import itShared from '../../src/locales/it.json';
+
+// Only the multipart case signs a user in; every other case rejects before any repository call.
+setupTestDb();
 
 const INVALID_SIGNUP = {
     email: 'not-an-email',
@@ -84,16 +89,20 @@ describe('Accept-Language negotiation', () => {
      *
      * `src/infrastructure/http/middlewares/upload.ts` re-enters the store after multer; this is the guard.
      */
+    // Signup takes no image any more (and so declares no multipart body); `PATCH /account` is a
+    // multipart door a signed-in caller can reach, and rejects an invalid email the same way.
     it('keeps the locale across a multipart upload', async () => {
-        const response = await signupWith('it')
-            .field('email', INVALID_SIGNUP.email)
-            .field('username', INVALID_SIGNUP.username)
-            .field('password', INVALID_SIGNUP.password)
-            .field('passwordConfirm', INVALID_SIGNUP.passwordConfirm);
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .patch('/account')
+            .set('Authorization', bearer)
+            .set('Accept-Language', 'it')
+            .field('email', INVALID_SIGNUP.email);
 
         expect(response.status).toBe(422);
         expect(response.headers['content-language']).toBe('it');
-        expect(messagesOf(response.body)).toContain(itUsers.users['field-email-invalid']);
+        expect(messagesOf(response.body)).toContain(itShared.validation['format-email']);
     });
 
     /**

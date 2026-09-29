@@ -5,26 +5,27 @@
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { UpsertCartItemBody } from '@api/schemas.zod';
+import { AddCartItemBody } from '@api/schemas.zod';
 import { cartService } from '../services';
-import { successResponse } from '@infrastructure/http/response';
-import type { CartResponse, UpsertCartItemRequest } from '@types';
+import { createdResponse, successResponse } from '@infrastructure/http/response';
+import type { CartResponse, AddCartItemRequest } from '@types';
 import { requireObjectId, callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /cart
- * Add a product (with its quantity) to the cart — or replace the quantity of a line already there.
+ * "Add to cart": a product with no line gets one (201); a line already there grows by the quantity
+ * (200) — pressing the button twice makes two. `PUT /cart/{productId}` is the door that sets.
  * Eligibility (can this product be in a cart at all) is decided by the service, not here — the
  * same rule must hold for `PUT /cart/{productId}` and the wishlist's move-to-cart.
  */
 export const postCart = (
-    request: Request<unknown, unknown, UpsertCartItemRequest>,
+    request: Request<unknown, unknown, AddCartItemRequest>,
     response: Response
 ) => {
     const userId = request.authContext!.id;
 
-    const body = parseBody(UpsertCartItemBody, request.body, response);
+    const body = parseBody(AddCartItemBody, request.body, response);
     if (!body) return;
 
     const { productId, quantity } = body;
@@ -37,7 +38,15 @@ export const postCart = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse<CartResponse>(response, result.data, 200, t('cart.product-added'));
+            // 201 when the product got a line, 200 when the line it already had grew.
+            if (result.status === 201)
+                createdResponse<CartResponse>(
+                    response,
+                    result.data,
+                    `/cart/${productId}`,
+                    t('cart.product-added')
+                );
+            else successResponse<CartResponse>(response, result.data, 200, t('cart.product-added'));
         })
-        .catch(catchAs(response, 'upsertCartItem'));
+        .catch(catchAs(response, 'addCartItem'));
 };

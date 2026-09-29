@@ -67,8 +67,8 @@ export const resolvePayerId = (orderUserId: string | undefined): Promise<string 
  * contract counts it in `totalPrice`. `orderCurrency` resolves the SAME currency the order was
  * priced in — the shop's live setting only for an order that predates the field — so a provider
  * charging in JPY never sees a EUR-shaped amount for a currency change made after the order was
- * placed. Re-asking is the double-click case and answers the same intent; an order whose money
- * already moved answers 409.
+ * placed. Re-asking is the double-click case: it refreshes and answers the same intent, 200 where
+ * the first ask was 201; an order whose money already moved answers 409.
  *
  * The provider is asked for an intent only when this payment does not already have one — a second
  * intent for the same order is a second thing the customer could pay.
@@ -113,7 +113,7 @@ export const createIntent = async (
     const provider = resolvePaymentProvider();
     const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
     const currency = orderCurrency(order);
-    const payment = await paymentRepository.upsertIntent(orderId, payerId, {
+    const upserted = await paymentRepository.upsertIntent(orderId, payerId, {
         // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
         // document; spreading it copies nothing, since its schema paths are prototype getters,
         // not the document's own enumerable properties.
@@ -121,7 +121,8 @@ export const createIntent = async (
         currency,
         provider: provider.name
     });
-    if (!payment) return notPayable();
+    if (!upserted) return notPayable();
+    const { payment, created } = upserted;
 
     const { providerRef, clientSecret } = await provider.prepare(
         { amount: payment.amount, currency: payment.currency },
@@ -133,7 +134,8 @@ export const createIntent = async (
         clientSecret
     };
 
-    return generateSuccess(prepared, 201);
+    // 201 says a payment row was inserted; asking again refreshes the same one and creates nothing.
+    return generateSuccess(prepared, created ? 201 : 200);
 };
 
 /**

@@ -83,7 +83,7 @@ export const recordOfflinePayment = async (
 
     const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
     const currency = orderCurrency(order);
-    const payment = await paymentRepository.upsertOffline(orderId, payerId, {
+    const upserted = await paymentRepository.upsertOffline(orderId, payerId, {
         // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
         // document; spreading it copies nothing, since its schema paths are prototype getters,
         // not the document's own enumerable properties.
@@ -95,7 +95,8 @@ export const recordOfflinePayment = async (
     });
     // Nothing to upsert onto: the order's own money already moved (succeeded or refunded),
     // raced past the `pending` check above.
-    if (!payment) return notPayable();
+    if (!upserted) return notPayable();
+    const { payment, created } = upserted;
 
     const settlement = await settlePayment(payment, { status: 'succeeded' });
     // Same refusal `confirmPayment`/`syncPayment` answer with when their own settlement loses
@@ -119,5 +120,6 @@ export const recordOfflinePayment = async (
         }
     });
 
-    return generateSuccess(settled, 201, t('payments.offline-recorded'));
+    // 201 only when the row is new; recording over an unpaid card intent converts that row.
+    return generateSuccess(settled, created ? 201 : 200, t('payments.offline-recorded'));
 };

@@ -28,6 +28,8 @@ export interface IdempotencyRecordDocument extends Document {
     state: IdempotencyRecordState;
     status?: number;
     body?: unknown;
+    /** The `Location` header a 201 sent, replayed with the body so a retry looks like the original. */
+    location?: string;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -75,6 +77,9 @@ export const idempotencyRecordSchema = new Schema<
         // which is exactly what `Mixed` is for.
         body: {
             type: Schema.Types.Mixed
+        },
+        location: {
+            type: String
         }
     },
     {

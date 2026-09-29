@@ -6,13 +6,13 @@
 
 import type { Request, Response } from 'express';
 import { AddAddressBody } from '@api/schemas.zod';
-import { successResponse } from '@infrastructure/http/response';
-import type { AddressInput, AddressesResponse } from '@types';
+import { createdResponse } from '@infrastructure/http/response';
+import type { Address, AddressInput } from '@types';
 import { addressAdd } from '../service';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
- * POST /account/addresses — add an entry.
+ * POST /account/addresses — add an entry. Answers 201 with the entry and its `Location`.
  * The first entry becomes the default automatically; a later one claims the slot only by saying
  * so, demoting the holder in the same write — one read-modify-write, owned by `repository.ts`
  * (see its docblock and `service.ts`).
@@ -31,7 +31,7 @@ export const postAddress = (
         .then((result) => {
             if (refused(response, result)) return;
             const { data, message } = result;
-            successResponse<AddressesResponse>(response, data, 200, message);
+            createdResponse<Address>(response, data, `/account/addresses/${data.id}`, message);
         })
         .catch(catchAs(response, 'postAddress'));
 };

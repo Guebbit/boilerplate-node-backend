@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { accountService } from '../services';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { rejectResponse, createdResponse } from '@infrastructure/http/response';
 import type { SignupRequest, User } from '@types';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authSignupTotal } from '../metrics';
@@ -16,6 +16,13 @@ import { sendVerificationEmail } from '../services';
 import { userService } from '@modules/users';
 import { SIGNUP_DEFAULT_ROLE } from '@modules/access';
 import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log';
+
+/**
+ * Where a signup's 201 says the new account lives. The same value for a refused address (nothing
+ * was created) and a real one, so the header is no tell — and the same for everyone, since the
+ * caller's own account is `/account`, never an id.
+ */
+const SIGNUP_LOCATION = '/account';
 
 /**
  * POST /account/signup
@@ -79,7 +86,11 @@ export const postSignup = (
                 // SIGNUP_DEFAULT_ROLE, not read off a membership that was never written (this
                 // document is never saved) — exactly what a genuine signup's response shows,
                 // which is the whole point of this branch being indistinguishable.
-                successResponse<User>(response, userService.toUser(data, SIGNUP_DEFAULT_ROLE), 201);
+                createdResponse<User>(
+                    response,
+                    userService.toUser(data, SIGNUP_DEFAULT_ROLE),
+                    SIGNUP_LOCATION
+                );
                 return;
             }
 
@@ -108,7 +119,11 @@ export const postSignup = (
                 // SIGNUP_DEFAULT_ROLE, not a lookup: self-service signup's `assignDefaultRole` can only
                 // ever grant this one role, so it's what the membership just written holds, by
                 // construction — see `authentication.ts#signup`.
-                successResponse<User>(response, userService.toUser(data, SIGNUP_DEFAULT_ROLE), 201);
+                createdResponse<User>(
+                    response,
+                    userService.toUser(data, SIGNUP_DEFAULT_ROLE),
+                    SIGNUP_LOCATION
+                );
             });
         })
         .catch((error: unknown) => {

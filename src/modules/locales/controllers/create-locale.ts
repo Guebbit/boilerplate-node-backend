@@ -12,7 +12,7 @@
 import type { Request, Response } from 'express';
 import { CreateLocaleBody } from '@api/schemas.zod';
 import type { CreateLocaleRequest, Language } from '@types';
-import { successResponse } from '@infrastructure/http/response';
+import { createdResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { presentLocale } from '../presenters';
@@ -37,7 +37,8 @@ export const createLocale = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            return successResponse<Language>(response, presentLocale(result.data), 201);
+            const language = presentLocale(result.data);
+            return createdResponse<Language>(response, language, `/locales/${language.tag}`);
         })
         .catch(catchAs(response, 'createLocale'));
 };

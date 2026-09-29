@@ -17,9 +17,9 @@ export interface Line {
     quantity: number;
 }
 
-/** What `POST /cart/checkout` answers with. Only the id is ever read. */
+/** What `POST /cart/checkout` answers with — the created order itself. Only the id is ever read. */
 interface CheckoutData {
-    order: { id: string };
+    id: string;
 }
 
 /** What every payment endpoint answers with, down to the two fields the flows branch on. */
@@ -77,7 +77,7 @@ export const checkout = async (
     const { shippingMethodId = 'pickup', ...rest } = options;
     await caller.call('PUT', '/cart/shipping-method', { shippingMethodId });
 
-    const { order } = await caller.call<CheckoutData>('POST', '/cart/checkout', rest);
+    const order = await caller.call<CheckoutData>('POST', '/cart/checkout', rest);
     return order.id;
 };
 

@@ -3,6 +3,7 @@
         "not-found": "Il prodotto richiesto non è stato trovato.",
         "field-title-required": "Il titolo è obbligatorio",
         "field-title-min": "Il titolo è troppo corto",
+        "field-description-empty": "La descrizione non può essere vuota — omettila oppure cancellala con null",
         "field-price-invalid": "Il prezzo è mancante o non valido",
         "field-price-min": "Il prezzo non può essere negativo",
         "field-translations-fallback-required": "La traduzione in {{locale}} è obbligatoria: è la lingua di fallback di questo deployment.",

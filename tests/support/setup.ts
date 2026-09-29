@@ -281,3 +281,18 @@ registerTemplateDirectories(
         .map((name) => path.join(MODULES_ROOT, name, 'templates'))
         .filter((directory) => existsSync(directory))
 );
+
+/*
+ * DNS, for the webhook URL check (`webhooks/services/subscriptions.ts`) and every suite that
+ * subscribes to a URL like `https://example.test/inbox`: a public address for any name, so no
+ * test depends on a real resolver — or on the network being there. A suite that needs a private
+ * or failing answer mocks `node:dns/promises` itself; a test file's own `jest.mock` wins.
+ */
+jest.mock('node:dns/promises', () => ({
+    // The rest of the module stays real — `Resolver` (the MX policy) is not what this stands in for.
+    ...jest.requireActual<typeof import('node:dns/promises')>('node:dns/promises'),
+    resolve4: jest.fn(() => Promise.resolve(['93.184.216.34'])),
+    resolve6: jest.fn(() =>
+        Promise.reject(Object.assign(new Error('no AAAA'), { code: 'ENODATA' }))
+    )
+}));

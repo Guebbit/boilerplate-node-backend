@@ -4,6 +4,7 @@
  * and the public event catalogue — against the bundled `openapi.yaml`.
  */
 
+import { resolve4 } from 'node:dns/promises';
 import { Types } from 'mongoose';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -463,5 +464,79 @@ describe('GET /webhooks/events', () => {
         const response = await api().get('/webhooks/events');
 
         expect(response.status).toBe(401);
+    });
+});
+
+/** The next lookup answers a private address, as a hostile DNS record would. */
+const resolvesToPrivateAddress = () => jest.mocked(resolve4).mockResolvedValueOnce(['10.0.0.5']);
+
+describe('a private target is refused at create and update (WM-D13)', () => {
+    afterEach(() => {
+        delete process.env.NODE_WEBHOOK_DEMO_SINK_URL;
+    });
+
+    it('422s a create whose host resolves to a private address, naming the url field', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        resolvesToPrivateAddress();
+
+        const response = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody({ url: 'https://internal.example.test/hook' }));
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details).toEqual({ field: 'url', reason: 'unsafe-address' });
+        expect(await webhookSubscriptionRepository.count({})).toBe(0);
+    });
+
+    it.each([
+        ['PUT', { eventTypes: ['order.paid'], enabled: true }],
+        ['PATCH', {}]
+    ] as const)('422s a %s that moves the url to a private address', async (verb, rest) => {
+        const { bearer } = await authenticateAsRole('manager');
+        const created = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
+        resolvesToPrivateAddress();
+
+        const response = await api()
+            [verb.toLowerCase() as 'put' | 'patch'](
+                `/webhooks/subscriptions/${String(created.body.data.id)}`
+            )
+            .set('Authorization', bearer)
+            .send({ url: 'https://internal.example.test/hook', ...rest });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('does not look the host up again when an edit leaves the url as it is', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const created = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
+        jest.mocked(resolve4).mockClear();
+
+        const response = await api()
+            .patch(`/webhooks/subscriptions/${String(created.body.data.id)}`)
+            .set('Authorization', bearer)
+            .send({ url: subscriptionBody().url, enabled: false });
+
+        expect(response.status).toBe(200);
+        expect(resolve4).not.toHaveBeenCalled();
+    });
+
+    it('lets the configured demo sink through, private address and all', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'https://sink.internal/';
+        resolvesToPrivateAddress();
+
+        const response = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody({ url: 'https://sink.internal/hook' }));
+
+        expect(response.status).toBe(201);
     });
 });

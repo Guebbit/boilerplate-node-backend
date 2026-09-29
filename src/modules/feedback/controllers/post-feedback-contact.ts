@@ -14,7 +14,7 @@ import {
     createFeedbackRequestBodySubjectMax,
     createFeedbackRequestBodyMessageMax
 } from '@api/schemas.zod';
-import { successResponse } from '@infrastructure/http/response';
+import { createdResponse } from '@infrastructure/http/response';
 import type { CreateFeedbackRequest, FeedbackRequest } from '@types';
 import { feedbackRequestService } from '../service';
 import { presentFeedbackRequest } from '../presenter';
@@ -29,7 +29,7 @@ import { catchAs, parseBody } from '@infrastructure/http/controller';
  * restated, not just the trim/min.
  */
 const createFeedbackSchema = CreateFeedbackRequestBody.extend({
-    name: z.string().trim().max(createFeedbackRequestBodyNameMax).optional(),
+    name: z.string().trim().min(1).max(createFeedbackRequestBodyNameMax).optional(),
     email: z.string().trim().pipe(z.email()),
     subject: z.string().trim().min(1).max(createFeedbackRequestBodySubjectMax),
     message: z.string().trim().min(1).max(createFeedbackRequestBodyMessageMax)
@@ -53,10 +53,11 @@ export const postFeedbackContact = (
     return feedbackRequestService
         .create(body)
         .then((createdFeedbackRequest) => {
-            successResponse<FeedbackRequest>(
+            const feedbackRequest = presentFeedbackRequest(createdFeedbackRequest);
+            createdResponse<FeedbackRequest>(
                 response,
-                presentFeedbackRequest(createdFeedbackRequest),
-                201
+                feedbackRequest,
+                `/feedback/${feedbackRequest.id}`
             );
         })
         .catch(catchAs(response, 'postFeedbackContact'));

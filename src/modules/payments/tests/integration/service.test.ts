@@ -940,15 +940,16 @@ describe('syncPayment', () => {
         // Built straight off the repository, skipping createIntent — so there is no providerRef,
         // which is the one thing this branch exists to catch before it ever reaches the provider.
         const { user, order } = await orderFor();
-        const payment = await paymentRepository.upsertIntent(String(order._id), user.id, {
+        const upserted = await paymentRepository.upsertIntent(String(order._id), user.id, {
             amount: 10,
             currency: 'EUR',
             provider: 'fake'
         });
-        expect(payment!.providerRef).toBeUndefined();
+        const { payment } = upserted!;
+        expect(payment.providerRef).toBeUndefined();
 
         const retrieveSpy = jest.spyOn(fakePaymentProvider, 'retrieve');
-        const result = await syncPayment(String(payment!._id), auth(user), testCallerContext);
+        const result = await syncPayment(String(payment._id), auth(user), testCallerContext);
         retrieveSpy.mockRestore();
 
         expect(asReject(result).status).toBe(409);

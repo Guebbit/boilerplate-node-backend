@@ -42,9 +42,14 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
             tags: [Cart]
-            summary: Add/Edit cart item
-            description: Adds or edit a product to the authenticated user's cart. Returns the updated cart.
-            operationId: upsertCartItem
+            summary: Add to cart
+            description: >-
+                "Add to cart": a product with no line in the caller's cart gets one, and a line
+                already there GROWS by `quantity` — pressing the button twice makes two (Shopify's
+                `/cart/add`, commercetools' `addLineItem`). Answers 201 with the cart and the
+                line's `Location` when a line was created, 200 when an existing one grew; the line
+                may not pass the per-line cap (422). To SET a quantity, `PUT /cart/{productId}`.
+            operationId: addCartItem
             security:
                 - bearerAuth: []
             requestBody:
@@ -52,10 +57,18 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpsertCartItemRequest'
+                            $ref: '#/components/schemas/AddCartItemRequest'
             responses:
+                '201':
+                    description: The product had no line; the cart now holds one
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
                 '200':
-                    description: Add/Edit to cart
+                    description: The product already had a line, which grew
                     content:
                         application/json:
                             schema:
@@ -112,13 +125,11 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /cart/{productId}:
-        # Same as POST /cart?productId={productId}
         put:
             tags: [Cart]
             summary: Set cart item quantity
-            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path. Functionally equivalent to `POST /cart`. Returns the updated cart.
+            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path — the quantity, not an increment; `POST /cart` is the door that adds. Answers 201 when it created the line (RFC 9110 §9.3.4) and 200 when it wrote one already there; repeating it changes nothing. Returns the updated cart.
             operationId: updateCartItemById
-            x-alias-of: upsertCartItem
             security:
                 - bearerAuth: []
             parameters:
@@ -130,6 +141,14 @@ paths:
                         schema:
                             $ref: '#/components/schemas/UpdateCartItemByIdRequest'
             responses:
+                '201':
+                    description: The product had no line; the cart now holds one
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
                 '200':
                     description: Updated cart
                     content:
@@ -216,7 +235,7 @@ paths:
         post:
             tags: [Orders]
             summary: Checkout (place order from cart)
-            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. Optional order notes can be supplied in the request body. Returns the created order. The order's email is always the authenticated caller's own — checkout is account-bound; a future guest checkout would bring an `email` field back.
+            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. Optional order notes can be supplied in the request body. Answers 201 with the created order itself as `data` — the same shape `POST /orders` answers — and its `Location`. The order's email is always the authenticated caller's own — checkout is account-bound; a future guest checkout would bring an `email` field back.
             operationId: checkout
             security:
                 - bearerAuth: []
@@ -231,6 +250,8 @@ paths:
             responses:
                 '201':
                     description: Order created
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
                         application/json:
                             schema:
@@ -239,12 +260,12 @@ paths:
                         PayOrder:
                             operationId: createPaymentIntent
                             parameters:
-                                orderId: '$response.body#/data/order/id'
+                                orderId: '$response.body#/data/id'
                             description: The new order's id is the `orderId` to freeze into a payment intent.
                         CancelOrder:
                             operationId: cancelOrderById
                             parameters:
-                                id: '$response.body#/data/order/id'
+                                id: '$response.body#/data/id'
                             description: The new order's id can be cancelled directly.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # An `addressId` that names none of the caller's saved addresses — the checkout
@@ -348,7 +369,7 @@ components:
                 message:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
-                    $ref: '#/components/schemas/CheckoutResponse'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
 
         CartQuantity:
             type: integer
@@ -365,7 +386,7 @@ components:
                 a nonsense summary total and arithmetic far outside any range the money code is
                 exercised over.
 
-        UpsertCartItemRequest:
+        AddCartItemRequest:
             type: object
             additionalProperties: false
             required: [productId, quantity]
@@ -380,8 +401,6 @@ components:
             additionalProperties: false
             required: [quantity]
             properties:
-                productId:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 quantity:
                     $ref: '#/components/schemas/CartQuantity'
 
@@ -400,6 +419,7 @@ components:
             properties:
                 shippingMethodId:
                     type: string
+                    minLength: 1
                     nullable: true
                     description: >-
                         Which shipping method (see `GET /delivery/methods`) the cart plans to ship
@@ -414,7 +434,8 @@ components:
             properties:
                 notes:
                     type: string
-                    description: Optional order notes
+                    minLength: 1
+                    description: Optional order notes. Left out when there are none; an empty string is a 422.
                 addressId:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }]
                     description: >-
@@ -553,15 +574,5 @@ components:
                         `summary.itemsTotal` — empty whenever `required` is `false`.
                         `GET /delivery/methods` remains the full, unfiltered catalogue this is
                         drawn from.
-
-        CheckoutResponse:
-            type: object
-            additionalProperties: false
-            required: [order]
-            properties:
-                order:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
-                message:
-                    type: string
 
         # ---------- Observability ----------

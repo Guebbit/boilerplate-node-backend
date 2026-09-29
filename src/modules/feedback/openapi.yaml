@@ -23,6 +23,8 @@ paths:
             responses:
                 '201':
                     description: Created feedback request
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
                         application/json:
                             schema:
@@ -146,6 +148,9 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateFeedbackRequestStatusRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateFeedbackRequestStatusRequest'
             responses:
                 '200':
                     description: Updated feedback request
@@ -256,6 +261,7 @@ components:
             properties:
                 name:
                     type: string
+                    minLength: 1
                     maxLength: 120
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
@@ -301,6 +307,7 @@ components:
                 adminNotes:
                     type: string
                     minLength: 1
+                    maxLength: 5000
                     nullable: true
 
         # PATCH /feedback/{id} — RFC 7396: every field optional, omitted means unchanged.
@@ -314,6 +321,7 @@ components:
                 adminNotes:
                     type: string
                     minLength: 1
+                    maxLength: 5000
                     nullable: true
 
         FeedbackRequestsResponse:

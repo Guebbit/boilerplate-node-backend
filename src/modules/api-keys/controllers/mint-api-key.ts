@@ -6,7 +6,7 @@
 import type { Request, Response } from 'express';
 import { MintApiKeyBody } from '@api/schemas.zod';
 import type { MintApiKeyRequest, ApiKeyCreated } from '@types';
-import { successResponse } from '@infrastructure/http/response';
+import { createdResponse } from '@infrastructure/http/response';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { apiKeysService } from '../services';
@@ -27,7 +27,11 @@ export const mintApiKey = (
         .mintApiKey(body, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            return successResponse<ApiKeyCreated>(response, result.data, 201);
+            return createdResponse<ApiKeyCreated>(
+                response,
+                result.data,
+                `/api-keys/${result.data.id}`
+            );
         })
         .catch(catchAs(response, 'mintApiKey'));
 };

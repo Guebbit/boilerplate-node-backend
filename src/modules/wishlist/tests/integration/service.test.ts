@@ -26,6 +26,20 @@ const savedIds = async (userId: string) => {
     return view.items.map(({ productId }) => productId);
 };
 
+describe('wishlistRepository.addLine', () => {
+    // The service fires `WISHLIST_ITEM_ADDED` off this flag, so it must say true exactly once.
+    it('reports a product as added the first time only, whatever the retries', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+
+        const first = await wishlistRepository.addLine(user.id, String(product._id));
+        const second = await wishlistRepository.addLine(user.id, String(product._id));
+
+        expect([first.added, second.added]).toEqual([true, false]);
+        expect(second.wishlist.items).toHaveLength(1);
+    });
+});
+
 describe('wishlistAdd', () => {
     it('saves a product and answers the view', async () => {
         const user = await createUser();

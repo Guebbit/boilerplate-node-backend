@@ -89,6 +89,7 @@ interface SpecDocument {
     components?: {
         schemas?: Record<string, SchemaNode>;
         parameters?: Record<string, ParameterObject>;
+        headers?: Record<string, { required?: boolean }>;
     };
 }
 
@@ -166,6 +167,64 @@ const queryParametersOf = (declared: ParameterObject[], spec: SpecDocument): Que
             required: parameter.required === true,
             schema: resolveSchema(parameter.schema, spec)
         }));
+
+/** One response header as an operation writes it: inline, or a `$ref` into `components.headers`. */
+interface HeaderReference {
+    $ref?: string;
+    required?: boolean;
+}
+
+/**
+ * The response headers an operation's documented status MUST send — `required: true`, `$ref`
+ * resolved — as lower-case names, which is how Node reports them.
+ *
+ * @param operation - the operation object as the spec writes it
+ * @param status - the response status to look up
+ * @param spec - the document the references point into
+ */
+const requiredHeadersOf = (
+    operation: Record<string, unknown>,
+    status: string,
+    spec: SpecDocument
+): string[] => {
+    const declared = (
+        operation.responses as
+            | Record<string, { headers?: Record<string, HeaderReference> } | undefined>
+            | undefined
+    )?.[status]?.headers;
+
+    return Object.entries(declared ?? {})
+        .filter(([, header]) => {
+            const resolved = header.$ref
+                ? spec.components?.headers?.[header.$ref.replace('#/components/headers/', '')]
+                : header;
+            return resolved?.required === true;
+        })
+        .map(([name]) => name.toLowerCase());
+};
+
+/**
+ * Every response header the spec requires, per operation and status: `{ createProduct: { '201':
+ * ['location'] } }`. What lets the shared `afterEach` fail a 201 that forgot its `Location`.
+ */
+export const requiredResponseHeaders = (
+    spec: SpecDocument = readSpec()
+): Record<string, Record<string, string[]>> => {
+    const byOperation: Record<string, Record<string, string[]>> = {};
+
+    for (const pathItem of Object.values(spec.paths))
+        for (const method of METHODS) {
+            const operation = pathItem[method] as Record<string, unknown> | undefined;
+            if (typeof operation?.operationId !== 'string') continue;
+
+            const statuses = Object.keys((operation.responses as object | undefined) ?? {});
+            byOperation[operation.operationId] = Object.fromEntries(
+                statuses.map((status) => [status, requiredHeadersOf(operation, status, spec)])
+            );
+        }
+
+    return byOperation;
+};
 
 /** Every operation the spec declares, in document order. */
 export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => {

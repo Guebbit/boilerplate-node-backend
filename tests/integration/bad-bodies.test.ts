@@ -9,7 +9,8 @@
  * | Body over `NODE_JSON_BODY_LIMIT` | 413 |
  * | Malformed JSON | 400 |
  * | A charset or content-encoding the parser cannot read | 415 |
- * | Wrong or absent content-type | the route's own answer |
+ * | A content-type the operation does not declare | 415 |
+ * | No content-type at all | the route's own answer |
  *
  * The last row is the one easy to get wrong twice. Express 5 leaves `request.body` UNDEFINED
  * when no parser matched — not `{}`, the way express 4 did — so an unguarded destructure throws
@@ -159,7 +160,7 @@ describe('a body express never parsed', () => {
      * controller's own guard, not the auth middleware in front of it.
      */
     it.each(BODY_READING_ROUTES)(
-        '$method $path does not fail on a text/plain body',
+        '$method $path answers 415 to a text/plain body',
         async ({ method, path, authorize }) => {
             const response = await api()
                 [method](path)
@@ -167,8 +168,7 @@ describe('a body express never parsed', () => {
                 .set(authorize ? { Authorization: await authorize() } : {})
                 .send('not json at all');
 
-            expect(response.status).toBeLessThan(500);
-            expect(response.status).not.toBe(401);
+            expect(response.status).toBe(415);
         }
     );
 

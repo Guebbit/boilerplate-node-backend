@@ -13,13 +13,13 @@ describe('wishlist routes', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /',
-            'POST /',
             'POST /:productId/move-to-cart',
+            'PUT /:productId',
             'DELETE /:productId'
         ]);
     });
 
-    it.each(['GET /', 'POST /', 'POST /:productId/move-to-cart', 'DELETE /:productId'])(
+    it.each(['GET /', 'PUT /:productId', 'POST /:productId/move-to-cart', 'DELETE /:productId'])(
         '%s requires a session',
         (signature) => {
             expect(guardsOn(router, signature)).toContain('isAuth');

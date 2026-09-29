@@ -69,6 +69,48 @@ describe('createUpdateController', () => {
         );
     });
 
+    it('PUT hands the filled change-set to completeReplace, and update() gets its answer', async () => {
+        const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
+        const completeReplace = jest.fn().mockResolvedValue({ title: 'x', note: 'completed' });
+        const { replace } = makeController({ update, completeReplace });
+
+        await replace(makeRequest({ title: 'x' }), makeResponseStub());
+
+        expect(completeReplace).toHaveBeenCalledWith(VALID_ID, { title: 'x', note: null });
+        expect(update).toHaveBeenCalledWith(
+            VALID_ID,
+            { title: 'x', note: 'completed' },
+            expect.anything()
+        );
+    });
+
+    // The uploaded-file case: a client cannot send the current value back, so an omission keeps
+    // it — but an explicit `null` still clears, as on any nullable field.
+    it('PUT leaves a keptWhenOmitted field out of the change-set, yet still passes an explicit null', async () => {
+        const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
+        const { replace } = makeController({ update, keptWhenOmitted: ['note'] });
+
+        await replace(makeRequest({ title: 'x' }), makeResponseStub());
+        await replace(makeRequest({ title: 'x', note: null }), makeResponseStub());
+
+        expect(update).toHaveBeenNthCalledWith(1, VALID_ID, { title: 'x' }, expect.anything());
+        expect(update).toHaveBeenNthCalledWith(
+            2,
+            VALID_ID,
+            { title: 'x', note: null },
+            expect.anything()
+        );
+    });
+
+    it('PATCH never runs completeReplace — an omission there leaves things alone', async () => {
+        const completeReplace = jest.fn();
+        const { update: patch } = makeController({ completeReplace });
+
+        await patch(makeRequest({ title: 'x' }), makeResponseStub());
+
+        expect(completeReplace).not.toHaveBeenCalled();
+    });
+
     it('PATCH sends only what the caller actually sent, no filling', async () => {
         const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
         const { update: patch } = makeController({ update });

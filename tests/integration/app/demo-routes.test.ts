@@ -11,6 +11,7 @@ import express from 'express';
 import request from 'supertest';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
+import { emptyFileSandbox } from '@tests/file-sandbox';
 import { installDemo } from '@app/demo';
 import { installRequestParsing, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
@@ -42,6 +43,9 @@ jest.mock('@infrastructure/runtime/database-snapshot', () => {
 });
 
 setupTestDb();
+
+// A `shop` build uploads a replacement product picture through the real route — the file is this test's to remove.
+afterAll(emptyFileSandbox);
 
 // The default (no `scenario` in the body) reseeds `shop`, whose products write translations
 // through the same manifest a real write validates against. `@tests/http`'s `api` import (above)

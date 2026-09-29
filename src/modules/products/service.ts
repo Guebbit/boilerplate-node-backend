@@ -20,6 +20,8 @@ import type {
     Product,
     ProductAdmin,
     ProductTranslationFields,
+    ProductTranslationFieldsPatch,
+    ProductTranslationFieldsWrite,
     TaxClass,
     RateType
 } from '@types';
@@ -424,7 +426,7 @@ export const updateById = (
  * write through `/products/{id}` is never a machine import.
  */
 const toUpsertTranslationsRequest = (
-    translations: Record<string, ProductTranslationFields | null>
+    translations: Record<string, ProductTranslationFieldsPatch | null>
 ): TranslationBatch =>
     Object.fromEntries(
         Object.entries(translations).map(([locale, entry]) => [
@@ -433,7 +435,7 @@ const toUpsertTranslationsRequest = (
                 ? null
                 : {
                       fields: {
-                          title: entry.title,
+                          ...(entry.title === undefined ? {} : { title: entry.title }),
                           ...(entry.description === undefined
                               ? {}
                               : { description: entry.description })
@@ -499,7 +501,9 @@ export const writeCreate = async (
 
     // Guaranteed present and non-null by the schema's own refinement — a plan cannot validate
     // without it.
-    const fallbackEntry = parsed.data.translations[getFallbackLocale()] as ProductTranslationFields;
+    const fallbackEntry = parsed.data.translations[
+        getFallbackLocale()
+    ] as ProductTranslationFieldsWrite;
     const { translations: _translations, ...productFields } = parsed.data;
 
     const product = await create(
@@ -520,9 +524,11 @@ export const writeCreate = async (
 };
 
 /**
- * Update a product and merge its translation rows in one operation — the PUT/PATCH door of the
- * multilingual product write surface. Delegates the product write itself to {@link updateById},
- * which already owns the 404 check and the audit emit; this only adds the translations half
+ * Update a product and write its translation rows in one operation — the PUT/PATCH door of the
+ * multilingual product write surface. A PUT arrives here with every omitted locale already `null`
+ * ({@link clearOmittedLocales}), so this one path serves both verbs. Delegates the product write
+ * itself to {@link updateById}, which already owns the 404 check and the audit emit; this only
+ * adds the translations half
  * around it, so there is exactly one path deciding what "the product was updated" means.
  *
  * `data` arrives already validated: `update-product.ts` hands `createUpdateController` the same
@@ -547,7 +553,12 @@ export const writeUpdate = async (
     // `null` there is already refused by `zodProductUpdateSchema`'s own refinement.
     const fallbackEntry = translations?.[getFallbackLocale()];
     const derivedFields = fallbackEntry
-        ? { title: fallbackEntry.title, description: fallbackEntry.description ?? '' }
+        ? {
+              ...(fallbackEntry.title === undefined ? {} : { title: fallbackEntry.title }),
+              ...(fallbackEntry.description === undefined
+                  ? {}
+                  : { description: fallbackEntry.description ?? '' })
+          }
         : {};
 
     const result = await updateById(
@@ -561,6 +572,33 @@ export const writeUpdate = async (
 
     return result;
 };
+
+/**
+ * PUT's `translations` is the whole set (RFC 9110 §9.3.4): every locale the product holds and the
+ * body leaves out becomes `null` — the same signal a PATCH sends to delete one — and a description
+ * a stated locale leaves out becomes `null` too, the merge's own way to clear a field. The
+ * fallback locale is never among the deleted: the PUT schema refuses a body without it.
+ *
+ * @param id - the product being replaced
+ * @param changes - the validated, filled PUT change-set
+ * @returns `changes`, its `translations` naming every stored locale
+ */
+export const clearOmittedLocales = (
+    id: string,
+    changes: z.infer<typeof zodProductUpdateSchema>
+): Promise<z.infer<typeof zodProductUpdateSchema>> =>
+    readAllTranslations('product', id).then((stored) => {
+        // A locale the body states is stated WHOLE, so its omitted description is a cleared one.
+        const translations = Object.fromEntries(
+            Object.entries(changes.translations ?? {}).map(([locale, entry]) => [
+                locale,
+                entry === null ? null : { description: null, ...entry }
+            ])
+        );
+        for (const locale of stored.keys())
+            if (!(locale in translations)) translations[locale] = null;
+        return { ...changes, translations };
+    });
 
 /**
  * `GET /products/{id}/admin` — a product with every language it has a row for, for the editor's
@@ -795,6 +833,7 @@ export const productService = {
     updateById,
     writeCreate,
     writeUpdate,
+    clearOmittedLocales,
     remove,
     removeById,
     restoreById,

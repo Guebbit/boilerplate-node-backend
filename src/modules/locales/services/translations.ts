@@ -6,8 +6,8 @@
  */
 
 import type {
+    MergeTranslationsRequest,
     Translation,
-    TranslationFields,
     TranslationOrigin,
     UpsertTranslationsRequest
 } from '@types';
@@ -71,8 +71,16 @@ const slotRejection = (
  * writes, so a rejected slot never leaves a partial edit behind.
  */
 type PlannedWrite =
-    | { locale: string; kind: 'upsert'; fields: TranslationFields; origin: TranslationOrigin }
+    | {
+          locale: string;
+          kind: 'upsert';
+          fields: Record<string, string | null>;
+          origin: TranslationOrigin;
+      }
     | { locale: string; kind: 'delete' };
+
+/** One locale's entry in either write body — a PUT's strings, or a PATCH's strings and `null`s. */
+type LocaleWrite = UpsertTranslationsRequest[string] | MergeTranslationsRequest[string];
 
 /**
  * Validate one locale slot against the `locales` collection, the registry's declared fields, and
@@ -80,10 +88,10 @@ type PlannedWrite =
  */
 const planSlot = (
     entityType: string,
-    fields: readonly string[],
+    target: TranslatableTarget,
     fallbackLocale: string,
     locale: string,
-    value: UpsertTranslationsRequest[string]
+    value: LocaleWrite
 ): Promise<PlannedWrite | ResponseReject> => {
     if (value === null) {
         if (locale === fallbackLocale)
@@ -97,13 +105,27 @@ const planSlot = (
         if (Object.keys(value.fields).length === 0)
             return slotRejection('locales.error-translation-fields-empty', undefined, locale);
 
-        const unknownField = Object.keys(value.fields).find((field) => !fields.includes(field));
+        const unknownField = Object.keys(value.fields).find(
+            (field) => !target.fields.includes(field)
+        );
         if (unknownField !== undefined)
             return slotRejection(
                 'locales.error-translation-field-unknown',
                 { field: unknownField, entityType },
                 `${locale}.${unknownField}`
             );
+
+        // The entity's own rules for a value — the ones its own write door applies, so this door
+        // cannot land what that one would refuse.
+        const broken = target.checkFields?.(value.fields, locale === fallbackLocale).at(0);
+        if (broken)
+            return generateReject(422, [
+                {
+                    code: ERROR_CODES.VALIDATION_ERROR,
+                    message: broken.message,
+                    details: { field: `${locale}.${broken.field}` }
+                }
+            ]);
 
         return { locale, kind: 'upsert', fields: value.fields, origin: value.origin ?? 'human' };
     };
@@ -143,7 +165,7 @@ const isRejection = (value: unknown): value is ResponseReject =>
  */
 const planTranslationWrites = async (
     entityType: string,
-    payload: UpsertTranslationsRequest
+    payload: Record<string, LocaleWrite>
 ): Promise<
     { target: TranslatableTarget; fallbackLocale: string; planned: PlannedWrite[] } | ResponseReject
 > => {
@@ -154,7 +176,7 @@ const planTranslationWrites = async (
     const planned: PlannedWrite[] = [];
 
     for (const [locale, value] of Object.entries(payload)) {
-        const result = await planSlot(entityType, target.fields, fallbackLocale, locale, value);
+        const result = await planSlot(entityType, target, fallbackLocale, locale, value);
         if (isRejection(result)) return result;
         planned.push(result);
     }
@@ -224,7 +246,7 @@ const writePlannedTranslations = async (
  */
 export const planForPort = (
     entityType: string,
-    payload: UpsertTranslationsRequest
+    payload: Record<string, LocaleWrite>
 ): Promise<TranslationWritePlan | ResponseReject> =>
     planTranslationWrites(entityType, payload).then((plan) =>
         isRejection(plan)
@@ -279,7 +301,7 @@ export const writeForPort = (
 const applyTranslationBatch = async (
     entityType: string,
     entityId: string,
-    payload: UpsertTranslationsRequest,
+    payload: Record<string, LocaleWrite>,
     context?: CallerContext
 ): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> => {
     const plan = await planTranslationWrites(entityType, payload);
@@ -311,16 +333,45 @@ const applyTranslationBatch = async (
 };
 
 /**
- * Merge a PATCH into an entity's translations: upsert what is an object, delete what is `null`,
- * leave alone what is absent.
+ * Merge a PATCH into an entity's translations (RFC 7396): a locale that is an object merges field
+ * by field into its row, one that is `null` is deleted, one that is absent is left alone.
  */
 export const upsertEntityTranslations = (
     entityType: string,
     entityId: string,
-    payload: UpsertTranslationsRequest,
+    payload: MergeTranslationsRequest,
     context?: CallerContext
 ): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> =>
     applyTranslationBatch(entityType, entityId, payload, context);
+
+/**
+ * A PUT states each locale WHOLE, so a declared field its `fields` leaves out is cleared — turned
+ * into the explicit `null` a PATCH would have sent, which is all the write side understands. An
+ * EMPTY `fields` is left as it is, for {@link planSlot} to refuse: clearing everything is a
+ * delete, and a delete is the locale's own `null`.
+ *
+ * @param payload - the PUT body
+ * @param declared - every field name the entity's registry entry declares
+ * @returns the body with each non-empty locale carrying every declared field
+ */
+const clearOmittedFields = (
+    payload: UpsertTranslationsRequest,
+    declared: readonly string[]
+): Record<string, LocaleWrite> =>
+    Object.fromEntries(
+        Object.entries(payload).map(([locale, entry]): [string, LocaleWrite] => [
+            locale,
+            entry === null || Object.keys(entry.fields).length === 0
+                ? entry
+                : {
+                      ...entry,
+                      fields: {
+                          ...Object.fromEntries(declared.map((field) => [field, null])),
+                          ...entry.fields
+                      }
+                  }
+        ])
+    );
 
 /**
  * Replace the whole set for a PUT: every locale currently stored but absent from the body is
@@ -352,7 +403,12 @@ export const replaceEntityTranslations = async (
         [...checkedLocales].filter((locale) => !(locale in payload)).map((locale) => [locale, null])
     );
 
-    return applyTranslationBatch(entityType, entityId, { ...payload, ...deletions }, context);
+    return applyTranslationBatch(
+        entityType,
+        entityId,
+        { ...clearOmittedFields(payload, target.fields), ...deletions },
+        context
+    );
 };
 
 /** Every locale row an entity has, in the admin shape. */

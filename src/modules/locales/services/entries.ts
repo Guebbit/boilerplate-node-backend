@@ -76,19 +76,21 @@ export const searchEntries = (
     });
 
 /**
- * Add one key to one language.
+ * Add one key to one language's dictionary in one tenant.
+ * @param tenant - the tenant the URI names
  * @param context - caller context for the `ADMIN_LOCALE_ENTRY_CREATED` audit emit; omitted by
  *   tests that call this as a plain helper — no context means no emit
  */
 export const createEntry = async (
     tag: string,
+    tenant: string,
     payload: CreateLocaleEntryRequest,
     context?: CallerContext
 ): Promise<ResponseSuccess<LocaleEntryDocument> | ResponseReject> => {
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
 
-    const unknownTenant = rejectUnknownTenant(payload.tenant);
+    const unknownTenant = rejectUnknownTenant(tenant);
     if (unknownTenant) return unknownTenant;
 
     const key = payload.key.trim();
@@ -98,7 +100,7 @@ export const createEntry = async (
      * every row would refuse the second half of a perfectly correct pair, and a collision between
      * `products.list` and `products.list.title` only matters inside the tree they share.
      */
-    const existingKeys = await localeEntryRepository.listKeys(language.tag, payload.tenant);
+    const existingKeys = await localeEntryRepository.listKeys(language.tag, tenant);
 
     if (existingKeys.includes(key))
         return generateReject(409, [t('locales.error-key-exists', { key })]);
@@ -106,7 +108,7 @@ export const createEntry = async (
     const unusable = rejectUnusableKey(key, existingKeys);
     if (unusable) return unusable;
 
-    const { entry } = await localeEntryRepository.createEntry(language.tag, payload.tenant, {
+    const { entry } = await localeEntryRepository.createEntry(language.tag, tenant, {
         key,
         value: payload.value
     });
@@ -116,7 +118,7 @@ export const createEntry = async (
         outcome: 'success',
         target_type: 'locale_entry',
         target_id: String(entry._id),
-        metadata: { locale: language.tag, tenant: payload.tenant, key: payload.key }
+        metadata: { locale: language.tag, tenant, key: payload.key }
     });
 
     refreshOverlay();

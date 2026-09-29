@@ -247,9 +247,27 @@ describe('productService.validateUpdateData', () => {
         expect(errors.length).toBeGreaterThan(0);
     });
 
-    it('rejects an empty translation object rather than treating it as a delete', () => {
+    // RFC 7396 one level down: every field of a locale is optional. An EMPTY object is refused by
+    // the translations plan (`locales.error-translation-fields-empty`), where the locale rules live.
+    it('accepts a locale naming only a description, or a null one', () => {
         const errors = productService.validateUpdateData({
-            translations: { it: {} }
+            translations: { it: { description: null }, fr: { description: 'Un lit' } }
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    it('rejects an empty description string — clearing is null', () => {
+        const errors = productService.validateUpdateData({
+            translations: { it: { description: '' } }
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('rejects a null title — a title is never cleared', () => {
+        const errors = productService.validateUpdateData({
+            translations: { it: { title: null } }
         });
 
         expect(errors.length).toBeGreaterThan(0);

@@ -27,6 +27,8 @@ export const { replace: replaceAccount, update: updateAccount } = createUpdateCo
     patchSchema: UpdateAccountBody,
     // The one boolean an edit carrying an avatar (multipart) sends as a string.
     input: { booleans: ['analyticsConsent'] },
+    // A client cannot send the current avatar back, so a PUT that omits it keeps it.
+    keptWhenOmitted: ['imageUrl'],
     // Guaranteed present: every mount of these handlers runs after `isAuth`.
     idFrom: (request) => request.authContext!.id,
     update: (id, changes, request) =>

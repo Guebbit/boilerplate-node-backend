@@ -21,6 +21,7 @@ describe('addresses routes — what is mounted', () => {
             'POST /addresses',
             'PUT /addresses/:addressId',
             'PATCH /addresses/:addressId',
+            'PUT /addresses/:addressId/default',
             'DELETE /addresses/:addressId'
         ]);
     });

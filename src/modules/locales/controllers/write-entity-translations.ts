@@ -8,57 +8,79 @@
 
 import type { Request, Response } from 'express';
 import { ReplaceEntityTranslationsBody, UpsertEntityTranslationsBody } from '@api/schemas.zod';
-import type { UpsertTranslationsRequest } from '@types';
-import { successResponse } from '@infrastructure/http/response';
+import type { CallerContext, MergeTranslationsRequest, UpsertTranslationsRequest } from '@types';
+import type { ZodType } from 'zod';
+import {
+    successResponse,
+    type ResponseReject,
+    type ResponseSuccess
+} from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { localeService } from '../services';
+import type { EntityTranslationsResult } from '../services/translations';
 
-/** The two routes differ by one word, so they are one handler and a mode. */
-const writeEntityTranslations = (
-    request: Request<{ entityType: string; id: string }, unknown, UpsertTranslationsRequest>,
-    response: Response,
-    mode: 'replace' | 'upsert'
-) => {
-    const schema =
-        mode === 'replace' ? ReplaceEntityTranslationsBody : UpsertEntityTranslationsBody;
-    const body = parseBody(schema, request.body, response);
-    if (!body) return;
+/**
+ * The two routes differ by their schema and their service call, so one builder makes both.
+ *
+ * @param schema - the operation's generated body schema
+ * @param write - the service call that applies a body of that shape
+ * @param operation - the name a failure is logged under
+ * @returns the express handler
+ */
+const writeEntityTranslations =
+    <TSchema extends ZodType>(
+        schema: TSchema,
+        write: (
+            entityType: string,
+            entityId: string,
+            body: TSchema['_output'],
+            context: CallerContext
+        ) => Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject>,
+        operation: string
+    ) =>
+    (
+        request: Request<
+            { entityType: string; id: string },
+            unknown,
+            UpsertTranslationsRequest | MergeTranslationsRequest
+        >,
+        response: Response
+    ) => {
+        const body = parseBody(schema, request.body, response);
+        if (!body) return;
 
-    const write =
-        mode === 'replace'
-            ? localeService.replaceEntityTranslations
-            : localeService.upsertEntityTranslations;
+        return write(request.params.entityType, request.params.id, body, callerContextOf(request))
+            .then((result) => {
+                if (refused(response, result)) return;
 
-    return write(request.params.entityType, request.params.id, body, callerContextOf(request))
-        .then((result) => {
-            if (refused(response, result)) return;
-
-            return successResponse(response, result.data);
-        })
-        .catch(catchAs(response, `${mode}EntityTranslations`));
-};
+                return successResponse(response, result.data);
+            })
+            .catch(catchAs(response, operation));
+    };
 
 /**
  * PUT /locales/translations/:entityType/:id (admin)
- * Replace the whole set — a locale stored and not sent is deleted. See `openapi.yaml` for the
- * full table, and why a translations table isn't a "whole-body replace" field on the entity
- * itself.
+ * Replace the whole set — a locale stored and not sent is deleted, and a field a sent locale
+ * leaves out is cleared. See `openapi.yaml` for the full table.
  */
-export const replaceEntityTranslations = (
-    request: Request<{ entityType: string; id: string }, unknown, UpsertTranslationsRequest>,
-    response: Response
-) => writeEntityTranslations(request, response, 'replace');
+export const replaceEntityTranslations = writeEntityTranslations(
+    ReplaceEntityTranslationsBody,
+    localeService.replaceEntityTranslations,
+    'replaceEntityTranslations'
+);
 
 /**
  * PATCH /locales/translations/:entityType/:id (admin)
- * Merges the body into the entity's translations — an object upserts a locale, `null` deletes it,
- * an absent key leaves it alone. See `openapi.yaml` for the full three-way table.
+ * Merges the body into the entity's translations (RFC 7396) — an object merges into a locale
+ * field by field, `null` deletes it, an absent key leaves it alone. See `openapi.yaml` for the
+ * full table.
  *
  * No `<EntityTranslations>` on `successResponse` — see `get-entity-translations.ts`'s docblock for
  * why: the rows are already the wire shape by the time they get here.
  */
-export const upsertEntityTranslations = (
-    request: Request<{ entityType: string; id: string }, unknown, UpsertTranslationsRequest>,
-    response: Response
-) => writeEntityTranslations(request, response, 'upsert');
+export const upsertEntityTranslations = writeEntityTranslations(
+    UpsertEntityTranslationsBody,
+    localeService.upsertEntityTranslations,
+    'upsertEntityTranslations'
+);

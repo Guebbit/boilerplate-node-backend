@@ -529,8 +529,7 @@ describe('createEntry', () => {
     it('refuses a key the language already has', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
 
-        const result = await localeService.createEntry('es', {
-            tenant: FRONTEND,
+        const result = await localeService.createEntry('es', FRONTEND, {
             key: 'cart.title',
             value: 'Otro'
         });
@@ -541,8 +540,7 @@ describe('createEntry', () => {
     it('refuses a key that collides with one already stored', async () => {
         await givenLanguage('es', { 'products.list.title': 'Catálogo' });
 
-        const result = await localeService.createEntry('es', {
-            tenant: FRONTEND,
+        const result = await localeService.createEntry('es', FRONTEND, {
             key: 'products.list',
             value: 'Lista'
         });
@@ -556,8 +554,7 @@ describe('createEntry', () => {
         // by looking at the other rows.
         await givenLanguage('es');
 
-        const result = await localeService.createEntry('es', {
-            tenant: FRONTEND,
+        const result = await localeService.createEntry('es', FRONTEND, {
             key: '__proto__.title',
             value: 'x'
         });
@@ -568,8 +565,7 @@ describe('createEntry', () => {
     it('accepts a key that merely shares a prefix without being an ancestor', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
 
-        const result = await localeService.createEntry('es', {
-            tenant: FRONTEND,
+        const result = await localeService.createEntry('es', FRONTEND, {
             key: 'cart.titlebar',
             value: 'Barra'
         });

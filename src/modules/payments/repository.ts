@@ -25,6 +25,12 @@ import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
  */
 export type PaymentWire = Omit<Wire<PaymentDocument>, 'providerRef' | 'pendingEffects'>;
 
+/** What an upsert answers: the row, and whether this call inserted it rather than refreshing one. */
+export interface UpsertedPayment {
+    payment: PaymentDocument;
+    created: boolean;
+}
+
 /**
  * The mechanics {@link paymentRepository.upsertIntent} and {@link paymentRepository.upsertOffline}
  * share: the same filter — an order's row still sitting at a status nobody has paid past — the same
@@ -43,7 +49,7 @@ const upsertConfirmable = (
     userId: string | undefined,
     set: Record<string, unknown>,
     unset?: Record<string, 1>
-): Promise<PaymentDocument | null> =>
+): Promise<UpsertedPayment | null> =>
     paymentModel
         .findOneAndUpdate(
             {
@@ -55,9 +61,19 @@ const upsertConfirmable = (
                 ...(unset ? { $unset: unset } : {}),
                 $setOnInsert: userId === undefined ? {} : { userId: toObjectId(userId) }
             },
-            { upsert: true, returnDocument: 'after' }
+            // `includeResultMetadata`: the driver's own answer to "did this insert or update" —
+            // https://mongoosejs.com/docs/api/query.html#Query.prototype.findOneAndUpdate()
+            { upsert: true, returnDocument: 'after', includeResultMetadata: true }
         )
         .exec()
+        .then((result) =>
+            result.value
+                ? {
+                      payment: result.value,
+                      created: result.lastErrorObject?.updatedExisting === false
+                  }
+                : null
+        )
         .catch((error: unknown) => {
             if (isDuplicateKey(error)) return null;
             throw error;
@@ -80,7 +96,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         orderId: string,
         userId: string | undefined,
         data: { amount: number; currency: string; provider: string }
-    ) => Promise<PaymentDocument | null>;
+    ) => Promise<UpsertedPayment | null>;
     upsertOffline: (
         orderId: string,
         userId: string | undefined,
@@ -91,7 +107,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             reference?: string;
             receivedAt: Date;
         }
-    ) => Promise<PaymentDocument | null>;
+    ) => Promise<UpsertedPayment | null>;
     detachUserId: (userId: string, session?: ClientSession) => Promise<number>;
     deleteAbandonedBefore: (cutoff: Date) => Promise<number>;
     updateStatusIfIn: (

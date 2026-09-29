@@ -537,7 +537,7 @@ describe('cartItemAddById', () => {
     });
 
     /*
-     * The line, not just the request: `UpsertCartItemRequest.quantity` already bounds one
+     * The line, not just the request: `AddCartItemRequest.quantity` already bounds one
      * request to 999, but nothing stopped two `'add'`s from clearing that ceiling together until
      * the repository filter carried the cap itself.
      */
@@ -948,7 +948,7 @@ describe('orderConfirm', () => {
             zip: '41121',
             country: 'IT'
         });
-        const addressId = added.success ? added.data.addresses[0]?.id : undefined;
+        const addressId = added.success ? added.data.id : undefined;
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 

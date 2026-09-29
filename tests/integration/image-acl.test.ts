@@ -80,7 +80,7 @@ const doors: Door[] = [
         method: 'put',
         route: () => '/account',
         as: 'user',
-        body: { email: 'attacker@example.com', username: 'attacker' }
+        body: { email: 'attacker@example.com', username: 'attacker', analyticsConsent: false }
     },
     {
         name: 'POST /users',
@@ -233,6 +233,31 @@ describe('imageUrl is never a client-named path', () => {
             expect(response.status).toBe(200);
             expect(response.body.data.imageUrl).toBe(ownUrl);
             expect(fileExists(ownUrl)).toBe(true);
+        });
+
+        // WM-D5: a client cannot send the current path back, so a PUT is lossless only if an
+        // omitted `imageUrl` keeps the image. An explicit null is still the way to remove it.
+        it('a PUT that never mentions imageUrl keeps the image; an explicit null clears it', async () => {
+            const uploaded = await api()
+                .patch('/account')
+                .set('Authorization', userBearer)
+                .attach('imageUpload', PNG_BYTES, { filename: 'a.png', contentType: 'image/png' });
+            const ownUrl = uploaded.body.data.imageUrl as string;
+            const profile = { email: uploaded.body.data.email as string, username: 'putname' };
+
+            const kept = await api()
+                .put('/account')
+                .set('Authorization', userBearer)
+                .send({ ...profile, analyticsConsent: false });
+            const cleared = await api()
+                .put('/account')
+                .set('Authorization', userBearer)
+                .send({ ...profile, analyticsConsent: false, imageUrl: null });
+
+            expect(kept.status).toBe(200);
+            expect(kept.body.data.imageUrl).toBe(ownUrl);
+            expect(cleared.status).toBe(200);
+            expect(fileExists(ownUrl)).toBe(false);
         });
 
         it('a multipart upload sets the image, and wins over a null in the same request', async () => {

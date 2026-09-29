@@ -31,7 +31,10 @@ import {
  */
 export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocument>> & {
     findByUserId: (userId: string) => Promise<WishlistDocument | null>;
-    addLine: (userId: string, productId: string) => Promise<WishlistDocument>;
+    addLine: (
+        userId: string,
+        productId: string
+    ) => Promise<{ wishlist: WishlistDocument; added: boolean }>;
     removeLine: (userId: string, productId: string) => Promise<WishlistDocument | null>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
@@ -48,7 +51,7 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
         wishlistModel.findOne({ userId: toObjectId(userId) }).exec(),
 
     /**
-     * Add one product, creating the wishlist if the user has none.
+     * Add one product, creating the wishlist if the user has none, and say whether it was new.
      *
      * Two races, and neither needs the retry budget `../cart/repository`'s `upsertLine` carries.
      *
@@ -64,14 +67,28 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
      *           `./tests/integration/wishlist-races.test.ts`, the case that would go red
      *           if the filter ever stopped being an equality.
      */
-    addLine: async (userId: string, productId: string) =>
-        wishlistModel
+    addLine: async (userId: string, productId: string) => {
+        const owner = { userId: toObjectId(userId) };
+        const line = toObjectId(productId);
+        // The document as it stood BEFORE this write (`null` when this call created it): whether
+        // the product was already in it is the answer to "was this an add", and only the write
+        // itself can say so atomically. `modifiedCount` cannot — the timestamp bump makes every
+        // write a modification.
+        const before = await wishlistModel
             .findOneAndUpdate(
-                { userId: toObjectId(userId) },
-                { $addToSet: { items: { productId: toObjectId(productId) } } },
-                { upsert: true, returnDocument: 'after' }
+                owner,
+                { $addToSet: { items: { productId: line } } },
+                { upsert: true, returnDocument: 'before' }
             )
-            .exec(),
+            .exec();
+        const wishlist = await wishlistModel.findOne(owner).exec();
+
+        // Present: the upsert above guarantees the document exists.
+        return {
+            wishlist: wishlist!,
+            added: !before?.items.some((item) => item.productId.equals(line))
+        };
+    },
 
     /**
      * Drop one line. Resolves `null` when the wishlist does not exist or does not hold the

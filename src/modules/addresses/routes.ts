@@ -13,6 +13,7 @@ import { getAddresses } from './controllers/get-addresses';
 import { postAddress } from './controllers/post-address';
 import { replaceAddress, updateAddress } from './controllers/update-address';
 import { deleteAddress } from './controllers/delete-address';
+import { putAddressDefault } from './controllers/put-address-default';
 
 /** Express router for the address book. */
 export const router = Router();
@@ -32,6 +33,10 @@ router.post('/addresses', isAuth, postAddress);
 // PUT /account/addresses/:addressId (replace) and PATCH (merge) (requires auth)
 router.put('/addresses/:addressId', isAuth, replaceAddress);
 router.patch('/addresses/:addressId', isAuth, updateAddress);
+
+// PUT /account/addresses/:addressId/default — make it the book's default (requires auth). The
+// pointer is the book's, not one address's, so it is an action of its own rather than a field.
+router.put('/addresses/:addressId/default', isAuth, putAddressDefault);
 
 // DELETE /account/addresses/:addressId — remove an entry (requires auth)
 router.delete('/addresses/:addressId', isAuth, deleteAddress);

@@ -8,7 +8,7 @@
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import { productService } from '../service';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { rejectResponse, createdResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { readUploadedImage } from '@infrastructure/http/uploads';
@@ -65,7 +65,8 @@ export const createProduct = (
                     .then(() => {
                         rejectResponse(response, result.status, result.errors);
                     });
-            successResponse<Product>(response, productService.toProduct(result.data), 201);
+            const product = productService.toProduct(result.data);
+            createdResponse<Product>(response, product, `/products/${product.id}`);
         })
         .catch((error: unknown) =>
             deleteUpload()

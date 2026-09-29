@@ -1,6 +1,6 @@
 /**
  * @module
- * `GET /locales/:locale/entries` controller — thin HTTP adapter over `localeService.searchEntries`.
+ * `GET /locales/:locale/entries` and `GET /locales/:locale/tenants/:tenant/entries` controllers — thin HTTP adapter over `localeService.searchEntries`.
  */
 
 import { z } from 'zod';
@@ -27,14 +27,16 @@ const listLocaleEntriesQuerySchema = ListLocaleEntriesQueryParams.extend({
 }).partial();
 
 /**
- * GET /locales/:locale/entries (admin)
- * Flat, paginated rows for one language's dictionary — what a translation screen edits.
- * The nested tree a client consumes is served separately by GET /locales/:locale/messages.
- * Deliberately not cached: this is the screen a translator is actively typing into.
+ * Lists one language's rows, optionally narrowed to a tenant — the one reader both routes share.
+ *
+ * @param request - the request; its query carries the filters
+ * @param response - the express response
+ * @param tenant - the tenant the URI names, when it names one; overrides any `?tenant=`
  */
-export const getLocaleEntries = (
+const listEntries = (
     request: Request<{ locale: string }, unknown, unknown, Record<string, string>>,
-    response: Response
+    response: Response,
+    tenant?: string
 ) => {
     // Query params only — a GET has no body to carry a search payload.
     // See docs/theory/request-input.md.
@@ -46,7 +48,7 @@ export const getLocaleEntries = (
     if (!parsed) return Promise.resolve();
 
     return localeService
-        .searchEntries(request.params.locale, parsed)
+        .searchEntries(request.params.locale, tenant === undefined ? parsed : { ...parsed, tenant })
         .then((result) => {
             if (refused(response, result)) return;
             // `search()`'s `TWire` is `LocaleEntry` itself, so `result.data.items` is already the
@@ -55,3 +57,25 @@ export const getLocaleEntries = (
         })
         .catch(catchAs(response, 'getLocaleEntries'));
 };
+
+/**
+ * GET /locales/:locale/entries (admin)
+ * Flat, paginated rows for one language's dictionary — every tenant's, unless `?tenant=` narrows
+ * them. What a translation screen edits. The nested tree a client consumes is served separately
+ * by GET /locales/:locale/messages. Deliberately not cached: this is the screen a translator is
+ * actively typing into.
+ */
+export const getLocaleEntries = (
+    request: Request<{ locale: string }, unknown, unknown, Record<string, string>>,
+    response: Response
+) => listEntries(request, response);
+
+/**
+ * GET /locales/:locale/tenants/:tenant/entries (admin)
+ * The same rows, at the address the writes target: one tenant's slice of the language, so a PUT
+ * there replaces exactly what this lists.
+ */
+export const getTenantLocaleEntries = (
+    request: Request<{ locale: string; tenant: string }, unknown, unknown, Record<string, string>>,
+    response: Response
+) => listEntries(request, response, request.params.tenant);

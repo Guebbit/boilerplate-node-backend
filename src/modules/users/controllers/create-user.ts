@@ -8,7 +8,7 @@
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import { userService } from '../service';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { rejectResponse, createdResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { parseBody } from '@infrastructure/http/controller';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
@@ -103,7 +103,7 @@ export const createUser = (
             // password and tokens on the document never reach `res.json`. The role is read
             // fresh from the membership just written — never off the document, which holds none.
             return userService.toUserContract(result.data).then((contract) => {
-                successResponse<User>(response, contract, 201);
+                createdResponse<User>(response, contract, `/users/${contract.id}`);
             });
         })
         .catch((error: unknown) =>

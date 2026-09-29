@@ -13,7 +13,7 @@ paths:
             summary: List this shop's webhook subscriptions
             description: |
                 Never returns a secret — the ring's plaintext exists only in the response of the
-                call that minted it (`POST` here, or the rotate action on `PATCH .../{id}`).
+                call that minted it (`POST` here, or `POST .../{id}/rotate-secret`).
             operationId: listWebhookSubscriptions
             security:
                 - bearerAuth: []
@@ -42,8 +42,11 @@ paths:
             description: |
                 Mints the ring's first secret and returns it in plaintext, once — the only
                 response that ever carries it. `url` must be `https://` and must not resolve to a
-                private, loopback or link-local address; that check runs again on every delivery,
-                since a subscription's DNS can change after it is created.
+                private, loopback or link-local address. The host is resolved here, so a refusal is a
+                422 naming the field (`errors[].details` `{ field: url, reason }`) instead of a
+                delivery that fails later; `PUT` and `PATCH` run the same check when the `url`
+                changes. It runs again on every delivery, since a subscription's DNS can change
+                after it is created.
             operationId: createWebhookSubscription
             security:
                 - bearerAuth: []
@@ -56,6 +59,8 @@ paths:
             responses:
                 '201':
                     description: Created subscription, with its one-time secret
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
                         application/json:
                             schema:
@@ -111,6 +116,9 @@ paths:
                 required: true
                 content:
                     application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateWebhookSubscriptionRequest'
+                    application/merge-patch+json:
                         schema:
                             $ref: '#/components/schemas/UpdateWebhookSubscriptionRequest'
             responses:
@@ -443,7 +451,7 @@ components:
                     minLength: 1
                 eventTypes:
                     type: array
-                    items: { type: string }
+                    items: { type: string, minLength: 1 }
                     minItems: 1
 
         ReplaceWebhookSubscriptionRequest:
@@ -464,7 +472,7 @@ components:
                     nullable: true
                 eventTypes:
                     type: array
-                    items: { type: string }
+                    items: { type: string, minLength: 1 }
                     minItems: 1
                 enabled:
                     type: boolean
@@ -486,7 +494,7 @@ components:
                     nullable: true
                 eventTypes:
                     type: array
-                    items: { type: string }
+                    items: { type: string, minLength: 1 }
                     minItems: 1
                 enabled:
                     type: boolean

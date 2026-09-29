@@ -28,13 +28,12 @@ const authenticateWithWishlist = async () => {
     const { bearer } = await authenticateAs('user');
     const product = await createProduct();
     const response = await api()
-        .post('/wishlist')
-        .set('Authorization', bearer)
-        .send({ productId: String(product._id) });
+        .put(`/wishlist/${String(product._id)}`)
+        .set('Authorization', bearer);
 
     if (response.status !== 200)
         throw new Error(
-            `wishlist setup failed: POST /wishlist returned ${response.status} — ${JSON.stringify(response.body)}`
+            `wishlist setup failed: PUT /wishlist/{productId} returned ${response.status} — ${JSON.stringify(response.body)}`
         );
 
     return { bearer, product };
@@ -58,45 +57,41 @@ describe('GET /wishlist', () => {
     });
 });
 
-describe('POST /wishlist', () => {
+describe('PUT /wishlist/{productId}', () => {
     it('matches the contract when saving a product', async () => {
         const { bearer } = await authenticateAs('user');
         const product = await createProduct();
 
         const response = await api()
-            .post('/wishlist')
-            .set('Authorization', bearer)
-            .send({ productId: String(product._id) });
+            .put(`/wishlist/${String(product._id)}`)
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toEqual([{ productId: String(product._id) }]);
     });
 
-    it('matches the error contract for an invalid body', async () => {
-        const { bearer } = await authenticateAs('user');
-        const response = await api().post('/wishlist').set('Authorization', bearer).send({});
+    // RFC 9110 §9.3.4: the URI is the whole statement, so sending it twice leaves the same state.
+    it('is idempotent — saving what is saved answers the same 200 and the same list', async () => {
+        const { bearer, product } = await authenticateWithWishlist();
 
-        expect(response.status).toBe(422);
+        const response = await api()
+            .put(`/wishlist/${String(product._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toEqual([{ productId: String(product._id) }]);
     });
 
     it('matches the error contract for a malformed product id', async () => {
-        // The body parses — `productId` is a string — and the ObjectId check is what refuses it.
-        // The empty-body case above never reaches that branch.
         const { bearer } = await authenticateAs('user');
-        const response = await api()
-            .post('/wishlist')
-            .set('Authorization', bearer)
-            .send({ productId: MALFORMED_ID });
+        const response = await api().put(`/wishlist/${MALFORMED_ID}`).set('Authorization', bearer);
 
         expect(response.status).toBe(422);
     });
 
     it('matches the error contract for a product that does not exist', async () => {
         const { bearer } = await authenticateAs('user');
-        const response = await api()
-            .post('/wishlist')
-            .set('Authorization', bearer)
-            .send({ productId: MISSING_ID });
+        const response = await api().put(`/wishlist/${MISSING_ID}`).set('Authorization', bearer);
 
         expect(response.status).toBe(404);
     });

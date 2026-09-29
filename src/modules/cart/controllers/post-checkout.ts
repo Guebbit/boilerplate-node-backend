@@ -8,12 +8,12 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { CheckoutBody } from '@api/schemas.zod';
 import { cartService } from '../services';
-import { successResponse } from '@infrastructure/http/response';
+import { createdResponse } from '@infrastructure/http/response';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { cartCheckoutTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
 import { orderService } from '@modules/orders';
-import type { CheckoutResponse } from '@types';
+import type { Order } from '@types';
 
 /**
  * POST /cart/checkout
@@ -38,10 +38,13 @@ export const postCheckout = (request: Request, response: Response) => {
             // resolves each line's live `current` picture, which a bare `.toJSON()` here would
             // leave off the response entirely.
             return orderService.withActions(result.data, request.authContext).then((order) => {
-                successResponse<CheckoutResponse>(
+                // The order itself, as `POST /orders` answers it: a 201 describes the resource it
+                // created, and the confirmation copy is the envelope's own `message`.
+                createdResponse<Order>(
                     response,
-                    { order, message: t('orders.creation-success') },
-                    201
+                    order,
+                    `/orders/${order.id}`,
+                    t('orders.creation-success')
                 );
             });
         })

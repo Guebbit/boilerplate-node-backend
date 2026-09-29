@@ -64,6 +64,9 @@ export const cartGetForView = (userId: string, context: CallerContext): Promise<
  * lines rather than refusing. Stock is deliberately excluded here — checked only at checkout,
  * where units are actually held.
  *
+ * The envelope's status says whether a line was created (201) or an existing one written (200), so
+ * the controller answers the RFC 9110 §9.3.4 status without a second read.
+ *
  * `'set'` always fits `CART_LINE_MAX` on its own (the request itself is bounded to it), so only
  * `'add'` — wishlist's move-to-cart, the one caller that reaches this in `'add'` mode — can hit
  * `QUANTITY_LIMIT`.
@@ -83,7 +86,10 @@ const upsertCartItem = (
                     { code: ERROR_CODES.CART_QUANTITY_LIMIT, message: t('cart.quantity-limit') }
                 ]);
 
-            return toCartView(result).then((view) => generateSuccess(view));
+            // 201 says a line was created; 200 that one already there changed or was left as it was.
+            return toCartView(result.cart).then((view) =>
+                generateSuccess(view, result.created ? 201 : 200)
+            );
         });
     });
 
@@ -101,9 +107,13 @@ export const cartItemSetById = (
     upsertCartItem(userId, id, quantity, 'set');
 
 /**
- * `POST /cart` — add a product to the cart, or replace the quantity of a line already there.
- * Wraps `cartItemSetById` rather than folding the emit into it, so callers with no
- * `CallerContext` (tests, `PUT`'s own wrapper below) stay free of one.
+ * `POST /cart` — "add to cart": a product not in the cart gets a line, one already there GROWS by
+ * `quantity` (Shopify's `/cart/add`, commercetools' `addLineItem`). `PUT /cart/{productId}` is the
+ * door that sets. Wraps `cartItemAddById` rather than folding the emit into it, so callers with no
+ * `CallerContext` (tests, wishlist's move-to-cart) stay free of one.
+ *
+ * `CART_ITEM_ADDED` fires only when a line was created; growing one is a quantity change, which
+ * is `CART_ITEM_UPDATED`.
  */
 export const cartItemAdd = (
     userId: string,
@@ -111,18 +121,22 @@ export const cartItemAdd = (
     quantity: number,
     context: CallerContext
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
-    cartItemSetById(userId, id, quantity).then((result) => {
+    cartItemAddById(userId, id, quantity).then((result) => {
         if (result.success)
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(context),
-                event: cartAnalyticsEvents.CART_ITEM_ADDED,
+                event:
+                    result.status === 201
+                        ? cartAnalyticsEvents.CART_ITEM_ADDED
+                        : cartAnalyticsEvents.CART_ITEM_UPDATED,
                 properties: { product_id: id, quantity }
             });
         return result;
     });
 
 /**
- * `PUT /cart/{productId}` — set the quantity of a specific cart item. See {@link cartItemAdd}.
+ * `PUT /cart/{productId}` — set the quantity of a specific cart item: 201 when it creates the
+ * line, 200 when it writes one already there (RFC 9110 §9.3.4). See {@link cartItemAdd}.
  */
 export const cartItemUpdateQuantity = (
     userId: string,
@@ -134,7 +148,10 @@ export const cartItemUpdateQuantity = (
         if (result.success)
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(context),
-                event: cartAnalyticsEvents.CART_ITEM_UPDATED,
+                event:
+                    result.status === 201
+                        ? cartAnalyticsEvents.CART_ITEM_ADDED
+                        : cartAnalyticsEvents.CART_ITEM_UPDATED,
                 properties: { product_id: id, quantity }
             });
         return result;

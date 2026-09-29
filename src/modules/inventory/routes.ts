@@ -10,6 +10,7 @@
 
 import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
+import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { getInventoryLevels } from './controllers/get-inventory-levels';
 import { getStockMovements } from './controllers/get-stock-movements';
 import { postReceipt } from './controllers/post-receipt';
@@ -36,11 +37,18 @@ router.get('/levels', requirePermission('inventory.any.read'), getInventoryLevel
 router.get('/movements', requirePermission('inventory.any.read'), getStockMovements);
 
 // POST /inventory/receipts — a supplier delivery lands. `inventory.any.create`: the key stock never
-// moves without — see `shared/authorization-keys.yaml`.
-router.post('/receipts', requirePermission('inventory.any.create'), postReceipt);
+// moves without — see `shared/authorization-keys.yaml`. `idempotencyKey`: a retried receipt must
+// replay, not count the delivery twice.
+router.post('/receipts', requirePermission('inventory.any.create'), idempotencyKey, postReceipt);
 
-// POST /inventory/adjustments — a stocktake correction, signed
-router.post('/adjustments', requirePermission('inventory.any.create'), postAdjustment);
+// POST /inventory/adjustments — a stocktake correction, signed. Same replay guard as receipts:
+// a retried delta applied twice is a wrong stock count.
+router.post(
+    '/adjustments',
+    requirePermission('inventory.any.create'),
+    idempotencyKey,
+    postAdjustment
+);
 
 // POST /inventory/reservations/sweep — the expiry tick's on-demand door. `npm run
 // sweep:reservations` (`docker/crontab`) is the actual schedule, calling `runReservationSweep`

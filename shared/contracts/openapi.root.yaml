@@ -324,6 +324,18 @@ components:
                 $ref: '#/components/schemas/Id'
             description: Product identifier
 
+    # Response headers a module's operations reuse.
+    headers:
+        Location:
+            required: true
+            description: >-
+                Where the created resource lives, as a path on this API (RFC 9110 §9.3.3). A create
+                that answers 201 always sends it, so a client follows the link instead of composing
+                one. Some created things have no `GET` of their own (a feedback ticket, a payment, an
+                API key) — the link is still their address for `PUT`, `PATCH` and `DELETE`.
+            schema:
+                type: string
+
     responses:
         Success:
             description: Success
@@ -1684,6 +1696,8 @@ paths:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1messages'
     /locales/{locale}/entries:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1entries'
+    /locales/{locale}/tenants/{tenant}/entries:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1tenants~1{tenant}~1entries'
     /locales/{locale}/entries/{entryId}:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1entries~1{entryId}'
     /locales/translations/{entityType}/{id}:
@@ -1734,6 +1748,8 @@ paths:
         $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses'
     /account/addresses/{addressId}:
         $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses~1{addressId}'
+    /account/addresses/{addressId}/default:
+        $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses~1{addressId}~1default'
     /account/verify-request:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-request'
     /account/verify-confirm:

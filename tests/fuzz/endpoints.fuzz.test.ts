@@ -38,15 +38,13 @@
  * `tests/integration/upload-security.test.ts` driving real magic-byte checks. The count is
  * asserted below so "skipped" cannot quietly become "skipped everything".
  *
- * ── S13: the multipart operations, fuzzed anyway ─────────────────────────────────────────────
- * Every `multipart/form-data` operation here ALSO declares an `application/json` variant — a
- * create/update with no file — and `readInput`'s decode rule
- * (`docs/theory/request-input.md`#"Only the string transports are decoded") coerces a
- * string-typed boolean/array ONLY for a real multipart body; a `application/x-www-form-urlencoded`
- * one is treated exactly like JSON, untouched. The second `describe.each` below sends the same
- * hostile, spec-valid arbitrary as urlencoded instead of JSON — the one transport that is
- * genuinely still untested here, since every field arrives as a bare string without ever being a
- * real file upload.
+ * ── S13: the multipart operations, sent as urlencoded ────────────────────────────────────────
+ * Every `multipart/form-data` operation here ALSO declares an `application/json` variant, and
+ * `readInput`'s decode rule (`docs/theory/request-input.md`#"Only the string transports are
+ * decoded") coerces a string-typed boolean/array ONLY for a real multipart body. The second
+ * `describe.each` below sends the same hostile, spec-valid arbitrary as
+ * `application/x-www-form-urlencoded`, a type none of them declares: the 415 guard
+ * (`docs/api/write-methods.md`) must refuse it before a controller sees a single field.
  */
 import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';
@@ -316,7 +314,7 @@ describe.each(
         (operation) => [`${operation.method.toUpperCase()} ${operation.path}`, operation] as const
     )
 )('%s (urlencoded)', (_label, operation) => {
-    it('never answers 5xx, and always answers something the spec documents', async () => {
+    it('refuses it with 415, and always answers something the spec documents', async () => {
         const { user, bearer } = await authenticateAs('admin');
         const world = await seedWorld(user);
         // Every MULTIPART_FUZZABLE operation has a bodySchema by construction (the filter above).
@@ -335,9 +333,10 @@ describe.each(
                     .set('Authorization', bearer)
                     .set('Accept-Language', 'en')
                     .type('form')
-                    .send(body as Record<string, unknown>);
+                    // `probe` keeps the encoded body non-empty: an empty one has no bytes for the guard to judge.
+                    .send({ ...(body as Record<string, unknown>), probe: 'x' });
 
-                expect(response.status).toBeLessThan(500);
+                expect(response.status).toBe(415);
                 assertResponseMatchesContract(response);
             }),
             { seed: SEED, numRuns: FUZZ_RUNS_PER_OPERATION, endOnFailure: true }

@@ -95,6 +95,8 @@ paths:
             responses:
                 '201':
                     description: The created language
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
                         application/json:
                             schema:
@@ -211,6 +213,9 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateLocaleRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateLocaleRequest'
             responses:
                 '200':
                     description: The updated language
@@ -294,7 +299,9 @@ paths:
                 translation screen lists. Flat, because a row is what gets edited; the nested tree
                 is `GET /locales/{locale}/messages`.
 
-                `text` searches keys and values together.
+                `text` searches keys and values together. Every tenant's rows are listed unless
+                `tenant` narrows them; one tenant's slice is also a resource of its own,
+                `/locales/{locale}/tenants/{tenant}/entries`, which is where it is written.
             operationId: listLocaleEntries
             security:
                 - bearerAuth: []
@@ -316,11 +323,48 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # One tenant's slice of a language's entries — the target of every write. The tenant is a
+    # path segment (Google AIP-122, Microsoft REST guidelines: a parent resource belongs in the
+    # path, a query string only filters a read), so a PUT replaces exactly what the GET on the SAME
+    # URI lists.
+    /locales/{locale}/tenants/{tenant}/entries:
+        get:
+            tags: [System]
+            summary: List one tenant's translation entries
+            description: |
+                The rows behind one language's dictionary, paginated and searchable — what a
+                translation screen lists. Flat, because a row is what gets edited; the nested tree
+                is `GET /locales/{locale}/messages`.
+
+                `text` searches keys and values together. The same rows `GET
+                /locales/{locale}/entries?tenant=` lists, at the address the writes below target.
+            operationId: listTenantLocaleEntries
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/TenantPathParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
+            responses:
+                '200':
+                    description: A page of entries
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleEntriesResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
             tags: [System]
             summary: Add one translation entry
             description: |
-                409 if the key already exists in this language, and equally if it COLLIDES with one
+                Adds a key to this tenant's dictionary. 409 if the key already exists in this language, and equally if it COLLIDES with one
                 — see `LocaleEntryInput.key` for what a collision is and why it is refused here
                 rather than discovered when the tree is built.
             operationId: createLocaleEntry
@@ -328,6 +372,7 @@ paths:
                 - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/TenantPathParam'
             requestBody:
                 required: true
                 content:
@@ -337,6 +382,8 @@ paths:
             responses:
                 '201':
                     description: The created entry
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
                         application/json:
                             schema:
@@ -352,7 +399,9 @@ paths:
             summary: Replace every entry
             description: |
                 Bulk import, REPLACING semantics: what is not sent is DELETED. The whole set of
-                entries for this language becomes exactly what the body carries.
+                this tenant's entries for this language becomes exactly what the body carries;
+                the other tenants are untouched. The URI names that slice, so the body is the
+                same thing `GET` on it lists (RFC 9110 §9.3.4).
 
                 Paired with `PATCH` on this same collection, which merges instead. "Does an import
                 delete missing keys" is the question every translation tool gets wrong, so the two
@@ -366,6 +415,7 @@ paths:
                 - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/TenantPathParam'
             requestBody:
                 required: true
                 content:
@@ -399,10 +449,14 @@ paths:
                 - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/TenantPathParam'
             requestBody:
                 required: true
                 content:
                     application/json:
+                        schema:
+                            $ref: '#/components/schemas/MergeLocaleEntriesRequest'
+                    application/merge-patch+json:
                         schema:
                             $ref: '#/components/schemas/MergeLocaleEntriesRequest'
             responses:
@@ -512,15 +566,17 @@ paths:
                 — the whole set becomes exactly what the body carries. Paired with `PATCH` on this
                 same resource, which merges instead; "does saving delete the locales I didn't
                 touch" is the question every translation tool gets wrong, so the two behaviours
-                are spelled in the METHOD rather than a flag. Same three signals as `PATCH` for a
-                key that IS in the body — see its own description — plus the implicit fourth: a
-                key that is neither in the body nor already stored never existed either way.
+                are spelled in the METHOD rather than a flag. A locale that IS in the body is
+                replaced whole: a declared field its `fields` leaves out is cleared, and no value
+                is `null`. A key that is neither in the body nor already stored never existed
+                either way.
 
                 The fallback locale (`NODE_FALLBACK_LOCALE`) must be present and non-null, same
                 invariant `POST /products` already enforces on create: a caller cannot replace the
                 whole set and leave the entity with nothing to fall back to.
 
-                422 for the same reasons `PATCH` refuses — an unknown or inactive locale, an empty
+                422 for the same reasons `PATCH` refuses — an unknown locale, an inactive one being written (a `null` that deletes an inactive locale's row is
+                allowed), an empty
                 `fields` object, a `fields` key the `translatables` registry does not declare, or a
                 missing/`null` fallback locale.
             operationId: replaceEntityTranslations
@@ -554,16 +610,22 @@ paths:
                 MERGING semantics: a locale key absent from the body is left exactly as it is. Three
                 signals inside the map, and no way to mistake one for another:
 
-                | the body says      | the server does                                    |
-                | ------------------ | --------------------------------------------------- |
-                | key absent         | leaves that locale's row exactly as it is            |
-                | `"it": { … }`      | upserts that locale's row — created or fully replaced |
-                | `"it": null`       | deletes that locale's row                            |
+                | the body says               | the server does                                  |
+                | --------------------------- | ------------------------------------------------- |
+                | key absent                  | leaves that locale's row exactly as it is          |
+                | `"it": { "fields": { … } }` | merges field by field into the row, creating it    |
+                | `"it": null`                | deletes that locale's row                          |
 
-                An empty `fields` object is a 422, never a delete — deletion is `null`, spent
-                deliberately: a cleared form field sends `""`, never `null`, so a mis-click can
-                never delete translated work. `null` on the fallback locale is a 422: deleting it
-                would leave the entity with nothing to fall back to.
+                Inside `fields` (RFC 7396, one level down): a string sets that field, `null`
+                clears it, a field left out keeps what it has — so `{"it": {"fields": {"title":
+                "x"}}}` changes only the Italian title. The values follow the entity's own rules:
+                a product title still needs its minimum length and cannot be cleared, and `""` is
+                never a value — clear with `null`.
+
+                An empty `fields` object is a 422, never a delete — deletion is the locale's own
+                `null`, spent deliberately so a mis-click can never delete translated work. `null`
+                on the fallback locale is a 422: deleting it would leave the entity with nothing to
+                fall back to.
 
                 422 equally when a named locale does not exist or is not `active` in the `locales`
                 collection, and when `fields` names a key the `translatables` registry does not
@@ -581,7 +643,10 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpsertTranslationsRequest'
+                            $ref: '#/components/schemas/MergeTranslationsRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/MergeTranslationsRequest'
             responses:
                 '200':
                     description: Every locale this entity has a row for, after the write
@@ -625,6 +690,16 @@ components:
             description: >-
                 Which frontend tenant's dictionary to build. Omitted, the deployment's default
                 frontend tenant — a client paired one-to-one with this API never needs to say.
+
+        TenantPathParam:
+            name: tenant
+            in: path
+            required: true
+            schema:
+                $ref: '#/components/schemas/LocaleTenant'
+            description: >-
+                The tenant whose slice of the language's entries this is. An id the deployment does
+                not configure is refused with a 422 — see `GET /locales/tenants`.
 
         EntryIdPathParam:
             name: entryId
@@ -1131,10 +1206,8 @@ components:
         CreateLocaleEntryRequest:
             type: object
             additionalProperties: false
-            required: [tenant, key, value]
+            required: [key, value]
             properties:
-                tenant:
-                    $ref: '#/components/schemas/LocaleTenant'
                 key:
                     type: string
                     minLength: 1
@@ -1154,17 +1227,16 @@ components:
         ReplaceLocaleEntriesRequest:
             type: object
             additionalProperties: false
-            required: [tenant, entries]
+            required: [entries]
             description: >-
-                The COMPLETE set of entries for this language IN ONE TENANT. Anything already stored
-                under that tenant and not named here is deleted; the other tenants are untouched.
+                The COMPLETE set of entries for this language IN THE TENANT the URI names. Anything
+                already stored under that tenant and not named here is deleted; the other tenants
+                are untouched.
 
-                The tenant is named once for the batch rather than per row, so a replace cannot
-                half-apply across dictionaries — the operation that deletes what it was not sent
-                has to know exactly what it is allowed to delete.
+                The tenant is the path's, once for the batch rather than per row, so a replace
+                cannot half-apply across dictionaries — the operation that deletes what it was not
+                sent has to know exactly what it is allowed to delete.
             properties:
-                tenant:
-                    $ref: '#/components/schemas/LocaleTenant'
                 entries:
                     type: array
                     items:
@@ -1173,12 +1245,11 @@ components:
         MergeLocaleEntriesRequest:
             type: object
             additionalProperties: false
-            required: [tenant, entries]
+            required: [entries]
             description: >-
-                Entries to upsert into ONE tenant. Anything already stored is left exactly as it was.
+                Entries to upsert into the tenant the URI names. Anything already stored is left
+                exactly as it was.
             properties:
-                tenant:
-                    $ref: '#/components/schemas/LocaleTenant'
                 entries:
                     type: array
                     minItems: 1
@@ -1353,19 +1424,45 @@ components:
                     type: object
                     additionalProperties:
                         type: string
+                        minLength: 1
                     description: >-
-                        Every key MUST be one the `translatables` registry declares for this
-                        `entityType`; an unknown key is a 422, not a silently dropped one. Empty is
-                        a 422 too — enforced at write time, not by this schema, since `minProperties`
-                        is not something the generated client validates.
+                        The locale's WHOLE set of fields. Every key MUST be one the `translatables`
+                        registry declares for this `entityType`; an unknown key is a 422, not a
+                        silently dropped one. Empty is a 422 too — enforced at write time, not by
+                        this schema, since `minProperties` is not something the generated client
+                        validates. A declared field this object leaves out is cleared: a PUT states
+                        the whole locale.
                 origin:
                     allOf:
                         - $ref: '#/components/schemas/TranslationOrigin'
                     default: human
 
-        # Shared by both `PUT` and `PATCH` — the two verbs interpret an absent key differently
-        # (untouched under PATCH, deleted under PUT), so that meaning lives in each operation's own
-        # description, not here.
+        # `PATCH`'s locale entry — RFC 7396 one level down: only the fields named change.
+        MergeTranslationRequest:
+            type: object
+            additionalProperties: false
+            required: [fields]
+            description: >-
+                One locale's changes for one entity. `origin` defaults to `human`, as it does on
+                `PUT`.
+            properties:
+                fields:
+                    type: object
+                    additionalProperties:
+                        type: string
+                        minLength: 1
+                        nullable: true
+                    description: >-
+                        Each key MUST be one the `translatables` registry declares for this
+                        `entityType`. A string sets that field, `null` clears it, a field left out
+                        keeps what it has. An empty object is a 422 — enforced at write time.
+                origin:
+                    allOf:
+                        - $ref: '#/components/schemas/TranslationOrigin'
+                    default: human
+
+        # `PUT`'s body. An absent locale key is deleted under PUT — that meaning lives in the
+        # operation's own description, not here.
         UpsertTranslationsRequest:
             type: object
             additionalProperties:
@@ -1379,10 +1476,28 @@ components:
                     in use.
             description: >-
                 One or more locales for one entity, keyed by locale tag. See the operation
-                description for what an object, a `null`, and an absent key each mean for the verb
-                in use.
+                description for what an object, a `null`, and an absent key each mean.
             example:
                 it:
                     fields:
                         title: Cuccia ortopedica in memory foam
                         description: Un supporto extra per le articolazioni durante il riposo.
+
+        # `PATCH`'s body: the same map, entries per `MergeTranslationRequest`.
+        MergeTranslationsRequest:
+            type: object
+            additionalProperties:
+                type: object
+                nullable: true
+                allOf:
+                    - $ref: '#/components/schemas/MergeTranslationRequest'
+                description: >-
+                    Merges into this locale's row when an object, deletes the row when `null`. A
+                    locale key this map does not name is left alone.
+            description: >-
+                One or more locales for one entity, keyed by locale tag. See the operation
+                description for what an object, a `null`, and an absent key each mean.
+            example:
+                it:
+                    fields:
+                        description: null

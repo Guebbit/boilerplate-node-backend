@@ -17,6 +17,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { productRepository } from './repository';
+import { checkProductTranslationFields } from './model';
 import { invalidVatRateConfig } from './config';
 import './events';
 
@@ -52,7 +53,8 @@ export default {
             fields: ['title', 'description'],
             cacheTag: 'products',
             exists: productRepository.existsById,
-            writeDerived: productRepository.writeTranslatedFields
+            writeDerived: productRepository.writeTranslatedFields,
+            checkFields: checkProductTranslationFields
         }
     },
     /**
