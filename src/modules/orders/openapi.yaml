@@ -238,6 +238,9 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateOrderByIdRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateOrderByIdRequest'
             responses:
                 '200':
                     description: Updated order

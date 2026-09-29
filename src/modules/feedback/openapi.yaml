@@ -146,6 +146,9 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateFeedbackRequestStatusRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateFeedbackRequestStatusRequest'
             responses:
                 '200':
                     description: Updated feedback request

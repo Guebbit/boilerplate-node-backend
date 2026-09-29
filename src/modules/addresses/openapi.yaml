@@ -99,6 +99,9 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateAddressRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAddressRequest'
             responses:
                 '200':
                     description: The updated address book

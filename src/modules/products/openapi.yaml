@@ -235,6 +235,9 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateProductRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateProductRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/UpdateProductRequestMultipart'

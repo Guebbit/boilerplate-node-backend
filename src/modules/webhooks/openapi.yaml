@@ -113,6 +113,9 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateWebhookSubscriptionRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateWebhookSubscriptionRequest'
             responses:
                 '200':
                     description: Updated subscription

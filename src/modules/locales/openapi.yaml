@@ -211,6 +211,9 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateLocaleRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateLocaleRequest'
             responses:
                 '200':
                     description: The updated language
@@ -405,6 +408,9 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/MergeLocaleEntriesRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/MergeLocaleEntriesRequest'
             responses:
                 '200':
                     description: What the import did
@@ -581,6 +587,9 @@ paths:
                 required: true
                 content:
                     application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpsertTranslationsRequest'
+                    application/merge-patch+json:
                         schema:
                             $ref: '#/components/schemas/UpsertTranslationsRequest'
             responses:

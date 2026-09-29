@@ -56,3 +56,45 @@ describe('an empty string is never a stored value', () => {
         expect(response.status).toBe(422);
     });
 });
+
+describe('the body media type', () => {
+    // Bug W8: a PATCH in any other type parsed as `{}`, which every all-optional schema accepts.
+    it('refuses a PATCH body in an undeclared type with 415, changing nothing', async () => {
+        const { bearer, user } = await authenticateAs('user');
+
+        const response = await api()
+            .patch('/account')
+            .set('Authorization', bearer)
+            .set('Content-Type', 'text/plain')
+            .send('username=someone-else');
+
+        expect(response.status).toBe(415);
+        const profile = await api().get('/account').set('Authorization', bearer);
+        expect(profile.body.data.username).toBe(user.username);
+    });
+
+    it('applies a PATCH sent as application/merge-patch+json', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .patch('/account')
+            .set('Authorization', bearer)
+            .set('Content-Type', 'application/merge-patch+json')
+            .send(JSON.stringify({ username: 'merged-name' }));
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.username).toBe('merged-name');
+    });
+
+    it('does not offer merge-patch on a PUT', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .set('Content-Type', 'application/merge-patch+json')
+            .send(JSON.stringify({ email: 'a@b.co', username: 'abc', analyticsConsent: false }));
+
+        expect(response.status).toBe(415);
+    });
+});

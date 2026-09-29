@@ -179,6 +179,9 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateUserByIdRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserByIdRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/UpdateUserByIdRequestMultipart'

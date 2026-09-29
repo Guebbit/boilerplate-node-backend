@@ -105,6 +105,9 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateAccountRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAccountRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/UpdateAccountRequestMultipart'
