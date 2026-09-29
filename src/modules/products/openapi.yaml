@@ -170,12 +170,10 @@ paths:
             description: |
                 Replaces the product identified by `{id}` in the path (RFC 9110 §9.3.4) — every
                 writable scalar field is required, since none of them but `taxClass`/`rateType`/
-                `weight`/`imageUrl` has a legal "cleared" state, and an omitted one of those four is
-                cleared, not left alone. `translations` keeps the same per-locale upsert/delete
-                semantics `PATCH` uses (see its own description): a translations table is keyed
-                sub-resources, not a single field a "whole-body replace" can meaningfully null out
-                — a caller cannot be expected to enumerate every locale that currently exists just
-                to keep it.
+                `sku`/`weight`/`imageUrl` has a legal "cleared" state, and an omitted one of those
+                five is cleared, not left alone. `translations` is the whole set as well: it must
+                name the fallback locale, and every stored locale it leaves out is deleted. To
+                change one locale without restating the others, use `PATCH`.
             operationId: replaceProductById
             security:
                 - bearerAuth: []
@@ -206,7 +204,7 @@ paths:
                 # `uploadLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-        # Merges, unlike the replacing PUT above — see `UpdateProductRequest.translations`.
+        # Merges, unlike the replacing PUT above — an omitted locale is left alone here.
         patch:
             tags: [Products]
             summary: Edit product
@@ -765,9 +763,9 @@ components:
                         minLength: 1
 
         # PUT /products/{id} — RFC 9110 §9.3.4: every scalar field the resource has is required,
-        # since none of them but taxClass/rateType/weight/imageUrl has a legal "cleared" state;
-        # those four stay optional-nullable, same as PATCH. `translations` keeps PATCH's own per-locale
-        # upsert/delete semantics — see the PUT operation's own description for why.
+        # since none of them but taxClass/rateType/sku/weight/imageUrl has a legal "cleared" state;
+        # those five stay optional-nullable, same as PATCH. `translations` is the whole set: a
+        # stored locale it leaves out is deleted, and the fallback locale is required.
         ReplaceProductRequest:
             type: object
             additionalProperties: false

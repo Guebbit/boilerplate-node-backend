@@ -1,6 +1,6 @@
 /**
- * The multilingual product write surface, over real HTTP: `POST /products`, `PATCH /products/{id}`
- * and `GET /products/{id}/admin`. Cross-module by nature, sitting at the top level rather than
+ * The multilingual product write surface, over real HTTP: `POST /products`, `PUT`/`PATCH
+ * /products/{id}` and `GET /products/{id}/admin`. Cross-module by nature, sitting at the top level rather than
  * under `src/modules/products/tests/`: driving these routes needs a real `locales` collection
  * row, which `products` may only reach through the `kernel/translation.ts` port.
  */
@@ -140,6 +140,57 @@ describe('PUT /products/{id}', () => {
             .put(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({ price: 15, translations: { en: { title: 'Bed, replaced' } } });
+
+        expect(response.status).toBe(422);
+    });
+
+    // `translations` is part of the replaced representation too (DECISIONS D5): a stored locale
+    // the PUT leaves out is deleted, not kept. Keeping one is what PATCH is for.
+    it('deletes every stored locale the PUT leaves out', async () => {
+        await localeRepository.create(makeLocale({ tag: 'it', name: 'it', nativeName: 'it' }));
+        const { bearer } = await authenticateAsRole('editor');
+        const created = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({
+                price: 10,
+                translations: { en: { title: 'Dog Bed' }, it: { title: 'Cuccia' } }
+            });
+        const id = String(created.body.data.id);
+
+        const response = await api()
+            .put(`/products/${id}`)
+            .set('Authorization', bearer)
+            .send({
+                price: 10,
+                active: true,
+                requiresShipping: true,
+                categories: [],
+                tags: [],
+                translations: { en: { title: 'Dog Bed, replaced' } }
+            });
+        const admin = await api().get(`/products/${id}/admin`).set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(Object.keys(admin.body.data.translations)).toEqual(['en']);
+    });
+
+    it('refuses a PUT whose translations leave out the fallback locale', async () => {
+        await localeRepository.create(makeLocale({ tag: 'it', name: 'it', nativeName: 'it' }));
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed', price: 10 });
+
+        const response = await api()
+            .put(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({
+                price: 15,
+                active: true,
+                requiresShipping: true,
+                categories: [],
+                tags: [],
+                translations: { it: { title: 'Cuccia' } }
+            });
 
         expect(response.status).toBe(422);
     });

@@ -4,9 +4,10 @@
  * One pipeline; the verb only changes the front of it:
  *
  * ```
- * PUT   body → validate(ReplaceSchema) → fill omitted clearable fields with null ─┐
- * PATCH body → validate(PatchSchema)   ───────────────────────────────────────────┴→ update(id, changes)
- *                                                                 value → $set · null → $unset
+ * PUT   body → validate(ReplaceSchema) → fill omitted clearable fields with null
+ *                                      → (completeReplace) null every stored map key left out ─┐
+ * PATCH body → validate(PatchSchema)   ─────────────────────────────────────────────────────────┴→ update(id, changes)
+ *                                                                       value → $set · null → $unset
  * ```
  *
  * See: docs/theory/request-flow.md#put-replaces-patch-merges
@@ -59,6 +60,12 @@ export interface UpdateControllerSpec<TReplace extends ZodObject, TPatch extends
      * record, or a differently named param. Omit it for `/x/:id`, which 422s a malformed id.
      */
     idFrom?: (request: Request) => string;
+    /**
+     * PUT only, after the omitted fields are filled: clear what the schema alone cannot name — the
+     * stored keys of a keyed map the body left out (a product's `translations` locales), each set
+     * to `null`, the signal a PATCH would have used. Omit it when the resource has no such map.
+     */
+    completeReplace?: (id: string, changes: TPatch['_output']) => Promise<TPatch['_output']>;
 }
 
 /**
@@ -105,7 +112,8 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
     input,
     update,
     present,
-    idFrom
+    idFrom,
+    completeReplace
 }: UpdateControllerSpec<TReplace, TPatch, TRow>): {
     replace: (request: Request, response: Response) => Promise<void>;
     update: (request: Request, response: Response) => Promise<void>;
@@ -114,11 +122,17 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
     const replaceFills = clearableFields(replaceSchema);
 
     /**
-     * The one pipeline both verbs run: id → decode → validate → (PUT only) fill → `update()` →
-     * respond. `schema` and `fills` are the only two things that differ between the verbs.
+     * The one pipeline both verbs run: id → decode → validate → (PUT only) fill and complete →
+     * `update()` → respond. `schema`, `fills` and `complete` are the only things that differ
+     * between the verbs.
      */
     const run =
-        (operation: string, schema: ZodObject, fills: readonly string[]) =>
+        (
+            operation: string,
+            schema: ZodObject,
+            fills: readonly string[],
+            complete?: UpdateControllerSpec<TReplace, TPatch, TRow>['completeReplace']
+        ) =>
         (request: Request, response: Response): Promise<void> => {
             const id = idFrom ? idFrom(request) : extractAndValidateId(request, response, 'path');
             if (!id) return Promise.resolve();
@@ -132,11 +146,12 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
             );
             if (body === undefined) return Promise.resolve();
 
-            const changes = fillOmittedWithNull(body, fills);
-
             // The PATCH schema's output type is the contract of `update()`; a filled PUT body is
             // the same shape, since every field it adds is one the PUT schema itself accepts null for.
-            return update(id, changes as TPatch['_output'], request)
+            const changes = fillOmittedWithNull(body, fills) as TPatch['_output'];
+
+            return (complete ? complete(id, changes) : Promise.resolve(changes))
+                .then((completed) => update(id, completed, request))
                 .then((result) => {
                     // Sends the error envelope (404, 409, 422) and stops here if refused.
                     if (refused(response, result)) return;
@@ -151,7 +166,10 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
     const updateOperation = operationName('update', entity);
 
     return {
-        replace: namedHandler(replaceOperation, run(replaceOperation, replaceSchema, replaceFills)),
+        replace: namedHandler(
+            replaceOperation,
+            run(replaceOperation, replaceSchema, replaceFills, completeReplace)
+        ),
         update: namedHandler(updateOperation, run(updateOperation, patchSchema, []))
     };
 };

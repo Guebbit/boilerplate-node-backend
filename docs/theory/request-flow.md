@@ -198,9 +198,6 @@ produced the change-set.
   may send.
 - **`PUT /locales/{locale}/entries/{entryId}`** and **`PUT /cart/{productId}`** are PUT-only —
   neither resource has a PATCH.
-- **Products' `PUT /products/{id}` merges `translations`** rather than replacing the set — a
-  caller shouldn't have to list every locale it already has just to keep them. Every other field
-  follows the table below as usual.
 
 ```mermaid
 flowchart LR

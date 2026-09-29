@@ -2,11 +2,10 @@
  * @module
  * Controllers for `PUT /products/:id` (replace) and `PATCH /products/:id` (merge), built on the
  * shared `createUpdateController` factory. Both verbs delegate the product write and the
- * translation-row merge to `productService.writeUpdate`, which already owns the 404 check and the
- * audit emit — the verb difference is entirely in which schema validates the body and whether an
- * omitted clearable field (`taxClass`/`rateType`/`weight`/`imageUrl`) is cleared or left alone; `translations`
- * keeps the same per-locale upsert/delete semantics either way (see `PUT`'s own operation
- * description for why a translations table isn't a "whole-body replace" field).
+ * translation rows to `productService.writeUpdate`, which already owns the 404 check and the
+ * audit emit. The verb difference is only what an omission means: a PUT clears an omitted
+ * clearable field (`taxClass`/`rateType`/`sku`/`weight`/`imageUrl`) and deletes every stored
+ * locale its `translations` leaves out; a PATCH leaves both alone.
  */
 
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
@@ -40,5 +39,7 @@ export const { replace: replaceProduct, update: updateProduct } = createUpdateCo
         writeWithUploadedImage(request, changes.imageUrl, (image) =>
             productService.writeUpdate(id, changes, callerContextOf(request), image)
         ),
+    // PUT only: every locale the product holds and the body left out becomes a `null` delete.
+    completeReplace: (id, changes) => productService.clearOmittedLocales(id, changes),
     present: (product) => productService.toProduct(product)
 });

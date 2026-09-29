@@ -520,9 +520,11 @@ export const writeCreate = async (
 };
 
 /**
- * Update a product and merge its translation rows in one operation — the PUT/PATCH door of the
- * multilingual product write surface. Delegates the product write itself to {@link updateById},
- * which already owns the 404 check and the audit emit; this only adds the translations half
+ * Update a product and write its translation rows in one operation — the PUT/PATCH door of the
+ * multilingual product write surface. A PUT arrives here with every omitted locale already `null`
+ * ({@link clearOmittedLocales}), so this one path serves both verbs. Delegates the product write
+ * itself to {@link updateById}, which already owns the 404 check and the audit emit; this only
+ * adds the translations half
  * around it, so there is exactly one path deciding what "the product was updated" means.
  *
  * `data` arrives already validated: `update-product.ts` hands `createUpdateController` the same
@@ -561,6 +563,26 @@ export const writeUpdate = async (
 
     return result;
 };
+
+/**
+ * PUT's `translations` is the whole set (RFC 9110 §9.3.4): every locale the product holds and the
+ * body leaves out becomes `null` — the same signal a PATCH sends to delete one. The fallback
+ * locale is never among them: the PUT schema refuses a body without it.
+ *
+ * @param id - the product being replaced
+ * @param changes - the validated, filled PUT change-set
+ * @returns `changes`, its `translations` naming every stored locale
+ */
+export const clearOmittedLocales = (
+    id: string,
+    changes: z.infer<typeof zodProductUpdateSchema>
+): Promise<z.infer<typeof zodProductUpdateSchema>> =>
+    readAllTranslations('product', id).then((stored) => {
+        const translations = { ...changes.translations };
+        for (const locale of stored.keys())
+            if (!(locale in translations)) translations[locale] = null;
+        return { ...changes, translations };
+    });
 
 /**
  * `GET /products/{id}/admin` — a product with every language it has a row for, for the editor's
@@ -795,6 +817,7 @@ export const productService = {
     updateById,
     writeCreate,
     writeUpdate,
+    clearOmittedLocales,
     remove,
     removeById,
     restoreById,

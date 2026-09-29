@@ -69,6 +69,30 @@ describe('createUpdateController', () => {
         );
     });
 
+    it('PUT hands the filled change-set to completeReplace, and update() gets its answer', async () => {
+        const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
+        const completeReplace = jest.fn().mockResolvedValue({ title: 'x', note: 'completed' });
+        const { replace } = makeController({ update, completeReplace });
+
+        await replace(makeRequest({ title: 'x' }), makeResponseStub());
+
+        expect(completeReplace).toHaveBeenCalledWith(VALID_ID, { title: 'x', note: null });
+        expect(update).toHaveBeenCalledWith(
+            VALID_ID,
+            { title: 'x', note: 'completed' },
+            expect.anything()
+        );
+    });
+
+    it('PATCH never runs completeReplace — an omission there leaves things alone', async () => {
+        const completeReplace = jest.fn();
+        const { update: patch } = makeController({ completeReplace });
+
+        await patch(makeRequest({ title: 'x' }), makeResponseStub());
+
+        expect(completeReplace).not.toHaveBeenCalled();
+    });
+
     it('PATCH sends only what the caller actually sent, no filling', async () => {
         const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
         const { update: patch } = makeController({ update });
