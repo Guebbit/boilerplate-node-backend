@@ -101,6 +101,18 @@ ever deleting the shared placeholder or a committed demo fixture by the same cal
 the save and the unlink leaks one file; rare enough, and bounded enough by the rule above, that no
 reconciliation sweep exists for it.
 
+### A client never names a path
+
+Deleting "the old image" is only safe if the old image is the record's own. It is, because a
+request body can never name one: `imageUrl` is `null`-only on every JSON and multipart write
+(`ImageRemoval` in `openapi.root.yaml`), and only the upload pipeline produces a path.
+
+| Attack (OWASP API1, BOLA)                                | How it works                                                                                       | This boilerplate                                                                                                  |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Point your avatar at a product's file, then clear it     | the next replace deletes "the old image", now someone else's; two requests per image               | a string `imageUrl` is a `422` before any service runs; `readUploadedImage` drops a body string it is ever handed |
+| The same through a multipart `imageUrl` text part        | multipart bodies validate against the same JSON schema, so the text part reached the same fallback | same schema, same `422`; `tests/integration/image-acl.test.ts` drives every door in both encodings                |
+| A stranger fills the disk through `POST /account/signup` | the one upload route with no account behind it: 75 MB/min per IP with the default `none` antibot   | signup is JSON-only and mounts no upload middleware; the avatar is a follow-up `PATCH /account`                   |
+
 An order line does not participate in any of this: it never stored an image to begin with. It
 keeps the catalogue product's id and resolves the picture LIVE, `null` once that product is gone —
 so a hard delete can free a product's image without leaving a broken link in someone's order
