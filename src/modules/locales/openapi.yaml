@@ -520,7 +520,8 @@ paths:
                 invariant `POST /products` already enforces on create: a caller cannot replace the
                 whole set and leave the entity with nothing to fall back to.
 
-                422 for the same reasons `PATCH` refuses — an unknown or inactive locale, an empty
+                422 for the same reasons `PATCH` refuses — an unknown locale, an inactive one being written (a `null` that deletes an inactive locale's row is
+                allowed), an empty
                 `fields` object, a `fields` key the `translatables` registry does not declare, or a
                 missing/`null` fallback locale.
             operationId: replaceEntityTranslations

@@ -311,6 +311,7 @@ components:
                     description: How many units arrived. Strictly positive — a delivery that removes units is an adjustment.
                 note:
                     type: string
+                    minLength: 1
                     description: Optional — the supplier, the delivery note number, whatever the operator wants on the row.
 
         AdjustmentRequest:
@@ -328,6 +329,7 @@ components:
                     description: Signed. Negative is shrinkage or damage; positive is a miscount found in your favour.
                 note:
                     type: string
+                    minLength: 1
                     description: Why. An unexplained correction is the thing an audit is looking for.
 
         ReservationSweepResponse:

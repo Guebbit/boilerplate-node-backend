@@ -29,7 +29,7 @@ import { catchAs, parseBody } from '@infrastructure/http/controller';
  * restated, not just the trim/min.
  */
 const createFeedbackSchema = CreateFeedbackRequestBody.extend({
-    name: z.string().trim().max(createFeedbackRequestBodyNameMax).optional(),
+    name: z.string().trim().min(1).max(createFeedbackRequestBodyNameMax).optional(),
     email: z.string().trim().pipe(z.email()),
     subject: z.string().trim().min(1).max(createFeedbackRequestBodySubjectMax),
     message: z.string().trim().min(1).max(createFeedbackRequestBodyMessageMax)

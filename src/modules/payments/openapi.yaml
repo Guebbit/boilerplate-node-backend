@@ -626,6 +626,7 @@ components:
                     description: How the money arrived. `card` is not offered here — that path is `POST /payments/intent`.
                 reference:
                     type: string
+                    minLength: 1
                     maxLength: 120
                     description: A bank transaction id, a receipt number — whatever ties this record to the money.
                 receivedAt:

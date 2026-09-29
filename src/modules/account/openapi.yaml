@@ -979,6 +979,7 @@ components:
             properties:
                 challenge:
                     type: string
+                    minLength: 1
                     description: The challenge token from POST /account/login. Omit it for an OAuth-originated login — that challenge was never sent to the client, and this endpoint reads it from the httpOnly cookie the callback set instead.
                 code:
                     type: string
@@ -991,6 +992,7 @@ components:
             properties:
                 challenge:
                     type: string
+                    minLength: 1
                     description: The challenge token from POST /account/login. Omit it for an OAuth-originated login — see LoginTwoFactorRequest.challenge.
                 method:
                     type: string
@@ -1292,6 +1294,7 @@ components:
             properties:
                 token:
                     type: string
+                    minLength: 1
                     description: One-time password reset token (NOT a JWT).
                 password:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
@@ -1305,6 +1308,7 @@ components:
             properties:
                 token:
                     type: string
+                    minLength: 1
                     description: One-time account deletion token (NOT a JWT).
 
         # Self-service profile update. Deliberately narrower than `UpdateUserRequest`: no
@@ -1323,6 +1327,7 @@ components:
                     minLength: 3
                 # `null` clears the override, falling back to the deployment default/negotiated locale.
                 locale:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
@@ -1353,6 +1358,7 @@ components:
                     type: string
                     minLength: 3
                 locale:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
@@ -1385,6 +1391,7 @@ components:
                     type: string
                     minLength: 3
                 locale:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
@@ -1412,6 +1419,7 @@ components:
                     type: string
                     minLength: 3
                 locale:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
@@ -1501,6 +1509,7 @@ components:
             properties:
                 token:
                     type: string
+                    minLength: 1
                     description: One-time email verification token (NOT a JWT).
 
         # One live refresh token, presented as a session. The token VALUE is never exposed —

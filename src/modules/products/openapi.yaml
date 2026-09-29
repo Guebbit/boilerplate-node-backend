@@ -693,10 +693,12 @@ components:
                     type: array
                     items:
                         type: string
+                        minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        minLength: 1
 
         CreateProductRequestMultipart:
             type: object
@@ -755,10 +757,12 @@ components:
                     type: array
                     items:
                         type: string
+                        minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        minLength: 1
 
         # PUT /products/{id} — RFC 9110 §9.3.4: every scalar field the resource has is required,
         # since none of them but taxClass/rateType/weight/imageUrl has a legal "cleared" state;
@@ -779,16 +783,19 @@ components:
                 # `null` clears the class back to the shop's standard rate. Omitted on a PUT is
                 # the same as `null` — see the operation description.
                 taxClass:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 # `null` clears it back to `standard`, same as `taxClass`. Omitted on a PUT is
                 # the same as `null` — see the operation description.
                 rateType:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
@@ -807,10 +814,12 @@ components:
                     type: array
                     items:
                         type: string
+                        minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        minLength: 1
 
         ReplaceProductRequestMultipart:
             type: object
@@ -826,14 +835,17 @@ components:
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 rateType:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
@@ -855,10 +867,12 @@ components:
                     type: array
                     items:
                         type: string
+                        minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        minLength: 1
 
         # PATCH /products/{id} — every field optional, since a merge may touch just one of them.
         # No `id`: it travels in the path.
@@ -876,16 +890,19 @@ components:
                 # `null` clears the class back to the shop's standard rate. Omitted leaves the
                 # stored value alone.
                 taxClass:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 # `null` clears it back to `standard`, same as `taxClass`. Omitted leaves the
                 # stored value alone.
                 rateType:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
@@ -908,10 +925,12 @@ components:
                     type: array
                     items:
                         type: string
+                        minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        minLength: 1
 
         UpdateProductRequestMultipart:
             type: object
@@ -928,14 +947,17 @@ components:
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 rateType:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
@@ -957,10 +979,12 @@ components:
                     type: array
                     items:
                         type: string
+                        minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        minLength: 1
 
         DeleteProductRequest:
             type: object

@@ -27,7 +27,7 @@ export const putCartItem = (
     if (!body) return;
 
     const { quantity } = body;
-    // productId travels via path param or body; body shape is already validated above.
+    // productId is the path segment; the body carries only the quantity.
     const { productId } = readInput(request, { surface: 'write', ids: ['productId'] });
 
     if (!requireObjectId(response, productId)) return;

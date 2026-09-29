@@ -13,7 +13,7 @@ paths:
             summary: List this shop's webhook subscriptions
             description: |
                 Never returns a secret — the ring's plaintext exists only in the response of the
-                call that minted it (`POST` here, or the rotate action on `PATCH .../{id}`).
+                call that minted it (`POST` here, or `POST .../{id}/rotate-secret`).
             operationId: listWebhookSubscriptions
             security:
                 - bearerAuth: []
@@ -443,7 +443,7 @@ components:
                     minLength: 1
                 eventTypes:
                     type: array
-                    items: { type: string }
+                    items: { type: string, minLength: 1 }
                     minItems: 1
 
         ReplaceWebhookSubscriptionRequest:
@@ -464,7 +464,7 @@ components:
                     nullable: true
                 eventTypes:
                     type: array
-                    items: { type: string }
+                    items: { type: string, minLength: 1 }
                     minItems: 1
                 enabled:
                     type: boolean
@@ -486,7 +486,7 @@ components:
                     nullable: true
                 eventTypes:
                     type: array
-                    items: { type: string }
+                    items: { type: string, minLength: 1 }
                     minItems: 1
                 enabled:
                     type: boolean

@@ -177,6 +177,7 @@ components:
             properties:
                 label:
                     type: string
+                    minLength: 1
                 fullName:
                     type: string
                     minLength: 1
@@ -193,6 +194,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
                     type: string
+                    minLength: 1
                 # On create: `true` claims the default slot, absent means "first entry becomes
                 # default, later ones do not". On update: `true` claims the slot, `false` and
                 # absent both leave the assignment alone — demoting the default without naming

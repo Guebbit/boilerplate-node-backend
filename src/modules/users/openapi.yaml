@@ -372,6 +372,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 username:
                     type: string
+                    minLength: 3
                 # Optional: an admin may set it directly (as if the user had registered it
                 # themselves), or leave it out and use `sendSetupEmail` to have the user pick their
                 # own instead.
@@ -386,6 +387,7 @@ components:
                     default: false
                 role:
                     type: string
+                    minLength: 1
                 # Same reasoning as `CreateProductRequest.active`: independent of soft-deletion,
                 # and defaulted here so both implementations derive it rather than each choosing.
                 # Create bodies only — an omitted `active` on an update means "leave it alone".
@@ -406,6 +408,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 username:
                     type: string
+                    minLength: 3
                 # Same as `CreateUserRequest.password` — optional, see `sendSetupEmail` below.
                 password:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
@@ -415,6 +418,7 @@ components:
                     default: false
                 role:
                     type: string
+                    minLength: 1
                 # Same default, same reasoning as `CreateUserRequest.active` above.
                 active:
                     type: boolean
@@ -429,8 +433,8 @@ components:
 
         # PATCH /users/{id} — RFC 7396: every field optional, omitted means unchanged. `password`
         # keeps its own flow (never cleared, never required) so it is optional-non-nullable on
-        # both this and the Replace schema below, and excluded from `writableFields` in code —
-        # see `create-update-controller.ts#UpdateControllerSpec.writableFields`.
+        # both this and the Replace schema below, and never listed as clearable — the factory
+        # reads clearable fields from the schema's `nullable` properties.
         UpdateUserByIdRequest:
             type: object
             additionalProperties: false
@@ -441,9 +445,10 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 username:
                     type: string
-                    minLength: 1
+                    minLength: 3
                 role:
                     type: string
+                    minLength: 1
                 active:
                     type: boolean
                 # `null` removes the image. Omitted leaves it unchanged; `''` is
@@ -452,6 +457,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 # `null` clears the override, falling back to the deployment default/negotiated locale.
                 locale:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
@@ -474,9 +480,10 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 username:
                     type: string
-                    minLength: 1
+                    minLength: 3
                 role:
                     type: string
+                    minLength: 1
                 active:
                     type: boolean
                 imageUpload:
@@ -485,6 +492,7 @@ components:
                     format: binary
                     description: Optional user profile image
                 locale:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
@@ -512,14 +520,16 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 username:
                     type: string
-                    minLength: 1
+                    minLength: 3
                 role:
                     type: string
+                    minLength: 1
                 active:
                     type: boolean
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 locale:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
@@ -543,9 +553,10 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 username:
                     type: string
-                    minLength: 1
+                    minLength: 3
                 role:
                     type: string
+                    minLength: 1
                 active:
                     type: boolean
                 imageUpload:
@@ -554,6 +565,7 @@ components:
                     format: binary
                     description: Optional user profile image
                 locale:
+                    type: string
                     nullable: true
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'

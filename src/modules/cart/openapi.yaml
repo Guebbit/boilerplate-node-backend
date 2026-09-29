@@ -112,7 +112,6 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /cart/{productId}:
-        # Same as POST /cart?productId={productId}
         put:
             tags: [Cart]
             summary: Set cart item quantity
@@ -380,8 +379,6 @@ components:
             additionalProperties: false
             required: [quantity]
             properties:
-                productId:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 quantity:
                     $ref: '#/components/schemas/CartQuantity'
 
@@ -400,6 +397,7 @@ components:
             properties:
                 shippingMethodId:
                     type: string
+                    minLength: 1
                     nullable: true
                     description: >-
                         Which shipping method (see `GET /delivery/methods`) the cart plans to ship
@@ -414,7 +412,8 @@ components:
             properties:
                 notes:
                     type: string
-                    description: Optional order notes
+                    minLength: 1
+                    description: Optional order notes. Left out when there are none; an empty string is a 422.
                 addressId:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }]
                     description: >-
