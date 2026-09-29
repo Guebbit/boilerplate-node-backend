@@ -17,12 +17,12 @@
  * See: docs/tools/idempotency.md
  */
 
-import { createHash } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { canonicalize } from '@guebbit/js-toolkit';
 import { rejectResponse } from '@infrastructure/http/response';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { logger } from '@infrastructure/adapters/logger';
+import { pseudonymise } from '@infrastructure/security/pseudonymise';
 import { t } from '@infrastructure/i18n';
 import {
     idempotencyRecordModel,
@@ -68,6 +68,10 @@ const hasProtoKey = (value: unknown): boolean => {
  * The concrete path, not the route template: `/order/A/refund` and `/order/B/refund` carry the
  * same (empty) body, so a template fingerprint would replay A's answer for B and never refund B.
  *
+ * Keyed, never a bare hash: the body of `POST /signup` carries the plaintext password, and this
+ * lands in Mongo for the retention window. A bare `sha256` of it would let anyone with a dump
+ * guess passwords at hash speed and skip the bcrypt cost entirely.
+ *
  * @param request - the incoming request, already matched to its route
  */
 const fingerprintOf = (request: Request): string => {
@@ -79,9 +83,10 @@ const fingerprintOf = (request: Request): string => {
      */
     const body = JSON.stringify(canonicalize(request.body ?? {}));
 
-    return createHash('sha256')
-        .update(`${request.method} ${request.baseUrl}${request.path}\n${body}`)
-        .digest('hex');
+    return pseudonymise(
+        'idempotency',
+        `${request.method} ${request.baseUrl}${request.path}\n${body}`
+    );
 };
 
 /**

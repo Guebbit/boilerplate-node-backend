@@ -17,7 +17,7 @@ withoutEnvironmentInThisFile([
     'NODE_ENV',
     'NODE_URL',
     'NODE_CORS_ORIGIN',
-    'NODE_LOG_HASH_KEY',
+    'NODE_PSEUDONYM_KEY',
     'NODE_SMTP_HOST',
     'NODE_SMTP_USER',
     'NODE_SMTP_PASS',
@@ -76,21 +76,21 @@ describe('application-wide variables', () => {
         expect(assertApp).toThrow(/NODE_CORS_ORIGIN/);
     });
 
-    it('ignores an unset NODE_LOG_HASH_KEY outside production', () => {
+    it('ignores an unset NODE_PSEUDONYM_KEY outside production', () => {
         // `productionOnly`: the logger's own dev fallback key (`adapters/logger.ts`) is right for
         // a developer and certainly wrong for a deployment, so only the deployment is asked.
         configure();
-        delete process.env.NODE_LOG_HASH_KEY;
+        delete process.env.NODE_PSEUDONYM_KEY;
 
         expect(assertApp).not.toThrow();
     });
 
-    it('refuses to boot in production with no NODE_LOG_HASH_KEY', () => {
+    it('refuses to boot in production with no NODE_PSEUDONYM_KEY', () => {
         configure();
         process.env.NODE_ENV = 'production';
-        delete process.env.NODE_LOG_HASH_KEY;
+        delete process.env.NODE_PSEUDONYM_KEY;
 
-        expect(assertApp).toThrow(/NODE_LOG_HASH_KEY/);
+        expect(assertApp).toThrow(/NODE_PSEUDONYM_KEY/);
     });
 });
 

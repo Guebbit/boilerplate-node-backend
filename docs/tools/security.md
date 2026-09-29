@@ -105,6 +105,20 @@ JWT rotation above makes for a session mid-refresh.
 need attention. Needs a "rotated since X" timestamp somewhere first, which nothing here writes
 today — a follow-on, not part of this runbook.
 
+## Pseudonymised identifiers
+
+One primitive, `pseudonymise(purpose, value)` (`src/infrastructure/security/pseudonymise.ts`), keys every hash of an identifier or a secret that must be comparable but not readable.
+
+| Purpose       | Used for                                | Why not a bare hash                                                                                           |
+| ------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `idempotency` | the request fingerprint stored for 24 h | `POST /signup` bodies carry the plaintext password; a bare SHA-256 lets a Mongo dump be guessed at hash speed |
+| `rate-limit`  | the submitted-email budget key in Redis | a Redis snapshot must not hand over the user list                                                             |
+| `log`         | personal fields in log lines            | see [Winston](./winston.md#personal-data)                                                                     |
+
+- **Scheme:** HMAC-SHA256 under a subkey HKDF-derived (RFC 5869) from `NODE_PSEUDONYM_KEY`, one subkey per purpose, so a digest made for one purpose cannot be replayed as another's.
+- **Standard:** EDPB Guidelines 01/2025 ¶88-89 and ¶117-118, ENISA pseudonymisation techniques (2019) §7.3, NIST SP 800-57 §5.2.
+- **Rotation:** a single value, no ring. Changing it costs, once: identity rate-limit budgets reset (at most one window), log digests stop correlating across the change, and a retry with the same `Idempotency-Key` across the change answers `422` for at most 24 h.
+
 ## Machine-to-machine credentials
 
 A JWT proves a PERSON signed in; a partner integration or a webhook consumer calling back into the

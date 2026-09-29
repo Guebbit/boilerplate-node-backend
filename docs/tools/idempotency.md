@@ -44,6 +44,9 @@ The fingerprint is the method, the **concrete** path and the canonicalised body.
 the route template: two refunds of different orders share a template and an empty body, and must
 not share an answer.
 
+It is stored as a keyed digest, never a bare hash: `POST /signup` bodies carry the plaintext
+password. See [Pseudonymised identifiers](./security.md#pseudonymised-identifiers).
+
 `src/infrastructure/http/middlewares/idempotency.ts` is the middleware; the schema lives beside
 it in `idempotency-model.ts`. Mounted per route — never globally, the same way
 `src/infrastructure/http/middlewares/cache.ts`'s `setCache` is — and a no-op when the caller
