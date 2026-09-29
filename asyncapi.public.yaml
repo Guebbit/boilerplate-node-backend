@@ -134,6 +134,14 @@ channels:
         messages:
             PaymentRefundedEvent:
                 $ref: '#/components/messages/PaymentRefundedEvent'
+    return.requested:
+        address: return.requested
+        description: A return was opened for goods that had shipped — a withdrawal or a request.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ReturnRequestedEvent:
+                $ref: '#/components/messages/ReturnRequestedEvent'
 operations:
     sseMetricsSnapshot:
         action: send
@@ -219,6 +227,15 @@ operations:
             One-to-one with the `payment.refunded` domain event — see `payments/services/refunds.ts`'s `settleRefund`. Fired once per refund, whether an operator asked for it directly or the `ORDER_REFUND_OWED` retry sweep completed it; never fired for a hand-paid refund left for an operator to confirm by hand.
         messages:
             - $ref: '#/channels/payment.refunded/messages/PaymentRefundedEvent'
+    webhookReturnRequested:
+        action: send
+        channel:
+            $ref: '#/channels/return.requested'
+        summary: A return was opened for goods that had shipped.
+        description: >-
+            One-to-one with the `return.requested` domain event — see `returns/services/create.ts`. Never fired for a withdrawal before dispatch: that has no return row, it is a cancel and `order.cancelled` says so.
+        messages:
+            - $ref: '#/channels/return.requested/messages/ReturnRequestedEvent'
 components:
     messages:
         MetricsSnapshotEvent:
@@ -285,6 +302,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/PaymentRefundedEnvelope'
+        ReturnRequestedEvent:
+            name: ReturnRequestedEvent
+            title: Return requested
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ReturnRequestedEnvelope'
     schemas:
         ObservabilityMetricsPayload:
             type: object
@@ -425,6 +449,21 @@ components:
                     type: string
                     description: ISO-4217, e.g. `EUR`.
             additionalProperties: false
+        ReturnRequestedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - reason
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                reason:
+                    type: string
+                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
+            additionalProperties: false
         OrderCreatedEnvelope:
             type: object
             required:
@@ -552,4 +591,22 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/PaymentRefundedPayload'
+            additionalProperties: false
+        ReturnRequestedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ReturnRequestedEventType
+                    type: string
+                    enum:
+                        - return.requested
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ReturnRequestedPayload'
             additionalProperties: false

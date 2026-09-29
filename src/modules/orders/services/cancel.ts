@@ -177,6 +177,12 @@ const afterCancel = async (
  * caller's scope AND the `pending` requirement, so a racing admin "shipped" (or a double-click)
  * resolves at the storage layer — exactly one write matches. The follow-up read on `null` only
  * tells 404 from 409; the decision is already made.
+ * @param id - the order to cancel
+ * @param authContext - the caller; absent for a system-initiated cancel
+ * @param options - `refund`: an operator's choice to cancel without returning the money.
+ *   `withdrawal`: the cancel is a consumer exercising their right of withdrawal (Directive Art. 9),
+ *   which is wider than an ordinary customer cancel — it reaches `processing` too, since the
+ *   consumer may withdraw right up to the moment the goods leave — and always refunds in full
  * @param context - omitted by every system-initiated caller (the reservation sweep,
  *   `availability.ts`'s product-removed cancel), which is not a request; still audited as a
  *   system actor and reported under its own analytics name
@@ -186,7 +192,7 @@ const afterCancel = async (
 export const cancelById = (
     id: string,
     authContext?: AuthContext,
-    options: { refund?: boolean } = {},
+    options: { refund?: boolean; withdrawal?: boolean } = {},
     context?: CallerContext,
     viaReservationExpiry = false
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
@@ -199,7 +205,8 @@ export const cancelById = (
      * asking for anything broader would have missed them, silently treating them as a customer
      * and forcing a refund they had a reason not to make.
      */
-    const refund = actorOf(authContext) === 'admin' ? (options.refund ?? true) : true;
+    const actor = options.withdrawal ? 'admin' : actorOf(authContext);
+    const refund = actor === 'admin' && !options.withdrawal ? (options.refund ?? true) : true;
 
     /*
      * The statuses a cancel may move from are read off the lifecycle table, not declared, and the
@@ -208,7 +215,7 @@ export const cancelById = (
      */
     return moveToCancelled(
         id,
-        statusesLeadingTo(OrderStatus.cancelled, actorOf(authContext)),
+        statusesLeadingTo(OrderStatus.cancelled, actor),
         callerScope(authContext),
         /*
          * The intent to refund is written WITH the cancel, in one document write, because the

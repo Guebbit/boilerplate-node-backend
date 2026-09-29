@@ -1,0 +1,4 @@
+subdomain: supporting
+group: shop
+dependsOn:
+    - orders # the order a return is about: its lines, its owner, and the cancel a pre-dispatch withdrawal becomes

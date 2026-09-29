@@ -23,12 +23,14 @@ flowchart LR
     invoicing["invoicing"]
     payments["payments"]
     products["products"]
+    returns["returns"]
     users["users"]
 
     cart --> orders
     delivery --> orders
     invoicing --> orders
     payments --> orders
+    returns --> orders
     orders --> inventory
     orders --> products
     orders --> users
@@ -43,7 +45,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class delivery,inventory,invoicing,payments supporting;
+    class delivery,inventory,invoicing,payments,returns supporting;
     class users generic;
     class orders centre;
 ```
@@ -217,7 +219,7 @@ payment method — see [`invoicing`](./invoicing.md) for what changed and why.
 ## The withdrawal window
 
 The EU right of withdrawal (Consumer Rights Directive Art. 9 and 11a) is decided here and made in
-`returns`. `orders` cannot import `returns`, `payments` or `delivery`, so what it
+[`returns`](./returns.md#the-withdrawal-button). `orders` cannot import `returns`, `payments` or `delivery`, so what it
 owns is the clock and the button:
 
 ```mermaid

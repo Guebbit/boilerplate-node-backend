@@ -155,3 +155,18 @@ export const markOrderPaidAt = (orderId: string, paidAt: Date): Promise<OrderDoc
             { timestamps: false, returnDocument: 'after' }
         )
         .exec();
+
+/**
+ * Set an order's frozen withdrawal deadline directly — the state `markDelivered` leaves it in,
+ * for a test that needs the window open or closed without running a delivery.
+ * @param orderId - the order
+ * @param withdrawUntil - the deadline to freeze; `undefined` clears it (the window has not started)
+ */
+export const setWithdrawUntil = (orderId: string, withdrawUntil: Date | undefined): Promise<void> =>
+    orderModel
+        .updateOne(
+            { _id: toObjectId(orderId) },
+            withdrawUntil ? { withdrawUntil } : { $unset: { withdrawUntil: 1 } }
+        )
+        .exec()
+        .then(() => undefined);

@@ -69,13 +69,14 @@ const FRONTEND_PAIRING: Readonly<Partial<Record<string, Pairing>>> = {
     inventory: { counterparts: ['inventory'] },
     invoicing: {
         counterparts: ['orders'],
-        why: "It has no screen of its own — `GET /orders/{id}/invoice` and `/credit-note` are two buttons on the frontend's own Order.vue, gated on the order's `actions.invoice` flag, the same as any other conditional order action."
+        why: "It has no screen of its own — `GET /orders/{id}/invoice` and `/credit-notes` are two buttons on the frontend's own Order.vue, gated on the order's `actions.invoice` flag, the same as any other conditional order action."
     },
     locales: { counterparts: ['locales'] },
     observability: { counterparts: ['observability'] },
     orders: { counterparts: ['orders'] },
     payments: { counterparts: ['payments'] },
     products: { counterparts: ['products'] },
+    returns: { counterparts: ['returns'] },
     users: { counterparts: ['users'] },
     webhooks: { counterparts: ['webhooks'] },
     wishlist: { counterparts: ['wishlist'] }

@@ -168,6 +168,8 @@ tags:
     - name: Invoicing
       description: The frozen invoice and credit-note PDFs — issued at payment and at refund, never before.
     - name: Delivery
+    - name: Returns
+      description: Sending goods back — including the EU withdrawal button, which is a return with `reason` `withdrawal`.
     - name: Inventory
     - name: Feedback
     - name: System
@@ -1197,7 +1199,19 @@ components:
         OrderActions:
             type: object
             additionalProperties: false
-            required: [transitions, cancel, pay, start, ship, deliver, fulfill, override, invoice, withdraw]
+            required:
+                [
+                    transitions,
+                    cancel,
+                    pay,
+                    start,
+                    ship,
+                    deliver,
+                    fulfill,
+                    override,
+                    invoice,
+                    withdraw
+                ]
             description: >-
                 What the requesting caller may do to this order, decided by the server. A client
                 renders its controls from this rather than re-implementing the lifecycle: the rules
@@ -1508,7 +1522,8 @@ components:
                     sessions,
                     auditLog,
                     apiKeys,
-                    invoicing
+                    invoicing,
+                    returns
                 ]
             properties:
                 exportedAt:
@@ -1597,6 +1612,13 @@ components:
                             type: array
                             items:
                                 $ref: '../../src/modules/invoicing/openapi.yaml#/components/schemas/ExportInvoiceDocument'
+                # Every return on one of this account's OWN orders — a withdrawal included — found by
+                # `orderId`, since a return is keyed by the order and never by the user. Empty, never
+                # absent, for an account that has returned nothing.
+                returns:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/returns/openapi.yaml#/components/schemas/ExportReturn'
 
         AccountExportEnvelope:
             type: object
@@ -1934,6 +1956,16 @@ paths:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1deliver'
     /delivery/order/{orderId}/fulfill:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1fulfill'
+
+    # ---------- returns ----------
+    /returns:
+        $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns'
+    /returns/{id}:
+        $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1{id}'
+    /returns/{id}/approve:
+        $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1{id}~1approve'
+    /returns/{id}/decline:
+        $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1{id}~1decline'
 
     # ---------- inventory ----------
     /inventory/levels:

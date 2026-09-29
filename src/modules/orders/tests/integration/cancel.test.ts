@@ -9,11 +9,10 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, setWithdrawUntil, toOrderItem } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
 import { ORDER_CANCELLED } from '../../events';
 import { orderRepository } from '../../repository';
-import { orderModel } from '../../model';
 import { OrderStatus } from '@types';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -442,17 +441,11 @@ describe('withActions — withdraw', () => {
         const open = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.delivered
         });
-        await orderModel.updateOne(
-            { _id: open._id },
-            { withdrawUntil: new Date(Date.now() + 60_000) }
-        );
+        await setWithdrawUntil(String(open._id), new Date(Date.now() + 60_000));
         const closed = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.delivered
         });
-        await orderModel.updateOne(
-            { _id: closed._id },
-            { withdrawUntil: new Date(Date.now() - 60_000) }
-        );
+        await setWithdrawUntil(String(closed._id), new Date(Date.now() - 60_000));
 
         const openBody = await orderService.withActions(
             (await orderRepository.findById(String(open._id)))!,

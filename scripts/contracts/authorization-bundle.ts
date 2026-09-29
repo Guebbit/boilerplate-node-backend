@@ -56,6 +56,7 @@ const SECTION_ORDER = [
     'payments',
     'inventory',
     'delivery',
+    'returns',
     'feedback',
     'locales',
     'core',

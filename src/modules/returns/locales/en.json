@@ -1,0 +1,38 @@
+{
+    "returns": {
+        "not-found": "The return was not found",
+        "order-not-found": "The order was not found",
+        "order-not-returnable": "This order cannot be returned in its current status.",
+        "window-closed": "The withdrawal period for this order has ended.",
+        "line-unknown-product": "One of the lines names a product that is not on this order.",
+        "line-too-many": "One of the lines asks to return more than is left of it.",
+        "nothing-returnable": "Nothing on this order is left to return.",
+        "not-decidable": "This return has already been decided.",
+        "not-receivable": "This return is not awaiting its goods.",
+        "requested": "Return requested.",
+        "withdrawn": "Withdrawal received — the order is cancelled and your money is on its way back.",
+        "approved": "Return approved.",
+        "declined": "Return declined.",
+        "email": {
+            "greeting": "Hello, {{name}}!",
+            "postage-consumer": "Returning the goods is at your own cost.",
+            "postage-shop": "We cover the cost of returning the goods.",
+            "withdrawal-acknowledged": {
+                "subject": "We received your withdrawal",
+                "body": "We received your withdrawal from order {{order}} on {{date}} (UTC)."
+            },
+            "return-requested": {
+                "subject": "We received your return request",
+                "body": "We received your request to return goods from order {{order}} on {{date}} (UTC). We will get back to you."
+            },
+            "return-approved": {
+                "subject": "Your return was approved",
+                "body": "Your return for order {{order}} was approved. You can send the goods back now."
+            },
+            "return-declined": {
+                "subject": "Your return was declined",
+                "body": "We could not accept your return for order {{order}}. Reason: {{reason}}"
+            }
+        }
+    }
+}

@@ -1,0 +1,38 @@
+{
+    "returns": {
+        "not-found": "Reso non trovato",
+        "order-not-found": "Ordine non trovato",
+        "order-not-returnable": "Questo ordine non può essere reso nel suo stato attuale.",
+        "window-closed": "Il periodo di recesso per questo ordine è terminato.",
+        "line-unknown-product": "Una delle righe indica un prodotto che non è in questo ordine.",
+        "line-too-many": "Una delle righe chiede di rendere più di quanto ne resta.",
+        "nothing-returnable": "Nulla di questo ordine resta da rendere.",
+        "not-decidable": "Questo reso è già stato deciso.",
+        "not-receivable": "Questo reso non sta aspettando la merce.",
+        "requested": "Reso richiesto.",
+        "withdrawn": "Recesso ricevuto — l'ordine è annullato e il tuo denaro sta tornando.",
+        "approved": "Reso approvato.",
+        "declined": "Reso rifiutato.",
+        "email": {
+            "greeting": "Ciao, {{name}}!",
+            "postage-consumer": "La restituzione della merce è a tuo carico.",
+            "postage-shop": "Le spese di restituzione della merce sono a nostro carico.",
+            "withdrawal-acknowledged": {
+                "subject": "Abbiamo ricevuto il tuo recesso",
+                "body": "Abbiamo ricevuto il tuo recesso dall'ordine {{order}} il {{date}} (UTC)."
+            },
+            "return-requested": {
+                "subject": "Abbiamo ricevuto la tua richiesta di reso",
+                "body": "Abbiamo ricevuto la tua richiesta di reso per l'ordine {{order}} il {{date}} (UTC). Ti risponderemo."
+            },
+            "return-approved": {
+                "subject": "Il tuo reso è stato approvato",
+                "body": "Il tuo reso per l'ordine {{order}} è stato approvato. Puoi spedire la merce."
+            },
+            "return-declined": {
+                "subject": "Il tuo reso è stato rifiutato",
+                "body": "Non abbiamo potuto accettare il tuo reso per l'ordine {{order}}. Motivo: {{reason}}"
+            }
+        }
+    }
+}

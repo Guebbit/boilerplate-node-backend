@@ -38,6 +38,7 @@ import {
 } from '@modules/orders/emails';
 import { buildDocumentView } from '@modules/invoicing/emails';
 import { shipmentShippedEmail } from '@modules/delivery/emails';
+import { returnNoticeEmail } from '@modules/returns';
 import { subscriptionDisabledEmail } from '@modules/webhooks';
 
 // Every case in this file renders against the real collection, the same one `app.ts` builds at
@@ -110,6 +111,11 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         { title: 'Boiled sweets' }
     ]),
     'delivery.shipment-shipped': shipmentShippedEmail(locale, 'Ada', 'TRK-0000TEST'),
+    'returns.notice': returnNoticeEmail('withdrawal-acknowledged', locale, 'Ada', {
+        orderRef: '2026-000041',
+        returnPostage: 'consumer',
+        at: new Date('2026-08-06T10:30:00Z')
+    }),
     'webhooks.subscription-disabled': subscriptionDisabledEmail(locale, 'https://example.com/hook'),
     'feedback.contact': contactRequestEmail(locale, {
         name: 'Ada',
