@@ -228,8 +228,13 @@ export interface Repository<TDocument extends Document, TWire> {
     ) => Promise<Lean<TDocument>[]>;
     /** Count the documents matching a filter. */
     count: (where?: QueryFilter<TDocument>) => Promise<number>;
-    /** Insert a new document. */
-    create: (data: Partial<TDocument>) => Promise<TDocument>;
+    /**
+     * Insert a new document.
+     *
+     * @param data - the fields to write
+     * @param session - joins the insert to the caller's own transaction; omitted, it stands alone
+     */
+    create: (data: Partial<TDocument>, session?: ClientSession) => Promise<TDocument>;
     /** Persist in-memory changes to an already-fetched document. */
     save: (document: TDocument) => Promise<TDocument>;
     /**
@@ -348,8 +353,14 @@ export function createRepository<TDocument extends Document, TWire>(
     const count = (where: QueryFilter<TDocument> = {}): Promise<number> =>
         mongooseModel.countDocuments(where);
 
-    /** Insert a new document. */
-    const create = (data: Partial<TDocument>): Promise<TDocument> => mongooseModel.create(data);
+    /**
+     * Insert a new document, optionally as part of the caller's own transaction.
+     * Mongoose: `Model.create` takes `{ session }` only in its array form, whose typing does not
+     * fit a generic document; `new Model(data).save({ session })` is the documented equivalent.
+     * https://mongoosejs.com/docs/transactions.html
+     */
+    const create = (data: Partial<TDocument>, session?: ClientSession): Promise<TDocument> =>
+        session ? new mongooseModel(data).save({ session }) : mongooseModel.create(data);
 
     /** Persist in-memory changes to an already-fetched document. */
     const save = (document: TDocument): Promise<TDocument> => document.save();

@@ -8,7 +8,7 @@
  */
 
 import { Types } from 'mongoose';
-import type { QueryFilter } from 'mongoose';
+import type { ClientSession, QueryFilter } from 'mongoose';
 import {
     stockLevelModel,
     applyStockLevelTransform,
@@ -106,14 +106,18 @@ const toReservationItems = (
  * condition, this file only applies it and keeps `available` in step.
  */
 export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLevelDocument>> & {
-    ensure: (productId: string) => Promise<StockLevelDocument>;
-    findByProductId: (productId: string) => Promise<StockLevelDocument | null>;
+    ensure: (productId: string, session?: ClientSession) => Promise<StockLevelDocument>;
+    findByProductId: (
+        productId: string,
+        session?: ClientSession
+    ) => Promise<StockLevelDocument | null>;
     deleteByProductId: (productId: string) => Promise<void>;
     applyDelta: (
         productId: string,
         reason: StockMovementReason,
         quantity: number,
-        delta: CounterDelta
+        delta: CounterDelta,
+        session?: ClientSession
     ) => Promise<boolean>;
     stockBoard: (options: {
         skip: number;
@@ -136,23 +140,28 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * opening-quantity write (a separate `receive` call) is not covered by this guarantee.
      *
      * @param productId - the product
+     * @param session - the caller's transaction, when the write belongs to one
      * @returns the row, new or already there
      */
-    ensure: (productId: string) =>
+    ensure: (productId: string, session?: ClientSession) =>
         stockLevelModel
             .findOneAndUpdate(
                 { productId: toObjectId(productId) },
                 { $setOnInsert: { onHand: 0, reserved: 0, available: 0 } },
-                { upsert: true, returnDocument: 'after' }
+                { upsert: true, returnDocument: 'after', session }
             )
             .exec(),
 
     /**
      * @param productId - the product
+     * @param session - the caller's transaction, so the read sees its own uncommitted writes
      * @returns its level, or `null` if it has none yet (never received, or the product is gone)
      */
-    findByProductId: (productId: string) =>
-        stockLevelModel.findOne({ productId: toObjectId(productId) }).exec(),
+    findByProductId: (productId: string, session?: ClientSession) =>
+        stockLevelModel
+            .findOne({ productId: toObjectId(productId) })
+            .session(session ?? null)
+            .exec(),
 
     /**
      * Erase a product's level row outright — the hard-delete cascade's own half. Never called for
@@ -179,9 +188,16 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * @param reason - the transition; decides the guard via `conditionFor`
      * @param quantity - how many units the transition guards for; signed only for `adjust`
      * @param delta - the pair `counterDeltaFor` computed for this transition
+     * @param session - the caller's transaction, when the write belongs to one
      * @returns whether the condition matched and the counters actually moved
      */
-    applyDelta: (productId: string, reason: StockMovementReason, quantity: number, delta) =>
+    applyDelta: (
+        productId: string,
+        reason: StockMovementReason,
+        quantity: number,
+        delta,
+        session?: ClientSession
+    ) =>
         stockLevelModel
             .updateOne(
                 { productId: toObjectId(productId), ...conditionFor(reason, quantity) },
@@ -192,7 +208,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                         available: delta.onHandDelta - delta.reservedDelta
                     }
                 },
-                { timestamps: false }
+                { timestamps: false, session }
             )
             .exec()
             .then(({ modifiedCount }) => modifiedCount > 0),
@@ -293,7 +309,8 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
     claimStatus: (
         orderId: string,
         from: ReservationStatus,
-        to: ReservationStatus
+        to: ReservationStatus,
+        session?: ClientSession
     ) => Promise<ReservationDocument | null>;
     findExpired: (now: Date, limit: number) => Promise<ReservationDocument[]>;
     narrowToTaken: (
@@ -345,15 +362,21 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
      * @param orderId - the order whose hold is being claimed
      * @param from - the status the hold must currently be in
      * @param to - the status to move it to
+     * @param session - the caller's transaction, when the claim belongs to one
      * @returns the updated hold, or `null` if another caller got there first
      */
-    claimStatus: (orderId: string, from: ReservationStatus, to: ReservationStatus) =>
+    claimStatus: (
+        orderId: string,
+        from: ReservationStatus,
+        to: ReservationStatus,
+        session?: ClientSession
+    ) =>
         reservationModel
             .findOneAndUpdate(
                 { orderId: toObjectId(orderId), status: from },
                 { $set: { status: to } },
                 // Return the post-update doc — caller needs the items it just claimed.
-                { returnDocument: 'after' }
+                { returnDocument: 'after', session }
             )
             .exec(),
 

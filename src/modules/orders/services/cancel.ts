@@ -1,10 +1,11 @@
 /**
  * @module
- * Cancelling an order, and making its consequences stick. The status move is one conditional
- * write; the hold and the refund follow it. A `held` reservation heals on its own if its release
- * is missed — the TTL sees to it — but a paid order's `committed` hold does not: if its restock
- * throws here, those units are lost from sale, with no retry. Only the refund's intent is written
- * down; `retryPendingEffects` is what discharges it when the announcement was not enough.
+ * Cancelling an order, and making its consequences stick. The status move, the hold's release and
+ * a paid order's restock are ONE transaction: a restock that throws rolls the status back too, so
+ * units are never lost from sale behind an order that already reads `cancelled`. The refund is
+ * not in it — that is money at a provider, which cannot roll back — so only its intent is written
+ * down, in the status write itself; `retryPendingEffects` discharges it when the announcement was
+ * not enough.
  */
 
 import { callerForSubject, SYSTEM_ACTOR } from '@kernel/permissions';
@@ -13,7 +14,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
 import type { AuthContext } from '@types';
-import type { OrderDocument } from '../model';
+import type { OrderDocument, OrderPendingEffect } from '../model';
 import {
     generateReject,
     generateSuccess,
@@ -22,6 +23,8 @@ import {
 } from '@infrastructure/http/response';
 import { inventoryService } from '@modules/inventory';
 import { emitDomainEvent } from '@kernel/events';
+import { withTransaction } from '@infrastructure/runtime/database';
+import type { ClientSession } from 'mongoose';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -44,7 +47,52 @@ const PENDING_REFUND = Object.freeze(['refund'] as const);
 const SWEEP_BATCH_SIZE = 200;
 
 /**
- * Everything a successful cancel unlocks: give back the hold, announce it, discharge the refund
+ * Give an order's stock back, inside the cancel's own transaction. A `held` reservation is
+ * released; a PAID order's hold is `committed`, so `releaseForOrder` never matches it — the units
+ * already left `onHand` at payment — and `restockForOrder` gives those back instead. Each claims
+ * its status conditionally, so calling the second speculatively is safe: a hold in any other state
+ * claims nothing. A hold already expired is an ordinary sequence, the units are already back.
+ * @param orderId - the order being cancelled
+ * @param session - the cancel's transaction
+ */
+const giveBackStock = async (orderId: string, session: ClientSession): Promise<void> => {
+    const released = await inventoryService.releaseForOrder(orderId, 'release', session);
+    if (!released) await inventoryService.restockForOrder(orderId, session);
+};
+
+/**
+ * The cancel's one atomic step: the conditional status move, and — only if it landed — the stock
+ * coming back. The catalogue's stock cache is refreshed after the commit, since that write cannot
+ * roll back.
+ * @param id - the order to cancel
+ * @param from - the statuses the caller may cancel from
+ * @param scope - the caller's ownership scope, riding in the same filter as the write
+ * @param effects - the consequences to write down with the status
+ * @returns the cancelled order, or `null` when the conditional move matched nothing
+ */
+const moveToCancelled = (
+    id: string,
+    from: readonly string[],
+    scope: Record<string, unknown> | undefined,
+    effects: readonly OrderPendingEffect[] | undefined
+): Promise<OrderDocument | null> =>
+    withTransaction(async (session) => {
+        const order = await orderRepository.updateStatusIfIn(
+            id,
+            from,
+            OrderStatus.cancelled,
+            scope,
+            effects,
+            session
+        );
+        if (order) await giveBackStock(id, session);
+        return order;
+    }).then((order) =>
+        order ? inventoryService.refreshStockCacheForOrder(id).then(() => order) : order
+    );
+
+/**
+ * Everything a successful cancel unlocks: announce it, discharge the refund
  * marker once every listener heard it — then the audit row, the analytics event, and — only for
  * the reservation-expiry sweep itself — the customer's own explanation by mail.
  * @param context - the caller's context; absent for a system-initiated cancel (the reservation
@@ -61,24 +109,6 @@ const afterCancel = async (
     context?: CallerContext,
     viaReservationExpiry = false
 ): Promise<ResponseSuccess<OrderDocument>> => {
-    /*
-     * The hold is given back after the status write, deliberately: the conditional
-     * move guarantees this runs at most once per order — a second cancel loses the
-     * `$in: ['pending']` match. Belt AND braces, since `releaseForOrder` claims the
-     * reservation's status conditionally too — both guards exist because the two
-     * callers (a customer cancelling, the sweep's deadline) can race, and exactly
-     * one moves the counters. Unchecked here: a hold already expired is an ordinary
-     * sequence, the units are already back.
-     *
-     * A release that claims nothing is not automatically a no-op: a PAID order's hold is
-     * `committed`, not `held`, so `releaseForOrder` never matches it — the units already left
-     * `onHand` at payment, not merely `reserved`. `restockForOrder` is what gives those back, and
-     * its own claim (`committed → restocked`) is exactly as safe to call speculatively: a hold
-     * that is anything else claims nothing there either.
-     */
-    const released = await inventoryService.releaseForOrder(String(order._id));
-    if (!released) await inventoryService.restockForOrder(String(order._id));
-
     // The fact is announced once, unconditionally — whatever a listener does with it (webhooks'
     // own delivery has its own retry story) is no longer this function's concern.
     await emitDomainEvent(ORDER_CANCELLED, {
@@ -176,35 +206,32 @@ export const cancelById = (
      * table answers per actor: a customer may cancel from `pending` and `paid`, an operator also
      * from `processing`.
      */
-    return orderRepository
-        .updateStatusIfIn(
-            id,
-            statusesLeadingTo(OrderStatus.cancelled, actorOf(authContext)),
-            OrderStatus.cancelled,
-            callerScope(authContext),
-            /*
-             * The intent to refund is written WITH the cancel, in one document write, because the
-             * announcement below is not durable — `@kernel/events` has no retry, so a refund that
-             * throws is logged and lost. The marker is what `retryPendingEffects` finds afterwards.
-             */
-            refund ? PENDING_REFUND : undefined
-        )
-        .then((order) =>
-            order
-                ? afterCancel(order, refund, context, viaReservationExpiry)
-                : // Which refusal was it? This read only informs the message — the write above
-                  // already decided nothing changes.
-                  getById(id, callerScope(authContext)).then((existing) =>
-                      existing
-                          ? generateReject(409, [
-                                {
-                                    code: ERROR_CODES.ORDER_NOT_CANCELLABLE,
-                                    message: t('orders.cancel.not-cancellable')
-                                }
-                            ])
-                          : generateReject(404, [t('orders.not-found')])
-                  )
-        );
+    return moveToCancelled(
+        id,
+        statusesLeadingTo(OrderStatus.cancelled, actorOf(authContext)),
+        callerScope(authContext),
+        /*
+         * The intent to refund is written WITH the cancel, in one document write, because the
+         * announcement below is not durable — `@kernel/events` has no retry, so a refund that
+         * throws is logged and lost. The marker is what `retryPendingEffects` finds afterwards.
+         */
+        refund ? PENDING_REFUND : undefined
+    ).then((order) =>
+        order
+            ? afterCancel(order, refund, context, viaReservationExpiry)
+            : // Which refusal was it? This read only informs the message — the write above
+              // already decided nothing changes.
+              getById(id, callerScope(authContext)).then((existing) =>
+                  existing
+                      ? generateReject(409, [
+                            {
+                                code: ERROR_CODES.ORDER_NOT_CANCELLABLE,
+                                message: t('orders.cancel.not-cancellable')
+                            }
+                        ])
+                      : generateReject(404, [t('orders.not-found')])
+              )
+    );
 };
 
 /**

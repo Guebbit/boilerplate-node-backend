@@ -138,13 +138,16 @@ const ownerScope = (userId: string): Record<string, unknown> => ({
  *   status. Single-document atomicity is what makes them exactly as durable as the move that
  *   decided them; a second write could be the one that is lost. Only the cancel passes any —
  *   `delivery`'s shipped move has nothing that needs retrying.
+ * @param session - joins the write to the caller's transaction — a cancel moves the status, the
+ *   hold and the stock together or not at all
  */
 const updateStatusIfIn = (
     id: string,
     from: readonly string[],
     to: string,
     scope?: Record<string, unknown>,
-    effects?: readonly OrderPendingEffect[]
+    effects?: readonly OrderPendingEffect[],
+    session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
@@ -157,7 +160,7 @@ const updateStatusIfIn = (
                 status: { $in: [...from] }
             } as QueryFilter<OrderDocument>,
             { $set: { status: to, ...(effects?.length ? { pendingEffects: [...effects] } : {}) } },
-            { returnDocument: 'after' }
+            { returnDocument: 'after', session }
         )
         .exec();
 
@@ -487,7 +490,8 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         from: readonly string[],
         to: string,
         scope?: Record<string, unknown>,
-        effects?: readonly OrderPendingEffect[]
+        effects?: readonly OrderPendingEffect[],
+        session?: ClientSession
     ) => Promise<OrderDocument | null>;
     markPaid: (id: string, from: OrderStatus) => Promise<OrderDocument | null>;
     applyStatusOverride: (

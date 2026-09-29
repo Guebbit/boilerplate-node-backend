@@ -50,6 +50,11 @@ cutoff — a sale undone by a timer, not by anyone cancelling anything. A cancel
 only after `releaseForOrder`'s own claim on `held → released` has already missed — exactly what a
 PAID order's `committed` hold does, every time.
 
+Both take an optional Mongo `session`. `orders`' cancel passes one so the status move, the release
+and the restock commit together or not at all; given a session, the catalogue's stock cache is
+not synced inside the transaction (that write cannot roll back), and the caller runs
+`refreshStockCacheForOrder` after the commit.
+
 Two more `reason` values exist and belong to no reservation at all: `receive`
 (`POST /inventory/receipts`) and `adjust` (`POST /inventory/adjustments`), which move `onHand`
 directly.
