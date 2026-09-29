@@ -148,20 +148,10 @@ router.post('/login', credentialLimiters, loginChallengeGate, postLogin);
 
 // POST /account/signup — register new user. `signupLimiters`, not `credentialLimiters`: the
 // abuse here (a Sybil account) gets a 201, which `credentialLimiters`' skipSuccessfulRequests
-// would spend nothing on — see rate-limits.ts. `humanChallengeGate` (rung 3, off by default) sits
-// ahead of the upload parse, so a request that fails it never pays for a file read.
-// `idempotencyKey` comes AFTER `upload.image()`, not before: its fingerprint reads `request.body`,
-// which multer only populates once it has parsed a multipart request — any earlier and every
-// multipart signup would fingerprint as the same empty body, defeating the mismatch check.
-router.post(
-    '/signup',
-    signupLimiters,
-    uploadLimiter,
-    humanChallengeGate,
-    upload.image(),
-    idempotencyKey,
-    postSignup
-);
+// would spend nothing on — see rate-limits.ts. `humanChallengeGate` is rung 3, off by default.
+// JSON only: no upload middleware is mounted, because a stranger writes nothing to the image store
+// before registering — the avatar is a follow-up `PATCH /account` from the signed-in session.
+router.post('/signup', signupLimiters, humanChallengeGate, idempotencyKey, postSignup);
 
 // POST /account/reset — request password reset email. `resetRequestLimiters`, same reasoning as
 // signup: this route always answers 200, so only a budget spent by success bounds anything.

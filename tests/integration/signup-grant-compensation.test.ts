@@ -38,10 +38,7 @@ describe('self-service signup', () => {
                 password: PLAIN_PASSWORD,
                 passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
-                termsAccepted: true,
-                imageUrl: undefined,
-                thumbnailUrl: undefined,
-                pendingImageKey: undefined
+                termsAccepted: true
             },
             testCallerContext
         );

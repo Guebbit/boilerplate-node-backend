@@ -46,10 +46,7 @@ describe('signup', () => {
                     password: PLAIN_PASSWORD,
                     passwordConfirm: PLAIN_PASSWORD,
                     analyticsConsent: undefined,
-                    termsAccepted: true,
-                    imageUrl: undefined,
-                    thumbnailUrl: undefined,
-                    pendingImageKey: undefined
+                    termsAccepted: true
                 },
                 testCallerContext
             )
@@ -74,10 +71,7 @@ describe('signup', () => {
                 password: PLAIN_PASSWORD,
                 passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
-                termsAccepted: true,
-                imageUrl: undefined,
-                thumbnailUrl: undefined,
-                pendingImageKey: undefined
+                termsAccepted: true
             },
             testCallerContext
         );
@@ -99,10 +93,7 @@ describe('signup', () => {
                     password: PLAIN_PASSWORD,
                     passwordConfirm: 'something-else',
                     analyticsConsent: undefined,
-                    termsAccepted: true,
-                    imageUrl: undefined,
-                    thumbnailUrl: undefined,
-                    pendingImageKey: undefined
+                    termsAccepted: true
                 },
                 testCallerContext
             )
@@ -125,10 +116,7 @@ describe('signup', () => {
                     password: PLAIN_PASSWORD,
                     passwordConfirm: PLAIN_PASSWORD,
                     analyticsConsent: undefined,
-                    termsAccepted: true,
-                    imageUrl: undefined,
-                    thumbnailUrl: undefined,
-                    pendingImageKey: undefined
+                    termsAccepted: true
                 },
                 testCallerContext
             )
@@ -157,10 +145,7 @@ describe('signup', () => {
                         password: PLAIN_PASSWORD,
                         passwordConfirm: PLAIN_PASSWORD,
                         analyticsConsent: undefined,
-                        termsAccepted: true,
-                        imageUrl: undefined,
-                        thumbnailUrl: undefined,
-                        pendingImageKey: undefined
+                        termsAccepted: true
                     },
                     testCallerContext
                 )
@@ -180,10 +165,7 @@ describe('signup', () => {
                         password: PLAIN_PASSWORD,
                         passwordConfirm: PLAIN_PASSWORD,
                         analyticsConsent: undefined,
-                        termsAccepted: true,
-                        imageUrl: undefined,
-                        thumbnailUrl: undefined,
-                        pendingImageKey: undefined
+                        termsAccepted: true
                     },
                     testCallerContext
                 )
@@ -214,10 +196,7 @@ describe('signup', () => {
                     password: password,
                     passwordConfirm: password,
                     analyticsConsent: undefined,
-                    termsAccepted: true,
-                    imageUrl: undefined,
-                    thumbnailUrl: undefined,
-                    pendingImageKey: undefined
+                    termsAccepted: true
                 },
                 testCallerContext
             )
@@ -239,10 +218,7 @@ describe('signup', () => {
                 password: PLAIN_PASSWORD,
                 passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
-                termsAccepted: true,
-                imageUrl: undefined,
-                thumbnailUrl: undefined,
-                pendingImageKey: undefined
+                termsAccepted: true
             },
             testCallerContext
         );
@@ -262,10 +238,7 @@ describe('signup', () => {
                     password: PLAIN_PASSWORD,
                     passwordConfirm: PLAIN_PASSWORD,
                     analyticsConsent: undefined,
-                    termsAccepted: false,
-                    imageUrl: undefined,
-                    thumbnailUrl: undefined,
-                    pendingImageKey: undefined
+                    termsAccepted: false
                 },
                 testCallerContext
             )
@@ -286,10 +259,7 @@ describe('signup', () => {
                 password: PLAIN_PASSWORD,
                 passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: true,
-                termsAccepted: true,
-                imageUrl: undefined,
-                thumbnailUrl: undefined,
-                pendingImageKey: undefined
+                termsAccepted: true
             },
             testCallerContext
         );

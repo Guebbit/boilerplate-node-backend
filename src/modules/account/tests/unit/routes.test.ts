@@ -246,7 +246,7 @@ describe('account routes — human-challenge gate (rung 3)', () => {
 });
 
 describe('account routes — uploads', () => {
-    it.each(['PUT /', 'PATCH /', 'POST /signup'])(
+    it.each(['PUT /', 'PATCH /'])(
         '%s accepts the imageUpload field and validates what arrives',
         (signature) => {
             const chain = chainOf(router, signature);
@@ -256,6 +256,13 @@ describe('account routes — uploads', () => {
             expect(chain).toContain('quarantineUploadedImages');
         }
     );
+
+    it('POST /signup mounts no upload middleware: a stranger writes nothing to the store', () => {
+        const chain = chainOf(router, 'POST /signup');
+
+        expect(chain).not.toContain('upload.image');
+        expect(chain).not.toContain('quarantineUploadedImages');
+    });
 
     it('caches nothing anywhere', () => {
         // The counterpart to `noStore`: not one route in this module may be stored, so not one
