@@ -277,6 +277,8 @@ const orderLineProductSchema = new Schema(
         tags: { type: [String] },
         active: { type: Boolean },
         requiresShipping: { type: Boolean },
+        /** Art. 16 exclusion, frozen the same as every other line field — see `Product.noWithdrawal`. */
+        noWithdrawal: { type: Boolean },
         /** SH4, frozen the same as every other line field — see `Product.sku`. No uniqueness
          * constraint here: the constraint is on the CATALOGUE, and a frozen copy is history. */
         sku: { type: String },

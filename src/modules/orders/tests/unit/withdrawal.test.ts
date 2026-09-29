@@ -4,7 +4,12 @@
  * order can answer them.
  */
 import { OrderStatus } from '@types';
-import { canWithdraw, isBeforeDispatch, withdrawUntilFrom } from '../../domain';
+import {
+    canWithdraw,
+    isBeforeDispatch,
+    isExcludedFromWithdrawal,
+    withdrawUntilFrom
+} from '../../domain';
 
 const NOW = new Date('2026-03-10T12:00:00Z');
 
@@ -64,4 +69,25 @@ describe('isBeforeDispatch', () => {
             expect(isBeforeDispatch(status)).toBe(false);
         }
     );
+});
+
+describe('Art. 16 exclusions', () => {
+    it('reads a line as excluded only when its product says so', () => {
+        expect(isExcludedFromWithdrawal({ product: { noWithdrawal: true } })).toBe(true);
+        expect(isExcludedFromWithdrawal({ product: { noWithdrawal: false } })).toBe(false);
+        expect(isExcludedFromWithdrawal({ product: {} })).toBe(false);
+        expect(isExcludedFromWithdrawal({ product: null })).toBe(false);
+    });
+
+    it('offers no withdrawal on an order made only of excluded goods', () => {
+        const items = [{ product: { noWithdrawal: true } }];
+
+        expect(canWithdraw({ status: OrderStatus.delivered, items }, NOW)).toBe(false);
+    });
+
+    it('still offers it when one line can be withdrawn from', () => {
+        const items = [{ product: { noWithdrawal: true } }, { product: { noWithdrawal: false } }];
+
+        expect(canWithdraw({ status: OrderStatus.delivered, items }, NOW)).toBe(true);
+    });
 });

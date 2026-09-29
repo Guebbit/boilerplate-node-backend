@@ -137,6 +137,78 @@ describe('a withdrawal before dispatch', () => {
     });
 });
 
+describe('goods excluded from the right of withdrawal (Art. 16)', () => {
+    /** A delivered order of one withdrawable shirt and one excluded engraved mug. */
+    const orderWithExcluded = async () => {
+        customers += 1;
+        const user = await createUser({ email: `customer-${customers}@example.com` });
+        const shirt = await createProduct({ title: 'Shirt', price: 30 });
+        const engraved = await createProduct({
+            title: 'Engraved mug',
+            price: 10,
+            noWithdrawal: true
+        });
+        const order = await createOrder(user, [toOrderItem(shirt, 1), toOrderItem(engraved, 1)], {
+            status: OrderStatus.delivered
+        });
+        const orderId = String(order._id);
+        await setWithdrawUntil(orderId, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+        return { user, shirt, engraved, orderId };
+    };
+
+    it('leaves the excluded line out of a withdrawal that names no lines', async () => {
+        const { user, shirt, orderId } = await orderWithExcluded();
+
+        const outcome = await createReturn(
+            { orderId, reason: 'withdrawal' },
+            buyer(user),
+            testCallerContext
+        );
+
+        if (outcome.kind !== 'created') throw new Error('expected a return');
+        expect(outcome.created.lines.map(({ productId }) => String(productId))).toEqual([
+            String(shirt._id)
+        ]);
+    });
+
+    it('refuses a return that names an excluded line', async () => {
+        const { user, engraved, orderId } = await orderWithExcluded();
+
+        const outcome = await createReturn(
+            {
+                orderId,
+                reason: 'withdrawal',
+                lines: [{ productId: String(engraved._id), quantity: 1 }]
+            },
+            buyer(user),
+            testCallerContext
+        );
+
+        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(422);
+        expect(outcome.kind === 'refused' && outcome.reject.errors[0]).toMatchObject({
+            code: 'RETURN_LINES_INVALID'
+        });
+    });
+
+    it('keeps a whole-order withdrawal before dispatch from cancelling an order holding one', async () => {
+        customers += 1;
+        const user = await createUser({ email: `customer-${customers}@example.com` });
+        const engraved = await createProduct({ noWithdrawal: true });
+        const order = await createOrder(user, [toOrderItem(engraved, 1)], {
+            status: OrderStatus.paid
+        });
+
+        const outcome = await createReturn(
+            { orderId: String(order._id), reason: 'withdrawal' },
+            buyer(user),
+            testCallerContext
+        );
+
+        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(422);
+        expect((await readOrder(String(order._id)))?.status).toBe(OrderStatus.paid);
+    });
+});
+
 describe('a return on goods that have shipped', () => {
     it.each([OrderStatus.shipped, OrderStatus.delivered])(
         'writes a withdrawal on a %s order born approved, with every line, and announces it once',

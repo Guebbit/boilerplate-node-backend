@@ -28,14 +28,23 @@ export const createProduct = (
     >,
     response: Response
 ) => {
-    const { price, active, requiresShipping, onHand, weight, categories, tags, translations } =
-        readInput(request, {
-            surface: 'create',
-            booleans: ['active', 'requiresShipping'],
-            numbers: ['price', 'onHand', 'weight'],
-            stringArrays: ['categories', 'tags'],
-            jsonFields: ['translations']
-        });
+    const {
+        price,
+        active,
+        requiresShipping,
+        noWithdrawal,
+        onHand,
+        weight,
+        categories,
+        tags,
+        translations
+    } = readInput(request, {
+        surface: 'create',
+        booleans: ['active', 'requiresShipping', 'noWithdrawal'],
+        numbers: ['price', 'onHand', 'weight'],
+        stringArrays: ['categories', 'tags'],
+        jsonFields: ['translations']
+    });
 
     // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`) — `undefined` is what "no image" means to `zodProductCreateSchema`'s
     // `.optional()` field.
@@ -48,6 +57,7 @@ export const createProduct = (
                 price,
                 active,
                 requiresShipping,
+                noWithdrawal,
                 onHand,
                 weight,
                 categories,

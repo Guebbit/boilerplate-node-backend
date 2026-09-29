@@ -121,6 +121,41 @@ gains is a second record for units that already have one — money is capped sep
 payment (`amountRefunded`), so it cannot be returned twice.
 :::
 
+## Goods with no right of withdrawal
+
+Art. 16 of the Consumer Rights Directive takes the right away from some goods — personalised,
+sealed-hygiene or perishable ones. A product carries `noWithdrawal: true` (an admin sets it in the
+product form); the flag is **frozen onto each order line at checkout**, like every other line field,
+so changing the product later cannot rewrite what a customer was sold.
+
+- A withdrawal that names no lines leaves excluded lines out of what comes back.
+- A return that names an excluded line is refused (422, `RETURN_LINES_INVALID`).
+- A withdrawal **before dispatch** takes the whole order, so one excluded line keeps it out (422); the
+  ordinary cancel is the shop's own policy and is unaffected.
+- `OrderActions.withdraw` is `false` on an order made only of excluded goods.
+- Excluded units never come back, so they never keep the order from reading `returned` — and a
+  return that leaves them behind is never a "full" return, so delivery is not refunded with it.
+
+**Digital content** (Art. 16(m): the right is lost once delivery starts, with the consumer's express
+consent) is not modelled: there is no consent step at checkout. A shop selling digital content
+should treat the consent as its own terms-and-conditions text until one is built.
+
+## The statuses beside the order's own
+
+`orders` cannot import `payments` or `returns`, so it cannot derive the money or the return on read.
+Both are **stamped by their owner through `orders`' own service door** (`markPaymentStatus`,
+`markReturnStatus`), the way `delivery` reports a shipment. `fulfillmentStatus` needs nothing
+outside, so it derives from `status`.
+
+| Field               | Values                                                                   | Stamped by                                                    |
+| ------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `paymentStatus`     | `unpaid` · `paid` · `partially_refunded` · `refunded`                    | `payments` (the refund states); `paid`/`unpaid` from `paidAt` |
+| `fulfillmentStatus` | `unfulfilled` · `in_progress` · `shipped` · `fulfilled`                  | derived from `status`                                         |
+| `returnStatus`      | `none` · `requested` · `in_progress` · `partially_returned` · `returned` | `returns`, after every move (`services/projection.ts`)        |
+
+A stamp is a report of a fact already decided, so a failed one is logged and never undoes the move;
+the next move stamps again.
+
 ## What the customer gets back
 
 Receiving is where the two clocks meet, and they are kept apart on purpose:

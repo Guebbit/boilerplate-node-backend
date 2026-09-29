@@ -5,7 +5,7 @@ info:
 
 x-error-codes:
     RETURN_DEDUCTION_INVALID: { status: 422, description: 'The handling deduction is more than the refund is worth.' }
-    RETURN_LINES_INVALID: { status: 422, description: 'A line names a product that is not on the order, asks for more than is left of it, or nothing on the order is left to return.' }
+    RETURN_LINES_INVALID: { status: 422, description: 'A line names a product that is not on the order, asks for more than is left of it, is excluded from the right of withdrawal (Art. 16), or nothing on the order is left to return.' }
     RETURN_NOT_RECEIVABLE: { status: 409, description: 'The return is not an approved one awaiting its goods.' }
     RETURN_NOT_DECIDABLE: { status: 409, description: 'The return has already been decided.' }
     RETURN_ORDER_NOT_RETURNABLE: { status: 409, description: 'The order is not in a state a return can be opened on — cancelled, or (for a reason other than withdrawal) still in the shop''s hands.' }

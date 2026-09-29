@@ -17,7 +17,12 @@ import { t } from '@infrastructure/i18n';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { emitDomainEvent } from '@kernel/events';
-import { orderService, orderCurrency, isBeforeDispatch } from '@modules/orders';
+import {
+    orderService,
+    orderCurrency,
+    isBeforeDispatch,
+    isExcludedFromWithdrawal
+} from '@modules/orders';
 import { returnAddress } from '@modules/delivery';
 import type { OrderDocument } from '@modules/orders';
 import type { AuthContext, CallerContext, Order } from '@types';
@@ -80,12 +85,13 @@ const windowClosed = (): CreateReturnOutcome =>
  * @param reason - which check failed
  */
 const badLines = (
-    reason: 'nothing-returnable' | 'unknown-product' | 'too-many'
+    reason: 'nothing-returnable' | 'unknown-product' | 'too-many' | 'excluded'
 ): CreateReturnOutcome => {
     const message = {
         'nothing-returnable': t('returns.nothing-returnable'),
         'unknown-product': t('returns.line-unknown-product'),
-        'too-many': t('returns.line-too-many')
+        'too-many': t('returns.line-too-many'),
+        excluded: t('returns.line-excluded')
     }[reason];
     return refused(generateReject(422, [{ code: ERROR_CODES.RETURN_LINES_INVALID, message }]));
 };
@@ -246,22 +252,34 @@ export const createReturn = (
         if (order.withdrawUntil && now.getTime() > order.withdrawUntil.getTime())
             return windowClosed();
 
+        // Art. 16: goods the product marks as excluded cannot be withdrawn from. A cancel before
+        // dispatch takes the whole order, so one such line keeps the whole withdrawal out.
+        const excluded = new Set(
+            order.items.filter(isExcludedFromWithdrawal).map((item) => String(item.product._id))
+        );
         const beforeDispatch = isBeforeDispatch(order.status);
         if (input.reason === 'withdrawal' && beforeDispatch)
-            return withdrawBeforeDispatch(order, authContext, context);
+            return excluded.size > 0
+                ? badLines('excluded')
+                : withdrawBeforeDispatch(order, authContext, context);
 
         // Past this point goods are on their way or arrived: `shipped` or `delivered`. Anything
         // else (cancelled, or a non-withdrawal reason before dispatch) has nothing to send back.
         if (beforeDispatch || (order.status !== 'shipped' && order.status !== 'delivered'))
             return notReturnable();
 
+        if (input.lines?.some(({ productId }) => excluded.has(productId)))
+            return badLines('excluded');
+
         return alreadyReturned(input.orderId).then((earlier) => {
             const verdict = checkRequestedLines(
                 returnableQuantities(
-                    order.items.map((item) => ({
-                        productId: String(item.product._id),
-                        quantity: item.quantity
-                    })),
+                    order.items
+                        .filter((item) => !isExcludedFromWithdrawal(item))
+                        .map((item) => ({
+                            productId: String(item.product._id),
+                            quantity: item.quantity
+                        })),
                     earlier
                 ),
                 input.lines

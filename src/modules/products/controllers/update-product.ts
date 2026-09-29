@@ -28,7 +28,7 @@ export const { replace: replaceProduct, update: updateProduct } = createUpdateCo
     // so one JSON-shaped schema above validates both content types (`imageUpload` itself is
     // outside the schema — `readUploadedImage`, inside `writeWithUploadedImage`, reads it).
     input: {
-        booleans: ['active', 'requiresShipping'],
+        booleans: ['active', 'requiresShipping', 'noWithdrawal'],
         numbers: ['price', 'weight'],
         stringArrays: ['categories', 'tags'],
         jsonFields: ['translations']

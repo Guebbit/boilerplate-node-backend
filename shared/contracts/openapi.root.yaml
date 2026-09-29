@@ -968,6 +968,11 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                # Art. 16 CRD: personalised, sealed-hygiene or perishable goods carry no right of
+                # withdrawal. Frozen onto each order line; `returns` refuses those lines.
+                noWithdrawal:
+                    type: boolean
+                    default: false
                 # Grams. Absent counts as 0 for shipping-method filtering (`GET /delivery/methods`,
                 # checkout's weight-range refusal) — a product missing this is silently routed as
                 # weightless, not refused, so the admin form warns rather than requiring it outright.
@@ -1082,6 +1087,9 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                # Art. 16 CRD, frozen at order-creation time — `returns` refuses a line marked so.
+                noWithdrawal:
+                    type: boolean
                 sku:
                     $ref: '#/components/schemas/Sku'
                 # Grams, frozen at order-creation time — same convention as `Product.weight`,

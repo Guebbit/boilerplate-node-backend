@@ -6,6 +6,7 @@
         "window-closed": "Il periodo di recesso per questo ordine è terminato.",
         "line-unknown-product": "Una delle righe indica un prodotto che non è in questo ordine.",
         "line-too-many": "Una delle righe chiede di rendere più di quanto ne resta.",
+        "line-excluded": "Alcuni di questi beni sono esclusi dal diritto di recesso.",
         "nothing-returnable": "Nulla di questo ordine resta da rendere.",
         "not-decidable": "Questo reso è già stato deciso.",
         "not-receivable": "Questo reso non sta aspettando la merce.",

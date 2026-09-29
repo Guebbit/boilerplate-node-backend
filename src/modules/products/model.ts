@@ -309,6 +309,14 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             default: true
         },
         /*
+         * Art. 16 of the Consumer Rights Directive: personalised, sealed-hygiene or perishable
+         * goods carry no right of withdrawal. Frozen onto each order line; `returns` reads it.
+         */
+        noWithdrawal: {
+            type: Boolean,
+            default: false
+        },
+        /*
          * Grams, optional. Absent counts as 0 wherever a basket's weight is summed
          * (`delivery`'s shipping-method filter, `cart`'s checkout refusal) — not a concern of
          * this module's own, which is why there is no default here the way `onHand` has one.

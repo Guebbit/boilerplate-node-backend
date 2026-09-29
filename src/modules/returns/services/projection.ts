@@ -8,7 +8,7 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import { orderService } from '@modules/orders';
+import { orderService, isExcludedFromWithdrawal } from '@modules/orders';
 import { returnRepository } from '../repository';
 import { projectReturnStatus } from '../domain';
 
@@ -23,7 +23,8 @@ export const syncReturnStatus = (orderId: string): Promise<void> =>
             if (!order) return undefined;
 
             const ordered = new Map<string, number>();
-            for (const item of order.items) {
+            // Excluded goods never come back, so they must not keep the order from reading `returned`.
+            for (const item of order.items.filter((line) => !isExcludedFromWithdrawal(line))) {
                 const productId = String(item.product._id);
                 ordered.set(productId, (ordered.get(productId) ?? 0) + item.quantity);
             }

@@ -44,9 +44,24 @@ export const isBeforeDispatch = (status: OrderStatus): boolean =>
 export const withdrawUntilFrom = (start: Date, days: number): Date =>
     new Date(start.getTime() + days * DAY_MS);
 
+/** The one fact about a line that decides whether the right of withdrawal reaches it. */
+export interface WithdrawableLine {
+    product?: { noWithdrawal?: boolean | null } | null;
+}
+
+/**
+ * Whether a line is one of the goods Art. 16 takes the right of withdrawal away from (personalised,
+ * sealed hygiene, perishable...) — decided by the product, frozen on the line at checkout.
+ * @param line - an order line
+ */
+export const isExcludedFromWithdrawal = (line: WithdrawableLine): boolean =>
+    line.product?.noWithdrawal === true;
+
 /** What {@link canWithdraw} needs to know about an order. */
 export interface WithdrawalCandidate {
     status: OrderStatus;
+    /** The lines; when given, an order made only of excluded goods offers no withdrawal. */
+    items?: readonly WithdrawableLine[];
     /** Frozen when the clock started; absent while it has not. */
     withdrawUntil?: Date;
 }
@@ -59,4 +74,5 @@ export interface WithdrawalCandidate {
  */
 export const canWithdraw = (order: WithdrawalCandidate, now: Date): boolean =>
     WITHDRAWABLE_STATUSES.has(order.status) &&
+    (order.items === undefined || order.items.some((line) => !isExcludedFromWithdrawal(line))) &&
     (order.withdrawUntil === undefined || now.getTime() <= order.withdrawUntil.getTime());

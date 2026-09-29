@@ -534,6 +534,11 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
+                noWithdrawal:
+                    type: boolean
+                    default: false
                 weight:
                     type: integer
                     minimum: 0
@@ -733,6 +738,11 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
+                noWithdrawal:
+                    type: boolean
+                    default: false
                 weight:
                     type: integer
                     minimum: 0
@@ -795,6 +805,11 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
+                noWithdrawal:
+                    type: boolean
+                    default: false
                 weight:
                     type: integer
                     minimum: 0
@@ -855,6 +870,10 @@ components:
                     type: boolean
                 requiresShipping:
                     type: boolean
+                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
+                noWithdrawal:
+                    type: boolean
                 weight:
                     type: integer
                     minimum: 0
@@ -902,6 +921,10 @@ components:
                 active:
                     type: boolean
                 requiresShipping:
+                    type: boolean
+                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
+                noWithdrawal:
                     type: boolean
                 weight:
                     type: integer
@@ -959,6 +982,10 @@ components:
                     type: boolean
                 requiresShipping:
                     type: boolean
+                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
+                noWithdrawal:
+                    type: boolean
                 # `null` clears a recorded weight back to unset (read as 0 for shipping-method
                 # filtering, same as an absent one) — omitted leaves the stored value alone.
                 weight:
@@ -1011,6 +1038,10 @@ components:
                 active:
                     type: boolean
                 requiresShipping:
+                    type: boolean
+                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
+                noWithdrawal:
                     type: boolean
                 weight:
                     type: integer

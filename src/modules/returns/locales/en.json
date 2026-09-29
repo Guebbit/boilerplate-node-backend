@@ -6,6 +6,7 @@
         "window-closed": "The withdrawal period for this order has ended.",
         "line-unknown-product": "One of the lines names a product that is not on this order.",
         "line-too-many": "One of the lines asks to return more than is left of it.",
+        "line-excluded": "Some of these goods are excluded from the right of withdrawal.",
         "nothing-returnable": "Nothing on this order is left to return.",
         "not-decidable": "This return has already been decided.",
         "not-receivable": "This return is not awaiting its goods.",

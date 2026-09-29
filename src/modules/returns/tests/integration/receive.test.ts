@@ -9,7 +9,12 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
-import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
+import {
+    createOrder,
+    forceOrderStatus,
+    readOrder,
+    toOrderItem
+} from '@modules/orders/tests/factories';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
@@ -105,6 +110,40 @@ const paymentOf = async (orderId: string) => {
     if (!result.success) throw new Error('no payment');
     return result.data;
 };
+
+describe('the statuses the order shows beside its own', () => {
+    /** The order as the wire serves it — the projections resolved. */
+    const wireOrder = async (orderId: string) => (await readOrder(orderId))?.toJSON();
+
+    it('follows the return from requested through approved to returned', async () => {
+        const fixture = await paidAndDelivered();
+        expect((await wireOrder(fixture.orderId))?.returnStatus).toBe('none');
+        expect((await wireOrder(fixture.orderId))?.paymentStatus).toBe('paid');
+        expect((await wireOrder(fixture.orderId))?.fulfillmentStatus).toBe('fulfilled');
+
+        const id = await approvedReturn(fixture, 'defective');
+        expect((await wireOrder(fixture.orderId))?.returnStatus).toBe('in_progress');
+
+        await receiveReturn(id, {}, testCallerContext);
+        const after = await wireOrder(fixture.orderId);
+        expect(after?.returnStatus).toBe('returned');
+        expect(after?.paymentStatus).toBe('refunded');
+    });
+
+    it('reads partially returned and partially refunded after taking back one line', async () => {
+        const fixture = await paidAndDelivered();
+        const id = await approvedReturn(fixture, 'withdrawal', [
+            { productId: String(fixture.mug._id), quantity: 1 }
+        ]);
+
+        await receiveReturn(id, {}, testCallerContext);
+
+        await waitFor(
+            async () => (await wireOrder(fixture.orderId))?.paymentStatus === 'partially_refunded'
+        );
+        expect((await wireOrder(fixture.orderId))?.returnStatus).toBe('partially_returned');
+    });
+});
 
 describe('receiving a return', () => {
     it('puts the goods back on sale, refunds them, and closes the return', async () => {
