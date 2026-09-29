@@ -114,6 +114,26 @@ describe('POST /payments/intent', () => {
         expect(response.body.data.status).toBe('requires_confirmation');
     });
 
+    // WM-D8: a 201 says a payment was created (RFC 9110 §15.3.2). Asking again refreshes the one
+    // row an order can have, so it answers 200 — the same payment, no second Location.
+    it('answers 200 for the same intent when asked again, and 201 with a Location only the first time', async () => {
+        const { bearer, order } = await authenticateWithOrder();
+        const ask = () =>
+            api()
+                .post('/payments/intent')
+                .set('Authorization', bearer)
+                .send({ orderId: String(order._id) });
+
+        const first = await ask();
+        const again = await ask();
+
+        expect(first.status).toBe(201);
+        expect(first.headers.location).toBe(`/payments/${String(first.body.data.id)}`);
+        expect(again.status).toBe(200);
+        expect(again.headers.location).toBeUndefined();
+        expect(again.body.data.id).toBe(first.body.data.id);
+    });
+
     it('never publishes the provider reference, and returns the client secret only here', async () => {
         // Two opposite rules on one response. `providerRef` operates on real money at the provider
         // and no client has an operation that needs it. `clientSecret` authorises COMPLETING this
@@ -493,9 +513,30 @@ describe('POST /payments/order/{orderId}/offline', () => {
             .send({ method: 'cash', reference: 'till-1' });
 
         expect(response.status).toBe(201);
+        expect(response.headers.location).toBe(`/payments/${String(response.body.data.id)}`);
         expect(response.body.data.status).toBe('succeeded');
         expect(response.body.data.provider).toBe('manual');
         expect(response.body.data.method).toBe('cash');
+    });
+
+    // The row of a card intent nobody paid is converted, not inserted, so nothing was created.
+    it('answers 200 when it converts the row of an unpaid card intent', async () => {
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        const { bearer, order } = await authenticateWithOrder();
+        await api()
+            .post('/payments/intent')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/offline`)
+            .set('Authorization', adminBearer)
+            .send({ method: 'cash', reference: 'till-2' });
+
+        expect(response.status).toBe(200);
+        expect(response.headers.location).toBeUndefined();
+        expect(response.body.data.status).toBe('succeeded');
+        expect(response.body.data.provider).toBe('manual');
     });
 
     it('refuses the order`s own owner — recording by hand is admin-only', async () => {

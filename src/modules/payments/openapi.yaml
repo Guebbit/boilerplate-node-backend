@@ -32,7 +32,7 @@ paths:
         post:
             tags: [Payments]
             summary: Create a payment intent
-            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact); an order whose money already moved answers 409. The intent is the thing the card dialog confirms.
+            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact) and answers 200 — 201 says a payment was created, and a refresh created nothing (RFC 9110 §15.3.2). An order whose money already moved answers 409. The intent is the thing the card dialog confirms.
             operationId: createPaymentIntent
             security:
                 - bearerAuth: []
@@ -49,6 +49,17 @@ paths:
                     description: The payment intent, ready to confirm
                     headers:
                         Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                    links:
+                        ConfirmPayment:
+                            operationId: confirmPayment
+                            parameters:
+                                id: '$response.body#/data/id'
+                '200':
+                    description: The order already had an intent; it was refreshed and is ready to confirm
                     content:
                         application/json:
                             schema:
@@ -193,6 +204,8 @@ paths:
                 does: the order moves `pending → paid`, stock commits, and `ORDER_STATUS_CHANGED`
                 and `PAYMENT_SUCCEEDED` fire as usual. The amount is always the order's own total —
                 there is no partial or over-payment here, those are handled by hand, off-system.
+                Answers 201 when the payment row is new, and 200 when it converted the row of a
+                card intent nobody paid.
                 Requires a session that has re-proved itself within the last few minutes — a
                 valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
                 caller re-authenticates and retries the same request.
@@ -218,6 +231,12 @@ paths:
                     description: The payment, `succeeded`, with the order now `paid`
                     headers:
                         Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '200':
+                    description: The payment, `succeeded` — it converted the row of an unpaid card intent — with the order now `paid`
                     content:
                         application/json:
                             schema:
