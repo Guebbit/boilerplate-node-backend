@@ -27,7 +27,7 @@ setupTestDb();
 const versionOf = (userId: string): Promise<number | undefined> =>
     cartRepository.findByUserId(userId).then((cart) => cart?.__v);
 
-describe('cart version increments on every write (B4)', () => {
+describe('cart version increments on every write that changes it (B4)', () => {
     it('starts already bumped on the write that creates the cart', async () => {
         const user = await createUser();
         const product = await createProduct();
@@ -60,6 +60,22 @@ describe('cart version increments on every write (B4)', () => {
         await cartItemSetById(user.id, String(product._id), 3);
 
         await expect(versionOf(user.id)).resolves.toBe((before ?? 0) + 1);
+    });
+
+    /*
+     * The one write that must NOT bump: setting a line to the quantity it already holds. A PUT
+     * repeated mid-checkout would otherwise fail that checkout with CART_CHANGED over nothing.
+     */
+    it('does not bump when a line is set to the quantity it already holds', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 2);
+        const before = await versionOf(user.id);
+
+        const result = await cartItemSetById(user.id, String(product._id), 2);
+
+        expect(result.success).toBe(true);
+        await expect(versionOf(user.id)).resolves.toBe(before);
     });
 
     it('bumps when an existing line is incremented', async () => {

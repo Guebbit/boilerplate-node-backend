@@ -50,6 +50,22 @@ const pushNewLine = (
         .exec();
 
 /**
+ * The `'set'` miss: the line already holds exactly `quantity` (a no-op — the cart comes back
+ * untouched, version included), or there is no such line yet (pushed). A line changed by a
+ * concurrent write between the two reads makes `pushNewLine`'s upsert hit the unique `userId`
+ * index, which `upsertLine`'s own duplicate-key retry already converges.
+ */
+const unchangedOrPushed = (
+    owner: QueryFilter<CartDocument>,
+    line: Types.ObjectId,
+    quantity: number
+): Promise<CartDocument> =>
+    cartModel
+        .findOne({ ...owner, items: { $elemMatch: { productId: line, quantity } } })
+        .exec()
+        .then((unchanged) => unchanged ?? pushNewLine(owner, line, quantity));
+
+/**
  * Set or increment one cart line, creating the cart if the user has none.
  *
  * CONCURRENCY. Each write's condition lives IN THE FILTER, not a preceding read, so mongod
@@ -83,9 +99,12 @@ const upsertLine = (
     // whichever the FIRST one found. Silent on a passing case (any two-line cart still updates
     // SOME line), so it only ever showed up as `q` landing on the wrong product.
     // https://www.mongodb.com/docs/manual/reference/operator/update/positional/#--em-multiple--em--array-conditions
+    // `'set'` matches only a line whose quantity DIFFERS: an identical PUT must not bump `__v`,
+    // or repeating it mid-checkout fails that checkout with CART_CHANGED (RFC 9110 §9.2.2 —
+    // the same PUT twice leaves the same state).
     const matchExistingLine: QueryFilter<CartDocument> =
         mode === 'set'
-            ? { ...owner, 'items.productId': line }
+            ? { ...owner, items: { $elemMatch: { productId: line, quantity: { $ne: quantity } } } }
             : {
                   ...owner,
                   items: {
@@ -110,7 +129,7 @@ const upsertLine = (
             // branch below.
             .then<CartDocument | typeof QUANTITY_LIMIT>((cart) => {
                 if (cart) return cart;
-                if (mode === 'set') return pushNewLine(owner, line, quantity);
+                if (mode === 'set') return unchangedOrPushed(owner, line, quantity);
 
                 return cartModel
                     .findOne({ ...owner, 'items.productId': line })
