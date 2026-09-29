@@ -334,9 +334,12 @@ const moveAndStampDelivered = (
     forced: boolean | undefined,
     reason: string | undefined
 ): Promise<ResponseSuccess<Shipment> | ResponseReject> => {
+    // One instant for both records: `orders` freezes the withdrawal deadline from it, `delivery`
+    // stamps it on the parcel, and the two must never disagree about when the goods arrived.
+    const deliveredAt = new Date();
     const moveOrder = forced
         ? orderService.forceMove(orderId, OrderStatus.delivered, reason!, context)
-        : orderService.markDelivered(orderId);
+        : orderService.markDelivered(orderId, deliveredAt);
 
     return moveOrder.then((moved) => {
         // Checked FIRST: a refusal object is truthy, so `!moved` alone would treat it as a move.
@@ -344,7 +347,7 @@ const moveAndStampDelivered = (
         if (!moved) return notShipped();
 
         return shipmentRepository
-            .updateStatusIfIn(orderId, ['shipped'], 'delivered', { deliveredAt: new Date() })
+            .updateStatusIfIn(orderId, ['shipped'], 'delivered', { deliveredAt })
             .then((updated) => {
                 if (!updated) return notShipped();
 

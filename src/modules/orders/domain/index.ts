@@ -48,3 +48,7 @@ export type { OrderTaxBreakdown, LineTaxBreakdown, TaxableLineItem, TaxRateSumma
 
 /** The RF creditor reference `placeOrder` mints for a `bank_transfer` order, and its admin-side parse. */
 export { buildReference, parseReference } from './transfer-reference';
+
+/** The right of withdrawal: when the window closes, and whether the button shows. */
+export { canWithdraw, isBeforeDispatch, withdrawUntilFrom } from './withdrawal';
+export type { WithdrawalCandidate } from './withdrawal';

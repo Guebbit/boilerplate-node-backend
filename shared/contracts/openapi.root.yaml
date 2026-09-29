@@ -1197,7 +1197,7 @@ components:
         OrderActions:
             type: object
             additionalProperties: false
-            required: [transitions, cancel, pay, start, ship, deliver, fulfill, override, invoice]
+            required: [transitions, cancel, pay, start, ship, deliver, fulfill, override, invoice, withdraw]
             description: >-
                 What the requesting caller may do to this order, decided by the server. A client
                 renders its controls from this rather than re-implementing the lifecycle: the rules
@@ -1258,6 +1258,23 @@ components:
                         destination for this caller right now — empty for anyone without
                         `orders.any.override`, or once the order has left every overridable status.
                     example: [processing, shipped, delivered]
+                withdraw:
+                    type: boolean
+                    description: >-
+                        Whether the "withdraw from contract here" button is offered — EU Consumer
+                        Rights Directive Art. 11a. `true` for the order's own buyer while the order
+                        is withdrawable (paid or awaiting payment, in the shop's hands or on its way,
+                        or delivered) and the withdrawal window has not closed. Always `false` for
+                        anyone else, an operator included: the right is the consumer's. The client
+                        never counts the days — the server says when. Made with
+                        `POST /returns` and `reason: withdrawal`.
+                withdrawUntil:
+                    type: string
+                    format: date-time
+                    description: >-
+                        The last instant a withdrawal is valid, frozen when the period started —
+                        delivery for goods, payment for digital content. Absent before that: the
+                        right already exists, the window has no end yet.
                 invoice:
                     type: boolean
                     description: >-

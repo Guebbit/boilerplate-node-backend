@@ -13,6 +13,8 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
 import { ORDER_CANCELLED } from '../../events';
 import { orderRepository } from '../../repository';
+import { orderModel } from '../../model';
+import { OrderStatus } from '@types';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { userService } from '@modules/users';
@@ -422,6 +424,62 @@ describe('cancelById — the payment-window-expired email', () => {
     });
 });
 
+describe('withActions — withdraw', () => {
+    it('is offered to the buyer, but not to an operator reading the same order', async () => {
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        const asBuyer = await orderService.withActions(order, asUser(user));
+        const asStaff = await orderService.withActions(order, asAdmin());
+
+        expect(asBuyer.actions?.withdraw).toBe(true);
+        expect(asStaff.actions?.withdraw).toBe(false);
+    });
+
+    it('carries the deadline once the clock has started, and stops being offered after it', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const open = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.delivered
+        });
+        await orderModel.updateOne(
+            { _id: open._id },
+            { withdrawUntil: new Date(Date.now() + 60_000) }
+        );
+        const closed = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.delivered
+        });
+        await orderModel.updateOne(
+            { _id: closed._id },
+            { withdrawUntil: new Date(Date.now() - 60_000) }
+        );
+
+        const openBody = await orderService.withActions(
+            (await orderRepository.findById(String(open._id)))!,
+            asUser(user)
+        );
+        const closedBody = await orderService.withActions(
+            (await orderRepository.findById(String(closed._id)))!,
+            asUser(user)
+        );
+
+        expect(openBody.actions?.withdraw).toBe(true);
+        expect(openBody.actions?.withdrawUntil).toEqual(expect.any(String));
+        expect(closedBody.actions?.withdraw).toBe(false);
+    });
+
+    it('is never offered on a cancelled order', async () => {
+        const user = await createUser();
+        const order = await seedOrder(user);
+        await orderService.cancelById(String(order._id), asUser(user));
+        const cancelled = await orderRepository.findById(String(order._id));
+
+        const body = await orderService.withActions(cancelled!, asUser(user));
+
+        expect(body.actions?.withdraw).toBe(false);
+    });
+});
+
 describe('withActions', () => {
     it('offers a customer the cancel their status allows', async () => {
         const user = await createUser();
@@ -438,7 +496,8 @@ describe('withActions', () => {
             deliver: false,
             fulfill: false,
             override: [],
-            invoice: false
+            invoice: false,
+            withdraw: true
         });
     });
 
@@ -459,7 +518,8 @@ describe('withActions', () => {
             deliver: false,
             fulfill: false,
             override: [],
-            invoice: false
+            invoice: false,
+            withdraw: false
         });
     });
 

@@ -166,6 +166,13 @@ export interface OrderDocument
      */
     paidAt?: Date;
     /**
+     * The last instant a withdrawal is valid, frozen when its clock starts: delivery for goods,
+     * `paidAt` for digital content (Art. 9(2)). Absent until then — the right already exists, the
+     * window has no end yet — and never recomputed, so a config change cannot move a promise
+     * already made. Internal: clients read it as `actions.withdrawUntil`.
+     */
+    withdrawUntil?: Date;
+    /**
      * What the cancel decided but has not yet seen through. Written in the same conditional write
      * that moves the status, so the intent and the decision cannot come apart; emptied once the
      * listener has actually returned. Non-empty means `retryPendingEffects` still owes this order
@@ -376,6 +383,10 @@ export const orderSchema = new Schema<OrderDocument>(
          * interface field's own comment for what reads it.
          */
         paidAt: {
+            type: Date
+        },
+        // Frozen once, when the withdrawal clock starts — see the interface field's own comment.
+        withdrawUntil: {
             type: Date
         },
         /*
@@ -598,7 +609,7 @@ export const applyOrderTransform = applySerialization(orderSchema, {
     // bookkeeping too — see the schema field's own comment. `transferReference` is NOT
     // listed here: `omit` runs before `after` below, and `applyTransferInstructions` still needs
     // to read it — it strips the raw field itself, once it no longer does.
-    omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides', 'paidAt'],
+    omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides', 'paidAt', 'withdrawUntil'],
     after: (serialized) => {
         applyOrderItems(serialized);
         // Resolved once, not read twice: an order predating `currency` falls back to the shop's
