@@ -24,6 +24,7 @@
  */
 
 import { connect, disconnect } from '@tests/database';
+import { emptyFileSandbox } from '@tests/file-sandbox';
 import { createApp } from '../../../src/app';
 import { buildScenario } from '@scenarios/index';
 import { assertScenarioGuarantees } from '@scenarios/check';
@@ -54,7 +55,8 @@ import {
  * of an hour and prove nothing a single build does not.
  */
 beforeAll(connect);
-afterAll(disconnect);
+// The build uploads a replacement product picture through the real route — the file is this test's to remove.
+afterAll(() => disconnect().then(emptyFileSandbox));
 
 /**
  * How long one build may take.
