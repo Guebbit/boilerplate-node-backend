@@ -90,6 +90,8 @@ paths:
             responses:
                 '201':
                     description: Created product
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
                         application/json:
                             schema:

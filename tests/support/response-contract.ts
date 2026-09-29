@@ -16,7 +16,7 @@
  */
 import * as zod from 'zod';
 import * as responseSchemas from '@api/schemas.zod';
-import { listOperations, type HttpMethod } from './spec-walk';
+import { listOperations, requiredResponseHeaders, type HttpMethod } from './spec-walk';
 import type { Response } from 'supertest';
 
 /** One documented operation, reduced to what a captured response is matched against. */
@@ -40,6 +40,9 @@ const DECLARED_ROUTES: DeclaredRoute[] = listOperations()
         operationId: operation.operationId,
         paramCount: operation.pathParameters.length
     }));
+
+/** Headers the spec marks `required`, per operation and status — built once, like the routes. */
+const REQUIRED_HEADERS = requiredResponseHeaders();
 
 /**
  * Every named export of the generated schema module, indexed by name.
@@ -104,6 +107,14 @@ export const assertResponseMatchesContract = (response: Response): void => {
     if (!schema)
         throw new Error(
             `${method.toUpperCase()} ${pathname} answered ${String(response.status)}, which ${operationId} does not document`
+        );
+
+    const missingHeader = (REQUIRED_HEADERS[operationId]?.[String(response.status)] ?? []).find(
+        (name) => !(name in response.headers)
+    );
+    if (missingHeader)
+        throw new Error(
+            `${method.toUpperCase()} ${pathname} (${String(response.status)}) is missing the \`${missingHeader}\` header ${operationId} documents as required`
         );
 
     // supertest/superagent only fill `.body` for a JSON (or urlencoded) response; a `text/plain`

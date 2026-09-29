@@ -103,7 +103,7 @@ const callerKeyOf = (request: Request): string =>
 /** Everything the outcomes below need out of a stored record. */
 type StoredRecord = Pick<
     IdempotencyRecordDocument,
-    'state' | 'fingerprint' | 'status' | 'body' | 'updatedAt'
+    'state' | 'fingerprint' | 'status' | 'body' | 'location' | 'updatedAt'
 >;
 
 /**
@@ -178,7 +178,15 @@ const armOutcomeCapture = (response: Response, key: string, caller: string): voi
         void idempotencyRecordModel
             .updateOne(
                 { key, caller },
-                { $set: { state: 'done', status: response.statusCode, body } }
+                {
+                    $set: {
+                        state: 'done',
+                        status: response.statusCode,
+                        body,
+                        // Set by `createdResponse` before it calls `json`; absent on every non-201.
+                        location: response.getHeader('location')?.toString()
+                    }
+                }
             )
             .exec()
             .catch((error: unknown) => {
@@ -229,6 +237,7 @@ const respondToCollision = (
 
     // Same key, same request: replay verbatim instead of running the handler a second time.
     response.set('Idempotent-Replay', 'true');
+    if (existing.location) response.location(existing.location);
     return response.status(existing.status ?? 200).json(existing.body);
 };
 

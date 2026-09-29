@@ -501,7 +501,9 @@ export const writeCreate = async (
 
     // Guaranteed present and non-null by the schema's own refinement — a plan cannot validate
     // without it.
-    const fallbackEntry = parsed.data.translations[getFallbackLocale()] as ProductTranslationFieldsWrite;
+    const fallbackEntry = parsed.data.translations[
+        getFallbackLocale()
+    ] as ProductTranslationFieldsWrite;
     const { translations: _translations, ...productFields } = parsed.data;
 
     const product = await create(

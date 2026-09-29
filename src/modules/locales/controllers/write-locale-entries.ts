@@ -23,7 +23,7 @@ import type {
     ReplaceLocaleEntriesRequest,
     UpdateLocaleEntryRequest
 } from '@types';
-import { successResponse } from '@infrastructure/http/response';
+import { successResponse, createdResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { presentLocaleEntry } from '../presenters';
@@ -45,7 +45,12 @@ export const createLocaleEntry = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            return successResponse<LocaleEntry>(response, presentLocaleEntry(result.data), 201);
+            const entry = presentLocaleEntry(result.data);
+            return createdResponse<LocaleEntry>(
+                response,
+                entry,
+                `/locales/${request.params.locale}/entries/${entry.id}`
+            );
         })
         .catch(catchAs(response, 'createLocaleEntry'));
 };

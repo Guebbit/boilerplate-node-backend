@@ -102,6 +102,24 @@ export const successResponse = <T>(response: Response, data: T, status = 200, me
     >;
 
 /**
+ * A create's answer: 201, the envelope, and `Location` naming the new resource.
+ *
+ * RFC 9110 §9.3.3: a POST that creates SHOULD send `Location`, and §15.3.2 reads a 201 without one
+ * as "the resource is the target URI", which for `POST /products` would name the collection.
+ *
+ * @param response - Express response
+ * @param data - payload, the created resource
+ * @param location - the new resource's path on this API, e.g. `/products/abc`
+ * @param message - optional envelope message
+ */
+export const createdResponse = <T>(response: Response, data: T, location: string, message = '') => {
+    // Express: sets the `Location` header, URL-encoding it; it never follows it.
+    // https://expressjs.com/en/api.html#res.location
+    response.location(location);
+    return successResponse(response, data, 201, message);
+};
+
+/**
  * Every status the envelope names, with the code and the message it answers with.
  *
  * One list, so adding 402 or 423 cannot reach the message and miss the code. An absent `code` is

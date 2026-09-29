@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { CheckoutBody } from '@api/schemas.zod';
 import { cartService } from '../services';
-import { successResponse } from '@infrastructure/http/response';
+import { createdResponse } from '@infrastructure/http/response';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { cartCheckoutTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -38,10 +38,10 @@ export const postCheckout = (request: Request, response: Response) => {
             // resolves each line's live `current` picture, which a bare `.toJSON()` here would
             // leave off the response entirely.
             return orderService.withActions(result.data, request.authContext).then((order) => {
-                successResponse<CheckoutResponse>(
+                createdResponse<CheckoutResponse>(
                     response,
                     { order, message: t('orders.creation-success') },
-                    201
+                    `/orders/${order.id}`
                 );
             });
         })

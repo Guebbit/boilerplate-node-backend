@@ -324,6 +324,18 @@ components:
                 $ref: '#/components/schemas/Id'
             description: Product identifier
 
+    # Response headers a module's operations reuse.
+    headers:
+        Location:
+            required: true
+            description: >-
+                Where the created resource lives, as a path on this API (RFC 9110 §9.3.3). A create
+                that answers 201 always sends it, so a client follows the link instead of composing
+                one. Some created things have no `GET` of their own (a feedback ticket, a payment, an
+                API key) — the link is still their address for `PUT`, `PATCH` and `DELETE`.
+            schema:
+                type: string
+
     responses:
         Success:
             description: Success

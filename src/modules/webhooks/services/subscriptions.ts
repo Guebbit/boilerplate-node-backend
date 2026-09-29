@@ -26,10 +26,7 @@ import type { WebhookSubscriptionDocument } from '../model';
 import { webhookSubscriptionRepository } from '../repository';
 import { mintRingSecret, removeRingSecret } from '../secrets';
 import { getWebhookDemoAllowedHost, getWebhookSubscriptionCap } from '../config';
-import {
-    resolveSafeOutboundTarget,
-    SsrfRefusedError
-} from '@infrastructure/adapters/ssrf-guard';
+import { resolveSafeOutboundTarget, SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';
 import { ERROR_CODES } from '@api/error-codes';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { webhooksAuditActions } from '../audit';

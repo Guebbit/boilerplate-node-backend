@@ -8,9 +8,10 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { MISSING_ID } from '@tests/ids';
 import { createProduct } from '@modules/products/tests/factories';
+import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
 
 setupTestDb();
 
@@ -121,5 +122,73 @@ describe('stock writes replay under an Idempotency-Key (WM-D9)', () => {
         expect(second.headers['idempotent-replay']).toBe('true');
         expect(second.body).toEqual(first.body);
         expect(first.body.data.onHand).toBe(10 + expectedDelta);
+    });
+});
+
+/** One contact request under a fixed key, as a client retrying would send it. */
+const sendKeyedContact = () =>
+    api()
+        .post('/feedback/contact')
+        .set('Idempotency-Key', 'located-replay-1')
+        .send({ email: 'ada@example.com', subject: 'Replay', message: 'Once only, please.' });
+
+describe('a 201 names the new resource in Location (WM-D1)', () => {
+    it('sends /users/{id} for an admin-created user', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api().post('/users').set('Authorization', bearer).send({
+            email: 'located@example.com',
+            username: 'located',
+            password: PLAIN_PASSWORD
+        });
+
+        expect(response.status).toBe(201);
+        expect(response.headers.location).toBe(`/users/${String(response.body.data.id)}`);
+    });
+
+    it('sends /feedback/{id} for a contact request', async () => {
+        const response = await api().post('/feedback/contact').send({
+            email: 'ada@example.com',
+            subject: 'Located',
+            message: 'Where did this land?'
+        });
+
+        expect(response.status).toBe(201);
+        expect(response.headers.location).toBe(`/feedback/${String(response.body.data.id)}`);
+    });
+
+    it('replays the Location with the body when a create is retried under its Idempotency-Key', async () => {
+        const first = await sendKeyedContact();
+        const second = await sendKeyedContact();
+
+        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.headers.location).toBe(first.headers.location);
+    });
+
+    it('sends /webhooks/subscriptions/{id} for a subscription', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+
+        const response = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send({ url: 'https://example.test/inbox', eventTypes: ['order.paid'] });
+
+        expect(response.status).toBe(201);
+        expect(response.headers.location).toBe(
+            `/webhooks/subscriptions/${String(response.body.data.id)}`
+        );
+    });
+
+    it('sends /account for a signup, real or refused alike', async () => {
+        const response = await api().post('/account/signup').send({
+            email: 'joiner@example.com',
+            username: 'joiner',
+            password: PLAIN_PASSWORD,
+            passwordConfirm: PLAIN_PASSWORD,
+            termsAccepted: true
+        });
+
+        expect(response.status).toBe(201);
+        expect(response.headers.location).toBe('/account');
     });
 });

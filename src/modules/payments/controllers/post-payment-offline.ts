@@ -8,7 +8,7 @@
 
 import type { Request, Response } from 'express';
 import type { Payment } from '@types';
-import { successResponse } from '@infrastructure/http/response';
+import { createdResponse } from '@infrastructure/http/response';
 import { RecordOfflinePaymentBody } from '@api/schemas.zod';
 import { paymentService } from '../services';
 import { presentPayment } from '../presenter';
@@ -24,7 +24,8 @@ export const postPaymentOffline = (request: Request<{ orderId?: string }>, respo
         .recordOfflinePayment(String(request.params.orderId), body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<Payment>(response, presentPayment(result.data), 201, result.message);
+            const payment = presentPayment(result.data);
+            createdResponse<Payment>(response, payment, `/payments/${payment.id}`, result.message);
         })
         .catch(catchAs(response, 'postPaymentOffline'));
 };

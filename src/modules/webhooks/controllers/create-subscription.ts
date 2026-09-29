@@ -6,7 +6,7 @@
 import type { Request, Response } from 'express';
 import { CreateWebhookSubscriptionBody } from '@api/schemas.zod';
 import type { CreateWebhookSubscriptionRequest, WebhookSubscriptionCreated } from '@types';
-import { successResponse } from '@infrastructure/http/response';
+import { createdResponse } from '@infrastructure/http/response';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { webhooksService } from '../services';
@@ -30,13 +30,11 @@ export const createWebhookSubscription = (
         .createSubscription(body, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            return successResponse<WebhookSubscriptionCreated>(
+            const subscription = presentWebhookSubscription(result.data.subscription);
+            return createdResponse<WebhookSubscriptionCreated>(
                 response,
-                {
-                    ...presentWebhookSubscription(result.data.subscription),
-                    secret: result.data.secret
-                },
-                201
+                { ...subscription, secret: result.data.secret },
+                `/webhooks/subscriptions/${subscription.id}`
             );
         })
         .catch(catchAs(response, 'createWebhookSubscription'));
