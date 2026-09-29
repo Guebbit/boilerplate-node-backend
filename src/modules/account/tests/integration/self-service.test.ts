@@ -206,6 +206,21 @@ describe('updateProfile', () => {
         expect(stored?.pendingEmail).toBe('after@example.com');
     });
 
+    it('restating the PENDING address is a no-op — the link already mailed stays valid', async () => {
+        const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
+        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        const emailChangeToken = () =>
+            readTokens(user.id).then(
+                (tokens) => tokens.find((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)?.token
+            );
+        const mailed = await emailChangeToken();
+
+        await updateProfile(user.id, { email: 'AFTER@example.com' }, testCallerContext);
+
+        expect(mailed).toBeDefined();
+        expect(await emailChangeToken()).toBe(mailed);
+    });
+
     it('answers the request-time collision check with 409 when the address belongs to someone else', async () => {
         await createUser({ email: 'taken@example.com', username: 'first' });
         const user = await createUser({ email: 'second@example.com', username: 'second' });

@@ -308,6 +308,8 @@ interface EmailChangeOutcome {
  * - CURRENT address: a no-op. A `PUT` (`email` required), or a save that merely didn't change it,
  *                    must not silently cancel a pending change the caller never asked to cancel —
  *                    see {@link cancelPendingEmailChange} for that explicit action.
+ * - PENDING address: a no-op too. A retried or double-submitted save would otherwise mail both
+ *                    addresses again and replace the link already delivered.
  * - Any OTHER address: checked against every account's `email` AND `pendingEmail` first — the
  *                    REQUEST-TIME half of the collision rule. `users_pending_email` and
  *                    `users_email` (both unique) are the swap-time half, since the two are up to
@@ -323,7 +325,9 @@ const applyEmailChangeRequest = (
 ): Promise<EmailChangeOutcome> => {
     if (
         requestedEmail === undefined ||
-        normalizeEmail(requestedEmail) === normalizeEmail(user.email)
+        normalizeEmail(requestedEmail) === normalizeEmail(user.email) ||
+        (user.pendingEmail !== undefined &&
+            normalizeEmail(requestedEmail) === normalizeEmail(user.pendingEmail))
     )
         return Promise.resolve({ conflict: false, requested: false });
 
