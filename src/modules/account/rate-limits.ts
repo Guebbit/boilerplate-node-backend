@@ -23,7 +23,9 @@ import {
     KEYED_BY_ADDRESS,
     KEYED_BY_ADDRESS_BLOCK,
     KEYED_BY_SUBMITTED_EMAIL,
-    KEYED_BY_CHALLENGE
+    KEYED_BY_CHALLENGE,
+    KEYED_BY_AUTHENTICATED_ACCOUNT,
+    accountIdOf
 } from '@infrastructure/http/middlewares/rate-limit';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import { MFA_CHALLENGE_DELIVERED_TTL_MS } from './services/two-factor';
@@ -352,6 +354,30 @@ const MFA_SEND_BUDGET: RateLimitBudget = {
 /** The budget for `POST /account/login/2fa/send` — see {@link MFA_SEND_BUDGET}. */
 export const mfaSendLimiter: RequestHandler = buildRateLimiter(MFA_SEND_BUDGET);
 
+/** Window of the signed-in delivery budget: an hour, so a burst cannot be waited out in minutes. */
+const ACCOUNT_CODE_SEND_WINDOW_MS = 3_600_000;
+
+/**
+ * Codes delivered to a SIGNED-IN account so it can prove a factor (`POST /account/2fa/methods/
+ * {method}/send`). Keyed on the account, not the challenge: there is no challenge here, and an
+ * address key would let one stolen session mail the owner from many places. The per-code cooldown
+ * still paces a single button; this caps the total one account's mailbox can be made to receive.
+ */
+const ACCOUNT_CODE_SEND_BUDGET: RateLimitBudget = {
+    name: 'MFA code deliveries — per account',
+    namespace: 'mfa-account-send',
+    environmentVariable: 'NODE_MFA_ACCOUNT_SEND_MAX',
+    defaultMax: 5,
+    windowMs: ACCOUNT_CODE_SEND_WINDOW_MS,
+    keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
+    bounds: 'Deliveries to a signed-in account (`POST /account/2fa/methods/{method}/send`).',
+    audited: true,
+    keyGenerator: accountIdOf
+};
+
+/** The budget for `POST /account/2fa/methods/{method}/send` — see {@link ACCOUNT_CODE_SEND_BUDGET}. */
+export const accountCodeSendLimiter: RequestHandler = buildRateLimiter(ACCOUNT_CODE_SEND_BUDGET);
+
 /** This module's declared budgets — listed on `./module.ts`'s `rateLimits`. */
 export const accountRateLimits: readonly RateLimitBudget[] = [
     CREDENTIAL_IDENTITY_BUDGET,
@@ -365,5 +391,6 @@ export const accountRateLimits: readonly RateLimitBudget[] = [
     RESET_ADDRESS_BUDGET,
     RESET_BLOCK_BUDGET,
     MFA_CHALLENGE_BUDGET,
-    MFA_SEND_BUDGET
+    MFA_SEND_BUDGET,
+    ACCOUNT_CODE_SEND_BUDGET
 ];

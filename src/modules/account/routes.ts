@@ -18,6 +18,7 @@ import {
     passwordCheckLimiter,
     mfaChallengeLimiter,
     mfaSendLimiter,
+    accountCodeSendLimiter,
     loginChallengeGate
 } from './rate-limits';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
@@ -47,6 +48,7 @@ import { postLoginTwoFactorSend } from './controllers/post-login-2fa-send';
 import { get2fa } from './controllers/get-2fa';
 import { post2faSetup } from './controllers/post-2fa-setup';
 import { post2faConfirm } from './controllers/post-2fa-confirm';
+import { post2faMethodSend } from './controllers/post-2fa-method-send';
 import { delete2faMethod } from './controllers/delete-2fa-method';
 import { delete2fa } from './controllers/delete-2fa';
 import { post2faBackupCodes } from './controllers/post-2fa-backup-codes';
@@ -253,6 +255,17 @@ router.post(
     isAuth,
     requireFreshAuth(REAUTH_TIME_CRITICAL),
     post2faSetup
+);
+
+// POST /account/2fa/methods/:method/send — mail a signed-in caller a code for an ARMED delivered
+// method, so an email-only account can prove itself before changing its factors. Critical tier,
+// like the calls it serves, and its own per-account delivery budget (mail is what it spends).
+router.post(
+    '/2fa/methods/:method/send',
+    isAuth,
+    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    accountCodeSendLimiter,
+    post2faMethodSend
 );
 
 // POST /account/2fa/methods/:method/confirm — arm the pending method. Critical, same reasoning.

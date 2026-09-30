@@ -25,7 +25,8 @@ import {
     deleteConfirmEmail,
     inactivityWarningEmail,
     twoFactorCodeEmail,
-    emailChangeNoticeEmail
+    emailChangeNoticeEmail,
+    twoFactorChangedEmail
 } from '@modules/account/emails';
 import { contactRequestEmail } from '@modules/feedback/emails';
 import {
@@ -87,6 +88,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'account.inactivity-warning': inactivityWarningEmail(locale, 'Ada', 30),
     'account.two-factor-code': twoFactorCodeEmail(locale, 'Ada', '492013', 10),
     'account.email-change-notice': emailChangeNoticeEmail(locale, 'Ada', 'new@example.com'),
+    'account.two-factor-changed': twoFactorChangedEmail(locale, 'Ada', 'enrolled', 'email'),
     'orders.order-confirm': orderConfirmEmail(
         locale,
         'Ada',

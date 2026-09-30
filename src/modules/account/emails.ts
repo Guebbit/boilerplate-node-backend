@@ -150,6 +150,39 @@ export const twoFactorCodeEmail = (
     };
 };
 
+/** What happened to the account's second factors, for {@link twoFactorChangedEmail}. */
+export type TwoFactorChange = 'enrolled' | 'removed' | 'disabled';
+
+/**
+ * Two-factor change notice: sent out of band the moment a factor is added or replaced, removed, or
+ * 2FA is turned off. A change made from a stolen session is otherwise silent — the owner's only
+ * warning is this mail (OWASP MFA Cheat Sheet, "Changing MFA Factors"). Carries no link that acts.
+ *
+ * @param change - `'enrolled'` covers an added and a replaced factor alike
+ * @param method - the wire name of the factor concerned; ignored for `'disabled'`
+ */
+export const twoFactorChangedEmail = (
+    locale: string,
+    name: string,
+    change: TwoFactorChange,
+    method = ''
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'account.two-factor-changed',
+        subject: t('account.email.two-factor-changed.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.two-factor-changed.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('account.email.two-factor-changed.greeting', { name }),
+            body: t(`account.email.two-factor-changed.body-${change}`, { method }),
+            advice: t('account.email.two-factor-changed.advice'),
+            footer: t('email.footer')
+        }
+    };
+};
+
 /** Password reset: the confirmation, after the password actually changed. */
 export const resetConfirmEmail = (locale: string, name: string): EmailContent => {
     const t = translator(locale);

@@ -99,16 +99,17 @@ the same record, and which half a method uses follows from its `delivers`.
 Reading your own factors is not a privileged act. Changing them is, and every mutation sits behind
 **critical** fresh auth — see [Sessions](./account-sessions.md#freshness-auth-time-and-amr).
 
-| Route                                       | Guard                                                |
-| ------------------------------------------- | ---------------------------------------------------- |
-| `GET /account/2fa`                          | `isAuth` — your own status                           |
-| `POST /account/2fa/methods/:method/setup`   | critical fresh auth                                  |
-| `POST /account/2fa/methods/:method/confirm` | critical fresh auth                                  |
-| `DELETE /account/2fa/methods/:method`       | critical fresh auth **+** a valid code               |
-| `DELETE /account/2fa`                       | critical fresh auth **+** a valid code               |
-| `POST /account/2fa/backup-codes`            | critical fresh auth                                  |
-| `POST /account/login/2fa/send`              | public — `credentialLimiters`, `mfaSendLimiter`      |
-| `POST /account/login/2fa`                   | public — `credentialLimiters`, `mfaChallengeLimiter` |
+| Route                                       | Guard                                                               |
+| ------------------------------------------- | ------------------------------------------------------------------- |
+| `GET /account/2fa`                          | `isAuth` — your own status                                          |
+| `POST /account/2fa/methods/:method/setup`   | critical fresh auth **+** a valid code once any factor is armed     |
+| `POST /account/2fa/methods/:method/send`    | critical fresh auth, `accountCodeSendLimiter`; armed delivered only |
+| `POST /account/2fa/methods/:method/confirm` | critical fresh auth                                                 |
+| `DELETE /account/2fa/methods/:method`       | critical fresh auth **+** a valid code                              |
+| `DELETE /account/2fa`                       | critical fresh auth **+** a valid code                              |
+| `POST /account/2fa/backup-codes`            | critical fresh auth **+** a valid code                              |
+| `POST /account/login/2fa/send`              | public — `credentialLimiters`, `mfaSendLimiter`                     |
+| `POST /account/login/2fa`                   | public — `credentialLimiters`, `mfaChallengeLimiter`                |
 
 The two login routes are public because they must be: the caller has no session yet, which is the
 entire point of the step. What stands in for one is the challenge — see
@@ -124,6 +125,34 @@ handler answers.
 Why a mutation needs a code on top of a fresh session, and why removing one method is held to the
 same bar as removing all of them, is argued in
 [Security](../tools/security.md#the-controls-and-which-attack-each-one-answers).
+
+## Changing factors needs a factor
+
+Once any factor is armed, **every** `setup` — replacing one, or adding a second method — carries a
+`code` from an armed factor or an unused backup code, the same `verifyAnyFactor` that removing one
+asks for. The **first** factor needs only the fresh password: there is nothing to prove yet, and a
+backup code is the route for someone who lost their phone. Without the rule a stolen-but-fresh
+session could disarm the factor it would otherwise have to pass (OWASP MFA Cheat Sheet, "Changing
+MFA Factors"; NIST SP 800-63B).
+
+An account whose only factor is **delivered** has nothing to read a code from, so
+`POST /account/2fa/methods/:method/send` mails one to the signed-in caller — armed delivered methods
+only, paced by the same 30 s per-code cooldown and by its own per-account hourly budget
+(`NODE_MFA_ACCOUNT_SEND_MAX`).
+
+```mermaid
+sequenceDiagram
+    participant U as Signed-in caller
+    participant A as API
+    U->>A: POST .../email/send
+    A-->>U: code mailed (masked address)
+    U->>A: POST .../email/setup { code }
+    A->>A: verify code, then disarm and mint the new one
+    A-->>U: setup payload
+```
+
+Every add or replace, removal, and "2FA turned off" also **mails the account holder** out of band
+(`account.two-factor-changed`), because a change from a stolen session is otherwise silent.
 
 ## Adding a channel
 

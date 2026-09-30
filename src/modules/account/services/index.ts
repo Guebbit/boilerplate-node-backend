@@ -104,6 +104,7 @@ export const twoFactorService = {
     buildLoginChallenge: twoFactor.buildLoginChallenge,
     twoFactorStatus: twoFactor.twoFactorStatus,
     setupTwoFactorMethod: twoFactor.setupTwoFactorMethod,
+    sendMethodCode: twoFactor.sendMethodCode,
     confirmTwoFactorMethod: twoFactor.confirmTwoFactorMethod,
     removeTwoFactorMethod: twoFactor.removeTwoFactorMethod,
     disableTwoFactor: twoFactor.disableTwoFactor,
