@@ -275,7 +275,10 @@ edited, and the bundle is an artefact nobody opens by hand. Once that is true, `
 the job the standard way — resolving `$ref` — and the 252 comments across the sources are untouched
 by it. One step runs after it, on the bundled document rather than on a source: merging
 `x-app-level-responses` into every operation, since a `$ref` has to be resolved first for an
-operation to be reachable exactly once — see `scripts/contracts/openapi-bundle.ts`.
+operation to be reachable exactly once — see `scripts/contracts/openapi-bundle.ts`. A second such
+step reads the `x-versioned: [methods]` marker a fragment puts on a path item, and hangs the shared
+`If-Match` parameter, the 412 and the `ETag` header on exactly the operations it lists — see
+[Conditional writes](./write-methods.md#conditional-writes-etag-and-if-match).
 
 What this bought, beyond deleting a custom bundler:
 

@@ -227,6 +227,18 @@ flowchart LR
 `tests/cross-cutting/replace-patch-parity.test.ts` checks that each resource's PUT and PATCH
 schemas declare the same fields.
 
+**Conditional writes ride the same pipeline.** The update and delete factories run the module's
+write inside `withIfMatch(request, id, …)`, which opens a precondition for that row. The
+repository's `save`/`deleteOne` are where it is met, so no module writes precondition code — see
+[Write Methods](../api/write-methods.md#conditional-writes-etag-and-if-match).
+
+```mermaid
+flowchart LR
+    H["If-Match header"] --> W["withIfMatch(request, id)"] --> U["module's update(id, changes)"] --> R["repository.save"]
+    R -->|"tag matches the loaded row<br/>+ fenced on updatedAt"| OK["200 + new ETag"]
+    R -->|"stale, or lost the race"| E["PreconditionFailedError → 412"]
+```
+
 ## The database error interpreter
 
 `databaseErrorInterpreter` in `src/infrastructure/http/errors.ts` is the single place that decides
@@ -234,14 +246,15 @@ which driver failures describe the **request** rather than the server. One funct
 is the same on every model — a call-site `try`/`catch` is invisible to every endpoint that
 did not think to write one.
 
-| Raised by                    | Status | Why it is the caller's problem                                                                            |
-| ---------------------------- | ------ | --------------------------------------------------------------------------------------------------------- |
-| `CastError` (Mongoose)       | 422    | A value failed a schema path's cast — nearly always an ObjectId in a URL or a filter.                     |
-| `BSONError` (driver)         | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters.         |
-| `E11000` duplicate key       | 409    | A unique index refused the write: something with that value already exists.                               |
-| `ValidationError` (Mongoose) | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`. |
-| any module's `ConflictError` | 409    | The write was refused for what it would make true — `access`'s `AccessInvariantError` today.              |
-| anything else                | 500    | Genuinely unrecognised.                                                                                   |
+| Raised by                    | Status | Why it is the caller's problem                                                                                                                |
+| ---------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CastError` (Mongoose)       | 422    | A value failed a schema path's cast — nearly always an ObjectId in a URL or a filter.                                                         |
+| `BSONError` (driver)         | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters.                                             |
+| `E11000` duplicate key       | 409    | A unique index refused the write: something with that value already exists.                                                                   |
+| `ValidationError` (Mongoose) | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`.                                     |
+| any module's `ConflictError` | 409    | The write was refused for what it would make true — `access`'s `AccessInvariantError` today.                                                  |
+| `PreconditionFailedError`    | 412    | The caller's `If-Match` no longer describes the row — see [Conditional writes](../api/write-methods.md#conditional-writes-etag-and-if-match). |
+| anything else                | 500    | Genuinely unrecognised.                                                                                                                       |
 
 Every branch above exists because something describing the CALLER was reaching the 500 and being
 reported as a server fault. `POST /products/search` is public and takes an `id` filter, so

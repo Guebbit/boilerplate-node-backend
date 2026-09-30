@@ -181,12 +181,102 @@ A create body declares nothing `nullable` — there is nothing to clear yet, so 
 | 201 | a create — something new exists, and `Location` says where |
 | 404 | the target does not exist (or the caller may not know it does) |
 | 409 | the write conflicts with the current state — a duplicate, a lifecycle refusal |
-| 412 | an `If-Match` that no longer matches **(not built yet — its own lane)** |
+| 412 | an `If-Match` that no longer matches — see [Conditional writes](#conditional-writes-etag-and-if-match) |
 | 415 | a body in a type the operation does not declare |
 | 422 | the body breaks the contract or a domain rule |
 
 The app-wide ones (400, 413, 429, 503) come from `x-app-level-responses` — see
 [Regenerating](./regenerating.md).
+
+## Conditional writes: ETag and If-Match
+
+Two admins open the same product. Both save. Without a check, the second save silently overwrites
+the first — the *lost update*. A versioned resource lets the client say "only if it is still the
+version I read" (RFC 9110 §13.1.1); the server refuses with **412** when it is not.
+
+| | Standard |
+| --- | --- |
+| `ETag`, `If-Match`, 412 | [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110) §8.8.3, §13.1.1, §15.5.13 |
+| Same idea elsewhere | Kubernetes `resourceVersion`, Google [AIP-154](https://google.aip.dev/154) `etag` |
+
+**Optional.** No `If-Match`, no check: the write runs as it always did, last writer wins. Requiring
+it (428, RFC 6585) can come later without changing anything below.
+
+```mermaid
+sequenceDiagram
+    participant A as Editor A
+    participant B as Editor B
+    participant S as API
+    A->>S: GET /products/1
+    S-->>A: 200 + ETag "100"
+    B->>S: GET /products/1
+    S-->>B: 200 + ETag "100"
+    A->>S: PATCH /products/1<br/>If-Match: "100"
+    S-->>A: 200 + ETag "200"
+    B->>S: PATCH /products/1<br/>If-Match: "100"
+    S-->>B: 412 PRECONDITION_FAILED — nothing written
+    B->>S: GET /products/1 (re-read, reapply, resend)
+```
+
+### Which resources are versioned
+
+A resource is versioned when its item read hands out an `ETag` **and** its write honours `If-Match`.
+The contract says so with one marker on the path item — `x-versioned: [get, put, patch, delete]` —
+and the bundler adds the header parameter, the 412 and the response header from it.
+
+| Resource | Read that sends `ETag` | Writes that take `If-Match` |
+| --- | --- | --- |
+| product | `GET /products/{id}`, `GET /products/{id}/admin` | `PUT`, `PATCH`, `DELETE /products/{id}`, `DELETE /products/{id}/hard` |
+| user | `GET /users/{id}` | `PUT`, `PATCH`, `DELETE /users/{id}`, `DELETE /users/{id}/hard` |
+| order | `GET /orders/{id}` | `PUT`, `PATCH`, `DELETE /orders/{id}`, `DELETE /orders/{id}/hard` |
+| the caller's account | `GET /account` | `PUT`, `PATCH /account` |
+
+Not versioned: a resource with no item read to take a tag from (feedback, webhook subscriptions,
+locales, an address inside its book) and anything with its own concurrency rule (cart lines,
+stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
+
+### What the tag is
+
+- **`ETag: "<updatedAt in epoch ms>"`** — strong, quoted, opaque to the client: compare it, never
+  parse it. Every `save()` that changes a row moves `updatedAt` in the same atomic update.
+- **Why `updatedAt` and not Mongoose's `__v`.** `__v` moves only when an *array* changes, so a
+  scalar edit would leave it — and any tag built on it — unchanged. `updatedAt` moves on every edit.
+- **What does NOT move it.** Writes that are not an editor's edit already pass `timestamps: false`:
+  the stock mirror, the image digest, a session token. An admin's form is never invalidated by a
+  customer logging in.
+- **A product edited only through its `translations`** writes rows outside the product document,
+  so the product's `updatedAt` is stamped by the same edit and the tag moves with it.
+
+### What the server does with `If-Match`
+
+| Header | Result |
+| --- | --- |
+| absent | the write runs unconditionally |
+| `"<tag>"` matching the stored version | the write runs; the response carries the **new** `ETag` |
+| `"<tag>"` no longer matching, or the row is gone | **412** `PRECONDITION_FAILED`, nothing written |
+| several tags, `"a", "b"` | matches if any does |
+| `*` | matches any row that exists |
+| weak (`W/"…"`), or anything that is not a quoted tag | never matches → 412 (`If-Match` compares strongly) |
+
+- **The check and the write are one atomic step for `PUT`/`PATCH`/soft `DELETE`.** The version the
+  service loaded is compared with the header, and the same version becomes part of the update's
+  filter (Mongoose `$where`) — two editors holding the same tag cannot both win. A hard `DELETE` is
+  checked against the loaded row only: Mongoose gives a delete no filter to add it to.
+- **It lives in the repository, not in each module.** `createUpdateController` and
+  `createDeleteController` open the precondition for the request; `repository.save` and
+  `repository.deleteOne` meet it. A module's service never sees a header.
+- **The body is validated first.** A 422 for a body the schema refuses wins over a 412.
+- **A read never answers `304`.** The tag covers the row's own edits, not what is derived from
+  config (prices, the caller's language), so it validates *writes* only. `If-None-Match` is ignored
+  on these reads.
+- **Browsers** may send `If-Match` and read `ETag` cross-origin: both are in the CORS allow and
+  expose lists.
+
+### For a client
+
+1. Keep the `ETag` of the record the form loaded.
+2. Send it back as `If-Match` on the save; take the new `ETag` from the 200.
+3. On 412 the record changed under you: re-read it, show the user what is different, resend.
 
 ## Deliberate exceptions
 
@@ -206,6 +296,8 @@ The app-wide ones (400, 413, 429, 503) come from `x-app-level-responses` — see
 | `createUpdateController` — [Request Flow](../theory/request-flow.md#put-replaces-patch-merges) | one PUT/PATCH pipeline for every factory-backed resource |
 | `tests/cross-cutting/replace-patch-parity.test.ts` | a PUT and a PATCH schema declaring different fields |
 | `tests/support/response-contract.ts` | a 201 without its `Location`, a status the operation does not document |
-| `tests/contract/write-methods.test.ts` | an empty string stored, an undeclared type accepted, a `Location` missing or wrong |
+| `tests/contract/write-methods.test.ts` | an empty string stored, an undeclared type accepted, a `Location` missing or wrong, a 412 the contract does not declare, an `ETag` a versioned 200 forgot |
+| `tests/integration/conditional-writes.test.ts` | a stale `If-Match` that still wrote, two editors on one tag both winning, a translations-only edit that left the tag alone |
+| `tests/unit/scripts/contracts/openapi-bundle.test.ts` | an `x-versioned` marker that did not reach the bundled operation |
 | `tests/contract/request-contract.test.ts` | a body the contract refuses being accepted |
 | `tests/fuzz/endpoints.fuzz.test.ts` | a hostile body answered with a 5xx |
