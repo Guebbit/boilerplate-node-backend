@@ -23,7 +23,8 @@
  *   npm run scenario:apply -- --describe-to=x  # also write the accounts and subjects to `x`
  */
 import 'dotenv/config';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { emptyDatabase, isDatabaseEmpty } from '@infrastructure/runtime/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
@@ -166,6 +167,9 @@ async function seed() {
         );
 
     if (describeTo) {
+        // A checkout that has never run the suite has no `reports/e2e/` yet, and `writeFile` does
+        // not make parents. `recursive` also makes an existing directory a no-op.
+        await mkdir(path.dirname(describeTo), { recursive: true });
         await writeFile(
             describeTo,
             JSON.stringify({ scenario: scenarioName, accounts: seedCredentials, subjects }, null, 2)
