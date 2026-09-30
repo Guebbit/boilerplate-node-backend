@@ -29,7 +29,7 @@ describe('emitDomainEvent', () => {
 
         await emitDomainEvent('test.thing-happened', { id: 'abc' });
 
-        expect(handler).toHaveBeenCalledWith({ id: 'abc' });
+        expect(handler).toHaveBeenCalledWith({ id: 'abc' }, {});
     });
 
     it('resolves only after an async handler has finished', async () => {

@@ -235,6 +235,7 @@ export default withMermaid(
                                 link: '/tools/deployment-hardening'
                             },
                             { text: 'Idempotency', link: '/tools/idempotency' },
+                            { text: 'Transactional Outbox', link: '/tools/outbox' },
                             { text: 'Image Processing', link: '/tools/image-processing' }
                         ]
                     },

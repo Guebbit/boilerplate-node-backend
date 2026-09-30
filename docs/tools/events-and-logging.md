@@ -123,7 +123,8 @@ assume — is the JSDoc on the `DomainEventMap` augmentation in the emitting mod
 ### Why it is not a substitute for the broker
 
 Do not grow it into one. It has no durability, no retry and no replay, and a crash mid-dispatch
-loses the event outright. Emails already go through RabbitMQ, which is durable — putting a lossy
+loses the event outright. An event that must not be lost goes through the
+[transactional outbox](./outbox.md) instead, which delivers to the same subscribers. Emails already go through RabbitMQ, which is durable — putting a lossy
 in-process hop in front of a durable queue is backwards. Cache invalidation wants the opposite of
 async fan-out: it should happen immediately after the write, in the same process.
 
