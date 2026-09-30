@@ -105,6 +105,10 @@ becomes next.
 **The module to copy is `feedback`.** It is `foundation`, so it is still there after the strip and
 depends on nothing shop-shaped, and it carries most of what a new module needs. Do not start from a
 shop module: the strip deletes it, and its dependencies with it.
+
+**Or let the scaffolder start it for you.** `npm run scaffold:module -- <name>` writes a working
+`feedback`-shaped module, its docs page and its registry line, then regenerates —
+[Module scaffolder](./tools/module-scaffolder.md) says what it writes and what it leaves to you.
 `docs/theory/modules.md#the-module-template` is the shape a new module follows; `docs/theory/module-lifecycle.md#adding-a-module` walks through adding one from
 nothing, the same way this page walks through removing one.
 

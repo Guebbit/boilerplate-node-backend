@@ -9,6 +9,7 @@ This page groups the `package.json` scripts by job instead of by raw list order.
 | `npm run compose:restart` | bring the stack up — [Getting Started](../getting-started.md)                                     |
 | `npm run regenerate`      | after changing anything a generator reads — [Regenerating After a Change](../api/regenerating.md) |
 | `npm run complete`        | before merging a lane — the full gate; pre-commit runs `complete:light` for now                   |
+| `npm run scaffold:module` | start a new domain — [Module scaffolder](./module-scaffolder.md)                                  |
 
 `regenerate` writes; `complete` only verifies. A gate failure saying **STALE** means the first one
 was not run. In the paired frontend the mirror command is `npm run regenerate` too — run it after
