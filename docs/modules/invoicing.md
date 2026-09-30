@@ -61,7 +61,7 @@ still splits the two contracts correctly.
 Depending on `orders` — never the reverse — is what keeps the graph acyclic. `orders` already has
 `payments` and `cart` depending on it the same way; this module reuses `orderTaxBreakdown`
 (`orders/domain/tax.ts`) for its own VAT arithmetic rather than re-deriving EN 16931's BR-CO-17
-reconciliation by hand a second time, and reads the order once, through `orderService.getById`, for
+rounding rule ([VAT rounding](#vat-rounding-and-the-net-unit-price)) by hand a second time, and reads the order once, through `orderService.getById`, for
 the auth-scoped download routes. `orders` itself carries no import of, and no wiring for, this
 module at all — the one thing it knows is `paidAt` (`orders/model.ts`), stamped in the same write
 that moves an order to `paid`, which is the proxy `orders`' own `actions.invoice` flag and
@@ -147,6 +147,39 @@ first one.
 Every getter is read fresh per call (`config.ts`), so a correction needs no restart; an empty
 string reads as unset, never as a blank row on the invoice.
 
+## VAT rounding and the net unit price
+
+Two rules, both from the law rather than taste, both decided once in `orders/domain/tax.ts`.
+
+- **VAT is rounded once per rate** (EN 16931 BR-CO-17). Each rate's taxable total — goods AND its
+  share of shipping — has its VAT extracted and rounded a single time. It is never the sum of
+  per-line rounded amounts: three 0.10 lines at 22% owe `round(0.30 x 0.22/1.22)` = 0.05, where
+  rounding each line first would bill 0.06.
+- **The printed unit price is net** (VAT Directive Art. 226(8): "the unit price exclusive of
+  VAT"). The frozen `unitPrice` stays what the customer was charged (gross); the document divides
+  the rate back out and prints it with two places beyond the currency's own, because a net price is
+  rarely a whole cent (19.90 at 22% is 16.3115).
+
+```mermaid
+flowchart LR
+    G["gross per line<br/><i>price x quantity</i>"] --> R["per rate:<br/>goods + shipping share"]
+    R -->|"extract + round ONCE"| T["rate's VAT"]
+    T -->|"apportion, by gross"| SG["goods VAT / shipping VAT"]
+    SG -->|"apportion, by gross"| L["each line's VAT"]
+```
+
+Prices are gross, so the extraction is `gross x rate / (1 + rate)`, not `net x rate`. Each rate's
+`net + VAT` therefore equals what was charged to the minor unit, and the line figures, the
+per-rate rows and the totals add up exactly — `apportion` hands leftover minor units to the
+largest weight. The line rows on a printed document are re-derived from the frozen
+`taxSummary` and `shippingByRate` (`lineTaxFromRateTotals`), so a stored invoice needs no new
+field.
+
+Credit notes follow the same rule: a full refund mirrors the invoice's frozen figures; a partial
+one is split across the invoice's rates, and each rate's share has its VAT extracted and rounded
+once (`services/partial-credit.ts`). Several partial notes each round their own share, so their
+VAT can differ from the invoice's by a minor unit in total; every document is self-consistent.
+
 ## VAT category codes
 
 EN 16931's category codes distinguish a 0%-rated line (`Z`) from an exempt one (`E`) — a
@@ -168,8 +201,7 @@ since there is no numeric form for a reason code to become.
 - **A per-category VAT summary.** The summary and shipping tables above group by decimal rate
   alone, so a rate carrying both a zero-rated and an exempt line folds into one 0% row instead of
   two. Splitting those tables by (rate, category) is a bigger rework than adding the per-line code
-  above — left for later, alongside the module's own per-line-vs-per-rate rounding question
-  (EN 16931 BR-CO-17), which this change does not touch either.
+  above — left for later.
 - **A render cache.** The old receipt cached a render for a few minutes to absorb a burst of
   requests for the same order; this module skips it. The document is immutable once issued, so
   there is no correctness reason to cache it — only a possible future perf one, if traffic ever

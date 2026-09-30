@@ -10,11 +10,10 @@
             "reversal-notice": "Questa nota di credito storna la fattura {{number}}.",
             "number": "N. {{number}}",
             "date": "Data: {{date}}",
-            "line": "{{title}} — {{quantity}} × {{price}}",
             "vat": {
                 "column-description": "Descrizione",
                 "column-quantity": "Qtà",
-                "column-unit-price": "Prezzo unitario (lordo)",
+                "column-unit-price": "Prezzo unitario (IVA esclusa)",
                 "column-net": "Imponibile",
                 "column-rate": "Aliquota IVA",
                 "column-category": "Categoria IVA",

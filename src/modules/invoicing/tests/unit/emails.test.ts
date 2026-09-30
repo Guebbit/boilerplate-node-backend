@@ -26,11 +26,13 @@ const DOCUMENT: EInvoicingDocument = {
 };
 
 describe('buildDocumentView', () => {
-    it('renders one line per item, with each item"s own values', () => {
-        const lines = buildDocumentView('en', DOCUMENT).lines as string[];
+    it('renders one table row per item, with each item"s own title', () => {
+        const { rows } = buildDocumentView('en', DOCUMENT).vat as {
+            rows: { description: string }[];
+        };
 
-        expect(lines).toHaveLength(1);
-        expect(lines[0]).toContain('Widget');
+        expect(rows).toHaveLength(1);
+        expect(rows[0].description).toBe('Widget');
     });
 
     it('names the document number in its title metadata', () => {
@@ -55,11 +57,11 @@ describe('buildDocumentView', () => {
             lines: [{ title: collidingTitle, quantity: 1, unitPrice: 1, taxRate: 0.22 }]
         };
 
-        const english = buildDocumentView('en', document).lines as string[];
-        const italian = buildDocumentView('it', document).lines as string[];
+        const rowsOf = (locale: string) =>
+            (buildDocumentView(locale, document).vat as { rows: { description: string }[] }).rows;
 
-        expect(english[0]).toContain(collidingTitle);
-        expect(italian[0]).toContain(collidingTitle);
+        expect(rowsOf('en')[0].description).toBe(collidingTitle);
+        expect(rowsOf('it')[0].description).toBe(collidingTitle);
     });
 
     it('titles itself an invoice, and a credit note a credit note', () => {
@@ -235,5 +237,74 @@ describe('buildDocumentView — the VAT table’s category column, C4', () => {
 
         expect(english.columns.category).toBe('VAT category');
         expect(italian.columns.category).not.toBe(english.columns.category);
+    });
+});
+
+describe('buildDocumentView — net unit price and once-per-rate VAT, worked example', () => {
+    /** 19.90 x 2 at 22% and 5.50 x 3 at 10%, 6.00 shipping — see `orders/tests/unit/tax.test.ts`. */
+    const MIXED: EInvoicingDocument = {
+        ...DOCUMENT,
+        lines: [
+            { title: 'Widget', quantity: 2, unitPrice: 19.9, taxRate: 0.22 },
+            { title: 'Gadget', quantity: 3, unitPrice: 5.5, taxRate: 0.1 }
+        ],
+        shippingNetAmount: 5.09,
+        shippingTaxAmount: 0.91,
+        netTotal: 47.61,
+        taxTotal: 9.6,
+        grandTotal: 62.3,
+        taxSummary: [
+            { rate: 0.1, netAmount: 16.59, taxAmount: 1.66, grossAmount: 18.25 },
+            { rate: 0.22, netAmount: 36.11, taxAmount: 7.94, grossAmount: 44.05 }
+        ],
+        shippingByRate: [
+            { rate: 0.1, netAmount: 1.6, taxAmount: 0.15, grossAmount: 1.75 },
+            { rate: 0.22, netAmount: 3.49, taxAmount: 0.76, grossAmount: 4.25 }
+        ]
+    };
+
+    it('prints the unit price EXCLUSIVE of VAT (Art. 226(8)), to two places beyond the cent', () => {
+        // 19.90 / 1.22 = 16.311475..., 5.50 / 1.10 = 5.00 exactly.
+        const vat = buildDocumentView('en', MIXED).vat as { rows: { unitPrice: string }[] };
+
+        expect(vat.rows.map((row) => row.unitPrice)).toEqual(['€16.3115', '€5.00']);
+    });
+
+    it('labels the column as excluding VAT', () => {
+        const vat = buildDocumentView('en', MIXED).vat as { columns: { unitPrice: string } };
+
+        expect(vat.columns.unitPrice).toBe('Unit price (excl. VAT)');
+    });
+
+    it("prints each line's share of its rate's one rounded goods VAT, adding up to the frozen totals", () => {
+        // Goods VAT frozen: 22% = 7.94 - 0.76 = 7.18, 10% = 1.66 - 0.15 = 1.51 — one line each.
+        const vat = buildDocumentView('en', MIXED).vat as {
+            rows: { netAmount: string; taxAmount: string; grossAmount: string }[];
+        };
+
+        expect(vat.rows).toEqual([
+            expect.objectContaining({
+                netAmount: '€32.62',
+                taxAmount: '€7.18',
+                grossAmount: '€39.80'
+            }),
+            expect.objectContaining({
+                netAmount: '€14.99',
+                taxAmount: '€1.51',
+                grossAmount: '€16.50'
+            })
+        ]);
+    });
+
+    it('a currency with no minor unit (JPY) prints a whole-yen net unit price with no fraction', () => {
+        // 108 yen at 8% -> 100 exactly; the extra places only appear when the value needs them.
+        const vat = buildDocumentView('en', {
+            ...DOCUMENT,
+            currency: 'JPY',
+            lines: [{ title: 'Widget', quantity: 1, unitPrice: 108, taxRate: 0.08 }],
+            taxSummary: [{ rate: 0.08, netAmount: 100, taxAmount: 8, grossAmount: 108 }]
+        }).vat as { rows: { unitPrice: string }[] };
+
+        expect(vat.rows[0].unitPrice).toBe('¥100');
     });
 });

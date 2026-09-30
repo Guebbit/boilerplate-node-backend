@@ -9,7 +9,7 @@
 
 import type { TFunction } from 'i18next';
 import { translator } from '@infrastructure/i18n';
-import { orderTaxBreakdown } from '@modules/orders';
+import { lineTaxFromRateTotals } from '@modules/orders';
 import type { EInvoicingDocument } from './providers';
 import type { InvoiceLine } from './model';
 
@@ -127,23 +127,40 @@ const buildVatBlock = (
     // A decimal rate (`0.055`) as the document prints it (`"5.5%"`).
     const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 2 });
 
-    // Re-derived from the frozen `unitPrice`/`taxRate`/`quantity` alone, via the same pure
-    // function `services/issue-invoice.ts` used to freeze the ORDER-level totals — safe because a
-    // single line's own net/tax/gross split needs nothing else (unlike the shipping apportionment,
-    // which needs `requiresShipping`, a fact this frozen line does not carry, so THAT stays
-    // frozen — `document.taxSummary`/`shippingByRate` below, never re-derived here).
-    const perLine = orderTaxBreakdown({
-        items: document.lines.map((line) => ({
+    // Art. 226(8): the unit price printed is EXCLUSIVE of VAT. The frozen `unitPrice` is gross, so
+    // it is divided back out, and shown with two places beyond the currency's own — a net unit
+    // price is rarely a whole minor unit (19.90 at 22% is 16.3115), and BT-146 allows any precision.
+    const digits = money.resolvedOptions().maximumFractionDigits ?? 2;
+    const unitNetMoney = new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: document.currency,
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits + 2
+    });
+
+    // BR-CO-17: each rate's VAT was rounded ONCE, on the rate's whole taxable total, and frozen in
+    // `taxSummary`. A line's own share is that rate's GOODS VAT (summary minus its shipping slice)
+    // spread over the rate's lines, so the printed lines add up to the frozen totals exactly.
+    const shippingTaxAt = new Map(document.shippingByRate.map((row) => [row.rate, row.taxAmount]));
+    const goodsTaxByRate = new Map(
+        document.taxSummary.map((row) => [
+            row.rate,
+            row.taxAmount - (shippingTaxAt.get(row.rate) ?? 0)
+        ])
+    );
+    const perLine = lineTaxFromRateTotals(
+        document.lines.map((line) => ({
             quantity: line.quantity,
             product: { price: line.unitPrice, taxRate: line.taxRate }
         })),
-        currency: document.currency
-    }).lines;
+        document.currency,
+        goodsTaxByRate
+    );
 
     const rows: DocumentVatRow[] = document.lines.map((line, index) => ({
         description: line.title,
         quantity: line.quantity,
-        unitPrice: money.format(line.unitPrice),
+        unitPrice: unitNetMoney.format(line.unitPrice / (1 + line.taxRate)),
         netAmount: money.format(perLine[index].netAmount),
         taxRateLabel: percent.format(line.taxRate),
         categoryCode: taxCategoryCode(line.taxRate, line.rateType),
@@ -253,13 +270,6 @@ export const buildDocumentView = (
                 : undefined,
         meta: buildMeta(locale, t, document),
         billing: buildBilling(document),
-        lines: document.lines.map((line) =>
-            t('invoicing.document.line', {
-                title: line.title,
-                quantity: line.quantity,
-                price: line.unitPrice
-            })
-        ),
         vat: buildVatBlock(locale, t, document)
     };
 };
