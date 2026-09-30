@@ -56,7 +56,10 @@ export interface TaxRateSummary {
 
 /** What `orderTaxBreakdown` reports: one entry per line, plus the order-level sums. */
 export interface OrderTaxBreakdown {
-    /** Same order and length as the `items` given in. */
+    /**
+     * Same order and length as the `items` given in. A line's tax is its share of its RATE's one
+     * rounded figure (see `groupByRate`), so a rate's lines sum exactly to that rate's row.
+     */
     lines: LineTaxBreakdown[];
     /** Sum of every line's `netAmount` — goods only, shipping's own net sits in {@link shippingNetAmount}. */
     netTotal: number;
@@ -121,22 +124,103 @@ const frozenRate = (item: TaxableLineItem): number => {
     return Number.isFinite(rate) ? rate : 0;
 };
 
+/** One VAT rate's goods and shipping gross, and the tax rounded ONCE across both. */
+interface RateGroup {
+    goodsGross: Money;
+    shippingGross: Money;
+    tax: Money;
+    goodsTax: Money;
+    shippingTax: Money;
+}
+
 /**
- * Folds one line's (net, tax) pair into its rate's running total in `byRate` — goods and
- * shipping both call this, which is what lets one row carry both without a second pass.
- * @param byRate - accumulator, mutated in place; one entry per rate seen so far
- * @param rate - the line's own frozen rate, this pair's key
- * @param net - the net amount to fold in
- * @param tax - the tax amount to fold in
+ * Groups gross amounts by rate and extracts each rate's VAT ONCE, from the rate's whole taxable
+ * total — goods and shipping together (EN 16931 BR-CO-17: VAT is rate x taxable amount per rate,
+ * rounded once, never a sum of per-line rounded amounts). The rounded tax is then split between
+ * goods and shipping by `apportion`, so the two parts always sum to it exactly.
+ * @param grossByLine - each line's gross goods amount
+ * @param shippingByLine - each line's apportioned gross shipping share
+ * @param rates - each line's own frozen rate
+ * @returns one group per distinct rate
  */
-const foldIntoRate = (
-    byRate: Map<number, { net: Money; tax: Money }>,
-    rate: number,
-    net: Money,
-    tax: Money
-): void => {
-    const existing = byRate.get(rate) ?? { net: NO_MONEY, tax: NO_MONEY };
-    byRate.set(rate, { net: addMoney(existing.net, net), tax: addMoney(existing.tax, tax) });
+const groupByRate = (
+    grossByLine: readonly Money[],
+    shippingByLine: readonly Money[],
+    rates: readonly number[]
+): Map<number, RateGroup> => {
+    const groups = new Map<number, RateGroup>();
+    for (const [index, rate] of rates.entries()) {
+        const current = groups.get(rate);
+        const goodsGross = addMoney(current?.goodsGross ?? NO_MONEY, grossByLine[index]);
+        const shippingGross = addMoney(current?.shippingGross ?? NO_MONEY, shippingByLine[index]);
+        groups.set(rate, {
+            goodsGross,
+            shippingGross,
+            tax: NO_MONEY,
+            goodsTax: NO_MONEY,
+            shippingTax: NO_MONEY
+        });
+    }
+    for (const [rate, group] of groups) {
+        const tax = extractTax(addMoney(group.goodsGross, group.shippingGross), rate);
+        const [goodsTax, shippingTax] = apportion(tax, [group.goodsGross, group.shippingGross]);
+        groups.set(rate, { ...group, tax, goodsTax, shippingTax });
+    }
+    return groups;
+};
+
+/**
+ * Spreads each rate's goods VAT over the lines carrying that rate, pro-rata by gross value, so a
+ * rate's line taxes sum EXACTLY to its one rounded figure.
+ * @param grossByLine - each line's gross goods amount
+ * @param rates - each line's own frozen rate
+ * @param goodsTaxByRate - the goods VAT owed at each rate
+ * @returns one tax amount per line, in line order
+ */
+const allocateLineTax = (
+    grossByLine: readonly Money[],
+    rates: readonly number[],
+    goodsTaxByRate: ReadonlyMap<number, Money>
+): Money[] => {
+    const taxes = grossByLine.map(() => NO_MONEY);
+    for (const [rate, goodsTax] of goodsTaxByRate) {
+        const indexes = rates.flatMap((lineRate, index) => (lineRate === rate ? [index] : []));
+        const shares = apportion(
+            goodsTax,
+            indexes.map((index) => grossByLine[index])
+        );
+        for (const [position, index] of indexes.entries()) taxes[index] = shares[position];
+    }
+    return taxes;
+};
+
+/**
+ * Per-line VAT for lines whose per-rate goods VAT is already frozen — how an issued document
+ * re-derives each printed line without the shipping it no longer carries per line.
+ * @param items - the document's lines
+ * @param currency - the ISO-4217 code the amounts are in
+ * @param goodsTaxByRate - the frozen goods VAT at each rate, a decimal
+ * @returns one figure set per line, in line order; net + tax is exactly the line's gross
+ */
+export const lineTaxFromRateTotals = (
+    items: readonly TaxableLineItem[],
+    currency: string,
+    goodsTaxByRate: ReadonlyMap<number, number>
+): LineTaxBreakdown[] => {
+    const rates = items.map((item) => frozenRate(item));
+    const grossByLine = items.map((item) =>
+        scaleMoney(toMinorUnits(item.product?.price, currency), wholeCount(item.quantity))
+    );
+    const taxes = allocateLineTax(
+        grossByLine,
+        rates,
+        new Map([...goodsTaxByRate].map(([rate, tax]) => [rate, toMinorUnits(tax, currency)]))
+    );
+    return grossByLine.map((gross, index) => ({
+        taxAmount: toDecimalAmount(taxes[index], currency),
+        netAmount: toDecimalAmount(subtractMoney(gross, taxes[index]), currency),
+        grossAmount: toDecimalAmount(gross, currency)
+    }));
 };
 
 /**
@@ -162,59 +246,63 @@ export const orderTaxBreakdown = ({
     );
     const shippingShares = apportion(toMinorUnits(shippingCost, currency), shippingWeights);
 
-    let netTotal: Money = NO_MONEY;
-    let taxTotal: Money = NO_MONEY;
-    let shippingNetTotal: Money = NO_MONEY;
-    let shippingTaxTotal: Money = NO_MONEY;
-    const byRate = new Map<number, { net: Money; tax: Money }>();
-    const shippingByRateMap = new Map<number, { net: Money; tax: Money }>();
+    const groups = groupByRate(grossAmounts, shippingShares, rates);
+    const lineTaxes = allocateLineTax(
+        grossAmounts,
+        rates,
+        new Map([...groups].map(([rate, group]) => [rate, group.goodsTax]))
+    );
 
-    const lines = items.map((item, index) => {
-        const rate = rates[index];
-        const gross = grossAmounts[index];
-        const tax = extractTax(gross, rate);
-        const net = subtractMoney(gross, tax);
-        // Shipping's own apportioned slice, taxed at THIS line's rate — ancillary to the goods.
-        const shippingGross = shippingShares[index];
-        const shippingTax = extractTax(shippingGross, rate);
-        const shippingNet = subtractMoney(shippingGross, shippingTax);
+    const lines = items.map((item, index) => ({
+        taxAmount: toDecimalAmount(lineTaxes[index], currency),
+        netAmount: toDecimalAmount(subtractMoney(grossAmounts[index], lineTaxes[index]), currency),
+        grossAmount: toDecimalAmount(grossAmounts[index], currency)
+    }));
 
-        netTotal = addMoney(netTotal, net);
-        taxTotal = addMoney(taxTotal, tax, shippingTax);
-        shippingNetTotal = addMoney(shippingNetTotal, shippingNet);
-        shippingTaxTotal = addMoney(shippingTaxTotal, shippingTax);
-        foldIntoRate(byRate, rate, addMoney(net, shippingNet), addMoney(tax, shippingTax));
-        foldIntoRate(shippingByRateMap, rate, shippingNet, shippingTax);
+    const sortedGroups = [...groups.entries()].toSorted(([left], [right]) => left - right);
+    const sumOf = (pick: (group: RateGroup) => Money): Money =>
+        addMoney(...sortedGroups.map(([, group]) => pick(group)));
 
-        return {
-            taxAmount: toDecimalAmount(tax, currency),
-            netAmount: toDecimalAmount(net, currency),
-            grossAmount: toDecimalAmount(addMoney(net, tax), currency)
-        };
+    const netOf = (gross: Money, tax: Money) => subtractMoney(gross, tax);
+    const rowOf = (rate: number, net: Money, tax: Money): TaxRateSummary => ({
+        rate,
+        netAmount: toDecimalAmount(net, currency),
+        taxAmount: toDecimalAmount(tax, currency),
+        grossAmount: toDecimalAmount(addMoney(net, tax), currency)
     });
 
-    const summaryRowsOf = (source: Map<number, { net: Money; tax: Money }>): TaxRateSummary[] =>
-        [...source.entries()]
-            .toSorted(([left], [right]) => left - right)
-            .map(([rate, { net, tax }]) => ({
-                rate,
-                netAmount: toDecimalAmount(net, currency),
-                taxAmount: toDecimalAmount(tax, currency),
-                grossAmount: toDecimalAmount(addMoney(net, tax), currency)
-            }));
+    const taxSummary = sortedGroups.map(([rate, group]) =>
+        rowOf(rate, netOf(addMoney(group.goodsGross, group.shippingGross), group.tax), group.tax)
+    );
+    // A rate with no shipping apportioned to it is left out, not printed as an empty row.
+    const shippingByRate = sortedGroups
+        .map(([rate, group]) =>
+            rowOf(rate, netOf(group.shippingGross, group.shippingTax), group.shippingTax)
+        )
+        .filter((row) => row.netAmount > 0 || row.taxAmount > 0);
+
+    const shippingNetTotal = subtractMoney(
+        sumOf((g) => g.shippingGross),
+        sumOf((g) => g.shippingTax)
+    );
+    const netTotal = subtractMoney(
+        sumOf((g) => g.goodsGross),
+        sumOf((g) => g.goodsTax)
+    );
 
     return {
         lines,
         netTotal: toDecimalAmount(netTotal, currency),
-        taxTotal: toDecimalAmount(taxTotal, currency),
+        taxTotal: toDecimalAmount(
+            sumOf((g) => g.tax),
+            currency
+        ),
         shippingNetAmount: toDecimalAmount(shippingNetTotal, currency),
-        shippingTaxAmount: toDecimalAmount(shippingTaxTotal, currency),
-        taxSummary: summaryRowsOf(byRate),
-        // A rate whose whole shipping share rounded down to zero — no shipping cost at all, or
-        // every line at that rate priced at zero, so `apportion` has no positive weight to split
-        // onto — is filtered out rather than printed as an empty row on the invoice.
-        shippingByRate: summaryRowsOf(shippingByRateMap).filter(
-            (row) => row.netAmount > 0 || row.taxAmount > 0
-        )
+        shippingTaxAmount: toDecimalAmount(
+            sumOf((g) => g.shippingTax),
+            currency
+        ),
+        taxSummary,
+        shippingByRate
     };
 };

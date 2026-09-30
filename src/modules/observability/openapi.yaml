@@ -389,7 +389,7 @@ components:
         ObservabilityMetricsSummary:
             type: object
             additionalProperties: false
-            required: [http, auth, business, database, process, timestamp]
+            required: [http, auth, database, process, timestamp]
             properties:
                 http:
                     type: object
@@ -412,6 +412,9 @@ components:
                         loginSuccess: { type: integer, minimum: 0 }
                         loginFailure: { type: integer, minimum: 0 }
                         signupSuccess: { type: integer, minimum: 0 }
+                # The shop's KPI block. Absent in a build with none of the modules that own these
+                # counters (`cart`, `orders`, `inventory`): a foundation-only deployment has no
+                # business figures to report, and a block of zeros would claim otherwise.
                 business:
                     type: object
                     additionalProperties: false

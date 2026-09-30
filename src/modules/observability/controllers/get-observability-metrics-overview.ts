@@ -33,8 +33,9 @@ interface MetricSample {
  * this module may reach `audit-logs` and nothing else.
  *
  * An absent metric is a normal state, not an error: it means the module that owns it is not in
- * this build, and the overview reports zero for that row. The response shape is fixed by
- * `openapi.yaml` and is the same either way, so a client never has to know which modules exist.
+ * this build, and the overview reports zero for that row. The one exception is the whole
+ * `business` block, which `openapi.yaml` makes optional: it is left out when none of its counters
+ * exist, see {@link SHOP_METRIC_NAMES}.
  */
 const readCounter = (name: string): Promise<MetricSample[]> => {
     const metric = metricsRegistry.getSingleMetric(name);
@@ -42,6 +43,21 @@ const readCounter = (name: string): Promise<MetricSample[]> => {
 
     return metric.get().then((result) => (result as { values?: MetricSample[] }).values ?? []);
 };
+
+/**
+ * The counters and gauges behind the `business` block, all owned by shop modules. When none is
+ * registered the build has no shop, and the block is omitted rather than reported as zeros.
+ */
+const SHOP_METRIC_NAMES = [
+    'cart_checkout_total',
+    'order_created_total',
+    'products_low_stock_total',
+    'inventory_reserved_units_total'
+] as const;
+
+/** Whether any shop module registered a metric this overview reads. */
+const hasShopMetrics = (): boolean =>
+    SHOP_METRIC_NAMES.some((name) => metricsRegistry.getSingleMetric(name) !== undefined);
 
 /**
  * Sum values matching every label in `filter` across a prom-client metric result.
@@ -101,12 +117,14 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                         loginFailure: sumByLabels(loginValues, { status: 'failure' }),
                         signupSuccess: sumByLabels(signupValues, { status: 'success' })
                     },
-                    business: {
-                        checkoutSuccess: sumByLabels(checkoutValues, { status: 'success' }),
-                        ordersCreated: sumMetricValues(orderValues),
-                        lowStockProducts: sumMetricValues(lowStockValues),
-                        reservedUnits: sumMetricValues(reservedValues)
-                    },
+                    ...(hasShopMetrics() && {
+                        business: {
+                            checkoutSuccess: sumByLabels(checkoutValues, { status: 'success' }),
+                            ordersCreated: sumMetricValues(orderValues),
+                            lowStockProducts: sumMetricValues(lowStockValues),
+                            reservedUnits: sumMetricValues(reservedValues)
+                        }
+                    }),
                     database: {
                         queriesTotal: sumMetricValues(databaseQueryValues),
                         errorsTotal: sumMetricValues(databaseErrorValues)

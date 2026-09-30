@@ -25,11 +25,13 @@ demo actually removable" is an enforced fact, not a claim.
 | `foundation` | everything else — `account`, `addresses`, `antibot`, `api-keys`, `audit-logs`, `feedback`, `locales`, `observability`, `users`, `webhooks`, `access` |
 
 `npm run measure:demo-strip` is the checked version of that claim: on every push and PR, CI copies
-the repo to a scratch directory, deletes every `group: shop` folder, and runs `ts-check`, the
-cross-cutting suite and `docs:build` against what's left. It reports on its own square
-(`demo-strip-measure` in `.github/workflows/ci.yml`) without blocking the merge gate — deliberately:
-it is a punch list for drift, not a promise that removing the shop today leaves a perfect repo, and
-`npm run demo:remove` (below) is the thing that actually clears that list for your own copy.
+the repo to a scratch directory, applies a removal recipe (`--recipe shop` runs the real
+`demo:remove`; `--recipe locales` deletes the optional locales module), then runs `regenerate`,
+`ts-check`, the cross-cutting suite and `docs:build` against what's left. It reports on its own
+squares (`demo-strip-measure` in `.github/workflows/ci.yml`) without blocking the merge gate —
+deliberately: it is a punch list for drift, not a promise that removing the shop today leaves a
+perfect repo, and `npm run demo:remove` (below) is the thing that actually clears that list for
+your own copy.
 
 ## Removing it
 

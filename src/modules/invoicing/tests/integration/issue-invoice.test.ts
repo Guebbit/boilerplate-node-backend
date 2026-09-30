@@ -62,6 +62,32 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         expect(invoice.grandTotal).toBeCloseTo(39.8, 2);
     });
 
+    // BR-CO-17: VAT is rounded once per rate, on the rate's whole taxable total. Three 0.10 lines
+    // at the standard rate (22%) owe round(30 x 0.22/1.22) = 5 cents, where rounding each line
+    // (round(1.80) = 2) and summing would bill 6.
+    it('freezes VAT rounded once per rate, not summed from per-line rounded amounts', async () => {
+        const user = await createUser();
+        const products = await Promise.all(
+            [0.1, 0.1, 0.1].map((price) => createProduct({ price }))
+        );
+        const order = await createOrder(
+            user,
+            products.map((product) => toOrderItem(product, 1))
+        );
+
+        await markPaid(String(order._id));
+        const invoice = await waitForInvoice(String(order._id));
+
+        // Read field by field: a Mongoose array of subdocuments is not plain data, and `toEqual` trips on it.
+        expect(invoice.taxSummary).toHaveLength(1);
+        const [row] = invoice.taxSummary;
+        expect([row.rate, row.netAmount, row.taxAmount, row.grossAmount]).toEqual([
+            0.22, 0.25, 0.05, 0.3
+        ]);
+        expect(invoice.taxTotal).toBe(0.05);
+        expect(invoice.grandTotal).toBe(0.3);
+    });
+
     // C4: `rateType` rides frozen onto the order line at checkout (`orders/services/snapshot.ts`)
     // and freezes again onto the invoice line here — the field a rendered PDF needs to tell a
     // zero-rated line from an exempt one, neither of which `taxRate` alone can say.

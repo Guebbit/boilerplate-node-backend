@@ -160,8 +160,10 @@ router.post('/reset', resetRequestLimiters, humanChallengeGate, postResetRequest
 // POST /account/reset-confirm — complete password reset with token
 router.post('/reset-confirm', credentialLimiters, postResetConfirm);
 
-// POST /account/password — change password by proving the current one (requires auth)
-router.post('/password', credentialLimiters, isAuth, postPasswordChange);
+// POST /account/password — change password by proving the current one (requires auth).
+// `isAuth` runs BEFORE `credentialLimiters` here, on /reauth and on /verify-request: the body
+// names no account, so the identity budget can only be per account if it reads the session's.
+router.post('/password', isAuth, credentialLimiters, postPasswordChange);
 
 // POST /account/password/check — advisory breach check, unauthenticated (signup needs it before
 // an account exists). `passwordCheckLimiter`, not `credentialLimiters`: this body carries no
@@ -170,7 +172,7 @@ router.post('/password', credentialLimiters, isAuth, postPasswordChange);
 router.post('/password/check', passwordCheckLimiter, postPasswordCheck);
 
 // POST /account/reauth — step-up: re-prove the password, refresh auth_time (requires auth)
-router.post('/reauth', credentialLimiters, isAuth, postReauth);
+router.post('/reauth', isAuth, credentialLimiters, postReauth);
 
 /*
  * GET /account/abilities — the rules the server enforces, for a client to render from.
@@ -205,7 +207,7 @@ router.delete(
 );
 
 // POST /account/verify-request — re-send the verification email (requires auth)
-router.post('/verify-request', credentialLimiters, isAuth, postVerifyRequest);
+router.post('/verify-request', isAuth, credentialLimiters, postVerifyRequest);
 
 // POST /account/verify-confirm — spend the emailed token; public, the token is the credential
 router.post('/verify-confirm', credentialLimiters, postVerifyConfirm);

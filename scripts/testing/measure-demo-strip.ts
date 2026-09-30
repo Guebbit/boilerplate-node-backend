@@ -1,18 +1,23 @@
 #!/usr/bin/env tsx
 /**
- * G-D2 step 1: measure how far "the demo shop is removable" actually is — `npm run measure:demo-strip`.
+ * G-D2 step 1: measure how far "a module is removable" actually is — `npm run measure:demo-strip
+ * [-- --recipe shop|locales]`.
  *
- * NOT `demo:strip`/`demo:remove`, and not meant to be green. This is the "measure first" half of
- * G-D2's `B` option: copy the checkout, delete every `group: shop` module folder (DDD-D1), and run
- * `ts-check`, the cross-cutting suite and `docs:build` against what is left. Whatever breaks — a
- * dangling import in `src/modules.ts`, a foundation module reaching for something a shop module
- * owned, a doc page citing a deleted path — is exactly the punch list the later "one command" work
- * (CT-D3, CT-D4, then a real `demo:remove`) has to clear. Report-only, on purpose: turning this
- * red would block every PR on work this step is not scoped to do.
+ * NOT `demo:remove`, and not meant to be green. It applies a removal RECIPE to a scratch copy of
+ * the checkout, regenerates, then runs `ts-check`, the cross-cutting suite and `docs:build`
+ * against what is left. Whatever breaks is the punch list:
  *
- * Runs against a SCRATCH COPY, never this checkout — `rm -rf src/modules/orders` in the real tree
- * is not a measurement. `node_modules` is symlinked rather than copied (or reinstalled): the
- * question is what the SOURCE looks like with the shop gone, not whether npm still works.
+ * | recipe   | what it does                                                                    |
+ * | -------- | ------------------------------------------------------------------------------- |
+ * | `shop`   | the real `demo:remove` — every `group: shop` module plus the files that name it |
+ * | `locales`| the optional-locales recipe: the folder and every registry line that names it   |
+ *
+ * Report-only, on purpose: turning this red would block every PR on work this step is not scoped
+ * to do. Promote it into the `ci` gate once it is green.
+ *
+ * Runs against a SCRATCH COPY, never this checkout. `node_modules` is symlinked rather than
+ * copied (or reinstalled): the question is what the SOURCE looks like with the module gone, not
+ * whether npm still works.
  *
  * See: docs/theory/strategic-ddd.md#4a-foundation-and-shop
  */
@@ -21,6 +26,13 @@ import { cpSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
+import {
+    removeModuleFolders,
+    stripModuleOrder,
+    stripModuleRegistry,
+    stripRoutedModules
+} from '../ops/demo-remove-registry';
+import { stripContractPathCensus } from '../ops/demo-remove-contract';
 import { readShopModuleNames } from './shop-module-names';
 
 /** Repo root, two levels up from `scripts/testing/`. */
@@ -34,7 +46,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const SCRATCH = path.join(os.tmpdir(), 'demo-strip-measure');
 
 /** Top-level entries never copied into the scratch tree — regenerated or symlinked instead. */
-const SKIP_ENTRIES = new Set(['node_modules', '.git', 'tmp']);
+const SKIP_ENTRIES = new Set(['node_modules', '.git', '.claude', 'tmp']);
 
 /** One command this script runs against the scratch tree, and what it is asked about. */
 interface Check {
@@ -43,8 +55,13 @@ interface Check {
     args: readonly string[];
 }
 
-/** `ts-check`, the cross-cutting suite, and the docs build — the three G-D2 asks for. */
+/**
+ * `regenerate` (an adopter's own first step after a removal), then `ts-check`, the cross-cutting
+ * suite and the docs build — the three G-D2 asks for. A failing `regenerate` is a finding, so the
+ * later checks still run against whatever it left.
+ */
 const CHECKS: readonly Check[] = [
+    { label: 'regenerate', command: 'npm', args: ['run', 'regenerate', '--', '--no-sync'] },
     { label: 'ts-check', command: 'npm', args: ['run', 'ts-check'] },
     { label: 'test:cross-cutting', command: 'npm', args: ['run', 'test:cross-cutting'] },
     { label: 'docs:build', command: 'npm', args: ['run', 'docs:build'] }
@@ -63,12 +80,59 @@ const assembleScratchCopy = (): void => {
     // Node resolves through the symlink exactly as it would a real directory — the scratch copy
     // needs working imports, not its own install.
     symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(SCRATCH, 'node_modules'), 'dir');
+
+    // `demo:remove` ends with a `git grep` for tests that still import what it deleted, and that
+    // needs a repository to search.
+    runInScratch('git', ['init', '--quiet']);
+    runInScratch('git', ['add', '--all']);
 };
 
-/** Delete every `group: shop` module folder from the scratch copy. */
-const stripShopModules = (names: readonly string[]): void => {
-    for (const name of names) {
-        rmSync(path.join(SCRATCH, 'src', 'modules', name), { recursive: true, force: true });
+/** A removal recipe: how to take one kind of module out of the scratch copy. */
+interface Recipe {
+    /** Applies the removal to the scratch tree. */
+    apply: () => void;
+    /** What the report says was removed. */
+    describe: () => string;
+}
+
+/**
+ * Run a command in the scratch tree, refusing to go on when it fails — a recipe that does not
+ * apply is a broken measurement, not a finding.
+ * @param command - the executable
+ * @param commandArguments - its arguments
+ */
+const runInScratch = (command: string, commandArguments: readonly string[]): void => {
+    const result = spawnSync(command, commandArguments, { cwd: SCRATCH, stdio: 'inherit' });
+    if (result.status !== 0)
+        throw new Error(
+            `[demo-strip] \`${command} ${commandArguments.join(' ')}\` failed while applying the recipe.`
+        );
+};
+
+/**
+ * The optional-locales recipe: the folder and every registry line that names it. What still
+ * imports it afterwards is the punch list.
+ */
+const LOCALES: readonly string[] = ['locales'];
+
+/** Every recipe this script knows, keyed by the `--recipe` value. */
+const RECIPES: Partial<Record<string, Recipe>> = {
+    shop: {
+        // The real command, inside the scratch copy: `__dirname` there resolves to the scratch root.
+        apply: () => {
+            runInScratch('npx', ['tsx', 'scripts/ops/demo-remove.ts']);
+        },
+        describe: () => `every group: shop module (${readShopModuleNames(REPO_ROOT).join(', ')})`
+    },
+    locales: {
+        apply: () => {
+            removeModuleFolders(SCRATCH, LOCALES);
+            stripModuleRegistry(SCRATCH, LOCALES);
+            stripRoutedModules(SCRATCH, LOCALES);
+            stripModuleOrder(SCRATCH, LOCALES);
+            stripContractPathCensus(SCRATCH, LOCALES);
+        },
+        describe: () => 'the locales module'
     }
 };
 
@@ -83,24 +147,31 @@ const run = (check: Check): boolean => {
     return result.status === 0;
 };
 
-const shop = readShopModuleNames(REPO_ROOT);
-console.info(`[demo-strip] stripping ${shop.length} group: shop module(s): ${shop.join(', ')}`);
+const recipeName = process.argv.includes('--recipe')
+    ? (process.argv[process.argv.indexOf('--recipe') + 1] ?? '')
+    : 'shop';
+const recipe = RECIPES[recipeName];
+if (!recipe)
+    throw new Error(
+        `[demo-strip] unknown recipe "${recipeName}"; one of ${Object.keys(RECIPES).join(', ')}.`
+    );
+
+console.info(`[demo-strip] recipe ${recipeName}: removing ${recipe.describe()}`);
 
 assembleScratchCopy();
-stripShopModules(shop);
-
+recipe.apply();
 const results = CHECKS.map((check) => ({ check, passed: run(check) }));
 
-console.info('\n[demo-strip] summary — report-only, not a merge gate:');
+console.info(`\n[demo-strip] summary (${recipeName}) — report-only, not a merge gate:`);
 for (const { check, passed } of results)
     console.info(`  ${passed ? 'PASS' : 'FAIL'}  ${check.label}`);
 
 const allPassed = results.every((result) => result.passed);
 console.info(
     allPassed
-        ? '\n[demo-strip] the demo shop is removable today.'
-        : '\n[demo-strip] the demo shop is NOT removable today — see the failing command(s) above ' +
-              "for what still couples the foundation to it. Fixing this is CT-D3/CT-D4 and DDD-D5's job, not this script's."
+        ? `\n[demo-strip] the ${recipeName} recipe leaves a working repo.`
+        : `\n[demo-strip] the ${recipeName} recipe leaves failures — see the failing command(s) above ` +
+              'for what still couples the rest of the repo to what was removed.'
 );
 
 process.exitCode = allPassed ? 0 : 1;

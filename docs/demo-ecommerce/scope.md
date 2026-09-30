@@ -34,6 +34,12 @@ Decided, or partly built, but not the whole story yet:
 
 - **Product variants.** A single SKU per product today; size/colour variants are a planned
   extension, not a redesign.
+- **Digital downloads.** A digital product skips shipping today, but there is no file behind it: a
+  paid order does not yet hand the buyer a download (an access-controlled file, delivered once the
+  payment settles).
+- **Stock committed at shipment.** Stock is committed when the payment settles; the standard (and
+  Shopify's own model) is to commit at fulfilment, so on-hand only drops when goods leave. It waits
+  for a fulfilment flow to hang off.
 - **A consent step for digital content.** Returns, partial refunds, the EU withdrawal button and
   the per-product exclusions are built (see [`returns`](../modules/returns.md)); what is left is the
   checkout acknowledgement that ends the withdrawal right once a download starts.

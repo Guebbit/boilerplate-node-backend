@@ -36,6 +36,24 @@ import { MFA_CHALLENGE_DELIVERED_TTL_MS } from './services/two-factor';
  */
 const IDENTITY_RATE_LIMIT_PROPERTY = 'credentialIdentityRateLimit';
 
+/** `keyedBy` label for the credential identity budget — see {@link credentialIdentityOf}. */
+const KEYED_BY_ACCOUNT_OR_SUBMITTED_EMAIL =
+    'the authenticated account when there is one, else the submitted email (normalised and ' +
+    'pseudonymised; falls back to address block when absent)';
+
+/**
+ * Who a credential attempt is aimed at. A signed-in caller (`POST /account/password`, `/reauth`,
+ * `/verify-request`, which run `isAuth` first) is keyed on their account id: those bodies name no
+ * email, so the submitted-email key would fall back to the address block and the "per account"
+ * budget would not be per account at all. Everyone else — login, reset-confirm — is still keyed
+ * on the account they name.
+ *
+ * The id is prefixed so it can never collide with a pseudonymised email. It is already an opaque
+ * id, the same value `payments` keys its per-account budgets on.
+ */
+export const credentialIdentityOf = (request: Request): string =>
+    request.authContext ? `account:${request.authContext.id}` : identityOf(request);
+
 /** Failed attempts against ONE account — the smallest of the three credential budgets. */
 const CREDENTIAL_IDENTITY_BUDGET: RateLimitBudget = {
     name: 'Credential guesses — per account',
@@ -43,13 +61,13 @@ const CREDENTIAL_IDENTITY_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_AUTH_RATE_LIMIT_MAX',
     defaultMax: 10,
     windowMs: 'shared',
-    keyedBy: KEYED_BY_SUBMITTED_EMAIL,
+    keyedBy: KEYED_BY_ACCOUNT_OR_SUBMITTED_EMAIL,
     bounds:
         'Failed attempts against ONE account — defeats a botnet spreading guesses. The smallest ' +
         'of the three, since guessing at one account is the attack and someone signing in on ' +
         'several devices is not.',
     audited: true,
-    keyGenerator: identityOf,
+    keyGenerator: credentialIdentityOf,
     skipSuccessfulRequests: true,
     requestPropertyName: IDENTITY_RATE_LIMIT_PROPERTY
 };
