@@ -32,6 +32,7 @@ import { productModel } from '@modules/products/model';
 import { presentProduct } from '@modules/products/presenter';
 import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
+import { asCustomer } from '@tests/callers';
 import { paymentModel } from '@modules/payments/model';
 import { userModel } from '@modules/users/model';
 import { auditLogModel } from '@modules/audit-logs/model';
@@ -308,6 +309,17 @@ describe('the history reads as a history', () => {
         const periodMs = 30 * 86_400_000;
         expect(gapMs).toBeGreaterThanOrEqual(periodMs);
         expect(gapMs - periodMs).toBeLessThan(2 * 86_400_000);
+    });
+
+    it.each([
+        ['order.withdrawal-open', true],
+        ['order.withdrawal-last-day', true],
+        ['order.withdrawal-closed', false]
+    ] as const)('%s offers its buyer the withdraw button: %s', async (subject, offered) => {
+        const order = await orderModel.findById(subjects[subject]).exec();
+        const wire = await orderService.withActions(order!, asCustomer(SEED_USER_ID));
+
+        expect(wire.actions?.withdraw).toBe(offered);
     });
 
     it('accounts for every unit of stock with a movement the app wrote', async () => {
