@@ -184,6 +184,46 @@ describe('status', () => {
     });
 });
 
+describe('status while an enrollment is pending', () => {
+    it('does not list a method that was never confirmed as armed, nor offer it as a method to add', async () => {
+        const { bearer } = await authenticateVerified();
+        await api().post('/account/2fa/methods/totp/setup').set('Authorization', bearer).send();
+
+        const response = await api().get('/account/2fa').set('Authorization', bearer).send();
+
+        expect(response.body.data.enabled).toBe(false);
+        expect(response.body.data.methods).toEqual([]);
+        expect((response.body.data.available as { method: string }[]).map((m) => m.method)).toEqual(
+            expect.arrayContaining(['totp'])
+        );
+    });
+
+    it('reports a replaced email factor as disarmed too: a replace disarms it before its new code is proved', async () => {
+        const { bearer } = await authenticateVerified();
+        await enrollEmail(bearer);
+        await api().post('/account/2fa/methods/email/setup').set('Authorization', bearer).send();
+
+        const response = await api().get('/account/2fa').set('Authorization', bearer).send();
+
+        expect(response.body.data.enabled).toBe(false);
+        expect(response.body.data.methods).toEqual([]);
+        expect((response.body.data.available as { method: string }[]).map((m) => m.method)).toEqual(
+            expect.arrayContaining(['email'])
+        );
+    });
+
+    it('reports a replaced device factor as disarmed, since the replace disarms it before its new code is proved', async () => {
+        const { bearer } = await authenticateVerified();
+        await enrollTotp(bearer);
+        await api().post('/account/2fa/methods/totp/setup').set('Authorization', bearer).send();
+
+        const response = await api().get('/account/2fa').set('Authorization', bearer).send();
+
+        expect(response.body.data.enabled).toBe(false);
+        expect(response.body.data.methods).toEqual([]);
+    });
+});
+
 describe('enrolling the device factor', () => {
     it('requires a live session', async () => {
         const response = await api().post('/account/2fa/methods/totp/setup').send();

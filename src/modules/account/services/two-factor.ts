@@ -297,7 +297,9 @@ export const twoFactorStatus = (
         .then<ResponseSuccess<TwoFactorStatus> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);
 
-            const enrolled = orderedEntries(user.twoFactorMethods);
+            // Armed ones only: an entry that has a pending code but no `enrolledAt` is an
+            // enrollment in progress, and listing it would show a factor login does not ask for.
+            const enrolled = armedEntries(user);
             const enrolledNames = new Set(enrolled.map(({ handler }) => handler.name));
 
             return generateSuccess({
