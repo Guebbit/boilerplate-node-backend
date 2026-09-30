@@ -149,6 +149,27 @@ describe('each subject names a row that really has the property', () => {
         expect(product?.active).toBe(true);
     });
 
+    it('the catalogue carries the VAT and shipping data the journeys need', async () => {
+        const reduced = await productModel.countDocuments({ taxClass: 'reduced' }).exec();
+        const zeroRated = await productModel
+            .countDocuments({ taxClass: 'zero', rateType: 'zero-rated' })
+            .exec();
+        const exempt = await productModel
+            .countDocuments({ taxClass: 'zero', rateType: 'exempt' })
+            .exec();
+        const weighed = await productModel.countDocuments({ weight: { $gt: 0 } }).exec();
+        const digital = await productModel
+            .countDocuments({ requiresShipping: false, deletedAt: { $exists: false } })
+            .exec();
+
+        expect(reduced).toBeGreaterThan(0);
+        expect(zeroRated).toBeGreaterThan(0);
+        expect(exempt).toBeGreaterThan(0);
+        expect(weighed).toBeGreaterThan(100);
+        // The hand-written course plus the two downloadable guides.
+        expect(digital).toBeGreaterThanOrEqual(3);
+    });
+
     it('order.ownerPending is pending, the admin account owns it, and it holds real stock', async () => {
         const order = await orderModel.findById(subjects['order.ownerPending']).exec();
         expect(order?.status).toBe('pending');

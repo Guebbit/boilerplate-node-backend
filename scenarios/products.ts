@@ -6,7 +6,7 @@
  * falls to `@modules/products/model`'s `default:` — see `@modules/products/factories`.
  *
  * Six named rows carry the branch coverage the storefront and repositories actually exercise
- * (soft-deleted, out of stock, inactive, minimal); `./products-filler` supplies a further 126 rows
+ * (soft-deleted, out of stock, inactive, minimal); `./products-filler` supplies a further 128 rows
  * combinatorially, so the catalogue reads like a real pet-supply retailer rather than a list of
  * edge cases. Every image comes from `./products-images.generated.json` (`npm run scenario:images`) —
  * none is hand-placed. The filler rows share a fixed pool of 20 images by cycling through it

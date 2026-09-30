@@ -120,7 +120,7 @@ There is a separate, permanent delete for when a record genuinely has to go.
 
 ## Hidden two different ways
 
-The demo has one of each, which is why the shop shows 130 products but the manager sees all 132:
+The demo has one of each, which is why the shop shows 132 products but the manager sees all 134:
 
 | Product                                              | State            | What it means                                           |
 | ---------------------------------------------------- | ---------------- | ------------------------------------------------------- |
