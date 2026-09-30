@@ -19,10 +19,13 @@ import {
     destroyStateCookie,
     destroyVerifierCookie,
     destroyContinueCookie,
+    destroyLocaleCookie,
     isSameOriginPath,
+    isLocaleTag,
     OAUTH_STATE_COOKIE,
     OAUTH_VERIFIER_COOKIE,
-    OAUTH_CONTINUE_COOKIE
+    OAUTH_CONTINUE_COOKIE,
+    OAUTH_LOCALE_COOKIE
 } from '../oauth/state';
 import { createMfaChallengeCookie } from '../oauth/mfa-redirect';
 import {
@@ -43,14 +46,15 @@ import { authOauthTotal } from '../metrics';
 import { isUnrestrictedCaller } from '../roles';
 
 /**
- * Clears all three single-attempt OAuth cookies — called at every outcome of one login attempt,
- * success or failure, since none of the state, the verifier or the saved `continue` path is any
+ * Clears all four single-attempt OAuth cookies — called at every outcome of one login attempt,
+ * success or failure, since none of the state, the verifier or the saved `continue` path and locale is any
  * use past this callback.
  */
 const clearOAuthCookies = (response: Response): void => {
     destroyStateCookie(response);
     destroyVerifierCookie(response);
     destroyContinueCookie(response);
+    destroyLocaleCookie(response);
 };
 
 /**
@@ -71,6 +75,13 @@ export const getOAuthCallback = (request: Request, response: Response) => {
 
     const query = request.query as Record<string, unknown>;
 
+    /** The language the visitor started the login in — re-validated for the same reason as
+     * `continue` below, and read lazily because every caller runs after `state` is trusted. */
+    const savedLocale = (): string | undefined => {
+        const saved = cookieOf(request, OAUTH_LOCALE_COOKIE);
+        return isLocaleTag(saved) ? saved : undefined;
+    };
+
     /** Audit + metric for a failed attempt, then clear both single-attempt cookies — the tail
      * every failure path shares, whichever response follows. */
     const recordFailureAndClear = (reason: string) => {
@@ -83,7 +94,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
      * than a JSON body — the browser is mid-navigation by the time any of this runs. */
     const failToFrontend = (reason: string) => {
         recordFailureAndClear(reason);
-        response.redirect(302, oauthFrontendCallbackUrl(reason));
+        response.redirect(302, oauthFrontendCallbackUrl(reason, undefined, savedLocale()));
     };
 
     if (!stateMatches(cookieOf(request, OAUTH_STATE_COOKIE), query.state)) {
@@ -148,7 +159,10 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                     ).then(() => {
                         authOauthTotal.inc({ provider: providerName, status: 'success' });
                         clearOAuthCookies(response);
-                        response.redirect(302, oauthFrontendCallbackUrl(undefined, continueTo));
+                        response.redirect(
+                            302,
+                            oauthFrontendCallbackUrl(undefined, continueTo, savedLocale())
+                        );
                     });
                 });
             }
@@ -157,7 +171,10 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                 createMfaChallengeCookie(response, challenge.challenge, challenge.expiresAt);
                 authOauthTotal.inc({ provider: providerName, status: 'mfa_required' });
                 clearOAuthCookies(response);
-                response.redirect(302, oauthFrontendMfaCallbackUrl(challenge, continueTo));
+                response.redirect(
+                    302,
+                    oauthFrontendMfaCallbackUrl(challenge, continueTo, savedLocale())
+                );
             });
         })
         .catch((error: unknown) => {
