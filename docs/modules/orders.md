@@ -121,6 +121,19 @@ address or method, cart pre-flight and clearing — stays with the caller; `plac
 what it needs to hold and write. See [Checkout](./cart-checkout.md#the-sequence) for the storefront
 path in full.
 
+Two frozen addresses ride on the order, both snapshots like the lines (an order keeps where it went
+and whom it was billed to, not what the address book says today):
+
+| Field             | Present when                                                | Read by                                |
+| ----------------- | ----------------------------------------------------------- | -------------------------------------- |
+| `shippingAddress` | a line ships to an address (not digital-only, not a pickup) | the warehouse, the order page          |
+| `billingAddress`  | every checkout order                                        | the invoice (Art. 226), the order page |
+
+The split is Shopify's: a digital-only order is invoiced to someone but ships nowhere, so it freezes
+no shipping address. Billing is "same as shipping" unless the buyer names another entry
+([how checkout resolves it](./cart-checkout.md#the-sequence)); the admin's `POST /orders` runs no
+checkout and carries neither. The retention scrub anonymises both.
+
 `POST /orders` is the OTHER caller — the admin path — and it is deliberately minimal, because it
 exists for manual corrections, not as a second sales channel:
 
