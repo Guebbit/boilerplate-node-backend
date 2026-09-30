@@ -346,6 +346,10 @@ const violationsForField = (fieldSchema: ZodType): { violation: string; value: u
                     violation: `above the maximum (${max.value})`,
                     value: max.value + 1
                 });
+            violations.push({
+                violation: 'wrong type (string instead of number)',
+                value: 'not-a-number'
+            });
 
             break;
         }

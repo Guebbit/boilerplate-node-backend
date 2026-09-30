@@ -41,8 +41,12 @@ import type { Response } from 'supertest';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
+import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { ZodType } from 'zod';
 import { validPayload, invalidPayloads } from '@tests/contract-data';
-import { listOperations, type SchemaNode } from '@tests/spec-walk';
+import { listOperations, type Operation, type SchemaNode } from '@tests/spec-walk';
+import { seedWorld, buildUrl, OBJECT_ID, type World } from '@tests/spec-world';
+import * as zodSchemas from '@api/schemas.zod';
 import {
     CreateUserBody,
     CreateProductBody,
@@ -420,6 +424,295 @@ describe('invalid query parameters (contract-derived)', () => {
             const response = await QUERY_FIXTURES[key]!.request(
                 `${paramName}=${encodeURIComponent(invalidQueryValue(schema))}`
             );
+
+            expect(response.status).toBe(422);
+        }
+    );
+});
+
+// ─── every other write operation ───────────────────────────────────────────────────────────────
+//
+// The seven blocks above are the ones that needed hand-written glue to reach a 2xx. Everything
+// else the spec declares under POST, PUT or PATCH is walked here from `listOperations()`, so a
+// write added tomorrow is covered without anyone remembering to add it. These cases assert the
+// weaker property that holds without a scenario behind each one: a body the contract declares
+// legal is never refused as a validation failure, and one it declares illegal always is.
+
+/** The operations the blocks above already drive, with the stronger 2xx assertion. */
+const BESPOKE_OPERATIONS = new Set([
+    'createUser',
+    'createProduct',
+    'createOrder',
+    'addCartItem',
+    'createFeedbackRequest',
+    'signup',
+    'login'
+]);
+
+/** Every POST/PUT/PATCH with a JSON body. */
+const ALL_WRITE_OPERATIONS = listOperations().filter(
+    (operation) => ['post', 'put', 'patch'].includes(operation.method) && operation.bodySchema
+);
+
+/** The ones no block above owns — those get the weaker cases here in full. */
+const WRITE_OPERATIONS = ALL_WRITE_OPERATIONS.filter(
+    (operation) => !BESPOKE_OPERATIONS.has(operation.operationId ?? '')
+);
+
+/** `createUser` -> `CreateUserBody`: the name orval gives the Zod schema of an operation's body. */
+const zodBodyName = (operationId: string): string =>
+    `${operationId.charAt(0).toUpperCase()}${operationId.slice(1)}Body`;
+
+/** The operation's generated Zod body schema, when it has one. */
+const zodBodyOf = (operation: Operation): ZodType | undefined => {
+    const exported: unknown = Object.entries(zodSchemas).find(
+        ([name]) => name === zodBodyName(operation.operationId ?? '')
+    )?.[1];
+    return exported instanceof ZodType ? exported : undefined;
+};
+
+/** A label that names the operation the way the fuzz suite does. */
+const labelOf = (operation: Operation): string =>
+    `${operation.method.toUpperCase()} ${operation.path}`;
+
+/**
+ * Bodies whose Zod schema is a `record`, which `contract-data.ts` does not generate: a hand-written
+ * legal body stands in, and there is no per-field violation to derive.
+ */
+const RECORD_BODIES = new Set(['replaceEntityTranslations', 'upsertEntityTranslations']);
+
+/**
+ * Operations whose legal body is still refused by something the body cannot carry, and why. They
+ * skip the "not refused" cases and keep the "violations are refused" ones where those hold.
+ */
+const NEEDS_STATE_OR_SIGNATURE: Record<string, string> = {
+    confirmEmailVerification: 'the token is issued by the verification mail',
+    confirmPasswordReset: 'the token is issued by the reset mail',
+    confirmEmailChange: 'the token is issued by the change-confirmation mail',
+    confirmTwoFactorMethod: 'a setup for that method must be under way',
+    regenerateBackupCodes: 'two-factor must already be enabled on the account',
+    receivePaymentWebhook:
+        'a provider-signed request: the signature is checked before the body, and a bad one is 400'
+};
+
+/**
+ * `operationId::field` pairs where a wrong-typed value is accepted on purpose: `readInput`
+ * coerces `category` and `tag` to a one-element array because the same schema serves the GET
+ * query string, where everything is text (`docs/theory/request-input.md`).
+ */
+const ACCEPTS_ANY_TYPE = new Set(['searchProducts::category', 'searchProducts::tag']);
+
+/** Operations whose violations are not answered 422, because the refusal comes earlier. */
+const REFUSED_BEFORE_VALIDATION = new Set(['receivePaymentWebhook']);
+
+/** Computes the real value for one field from the seeded rows and the payload around it. */
+type FieldOverride = (world: World, payload: Record<string, unknown>) => unknown;
+
+/**
+ * Fields the contract cannot describe well enough to generate: an `Id` is an opaque string to the
+ * schema but an ObjectId to the database, a confirmation must equal the password beside it, a
+ * permission must be one the caller holds. Same relinking as `withRealOrderReferences` above,
+ * once per operation, and never applied to the field a case is testing.
+ */
+const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
+    createUser: { role: () => 'customer' },
+    createProduct: { translations: () => ({ en: { title: 'Generated Product Title' } }) },
+    searchUsers: { id: () => [OBJECT_ID] },
+    searchProducts: { id: () => [OBJECT_ID] },
+    searchOrders: {
+        id: () => [OBJECT_ID],
+        userId: (world) => world.userId,
+        productId: (world) => world.productId
+    },
+    createPaymentIntent: { orderId: (world) => world.orderId },
+    createReturn: {
+        orderId: (world) => world.orderId,
+        lines: (world) => [{ productId: world.productId, quantity: 1 }]
+    },
+    receiveStock: { productId: (world) => world.productId },
+    adjustStock: { productId: (world) => world.productId },
+    changePassword: {
+        currentPassword: () => PLAIN_PASSWORD,
+        passwordConfirm: (_world, payload) => payload.password
+    },
+    confirmPasswordReset: { passwordConfirm: (_world, payload) => payload.password },
+    reauth: { password: () => PLAIN_PASSWORD },
+    mintApiKey: { permissions: () => ['users.any.read'] },
+    replaceProductById: { translations: () => ({ en: { title: 'Generated Product Title' } }) },
+    updateProductById: { translations: () => ({ en: { title: 'Generated Product Title' } }) }
+};
+
+/** A legal translations body: the fallback locale, with one field, which is what a write must carry. */
+const FALLBACK_TRANSLATIONS = { en: { fields: { title: 'Generated Product Title' } } };
+
+/**
+ * A legal body for the operation: Zod-generated for an object, hand-written for a map.
+ *
+ * @throws {Error} when the operation has no generated Zod body — the census test names it first
+ */
+const legalBody = (operation: Operation): Record<string, unknown> => {
+    if (RECORD_BODIES.has(operation.operationId ?? '')) return FALLBACK_TRANSLATIONS;
+    const zod = zodBodyOf(operation);
+    if (!zod) throw new Error(`no generated Zod body for ${labelOf(operation)}`);
+    return validPayload(zod);
+};
+
+/** The names of the operation's `nullable` (or `enum: [null]`) body fields. */
+const nullableFieldsOf = (schema: SchemaNode | undefined): string[] =>
+    Object.entries(schema?.properties ?? {})
+        .filter(([, property]) => property.nullable === true)
+        .map(([name]) => name);
+
+/** The two request bodies a PATCH may carry: plain JSON, and merge-patch when declared. */
+const contentTypesOf = (operation: Operation): string[] => [
+    'application/json',
+    ...(operation.mergePatchSchema ? ['application/merge-patch+json'] : [])
+];
+
+/**
+ * Sends `body` to `operation` as an admin, against a world where its path names real rows.
+ *
+ * @param operation - what to call
+ * @param body - the payload under test
+ * @param contentType - which declared request body this is
+ * @param skipField - the field the case is about; the overrides leave it alone
+ */
+const sendWrite = async (
+    operation: Operation,
+    body: Record<string, unknown>,
+    contentType = 'application/json',
+    skipField?: string
+): Promise<Response> => {
+    const { user, bearer } = await authenticateAs('admin');
+    const world = await seedWorld(user);
+    const payload = { ...body };
+    for (const [field, override] of Object.entries(
+        FIELD_OVERRIDES[operation.operationId ?? ''] ?? {}
+    ))
+        if (field !== skipField) payload[field] = override(world, payload);
+
+    return api()
+        [operation.method](buildUrl(operation, world))
+        .set('Authorization', bearer)
+        .set('Accept-Language', 'en')
+        .type(contentType)
+        .send(payload);
+};
+
+/** A refusal of the body itself: validation, or a content type the operation does not take. */
+const refusesTheBody = (response: Response): boolean =>
+    response.status === 422 || response.status === 415;
+
+/** The operations a legal body alone is enough to get past. */
+const STATEFUL_FREE_OPERATIONS = WRITE_OPERATIONS.filter(
+    (operation) =>
+        !(operation.operationId ?? '') ||
+        !((operation.operationId ?? '') in NEEDS_STATE_OR_SIGNATURE)
+);
+
+/** One legal-payload case per operation and content type it accepts. */
+const LEGAL_CASES = STATEFUL_FREE_OPERATIONS.flatMap((operation) =>
+    contentTypesOf(operation).map((contentType) => ({
+        label: labelOf(operation),
+        operation,
+        contentType
+    }))
+);
+
+/** One null case per nullable body field, per content type. */
+const NULL_CASES = ALL_WRITE_OPERATIONS.filter(
+    (operation) => !((operation.operationId ?? '') in NEEDS_STATE_OR_SIGNATURE)
+).flatMap((operation) =>
+    nullableFieldsOf(operation.bodySchema).flatMap((field) =>
+        contentTypesOf(operation).map((contentType) => ({
+            label: labelOf(operation),
+            operation,
+            field,
+            contentType
+        }))
+    )
+);
+
+/** One violation case per constraint a body schema declares, where Zod can enumerate them. */
+const VIOLATION_CASES = WRITE_OPERATIONS.flatMap((operation) => {
+    const zod = zodBodyOf(operation);
+    if (!zod || RECORD_BODIES.has(operation.operationId ?? '')) return [];
+    if (REFUSED_BEFORE_VALIDATION.has(operation.operationId ?? '')) return [];
+    return invalidPayloads(zod)
+        .filter(({ field }) => !ACCEPTS_ANY_TYPE.has(`${operation.operationId ?? ''}::${field}`))
+        .map(({ field, violation, payload }) => ({
+            label: labelOf(operation),
+            operation,
+            field,
+            violation,
+            payload
+        }));
+});
+
+/**
+ * Fails with the response body in the message when the operation refused the body itself, so a
+ * failing case names the field the validator objected to rather than just "true".
+ */
+const expectBodyAccepted = (response: Response): void => {
+    expect(refusesTheBody(response) ? response.body : 'accepted').toBe('accepted');
+    expect(response.status).toBeLessThan(500);
+};
+
+describe('every write operation (contract-derived)', () => {
+    // The fallback locale must exist as a row for a product or translation write to name it.
+    beforeEach(async () => {
+        await localeRepository.create(makeLocale({ tag: 'en', name: 'en', nativeName: 'en' }));
+    });
+
+    it('walks more than the seven hand-written blocks', () => {
+        expect(WRITE_OPERATIONS.length).toBeGreaterThan(40);
+        expect(ALL_WRITE_OPERATIONS.length - WRITE_OPERATIONS.length).toBe(BESPOKE_OPERATIONS.size);
+    });
+
+    it('names only operations that exist in every table above', () => {
+        const known = new Set(ALL_WRITE_OPERATIONS.map((operation) => operation.operationId));
+        const named = [
+            ...Object.keys(NEEDS_STATE_OR_SIGNATURE),
+            ...Object.keys(FIELD_OVERRIDES),
+            ...REFUSED_BEFORE_VALIDATION
+        ];
+        expect(named.filter((id) => !known.has(id))).toEqual([]);
+    });
+
+    it('has a generated Zod body schema for every operation it walks', () => {
+        const missing = WRITE_OPERATIONS.filter((operation) => !zodBodyOf(operation)).map(
+            (operation) => labelOf(operation)
+        );
+        expect(missing).toEqual([]);
+    });
+
+    it.each(LEGAL_CASES)(
+        '$label does not refuse a payload the contract declares legal, as $contentType',
+        async ({ operation, contentType }) => {
+            const response = await sendWrite(operation, legalBody(operation), contentType);
+
+            expectBodyAccepted(response);
+        }
+    );
+
+    it.each(NULL_CASES)(
+        '$label accepts null for the nullable $field, as $contentType',
+        async ({ operation, field, contentType }) => {
+            const response = await sendWrite(
+                operation,
+                { ...legalBody(operation), [field]: null },
+                contentType,
+                field
+            );
+
+            expectBodyAccepted(response);
+        }
+    );
+
+    it.each(VIOLATION_CASES)(
+        '$label rejects a payload where $field is $violation',
+        async ({ operation, field, payload }) => {
+            const response = await sendWrite(operation, payload, 'application/json', field);
 
             expect(response.status).toBe(422);
         }

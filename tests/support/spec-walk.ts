@@ -61,6 +61,8 @@ export interface Operation {
     queryParameters: QueryParameter[];
     /** Resolved `application/json` request body schema, when the operation takes one. */
     bodySchema?: SchemaNode;
+    /** Resolved `application/merge-patch+json` body schema, when the operation declares that variant. */
+    mergePatchSchema?: SchemaNode;
     /** True when the operation declares a `multipart/form-data` body (skipped by the fuzzer). */
     isMultipart: boolean;
     /** True when the operation requires a bearer token. */
@@ -106,7 +108,34 @@ export const readSpec = (): SpecDocument => {
 };
 
 /**
- * Resolve `$ref` and flatten `allOf`, leaving a node the arbitrary builder can read directly.
+ * Fold an `allOf` into one node: every part's keywords, then the node's own siblings on top.
+ *
+ * Own siblings win because the spec writes `type: string` or `nullable: true` beside the
+ * `allOf: [$ref]` wrapper on purpose (orval needs the wrapper, the sibling says what the field is).
+ * Among parts the last one wins for a scalar keyword — no part in the spec constrains the same
+ * bound twice, so "tightest wins" would be code for a case that does not exist.
+ * `properties` are merged and `required` unioned, which is what `allOf` means for objects.
+ *
+ * @param own - the node carrying the `allOf`, siblings included
+ * @param parts - the resolved members of that `allOf`
+ */
+const mergeAllOf = (own: SchemaNode, parts: (SchemaNode | undefined)[]): SchemaNode => {
+    const merged: SchemaNode = {};
+    const { allOf: _members, ...siblings } = own;
+
+    for (const part of [...parts, siblings]) {
+        if (!part) continue;
+        const { properties, required, ...scalars } = part;
+        Object.assign(merged, scalars);
+        if (properties) merged.properties = { ...merged.properties, ...properties };
+        if (required) merged.required = [...new Set([...(merged.required ?? []), ...required])];
+    }
+
+    return merged;
+};
+
+/**
+ * Resolve `$ref` and fold `allOf`, leaving a node the arbitrary builder can read directly.
  *
  * Bounded by `seen`: a self-referential schema (a category with child categories) would otherwise
  * recurse forever, and the failure mode would be a stack overflow inside a test rather than a
@@ -126,26 +155,30 @@ export const resolveSchema = (
         return resolveSchema(spec.components?.schemas?.[name], spec, seen);
     }
 
-    if (schema.allOf) {
-        const merged: SchemaNode = { type: 'object', properties: {}, required: [] };
-        for (const part of schema.allOf) {
-            const resolved = resolveSchema(part, spec, new Set(seen));
-            Object.assign(merged.properties!, resolved?.properties);
-            merged.required!.push(...(resolved?.required ?? []));
-        }
-        return merged;
-    }
+    if (schema.allOf)
+        return mergeAllOf(
+            schema,
+            schema.allOf.map((part) => resolveSchema(part, spec, new Set(seen)))
+        );
+
+    const resolved: SchemaNode = { ...schema };
 
     if (schema.properties) {
-        const properties: Record<string, SchemaNode> = {};
+        resolved.properties = {};
         for (const [key, value] of Object.entries(schema.properties))
-            properties[key] = resolveSchema(value, spec, new Set(seen)) ?? {};
-        return { ...schema, properties };
+            resolved.properties[key] = resolveSchema(value, spec, new Set(seen)) ?? {};
     }
 
-    if (schema.items) return { ...schema, items: resolveSchema(schema.items, spec, new Set(seen)) };
+    if (schema.items) resolved.items = resolveSchema(schema.items, spec, new Set(seen));
 
-    return schema;
+    if (typeof schema.additionalProperties === 'object')
+        resolved.additionalProperties = resolveSchema(
+            schema.additionalProperties,
+            spec,
+            new Set(seen)
+        );
+
+    return resolved;
 };
 
 /**
@@ -256,6 +289,10 @@ export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => 
                     spec
                 ),
                 bodySchema: resolveSchema(content?.['application/json']?.schema, spec),
+                mergePatchSchema: resolveSchema(
+                    content?.['application/merge-patch+json']?.schema,
+                    spec
+                ),
                 isMultipart: Boolean(content?.['multipart/form-data']),
                 requiresAuth: Array.isArray(operation.security) && operation.security.length > 0
             });

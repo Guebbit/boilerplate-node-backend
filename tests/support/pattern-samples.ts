@@ -16,6 +16,16 @@
 const PATTERN_SAMPLES: Record<string, string> = {
     // Locale — BCP 47 language tag.
     '^[a-z]{2}(-[A-Za-z0-9]+)*$': 'it',
+    // CountryCode — ISO 3166-1 alpha-2.
+    '^[A-Z]{2}$': 'IT',
+    // Identifier-shaped strings (a tenant id, a two-letter tag, a token-ish key). The `\w` form is
+    // how the generated zod schema spells `[A-Za-z0-9_]`.
+    '^[a-z0-9][a-z0-9-]*$': 'abc',
+    '^[a-z]{2}$': 'it',
+    '^[A-Za-z0-9_-]+$': 'abc',
+    '^[\\w-]+$': 'abc',
+    // An https-only URL.
+    '(?:^https://)': 'https://example.com/hook',
     // PasswordNew — all four character classes, in any order. Lookahead, so nothing can generate
     // it; this is the shortest value that satisfies the rule.
     '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^\\dA-Za-z]).{8,}$': 'Aa1!aaaa'
