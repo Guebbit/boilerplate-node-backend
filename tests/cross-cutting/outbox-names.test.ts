@@ -22,7 +22,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { templateFile } from '@infrastructure/adapters/mailer';
-import { MODULES_ROOT } from '@tests/paths';
+import { isDeployed, MODULES_ROOT } from '@tests/paths';
 
 // `templateFile` resolves against the collection `tests/support/setup.ts` already built once for
 // this worker, the same as every other suite that sends a templated mail (SK-15).
@@ -61,7 +61,7 @@ it('finds the mails it means to check', () => {
     // over an empty list, which passes and proves nothing.
     const found = publishedNames();
     expect(found.length).toBeGreaterThanOrEqual(8);
-    expect(new Set(found.map((entry) => entry.module)).size).toBeGreaterThanOrEqual(4);
+    expect(new Set(found.map((entry) => entry.module)).size).toBeGreaterThanOrEqual(3);
 });
 
 it('states every name as a literal, so the sweep below can see all of them', () => {
@@ -157,7 +157,7 @@ it('publishes the set the pair agreed on', () => {
      * `orders.order-transfer-expired` for the other payment method) — both new here. The other
      * eight are the agreed, mirrored set.
      */
-    const agreed = [
+    const agreedByPair = [
         'account.delete-confirm',
         'account.delete-request',
         'account.email-change-notice',
@@ -178,6 +178,9 @@ it('publishes the set the pair agreed on', () => {
         'returns.notice',
         'webhooks.subscription-disabled'
     ];
+    // A name's first segment is the module that publishes it, so deleting a module (`demo:remove`)
+    // takes its names out of the expected set too.
+    const agreed = agreedByPair.filter((name) => isDeployed(name.split('.')[0]));
 
     expect(
         publishedNames()

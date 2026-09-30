@@ -71,25 +71,6 @@ export const stripModuleRegistry = (repoRoot: string, names: readonly string[]):
     return { file: 'src/modules.ts', detail: `removed ${names.join(', ')}` };
 };
 
-/**
- * Edit `scripts/contracts/openapi-bundle.ts`'s `MODULE_ORDER` — its own docblock calls it "the
- * ONLY hand-kept list left for this bundle", and `sectionPaths()` reads a stale entry's own
- * `openapi.yaml` straight off disk, so a shop module left in this array outlives its folder and
- * throws `ENOENT` the moment anything walks every section.
- */
-export const stripModuleOrder = (repoRoot: string, names: readonly string[]): RemovalNote => {
-    const file = path.join(repoRoot, 'scripts', 'contracts', 'openapi-bundle.ts');
-    const before = readFileSync(file, 'utf8');
-    // No import lines in this file's `MODULE_ORDER` — an always-false pattern disables that half
-    // of `stripModuleLines` and leaves only its array-entry filtering.
-    const after = stripModuleLines(before, names, () => /(?!)/);
-    writeFileSync(file, after);
-    return {
-        file: 'scripts/contracts/openapi-bundle.ts',
-        detail: `removed ${names.join(', ')} from MODULE_ORDER`
-    };
-};
-
 /** Edit `tests/support/routed-modules.ts`: remove each shop module's router import and map entry. */
 export const stripRoutedModules = (repoRoot: string, names: readonly string[]): RemovalNote => {
     const file = path.join(repoRoot, 'tests', 'support', 'routed-modules.ts');

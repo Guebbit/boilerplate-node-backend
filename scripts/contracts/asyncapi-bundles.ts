@@ -20,6 +20,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isMap, parseDocument, type Document } from 'yaml';
 import { REPO_ROOT, type ContractBundle } from './bundle-kinds';
+import { orderSections } from './section-order';
 
 /**
  * Who a section's channels are for.
@@ -31,22 +32,17 @@ import { REPO_ROOT, type ContractBundle } from './bundle-kinds';
  */
 type AsyncScope = 'shared' | 'backend';
 
-/** A section this file always has, independent of which modules exist. */
-type FixedSection = 'workers';
-
 /**
  * The narrative order for modules that own a top-level `asyncapi.yaml` — a PUBLIC event catalogue
- * an API client can reach, as opposed to `asyncapi.internal.yaml`'s backend-only queue. This is the
- * one hand-kept line for this half of the bundle: which modules qualify is discovered from disk by
- * {@link resolveModuleAsyncSections}, which throws if a module ships an `asyncapi.yaml` this array
- * hasn't placed yet — the same shape `openapi-bundle.ts`'s `MODULE_ORDER` uses.
+ * an API client can reach, as opposed to `asyncapi.internal.yaml`'s backend-only queue. A
+ * preference, not a registry: membership is discovered from disk (`scripts/contracts/section-order.ts`).
  */
-const MODULE_ASYNC_ORDER = ['observability', 'webhooks'] as const;
+const MODULE_ASYNC_ORDER: readonly string[] = ['observability', 'webhooks'];
 
-type ModuleAsyncSection = (typeof MODULE_ASYNC_ORDER)[number];
+type ModuleAsyncSection = string;
 
-/** A fixed section, a module owning a public `asyncapi.yaml`, or `<module>-internal` for a module owning a queue nothing else may reach. */
-type AsyncSectionName = FixedSection | ModuleAsyncSection | `${string}-internal`;
+/** A fixed section, a module owning a public `asyncapi.yaml`, or `<module>-internal` for a module owning a queue nothing else may reach — all just names. */
+type AsyncSectionName = string;
 
 /** The suffix an internal-queue section's name carries — see {@link internalSections}. */
 const INTERNAL_SUFFIX = '-internal';
@@ -60,22 +56,9 @@ const modulesWithAsyncapi = (): string[] =>
             existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'asyncapi.yaml'))
         );
 
-/**
- * Which modules contribute a public section, in {@link MODULE_ASYNC_ORDER}'s order — membership is
- * discovery, so a new module's public `asyncapi.yaml` needs exactly the one line above to say where
- * it sits in the merge order.
- * @throws Error if a module ships an `asyncapi.yaml` that MODULE_ASYNC_ORDER does not know about
- */
-const resolveModuleAsyncSections = (): readonly ModuleAsyncSection[] => {
-    const forgotten = modulesWithAsyncapi().filter(
-        (name) => !(MODULE_ASYNC_ORDER as readonly string[]).includes(name)
-    );
-    if (forgotten.length > 0)
-        throw new Error(
-            `[asyncapi] add to MODULE_ASYNC_ORDER in asyncapi-bundles.ts: ${forgotten.join(', ')}`
-        );
-    return MODULE_ASYNC_ORDER;
-};
+/** Which modules contribute a public section, in {@link MODULE_ASYNC_ORDER}'s order. */
+const resolveModuleAsyncSections = (): readonly ModuleAsyncSection[] =>
+    orderSections(MODULE_ASYNC_ORDER, modulesWithAsyncapi());
 
 /**
  * Every module with its own `asyncapi.internal.yaml` — a queue that module owns, discovered

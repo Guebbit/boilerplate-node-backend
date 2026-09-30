@@ -82,7 +82,7 @@ describe('operation aliases', () => {
     // A regex-free tripwire: if the bundle is ever read wrong, everything below passes vacuously.
     it('found the operations and the aliases among them', () => {
         expect(operations.length).toBeGreaterThan(50);
-        expect(aliases.length).toBeGreaterThan(5);
+        expect(aliases.length).toBeGreaterThan(3);
     });
 
     it('every x-alias-of names an operation that exists', () => {

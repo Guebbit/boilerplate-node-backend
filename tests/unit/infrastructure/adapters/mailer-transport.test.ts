@@ -49,7 +49,7 @@ const transportOptions = async (
     }
 
     // Any send builds the transport; the envelope itself is irrelevant here.
-    await sendTemplatedEmail({ to: 'ada@example.com' }, 'orders.order-confirm', {
+    await sendTemplatedEmail({ to: 'ada@example.com' }, 'account.reset-confirm', {
         locale: 'en',
         pageMetaTitle: '',
         pageMetaLinks: [],

@@ -13,25 +13,26 @@ That claim is not aspirational — `wishlist` was added under it, and three doma
 it. What each one actually cost is recorded below, honestly, including the parts that are more than
 one line.
 
-## The registries, all four of them
+## The registries, and the order lists that are not
 
-A module is named in exactly four places. Knowing which ones apply to your domain is most of both
-procedures:
+A module is named in two places that decide whether it exists, and three that only decide where it
+sits:
 
-| Registry             | File                                           | Applies when                                 |
-| -------------------- | ---------------------------------------------- | -------------------------------------------- |
-| `enabledModules`     | `src/modules.ts`                               | **always**                                   |
-| `MODULE_ORDER`       | `scripts/contracts/openapi-bundle.ts`          | the domain serves HTTP                       |
-| `MODULE_ASYNC_ORDER` | `scripts/contracts/asyncapi-bundles.ts`        | the domain ships a top-level `asyncapi.yaml` |
-| `FRONTEND_PAIRING`   | `tests/cross-cutting/frontend-pairing.test.ts` | **always**                                   |
+| List                 | File                                           | What it decides                                             |
+| -------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
+| `enabledModules`     | `src/modules.ts`                               | **registry** — the module is served                         |
+| `FRONTEND_PAIRING`   | `tests/cross-cutting/frontend-pairing.test.ts` | **registry** — the paired frontend's view of it             |
+| `MODULE_ORDER`       | `scripts/contracts/openapi-bundle.ts`          | order only — where its paths sit in the OpenAPI bundle      |
+| `MODULE_ASYNC_ORDER` | `scripts/contracts/asyncapi-bundles.ts`        | order only — where its channels sit in the AsyncAPI bundle  |
+| `PREFERRED_ORDER`    | `scripts/contracts/authorization-bundle.ts`    | order only — where its keys sit in the authorization bundle |
 
-Each of the two contract registries decides ORDER only — the narrative position a module's paths or
-channels appear in the published bundle. MEMBERSHIP is discovered from disk: a module folder either
-ships an `openapi.yaml` (or `asyncapi.yaml`) or it doesn't, and the bundler throws, naming the
-module, the moment one exists that isn't placed in its registry yet. That keeps this a one-line
-cost in both directions rather than a census a completeness test has to reconcile: forget the line
-on ADDITION and the bundle refuses to build; forget to delete it on REMOVAL and the bundle refuses
-just as loudly, the next line down, trying to read a file that is no longer there.
+The three order lists are a PREFERENCE. MEMBERSHIP is discovered from disk: a module folder either
+ships an `openapi.yaml` / `asyncapi.yaml` / `authorization.yaml` or it doesn't, and
+`scripts/contracts/section-order.ts` puts the discovered ones in the listed
+order, drops a listed module whose folder is gone, and appends one the list has never heard of in
+alphabetical order. So neither adding nor removing a module needs an edit to any of them — an edit
+only moves where the module sits, and the bundles of a full checkout keep their historical order
+byte for byte.
 
 An `asyncapi.internal.yaml` (a queue nothing outside this service reaches) and whether a module's
 public `asyncapi.yaml` is frontend-visible are both fully automatic — see step 3 below — so neither
@@ -214,8 +215,9 @@ already — nothing below applies.
 
 ### 3 · The fragments and their section entries
 
-Write `openapi.yaml`, add the domain to `MODULE_ORDER`, and add its paths to the root's index. Do
-the same for `MODULE_ASYNC_ORDER` if you wrote a top-level `asyncapi.yaml` (not `asyncapi.internal.yaml`
+Write `openapi.yaml` and add its paths to the root's index. A line in `MODULE_ORDER` is optional —
+it only chooses where the paths sit; without one the module is appended alphabetically. The same
+goes for `MODULE_ASYNC_ORDER` if you wrote a top-level `asyncapi.yaml` (not `asyncapi.internal.yaml`
 — see below). An `analytics.ts` needs no entry anywhere — the name is swept off disk. A
 `scenarios/<name>.ts`, if the domain has demo data, needs one line in `scenarios/index.ts`'s table —
 the rows themselves are produced by seeding the catalogue and driving the real endpoints at boot,
@@ -226,9 +228,8 @@ the module's public event catalogue — an SSE stream, a websocket — and lands
 copied to the paired frontend. `asyncapi.internal.yaml` is a queue crossing a broker the frontend
 cannot open, and never leaves this bundle. A domain can own either, both, or neither.
 
-A section entry with no fragment on disk is the hard error shown above. A fragment on disk with no
-section entry fails just as loudly now — `MODULE_ORDER` and `MODULE_ASYNC_ORDER` both throw, naming
-the module, the moment discovery finds one they haven't placed.
+A listed order entry with no fragment on disk is ignored, and a fragment on disk with no entry is
+appended — neither fails the bundle, because membership is what is on disk.
 
 ### 4 · Bundle
 
@@ -324,7 +325,6 @@ flowchart LR
 ```bash
 rm -rf src/modules/<name>
 # delete the import and the array entry in src/modules.ts
-# delete its entry from MODULE_ORDER / MODULE_ASYNC_ORDER, if it had one
 # and, if it declared probes, from scripts/contracts/client-collections-bundle.ts
 ```
 
@@ -405,6 +405,26 @@ invalidate the claim — and some of them are **supposed** to break:
 | a sweep canary whose floor was calibrated to the old module count | residue — compare the sweep against the disk instead, see [What it finds today](#what-it-finds-today) |
 | a central spec importing the deleted module                       | residue — the spec used a domain as sample data                                                       |
 
+### What `demo:remove` does about the residue
+
+`npm run demo:remove` (and `removeModules` in `scripts/ops/demo-remove-modules.ts`, which the
+locales recipe of `measure:demo-strip` shares) takes the mechanical share of the residue out itself:
+
+- **A test that imports a removed module is deleted**, and so is every test that imports one of
+  those — `tests/support` helpers included. A test may also say `// requires-module: a, b` on a line
+  of its own when it drives the kernel through a module's subjects without importing it.
+- **The shared authorization files lose the module's keys.** `shared/authorization-roles.yaml` drops
+  the grants, and `shared/authorization-conformance.yaml` drops the module's keys from every caller
+  and every case about a subject only that module declared.
+- **The scenario fixtures lose the module's slice** (`scenarios/<name>.ts` and its table entry).
+
+Writing a test that survives this is one rule: **a test that needs a module to say something says so
+in its imports, and a foundation test never borrows one as sample data.** A test about a foundation
+module that also has shop cases keeps those cases in a file of their own (`shop.contract.test.ts`,
+`checkout.test.ts`), so the strip removes exactly them. A sweep with an exact expected set filters it
+through `isDeployed(<module>)` from `@tests/paths`, and a canary floor is a floor the foundation
+modules alone clear.
+
 ---
 
 ## The shared contract, in both directions
@@ -450,7 +470,6 @@ npx tsc --noEmit                                  # THE assertion: 0 errors in s
                                                   # in src/** from a module that did not DECLARE
                                                   # the dependency in its manifest
 
-# drop them from MODULE_ORDER, MODULE_ASYNC_ORDER,
 # and from generate-collections.ts if any of them declared probes
 npm run contracts:bundle
 npx spectral lint openapi.yaml --ruleset shared/contracts/spectral.yaml

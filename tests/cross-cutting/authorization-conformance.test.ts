@@ -20,6 +20,7 @@ import { parse } from 'yaml';
 import { subject } from '@casl/ability';
 import type { Caller } from '@types';
 import { buildAbility } from '@kernel/ability';
+import { isDeployed } from '@tests/paths';
 
 interface ConformanceCase {
     name: string;
@@ -37,9 +38,15 @@ const { cases } = parse(
     )
 ) as { cases: ConformanceCase[] };
 
-const MIN_CASES = 30;
-const MIN_DENY = 20;
-const MIN_ALLOW = 10;
+/**
+ * The shop's cases are more than half the file. A checkout without the shop (`demo:remove` drops
+ * them with the modules) is held to the floors the foundation cases alone clear, so the guard
+ * against a silently empty file stays real in both.
+ */
+const shopDeployed = isDeployed('orders');
+const MIN_CASES = shopDeployed ? 30 : 20;
+const MIN_DENY = shopDeployed ? 20 : 12;
+const MIN_ALLOW = shopDeployed ? 10 : 6;
 
 describe('the shared conformance suite', () => {
     it('reads enough cases to be worth running', () => {

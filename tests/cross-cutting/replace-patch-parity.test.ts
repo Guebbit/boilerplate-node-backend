@@ -12,7 +12,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
-import { MODULES_ROOT } from '@tests/paths';
+import { isDeployed, MODULES_ROOT } from '@tests/paths';
 
 /** One schema component's declared property names, keyed by the module fragment it came from. */
 interface SchemaShape {
@@ -75,16 +75,23 @@ describe('Replace/Update schema parity', () => {
     it('finds exactly the known Replace/Update pairs — a canary against an empty sweep', () => {
         // The exact set, not a minimum: a pair whose naming drifts drops out of the sweep silently,
         // and `>= N` would still pass. A resource moving onto the factory adds its entity here.
-        expect([...pairedSchemas().keys()].toSorted()).toEqual([
-            'Account',
-            'Address',
-            'FeedbackRequestStatus',
-            'Locale',
-            'OrderById',
-            'Product',
-            'UserById',
-            'WebhookSubscription'
-        ]);
+        const known: Record<string, string> = {
+            Account: 'account',
+            Address: 'addresses',
+            FeedbackRequestStatus: 'feedback',
+            Locale: 'locales',
+            OrderById: 'orders',
+            Product: 'products',
+            UserById: 'users',
+            WebhookSubscription: 'webhooks'
+        };
+        // Filtered by which owning module is deployed, so removing one shrinks the set to match.
+        const expected = Object.entries(known)
+            .filter(([, module]) => isDeployed(module))
+            .map(([entity]) => entity)
+            .toSorted();
+
+        expect([...pairedSchemas().keys()].toSorted()).toEqual(expected);
     });
 
     it('declares the same property names on both verbs of every resource that has both', () => {

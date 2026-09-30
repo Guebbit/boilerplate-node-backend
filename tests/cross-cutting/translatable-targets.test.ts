@@ -9,6 +9,7 @@
 import mongoose from 'mongoose';
 import { resolveTranslatables } from '@kernel/registry';
 import { enabledModules } from '../../src/modules';
+import { isDeployed } from '@tests/paths';
 
 const translatables = resolveTranslatables(enabledModules);
 
@@ -20,26 +21,32 @@ const modelsByCollection = new Map(
     })
 );
 
+/** The registered entries — empty when no deployed module owns translatable content. */
+const entries = Object.entries(translatables);
+
 describe('the translatables registry', () => {
-    it.each(Object.entries(translatables))(
-        '%s names a collection an actual model owns',
-        (_entityType, target) => {
+    // `it.each` rejects an empty table outright, so the two per-entry checks only exist when
+    // there is an entry to check.
+    if (entries.length > 0) {
+        it.each(entries)('%s names a collection an actual model owns', (_entityType, target) => {
             expect(modelsByCollection.has(target!.collection)).toBe(true);
-        }
-    );
+        });
 
-    it.each(Object.entries(translatables))(
-        "%s names fields the collection's schema actually declares",
-        (_entityType, target) => {
-            const registeredModel = modelsByCollection.get(target!.collection);
-            expect(registeredModel).toBeDefined();
+        it.each(entries)(
+            "%s names fields the collection's schema actually declares",
+            (_entityType, target) => {
+                const registeredModel = modelsByCollection.get(target!.collection);
+                expect(registeredModel).toBeDefined();
 
-            for (const field of target!.fields)
-                expect(registeredModel!.schema.path(field)).toBeDefined();
-        }
-    );
+                for (const field of target!.fields)
+                    expect(registeredModel!.schema.path(field)).toBeDefined();
+            }
+        );
+    }
 
-    it('has at least one entry, so the two checks above are not vacuous', () => {
-        expect(Object.keys(translatables).length).toBeGreaterThan(0);
+    it('has an entry whenever `products`, the module that registers one, is deployed', () => {
+        // The canary for the two checks above: an empty registry must mean "nothing translatable
+        // is deployed", never "the manifest stopped being read".
+        if (isDeployed('products')) expect(entries.length).toBeGreaterThan(0);
     });
 });

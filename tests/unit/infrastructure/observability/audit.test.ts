@@ -230,7 +230,7 @@ describe('buildAuditEvent — default actor_role', () => {
     // is computed from (`kernel/permissions.ts`'s `assembleCaller`).
     it('reports system for the system actor, never admin, though both are unrestricted', () => {
         const event = buildAuditEvent(callerContextAs('system', 'system'), {
-            action: 'order.cancelled',
+            action: 'auth.login',
             outcome: 'success'
         });
 
