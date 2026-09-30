@@ -13,6 +13,7 @@ import type { Router } from 'express';
 import type { ZodType } from 'zod';
 import type { ClientSession } from 'mongoose';
 import { assertRequiredConfig, type NonModuleChecks } from '@kernel/required-config';
+import { markDomainEventsWired } from '@kernel/events';
 import type { RateLimitBudget } from '@types';
 
 /**
@@ -586,4 +587,5 @@ export const registerModules = (
     assertRequiredConfig(appModules, nonModuleChecks);
     for (const appModule of appModules) appModule.subscribe?.();
     for (const appModule of appModules) appModule.onRegistered?.(appModules);
+    markDomainEventsWired();
 };

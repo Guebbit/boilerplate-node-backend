@@ -87,6 +87,18 @@ groups:
                 summary: 'A queue is parking jobs in its dead-letter queue'
                 description: 'queue_jobs_dead_lettered_total increased in the last 15 minutes for queue {{ $labels.queue }} — inspect and replay via the RabbitMQ management UI.'
 
+          # The outbox parks an event as `dead` only after every dispatch attempt failed, and
+          # nothing else reads a dead row. Same shape as `QueueJobsParked`: a rate above zero is
+          # the alert. See docs/tools/outbox.md#poison-events.
+          - alert: OutboxEventsDead
+            expr: increase(outbox_events_dead_total[15m]) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'The transactional outbox parked an event as dead'
+                description: 'outbox_events_dead_total increased in the last 15 minutes — a consumer of a domain event kept failing. Inspect `outboxevents` rows with status "dead".'
+
           # Fleet-wide webhook delivery failure: a failed delivery never parks (it reschedules on
           # its own row, and the sweep republishes it), so `QueueJobsParked` above never fires for
           # this queue — this is the signal that actually surfaces it. Zero successes while
@@ -129,7 +141,7 @@ groups:
           # counter alone would miss the second.
           - alert: ScheduledJobStale
             expr: |
-                time() - job_last_success_timestamp_seconds{job!~"sweep:webhook-retries|sweep:payment-effects|sweep:reservations"} > 2 * 86400
+                time() - job_last_success_timestamp_seconds{job!~"sweep:webhook-retries|sweep:outbox|sweep:payment-effects|sweep:reservations"} > 2 * 86400
             for: 0m
             labels:
                 severity: warning
@@ -137,15 +149,15 @@ groups:
                 summary: 'A scheduled job has not succeeded in over 48 hours'
                 description: '{{ $labels.job }} has not recorded a success in more than twice its expected daily interval — see docker/crontab and docs/reference/ops.md#scheduled-jobs.'
 
-          # `sweep:payment-effects` and `sweep:reservations` (`docker/crontab`, every 5 minutes)
-          # are excluded from the rule above for the same reason `sweep:webhook-retries` is: at
+          # `sweep:outbox` (every minute), `sweep:payment-effects` and `sweep:reservations` (every
+          # 5 minutes; `docker/crontab`) are excluded from the rule above for the same reason `sweep:webhook-retries` is: at
           # that cadence, the 48-hour threshold would page 48 hours after a stuck payment or a
           # reservation nobody is expiring. 30 minutes is six missed runs — long enough that one
           # slow pass never pages, short enough to catch a dead cron before it costs a customer a
           # refund or a stale hold.
           - alert: FrequentSweepStale
             expr: |
-                time() - job_last_success_timestamp_seconds{job=~"sweep:payment-effects|sweep:reservations"} > 30 * 60
+                time() - job_last_success_timestamp_seconds{job=~"sweep:outbox|sweep:payment-effects|sweep:reservations"} > 30 * 60
             for: 0m
             labels:
                 severity: warning

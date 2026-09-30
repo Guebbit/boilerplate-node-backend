@@ -28,13 +28,41 @@ export interface DomainEventMap {}
  */
 export type DomainEventName = Extract<keyof DomainEventMap, string>;
 
+/**
+ * What travels beside a payload. Empty for an in-process emit; the outbox relay (`./outbox`)
+ * fills it, so a consumer that must not act twice has something stable to dedupe on.
+ */
+export interface DomainEventMeta {
+    /**
+     * Stable across every redelivery of one event — the outbox row's id. Absent for a plain emit,
+     * which has no redelivery to dedupe.
+     */
+    eventId?: string;
+}
+
 /** A subscriber for one event name, narrowed to that event's own payload type. */
 type DomainEventHandler<TEventName extends DomainEventName> = (
-    payload: DomainEventMap[TEventName]
+    payload: DomainEventMap[TEventName],
+    meta: DomainEventMeta
 ) => unknown;
 
 /** Event name → its subscribed handlers, in subscription order. */
-const handlers = new Map<string, ((payload: never) => unknown)[]>();
+const handlers = new Map<string, ((payload: never, meta: DomainEventMeta) => unknown)[]>();
+
+/**
+ * Whether the modules have subscribed in THIS process. The outbox relay reads it: dispatching an
+ * event in a process where nothing is subscribed would "succeed" with no listener and mark the
+ * row published, losing it. Only `registerModules` sets it.
+ */
+let wired = false;
+
+/** Called by `registerModules` once every module's `subscribe()` has run. */
+export const markDomainEventsWired = (): void => {
+    wired = true;
+};
+
+/** See {@link markDomainEventsWired}. */
+export const domainEventsWired = (): boolean => wired;
 
 /**
  * Subscribe to a domain event.
@@ -43,7 +71,7 @@ const handlers = new Map<string, ((payload: never) => unknown)[]>();
  * is decided by `src/modules.ts` and not by whichever file something happened to import first.
  *
  * @param name - the event name
- * @param handler - invoked with the payload; may be async
+ * @param handler - invoked with the payload and its {@link DomainEventMeta}; may be async
  */
 export const onDomainEvent = <TEventName extends DomainEventName>(
     name: TEventName,
@@ -74,11 +102,13 @@ export const onDomainEvent = <TEventName extends DomainEventName>(
  *
  * @param name - the event name
  * @param payload - the event payload
+ * @param meta - see {@link DomainEventMeta}; only the outbox relay passes one
  * @returns `true` when every handler resolved, `false` when at least one threw
  */
 export const emitDomainEvent = async <TEventName extends DomainEventName>(
     name: TEventName,
-    payload: DomainEventMap[TEventName]
+    payload: DomainEventMap[TEventName],
+    meta: DomainEventMeta = {}
 ): Promise<boolean> => {
     let settled = true;
 
@@ -86,7 +116,7 @@ export const emitDomainEvent = async <TEventName extends DomainEventName>(
     for (const handler of handlers.get(name) ?? [])
         // eslint-disable-next-line no-restricted-syntax -- caught per handler: one subscriber's failure must not stop the ones queued behind it
         try {
-            await (handler as DomainEventHandler<TEventName>)(payload);
+            await (handler as DomainEventHandler<TEventName>)(payload, meta);
         } catch (error) {
             settled = false;
             // Stryker disable next-line all
@@ -107,4 +137,5 @@ export const emitDomainEvent = async <TEventName extends DomainEventName>(
  */
 export const resetDomainEvents = (): void => {
     handlers.clear();
+    wired = false;
 };

@@ -12,6 +12,10 @@ declare module '@kernel/events' {
          * A payment settled. Emitted alongside `order.status_changed` (`to: 'paid'`), from the
          * same at-most-once write — `webhooks` is the first listener that needs this as its own
          * fact rather than inferred from the order's status.
+         *
+         * Delivered through the transactional outbox (`./services/announce.ts`), not emitted inline:
+         * at-least-once, so a listener dedupes on `meta.eventId`. It can arrive after the
+         * settlement's response, and — when a settlement died after charging — minutes later.
          */
         'payment.succeeded': { paymentId: string; orderId: string };
 

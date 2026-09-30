@@ -117,6 +117,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         extra?: Partial<PaymentDocument>
     ) => Promise<PaymentDocument | null>;
     clearPendingEffects: (orderId: string) => Promise<void>;
+    clearPendingEffectsOnce: (orderId: string, session: ClientSession) => Promise<boolean>;
     findWithPendingEffects: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
     addRefund: (
         paymentId: string,
@@ -299,6 +300,25 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             )
             .exec()
             .then(() => undefined),
+
+    /**
+     * Drop the marker inside the caller's transaction, and say whether THIS call was the one that
+     * dropped it. Conditional on the marker still being there, so of two racers (a settlement and
+     * the sweep finishing the same payment) exactly one sees `true` — the one that owes the
+     * announcement, written to the outbox in that same transaction.
+     *
+     * @param orderId - the order whose payment's marker is being cleared
+     * @param session - the transaction this write joins
+     */
+    clearPendingEffectsOnce: (orderId: string, session: ClientSession) =>
+        paymentModel
+            .updateOne(
+                { orderId: toObjectId(orderId), pendingEffects: { $exists: true, $ne: [] } },
+                { $unset: { pendingEffects: 1 } },
+                { timestamps: false, session }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
      * Payments still owing an effect from a settlement that never finished it, oldest first —

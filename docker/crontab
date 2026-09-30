@@ -14,8 +14,8 @@
 # Staggered five minutes apart, nightly at low-traffic hours (the container's default TZ, UTC), so
 # the nightly jobs each opening their own Mongo connection do not all land on the pool at once.
 #
-# `sweep:webhook-retries`, `sweep:payment-effects` and `sweep:reservations` are the three jobs
-# below NOT on that nightly schedule — each runs every 5 minutes or faster, because the sweep
+# `sweep:webhook-retries`, `sweep:outbox`, `sweep:payment-effects` and `sweep:reservations` are the
+# jobs below NOT on that nightly schedule — each runs every 5 minutes or faster, because the sweep
 # interval IS the retry/expiry granularity for what it covers (webhook retries down to a minute
 # boundary, a stuck stock commit, a stale reservation hold) — see
 # docs/modules/webhooks.md#the-delivery-path, docs/modules/payments.md#pending-effects and
@@ -35,6 +35,9 @@
 20 2 * * * cd /app && npm run sweep:order-effects
 # WARNING: owned by the webhooks module — delete it when removing the module (docs/modules/webhooks.md)
 *  * * * * cd /app && npm run sweep:webhook-retries
+# Every minute: the outbox's backstop relay. The writer already nudges one after commit, so this only
+# carries what a crash or a retry backoff left behind — see docs/tools/outbox.md.
+*  * * * * cd /app && npm run sweep:outbox
 # Every 5 minutes, well inside the 30-minute reservation hold a stuck `commit` would otherwise
 # outlive — see docs/modules/payments.md#pending-effects.
 # WARNING: owned by the payments module — delete it when removing the module (docs/modules/payments.md)

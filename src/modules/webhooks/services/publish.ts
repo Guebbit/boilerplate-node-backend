@@ -19,65 +19,89 @@ import { randomUUID } from 'node:crypto';
 import { onDomainEvent, type DomainEventName } from '@kernel/events';
 import type { PublicEventProjection, PublicEventTarget } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../repository';
 import { matchesEventFilter } from '../domain';
 import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../model';
 import { enqueueDeliveryAttempt } from './enqueue';
 
-/** Create the delivery row for one matching subscription. `attempt` always starts at 1. */
+/**
+ * Create the delivery row for one matching subscription. `attempt` always starts at 1.
+ *
+ * Idempotent on `(subscriptionId, eventId)`: the outbox relay is at-least-once, so the same event
+ * can arrive twice, and the unique index turns the second arrival into `null` — "this
+ * subscription already has its row" — instead of a duplicate delivery.
+ */
 const createDeliveryRow = (
     subscription: WebhookSubscriptionDocument,
     event: PublicEventProjection,
     eventId: string
-): Promise<WebhookDeliveryDocument> =>
-    webhookDeliveryRepository.create({
-        tenant: subscription.tenant,
-        subscriptionId: subscription._id,
-        eventId,
-        eventType: event.eventType,
-        payload: event.data,
-        attempt: 1,
-        status: 'pending',
-        nextAttemptAt: new Date()
-    });
+): Promise<WebhookDeliveryDocument | null> =>
+    webhookDeliveryRepository
+        .create({
+            tenant: subscription.tenant,
+            subscriptionId: subscription._id,
+            eventId,
+            eventType: event.eventType,
+            payload: event.data,
+            attempt: 1,
+            status: 'pending',
+            nextAttemptAt: new Date()
+        })
+        .catch((error: unknown) => {
+            if (isDuplicateKey(error)) return null;
+            throw error;
+        });
 
-/** Write the delivery row and enqueue its first attempt, for one matching subscription. */
+/**
+ * Write the delivery row and enqueue its first attempt, for one matching subscription.
+ *
+ * Rejects on failure: the caller decides what a failed subscription means. A row that already
+ * existed is not a failure and enqueues nothing — its first attempt was enqueued (or is waiting
+ * for the retry sweep) by whoever created it.
+ */
 const deliverToOne = (
     subscription: WebhookSubscriptionDocument,
     event: PublicEventProjection,
     eventId: string
 ): Promise<void> =>
-    createDeliveryRow(subscription, event, eventId)
-        .then((delivery) => enqueueDeliveryAttempt(delivery))
-        .catch((error: unknown) => {
-            // One subscription's write failing must not stop the others matching the same event —
-            // caught per subscription, same reasoning as `emitDomainEvent`'s own per-handler catch.
-            // Stryker disable all
-            logger.error({
-                message: 'webhooks: failed to fan out to a subscription',
-                subscriptionId: String(subscription._id),
-                error
-            });
-            // Stryker restore all
-        });
+    createDeliveryRow(subscription, event, eventId).then((delivery) =>
+        delivery ? enqueueDeliveryAttempt(delivery) : undefined
+    );
 
 /**
  * Match `event` against every enabled subscription and fan out, sharing ONE `eventId` across every
  * match — the id a consumer dedupes `webhook-id` on, per Standard Webhooks, across both retries of
  * one delivery and the several subscriptions one event fans out to.
+ *
+ * `eventId` is the outbox row's id when the event came through the outbox, so a redelivered event
+ * keeps its id and `createDeliveryRow` recognises it; a plain in-process emit has none and gets a
+ * fresh one.
+ *
+ * Every matching subscription is attempted even when one fails (`allSettled`), and the failures
+ * are then thrown together: the event bus reports `false` and the outbox retries, while the
+ * subscriptions that already have their row are skipped on that retry.
  */
-const fanOut = (event: PublicEventProjection): Promise<void> => {
-    const eventId = randomUUID();
-
-    return webhookSubscriptionRepository.findEnabled().then((subscriptions) => {
+const fanOut = (event: PublicEventProjection, eventId: string = randomUUID()): Promise<void> =>
+    webhookSubscriptionRepository.findEnabled().then((subscriptions) => {
         const matches = subscriptions.filter((subscription) =>
             matchesEventFilter(event.eventType, subscription.eventTypes)
         );
-        return Promise.all(
+        return Promise.allSettled(
             matches.map((subscription) => deliverToOne(subscription, event, eventId))
-        ).then(() => undefined);
+        ).then((outcomes) => {
+            const failures = outcomes.filter((outcome) => outcome.status === 'rejected');
+            // Stryker disable next-line all
+            if (failures.length > 0)
+                logger.error({
+                    message: 'webhooks: failed to fan out to a subscription',
+                    failed: failures.length,
+                    of: matches.length
+                });
+            if (failures.length > 0)
+                throw new Error(`webhooks: ${String(failures.length)} fan-out(s) failed`);
+        });
     });
-};
 
 /**
  * One domain-event listener for one {@link PublicEventTarget}: project the payload, and fan out
@@ -98,9 +122,9 @@ const subscribeToTarget = (domainEventName: string, target: PublicEventTarget): 
         payload: unknown
     ) => PublicEventProjection | undefined;
 
-    onDomainEvent(domainEventName as DomainEventName, (payload) => {
+    onDomainEvent(domainEventName as DomainEventName, (payload, meta) => {
         const publicEvent = toPublicEvent(payload);
-        return publicEvent ? fanOut(publicEvent) : undefined;
+        return publicEvent ? fanOut(publicEvent, meta.eventId) : undefined;
     });
 };
 

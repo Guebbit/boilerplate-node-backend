@@ -269,6 +269,9 @@ export const webhookDeliverySchema = new Schema<WebhookDeliveryDocument, Webhook
 );
 
 // The admin log's own filters (subscription, status), newest first.
+// One row per (subscription, event): what makes a redelivered event's fan-out idempotent — see
+// `services/publish.ts`.
+webhookDeliverySchema.index({ subscriptionId: 1, eventId: 1 }, { unique: true });
 webhookDeliverySchema.index({ tenant: 1, createdAt: -1 });
 webhookDeliverySchema.index({ subscriptionId: 1, createdAt: -1 });
 webhookDeliverySchema.index({ status: 1, createdAt: -1 });
