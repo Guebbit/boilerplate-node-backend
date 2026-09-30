@@ -110,8 +110,10 @@ export const handleUncaughtError = (
     // process-level handlers below: `redactFormat` (`adapters/logger.ts`) serializes an `Error`
     // into `{name, message, stack}` before JSON output, so passing it whole is what keeps the
     // stack in the log line outside production.
+    // A client mistake (409 duplicate, 422 malformed) is the caller's problem, not an incident:
+    // logged at `error` it would page someone for every bad request.
     // Stryker disable all
-    logger.error(`${error.name}: ${error.message}`, {
+    logger[status >= 500 ? 'error' : 'warn'](`${error.name}: ${error.message}`, {
         request_id: request.requestId,
         trace_id: getActiveSpanContext().traceId,
         status,

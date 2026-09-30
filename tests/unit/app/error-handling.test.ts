@@ -12,6 +12,7 @@
 import type { NextFunction, Request } from 'express';
 import { asStub } from '@tests/stub';
 import { makeResponseStub } from '@tests/express';
+import { logger } from '@infrastructure/adapters/logger';
 import { handleUncaughtError } from '@app/error-handling';
 
 /** Enough of a `Request` for the one field the handler reads: `requestId`, for the log line. */
@@ -104,5 +105,36 @@ describe('handleUncaughtError', () => {
                 'server selection'
             );
         });
+    });
+});
+
+describe('handleUncaughtError log level', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('logs a client error at warn, not error', () => {
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        const error = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+
+        handleUncaughtError(
+            Object.assign(new Error('duplicate'), { expose: true, status: 409 }),
+            requestStub(),
+            makeResponseStub(),
+            NEXT
+        );
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(error).not.toHaveBeenCalled();
+    });
+
+    it('logs a server error at error', () => {
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        const error = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+
+        handleUncaughtError(new Error('boom'), requestStub(), makeResponseStub(), NEXT);
+
+        expect(error).toHaveBeenCalledTimes(1);
+        expect(warn).not.toHaveBeenCalled();
     });
 });
