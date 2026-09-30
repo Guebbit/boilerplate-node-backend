@@ -26,12 +26,7 @@ import { cpSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } f
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import {
-    removeModuleFolders,
-    stripModuleRegistry,
-    stripRoutedModules
-} from '../ops/demo-remove-registry';
-import { stripContractPathCensus } from '../ops/demo-remove-contract';
+import { removeModules } from '../ops/demo-remove-modules';
 import { readShopModuleNames } from './shop-module-names';
 
 /** Repo root, two levels up from `scripts/testing/`. */
@@ -134,10 +129,7 @@ const RECIPES: Partial<Record<string, Recipe>> = {
     },
     locales: {
         apply: () => {
-            removeModuleFolders(SCRATCH, LOCALES);
-            stripModuleRegistry(SCRATCH, LOCALES);
-            stripRoutedModules(SCRATCH, LOCALES);
-            stripContractPathCensus(SCRATCH, LOCALES);
+            removeModules(SCRATCH, LOCALES);
         },
         describe: () => 'the locales module'
     }

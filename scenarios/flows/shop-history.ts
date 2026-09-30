@@ -22,7 +22,7 @@ import {
 import { SEED_PRODUCT_IDS } from '../subjects';
 import { fillerProductId, openingStockFor, productFixtures } from '../products';
 import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from '../users';
-import { shopModules } from '../shop-modules';
+import { historyEdits } from '../shop-modules';
 import { PLAIN_PASSWORD } from '@modules/users/factories';
 import { signIn, type Caller } from './client';
 import {
@@ -278,10 +278,10 @@ const driveCatalogueEdits = async (owner: Caller): Promise<void> => {
         price: 71
     });
 
-    // `locales` owns this edit — `shop-modules.ts`'s `driveHistoryEdit` — so deleting that module
-    // removes the step along with everything else it owns, instead of leaving a `/locales` call
-    // here for the flow to 404 on.
-    await shopModules.locales.driveHistoryEdit(owner);
+    // Each module that owns a piece of the story contributes its own edit (`shop-modules.ts`'s
+    // `driveHistoryEdit`), so deleting a module removes its step along with everything else it
+    // owns, instead of leaving a call here for the flow to 404 on.
+    for (const edit of historyEdits()) await edit(owner);
 };
 
 /**

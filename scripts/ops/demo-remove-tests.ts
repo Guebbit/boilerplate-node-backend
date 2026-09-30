@@ -69,7 +69,7 @@ const specifiersOf = (source: string): string[] =>
 
 /**
  * The absolute path a specifier points at, or `undefined` for a package. Handles the three
- * spellings a test uses for repo code: `@modules/<name>/...`, `@tests/...` and a relative path.
+ * spellings a test uses for repo code: `@modules/<name>/...`, `@scenarios/...`, `@tests/...` and a relative path.
  * @param specifier - as written in the import
  * @param importer - the absolute path of the file that wrote it
  * @param repoRoot - repo root
@@ -81,6 +81,8 @@ const resolveSpecifier = (
 ): string | undefined => {
     if (specifier.startsWith('@modules/'))
         return path.join(repoRoot, 'src', 'modules', specifier.slice('@modules/'.length));
+    if (specifier.startsWith('@scenarios/'))
+        return path.join(repoRoot, 'scenarios', specifier.slice('@scenarios/'.length));
     if (specifier.startsWith('@tests/'))
         return path.join(repoRoot, 'tests', 'support', specifier.slice('@tests/'.length));
     if (specifier.startsWith('.')) return path.resolve(path.dirname(importer), specifier);
@@ -105,7 +107,12 @@ const isGone = (resolved: string, gone: readonly string[]): boolean =>
  */
 export const removeResidueTests = (repoRoot: string, names: readonly string[]): RemovalNote[] => {
     const files = testRoots(repoRoot).flatMap((root) => walkTypeScript(root));
-    const gone = names.map((name) => path.join(repoRoot, 'src', 'modules', name));
+    // A module's own scenario fixtures (`scenarios/<name>.ts`) go with it, so a test importing them
+    // is as orphaned as one importing the module.
+    const gone = names.flatMap((name) => [
+        path.join(repoRoot, 'src', 'modules', name),
+        path.join(repoRoot, 'scenarios', name)
+    ]);
     const deleted: string[] = [];
 
     for (let changed = true; changed; ) {

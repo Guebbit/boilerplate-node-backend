@@ -16,13 +16,8 @@
 
 import path from 'node:path';
 import { readShopModuleNames } from '../testing/shop-module-names';
-import {
-    removeModuleFolders,
-    removeShopOwnedOpsScripts,
-    stripModuleRegistry,
-    stripRoutedModules,
-    type RemovalNote
-} from './demo-remove-registry';
+import { removeModules } from './demo-remove-modules';
+import type { RemovalNote } from './demo-remove-registry';
 import {
     removeGeneratedProductImages,
     removeShopOnlyScenarioFiles,
@@ -32,13 +27,7 @@ import {
     stripShopModulesTable,
     stripSubjects
 } from './demo-remove-scenarios';
-import {
-    readRemovedAuthorization,
-    stripConformanceCases,
-    stripRoleGrants
-} from './demo-remove-authorization';
-import { removeResidueTests } from './demo-remove-tests';
-import { stripAccountExportSchema, stripContractPathCensus } from './demo-remove-contract';
+import { stripAccountExportSchema } from './demo-remove-contract';
 
 /** Repo root, two levels up from `scripts/ops/`. */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -53,20 +42,8 @@ console.info(
     `[demo-remove] removing ${shopModuleNames.length} group: shop module(s): ${shopModuleNames.join(', ')}`
 );
 
-// Read the removed modules' permission keys BEFORE their folders (and fragments) are gone.
-const removedAuthorization = readRemovedAuthorization(REPO_ROOT, shopModuleNames);
-
-console.info('\n[demo-remove] module folders:');
-report(removeModuleFolders(REPO_ROOT, shopModuleNames));
-
-console.info('\n[demo-remove] the module registry:');
-report([
-    stripModuleRegistry(REPO_ROOT, shopModuleNames),
-    stripRoutedModules(REPO_ROOT, shopModuleNames)
-]);
-
-console.info('\n[demo-remove] reap/sweep scripts, package.json and docker/crontab:');
-report(removeShopOwnedOpsScripts(REPO_ROOT, shopModuleNames));
+console.info('\n[demo-remove] the modules, and everything central that names them:');
+report(removeModules(REPO_ROOT, shopModuleNames));
 
 console.info('\n[demo-remove] the demo catalogue and its generated collections:');
 report(removeGeneratedProductImages(REPO_ROOT));
@@ -80,16 +57,7 @@ report([
 ]);
 
 console.info('\n[demo-remove] the shared contract fragment (shared/contracts/openapi.root.yaml):');
-report([stripContractPathCensus(REPO_ROOT, shopModuleNames), stripAccountExportSchema(REPO_ROOT)]);
-
-console.info('\n[demo-remove] the shared authorization files:');
-report([
-    stripRoleGrants(REPO_ROOT, removedAuthorization),
-    stripConformanceCases(REPO_ROOT, removedAuthorization)
-]);
-
-console.info('\n[demo-remove] tests that import or require a removed module:');
-report(removeResidueTests(REPO_ROOT, shopModuleNames));
+report([stripAccountExportSchema(REPO_ROOT)]);
 
 console.info('\n[demo-remove] done. Next:');
 console.info(

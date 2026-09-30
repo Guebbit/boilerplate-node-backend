@@ -85,6 +85,12 @@ describe('removeResidueTests', () => {
         expect(files).toEqual([path.join('tests', 'kernel.test.ts')]);
     });
 
+    it("deletes a test that imports the removed module's scenario fixtures", () => {
+        write('tests/fixtures.test.ts', "import { rows } from '@scenarios/cart';\n");
+
+        expect(removeResidueTests(root, ['cart'])).toHaveLength(1);
+    });
+
     it('also sweeps the tests folder of a surviving module', () => {
         write(
             'src/modules/users/tests/x.test.ts',
