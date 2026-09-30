@@ -131,7 +131,12 @@ const PERSONA_PASSWORDS = [
 /** The logins for the persona accounts, by the name a spec asks for. */
 export const seedPersonaCredentials = {
     unverified: { email: SEED_UNVERIFIED_EMAIL, password: SEED_UNVERIFIED_PASSWORD.value },
-    twoFactor: { email: SEED_TWO_FACTOR_EMAIL, password: SEED_TWO_FACTOR_PASSWORD.value },
+    twoFactor: {
+        email: SEED_TWO_FACTOR_EMAIL,
+        password: SEED_TWO_FACTOR_PASSWORD.value,
+        // Published beside the login: a journey that gets in with a backup code must know one.
+        backupCodes: SEED_TWO_FACTOR_BACKUP_CODES
+    },
     pendingEmail: { email: SEED_PENDING_EMAIL_EMAIL, password: SEED_PENDING_EMAIL_PASSWORD.value },
     banned: { email: SEED_BANNED_EMAIL, password: SEED_BANNED_PASSWORD.value }
 } as const;

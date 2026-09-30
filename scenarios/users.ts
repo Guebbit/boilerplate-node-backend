@@ -95,7 +95,8 @@ const personaUsers = [
     makeUser({
         id: SEED_TWO_FACTOR_ID,
         username: 'two-factor',
-        ...seedPersonaCredentials.twoFactor,
+        email: seedPersonaCredentials.twoFactor.email,
+        password: seedPersonaCredentials.twoFactor.password,
         verifiedAt: new Date(),
         twoFactorEnabledAt: new Date().toISOString(),
         twoFactorMethods: [{ method: 'email', enrolledAt: new Date() }],

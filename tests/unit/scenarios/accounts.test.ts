@@ -10,6 +10,7 @@ import {
     SEED_USER_EMAIL,
     SEED_ADMIN_PASSWORD,
     SEED_USER_PASSWORD,
+    SEED_TWO_FACTOR_BACKUP_CODES,
     seedCredentials
 } from '@scenarios/accounts';
 
@@ -120,6 +121,10 @@ describe('seedCredentials', () => {
         );
         for (const persona of ['unverified', 'twoFactor', 'pendingEmail', 'banned'] as const)
             expect(satisfiesPolicy(seedCredentials[persona].password)).toBe(true);
+    });
+
+    it('publishes the two-factor persona’s backup codes beside its login', () => {
+        expect(seedCredentials.twoFactor.backupCodes).toEqual(SEED_TWO_FACTOR_BACKUP_CODES);
     });
 
     it('gives every account its own address', () => {

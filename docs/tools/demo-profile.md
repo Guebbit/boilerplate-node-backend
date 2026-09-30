@@ -131,12 +131,12 @@ Four more customers, each in one state a journey starts from. They are written s
 collection (`scenarios/users.ts`), because reaching the state through the API needs a mail or a
 code the seeder never reads. Each password is `NODE_SEED_<NAME>_PASSWORD`.
 
-| Persona        | Login                       | State                                                 |
-| -------------- | --------------------------- | ----------------------------------------------------- |
-| `unverified`   | `unverified@example.com`    | signed up, never proved the address                   |
-| `twoFactor`    | `two-factor@example.com`    | email 2FA armed; five known single-use backup codes   |
-| `pendingEmail` | `pending-email@example.com` | asked to move to another address, has not confirmed   |
-| `banned`       | `banned@example.com`        | switched off (`active: false`), so a login is refused |
+| Persona        | Login                       | State                                                                            |
+| -------------- | --------------------------- | -------------------------------------------------------------------------------- |
+| `unverified`   | `unverified@example.com`    | signed up, never proved the address                                              |
+| `twoFactor`    | `two-factor@example.com`    | email 2FA armed; five known single-use backup codes (published as `backupCodes`) |
+| `pendingEmail` | `pending-email@example.com` | asked to move to another address, has not confirmed                              |
+| `banned`       | `banned@example.com`        | switched off (`active: false`), so a login is refused                            |
 
 The banned persona is separate from `marcus`, whom the shop flow bans through the API so the audit
 trail records it. The persona exists so `blank` carries one too.
