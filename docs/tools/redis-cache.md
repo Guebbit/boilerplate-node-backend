@@ -273,7 +273,7 @@ Two mitigations, because neither is sufficient alone:
 |                                | What it does                                                                                                                                                                       | Limit                                                             |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | `npm run db:cache:clear`       | Deletes every key under `NODE_REDIS_CACHE_PREFIX` (`SCAN` + `DEL`, never `FLUSHALL`, so a shared Redis is safe). `scenario:apply` calls it automatically when it created something | Opt-in — only covers writers that remember                        |
-| `NODE_REDIS_CACHE_DEV_TTL_MAX` | Clamps every route's TTL when `NODE_ENV !== 'production'`, default `30`s                                                                                                           | Dev only, and it shortens the stale window rather than closing it |
+| `NODE_REDIS_CACHE_DEV_TTL_MAX` | Clamps every route's TTL in development/test only, default `30`s                                                                                                                   | Dev only, and it shortens the stale window rather than closing it |
 
 The TTL cap is the one that matters for writers nobody anticipated: it bounds _every_ out-of-band
 write to seconds instead of the route's declared hour. Set it to `0` to opt out and use the

@@ -83,6 +83,7 @@ flowchart LR
 | Project       | **[Permission Actions](./permission-actions.md)**           | The action vocabulary, written once in the shared yaml and generated into both repos.                                           |
 | Project       | **[Package Scripts](./package-scripts.md)**                 | What every `npm run <script>` does and when to reach for it.                                                                    |
 | Project       | **[Docker & Podman](./docker-and-podman.md)**               | 11-container local stack: what each container is for and how to run it.                                                         |
+| Project       | **[Health checks](./health-checks.md)**                     | What each container's check tests: `/livez` for the web process, its own check per worker, none for a one-shot job.             |
 | API           | **[API](../api/)**                                          | OpenAPI Generator, Spectral, Prism, Bruno, Mockoon: contract-first API tooling.                                                 |
 
 ## Why this section is bigger now

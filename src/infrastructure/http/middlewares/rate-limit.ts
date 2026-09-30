@@ -231,8 +231,10 @@ const GLOBAL_RATE_LIMIT_BUDGET: RateLimitBudget = {
         'Every request across the whole surface — a scanner sweeping for paths that do not exist ' +
         'is the traffic most worth braking, same as a browsing session.',
     audited: false,
-    // `GET /readyz` is an orchestrator's own probe, on a fixed interval — see `RateLimitBudget.skip`.
-    skip: (request) => request.method === 'GET' && request.path === '/readyz'
+    // `GET /livez` and `GET /readyz` are an orchestrator's own probes, on a fixed interval — see
+    // `RateLimitBudget.skip`.
+    skip: (request) =>
+        request.method === 'GET' && (request.path === '/livez' || request.path === '/readyz')
 };
 
 /**

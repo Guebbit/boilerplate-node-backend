@@ -21,7 +21,7 @@ import {
 import { bodyRecordOf } from '@infrastructure/http/request';
 import { logger } from '@infrastructure/adapters/logger';
 import { cacheRequestsTotal } from '@infrastructure/observability/metrics-cache';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { environmentNumber, isRelaxedEnvironment } from '@infrastructure/runtime/environment';
 
 /**
  * Enough to replay an HTTP response verbatim, plus the refresh-ahead soft expiry.
@@ -80,7 +80,7 @@ const getDevelopmentTtlMax = (): number =>
  * @returns the TTL to use, capped outside production
  */
 export const resolveCacheTtl = (seconds: number): number => {
-    if (process.env.NODE_ENV === 'production') return seconds;
+    if (!isRelaxedEnvironment()) return seconds;
 
     const max = getDevelopmentTtlMax();
     if (max <= 0) return seconds;

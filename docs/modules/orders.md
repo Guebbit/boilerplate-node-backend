@@ -225,8 +225,8 @@ owns is the clock and the button:
 ```mermaid
 flowchart LR
     paid["paid<br/><i>right exists, no end yet</i>"] --> shipped["shipped<br/><i>still no end</i>"]
-    shipped -- "markDelivered(deliveredAt)" --> goods["delivered<br/><i>withdrawUntil = deliveredAt + 14d</i>"]
-    paid -- "markFulfilled (digital)" --> digital["delivered<br/><i>withdrawUntil = paidAt + 14d</i>"]
+    shipped -- "markDelivered(deliveredAt)" --> goods["delivered<br/><i>withdrawUntil = end of day (deliveredAt + 14 days)</i>"]
+    paid -- "markFulfilled (digital)" --> digital["delivered<br/><i>withdrawUntil = end of day (paidAt + 14 days)</i>"]
 ```
 
 - **`withdrawUntil` is frozen, never recomputed** — the same "freeze the fact at the moment it
@@ -234,6 +234,9 @@ flowchart LR
   already made. Goods count from delivery (Art. 9(2)(b)); digital content from the conclusion of the
   contract (Art. 9(2)(a)), which is `paidAt` here. `delivery` reports the timestamp through
   `markDelivered(orderId, deliveredAt)`; `orders` cannot read `delivery`'s own.
+- **The window ends with the last hour of its last day.** The day of the event is not counted and
+  the 14th day after it is counted whole (CRD recital 41 → Regulation 1182/71 Art. 3(1), 3(2)(c)),
+  in UTC. Art. 3(4)'s roll-over past a weekend or public holiday is not applied.
 - **Before either has happened the window has no end** — the right exists from the moment the
   contract is concluded, so `withdrawUntil` is absent, not far in the future.
 - **The button is server-driven.** `OrderActions.withdraw` is true for the order's own buyer (not an

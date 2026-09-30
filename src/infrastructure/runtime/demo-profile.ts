@@ -10,6 +10,7 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
+import { isRelaxedEnvironment } from '@infrastructure/runtime/environment';
 
 /** Set only by {@link enableDemoProfile}. Module-level: a restart clears it. */
 let demoProfileEnabled = false;
@@ -28,16 +29,16 @@ export const enableDemoProfile = (enabled = true): void => {
 };
 
 /**
- * `NODE_ENV !== 'production'` stays a second gate even though nothing but
+ * `NODE_ENV` being `development` or `test` stays a second gate even though nothing but
  * {@link enableDemoProfile} can request the demo profile now: `run-server.ts` only DEFAULTS
- * `NODE_ENV` to `development`, it does not override a shell's own `NODE_ENV=production`, so this
- * is what refuses that case rather than mounting anyway. Logs at `error` when it does — a fact
+ * `NODE_ENV` to `development`, it does not override a shell's own `NODE_ENV=production` (or
+ * `staging`), so this is what refuses that case rather than mounting anyway. Logs at `error` when it does — a fact
  * whoever owns that deployment needs to hear, not swallow.
  */
 export const isDemoMode = (): boolean => {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isServer = !isRelaxedEnvironment();
 
-    if (demoProfileEnabled && isProduction)
+    if (demoProfileEnabled && isServer)
         // Stryker disable all
         logger.error({
             message:
@@ -45,5 +46,5 @@ export const isDemoMode = (): boolean => {
         });
     // Stryker restore all
 
-    return demoProfileEnabled && !isProduction;
+    return demoProfileEnabled && !isServer;
 };

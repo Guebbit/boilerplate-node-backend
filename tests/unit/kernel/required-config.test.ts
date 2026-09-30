@@ -184,6 +184,14 @@ describe('module-declared forbiddenInProduction — forbidden, not required', ()
         expect(() => assertRequiredConfig(modules)).toThrow(/SECRET/);
     });
 
+    it('refuses to boot with NODE_ENV unset and it set: only development/test relax the rule', () => {
+        configure();
+        delete process.env.NODE_ENV;
+        process.env.SECRET = 'a-real-secret-value';
+
+        expect(() => assertRequiredConfig(modules)).toThrow(/SECRET/);
+    });
+
     it('accepts production with it unset', () => {
         configure();
         process.env.NODE_ENV = 'production';

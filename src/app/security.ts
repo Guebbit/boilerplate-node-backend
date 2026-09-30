@@ -19,7 +19,7 @@ import cookieParser from 'cookie-parser';
 import { rateLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { requireDeclaredContentType } from '@infrastructure/http/middlewares/content-type';
 import { REQUEST_CONTENT_TYPES } from '@api/request-content-types';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { environmentNumber, isRelaxedEnvironment } from '@infrastructure/runtime/environment';
 import { logger } from '@infrastructure/adapters/logger';
 import { enabledModules } from '../modules';
 
@@ -127,11 +127,11 @@ export const installSecurity = (app: Express): void => {
      * limiter, and the warning below reads the same either way — nothing here can tell which one
      * this deployment is.
      */
-    if (trustProxyHops === 0 && process.env.NODE_ENV === 'production')
+    if (trustProxyHops === 0 && !isRelaxedEnvironment())
         // Stryker disable all
         logger.warn({
             message:
-                'NODE_TRUST_PROXY_HOPS=0 in production. Correct only if this API is reached directly, with no reverse proxy in front of it — otherwise the rate limiter is bucketing every caller together.'
+                'NODE_TRUST_PROXY_HOPS=0 outside development/test. Correct only if this API is reached directly, with no reverse proxy in front of it — otherwise the rate limiter is bucketing every caller together.'
         });
     // Stryker restore all
 

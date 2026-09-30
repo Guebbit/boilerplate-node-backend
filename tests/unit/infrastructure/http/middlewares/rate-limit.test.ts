@@ -54,7 +54,7 @@ const requestWith = (body: unknown, ip: string) => asStub<Request>({ body, ip })
 const requestFor = (method: string, path: string) => asStub<Request>({ method, path });
 
 /**
- * The global browsing budget's own `skip` — an orchestrator's `/readyz` probe, on a fixed
+ * The global browsing budget's own `skip` — an orchestrator's `/livez` and `/readyz` probes, on a fixed
  * interval, must never trip the budget every other caller shares (PL-27).
  */
 describe("the global budget's skip", () => {
@@ -68,6 +68,11 @@ describe("the global budget's skip", () => {
 
     it('does not exempt other methods on /readyz', () => {
         expect(globalBudget?.skip?.(requestFor('POST', '/readyz'))).toBe(false);
+    });
+
+    it('exempts GET /livez, and not POST', () => {
+        expect(globalBudget?.skip?.(requestFor('GET', '/livez'))).toBe(true);
+        expect(globalBudget?.skip?.(requestFor('POST', '/livez'))).toBe(false);
     });
 
     it('does not exempt GET on any other path', () => {

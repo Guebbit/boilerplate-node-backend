@@ -144,19 +144,20 @@ services:
             rabbitmq:
                 condition: service_started
 
-        # Health check to verify the container is ready to accept traffic
+        # Health check to verify the container is alive (liveness, not readiness)
         # Inspect with "podman ps" or "podman inspect <container name>"
         healthcheck:
+            # Liveness (`/livez`), never a dependency — see docs/tools/health-checks.md.
             # `node -e`, not `curl -f`: the image is node:*-alpine and does not ship curl, so the
             # curl form exited non-zero every time and parked the container on `unhealthy` while
-            # the API was answering 200 on `/` throughout. Node's built-in fetch needs nothing
-            # added to the image.
+            # the API was answering 200 throughout. Node's built-in fetch needs nothing added to
+            # the image.
             test:
                 [
                     'CMD',
                     'node',
                     '-e',
-                    "fetch('http://localhost:${NODE_PORT:-3000}/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                    "fetch('http://localhost:${NODE_PORT:-3000}/livez').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
                 ]
             # How often to run the test
             interval: 2m
@@ -200,7 +201,28 @@ services:
             - .:/app:Z
             - /app/node_modules
             - ./docker/crontab:/app/crontab:ro,Z
-        command: ['supercronic', '-passthrough-logs', '/app/crontab']
+        # Same as production: supercronic serves `/health` on loopback, and that is this
+        # container's own check — see docs/tools/health-checks.md.
+        command:
+            [
+                'supercronic',
+                '-passthrough-logs',
+                '-prometheus-listen-address',
+                '127.0.0.1:9746',
+                '/app/crontab'
+            ]
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:9746/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
         depends_on:
             database:
                 condition: service_healthy

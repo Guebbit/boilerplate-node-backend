@@ -45,6 +45,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
         productId: string,
         fields: Record<string, string | null>
     ) => Promise<void>;
+    markEdited: (productId: string) => Promise<void>;
     existsById: (productId: string) => Promise<boolean>;
     writebackImage: ImageWriteback;
 } = {
@@ -165,6 +166,23 @@ export const productRepository: Repository<ProductDocument, Product> & {
                         Object.entries(fields).map(([name, value]) => [name, value ?? ''])
                     )
                 },
+                { timestamps: false }
+            )
+            .exec()
+            .then(() => undefined),
+
+    /**
+     * The `locales` translation port's `markEdited` — a translation edit is an admin's edit, so the
+     * product's `updatedAt` (its ETag) moves even when no column on the document changed.
+     * Stamped by hand with `timestamps: false`: Mongoose adds no `$set` to an empty update.
+     *
+     * @param productId - the product whose translations were just written
+     */
+    markEdited: (productId: string) =>
+        productModel
+            .updateOne(
+                { _id: toObjectId(productId) },
+                { $set: { updatedAt: new Date() } },
                 { timestamps: false }
             )
             .exec()

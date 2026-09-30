@@ -54,6 +54,19 @@ describe('System routes', () => {
     });
 });
 
+describe('GET /livez', () => {
+    // Runs before `GET /readyz`'s cases below, so the process is still booting here: the property
+    // that defines liveness is that it does not care.
+    it('answers 200 with an empty body while /readyz still answers 503', async () => {
+        const ready = await api().get('/readyz');
+        const live = await api().get('/livez');
+
+        expect(ready.status).toBe(503);
+        expect(live.status).toBe(200);
+        expect(live.text).toBe('');
+    });
+});
+
 describe('GET /readyz', () => {
     // `src/app.ts`'s auto-start is skipped under `NODE_ENV=test` (see `tests/support/http.ts`'s
     // own docblock), so this process never calls `markServerListening` on its own — every case
@@ -83,6 +96,12 @@ describe('GET /readyz', () => {
         const response = await api().get('/readyz');
 
         expect(response.status).toBe(503);
+    });
+
+    it('leaves /livez at 200 while draining: a shutdown is not a reason to restart', async () => {
+        const response = await api().get('/livez');
+
+        expect(response.status).toBe(200);
     });
 });
 

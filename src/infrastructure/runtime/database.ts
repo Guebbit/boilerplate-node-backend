@@ -12,6 +12,7 @@
 import mongoose from 'mongoose';
 import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
+import { isRelaxedEnvironment } from '@infrastructure/runtime/environment';
 
 /** Give up after this many attempts so a misconfigured URI fails the deploy instead of retrying forever. */
 const MAX_RETRIES = 10;
@@ -86,7 +87,7 @@ export const getDatabaseUri = () => {
  * their constraints for free. https://mongoosejs.com/docs/guide.html#autoIndex
  */
 export const start = () => {
-    if (process.env.NODE_ENV === 'production') mongoose.set('autoIndex', false);
+    if (!isRelaxedEnvironment()) mongoose.set('autoIndex', false);
 
     // Recursive rather than a `for` loop so each retry chains onto the previous promise
     // without `async`/`await` — this codebase stays on explicit promise chains throughout.

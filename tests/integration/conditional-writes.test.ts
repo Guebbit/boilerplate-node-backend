@@ -17,6 +17,13 @@ import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem, readOrder } from '@modules/orders/tests/factories';
 import { productModel } from '@modules/products/model';
 import { userModel } from '@modules/users/model';
+import { userRepository } from '@modules/users/repository';
+import {
+    PreconditionFailedError,
+    runWithPrecondition,
+    versionOf,
+    etagOf as etagFor
+} from '@infrastructure/persistence/versioning';
 import { givenLocale } from '@modules/locales/tests/factories';
 import { registerModules } from '@kernel/registry';
 import localesModule from '@modules/locales/module';
@@ -280,6 +287,92 @@ describe('a product edited through its translations', () => {
         expect(etagOf(await api().get(`${path}/admin`).set('Authorization', bearer))).toBe(
             etagOf(write)
         );
+    });
+});
+
+describe('a product edited only through the locales translations route', () => {
+    beforeEach(() => Promise.all([givenLocale('en'), givenLocale('it')]));
+
+    it('moves the ETag even for a locale that is not the fallback', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const admin = `/products/${product.id}/admin`;
+        const before = etagOf(await api().get(admin).set('Authorization', bearer));
+
+        await api()
+            .patch(`/locales/translations/product/${product.id}`)
+            .set('Authorization', bearer)
+            .send({ it: { fields: { title: 'Un titolo italiano' } } })
+            .expect(200);
+
+        expect(etagOf(await api().get(admin).set('Authorization', bearer))).not.toBe(before);
+    });
+
+    it('refuses a stale PUT /products/{id} that would overwrite those translations', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/products/${product.id}`;
+        const stale = etagOf(await api().get(`${path}/admin`).set('Authorization', bearer));
+        await api()
+            .patch(`/locales/translations/product/${product.id}`)
+            .set('Authorization', bearer)
+            .send({ it: { fields: { title: 'Un titolo italiano' } } })
+            .expect(200);
+
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', stale)
+            .send({ tags: ['late'] });
+
+        expect(write.status).toBe(412);
+    });
+});
+
+describe('a user edited only through its role', () => {
+    it('moves the ETag, so a second admin holding the old tag is refused', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({ email: 'target@example.com', username: 'target' });
+        const path = `/users/${String(target._id)}`;
+        const before = etagOf(await api().get(path).set('Authorization', bearer));
+
+        const first = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', before)
+            .send({ role: 'support' });
+        const second = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', before)
+            .send({ role: 'customer' });
+
+        expect(first.status).toBe(200);
+        expect(etagOf(first)).not.toBe(before);
+        expect(second.status).toBe(412);
+    });
+});
+
+describe('a hard delete is fenced, not only checked', () => {
+    it('keeps a row edited between the load and the delete', async () => {
+        const target = await createUser({ email: 'fence@example.com', username: 'fence' });
+        const loaded = await userRepository.findById(String(target._id));
+        if (!loaded) throw new Error('seeded user missing');
+        const tag = etagFor(versionOf(loaded) ?? 0);
+        // Another writer lands after the service loaded the row.
+        await userModel.updateOne(
+            { _id: target._id },
+            { $set: { username: 'moved', updatedAt: new Date(Date.now() + 5000) } },
+            { timestamps: false }
+        );
+
+        await expect(
+            runWithPrecondition({ id: String(target._id), etags: [tag] }, () =>
+                userRepository.deleteOne(loaded)
+            )
+        ).rejects.toBeInstanceOf(PreconditionFailedError);
+
+        expect(await userModel.findById(target._id)).not.toBeNull();
     });
 });
 

@@ -157,6 +157,7 @@ export default withMermaid(
                             { text: 'Testing — Quick Start', link: '/tools/testing-quickstart' },
                             { text: 'Package Scripts', link: '/tools/package-scripts' },
                             { text: 'Docker & Podman', link: '/tools/docker-and-podman' },
+                            { text: 'Health checks', link: '/tools/health-checks' },
                             { text: 'Two Client Stacks', link: '/tools/two-client-stacks' },
                             { text: 'Hosting', link: '/tools/hosting' },
                             {

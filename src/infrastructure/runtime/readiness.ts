@@ -25,8 +25,8 @@ export const markServerListening = (): void => {
 
 /**
  * Marks the process as draining — a shutdown signal has been received. Called once by
- * `registerSignalHandlers` (`server-lifecycle.ts`), before teardown starts: a load balancer must
- * stop sending new traffic before the connections under it are cut, not after.
+ * `registerSignalHandlers` (`server-lifecycle.ts`), before teardown starts. `GET /readyz` answers
+ * 503 from here on, though teardown begins in the same tick, so a probe rarely gets to see it.
  */
 export const markServerDraining = (): void => {
     phase = 'draining';
@@ -35,7 +35,7 @@ export const markServerDraining = (): void => {
 /**
  * Whether this instance should receive traffic right now — `GET /readyz`'s whole decision.
  * `booting` and `draining` both answer `false` regardless of the database, so a load balancer
- * pulls traffic on either edge of the process lifecycle, not only while it is misbehaving mid-run.
+ * reading it sees either edge of the process lifecycle, not only a misbehaving one mid-run.
  * `ConnectionStates.connected` is Mongoose's own enum for a live connection:
  * https://mongoosejs.com/docs/api/connection.html#Connection.prototype.readyState
  */

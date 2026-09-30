@@ -1,5 +1,5 @@
 /**
- * `scenarios/apply.ts`'s own gates: the production refusal, the non-empty-database refusal, and
+ * `scenarios/apply.ts`'s own gates: the refusal outside development/test, the non-empty-database refusal, and
  * `--reset`.
  *
  * Spawned ASYNCHRONOUSLY, and that is load-bearing: `spawnSync` blocks jest's event loop for the
@@ -93,15 +93,16 @@ const freshDbUri = (): string => {
 };
 
 describe('scenarios/apply.ts', () => {
-    it(
-        'refuses to run in production, and never opens the database',
-        async () => {
+    // An empty value stands for "unset": `dotenv/config` would fill a truly absent one from `.env`.
+    it.each(['production', 'staging', ''])(
+        'refuses to run with NODE_ENV=%p, and never opens the database',
+        async (nodeEnv) => {
             const dbUri = freshDbUri();
 
-            const result = await runApply(['blank'], dbUri, 'production');
+            const result = await runApply(['blank'], dbUri, nodeEnv);
 
             expect(result.status).toBe(0);
-            expect(result.stdout + result.stderr).toContain('NODE_ENV is production');
+            expect(result.stdout + result.stderr).toContain('not development or test');
 
             // The gate returns before `bootAppInProcess()` ever connects — nothing to drop.
             const connection = await mongoose.createConnection(dbUri).asPromise();
