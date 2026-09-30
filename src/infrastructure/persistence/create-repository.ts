@@ -22,6 +22,7 @@ import {
     type PaginatedMeta
 } from './search';
 import { trackDatabaseQuery } from './metrics';
+import { checkedDelete, fencedSave } from './versioning';
 import type { SerializeTransform } from './serialize';
 
 /**
@@ -362,8 +363,12 @@ export function createRepository<TDocument extends Document, TWire>(
     const create = (data: Partial<TDocument>, session?: ClientSession): Promise<TDocument> =>
         session ? new mongooseModel(data).save({ session }) : mongooseModel.create(data);
 
-    /** Persist in-memory changes to an already-fetched document. */
-    const save = (document: TDocument): Promise<TDocument> => document.save();
+    /**
+     * Persist in-memory changes to an already-fetched document — checked and fenced against the
+     * request's `If-Match` when one names this row (`./versioning`), a plain `save()` otherwise.
+     */
+    const save = (document: TDocument): Promise<TDocument> =>
+        fencedSave(document, () => document.save());
 
     /**
      * Mongoose: `new Model(doc)` hydrates a document without writing it — defaults, casting and
@@ -372,11 +377,16 @@ export function createRepository<TDocument extends Document, TWire>(
      */
     const build = (data: Partial<TDocument>): TDocument => new mongooseModel(data);
 
-    /** Remove a single document, optionally as part of the caller's own transaction. */
+    /**
+     * Remove a single document, optionally as part of the caller's own transaction — checked
+     * against the request's `If-Match` when one names this row (`./versioning`).
+     */
     const deleteOne = (document: TDocument, session?: ClientSession): Promise<void> =>
-        // mongoose types `Document#deleteOne` as `any`; the cast restores the promise it returns
-        (document.deleteOne(session ? { session } : undefined) as Promise<unknown>).then(
-            () => undefined
+        checkedDelete(document, () =>
+            // mongoose types `Document#deleteOne` as `any`; the cast restores the promise it returns
+            (document.deleteOne(session ? { session } : undefined) as Promise<unknown>).then(
+                () => undefined
+            )
         );
 
     /**

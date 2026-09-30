@@ -320,8 +320,15 @@ export const update = (
         taxClass?: TaxClass | null;
         rateType?: RateType | null;
         sku?: string | null;
+        /**
+         * The edit also wrote something OUTSIDE this document (translation rows). Moves
+         * `updatedAt` so the row's version — its `ETag` — moves with the edit.
+         */
+        touch?: boolean;
     }
 ): Promise<ProductDocument> => {
+    // Applying `updatedAt` itself is the timestamps hook's job; this only makes the save non-empty.
+    if (data.touch) product.markModified('updatedAt');
     // Apply incoming field changes
     if (data.title !== undefined) product.title = data.title;
     if (data.price !== undefined) product.price = data.price;
@@ -380,6 +387,8 @@ export const updateById = (
         taxClass?: TaxClass | null;
         rateType?: RateType | null;
         sku?: string | null;
+        /** See `update`'s own `touch`. */
+        touch?: boolean;
     },
     context: CallerContext
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
@@ -553,7 +562,7 @@ export const writeUpdate = async (
 
     const result = await updateById(
         id,
-        { ...productFields, ...imageExtras, ...derivedFields },
+        { ...productFields, ...imageExtras, ...derivedFields, touch: plan !== undefined },
         context
     );
     if (!result.success) return result;

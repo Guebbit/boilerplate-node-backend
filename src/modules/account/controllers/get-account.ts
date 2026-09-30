@@ -10,6 +10,7 @@ import { userService } from '@modules/users';
 import { accountService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
+import { setEtag } from '@infrastructure/http/preconditions';
 
 /**
  * GET /account — the authenticated user's full profile, read fresh from the users collection.
@@ -28,9 +29,13 @@ export const getAccount = (request: Request, response: Response): void => {
             // A valid token whose row is gone is a dead session, not a server fault. The role
             // comes straight off the already-resolved auth context — it was read from the
             // membership store once already, at token verification, so no second lookup here.
-            if (user)
-                successResponse<User>(response, userService.toUser(user, authContext.roles.tenant));
-            else rejectResponse(response, 401);
+            if (!user) {
+                rejectResponse(response, 401);
+                return;
+            }
+            // The version a profile edit sends back as `If-Match`.
+            setEtag(response, user);
+            successResponse<User>(response, userService.toUser(user, authContext.roles.tenant));
         })
         .catch(catchAs(response, 'getAccount'));
 };
