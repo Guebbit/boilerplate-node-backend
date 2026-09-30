@@ -15,6 +15,7 @@ import {
     manageConnection,
     type ManagedConnection
 } from '@infrastructure/adapters/managed-connection';
+import { drainMatchingKeys } from '@infrastructure/adapters/cache';
 import {
     closeRedisClient,
     createRedisClient,
@@ -33,7 +34,7 @@ const KEY_PREFIX = process.env.NODE_RATE_LIMIT_REDIS_PREFIX ?? 'rate-limit';
  * The limiter's own Redis URL. Falls back to the cache's, because one Redis is the normal
  * deployment and asking for the same URL twice is a way to get two different ones.
  */
-const redisUrl = (): string | undefined => {
+export const rateLimitRedisUrl = (): string | undefined => {
     /*
      * The explicit kill switch, the twin of `NODE_REDIS_CACHE_ENABLED`. Needed because the URL is
      * INHERITED from the cache's, so "do not share counters" cannot be said by leaving a variable
@@ -53,7 +54,7 @@ const redisUrl = (): string | undefined => {
 /**
  * Construct (but do not connect) the limiter's own Redis client.
  *
- * @param url - the limiter's Redis URL — see {@link redisUrl}
+ * @param url - the limiter's Redis URL — see {@link rateLimitRedisUrl}
  */
 const build = (url: string): RedisClient => {
     const redisClient: RedisClient = createRedisClient(url);
@@ -217,7 +218,7 @@ const lazyRedisStore = (namespace: string, url: string): Store => {
  * @returns a Redis-backed store when Redis is configured, an in-process one otherwise
  */
 export const rateLimitStore = (namespace: string): Store => {
-    const url = redisUrl();
+    const url = rateLimitRedisUrl();
 
     if (!url) {
         /*
@@ -245,3 +246,40 @@ export const rateLimitStore = (namespace: string): Store => {
 /** Release the limiter's connection on shutdown, so a restart begins from a clean socket. */
 export const stopRateLimitStore = (): Promise<void> =>
     redisConnection ? redisConnection.stop() : Promise.resolve();
+
+/**
+ * Delete every limiter counter, so the next request starts with a full budget.
+ *
+ * For the e2e reset (`scenario:apply --reset`), which restores the data but would otherwise leave
+ * every spent budget behind: the keys are identical after a reseed (fixed ids, a stable email
+ * hash, 127.0.0.1).
+ *
+ * Scoped to this app's `KEY_PREFIX`, never `FLUSHALL`, and independent of the cache's own clear
+ * on purpose (separate prefixes, see above). Uses a short-lived client of its own: the shared one
+ * is switched off in the process that calls this.
+ *
+ * Never rejects; `reachable: false` tells the caller the counters may survive.
+ *
+ * @param url - the limiter's Redis URL as the DEPLOYMENT configured it (see
+ *  {@link rateLimitRedisUrl}), read before anything switches the limiter off. `undefined` means
+ *  no Redis: nothing to clear
+ */
+export const clearRateLimitCounters = (
+    url: string | undefined
+): Promise<{ deleted: number; reachable: boolean }> => {
+    if (!url) return Promise.resolve({ deleted: 0, reachable: true });
+
+    const redisClient = build(url);
+
+    return redisClient
+        .connect()
+        .then(() => drainMatchingKeys(redisClient, `${KEY_PREFIX}:*`))
+        .then((deleted) => ({ deleted, reachable: true }))
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.warn({ message: 'Rate-limit counters could not be cleared.', error });
+            // Stryker restore all
+            return { deleted: 0, reachable: false };
+        })
+        .finally(() => closeRedisClient(redisClient));
+};

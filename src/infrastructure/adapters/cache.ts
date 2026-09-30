@@ -397,7 +397,10 @@ export interface ClearCacheResult {
  * @param pattern - glob pattern passed to Redis `SCAN` (`MATCH`)
  * @returns total number of keys deleted across every batch
  */
-const drainMatchingKeys = async (redisClient: RedisClient, pattern: string): Promise<number> => {
+export const drainMatchingKeys = async (
+    redisClient: RedisClient,
+    pattern: string
+): Promise<number> => {
     let deleted = 0;
 
     // `scanIterator` yields batches of keys (node-redis v5), so one DEL per batch.

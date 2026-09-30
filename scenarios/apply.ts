@@ -13,6 +13,7 @@
  * Refuses production:        a boot-time seeder that can drop or overwrite one is a footgun.
  * Refuses a public password: outside development/test, where a fixed demo login is the point.
  * Refuses a non-empty one:   unless `--reset`. Driving a checkout twice makes two orders.
+ * `--reset` also:             deletes the rate-limit counters, so spent budgets do not outlive the data.
  * Plain-text passwords:      the model's pre-save hook hashes them; a hash written by hand here
  *                            would drift from that hook, its plaintext unrecoverable.
  *
@@ -26,10 +27,21 @@ import { writeFile } from 'node:fs/promises';
 import { emptyDatabase, isDatabaseEmpty } from '@infrastructure/runtime/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
+import {
+    clearRateLimitCounters,
+    rateLimitRedisUrl
+} from '@infrastructure/http/middlewares/rate-limit-store';
 import { runScript } from '../scripts/run-script';
 import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/index';
 import { hasFallbackSeedPassword, seedCredentials } from '@scenarios/accounts';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from '@scenarios/rate-limits';
+
+/**
+ * The limiter's Redis as the DEPLOYMENT configured it, read before {@link SCRIPTED_RATE_LIMITS}
+ * below switches the limiter to in-memory counting for this process. `--reset` clears the counters
+ * there, since a reseed leaves the same keys behind (same ids, same email hash, same address).
+ */
+const deploymentRateLimitRedisUrl = rateLimitRedisUrl();
 
 /*
  * OVERRIDES `.env`, which is the whole point: a deployment's budgets are sized for a person, and
@@ -128,6 +140,15 @@ async function seed() {
     if (reset) {
         await emptyDatabase();
         logger.info('Database emptied.');
+
+        /*
+         * Fails open like the cache clear below: an unreachable Redis means no counters to spend
+         * either. SCAN + DEL under the limiter's own prefix — never FLUSHALL.
+         */
+        const counters = await clearRateLimitCounters(deploymentRateLimitRedisUrl);
+        if (counters.reachable)
+            logger.info(`Rate-limit counters cleared: ${counters.deleted} keys removed.`);
+        else logger.warn('Rate-limit counters NOT cleared: Redis is unreachable.');
     } else if (!(await isDatabaseEmpty())) {
         /*
          * Warn and succeed, never throw: the compose `app` command is
