@@ -5,7 +5,7 @@
  * See: docs/modules/users.md
  */
 
-import { userService } from '../service';
+import { userService } from '../services';
 import { createItemController } from '@infrastructure/surfaces/create-item-controller';
 
 /**

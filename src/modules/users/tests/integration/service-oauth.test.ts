@@ -7,7 +7,7 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, userRepository } from '@modules/users/tests/factories';
-import { userService } from '@modules/users/service';
+import { userService } from '@modules/users/services';
 
 setupTestDb();
 

@@ -12,7 +12,7 @@ import path from 'node:path';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
-import * as userService from '../../service';
+import * as userService from '../../services';
 import { userModel } from '../../model';
 
 setupTestDb();

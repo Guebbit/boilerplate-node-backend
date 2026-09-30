@@ -10,7 +10,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { writeWithUploadedImage } from '@infrastructure/http/uploads';
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
 import { ReplaceUserByIdBody, UpdateUserByIdBody } from '@api/schemas.zod';
-import { userService } from '../service';
+import { userService } from '../services';
 
 /**
  * `PUT /users/:id` and `PATCH /users/:id` — one handler pair over `userService.updateById`, which

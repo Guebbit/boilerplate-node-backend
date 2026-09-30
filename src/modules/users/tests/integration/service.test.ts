@@ -12,7 +12,7 @@ import { systemCallerContext } from '@kernel/permissions';
 import type { ClientSession } from 'mongoose';
 import { personalDataErasers, setPersonalDataErasers } from '../../erasure-registry';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
-import * as userService from '@modules/users/service';
+import * as userService from '@modules/users/services';
 import { USER_SETUP_REQUESTED } from '../../events';
 import { userRepository } from '../../repository';
 import { usersAuditActions } from '@modules/users/audit';

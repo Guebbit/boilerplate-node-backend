@@ -7,7 +7,7 @@
 
 import { createDeleteController } from '@infrastructure/surfaces/create-delete-controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { userService } from '../service';
+import { userService } from '../services';
 
 /**
  * DELETE /users — delete a user by id in the request body (admin).

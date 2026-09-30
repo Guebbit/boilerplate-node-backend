@@ -80,7 +80,7 @@ export const membershipIn = (
  * The synchronous half of {@link assignRole}: refuses the same two things, and returns the
  * lowered role name for the caller to act on. Split out so {@link assertCanGrant} can ask "would
  * this succeed" before committing other state, without a compensating rollback if the grant turns
- * out to be refused — see `users/service.ts`'s `updateSavedUser`.
+ * out to be refused — see `users/services/update.ts`'s `updateSavedUser`.
  *
  * Refuses two things, and each refusal is an invariant of the model:
  *
@@ -138,7 +138,7 @@ const validateGrant = (
 /**
  * Would {@link assignRole} succeed, without writing anything — for a caller that needs to know
  * BEFORE it commits other state, since a refused grant discovered afterwards means either a
- * rollback or a half-applied update. See `users/service.ts`'s `updateSavedUser`, which validates
+ * rollback or a half-applied update. See `users/services/update.ts`'s `updateSavedUser`, which validates
  * a role change before saving the rest of the document.
  *
  * @param granter - same meaning as {@link assignRole}'s own parameter
@@ -187,7 +187,7 @@ const auditRoleChange = (
  *   migration or an operator on the console — the three callers with nobody to escalate from
  * @param context - the caller context to audit this grant (or its refusal) against. `undefined`
  *   for a self-service/system caller with no request to attribute it to — see
- *   {@link assignDefaultRole} and `users/service.ts`'s `USER_SETUP_REQUESTED` handler for the same
+ *   {@link assignDefaultRole} and `users/services/create.ts`'s `USER_SETUP_REQUESTED` handler for the same
  *   reasoning. An escalation attempt is audited as a FAILURE, not skipped: it is the single most
  *   useful entry this vocabulary can produce.
  * @throws AccessInvariantError synchronously refused as a REJECTION, never a thrown exception —
@@ -274,7 +274,7 @@ export const promoteVerifiedCustomer = (userId: string, tenantId: string): Promi
  * knows what they are doing, and a new administrator is one database write away.
  *
  * @param context - the caller to audit this revoke against, or `undefined` for a system caller
- *   with no request to attribute it to (e.g. the account-deletion cascade in `users/service.ts`'s
+ *   with no request to attribute it to (e.g. the account-deletion cascade in `users/services/remove.ts`'s
  *   `remove`, which has no `CallerContext` to pass — see {@link assignRole}'s own docblock).
  */
 export const revokeRole = (

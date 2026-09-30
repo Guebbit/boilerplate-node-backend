@@ -184,7 +184,7 @@ export const requestPasswordReset = (
 /**
  * Issue a password-set token for an admin-created user with no password, and deliver it. Only
  * caller: `users`' `USER_SETUP_REQUESTED` event — no `CallerContext`, so nothing to audit here
- * (already recorded as `ADMIN_USER_CREATED` in `users/service.ts`). Reuses the reset token
+ * (already recorded as `ADMIN_USER_CREATED` in `users/services/create.ts`). Reuses the reset token
  * type/TTL; only the mail copy differs, see {@link setupRequestEmail}.
  */
 export const requestAccountSetup = (user: UserDocument): Promise<void> =>

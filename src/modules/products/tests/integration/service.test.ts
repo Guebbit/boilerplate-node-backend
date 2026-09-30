@@ -189,7 +189,7 @@ describe('productService.validateCreateData', () => {
     /**
      * The messages are what the API sends a client verbatim, so a wrong i18n key is a user-visible
      * bug the assertions above can't see — a missing key makes i18next return the key itself, still a
-     * non-empty string. This caught exactly that: `users/service.ts`'s `validateData` asked for
+     * non-empty string. This caught exactly that: `users/services/validation.ts`'s `validateData` asked for
      * `signup.user-field-*` while `en.json` defined them under `login.*`, so a failed email showed
      * "users.field-email-invalid".
      */
