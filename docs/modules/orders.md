@@ -225,8 +225,8 @@ owns is the clock and the button:
 ```mermaid
 flowchart LR
     paid["paid<br/><i>right exists, no end yet</i>"] --> shipped["shipped<br/><i>still no end</i>"]
-    shipped -- "markDelivered(deliveredAt)" --> goods["delivered<br/><i>withdrawUntil = end of day (deliveredAt + 14 days)</i>"]
-    paid -- "markFulfilled (digital)" --> digital["delivered<br/><i>withdrawUntil = end of day (paidAt + 14 days)</i>"]
+    shipped -- "markDelivered(deliveredAt)" --> goods["delivered<br/><i>withdrawUntil = end of day (deliveredAt + the period)</i>"]
+    paid -- "markFulfilled (digital)" --> digital["delivered<br/><i>withdrawUntil = end of day (paidAt + the period)</i>"]
 ```
 
 - **`withdrawUntil` is frozen, never recomputed** — the same "freeze the fact at the moment it
@@ -235,8 +235,22 @@ flowchart LR
   contract (Art. 9(2)(a)), which is `paidAt` here. `delivery` reports the timestamp through
   `markDelivered(orderId, deliveredAt)`; `orders` cannot read `delivery`'s own.
 - **The window ends with the last hour of its last day.** The day of the event is not counted and
-  the 14th day after it is counted whole (CRD recital 41 → Regulation 1182/71 Art. 3(1), 3(2)(c)),
-  in UTC. Art. 3(4)'s roll-over past a weekend or public holiday is not applied.
+  the last day of the period is counted whole (CRD recital 41 → Regulation 1182/71 Art. 3(1),
+  3(2)(c)), in UTC.
+- **No weekend or holiday roll-over is computed.** Art. 3(4) moves a deadline that lands on one to
+  the next working day; closing early would be illegal, offering more never is. So the period is
+  long enough that the move cannot matter:
+
+    |                                                                    | days |
+    | ------------------------------------------------------------------ | ---- |
+    | the legal period                                                   | 14   |
+    | longest weekend + holiday run in any EU country (Denmark's Easter) | +5   |
+    | UTC day counting                                                   | +1   |
+    | needed                                                             | 20   |
+    | minimum, a day to spare                                            | 21   |
+
+    The default is 30, a common return window.
+
 - **Before either has happened the window has no end** — the right exists from the moment the
   contract is concluded, so `withdrawUntil` is absent, not far in the future.
 - **The button is server-driven.** `OrderActions.withdraw` is true for the order's own buyer (not an

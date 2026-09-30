@@ -24,6 +24,7 @@ import {
     returnAddress,
     returnPostagePayer,
     shipToCountries,
+    withdrawalPeriodDays,
     shopCountry,
     shopIdentity
 } from '../../config';
@@ -63,7 +64,8 @@ const TOUCHED = [
     'NODE_BANK_TRANSFER_HOLD_HOURS',
     'NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT',
     'NODE_FRONTEND_LINK_ORDER',
-    'NODE_FRONTEND_URL'
+    'NODE_FRONTEND_URL',
+    'NODE_WITHDRAWAL_PERIOD_DAYS'
 ] as const;
 
 withoutEnvironmentInThisFile(TOUCHED);
@@ -234,6 +236,27 @@ describe('the shop identity boot gate', () => {
         process.env.NODE_SHOP_EMAIL = 'not-an-address';
 
         expect(() => assertModuleConfig([ordersModule], [])).toThrow(/NODE_SHOP_EMAIL/);
+    });
+});
+
+describe('the withdrawal period', () => {
+    it('reads 30 when unset', () => {
+        expect(withdrawalPeriodDays()).toBe(30);
+    });
+
+    it('refuses 20 at boot: less than the law plus the longest roll-over', () => {
+        configure();
+        process.env.NODE_WITHDRAWAL_PERIOD_DAYS = '20';
+
+        expect(() => assertModuleConfig([ordersModule], [])).toThrow(/NODE_WITHDRAWAL_PERIOD_DAYS/);
+    });
+
+    it('accepts 21 at boot and reads it back', () => {
+        configure();
+        process.env.NODE_WITHDRAWAL_PERIOD_DAYS = '21';
+
+        expect(() => assertModuleConfig([ordersModule], [])).not.toThrow();
+        expect(withdrawalPeriodDays()).toBe(21);
     });
 });
 

@@ -85,7 +85,7 @@ the database and exactly one wins — the loser is told it was already decided (
 The button is **server-driven**: `OrderActions.withdraw` says whether to show it and
 `OrderActions.withdrawUntil` says until when. `OrderActions`' own description states the doctrine — a
 client must not re-implement the lifecycle, because "a second copy in a separately deployed client is
-how the two come to disagree". The frontend never counts the 14 days. The clock itself is
+how the two come to disagree". The frontend never counts the days. The clock itself is
 [`orders`'](./orders.md#the-withdrawal-window).
 
 What the call does depends on where the goods are:

@@ -302,10 +302,10 @@ describe('the history reads as a history', () => {
         expect(order?.withdrawUntil).toBeDefined();
 
         // Delivery follows the checkout within seconds, so the deadline sits one withdrawal period
-        // (14 days by default) after `createdAt`, rounded up to the end of that UTC day (the
+        // (30 days by default) after `createdAt`, rounded up to the end of that UTC day (the
         // window ends with the last hour of its last day). Left at boot time it would be weeks later.
         const gapMs = order!.withdrawUntil!.getTime() - order!.createdAt!.getTime();
-        const periodMs = 14 * 86_400_000;
+        const periodMs = 30 * 86_400_000;
         expect(gapMs).toBeGreaterThanOrEqual(periodMs);
         expect(gapMs - periodMs).toBeLessThan(2 * 86_400_000);
     });

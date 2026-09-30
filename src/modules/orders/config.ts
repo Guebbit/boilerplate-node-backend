@@ -107,9 +107,10 @@ export const ordersConfig = defineConfig({
             describe: 'Grace before the sweep retries a cancelled order’s refund.'
         }),
         NODE_WITHDRAWAL_PERIOD_DAYS: int({
-            default: 14,
-            min: 14,
-            describe: 'Days a consumer may withdraw. 14 is the legal floor (CRD Art. 9).'
+            default: 30,
+            min: 21,
+            describe:
+                'Days a consumer may withdraw. At least 21: the law’s 14, plus room for any weekend or holiday roll-over, which is not computed.'
         }),
         NODE_ORDER_PII_RETENTION_DAYS: int({
             default: 3650,
@@ -363,9 +364,10 @@ export const transferInstructionsFor = (reference: string): OrderTransferInstruc
 export const orderEffectRetryMinutes = (): number => ordersConfig().NODE_ORDER_EFFECT_RETRY_MINUTES;
 
 /**
- * How many days a consumer has to withdraw. 14 is the law's floor (Consumer Rights Directive
- * Art. 9); a deployment may offer longer, never shorter — hence the minimum. Read per call, like
- * every getter here.
+ * How many days a consumer has to withdraw. The law's floor is 14 (Consumer Rights Directive
+ * Art. 9); the minimum here is 21 so a weekend or holiday roll-over can never matter. Read per
+ * call, like every getter here.
+ * See docs/modules/orders.md#the-withdrawal-window
  * @returns the withdrawal period, in days
  */
 export const withdrawalPeriodDays = (): number => ordersConfig().NODE_WITHDRAWAL_PERIOD_DAYS;
