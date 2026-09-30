@@ -215,6 +215,10 @@ export default withMermaid(
                         items: [
                             { text: 'Package Dependencies', link: '/tools/package-dependencies' },
                             { text: 'Dependency Vetting', link: '/tools/dependency-vetting' },
+                            {
+                                text: 'Pending Major Upgrades',
+                                link: '/tools/pending-major-upgrades'
+                            },
                             { text: 'Testing — Quick Start', link: '/tools/testing-quickstart' },
                             { text: 'Package Scripts', link: '/tools/package-scripts' },
                             { text: 'Docker & Podman', link: '/tools/docker-and-podman' },

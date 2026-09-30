@@ -202,9 +202,9 @@ export const mergeIntoBaseline = (
     const previous = baseline?.files ?? {};
     const files: Record<string, number> = { ...previous };
 
-    for (const file of Object.keys(current)) {
+    for (const [file, score] of Object.entries(current)) {
         const before = previous[file] as number | undefined;
-        files[file] = before === undefined ? current[file] : Math.max(before, current[file]);
+        files[file] = before === undefined ? score : Math.max(before, score);
     }
 
     return { generatedAt: new Date().toISOString(), files };

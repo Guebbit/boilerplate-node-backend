@@ -160,7 +160,7 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
         // across a freshly named database every boot.
         const databaseUri = new URL(mongo.uri);
         databaseUri.pathname = '/demo';
-        process.env.NODE_DB_URI = databaseUri.toString();
+        process.env.NODE_DB_URI = databaseUri.href;
         // Always derived, never defaulted-when-unset like the block above: a checked-in `.env`'s
         // `NODE_URL` names the SINGLE-instance developer setup (:3000), and this profile's whole
         // point is several instances on several ports (see this file's own module doc) — the

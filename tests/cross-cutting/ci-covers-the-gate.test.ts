@@ -65,7 +65,7 @@ const scriptsRunByCi = (all: Record<string, string>): Set<string> => {
                 // `ci.yml`'s header explains why there is no `npm run complete` job. A comment is
                 // not a job, and reading one as coverage is how this check would pass while the
                 // gap it exists for stayed open.
-                .filter((line) => !line.trim().startsWith('#'))
+                .filter((line) => !line.trimStart().startsWith('#'))
                 .flatMap((line) => [...line.matchAll(/npm run ([\w:-]+)/g)].map(([, name]) => name))
         );
 

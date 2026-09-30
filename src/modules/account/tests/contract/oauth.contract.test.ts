@@ -62,6 +62,21 @@ describe('GET /account/oauth/:provider', () => {
         expect(setCookie(response, 'oauth_continue')).toMatch(/oauth_continue=%2Fcheckout;/);
     });
 
+    it('saves a `locale` tag as a cookie of its own', async () => {
+        const response = await api().get('/account/oauth/fake?locale=it');
+
+        expect(setCookie(response, 'oauth_locale')).toMatch(/oauth_locale=it;/);
+    });
+
+    it('drops a `locale` that is not a tag rather than saving it', async () => {
+        const response = await api().get(
+            `/account/oauth/fake?locale=${encodeURIComponent('https://evil.example')}`
+        );
+
+        expect(response.status).toBe(302);
+        expect(setCookie(response, 'oauth_locale')).toBeUndefined();
+    });
+
     it.each([
         ['a protocol-relative address', '%2F%2Fevil.example'],
         ['an absolute URL', encodeURIComponent('https://evil.example/phish')],
@@ -104,7 +119,7 @@ describe('GET /account/oauth/:provider/callback', () => {
 
     it('answers 400 when the verifier cookie is missing, without ever reaching the token exchange', async () => {
         const start = await api().get('/account/oauth/fake');
-        const stateCookie = setCookie(start, 'oauth_state')!.split(';')[0];
+        const stateCookie = setCookie(start, 'oauth_state')!.split(';', 1)[0];
         const callbackUrl = new URL(start.headers.location);
 
         // The state cookie rides along, the verifier does not — the trap the build order warns
@@ -150,6 +165,50 @@ describe('GET /account/oauth/:provider/callback', () => {
         const location = new URL(response.headers.location);
         expect(location.searchParams.get('continue')).toBe('/checkout');
         expect(setCookie(response, 'oauth_continue')).toMatch(/oauth_continue=;/);
+    });
+
+    it('carries a saved `locale` through to the frontend redirect, and clears the cookie', async () => {
+        const start = await api().get('/account/oauth/fake?locale=it');
+        const callbackUrl = new URL(start.headers.location);
+
+        const response = await api()
+            .get(callbackUrl.pathname + callbackUrl.search)
+            .set('Cookie', cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_locale'));
+
+        expect(response.status).toBe(302);
+        const location = new URL(response.headers.location);
+        expect(location.searchParams.get('locale')).toBe('it');
+        expect(location.searchParams.has('continue')).toBe(false);
+        expect(setCookie(response, 'oauth_locale')).toMatch(/oauth_locale=;/);
+    });
+
+    it('carries the saved `locale` on a failure redirect too, so the error page speaks it', async () => {
+        const start = await api().get('/account/oauth/fake?locale=it');
+        const callbackUrl = new URL(start.headers.location);
+        const state = callbackUrl.searchParams.get('state');
+
+        const response = await api()
+            .get(`${callbackUrl.pathname}?state=${state}&error=access_denied`)
+            .set('Cookie', cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_locale'));
+
+        const location = new URL(response.headers.location);
+        expect(location.searchParams.get('error')).toBe('access_denied');
+        expect(location.searchParams.get('locale')).toBe('it');
+    });
+
+    it('never honors a forged `locale` cookie the start controller never validated', async () => {
+        const start = await api().get('/account/oauth/fake');
+        const callbackUrl = new URL(start.headers.location);
+
+        const response = await api()
+            .get(callbackUrl.pathname + callbackUrl.search)
+            .set(
+                'Cookie',
+                `${cookieHeader(start, 'oauth_state', 'oauth_verifier')}; oauth_locale=//evil.example`
+            );
+
+        expect(response.status).toBe(302);
+        expect(new URL(response.headers.location).searchParams.has('locale')).toBe(false);
     });
 
     it('falls back to the plain landing page when no `continue` was saved', async () => {

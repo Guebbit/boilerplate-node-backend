@@ -136,6 +136,87 @@ export default tseslint.config(
     pluginUnicorn.configs['flat/recommended'],
 
     /**
+     * Unicorn 76 arrived with about 190 new rules in `recommended` (63 had none of them). The ones
+     * below fired here and are turned OFF, in three groups, rather than exempted site by site.
+     * Every rule not listed either passes as-is or was fixed in the change that adopted 76.
+     *
+     * Contradicts a rule this repo already has:
+     *   prefer-await                     — CLAUDE.md prefers `.then` chains for one or two awaits.
+     *   single-line-block-comment-style  — docblocks are the house comment shape.
+     *   prefer-then-catch                — `.then(ok, fail)` and `.then(ok).catch(fail)` differ: the
+     *                                      second also catches `ok` throwing. A rewrite, not a style.
+     *
+     * Deliberate in this codebase:
+     *   prefer-https                     — tests use `http://` on purpose (SSRF guard, localhost).
+     *   no-error-property-assignment     — tests build error stubs by setting `name`.
+     *   no-exports-in-scripts            — `scripts/` files export for their own unit tests.
+     *   prefer-string-repeat             — rewrites `'    '` as `' '.repeat(4)`, which reads worse.
+     *   prefer-combined-guards           — folds separate early exits into one long condition,
+     *                                      losing the one-line-per-reason shape.
+     *
+     * Opinion, no bug behind it — hundreds of hits, each a judgement call:
+     *   no-top-level-side-effects, no-top-level-assignment-in-function, consistent-boolean-name,
+     *   consistent-conditional-object-spread, prefer-ternary, max-nested-calls,
+     *   no-unreadable-for-of-expression, require-array-sort-compare (`tsc` already types the
+     *   comparator), prefer-iterator-to-array, no-computed-property-existence-check,
+     *   prefer-simple-condition-first, no-non-function-verb-prefix, prefer-promise-try,
+     *   prefer-promise-with-resolvers, prefer-logical-operator-over-ternary, prefer-minimal-ternary,
+     *   prefer-else-if, prefer-includes-over-repeated-comparisons, prefer-number-is-safe-integer,
+     *   no-return-array-push, no-this-outside-of-class, no-duplicate-loops,
+     *   no-break-in-nested-loop, no-unsafe-promise-all-settled-values,
+     *   no-declarations-before-early-exit, prefer-number-coercion,
+     *   no-incorrect-template-string-interpolation, no-global-object-property-assignment,
+     *   consistent-class-member-order, prefer-queue-microtask, prefer-smaller-scope,
+     *   prefer-unicode-code-point-escapes, prefer-iterator-helpers, prefer-set-methods.
+     */
+    {
+        rules: {
+            'unicorn/prefer-await': 'off',
+            'unicorn/single-line-block-comment-style': 'off',
+            'unicorn/prefer-then-catch': 'off',
+            'unicorn/prefer-https': 'off',
+            'unicorn/no-error-property-assignment': 'off',
+            'unicorn/no-exports-in-scripts': 'off',
+            'unicorn/prefer-string-repeat': 'off',
+            'unicorn/prefer-combined-guards': 'off',
+            'unicorn/no-top-level-side-effects': 'off',
+            'unicorn/no-top-level-assignment-in-function': 'off',
+            'unicorn/consistent-boolean-name': 'off',
+            'unicorn/consistent-conditional-object-spread': 'off',
+            'unicorn/prefer-ternary': 'off',
+            'unicorn/max-nested-calls': 'off',
+            'unicorn/no-unreadable-for-of-expression': 'off',
+            'unicorn/require-array-sort-compare': 'off',
+            'unicorn/prefer-iterator-to-array': 'off',
+            'unicorn/no-computed-property-existence-check': 'off',
+            'unicorn/prefer-simple-condition-first': 'off',
+            'unicorn/no-non-function-verb-prefix': 'off',
+            'unicorn/prefer-promise-try': 'off',
+            'unicorn/prefer-promise-with-resolvers': 'off',
+            'unicorn/prefer-logical-operator-over-ternary': 'off',
+            'unicorn/prefer-minimal-ternary': 'off',
+            'unicorn/prefer-else-if': 'off',
+            'unicorn/prefer-includes-over-repeated-comparisons': 'off',
+            'unicorn/prefer-number-is-safe-integer': 'off',
+            'unicorn/no-return-array-push': 'off',
+            'unicorn/no-this-outside-of-class': 'off',
+            'unicorn/no-duplicate-loops': 'off',
+            'unicorn/no-break-in-nested-loop': 'off',
+            'unicorn/no-unsafe-promise-all-settled-values': 'off',
+            'unicorn/no-declarations-before-early-exit': 'off',
+            'unicorn/prefer-number-coercion': 'off',
+            'unicorn/no-incorrect-template-string-interpolation': 'off',
+            'unicorn/no-global-object-property-assignment': 'off',
+            'unicorn/consistent-class-member-order': 'off',
+            'unicorn/prefer-queue-microtask': 'off',
+            'unicorn/prefer-smaller-scope': 'off',
+            'unicorn/prefer-unicode-code-point-escapes': 'off',
+            'unicorn/prefer-iterator-helpers': 'off',
+            'unicorn/prefer-set-methods': 'off'
+        }
+    },
+
+    /**
      * Every `eslint-disable` must say why. The two project-local rules and the `TryStatement`
      * restriction below are deliberately annoying; a bare disable comment converts "deliberately
      * annoying" into "silently ignored", and the description requirement is what keeps each
@@ -396,8 +477,8 @@ export default tseslint.config(
                 }
             ],
 
-            // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/prevent-abbreviations.md
-            'unicorn/prevent-abbreviations': [
+            // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/name-replacements.md
+            'unicorn/name-replacements': [
                 'error',
                 {
                     replacements: {
@@ -412,7 +493,12 @@ export default tseslint.config(
                         },
                         ref: {
                             reference: false
-                        }
+                        },
+                        // 76 added `repository -> repo` and `configuration -> config`. This
+                        // codebase spells both out on purpose: `repository` is a DDD term with a
+                        // rules section of its own in CLAUDE.md, and `config` is ambiguous here.
+                        repository: false,
+                        configuration: false
                     }
                 }
             ],
@@ -1269,7 +1355,7 @@ export default tseslint.config(
         rules: {
             'no-console': 'off',
             // `props`, `env`, `dir`: the VitePress/orval config surface spells its own keys.
-            'unicorn/prevent-abbreviations': 'off',
+            'unicorn/name-replacements': 'off',
             // dependency-cruiser and jest both read CommonJS configs; `module.exports` and
             // `require` are their interface, not a style choice.
             'unicorn/prefer-module': 'off',
@@ -1296,7 +1382,7 @@ export default tseslint.config(
             'no-console': 'off',
             '@typescript-eslint/no-require-imports': 'off',
             // `moduleNameMapper` is jest's own key: these files spell what their tools spell.
-            'unicorn/prevent-abbreviations': 'off'
+            'unicorn/name-replacements': 'off'
         }
     },
 
@@ -1307,7 +1393,7 @@ export default tseslint.config(
         files: ['tests/**/*', '**/*.spec.ts', '**/*.test.ts', '**/*.d.ts'],
         rules: {
             'unicorn/filename-case': 'off',
-            'unicorn/prevent-abbreviations': 'off'
+            'unicorn/name-replacements': 'off'
         }
     },
 

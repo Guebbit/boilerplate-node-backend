@@ -14,7 +14,6 @@ import type { Caller, CallerContext, TenantCallerContext } from '@types';
 // i18next translation function — messages are resolved against the request's locale, which the
 // i18next middleware has already set up by the time a controller runs.
 import { t } from '@infrastructure/i18n';
-import { Types } from 'mongoose';
 import { coerceStringArray, getJson } from '@guebbit/js-toolkit';
 import { parseBooleanWord } from '@infrastructure/runtime/environment';
 import { rejectResponse } from '@infrastructure/http/response';
@@ -371,14 +370,20 @@ export const tenantCallerContextOf = (
 };
 
 /**
- * Check if a value is a valid MongoDB ObjectId. Thin wrapper around Mongoose's `isValid` for
- * readability.
+ * The one spelling of an id this API issues: 24 hex characters.
+ * Mongoose's own `isValid` also accepts any 12-character string (a 12-byte binary form), which no
+ * route ever hands out, so it is not the check here.
+ */
+const OBJECT_ID_PATTERN = /^[\da-f]{24}$/i;
+
+/**
+ * Check if a value is a well-formed MongoDB ObjectId string: exactly 24 hex characters.
  *
  * The `id is string` return type makes this a type guard: `if (isValidObjectId(x))` narrows `x`
  * from `string | undefined` to `string`, removing the need for a non-null assertion downstream.
  */
 export const isValidObjectId = (id: string | undefined): id is string =>
-    !!id && Types.ObjectId.isValid(id);
+    id !== undefined && OBJECT_ID_PATTERN.test(id);
 
 /**
  * A type guard that also answers 422 when `value` is not a well-formed ObjectId — the check every

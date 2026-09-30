@@ -10,7 +10,8 @@ import {
     stateMatches,
     generateCodeVerifier,
     codeChallengeOf,
-    isSameOriginPath
+    isSameOriginPath,
+    isLocaleTag
 } from '../../oauth/state';
 
 describe('generateOAuthState', () => {
@@ -103,5 +104,26 @@ describe('isSameOriginPath', () => {
         // A repeated query param — express hands that back as an array, same trap `stateMatches` guards.
         expect(isSameOriginPath(['/a', '/b'])).toBe(false);
         expect(isSameOriginPath(42)).toBe(false);
+    });
+});
+
+describe('isLocaleTag', () => {
+    it.each(['it', 'en', 'pt-BR', 'zh-Hant-TW', 'fil'])('accepts %s', (tag) => {
+        expect(isLocaleTag(tag)).toBe(true);
+    });
+
+    it.each([
+        ['empty', ''],
+        ['one letter', 'e'],
+        ['a URL', 'https://evil.example'],
+        ['a path', '/it'],
+        ['markup', 'it"><script>'],
+        ['a CRLF injection', 'it\r\nSet-Cookie: x=1'],
+        ['an underscore form', 'pt_BR'],
+        ['too many subtags', 'aa-bbbb-cccc-dddd-eeee'],
+        ['an array', ['it']],
+        ['undefined', undefined]
+    ])('rejects %s', (_label, value) => {
+        expect(isLocaleTag(value)).toBe(false);
     });
 });

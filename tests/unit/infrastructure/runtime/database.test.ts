@@ -2,7 +2,8 @@
  * `src/infrastructure/runtime/database.ts` — which connect failures are worth retrying.
  */
 import mongoose from 'mongoose';
-import { isPermanentConnectError, start } from '@infrastructure/runtime/database';
+import { logger } from '@infrastructure/adapters/logger';
+import { isPermanentConnectError, start, stopDatabase } from '@infrastructure/runtime/database';
 
 describe('isPermanentConnectError', () => {
     it.each([
@@ -64,5 +65,29 @@ describe('start', () => {
             connect.mockRestore();
             setSpy.mockRestore();
         });
+    });
+});
+
+describe('connection loss logging', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('reports a drop nobody asked for, but not the one stopDatabase causes', async () => {
+        jest.spyOn(mongoose, 'connect').mockResolvedValue(mongoose);
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        await start();
+
+        mongoose.connection.emit('disconnected');
+        expect(warn).toHaveBeenCalledWith('MongoDB connection lost.');
+
+        warn.mockClear();
+        jest.spyOn(mongoose, 'disconnect').mockImplementation(() => {
+            mongoose.connection.emit('disconnected');
+            return Promise.resolve();
+        });
+        await stopDatabase();
+
+        expect(warn).not.toHaveBeenCalled();
     });
 });

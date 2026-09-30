@@ -134,7 +134,7 @@ export const stripConformanceCases = (
 ): RemovalNote => {
     const file = path.join(repoRoot, 'shared', 'authorization-conformance.yaml');
     const content = readFileSync(file, 'utf8');
-    const [head, cases] = content.split(/^cases:\n/m);
+    const [head, cases] = content.split(/^cases:\n/m, 2);
 
     const headKept = head
         .split('\n')

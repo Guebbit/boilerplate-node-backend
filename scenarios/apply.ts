@@ -81,13 +81,13 @@ const describeTo = process.argv
     ?.slice('--describe-to='.length);
 
 /** The instance {@link seed} has booted — what the cleanup below has to shut down. */
-let application: { stop: () => Promise<void> } | undefined;
+let app: { stop: () => Promise<void> } | undefined;
 
 /** Import the app, connect everything a request needs, and hand back its Express instance. */
 const bootAppInProcess = () =>
     import('../src/app').then(({ createApp }) => {
         const instance = createApp();
-        application = instance;
+        app = instance;
         return instance.boot().then(() => instance.app);
     });
 
@@ -194,6 +194,6 @@ async function seed() {
  * never hits this hook, which is why `run-script.ts` itself stays on `process.exitCode`.
  */
 // `undefined`: the demo seeder, not a `docker/crontab` job — see `run-script.ts`.
-void runScript(undefined, seed, () => application?.stop() ?? Promise.resolve()).then(() =>
+void runScript(undefined, seed, () => app?.stop() ?? Promise.resolve()).then(() =>
     process.exit(process.exitCode ?? 0)
 );

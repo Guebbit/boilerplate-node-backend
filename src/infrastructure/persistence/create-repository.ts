@@ -359,14 +359,7 @@ export function createRepository<TDocument extends Document, TWire>(
         // Query#collation: string comparison rules for the sort; the default binary order stays
         // for every read that did not ask for one.
         if (collated) query.collation(SORT_COLLATION);
-        return (
-            query
-                // eslint-disable-next-line unicorn/no-array-sort -- Mongoose's Query#sort, not Array#sort
-                .sort(sort)
-                .skip(skip)
-                .limit(limit)
-                .exec()
-        );
+        return query.sort(sort).skip(skip).limit(limit).exec();
     };
 
     /** Count the documents matching a filter. */

@@ -60,15 +60,15 @@ describe('observability routes — the two guard styles', () => {
     it('leaves no observability endpoint unguarded', () => {
         // Every route here is a map of the service. The sweep covers all three guard styles at
         // once, so a route added with any of them passes and one added with none fails.
-        const unguarded = routeSignatures(router).filter(
-            (signature) =>
-                !guardsOn(router, signature).some((guard) =>
-                    [
+        const unguarded = routeSignatures(router).filter((signature) =>
+            guardsOn(router, signature).every(
+                (guard) =>
+                    ![
                         'requirePermissionGuard',
                         'requirePermissionViaCookieGuard',
                         'isMetricsScraper'
                     ].includes(guard)
-                )
+            )
         );
 
         expect(unguarded).toEqual([]);

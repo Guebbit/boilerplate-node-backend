@@ -80,11 +80,18 @@ const oauthFrontendCallbackBase = (): string =>
  * @param continueTo - the saved `?continue=` target, forwarded as-is so the frontend's own
  *   `usePostLoginRedirect` can send the browser on from its landing page, exactly as it already
  *   does for a password login's `?continue=`.
+ * @param locale - the saved `?locale=` tag, already validated by the caller against
+ *   `oauth/state.ts#isLocaleTag`; the frontend opens its landing page in that language.
  */
-export const oauthFrontendCallbackUrl = (errorCode?: string, continueTo?: string): string => {
+export const oauthFrontendCallbackUrl = (
+    errorCode?: string,
+    continueTo?: string,
+    locale?: string
+): string => {
     const parameters = new URLSearchParams();
     if (errorCode) parameters.set('error', errorCode);
     if (continueTo) parameters.set('continue', continueTo);
+    if (locale) parameters.set('locale', locale);
 
     const query = parameters.toString();
     return `${oauthFrontendCallbackBase()}${query ? `?${query}` : ''}`;
@@ -101,10 +108,12 @@ export const oauthFrontendCallbackUrl = (errorCode?: string, continueTo?: string
  * @param continueTo - the saved `?continue=` target, already validated by the caller — see
  *   {@link oauthFrontendCallbackUrl}. The frontend's 2FA step forwards it on again once the
  *   challenge is answered, so the redirect a plain login would have landed on still happens.
+ * @param locale - the saved `?locale=` tag, validated like {@link oauthFrontendCallbackUrl}'s.
  */
 export const oauthFrontendMfaCallbackUrl = (
     challenge: Omit<MfaChallenge, 'mfaRequired' | 'challenge'>,
-    continueTo?: string
+    continueTo?: string,
+    locale?: string
 ): string => {
     const parameters = new URLSearchParams({
         mfaRequired: '1',
@@ -113,6 +122,7 @@ export const oauthFrontendMfaCallbackUrl = (
     });
     if (challenge.defaultMethod) parameters.set('defaultMethod', challenge.defaultMethod);
     if (continueTo) parameters.set('continue', continueTo);
+    if (locale) parameters.set('locale', locale);
 
     return `${oauthFrontendCallbackBase()}?${parameters.toString()}`;
 };

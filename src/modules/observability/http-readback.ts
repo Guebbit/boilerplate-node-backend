@@ -66,7 +66,7 @@ const aggregateLatencyBuckets = (
 
     // Ascending order is required by the percentile scan below, which relies on cumulative
     // counts increasing monotonically. `toSorted` copies rather than mutating in place.
-    const buckets = [...totals.entries()]
+    const buckets = [...totals]
         .toSorted(([a], [b]) => a - b)
         .map(([upperBound, cumulativeCount]) => ({ upperBound, cumulativeCount }));
 

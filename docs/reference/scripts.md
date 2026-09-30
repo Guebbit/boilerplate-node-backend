@@ -65,7 +65,7 @@ so the split is greppable rather than a naming habit: `head -1` says which a fil
 The same words are used in the paired frontend, whose `scripts/` carries these folders plus an
 `e2e/` for the Cypress runner, and in `boilerplate-php-laravel-backend`, whose Artisan command
 classes are the StudlyCase spelling of these names. Abbreviations are a lint error
-(`unicorn/prevent-abbreviations` checks filenames too), so write `directory`, not `dir`.
+(`unicorn/name-replacements` checks filenames too), so write `directory`, not `dir`.
 
 ---
 

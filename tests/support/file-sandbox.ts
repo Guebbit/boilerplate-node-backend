@@ -168,7 +168,7 @@ export const describeLeftovers = (leftovers: SandboxLeftovers[]): string =>
     [
         'Test files left files behind. A test must remove every file it causes:',
         ...leftovers.flatMap(({ sandbox, files }) => [
-            `  ${sandbox.split('__').join('/')}`,
+            `  ${sandbox.replaceAll('__', '/')}`,
             ...files.map((file) => `    ${file}`)
         ])
     ].join('\n');

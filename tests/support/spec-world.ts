@@ -71,6 +71,6 @@ const parameterValue = (path: string, name: string, world: World): string => {
 export const buildUrl = (operation: Operation, world: World): string => {
     let url = operation.path;
     for (const name of operation.pathParameters)
-        url = url.replace(`{${name}}`, parameterValue(operation.path, name, world));
+        url = url.replace(`{${name}}`, () => parameterValue(operation.path, name, world));
     return url;
 };

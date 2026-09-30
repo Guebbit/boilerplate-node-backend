@@ -57,7 +57,7 @@ export const versionOf = (row: unknown): number | undefined => {
             ? stamp.getTime()
             : typeof stamp === 'string'
               ? Date.parse(stamp)
-              : Number.NaN;
+              : NaN;
     return Number.isNaN(epoch) ? undefined : epoch;
 };
 

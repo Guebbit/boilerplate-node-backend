@@ -305,7 +305,7 @@ export const relayOutbox = async (): Promise<RelayResult> => {
         const outcomes = await Promise.all(heads.map((row) => relayOne(row)));
         for (const outcome of outcomes) tally(result, outcome);
         // Nothing settled: every head is claimed elsewhere or backing off, so another round is idle.
-        if (!outcomes.some((outcome) => outcome !== 'skipped')) break;
+        if (outcomes.every((outcome) => outcome === 'skipped')) break;
     }
 
     return result;

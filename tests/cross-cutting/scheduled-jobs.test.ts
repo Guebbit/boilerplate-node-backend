@@ -21,7 +21,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const scriptsInCrontab = (): string[] =>
     readFileSync(path.join(ROOT, 'docker', 'crontab'), 'utf8')
         .split('\n')
-        .filter((line) => line.trim() !== '' && !line.trim().startsWith('#'))
+        .filter((line) => line.trim() !== '' && !line.trimStart().startsWith('#'))
         .flatMap((line) => [...line.matchAll(/npm run ([\w:-]+)/g)].map(([, name]) => name));
 
 /** Every `package.json` script in the `reap:*`/`sweep:*` family, name to its `npm run` command. */

@@ -87,7 +87,7 @@ export const decryptVersionedSecret = (
     ring: readonly VersionedKey[],
     label: string
 ): string => {
-    const [version, ivHex, tagHex, ciphertextHex] = stored.split(':');
+    const [version, ivHex, tagHex, ciphertextHex] = stored.split(':', 4);
     const configured = ring.find((entry) => entry.version === version);
     if (!configured) throw new Error(`Unknown ${label} key version: ${version}`);
 

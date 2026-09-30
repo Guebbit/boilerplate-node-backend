@@ -53,11 +53,11 @@ const KEY_PATTERN = /^[\w-]{1,200}$/;
  *
  * @param value - the value to scan — `request.body`, or a nested object/array reached from it
  */
-const hasProtoKey = (value: unknown): boolean => {
-    if (Array.isArray(value)) return value.some((entry) => hasProtoKey(entry));
+const hasPrototypeKey = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some((entry) => hasPrototypeKey(entry));
     if (value === null || typeof value !== 'object') return false;
     if (Object.hasOwn(value, '__proto__')) return true;
-    return Object.values(value).some((entry) => hasProtoKey(entry));
+    return Object.values(value).some((entry) => hasPrototypeKey(entry));
 };
 
 /**
@@ -349,7 +349,7 @@ export const idempotencyKey: RequestHandler = (
         return;
     }
 
-    if (hasProtoKey(request.body)) {
+    if (hasPrototypeKey(request.body)) {
         rejectResponse(response, 422, [
             {
                 code: ERROR_CODES.VALIDATION_ERROR,

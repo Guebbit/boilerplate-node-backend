@@ -56,6 +56,12 @@ const overrideTemplatesDirectory = (): string | undefined =>
         : undefined;
 
 /**
+ * What a template name may look like: `<module>.<mail-name>`, letters, digits, dots and dashes.
+ * No path separator, so a name can never climb out of the override directory it is joined onto.
+ */
+const TEMPLATE_NAME = /^[\da-z][\d.a-z-]*$/i;
+
+/**
  * The file an outbox name renders from.
  *
  * The single point where the identifier becomes a path, and so the single place `.ejs` is written.
@@ -63,15 +69,21 @@ const overrideTemplatesDirectory = (): string | undefined =>
  * publishes it and the paired frontend asserts on it against both backends.
  *
  * @param templateName - an `EmailContent.template` name, without extension
- * @throws {Error} when no override directory is set and the name is not one
- *   {@link registerTemplateDirectories} collected — a module deleted without deleting the name
+ * @throws {Error} when the name holds a path separator or other odd character, or when no
+ *   override directory is set and the name is not one {@link registerTemplateDirectories} collected — a module deleted without deleting the name
  *   that referenced its template, say
  */
 export const templateFile = (templateName: string): string => {
+    if (!TEMPLATE_NAME.test(templateName))
+        throw new Error(`[templates] "${templateName}" is not a valid template name.`);
+
     const override = overrideTemplatesDirectory();
     if (override) return path.resolve(override, `${templateName}.ejs`);
 
-    const file = collectedTemplates[templateName];
+    // `hasOwn`: a bare index would answer `constructor` with `Object`'s own function.
+    const file = Object.hasOwn(collectedTemplates, templateName)
+        ? collectedTemplates[templateName]
+        : undefined;
     if (!file)
         throw new Error(
             `[templates] "${templateName}" is not a registered template — check the owning module's AppModule.templates.`

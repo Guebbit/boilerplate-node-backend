@@ -73,6 +73,32 @@ only when the two agree. No new server secret, unlike a signed token would need.
 - `httpOnly` / `sameSite: 'lax'`, `secure` in production — `createRefreshCookie`'s flags exactly.
 - Cleared by **both** a successful and a failed callback.
 
+## What else rides the round trip: `continue` and `locale`
+
+The start route accepts two optional query params. Each is saved as a cookie beside `oauth_state`
+(same 5 minutes, same flags, same clearing points) and echoed on the redirect back to the frontend.
+
+| Param      | Cookie           | Validated by       | Echoed on                            |
+| ---------- | ---------------- | ------------------ | ------------------------------------ |
+| `continue` | `oauth_continue` | `isSameOriginPath` | the success and the 2FA redirect     |
+| `locale`   | `oauth_locale`   | `isLocaleTag`      | every redirect, a failure's included |
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 32, 'rankSpacing': 44}}}%%
+flowchart LR
+    A["/it/login<br/><i>the visitor's page</i>"] -->|"?locale=it"| B["GET /account/oauth/:provider<br/><i>validates, saves cookie</i>"]
+    B --> C["provider consent"]
+    C --> D["GET .../callback<br/><i>re-validates the cookie</i>"]
+    D -->|"?locale=it"| E["/oauth/callback<br/><i>redirects to /it/...</i>"]
+```
+
+Both are **validated twice**: at the start against the query, and again at the callback against
+the cookie, because a cookie is client-writable. An invalid value is dropped silently, since a
+browser navigation has nowhere to show a JSON error. `locale` exists because `NODE_FRONTEND_URL`
+names an origin, not a page: with no `continue` target and no saved language preference, the
+frontend has nothing else to tell an `/it/login` visitor from an `/en/login` one. A saved
+preference on the account still wins, exactly as it does for a password login.
+
 ## Three outcomes, and the one that is a security decision
 
 ```mermaid

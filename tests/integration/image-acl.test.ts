@@ -168,7 +168,7 @@ describe('imageUrl is never a client-named path', () => {
                 .set('Authorization', adminBearer)
                 .send({ price: 1, translations: { en: { title: 'Target' } } });
             const url = label.startsWith('POST') ? '/products' : `/products/${target.body.data.id}`;
-            const method = label.split(' ')[0].toLowerCase() as 'post' | 'put' | 'patch';
+            const method = label.split(' ', 1)[0].toLowerCase() as 'post' | 'put' | 'patch';
             const full = {
                 price: 1,
                 translations: { en: { title: 'Attempt' } },

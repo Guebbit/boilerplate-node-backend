@@ -63,7 +63,7 @@ let random = createRandom(0);
 /** `RANDOM_DATA_SEED` when set to a finite number, otherwise a fresh value. */
 export const resolveContractDataSeed = (): number => {
     const raw = process.env.RANDOM_DATA_SEED;
-    const parsed = raw ? Number(raw) : Number.NaN;
+    const parsed = raw ? Number(raw) : NaN;
     return Number.isFinite(parsed) ? parsed : Math.floor(Math.random() * 1e9);
 };
 

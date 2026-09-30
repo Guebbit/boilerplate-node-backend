@@ -65,7 +65,7 @@ export const disconnect = async () => {
 /** Empties every collection without dropping the database or closing the connection. */
 export const clearAll = async () => {
     const { collections } = mongoose.connection;
-    for (const key of Object.keys(collections)) {
-        await collections[key].deleteMany({});
+    for (const value of Object.values(collections)) {
+        await value.deleteMany({});
     }
 };

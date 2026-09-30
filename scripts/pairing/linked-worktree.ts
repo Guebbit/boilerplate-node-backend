@@ -38,7 +38,7 @@ export const isLinkedWorktree = (directory: string): boolean | undefined => {
     } catch {
         return undefined;
     }
-    const [gitDirectory, commonDirectory] = output.trim().split('\n');
+    const [gitDirectory, commonDirectory] = output.trim().split('\n', 2);
     return gitDirectory !== commonDirectory;
 };
 
