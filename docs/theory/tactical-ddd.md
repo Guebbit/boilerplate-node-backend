@@ -463,6 +463,11 @@ flowchart LR
     class R22,R10 row;
 ```
 
+VAT is rounded ONCE per rate, on that rate's whole gross total (EN 16931 BR-CO-17), and only then
+split down to shipping and lines by the same `apportion` rule. Summing per-line rounded amounts
+would drift: three 0.10 lines at 22% carry 0.05 of VAT, not 0.06. The order response and the
+invoice call the same function, so they cannot disagree.
+
 Reconciliation is exact, in integer minor units, never approximated: summed `taxSummary.netAmount`
 is `netTotal + shippingNetAmount`, summed `taxAmount` is `taxTotal`, and summed `grossAmount` is
 the order's own `totalPrice` — `orders/tests/unit/tax.test.ts` asserts both reconciliations with a
