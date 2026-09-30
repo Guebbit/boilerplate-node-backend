@@ -167,7 +167,7 @@
         "orval": "^8.33.0",
         "prettier": "^3.8.1",
         "supertest": "^7.2.2",
-        "ts-jest": "29.4.9",
+        "ts-jest": "^29.4.14",
         "typescript": "~6.0.0",
         "typescript-eslint": "^8.70.1",
         "vitepress": "^1.6.4",
