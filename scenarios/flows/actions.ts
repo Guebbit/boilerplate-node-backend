@@ -194,6 +194,24 @@ export const cancelOrder = (caller: Caller, orderId: string, refund?: boolean): 
         .then(() => undefined);
 
 /**
+ * Open a return on a delivered order — `POST /returns`, the customer's own door. Every line, since
+ * the body names none.
+ *
+ * @param caller - the order's own buyer; staff cannot exercise a consumer's right for them
+ * @param reason - `defective`, `wrong_item`, `other` or `withdrawal`
+ * @returns the return's id
+ */
+export const requestReturn = (
+    caller: Caller,
+    orderId: string,
+    reason: string,
+    note?: string
+): Promise<string> =>
+    caller
+        .call<{ id: string }>('POST', '/returns', { orderId, reason, ...(note ? { note } : {}) })
+        .then((opened) => opened.id);
+
+/**
  * Soft-delete an order — `deletedAt`, not a removal.
  *
  * @param owner - a caller holding `orders.any.delete`

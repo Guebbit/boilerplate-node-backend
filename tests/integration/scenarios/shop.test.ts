@@ -34,6 +34,7 @@ import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
 import { paymentModel } from '@modules/payments/model';
 import { shipmentModel } from '@modules/delivery/model';
+import { returnModel } from '@modules/returns/model';
 import { userModel } from '@modules/users/model';
 import { auditLogModel } from '@modules/audit-logs/model';
 import { addressBookModel } from '@modules/addresses/model';
@@ -245,6 +246,43 @@ describe('each subject names a row that really has the property', () => {
             .findOne({ orderId: subjects['order.paidExpress'] })
             .exec();
         expect(shipment).toBeNull();
+    });
+
+    it('order.deliveredRecent is delivered today, inside its withdrawal window, and paid for by card', async () => {
+        const order = await orderModel.findById(subjects['order.deliveredRecent']).exec();
+        expect(order?.status).toBe('delivered');
+        expect(order?.userId?.toString()).toBe(SEED_USER_ID);
+        // Shipped somewhere, so the delivery charge is part of what a withdrawal refunds.
+        expect(order?.shippingMethod).toBe('standard');
+        expect(order!.withdrawUntil!.getTime()).toBeGreaterThan(Date.now());
+
+        const payment = await paymentModel
+            .findOne({ orderId: subjects['order.deliveredRecent'] })
+            .exec();
+        expect(payment?.status).toBe('succeeded');
+        expect(payment?.method).toBe('card');
+    });
+
+    it('return.requested and return.requestedSecond await an answer, each on its own open-window order', async () => {
+        const returns = await Promise.all(
+            ['return.requested', 'return.requestedSecond'].map((name) =>
+                returnModel.findById(subjects[name]).exec()
+            )
+        );
+        for (const opened of returns) {
+            expect(opened?.status).toBe('requested');
+            expect(opened?.reason).toBe('defective');
+        }
+        expect(String(returns[0]?.orderId)).not.toBe(String(returns[1]?.orderId));
+
+        const orders = await orderModel
+            .find({ _id: { $in: returns.map((opened) => opened!.orderId) } })
+            .exec();
+        for (const order of orders) {
+            expect(order.status).toBe('delivered');
+            expect(order.userId?.toString()).toBe(SEED_USER_ID);
+            expect(order.withdrawUntil!.getTime()).toBeGreaterThan(Date.now());
+        }
     });
 
     it('order.softDeleted is hidden, and sits on the non-admin account', async () => {

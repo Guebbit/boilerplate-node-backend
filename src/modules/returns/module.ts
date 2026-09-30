@@ -83,5 +83,11 @@ export default {
         }
     ],
     locales: path.join(__dirname, 'locales'),
-    templates: path.join(__dirname, 'templates')
+    templates: path.join(__dirname, 'templates'),
+    /**
+     * Two defective-goods requests awaiting an answer, each on its own order delivered today:
+     * opened by the customer through `POST /returns`, so a journey can approve one and decline
+     * the other. The ids are RETURN ids.
+     */
+    scenario: { shop: ['return.requested', 'return.requestedSecond'] }
 } satisfies AppModule;
