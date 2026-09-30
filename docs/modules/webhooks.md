@@ -115,6 +115,12 @@ flowchart LR
     BACK -.->|sweep, per minute<br/>publishes, does not claim| Q
 ```
 
+**An event that came through the [outbox](../tools/outbox.md) is fanned out idempotently.** The
+relay is at-least-once, so the subscriber can see one event twice. It keeps the outbox row's id as
+the delivery's `eventId`, and a unique `(subscriptionId, eventId)` index makes the second arrival a
+no-op. A failed fan-out throws, so the relay retries it; subscriptions that already have their row
+are skipped. Today `payment.succeeded` is the one event that travels this way.
+
 The queued message itself carries only `{ deliveryId }` — a Claim Check, not a copy of the
 delivery. The row is the payload's only source of truth once the consumer claims it, which is what
 keeps a replay's own `attempt` count (or any other field that changes after the message was
