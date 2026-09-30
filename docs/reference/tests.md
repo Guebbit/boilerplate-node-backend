@@ -294,12 +294,12 @@ happen in a single process.
 
 ## `tests/contract/` and `tests/fuzz/`
 
-| File                                      | What it guarantees                                                                                                                                                         | Read next                                                          |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `tests/contract/system.test.ts`           | The system routes and the shared error envelopes match the contract.                                                                                                       | [Contract Testing (Response)](../tools/contract-testing.md)        |
-| `tests/contract/request-contract.test.ts` | For every write endpoint: the API accepts every payload the contract permits and rejects the rest — with the payloads generated _from_ the contract.                       | [Contract-Derived Request Data](../tools/contract-request-data.md) |
-| `tests/contract/request-sources.test.ts`  | Every controller reads only the request sources its own contract declares — no undocumented query parameter.                                                               | [Contract-Derived Request Data](../tools/contract-request-data.md) |
-| `tests/fuzz/endpoints.fuzz.test.ts`       | Spec-driven fuzzing: every operation in `openapi.yaml` walked with generated hostile input, asserting the API never answers with something the contract does not describe. | [Fuzz Testing](../tools/fuzz-testing.md)                           |
+| File                                      | What it guarantees                                                                                                                                                                     | Read next                                                          |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `tests/contract/system.test.ts`           | The system routes and the shared error envelopes match the contract.                                                                                                                   | [Contract Testing (Response)](../tools/contract-testing.md)        |
+| `tests/contract/request-contract.test.ts` | For every POST/PUT/PATCH (merge-patch and `null` included): the API accepts every payload the contract permits and rejects the rest — with the payloads generated _from_ the contract. | [Contract-Derived Request Data](../tools/contract-request-data.md) |
+| `tests/contract/request-sources.test.ts`  | Every controller reads only the request sources its own contract declares — no undocumented query parameter.                                                                           | [Contract-Derived Request Data](../tools/contract-request-data.md) |
+| `tests/fuzz/endpoints.fuzz.test.ts`       | Spec-driven fuzzing: every operation in `openapi.yaml` walked with generated hostile input, asserting the API never answers with something the contract does not describe.             | [Fuzz Testing](../tools/fuzz-testing.md)                           |
 
 ## `tests/support/` — the harness
 

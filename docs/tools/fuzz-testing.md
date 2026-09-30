@@ -53,12 +53,14 @@ Generating outright garbage would mostly re-test the validator: every write endp
 
 So the generator honours `minLength`, `maximum`, `pattern`, `enum`, `format` and `minItems`, and then heads for the edges of what those allow:
 
-| Kind    | What it reaches for                                                                                                                           |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| strings | empty, whitespace, `'null'`, `'undefined'`, emoji, right-to-left marks, 1000 characters, regex metacharacters, traversal and injection shapes |
-| numbers | exactly `minimum`, exactly `maximum`, `0`, `1` — each only where the bounds allow it                                                          |
-| objects | optional properties genuinely omitted — "absent" is a different case from "empty"                                                             |
-| arrays  | `minItems` respected, so the request is not rejected before it reaches the handler                                                            |
+| Kind     | What it reaches for                                                                                                                             |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| strings  | empty, whitespace, `'null'`, `'undefined'`, emoji, right-to-left marks, 1000 characters, regex metacharacters, traversal and injection shapes   |
+| numbers  | exactly `minimum`, exactly `maximum`, `0`, `1` — each only where the bounds allow it                                                            |
+| objects  | optional properties genuinely omitted — "absent" is a different case from "empty"                                                               |
+| arrays   | `minItems` respected, so the request is not rejected before it reaches the handler                                                              |
+| nullable | `null` drawn on purpose for every `nullable: true` field, and for an `enum: [null]` — "cleared" is a different case from "absent" and from `''` |
+| maps     | an `additionalProperties` schema (translations keyed by locale) draws up to three entries of its value schema                                   |
 
 These are weighted rather than uniform. Uniform random strings essentially never produce an empty one.
 
@@ -67,6 +69,24 @@ required ones always, optional ones sometimes, an array as a repeated key. **Pat
 name real rows where the path says which kind: a product, an order and a second user are seeded
 before each operation, so `/orders/{id}/cancel` reaches the cancel rather than stopping at a 404.
 A path whose resource is not seeded still gets a well-formed id nothing holds.
+
+### `allOf` is folded, not flattened
+
+The contract wraps a shared schema in `allOf: [$ref]` wherever a field needs a sibling keyword
+(`nullable`, `default`), because the generator needs the wrapper. `resolveSchema()` folds the
+parts and the siblings into one node: keywords merge, `properties` union, `required` unions, the
+node's own siblings win. An earlier version rebuilt every `allOf` as an empty object, so a
+nullable string like `locale` was drawn as `{}` and the operation was refused at the edge on every
+run, 11 of them (the `PUT`/`PATCH` of `/account`, `/users/{id}`, `/products/{id}`, translations,
+`POST /products`, `POST /cart/checkout`, `POST /orders/{id}/status-override`). Green, and testing
+the validator. `tests/unit/spec-walk.test.ts` pins the fold.
+
+## The merge-patch body
+
+A `PATCH` that declares `application/merge-patch+json` is also fuzzed with it (10 operations, admin
+caller). Same field schemas, different content type and a different reading of `null` (clear), so
+it is its own route through the body parser. A test asserts the set is non-empty and all `PATCH`,
+the same guard the multipart set has.
 
 ## Three callers
 
@@ -168,15 +188,16 @@ with many more requests per operation and a fresh seed — that is the hunter, a
 
 ## File map
 
-| Path                                 | Contents                                                                                         |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `tests/fuzz/endpoints.fuzz.test.ts`  | The driver: three callers per operation, the two assertions, the self-tripwire                   |
-| `tests/support/spec-walk.ts`         | Parses `openapi.yaml`, resolves `$ref`/`allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS` |
-| `tests/support/spec-arbitraries.ts`  | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                               |
-| `tests/support/http.ts`              | The supertest harness and `authenticateAs`, shared with the integration and contract suites      |
-| `tests/support/response-contract.ts` | `assertResponseMatchesContract` — judges one response against its operation+status Zod schema    |
-| `.github/workflows/fuzz.yml`         | The nightly schedule and manual dispatch                                                         |
-| `.github/workflows/schemathesis.yml` | Stateful sequence fuzzing, following `openapi.yaml`'s `links` — see above                        |
+| Path                                 | Contents                                                                                                   |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `tests/fuzz/endpoints.fuzz.test.ts`  | The driver: three callers per operation, the two assertions, the self-tripwire                             |
+| `tests/support/spec-walk.ts`         | Parses `openapi.yaml`, resolves `$ref` and folds `allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS` |
+| `tests/support/spec-world.ts`        | The seeded rows a path parameter names, shared with the request-contract walk                              |
+| `tests/support/spec-arbitraries.ts`  | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                                         |
+| `tests/support/http.ts`              | The supertest harness and `authenticateAs`, shared with the integration and contract suites                |
+| `tests/support/response-contract.ts` | `assertResponseMatchesContract` — judges one response against its operation+status Zod schema              |
+| `.github/workflows/fuzz.yml`         | The nightly schedule and manual dispatch                                                                   |
+| `.github/workflows/schemathesis.yml` | Stateful sequence fuzzing, following `openapi.yaml`'s `links` — see above                                  |
 
 ## Commands
 

@@ -103,6 +103,31 @@ The name is deliberately generic rather than backend-specific: seeded generation
 
 The PRNGs stay separate — Mulberry32 here, faker's Mersenne Twister there — and given one seed the two produce entirely unrelated values. That is intended, not a defect to fix later. The two generators produce **opposite halves of the same contract** (requests here, responses there) from different schema surfaces (zod `_zod.def` here, orval factories there); making the streams agree would buy nothing and would couple two implementations that are independently correct. What the shared name buys is a shared vocabulary, not shared output.
 
+## Every write operation, not just seven
+
+The seven `describe` blocks are the operations that needed hand-written glue to reach a 2xx. The
+rest of the write surface is **walked**, not listed: `listOperations()` yields every `POST`, `PUT`
+and `PATCH` with a JSON body (65 today), and each gets the same four kinds of case, so a write
+added to the spec is covered on the next run.
+
+| Case                                        | Asserts                                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| a legal body                                | never refused as a validation failure (422) or a wrong content type (415), never 5xx           |
+| a legal body, `null` in each nullable field | same — `null` is a value the contract permits, and `nullish` vs `nullable` drift shows up here |
+| the same, as `application/merge-patch+json` | every `PATCH` that declares that variant is sent it too                                        |
+| each violation `invalidPayloads()` derives  | exactly 422                                                                                    |
+
+"Not refused" rather than "2xx" is deliberate. Without a scenario behind each operation a legal
+body may still meet a business rule (a wrong password, a mail token, a payment signature). Those
+are named in `NEEDS_STATE_OR_SIGNATURE` with the reason, and skip the legal cases. The fields the
+contract cannot generate honestly (an `Id` is an ObjectId to the database, a confirmation equals
+its password) are `FIELD_OVERRIDES`, per operation, never applied to the field a case is about.
+Both tables are checked to name only operations that exist.
+
+`contract.ts`'s shared `afterEach` judges each response too, so an undocumented status fails here as
+it does everywhere. That is how the walk found `PUT`/`PATCH /locales/{locale}` answering an
+undeclared 409.
+
 ## Endpoint-specific glue
 
 The walker only knows what a zod schema can express. Three things it structurally can't:
@@ -132,11 +157,12 @@ Worth remembering when extending the walker: `unwrapField` had handled `'default
 
 ## File map
 
-| Path                                      | Contents                                                                                                                                                                                          |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/support/contract-data.ts`          | The walker: `validPayload`, `invalidPayloads`, the PRNG, the zod introspection helpers                                                                                                            |
-| `tests/contract/request-contract.test.ts` | One `describe` per write endpoint (`/users`, `/products`, `/orders`, `/cart`, `/feedback/contact`, `/account/signup`, `/account/login`); the endpoint-specific glue lives here, not in the walker |
-| `api/schemas.zod.ts`                      | The generated `*Body` schemas this file walks                                                                                                                                                     |
+| Path                                      | Contents                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/support/contract-data.ts`          | The walker: `validPayload`, `invalidPayloads`, the PRNG, the zod introspection helpers                                                                                                                                                                                                      |
+| `tests/contract/request-contract.test.ts` | One `describe` per hand-glued write endpoint (`/users`, `/products`, `/orders`, `/cart`, `/feedback/contact`, `/account/signup`, `/account/login`), then [the walk over every other write](#every-write-operation-not-just-seven); the endpoint-specific glue lives here, not in the walker |
+| `tests/support/spec-world.ts`             | The seeded rows a templated path names (`{id}`, `{tenant}`, ...), shared with the fuzz suite                                                                                                                                                                                                |
+| `api/schemas.zod.ts`                      | The generated `*Body` schemas this file walks                                                                                                                                                                                                                                               |
 
 ## Commands
 
