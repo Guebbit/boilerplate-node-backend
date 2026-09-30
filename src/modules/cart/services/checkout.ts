@@ -20,19 +20,12 @@ import {
     placeOrder,
     sendOrderPlacedEmail,
     retractOrder,
-    sumLineItems,
-    isShippedItem,
     type OrderDocument
 } from '@modules/orders';
 import { availableStock } from '@modules/products';
 import { userService } from '@modules/users';
 import { addressForCheckout, type AddressItem } from '@modules/addresses';
-import {
-    findShippingMethod,
-    methodFitsWeight,
-    priceShipping,
-    type StaticShippingMethod
-} from '@modules/delivery';
+import { findShippingMethod, type StaticShippingMethod } from '@modules/delivery';
 import { paymentService, type PaymentMethodInfo } from '@modules/payments';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -40,13 +33,17 @@ import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
 import {
     evaluateCheckout,
-    basketWeight,
-    needsShipping,
     evaluateShippingRequirement,
     type CheckoutShortfall,
     type UnavailableCartLine
 } from '../domain';
-import { isJoined, readCartLines } from './view';
+import {
+    effectiveShippingChoice,
+    isJoined,
+    readCartLines,
+    shippingOptionsFor,
+    shippingPriceFor
+} from './view';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
@@ -283,13 +280,23 @@ const runCheckout = async (
     // products are being resolved invalidates this checkout rather than being missed.
     const version = cart?.__v ?? 0;
 
+    const lines = await readCartLines(cart);
+    const joined = lines.filter((line) => isJoined(line));
+
     // The cart's own choice (`PUT /cart/shipping-method`), read here rather than from the
-    // request — see this module's `openapi.yaml` `CheckoutRequest` description.
-    const shippingResolution = await resolveShipping(userId, addressId, cart?.shippingMethodId);
+    // request — see this module's `openapi.yaml` `CheckoutRequest` description. A stored choice the
+    // basket no longer fits counts as none, exactly as the cart's own view reads it.
+    const chosenMethodId = effectiveShippingChoice(
+        cart?.shippingMethodId,
+        shippingOptionsFor(joined).options
+    );
+    const shippingResolution = await resolveShipping(
+        userId,
+        addressId,
+        chosenMethodId ?? undefined
+    );
     if (!shippingResolution.ok) return shippingResolution.reject;
     const { shippingMethod, address } = shippingResolution;
-
-    const lines = await readCartLines(cart);
 
     /*
      * The rule is in `../domain`; what a refusal looks like on the wire is here.
@@ -325,21 +332,6 @@ const runCheckout = async (
         return buildStockRefusal({ type: 'unavailable', status: 404, lines: verdict.lines });
     }
 
-    const joined = lines.filter((line) => isJoined(line));
-
-    /*
-     * A method was named, but nothing in the basket needs one — every line is a digital good
-     * (`requiresShipping: false`). Refused rather than silently ignored: a client that thinks it
-     * is paying for shipping on a purchase that never ships should not proceed uncorrected.
-     */
-    if (shippingMethod && !needsShipping(joined))
-        return generateReject(409, [
-            {
-                code: ERROR_CODES.CART_SHIPPING_NOT_APPLICABLE,
-                message: t('cart.shipping-not-applicable')
-            }
-        ]);
-
     /*
      * The rest of the rule, once shipping applicability itself is settled above: a physical
      * basket names a method, and — only when that method demands it — an address. A
@@ -358,19 +350,6 @@ const runCheckout = async (
                       message: t('cart.shipping-method-required')
                   }
                 : { code: ERROR_CODES.CART_ADDRESS_REQUIRED, message: t('cart.address-required') }
-        ]);
-
-    /*
-     * Enforced here, not just at `GET /delivery/methods`: that list is advisory (it filters by
-     * whatever weight the CLIENT last computed), so the basket's real weight — joined
-     * server-side, right now — is what actually decides whether the chosen method may carry it.
-     */
-    if (shippingMethod && !methodFitsWeight(shippingMethod, basketWeight(joined)))
-        return generateReject(409, [
-            {
-                code: ERROR_CODES.CART_SHIPPING_METHOD_WEIGHT,
-                message: t('cart.shipping-method-weight')
-            }
         ]);
 
     /*
@@ -405,19 +384,11 @@ const runCheckout = async (
                 ? {
                       method: {
                           id: shippingMethod.id,
-                          // The threshold prices only what ships — a digital line's price
-                          // shouldn't count toward "spend enough for free shipping" when it never
-                          // needed shipping to begin with.
                           // The shop's CURRENT currency, not a frozen one — this runs as `placeOrder`
-                          // is still deciding what to freeze onto the new order.
+                          // is still deciding what to freeze onto the new order. Every line counts
+                          // toward the free-shipping line, as the cart's own quote counts it.
                           priceFor: (frozenLines) =>
-                              priceShipping(
-                                  shippingMethod,
-                                  sumLineItems(
-                                      frozenLines.filter((line) => isShippedItem(line)),
-                                      shopCurrency()
-                                  ).price
-                              )
+                              shippingPriceFor(shippingMethod, frozenLines, shopCurrency())
                       }
                   }
                 : {}),
