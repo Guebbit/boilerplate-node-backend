@@ -274,7 +274,9 @@ describe('each subject names a row that really has the property', () => {
         const shipment = await shipmentModel
             .findOne({ orderId: subjects['order.deliveredLongAgo'] })
             .exec();
-        expect(shipment?.deliveredAt!.getTime()).toBeLessThan(Date.now() - 60 * 24 * 60 * 60 * 1000);
+        expect(shipment?.deliveredAt!.getTime()).toBeLessThan(
+            Date.now() - 60 * 24 * 60 * 60 * 1000
+        );
     });
 
     it('return.requested and return.requestedSecond await an answer, each on its own open-window order', async () => {
