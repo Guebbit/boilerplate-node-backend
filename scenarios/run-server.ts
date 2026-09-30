@@ -66,6 +66,9 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_PII_ENCRYPTION_KEY: 'demo-pii-encryption-key',
     NODE_TOTP_ENCRYPTION_KEY: 'demo-totp-encryption-key',
     NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'demo-webhook-secret-encryption-key',
+    // Known, so the paired e2e suite can sign a payment-provider delivery (`POST /payments/webhook`)
+    // itself; the frontend's `paymentWebhookSecret` carries the same value.
+    NODE_PAYMENT_WEBHOOK_SECRET: 'demo-payment-webhook-secret',
     // `orders`' and `products`' own boot-time requirements (SK-08) — `assertModuleConfig` no
     // longer exempts this profile, so it satisfies the gate the ordinary way, with the same
     // values `.env-example` ships for a plain developer checkout.
