@@ -142,7 +142,7 @@ in the `translations` collection [`locales`](./locales.md) owns (`entityType: 'p
 per language, the fallback language included, no special-cased "source" row.
 
 Every read resolves them onto the wire shape: `search()` and `getById()` in
-`src/modules/products/service.ts` call `applyTranslations('product', …)`, which overlays the
+`src/modules/products/services/{search,read}.ts` call `applyTranslations('product', …)`, which overlays the
 caller's `Accept-Language` chain — exact tag, base language, then the deployment's fallback — over
 an already-serialized page in one batched query. See
 [Internationalisation](../tools/i18n.md#tier-3-user-authored-content) for the resolve/fallback path.
@@ -167,7 +167,7 @@ optional (an absent key leaves that locale untouched: a translations table is ke
 not a field a whole-body replace can null out) but never `null` — deleting the one locale every
 other read falls back to would leave the product with nothing. Every other locale is always
 optional, and `null` on an existing one (never the fallback) deletes its row.
-`src/modules/products/service.ts`'s `writeCreate`/`writeUpdate` validate the whole batch
+`src/modules/products/services/translated-write.ts`'s `writeCreate`/`writeUpdate` validate the whole batch
 (`planTranslations`, the `@kernel/translation` port) before writing anything, then write the
 product and its rows in the same operation; `getAdmin` backs `GET /products/{id}/admin`, the one
 read that returns every language at once rather than the caller's resolved one — what the editor's

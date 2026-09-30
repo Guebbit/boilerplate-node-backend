@@ -7,7 +7,7 @@
  * from outside — is the factory's own default behaviour, so nothing extra is needed here.
  */
 
-import { productService } from '../service';
+import { productService } from '../services';
 import { createItemController } from '@infrastructure/surfaces/create-item-controller';
 
 /** GET /products/:id/admin — a product with every language it has a row for, admin only. */

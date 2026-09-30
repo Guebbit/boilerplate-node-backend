@@ -78,7 +78,7 @@ describe('POST /products', () => {
     });
 
     /*
-     * `products` never writes `onHand` itself — see `products/service.ts`'s `create()` — so this
+     * `products` never writes `onHand` itself — see `products/services/crud.ts`'s `create()` — so this
      * is the one test proving the opening count still reaches the document, through a real
      * `receive()` movement rather than a direct field write. `owner`, not `editor`: reading the
      * ledger back needs `inventory.any.read`, which the editor role does not hold.

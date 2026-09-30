@@ -27,7 +27,7 @@ declare module '@kernel/events' {
 
         /**
          * A product's `active` flag flipped from `true` to `false` — never fired for any other
-         * edit, including one that repeats `active: false` unchanged (see `products/service.ts`'s
+         * edit, including one that repeats `active: false` unchanged (see `products/services/crud.ts`'s
          * `updateById`, the same "flip, not every write" shape `users`' `ADMIN_USER_BANNED` uses).
          * No subscriber today — `orders` deliberately does NOT cancel a pending order over this:
          * only a hard delete does (`product.deleted`, `hardDelete: true`). A deactivated product

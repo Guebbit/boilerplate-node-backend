@@ -433,7 +433,7 @@ describe('the translations collection', () => {
 describe('removeEntityTranslations', () => {
     // `entityType: 'widget'` on purpose — no `widget` module exists. `removeEntityTranslations`
     // is the kernel translation port's `removeAll`, called by ANY module's hard delete
-    // (`products/service.ts`'s `remove`, today); this collection's own cascade guarantee holds
+    // (`products/services/remove.ts`'s `remove`, today); this collection's own cascade guarantee holds
     // for a caller this module has never heard of, which a real product would not prove.
     it('removes every locale row for the entity, and reports how many', async () => {
         await translationRepository.upsertEntityLocale(

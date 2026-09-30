@@ -12,7 +12,7 @@ import {
     searchProductsBodyMinPriceMin,
     searchProductsBodyMaxPriceMin
 } from '@api/schemas.zod';
-import { productService } from '../service';
+import { productService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 import {
     blankToUndefined,

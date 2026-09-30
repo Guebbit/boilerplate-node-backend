@@ -73,7 +73,7 @@ export const update = (
             if (data.active !== undefined) user.active = data.active;
             // The old url is captured before the overwrite so `updateSavedUser` can delete it once
             // the new one is durably saved — see `applyImageWriteback`'s own docblock for the gate
-            // shared with `products/service.ts`'s own `update`. `null` unsets the field, and the
+            // shared with `products/services/crud.ts`'s own `update`. `null` unsets the field, and the
             // same old-url capture then deletes the file and its thumbnail.
             const oldImageUrl = applyImageWriteback(user, data);
             // The preference that outlives the request — see the `locale` field on the user

@@ -22,7 +22,7 @@ import { getProductSettings } from './controllers/get-product-settings';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { hasAnonymousReadScope } from '@kernel/access/query';
-import { callerScope } from './service';
+import { callerScope } from './services';
 
 /** Express router for product catalogue endpoints (public read, admin write). */
 export const router = Router();

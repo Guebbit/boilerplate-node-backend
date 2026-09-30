@@ -4,7 +4,7 @@
  * scoped through the caller's own visibility.
  */
 
-import { productService } from '../service';
+import { productService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 import { createItemController } from '@infrastructure/surfaces/create-item-controller';
 

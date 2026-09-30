@@ -11,7 +11,7 @@
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { writeWithUploadedImage } from '@infrastructure/http/uploads';
-import { productService } from '../service';
+import { productService } from '../services';
 
 /**
  * `PUT` and `PATCH /products/:id` — one handler pair over `productService.writeUpdate`.
