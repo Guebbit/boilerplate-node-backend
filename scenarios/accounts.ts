@@ -23,6 +23,15 @@ export const SEED_EDITOR_ID = '65df1a2b3c4d5e6f7a8b9c01';
 /** The demo moderator's id — same format as {@link SEED_ADMIN_ID}. */
 export const SEED_MODERATOR_ID = '65df1a2b3c4d5e6f7a8b9c03';
 
+/**
+ * The four persona accounts — each is a customer in one particular state the e2e journeys start
+ * from. Same id format as {@link SEED_ADMIN_ID}; `scenarios/users.ts` builds the rows.
+ */
+export const SEED_UNVERIFIED_ID = '65df1a2b3c4d5e6f7a8b9c10';
+export const SEED_TWO_FACTOR_ID = '65df1a2b3c4d5e6f7a8b9c11';
+export const SEED_PENDING_EMAIL_ID = '65df1a2b3c4d5e6f7a8b9c12';
+export const SEED_BANNED_ID = '65df1a2b3c4d5e6f7a8b9c13';
+
 /** The demo owner's login email. */
 export const SEED_ADMIN_EMAIL = 'root@root.it';
 
@@ -66,17 +75,79 @@ const SEED_MODERATOR_PASSWORD_FALLBACK = 'Demo-Moderator1!';
 export const SEED_MODERATOR_PASSWORD =
     process.env.NODE_SEED_MODERATOR_PASSWORD ?? SEED_MODERATOR_PASSWORD_FALLBACK;
 
+/** Login emails of the persona accounts — see {@link SEED_UNVERIFIED_ID}. */
+export const SEED_UNVERIFIED_EMAIL = 'unverified@example.com';
+export const SEED_TWO_FACTOR_EMAIL = 'two-factor@example.com';
+export const SEED_PENDING_EMAIL_EMAIL = 'pending-email@example.com';
+export const SEED_BANNED_EMAIL = 'banned@example.com';
+
+/** The address the pending-email persona asked to move to, and has not yet confirmed. */
+export const SEED_PENDING_EMAIL_TARGET = 'pending-new-address@example.com';
+
+/**
+ * The two-factor persona's backup codes, in the clear — the row stores only their digests.
+ * Fixed, because a journey that signs in with one must know it; each is single-use, so the reset
+ * restores them. Shaped like a real one (10 hex characters).
+ */
+export const SEED_TWO_FACTOR_BACKUP_CODES = [
+    'a1b2c3d4e5',
+    'f6a7b8c9d0',
+    '0a1b2c3d4e',
+    '5f6a7b8c9d',
+    'e0f1a2b3c4'
+] as const;
+
+/**
+ * One persona's password: `NODE_SEED_<NAME>_PASSWORD` when set, else its committed fallback.
+ * The same rule as the four accounts above, in one place instead of four more copies.
+ */
+const personaPassword = (variable: string, fallback: string) => ({
+    value: process.env[variable] ?? fallback,
+    fallback
+});
+
+const SEED_UNVERIFIED_PASSWORD = personaPassword(
+    'NODE_SEED_UNVERIFIED_PASSWORD',
+    'Demo-Unverified1!'
+);
+const SEED_TWO_FACTOR_PASSWORD = personaPassword(
+    'NODE_SEED_TWO_FACTOR_PASSWORD',
+    'Demo-TwoFactor1!'
+);
+const SEED_PENDING_EMAIL_PASSWORD = personaPassword(
+    'NODE_SEED_PENDING_EMAIL_PASSWORD',
+    'Demo-PendingEmail1!'
+);
+const SEED_BANNED_PASSWORD = personaPassword('NODE_SEED_BANNED_PASSWORD', 'Demo-Banned1!');
+
+/** Every persona password, so {@link hasFallbackSeedPassword} cannot forget a new one. */
+const PERSONA_PASSWORDS = [
+    SEED_UNVERIFIED_PASSWORD,
+    SEED_TWO_FACTOR_PASSWORD,
+    SEED_PENDING_EMAIL_PASSWORD,
+    SEED_BANNED_PASSWORD
+];
+
+/** The logins for the persona accounts, by the name a spec asks for. */
+export const seedPersonaCredentials = {
+    unverified: { email: SEED_UNVERIFIED_EMAIL, password: SEED_UNVERIFIED_PASSWORD.value },
+    twoFactor: { email: SEED_TWO_FACTOR_EMAIL, password: SEED_TWO_FACTOR_PASSWORD.value },
+    pendingEmail: { email: SEED_PENDING_EMAIL_EMAIL, password: SEED_PENDING_EMAIL_PASSWORD.value },
+    banned: { email: SEED_BANNED_EMAIL, password: SEED_BANNED_PASSWORD.value }
+} as const;
+
 /** The logins for the demo accounts. */
 export const seedCredentials = {
     admin: { email: SEED_ADMIN_EMAIL, password: SEED_ADMIN_PASSWORD },
     user: { email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD },
     editor: { email: SEED_EDITOR_EMAIL, password: SEED_EDITOR_PASSWORD },
-    moderator: { email: SEED_MODERATOR_EMAIL, password: SEED_MODERATOR_PASSWORD }
+    moderator: { email: SEED_MODERATOR_EMAIL, password: SEED_MODERATOR_PASSWORD },
+    ...seedPersonaCredentials
 } as const;
 
 /**
  * `true` when any seed account is still logging in with its committed, public fallback password
- * — the four `Demo-*1!` values anyone can read in this file or `.env-example`. `scenario:apply`
+ * — the eight `Demo-*1!` values anyone can read in this file or `.env-example`. `scenario:apply`
  * refuses to run when this is `true` outside development/test, so a reachable staging database
  * never ends up handing out `root@root.it` / `Demo-Admin1!` as both the shop owner and the
  * platform operator.
@@ -85,7 +156,8 @@ export const hasFallbackSeedPassword = (): boolean =>
     SEED_ADMIN_PASSWORD === SEED_ADMIN_PASSWORD_FALLBACK ||
     SEED_USER_PASSWORD === SEED_USER_PASSWORD_FALLBACK ||
     SEED_EDITOR_PASSWORD === SEED_EDITOR_PASSWORD_FALLBACK ||
-    SEED_MODERATOR_PASSWORD === SEED_MODERATOR_PASSWORD_FALLBACK;
+    SEED_MODERATOR_PASSWORD === SEED_MODERATOR_PASSWORD_FALLBACK ||
+    PERSONA_PASSWORDS.some((persona) => persona.value === persona.fallback);
 
 /**
  * The whole access model, seeded: one shop, the presets, and the seed accounts placed in it.
@@ -105,7 +177,13 @@ export const seedAccessModel = (): Promise<void> =>
                 assignRole(SEED_ADMIN_ID, null, 'platform', 'operator'),
                 assignRole(SEED_USER_ID, String(tenant._id), 'tenant', 'customer'),
                 assignRole(SEED_EDITOR_ID, String(tenant._id), 'tenant', 'editor'),
-                assignRole(SEED_MODERATOR_ID, String(tenant._id), 'tenant', 'moderator')
+                assignRole(SEED_MODERATOR_ID, String(tenant._id), 'tenant', 'moderator'),
+                ...[
+                    SEED_UNVERIFIED_ID,
+                    SEED_TWO_FACTOR_ID,
+                    SEED_PENDING_EMAIL_ID,
+                    SEED_BANNED_ID
+                ].map((id) => assignRole(id, String(tenant._id), 'tenant', 'customer'))
             ])
         )
         .then(() => undefined);

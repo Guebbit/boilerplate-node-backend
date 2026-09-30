@@ -96,8 +96,8 @@ name a person without taking on the shape of a user.
 **The credentials must stay fixed.** `cy.loginAs()` in the paired frontend types them into a real
 login form. Everything else about the dataset can move; these are the part a human reads off a
 page and types. Each password is overridable — `NODE_SEED_ADMIN_PASSWORD` for the owner,
-`NODE_SEED_USER_PASSWORD`, `NODE_SEED_EDITOR_PASSWORD`, `NODE_SEED_MODERATOR_PASSWORD` — change
-both `.env` files together, never one alone.
+`NODE_SEED_USER_PASSWORD`, `NODE_SEED_EDITOR_PASSWORD`, `NODE_SEED_MODERATOR_PASSWORD`, and one per
+persona (below) — change both `.env` files together, never one alone.
 
 **The password is stored plaintext on purpose.** `userSchema`'s pre-save hook hashes it on the way
 in, so a hash written there would drift from that hook and lose its plaintext. It never reaches a
@@ -105,6 +105,22 @@ response — `password` is `select: false` and the user transform omits it — w
 `scenarios/subjects.ts` and `@scenarios/accounts` state these credentials as literals rather than
 reading them back off a serialized user.
 :::
+
+## The persona accounts
+
+Four more customers, each in one state a journey starts from. They are written straight to the
+collection (`scenarios/users.ts`), because reaching the state through the API needs a mail or a
+code the seeder never reads. Each password is `NODE_SEED_<NAME>_PASSWORD`.
+
+| Persona        | Login                       | State                                                 |
+| -------------- | --------------------------- | ----------------------------------------------------- |
+| `unverified`   | `unverified@example.com`    | signed up, never proved the address                   |
+| `twoFactor`    | `two-factor@example.com`    | email 2FA armed; five known single-use backup codes   |
+| `pendingEmail` | `pending-email@example.com` | asked to move to another address, has not confirmed   |
+| `banned`       | `banned@example.com`        | switched off (`active: false`), so a login is refused |
+
+The banned persona is separate from `marcus`, whom the shop flow bans through the API so the audit
+trail records it. The persona exists so `blank` carries one too.
 
 ## How a scenario is built
 

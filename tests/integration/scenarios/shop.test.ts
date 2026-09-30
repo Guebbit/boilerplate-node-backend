@@ -39,7 +39,14 @@ import { addressBookModel } from '@modules/addresses/model';
 import { decryptAddressItem } from '@modules/addresses/pii';
 import { reservationModel, stockMovementModel } from '@modules/inventory/model';
 import { Types } from 'mongoose';
-import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
+import {
+    SEED_ADMIN_ID,
+    SEED_PENDING_EMAIL_TARGET,
+    SEED_TWO_FACTOR_BACKUP_CODES,
+    SEED_USER_ID,
+    seedCredentials
+} from '@scenarios/accounts';
+import { hashBackupCode } from '@modules/account/two-factor/backup-codes';
 import {
     CreateProduct201Response,
     CreateOrder201Response,
@@ -168,6 +175,33 @@ describe('each subject names a row that really has the property', () => {
         expect(weighed).toBeGreaterThan(100);
         // The hand-written course plus the two downloadable guides.
         expect(digital).toBeGreaterThanOrEqual(3);
+    });
+
+    it('each persona account is in the state its name promises', async () => {
+        const unverified = await userModel.findOne({ email: seedCredentials.unverified.email });
+        expect(unverified?.verifiedAt).toBeFalsy();
+
+        const banned = await userModel.findOne({ email: seedCredentials.banned.email });
+        expect(banned?.active).toBe(false);
+
+        const pending = await userModel
+            .findOne({ email: seedCredentials.pendingEmail.email })
+            .select('+pendingEmail');
+        expect(pending?.pendingEmail).toBe(SEED_PENDING_EMAIL_TARGET);
+        expect(pending?.email).toBe(seedCredentials.pendingEmail.email);
+    });
+
+    it('the two-factor persona has email 2FA armed and backup codes that verify', async () => {
+        const user = await userModel
+            .findOne({ email: seedCredentials.twoFactor.email })
+            .select('+twoFactorMethods +twoFactorBackupCodes +twoFactorBackupCodeSalt');
+
+        expect(user?.twoFactorEnabledAt).toBeDefined();
+        expect(user?.twoFactorMethods.map((entry) => entry.method)).toEqual(['email']);
+        for (const code of SEED_TWO_FACTOR_BACKUP_CODES)
+            expect(user?.twoFactorBackupCodes).toContain(
+                hashBackupCode(code, user!.twoFactorBackupCodeSalt!)
+            );
     });
 
     it('order.ownerPending is pending, the admin account owns it, and it holds real stock', async () => {

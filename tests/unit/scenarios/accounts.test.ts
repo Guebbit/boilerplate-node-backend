@@ -18,7 +18,11 @@ const ALL_PASSWORD_KEYS = [
     'NODE_SEED_ADMIN_PASSWORD',
     'NODE_SEED_USER_PASSWORD',
     'NODE_SEED_EDITOR_PASSWORD',
-    'NODE_SEED_MODERATOR_PASSWORD'
+    'NODE_SEED_MODERATOR_PASSWORD',
+    'NODE_SEED_UNVERIFIED_PASSWORD',
+    'NODE_SEED_TWO_FACTOR_PASSWORD',
+    'NODE_SEED_PENDING_EMAIL_PASSWORD',
+    'NODE_SEED_BANNED_PASSWORD'
 ] as const;
 
 /** What every password-setting endpoint enforces, reduced to a yes/no. */
@@ -110,6 +114,19 @@ describe('seedCredentials', () => {
         });
     });
 
+    it('publishes the four personas, each with a login the policy accepts', () => {
+        expect(Object.keys(seedCredentials)).toEqual(
+            expect.arrayContaining(['unverified', 'twoFactor', 'pendingEmail', 'banned'])
+        );
+        for (const persona of ['unverified', 'twoFactor', 'pendingEmail', 'banned'] as const)
+            expect(satisfiesPolicy(seedCredentials[persona].password)).toBe(true);
+    });
+
+    it('gives every account its own address', () => {
+        const emails = Object.values(seedCredentials).map((login) => login.email);
+        expect(new Set(emails).size).toBe(emails.length);
+    });
+
     it('carries the overridden password, not the fallback', async () => {
         const seeds = await reloadWith('Env-Admin1!', 'Env-User1!');
 
@@ -121,7 +138,7 @@ describe('seedCredentials', () => {
 describe('hasFallbackSeedPassword', () => {
     const original = new Map(ALL_PASSWORD_KEYS.map((key) => [key, process.env[key]]));
 
-    /** Reloads with all four override vars set as given, so every fallback re-evaluates. */
+    /** Reloads with every override var set as given, so every fallback re-evaluates. */
     const reloadAllWith = async (
         overrides: Partial<Record<(typeof ALL_PASSWORD_KEYS)[number], string>>
     ) => {
@@ -158,14 +175,30 @@ describe('hasFallbackSeedPassword', () => {
         expect(seeds.hasFallbackSeedPassword()).toBe(true);
     });
 
+    /** Every override var set to its own value. */
+    const EVERY_OVERRIDE = {
+        NODE_SEED_ADMIN_PASSWORD: 'Env-Admin1!',
+        NODE_SEED_USER_PASSWORD: 'Env-User1!',
+        NODE_SEED_EDITOR_PASSWORD: 'Env-Editor1!',
+        NODE_SEED_MODERATOR_PASSWORD: 'Env-Moderator1!',
+        NODE_SEED_UNVERIFIED_PASSWORD: 'Env-Unverified1!',
+        NODE_SEED_TWO_FACTOR_PASSWORD: 'Env-TwoFactor1!',
+        NODE_SEED_PENDING_EMAIL_PASSWORD: 'Env-PendingEmail1!',
+        NODE_SEED_BANNED_PASSWORD: 'Env-Banned1!'
+    };
+
     it('is false once every account has its own password', async () => {
-        const seeds = await reloadAllWith({
-            NODE_SEED_ADMIN_PASSWORD: 'Env-Admin1!',
-            NODE_SEED_USER_PASSWORD: 'Env-User1!',
-            NODE_SEED_EDITOR_PASSWORD: 'Env-Editor1!',
-            NODE_SEED_MODERATOR_PASSWORD: 'Env-Moderator1!'
-        });
+        const seeds = await reloadAllWith(EVERY_OVERRIDE);
 
         expect(seeds.hasFallbackSeedPassword()).toBe(false);
+    });
+
+    it('is true when only a persona was left at its fallback', async () => {
+        const seeds = await reloadAllWith({
+            ...EVERY_OVERRIDE,
+            NODE_SEED_BANNED_PASSWORD: undefined
+        });
+
+        expect(seeds.hasFallbackSeedPassword()).toBe(true);
     });
 });
