@@ -13,6 +13,7 @@
  */
 import { assertRequiredConfig } from '@kernel/required-config';
 import { withoutEnvironmentInThisFile } from '@tests/environment';
+import { logger } from '@infrastructure/adapters/logger';
 import webhooksModule from '../../module';
 
 /** Every variable this gate reads, cleared before each case and put back after the file. */
@@ -21,7 +22,9 @@ const TOUCHED = [
     'NODE_URL',
     'NODE_CORS_ORIGIN',
     'NODE_WEBHOOK_SECRET_ENCRYPTION_KEY',
-    'NODE_WEBHOOK_DEMO_SINK_URL'
+    'NODE_WEBHOOK_DEMO_SINK_URL',
+    'NODE_RABBITMQ_URL',
+    'NODE_RABBITMQ_PORT'
 ] as const;
 
 withoutEnvironmentInThisFile(TOUCHED);
@@ -82,5 +85,30 @@ describe('the demo-sink exemption', () => {
         process.env.NODE_CORS_ORIGIN = 'https://example.com';
 
         expect(() => assertRequiredConfig([webhooksModule])).not.toThrow();
+    });
+});
+
+describe('the boot warning', () => {
+    it('says deliveries wait for the sweep when no broker is configured', () => {
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        delete process.env.NODE_RABBITMQ_URL;
+        delete process.env.NODE_RABBITMQ_PORT;
+
+        webhooksModule.onRegistered([]);
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({ message: expect.stringContaining('no message broker') })
+        );
+        warn.mockRestore();
+    });
+
+    it('stays quiet when a broker is configured', () => {
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        process.env.NODE_RABBITMQ_URL = 'amqp://broker.example.com';
+
+        webhooksModule.onRegistered([]);
+
+        expect(warn).not.toHaveBeenCalled();
+        warn.mockRestore();
     });
 });

@@ -10,8 +10,9 @@
  *
  * The queue publish is fire-and-forget from here on purpose: when it fails (no broker configured,
  * or a publish error), the row it already wrote stays `pending` and `scripts/ops/sweep-webhook-retries.ts`
- * picks it up on its next pass — never lost, at worst delayed to the sweep interval. That is the
- * same "degrades to queued rather than to lost" story `./attempt.ts`'s `recordFailure` already
+ * picks it up on its next pass. With a broker the sweep re-publishes it; without one the sweep
+ * sends it itself (`./sweep.ts`) — never lost, at worst delayed to the sweep interval. That is
+ * the same "degrades to queued rather than to lost" story `./attempt.ts`'s `recordFailure` already
  * accepts for a mid-chain retry, just reached one step earlier.
  */
 
@@ -66,7 +67,7 @@ const deliverToOne = (
     eventId: string
 ): Promise<void> =>
     createDeliveryRow(subscription, event, eventId).then((delivery) =>
-        delivery ? enqueueDeliveryAttempt(delivery) : undefined
+        delivery ? enqueueDeliveryAttempt(delivery).then(() => undefined) : undefined
     );
 
 /**

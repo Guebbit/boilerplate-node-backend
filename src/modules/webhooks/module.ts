@@ -16,6 +16,8 @@
 
 import path from 'node:path';
 import { resolvePublicEvents, type AppModule } from '@kernel/registry';
+import { logger } from '@infrastructure/adapters/logger';
+import { isQueueEnabled } from '@infrastructure/adapters/queue';
 import { WORKER_CHANNELS, WebhookDeliverJobPayloadSchema } from '@types';
 import { router } from './routes';
 import { subscribeToWebhookEvents, processDeliveryJob } from './services';
@@ -30,6 +32,12 @@ import { subscribeToWebhookEvents, processDeliveryJob } from './services';
  */
 const onRegistered = (modules: readonly AppModule[]): void => {
     subscribeToWebhookEvents(resolvePublicEvents(modules));
+    if (!isQueueEnabled())
+        logger.warn({
+            message:
+                'webhooks: no message broker configured, so deliveries are sent by the retry sweep ' +
+                '(npm run sweep:webhook-retries, per minute) instead of at once'
+        });
 };
 
 /** This module's manifest entry. */

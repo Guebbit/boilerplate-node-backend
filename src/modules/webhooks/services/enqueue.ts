@@ -15,12 +15,15 @@ import type { WebhookDeliveryDocument } from '../model';
  * Publish one delivery row's next attempt. Never claims: publishing an already-live row twice is
  * safe, since the WORKER's own claim (`./attempt.ts`) is what decides who actually does the one
  * real HTTP attempt.
+ *
+ * @returns whether the broker took the message; `false` means nobody will consume it (no broker,
+ *   or one that refused it), which is the sweep's cue to send the row itself
  */
-export const enqueueDeliveryAttempt = (delivery: WebhookDeliveryDocument): Promise<void> => {
+export const enqueueDeliveryAttempt = (delivery: WebhookDeliveryDocument): Promise<boolean> => {
     const payload: WebhookDeliverJobPayload = { deliveryId: String(delivery._id) };
 
     return publishToQueue<WebhookDeliverJobPayload>({
         queue: WORKER_CHANNELS.WEBHOOK_DELIVER,
         payload
-    }).then(() => undefined);
+    });
 };
