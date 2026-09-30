@@ -44,8 +44,8 @@ import { toFeedbackStatus, initialFeedbackStatus, shouldStampRespondedAt } from 
  * Where the operator's notification goes: the dedicated contact mailbox, then the generic SMTP
  * sender, then nowhere.
  *
- * Read per call rather than captured at import, so a deployment can change it without a restart —
- * the pattern `inventory/config.ts` sets for this repo.
+ * Read per call rather than captured at import, so a test can vary it — the pattern
+ * `inventory/config.ts` sets for this repo. A deployment changes it with a restart.
  */
 const notifyMailbox = (): string =>
     process.env.NODE_CONTACT_NOTIFY_EMAIL ?? process.env.NODE_SMTP_SENDER ?? '';

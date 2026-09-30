@@ -1,7 +1,7 @@
 /**
  * @module
  * Env-derived config read per call, not captured at import — the pattern `inventory/config.ts`
- * sets, so a deployment can change these without a restart.
+ * sets, so a test can vary these per case. A deployment changes one with a restart.
  */
 
 import { environmentNumber, isRelaxedEnvironment } from '@infrastructure/runtime/environment';

@@ -1,8 +1,8 @@
 /**
  * @module
  * The two VAT rates a deployment charges, read per call rather than captured at import — the
- * pattern `inventory/config.ts` sets, so a rate change takes effect on the next resolve instead
- * of the next restart.
+ * pattern `inventory/config.ts` sets, so a test can vary a rate per case. A rate change reaches
+ * production with a restart, like every environment variable.
  *
  * Owned by `products` because `resolveTaxRate` (`./tax`) is the only reader: a product's tax
  * class resolving to a rate is an invariant of the catalogue. `orders` freezes whatever that

@@ -1,8 +1,7 @@
 /**
  * @module
  * The values a deployment tunes about money, read in one place — same arrangement as
- * `@modules/inventory`'s `config.ts`: read per call so a change takes effect on the next intent,
- * not the next restart, and so a second reader doesn't transcribe its own copy of the fallback.
+ * `@modules/inventory`'s `config.ts`: read per call so a test can vary it, and so a second reader doesn't transcribe its own copy of the fallback.
  *
  * The bank-transfer VALUES themselves (`bankTransferBeneficiary`/`Iban`/`Bic`) and `shopCurrency`
  * are `@modules/orders`' own config — `orders` renders `transferInstructions` and enforces the

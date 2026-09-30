@@ -2,8 +2,8 @@
  * @module
  * The shop's own jurisdiction, the bank-transfer payment method's deployment config, and this
  * module's one link into the paired frontend (its own order page) — all read per call rather than
- * captured at import, the pattern `inventory/config.ts` sets, so a deployment can correct any of
- * them without a restart.
+ * captured at import, the pattern `inventory/config.ts` sets, so a test can vary any of
+ * them per case. A deployment corrects one with a restart.
  *
  * The shop's own LEGAL identity for invoicing (legal name, VAT number, street address) lives in
  * `@modules/invoicing`'s own `config.ts`, not here — only `shopCountry` stays, since it is also

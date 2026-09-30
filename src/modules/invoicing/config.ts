@@ -2,7 +2,8 @@
  * @module
  * The shop's own LEGAL identity, as Art. 226(e) needs it printed on an invoice: the legal name,
  * VAT number, and full postal address. Read per call rather than captured at import — the pattern
- * `inventory/config.ts` sets, so a deployment can correct any of them without a restart.
+ * `inventory/config.ts` sets, so a test can vary any of them per case. A deployment corrects one
+ * with a restart.
  *
  * Owned here, not `orders`, because this module's own `services/issue-invoice.ts` is the only reader —
  * `orders/config.ts` keeps `shopCountry` alone, since that one is also the VAT-jurisdiction and
