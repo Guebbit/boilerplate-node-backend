@@ -3,7 +3,7 @@
  * `stockLevelRepository`'s own aggregate reads against a real Mongo instance, including their
  * answers over an empty collection — a `$group`/`$facet` pipeline returns no row at all rather
  * than a zeroed one, so the `.at(0)` arm the calling code guards is asserted, not assumed. The
- * transition path itself (`applyDelta`, `ensure`) is exercised through `../../service.ts`'s own
+ * transition path itself (`applyDelta`, `ensure`) is exercised through `../../services/transition.ts`'s own
  * tests, which is where its guarantees actually matter; this file is the aggregates alone.
  */
 
@@ -34,7 +34,7 @@ describe('an empty collection', () => {
 /*
  * `docs/modules/inventory-reservations.md` §"The threshold, and its two readers": the stock
  * board's `lowOnly` filter counts the WHOLE catalogue (an admin restocking needs an inactive
- * product too); `service.ts`'s `lowStockCount` narrows `lowAvailabilityProductIds`' candidates to
+ * product too); `services/levels.ts`'s `lowStockCount` narrows `lowAvailabilityProductIds`' candidates to
  * PUBLICLY VISIBLE products only (a customer can't buy what they can't see, so an alert about it
  * is noise) — "the two numbers will not match, and should not." `sumReserved` carries no scope at
  * all: an inactive product still holds units. Visibility itself is `products`' rule to apply, not

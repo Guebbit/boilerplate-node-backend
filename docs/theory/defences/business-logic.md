@@ -49,11 +49,11 @@ certain inputs.
 Two requests pass the same check before either commits. The answer is never "check harder" — it is
 to make the WRITE carry the precondition.
 
-| Attack                        | How it works                                            | This boilerplate                                                                                                                                                                                                         |
-| ----------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Race condition / double spend | parallel requests pass one check before any commits     | Checkout empties the cart under the `__v` it read the lines at, so exactly one of two racing checkouts wins; the loser retracts its own order and answers 409 — `cart/repository.ts#clearLinesIfUnchanged`               |
-| Checkout race                 | pay once, receive twice, via parallel confirms          | The units are held by a conditional reserve keyed on the order id, and `updateStatusIfIn` re-asserts the precondition inside the write — `inventory/service.ts#reserveForOrder`, `orders/repository.ts#updateStatusIfIn` |
-| Coupon / voucher reuse        | a race, missing uniqueness, or case/whitespace variants | No surface: there is no coupon or voucher feature.                                                                                                                                                                       |
+| Attack                        | How it works                                            | This boilerplate                                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Race condition / double spend | parallel requests pass one check before any commits     | Checkout empties the cart under the `__v` it read the lines at, so exactly one of two racing checkouts wins; the loser retracts its own order and answers 409 — `cart/repository.ts#clearLinesIfUnchanged`                        |
+| Checkout race                 | pay once, receive twice, via parallel confirms          | The units are held by a conditional reserve keyed on the order id, and `updateStatusIfIn` re-asserts the precondition inside the write — `inventory/services/reserve.ts#reserveForOrder`, `orders/repository.ts#updateStatusIfIn` |
+| Coupon / voucher reuse        | a race, missing uniqueness, or case/whitespace variants | No surface: there is no coupon or voucher feature.                                                                                                                                                                                |
 
 ## Abuse of a legitimate feature
 

@@ -9,7 +9,7 @@
  * See: docs/modules/inventory.md
  */
 
-export * from './service';
+export * from './services';
 
 export * from './domain';
 

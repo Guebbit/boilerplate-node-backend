@@ -6,7 +6,7 @@
 
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { ListInventoryLevelsQueryParams } from '@api/schemas.zod';
-import { inventoryService } from '../service';
+import { inventoryService } from '../services';
 import { createListController } from '@infrastructure/surfaces/create-list-controller';
 
 /** Handles `GET /inventory/levels`. */

@@ -174,7 +174,6 @@ have nowhere below `services/` to go. `keys.ts` is where they live instead — t
 | File                              | Why it is over                                                                                        |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `orders/services/crud.ts`         | `getById`/`create`/`update`/`updateById`/`remove`/`removeById` — the whole write half                 |
-| `inventory/service.ts`            | reserve, commit, release, the sweep, and the operator's own writes                                    |
 | `payments/services/settlement.ts` | confirm, sync and webhook reconciliation — the one settlement choreography every path funnels through |
 
 That is recorded rather than quietly fixed, because the number's job is to make the split feel
