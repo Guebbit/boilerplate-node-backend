@@ -281,15 +281,15 @@ describe('updateStatus', () => {
         expect(feedback.status).toBe(FeedbackRequestStatus.in_progress);
     });
 
-    it('allows admin notes to be cleared to an empty string', async () => {
-        // `!== undefined`, not a truthiness check: '' is a deliberate clear, and a truthy guard
-        // would make notes impossible to remove once written.
+    it("clears admin notes on `null`, the contract's only way to clear them", async () => {
+        // `!== undefined`, not a truthiness check: `null` is a deliberate clear, and a truthy guard
+        // would make notes impossible to remove once written. `''` is refused at the HTTP door.
         const feedback = await create(makePayload());
         await updateStatus(feedback, { adminNotes: 'temporary' });
 
-        await updateStatus(feedback, { adminNotes: '' });
+        await updateStatus(feedback, { adminNotes: null });
 
-        expect(feedback.adminNotes).toBe('');
+        expect(feedback.adminNotes).toBeUndefined();
     });
 
     it('stamps respondedAt when the request becomes resolved', async () => {

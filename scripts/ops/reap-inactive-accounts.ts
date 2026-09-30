@@ -15,7 +15,7 @@
  * threshold and one fixed grace between them:
  *
  *   inactive N days  → email warning, `inactivityWarnedAt` stamped
- *   + GRACE_DAYS more, still no login → soft delete (`userService.remove(user, false)`)
+ *   + GRACE_DAYS more, still no login → soft delete (`userService.remove(user, false, systemContext)`)
  *   + GRACE_DAYS more since the soft delete → hard delete (`userService.remove(user, true)`),
  *     which emits `USER_DELETED` and cascades exactly like an admin's own hard delete
  *
@@ -110,12 +110,13 @@ const main = async (): Promise<void> => {
         const toSoftDelete = await userService.findWarnedStillInactive(
             daysAgo(inactiveDays + GRACE_DAYS)
         );
-        for (const user of toSoftDelete) await userService.remove(user, false);
+        // Both deletes hand a system context: nobody is at the keyboard, so the trail is the only record.
+        for (const user of toSoftDelete)
+            await userService.remove(user, false, systemCallerContext('User'));
 
         const toHardDelete = await userService.findReaperSoftDeletedPastGrace(daysAgo(GRACE_DAYS));
-        // T6: nobody is at the keyboard for this one, so it is the ONE hard-delete caller that
-        // must hand its own audit context — every HTTP-driven one already records through
-        // `createDeleteController`'s spec.
+        // Every HTTP-driven delete records through `createDeleteController`'s spec; this one has no
+        // request behind it, so it hands its own audit context.
         for (const user of toHardDelete)
             await userService.remove(user, true, systemCallerContext('User'));
 

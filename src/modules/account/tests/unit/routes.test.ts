@@ -177,14 +177,13 @@ describe('account routes — credential rate limiting', () => {
         ]);
     });
 
-    it('rate-limits before authenticating, so a spent budget costs no lookup', () => {
-        // On `POST /password`, `/reauth` and `/verify-request` the limiters precede `isAuth`.
-        // Reversed, a flood of unauthenticated requests would each do the session work before
-        // being refused.
+    it('authenticates before rate-limiting, so the identity budget is keyed on the account', () => {
+        // On `POST /password`, `/reauth` and `/verify-request` the body names no account, so the
+        // identity limiter reads the session's. Reversed, it would fall back to the address block.
         for (const signature of ['POST /password', 'POST /reauth', 'POST /verify-request']) {
             const chain = chainOf(router, signature);
 
-            expect(chain.indexOf('credentials-identity')).toBeLessThan(chain.indexOf('isAuth'));
+            expect(chain.indexOf('isAuth')).toBeLessThan(chain.indexOf('credentials-identity'));
         }
     });
 

@@ -34,7 +34,7 @@ jest.mock('@infrastructure/http/response', () => ({
 /** Shape of the payload the controller hands to `successResponse` — the subset this suite asserts on. */
 interface Overview {
     auth: { loginSuccess: number; loginFailure: number; signupSuccess: number };
-    business: { checkoutSuccess: number; ordersCreated: number };
+    business?: { checkoutSuccess: number; ordersCreated: number };
     database: { queriesTotal: number; errorsTotal: number };
 }
 
@@ -83,7 +83,7 @@ describe('observability metrics overview', () => {
         counter('cart_checkout_total').inc({ status: 'success' }, 4);
 
         const after = await runOverview();
-        expect(after.business.checkoutSuccess).toBe(before.business.checkoutSuccess + 4);
+        expect(after.business?.checkoutSuccess).toBe((before.business?.checkoutSuccess ?? 0) + 4);
     });
 
     it('reports created orders from the orders module counter', async () => {
@@ -91,7 +91,7 @@ describe('observability metrics overview', () => {
         counter('order_created_total').inc(5);
 
         const after = await runOverview();
-        expect(after.business.ordersCreated).toBe(before.business.ordersCreated + 5);
+        expect(after.business?.ordersCreated).toBe((before.business?.ordersCreated ?? 0) + 5);
     });
 
     it('reports database query and error totals from the persistence layer counters', async () => {
@@ -107,15 +107,34 @@ describe('observability metrics overview', () => {
 
     it('reports zero for a counter no enabled module registered', async () => {
         // What a deleted module leaves behind. `metricsRegistry.getSingleMetric` returns undefined
-        // and the row has to degrade to 0 — the response shape is fixed by `openapi.yaml`, so a
-        // client must not be able to tell which modules this build has.
+        // and the row has to degrade to 0 while the rest of the shop block is still reported.
         const removed = metricsRegistry.getSingleMetric('cart_checkout_total');
         metricsRegistry.removeSingleMetric('cart_checkout_total');
 
         const after = await runOverview();
-        expect(after.business.checkoutSuccess).toBe(0);
+        expect(after.business?.checkoutSuccess).toBe(0);
 
         // Put it back: the registry is process-global and later suites read the same instance.
         if (removed) metricsRegistry.registerMetric(removed);
+    });
+
+    it('leaves the business block out when no shop module registered a metric', async () => {
+        // A foundation-only build: every counter behind the block is gone, so zeros would claim
+        // figures nobody is measuring. `business` is optional in `openapi.yaml` for this case.
+        const names = [
+            'cart_checkout_total',
+            'order_created_total',
+            'products_low_stock_total',
+            'inventory_reserved_units_total'
+        ];
+        const removed = names.flatMap((name) => metricsRegistry.getSingleMetric(name) ?? []);
+        for (const name of names) metricsRegistry.removeSingleMetric(name);
+
+        const after = await runOverview();
+        expect(after).not.toHaveProperty('business');
+        expect(after.auth).toBeDefined();
+
+        // Put them back: the registry is process-global and later suites read the same instance.
+        for (const metric of removed) metricsRegistry.registerMetric(metric);
     });
 });

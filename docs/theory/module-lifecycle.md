@@ -45,7 +45,7 @@ frontend module answers this domain, or a sentence saying why none does.
 `tests/cross-cutting/frontend-pairing.test.ts` fails on a missing entry, which is what stops the
 FE/BE gap from widening unnoticed.
 
-A sixth list is _nearly_ one and is worth knowing about: a module that declares `probes.ts` is
+A fifth list is _nearly_ one and is worth knowing about: a module that declares `probes.ts` is
 imported by name in `scripts/contracts/client-collections-bundle.ts`. Deleting the module stops the build
 on its own rather than waiting for a bundle to come out quietly short — but ADDING one needs the map
 edited, and forgetting that is silent, so `tests/cross-cutting/probes-are-wired.test.ts` fails when a
@@ -60,7 +60,7 @@ library from `package.json` in the same change, once nothing else has started im
 [Libraries a module owns](./modules.md#libraries-a-module-owns).
 
 A module's demo records live in `scenarios/<name>.ts`, tabled by `scenarios/index.ts` — a list,
-but not a hand-kept one of these six: adding an entry is optional (a module need not have demo
+but not a hand-kept one of these four: adding an entry is optional (a module need not have demo
 data at all), and forgetting to remove one after deleting a module is caught by
 `tests/cross-cutting/scenario-fixtures.test.ts` rather than by a build failure. What the API
 actually answers for a seeded row is not published anywhere; it is checked directly, against a
@@ -70,7 +70,7 @@ Nothing else enumerates domains. Route mounting, the seeder, the i18n boot, the 
 the metrics registry all walk the registry instead — which is why none of them appears in either
 checklist.
 
-The conditional three exist because **the contract is fragmented and shared with the paired
+The two conditional registries exist because **the contract is fragmented and shared with the paired
 frontend**. They are the price of one document assembled from per-module pieces, not a leak. Leaving
 one stale is a hard error naming the missing file:
 
