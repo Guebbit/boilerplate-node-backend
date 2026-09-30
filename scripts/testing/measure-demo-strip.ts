@@ -22,7 +22,7 @@
  * See: docs/theory/strategic-ddd.md#4a-foundation-and-shop
  */
 
-import { cpSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -80,10 +80,19 @@ const assembleScratchCopy = (): void => {
     // needs working imports, not its own install.
     symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(SCRATCH, 'node_modules'), 'dir');
 
-    // `demo:remove` ends with a `git grep` for tests that still import what it deleted, and that
-    // needs a repository to search.
-    runInScratch('git', ['init', '--quiet']);
-    runInScratch('git', ['add', '--all']);
+    // A symlinked `node_modules` resolves to a real path OUTSIDE the scratch tree, and TypeScript
+    // then refuses to name a type reached through it (TS2883 on `tests/support/routes.ts`) — an
+    // artifact of the measurement, not of the code. `preserveSymlinks` makes it resolve through
+    // the link the way a real install would.
+    // https://www.typescriptlang.org/tsconfig/#preserveSymlinks
+    const tsconfig = path.join(SCRATCH, 'tsconfig.json');
+    writeFileSync(
+        tsconfig,
+        readFileSync(tsconfig, 'utf8').replace(
+            '"strict": true,',
+            '"strict": true,\n"preserveSymlinks": true,'
+        )
+    );
 };
 
 /** A removal recipe: how to take one kind of module out of the scratch copy. */

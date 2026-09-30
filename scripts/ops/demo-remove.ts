@@ -32,6 +32,11 @@ import {
     stripShopModulesTable,
     stripSubjects
 } from './demo-remove-scenarios';
+import {
+    readRemovedAuthorization,
+    stripConformanceCases,
+    stripRoleGrants
+} from './demo-remove-authorization';
 import { removeResidueTests } from './demo-remove-tests';
 import { stripAccountExportSchema, stripContractPathCensus } from './demo-remove-contract';
 
@@ -47,6 +52,9 @@ const shopModuleNames = readShopModuleNames(REPO_ROOT);
 console.info(
     `[demo-remove] removing ${shopModuleNames.length} group: shop module(s): ${shopModuleNames.join(', ')}`
 );
+
+// Read the removed modules' permission keys BEFORE their folders (and fragments) are gone.
+const removedAuthorization = readRemovedAuthorization(REPO_ROOT, shopModuleNames);
 
 console.info('\n[demo-remove] module folders:');
 report(removeModuleFolders(REPO_ROOT, shopModuleNames));
@@ -73,6 +81,12 @@ report([
 
 console.info('\n[demo-remove] the shared contract fragment (shared/contracts/openapi.root.yaml):');
 report([stripContractPathCensus(REPO_ROOT, shopModuleNames), stripAccountExportSchema(REPO_ROOT)]);
+
+console.info('\n[demo-remove] the shared authorization files:');
+report([
+    stripRoleGrants(REPO_ROOT, removedAuthorization),
+    stripConformanceCases(REPO_ROOT, removedAuthorization)
+]);
 
 console.info('\n[demo-remove] tests that import a removed module:');
 report(removeResidueTests(REPO_ROOT, shopModuleNames));
