@@ -291,11 +291,21 @@ describe('the API client collections', () => {
      * contract and synthesises an example per operation, which is not work worth repeating per
      * case.
      */
-    const generated = new Map(
-        CONTRACT_BUNDLES.filter((bundle) => isGenerated(bundle)).map((bundle) => [
-            bundle.name,
-            assembleBundle(bundle)
-        ])
+    const generated = new Map<string, string>();
+    let probeCount = 0;
+    let probeNames: string[] = [];
+
+    beforeAll(() =>
+        Promise.all(
+            CONTRACT_BUNDLES.filter((bundle) => isGenerated(bundle)).map((bundle) =>
+                assembleBundle(bundle).then((document) => generated.set(bundle.name, document))
+            )
+        )
+            .then(() => allProbes())
+            .then((probes) => {
+                probeCount = probes.length;
+                probeNames = probes.map(({ name }) => name);
+            })
     );
 
     const collection = (name: string): string => {
@@ -335,9 +345,7 @@ describe('the API client collections', () => {
     it('names no probe twice', () => {
         // The name is what someone reads in a folder of 70 requests; two probes under one name
         // would make a failing request unaddressable by name.
-        const probes = allProbes();
-
-        expect(new Set(probes.map(({ name }) => name)).size).toBe(probes.length);
+        expect(new Set(probeNames).size).toBe(probeNames.length);
     });
 
     it('are generated whole, with nothing on disk in between', () => {
@@ -384,7 +392,7 @@ describe('the API client collections', () => {
         // The three request collections also carry the probes — the requests the contract cannot
         // describe, so that they are the only difference between what one holds and what the API
         // declares. Mockoon has none: a mock server answers requests, it does not send them.
-        const probes = allProbes().length;
+        const probes = probeCount;
         expect(probes).toBeGreaterThan(0);
 
         expect(counted(bruno.items)).toBe(operations.length + probes);

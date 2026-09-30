@@ -276,10 +276,9 @@ export const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Edit `scripts/contracts/client-collections-bundle.ts`: the generated API collections' own probe
- * imports and example values are a static, per-module list by design (see the file's own header)
- * — deleting a shop module without updating this file is the ONE break the file is built to
- * produce loudly, and this is that edit, done for every shop module at once.
+ * Edit `scripts/contracts/client-collections-bundle.ts`: the generated API collections' example
+ * values name the demo shop's seeded product and order. Probes are loaded from each module's own
+ * `probes.ts` by scan, so they leave with their modules; only these values are edited here.
  */
 export const stripClientCollections = (repoRoot: string): RemovalNote => {
     const file = path.join(repoRoot, 'scripts', 'contracts', 'client-collections-bundle.ts');
@@ -288,14 +287,8 @@ export const stripClientCollections = (repoRoot: string): RemovalNote => {
 
     content = replaceOnce(
         content,
-        `import { probes as accountProbes } from '../../src/modules/account/probes';
-import { probes as cartProbes } from '../../src/modules/cart/probes';
-import { probes as ordersProbes } from '../../src/modules/orders/probes';
-import { probes as productsProbes } from '../../src/modules/products/probes';
-import { probes as wishlistProbes } from '../../src/modules/wishlist/probes';
-import { SEED_PRODUCT_IDS, SUBJECTS } from '../../scenarios/subjects';`,
-        `import { probes as accountProbes } from '../../src/modules/account/probes';
-import { SUBJECTS } from '../../scenarios/subjects';`,
+        `import { SEED_PRODUCT_IDS, SUBJECTS } from '../../scenarios/subjects';`,
+        `import { SUBJECTS } from '../../scenarios/subjects';`,
         label
     );
     content = replaceOnce(
@@ -392,23 +385,8 @@ const ORDER_ID_VARIABLE = '{{orderId}}';
     }`,
         label
     );
-    content = replaceOnce(
-        content,
-        `const PROBES: Partial<Record<SectionName, Probe[]>> = {
-    account: accountProbes,
-    cart: cartProbes,
-    orders: ordersProbes,
-    products: productsProbes,
-    wishlist: wishlistProbes
-};`,
-        `const PROBES: Partial<Record<SectionName, Probe[]>> = {
-    account: accountProbes
-};`,
-        label
-    );
-
     writeFileSync(file, content);
-    return { file: label, detail: 'dropped the shop modules’ probes and example values' };
+    return { file: label, detail: 'dropped the shop’s example values' };
 };
 
 /**

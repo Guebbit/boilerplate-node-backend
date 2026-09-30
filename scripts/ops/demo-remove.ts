@@ -5,7 +5,7 @@
  *
  * Deletes every `group: shop` module folder, the reap/sweep scripts and `docker/crontab`/
  * `package.json` lines that belong to one, and the demo catalogue's own scenario data — then edits
- * the handful of central files (`src/modules.ts`, `tests/support/routed-modules.ts`,
+ * the handful of central files (`src/modules.ts`,
  * `scripts/contracts/client-collections-bundle.ts`, `scenarios/*`) that would otherwise stop the
  * repo compiling. See `docs/getting-started-new-project.md` for what this promises and does not.
  *

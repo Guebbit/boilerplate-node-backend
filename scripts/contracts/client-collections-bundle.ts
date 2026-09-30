@@ -27,6 +27,7 @@
  * See: docs/api/contract-fragmentation.md#the-client-collections-generated
  */
 
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import {
     generateCollections,
@@ -39,12 +40,7 @@ import {
     type ValueSources
 } from '@guebbit/openapi-runnable-collections';
 import { REPO_ROOT, type ContractBundle } from './bundle-kinds';
-import { SECTION_ORDER, sectionPaths, type SectionName } from './openapi-bundle';
-import { probes as accountProbes } from '../../src/modules/account/probes';
-import { probes as cartProbes } from '../../src/modules/cart/probes';
-import { probes as ordersProbes } from '../../src/modules/orders/probes';
-import { probes as productsProbes } from '../../src/modules/products/probes';
-import { probes as wishlistProbes } from '../../src/modules/wishlist/probes';
+import { SECTION_ORDER, sectionPaths } from './openapi-bundle';
 import { SEED_PRODUCT_IDS, SUBJECTS } from '../../scenarios/subjects';
 
 /**
@@ -159,30 +155,56 @@ const values: ValueSources = {
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The modules that declare probes, imported by name rather than discovered on disk.
- *
- * A static import is the point: deleting `src/modules/orders` stops this file compiling, which is
- * the failure `docs/theory/module-lifecycle.md` asks for. A directory scan would instead drop that
- * module's probes silently and leave a collection that still looks complete.
- *
- * That covers deletion and not addition — a new module writing a perfectly good `probes.ts` and
- * not editing this map produces four collections that look complete and carry none of its probes.
- * `tests/cross-cutting/probes-are-wired.test.ts` closes that half, so the compile-time failure is
- * kept rather than traded for a directory scan.
- *
- * Seven modules and the `system` section declare none. That is deliberate rather than a backlog —
- * a probe exists where a rejection is interesting, and most read endpoints have none.
+ * Every module folder that has written a `probes.ts`, discovered rather than listed.
+ * @param modulesRoot - the `src/modules` directory (the real one, or a scratch tree)
  */
-const PROBES: Partial<Record<SectionName, Probe[]>> = {
-    account: accountProbes,
-    cart: cartProbes,
-    orders: ordersProbes,
-    products: productsProbes,
-    wishlist: wishlistProbes
-};
+export const modulesDeclaringProbes = (
+    modulesRoot: string = path.join(REPO_ROOT, 'src', 'modules')
+): string[] =>
+    readdirSync(modulesRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .filter((name) => existsSync(path.join(modulesRoot, name, 'probes.ts')))
+        .toSorted();
 
-/** Which sections {@link PROBES} carries. Read by the completeness guard, nothing else. */
-export const PROBED_SECTIONS: readonly SectionName[] = Object.keys(PROBES);
+/** Narrows a loaded `probes.ts` to the one export the generator reads. */
+const hasProbes = (loaded: unknown): loaded is { probes: Probe[] } =>
+    typeof loaded === 'object' &&
+    loaded !== null &&
+    'probes' in loaded &&
+    Array.isArray(loaded.probes);
+
+/**
+ * Every module's `probes.ts`, loaded by directory scan: a module that writes one is in the
+ * collections with no edit here, and a deleted module simply has none. A module with no probes is
+ * not a finding — a probe exists where a rejection is interesting, and most read endpoints have
+ * none.
+ *
+ * Memoised: the probes are source, so they cannot change mid-run (unlike the contract, see
+ * {@link generate}).
+ */
+const loadProbes = (() => {
+    let loaded: Promise<Record<string, Probe[]>> | undefined;
+
+    return (): Promise<Record<string, Probe[]>> => {
+        loaded ??= Promise.all(
+            modulesDeclaringProbes().map((name) =>
+                // Dynamic `import()` of a computed path: which modules have probes is only known
+                // after the scan. tsx and ts-jest both resolve a bare `.ts` path.
+                import(path.join(REPO_ROOT, 'src', 'modules', name, 'probes')).then(
+                    (module_: unknown) => {
+                        if (!hasProbes(module_))
+                            throw new Error(
+                                `[collections] ${name}/probes.ts exports no \`probes\` array.`
+                            );
+                        return [name, module_.probes] as const;
+                    }
+                )
+            )
+        ).then((entries) => Object.fromEntries(entries));
+        return loaded;
+    };
+})();
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────
  * 4. The four documents
@@ -195,29 +217,30 @@ export const PROBED_SECTIONS: readonly SectionName[] = Object.keys(PROBES);
  * from it in phase 2, so a cached result would be one taken before the contract it claims to derive
  * from existed.
  */
-const generate = (): GenerateResult =>
-    generateCollections({
-        spec: loadSpec(path.join(REPO_ROOT, 'openapi.yaml')),
-        sections: sections(),
-        // Narrowing cast: the generator reads `probes[section]` only for sections it walks, so a
-        // section with no entry is simply absent — `Partial` says so, its index signature cannot.
-        probes: PROBES as Record<string, Probe[]>,
-        values,
-        collection: { name: COLLECTION_NAME },
-        targets: COLLECTION_TOOLS
-    });
+const generate = (): Promise<GenerateResult> =>
+    loadProbes().then((probes) =>
+        generateCollections({
+            spec: loadSpec(path.join(REPO_ROOT, 'openapi.yaml')),
+            sections: sections(),
+            probes,
+            values,
+            collection: { name: COLLECTION_NAME },
+            targets: COLLECTION_TOOLS
+        })
+    );
 
 /** Every module's probes, flattened — what a coverage check has to account for. */
-export const allProbes = (): CollectionRequest[] =>
-    generate().requests.filter((request) => request.probe);
+export const allProbes = (): Promise<CollectionRequest[]> =>
+    generate().then((result) => result.requests.filter((request) => request.probe));
 
 /** What a tool's committed document should contain. */
-const contentFor = (tool: CollectionTool) => (): string => {
-    const document = generate().bundles[tool];
-    if (document === undefined)
-        throw new Error(`[collections] the generator emitted no ${tool} document.`);
-    return document;
-};
+const contentFor = (tool: CollectionTool) => (): Promise<string> =>
+    generate().then((result) => {
+        const document = result.bundles[tool];
+        if (document === undefined)
+            throw new Error(`[collections] the generator emitted no ${tool} document.`);
+        return document;
+    });
 
 /*
  * Written to the repo root as `contract.<tool>.<ext>`, next to `openapi.yaml` — deliberately not
