@@ -74,7 +74,8 @@ this middleware owns, and decides whether the request is even a candidate for th
   only — the wire always says `no-store`, since a shared cache holding a POST response could
   answer a later POST from it, including a real write on some other route.
 - A cacheable GET gets `max-age`/`stale-*` (a shared cache in front of this server is what absorbs
-  a guest-scope stampede), or `no-cache` when the route asked for `browserRevalidate` instead.
+  a guest-scope stampede), or `no-cache` when the route asked for `browserRevalidate` instead (`GET /products/:id` does: the
+  page shows a stock count, and inventory clears the `products` tag on every stock write).
 - `cacheScope === undefined` — this caller sees more than the shared answer, per
   [the scope-key rule above](#no-caching-depends-on-who-is-asking) — answers `private, no-cache`
   regardless of `browserRevalidate`: `serveOrArm` is about to bypass Redis for this same request,

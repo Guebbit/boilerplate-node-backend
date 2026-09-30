@@ -99,7 +99,15 @@ router.get('/settings', getProductSettings);
 // GET /products/:id — public
 router.get(
     '/:id',
-    setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: cacheScopeKey }),
+    // `browserRevalidate`: the server keeps serving from Redis, but a browser must check first (a
+    // 304 when nothing changed), because the page shows `available`, which a stock write changes
+    // and no server-side clear can reach in someone's browser.
+    setCache(3600, {
+        tags: ['products'],
+        keyParameters: [],
+        scopeKey: cacheScopeKey,
+        browserRevalidate: true
+    }),
     getProductItem
 );
 
