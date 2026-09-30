@@ -32,6 +32,7 @@ beforeAll(() => {
             cacheTag: 'products',
             exists: productRepository.existsById,
             writeDerived: productRepository.writeTranslatedFields,
+            markEdited: productRepository.markEdited,
             checkFields: checkProductTranslationFields
         }
     });

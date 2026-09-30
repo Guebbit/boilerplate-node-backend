@@ -41,7 +41,8 @@ beforeAll(async () => {
             fields: ['title', 'description'],
             cacheTag: 'products',
             exists: productRepository.existsById,
-            writeDerived: productRepository.writeTranslatedFields
+            writeDerived: productRepository.writeTranslatedFields,
+            markEdited: productRepository.markEdited
         }
     });
 });

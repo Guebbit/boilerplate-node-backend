@@ -149,6 +149,14 @@ export interface TranslatableTarget {
     writeDerived: (entityId: string, fields: Record<string, string | null>) => Promise<void>;
 
     /**
+     * Stamps this entity's own document as edited, so its version (the `ETag`) moves. A translation
+     * edit changes rows OUTSIDE the document, and {@link writeDerived} only runs when the fallback
+     * locale changed — without this, an editor holding the old tag could still replace the
+     * translations another editor just wrote. Supplied by the OWNING module, like the rest.
+     */
+    markEdited: (entityId: string) => Promise<void>;
+
+    /**
      * The OWNING module's own rules for a locale's field values — the same ones its own write
      * door applies — so the generic translator's door cannot land a value the entity itself would
      * refuse (a product title under its minimum). Optional: a target with no rules beyond the

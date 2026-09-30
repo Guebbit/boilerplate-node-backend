@@ -245,7 +245,14 @@ stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declar
   the stock mirror, the image digest, a session token. An admin's form is never invalidated by a
   customer logging in.
 - **A product edited only through its `translations`** writes rows outside the product document,
-  so the product's `updatedAt` is stamped by the same edit and the tag moves with it.
+  so the product's `updatedAt` is stamped by the same edit and the tag moves with it. That holds
+  for `PUT`/`PATCH /locales/translations/product/{id}` too, whichever locale it names
+  (`TranslatableTarget.markEdited`).
+- **A user edited only through its `role`** changes the membership, not the user document, so the
+  save stamps `updatedAt` on purpose (`markModified('updatedAt')`): two admins on one tag cannot
+  both change the role.
+- **The orders anonymisation sweep is an edit.** It moves `updatedAt`, so an edit form opened
+  before it cannot put the scrubbed email back.
 
 ### What the server does with `If-Match`
 
@@ -258,10 +265,11 @@ stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declar
 | `*` | matches any row that exists |
 | weak (`W/"…"`), or anything that is not a quoted tag | never matches → 412 (`If-Match` compares strongly) |
 
-- **The check and the write are one atomic step for `PUT`/`PATCH`/soft `DELETE`.** The version the
+- **The check and the write are one atomic step for `PUT`/`PATCH`/`DELETE`, hard or soft.** The version the
   service loaded is compared with the header, and the same version becomes part of the update's
-  filter (Mongoose `$where`) — two editors holding the same tag cannot both win. A hard `DELETE` is
-  checked against the loaded row only: Mongoose gives a delete no filter to add it to.
+  filter (Mongoose `$where`) — two editors holding the same tag cannot both win. A hard `DELETE`
+  is fenced the same way: Mongoose 9 applies `$where` to a document delete, and a delete that
+  removed nothing is a 412.
 - **It lives in the repository, not in each module.** `createUpdateController` and
   `createDeleteController` open the precondition for the request; `repository.save` and
   `repository.deleteOne` meet it. A module's service never sees a header.
