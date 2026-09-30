@@ -703,17 +703,22 @@ jobs:
               run: npm audit --omit=dev --audit-level=moderate
 
     demo-strip-measure:
-        # G-D2 step 1: how far "the demo shop is removable" actually is, measured rather than
-        # walked by hand. Deletes every `group: shop` module folder (DDD-D1) from a scratch copy
-        # and runs ts-check, the cross-cutting suite and docs:build against what is left.
+        # G-D2 step 1: how far "a module is removable" actually is, measured rather than walked by
+        # hand. Applies a removal recipe to a scratch copy — `shop` is the real `demo:remove`,
+        # `locales` deletes the optional locales module — then runs regenerate, ts-check, the
+        # cross-cutting suite and docs:build against what is left.
         #
-        # Deliberately NOT in the `ci` gate's `needs:` below, the same reasoning as `audit`: this
-        # is not expected to be green yet — CT-D3, CT-D4 and DDD-D5 still have to move the shop's
-        # out-of-folder assets into its modules before the strip stays small — and turning it red
-        # would block every PR on work this step only measures. It still runs on every push/PR and
-        # still shows red on its own square, which is the point: a punch list, not a gate.
+        # Deliberately NOT in the `ci` gate's `needs:` below, the same reasoning as `audit`: it is
+        # not green yet (only CT-D3 still blocks the shop recipe, plus the residue tests that
+        # `demo:remove` lists for a human), and turning it red would block every PR on work this
+        # step only measures. It still runs on every push/PR and shows red on its own square — a
+        # punch list, not a gate. Promote it into `needs:` once both recipes are green.
+        strategy:
+            fail-fast: false
+            matrix:
+                recipe: [shop, locales]
         runs-on: ubuntu-latest
-        timeout-minutes: 15
+        timeout-minutes: 20
         permissions:
             contents: read
         steps:
@@ -726,8 +731,8 @@ jobs:
                   node-version: ${{ env.NODE_VERSION }}
                   setup-mongod: 'true'
 
-            - name: Measure the demo-shop strip
-              run: npm run measure:demo-strip
+            - name: Measure the ${{ matrix.recipe }} removal
+              run: npm run measure:demo-strip -- --recipe ${{ matrix.recipe }}
 
     ci:
         # Single status check to require in branch protection, so adding/renaming
