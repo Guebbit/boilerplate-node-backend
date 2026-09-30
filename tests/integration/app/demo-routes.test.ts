@@ -20,6 +20,9 @@ import { installErrorHandling } from '@app/error-handling';
 import { registerDemoClock, type DemoClock } from '@infrastructure/runtime/demo-clock';
 import { productModel } from '@modules/products/model';
 import { orderModel } from '@modules/orders/model';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
+import { createOrder, toOrderItem, detachOrderUserId } from '@modules/orders/tests/factories';
 
 /**
  * A one-shot switch: the next `emptyDatabase()` call rejects instead of doing its real work, then
@@ -126,6 +129,40 @@ describe('POST /__test/restore', () => {
 
         const emails = await request(app).get('/__test/emails');
         expect(emails.body).toEqual({ emails: [] });
+    });
+});
+
+describe('POST /__test/jobs/:name', () => {
+    it('refuses a job it does not carry, with a 404', async () => {
+        const response = await request(testApp()).post('/__test/jobs/not-a-job');
+
+        expect(response.status).toBe(404);
+    });
+
+    it('does not mistake an inherited property for a job', async () => {
+        const response = await request(testApp()).post('/__test/jobs/constructor');
+
+        expect(response.status).toBe(404);
+    });
+
+    it('reap-orders scrubs an order past its retention window and says how many', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
+
+        const response = await request(testApp()).post('/__test/jobs/reap-orders');
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ job: 'reap-orders', result: 1 });
+        const scrubbed = await orderModel.findById(order._id);
+        expect(scrubbed?.email).toBe('anonymized@deleted.invalid');
+    });
+
+    it('answers 0 when nothing is due', async () => {
+        const response = await request(testApp()).post('/__test/jobs/reap-orders');
+
+        expect(response.body).toEqual({ job: 'reap-orders', result: 0 });
     });
 });
 

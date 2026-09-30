@@ -3,7 +3,7 @@
  * The demo profile's control surface — mounted only when `enableDemoProfile()` was called (see
  * `npm run demo`).
  *
- * Five routes for the paired frontend's e2e suite, all under `/__test/*`:
+ * Six routes for the paired frontend's e2e suite, all under `/__test/*`:
  *
  * `POST /__test/restore`   empty the database and put a named scenario back, clearing the outbox
  *                          and putting the clock back to real time
@@ -12,6 +12,7 @@
  * `GET /__test/clock`      the demo clock: what `Date.now()` answers, and how far ahead of real time
  * `POST /__test/clock`     move it FORWARD by `advanceMs` (never back); a job that should react
  *                          is then triggered through its own door, e.g. the reservation sweep
+ * `POST /__test/jobs/:name` run one background job now (`scenarios/jobs.ts`), e.g. `reap-orders`
  *
  * A scenario is BUILT once per process and REPLAYED thereafter — see {@link buildOnce}. App-tier
  * since it is the one tier `eslint-plugin-boundaries` lets reach `scenarios/`; unauthenticated
@@ -240,6 +241,28 @@ export const installDemo = (app: Express): void => {
 
         clock.advance(advanceMs);
         response.json({ now: clock.now().toISOString(), offsetMs: clock.offsetMs() });
+    });
+
+    app.post('/__test/jobs/:name', (request: Request, response: Response) => {
+        // Express types a route parameter as `string | string[]`; this route has one plain segment.
+        const name = String(request.params.name);
+
+        import('@scenarios/jobs')
+            .then((jobs) => {
+                const job = jobs.DEMO_JOBS.get(name);
+                if (!job) {
+                    response.status(404).json({ success: false, message: `unknown job: ${name}` });
+                    return undefined;
+                }
+                return job().then((result) => {
+                    response.json({ job: name, result });
+                });
+            })
+            .catch((error: unknown) => {
+                // Stryker disable next-line all
+                logger.error({ message: 'demo job failed', job: name, error });
+                response.status(500).json({ success: false });
+            });
     });
 
     app.get('/__test/emails', (_request: Request, response: Response) => {
