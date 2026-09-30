@@ -13,7 +13,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { ChangePasswordRequest, AuthTokens } from '@types';
 import { accountService } from '../services';
-import { issueSession } from '../session/session';
+import { reissueSession } from '../session/session';
 import { authPasswordChangeTotal } from '../metrics';
 import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -76,7 +76,7 @@ export const postPasswordChange = (
              * A 500 here would tell them the opposite of what happened, so a failed re-mint
              * degrades to "no new token" rather than "the change failed".
              */
-            return issueSession(response, id)
+            return reissueSession(request, response, id)
                 .then((token) => {
                     authPasswordChangeTotal.inc({ status: 'success' });
                     successResponse<AuthTokens>(

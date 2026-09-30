@@ -129,6 +129,9 @@ describe('GET /account/oauth/:provider/callback', () => {
         expect(response.headers.location).toBe('http://localhost:8080/oauth/callback');
         expect(setCookie(response, 'jwt')).toBeTruthy();
         expect(setCookie(response, 'isAuth')).toBeTruthy();
+        // No "remember me" box on a provider round trip: browser-session cookies.
+        expect(setCookie(response, 'jwt')).not.toMatch(/max-age=|expires=/i);
+        expect(setCookie(response, 'isAuth')).not.toMatch(/max-age=|expires=/i);
 
         const created = await userRepository.findOne({ email: 'oauth.demo@example.com' });
         expect(created).not.toBeNull();
