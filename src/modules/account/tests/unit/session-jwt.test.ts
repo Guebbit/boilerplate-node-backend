@@ -338,6 +338,33 @@ describe('createRefreshToken', () => {
         expect(user.tokenAdd.mock.calls[0][1]).toBe(2_592_000 * 1000);
     });
 
+    it('gives a browser-session login (no tier) the short tier as its server-side limit', async () => {
+        const user = userDouble();
+        findByIdReturning(user);
+
+        await createRefreshToken(USER_ID);
+        const token = user.tokenAdd.mock.calls[0][2] as string;
+        const { iat, exp } = decode(token) as { iat: number; exp: number };
+
+        // NOT the access-token window (900s here): a session cookie still needs a real limit.
+        expect(exp - iat).toBe(3600);
+        expect(user.tokenAdd.mock.calls[0][1]).toBe(3600 * 1000);
+    });
+
+    it('stamps the ticked tier as a claim, and stamps none for a browser-session login', async () => {
+        const user = userDouble();
+        findByIdReturning(user);
+
+        await createRefreshToken(USER_ID, 'long' as never);
+        await createRefreshToken(USER_ID);
+        const [remembered, session] = user.tokenAdd.mock.calls.map((call) =>
+            decode(call[2] as string)
+        );
+
+        expect(remembered).toMatchObject({ remember: 'long' });
+        expect(session).not.toHaveProperty('remember');
+    });
+
     it('refuses to issue a token for a user that does not exist', async () => {
         findByIdReturning(null);
 
@@ -379,6 +406,37 @@ describe('createAccessToken', () => {
         // one. Signing it with the refresh window would make revocation irrelevant for a month.
         const refresh = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
         mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+
+        const { iat, exp } = decode(await createAccessToken(refresh)) as {
+            iat: number;
+            exp: number;
+        };
+
+        expect(exp - iat).toBe(900);
+    });
+});
+
+describe('createAccessToken carrying the tier', () => {
+    it("copies the refresh token's tier onto the access token, and omits it when there is none", async () => {
+        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+        const remembered = signAs(
+            'refresh-secret',
+            { id: USER_ID, remember: 'medium' },
+            { expiresIn: 3600 }
+        );
+        const session = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+
+        expect(decode(await createAccessToken(remembered))).toMatchObject({ remember: 'medium' });
+        expect(decode(await createAccessToken(session))).not.toHaveProperty('remember');
+    });
+
+    it('keeps the access window even for a long-tier session', async () => {
+        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+        const refresh = signAs(
+            'refresh-secret',
+            { id: USER_ID, remember: 'long' },
+            { expiresIn: 3600 }
+        );
 
         const { iat, exp } = decode(await createAccessToken(refresh)) as {
             iat: number;

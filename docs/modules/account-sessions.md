@@ -63,6 +63,47 @@ the login form and the lifetime in the environment stay one decision:
 `jwt.ts` signs against it and `cookies.ts` sets `maxAge` from it. Its name is deliberate: it holds
 no token and issues none.
 
+### The box left unticked {#remember-me-unticked}
+
+No `remember` is a real choice, not a missing one. It is the conventional meaning of an unticked
+"remember me" (ASP.NET Core Identity, Django, Rails Devise, Spring Security all do the same):
+
+| Login                                 | Cookie                                      | Refresh token's server TTL |
+| ------------------------------------- | ------------------------------------------- | -------------------------- |
+| `remember: short` / `medium` / `long` | persistent, `Max-Age` = the tier            | the tier                   |
+| no `remember` (also OAuth, signup)    | **browser-session**: no `Max-Age`/`Expires` | the `short` tier           |
+
+The **server** TTL is the real limit, not the cookie: browsers restore session cookies ("continue
+where you left off"), so a session cookie alone would not end anything. NIST 800-63B-4 says the same
+— use a non-persistent cookie, and never let cookie expiry be the limit.
+
+The access token is a separate clock. `getAccessExpiryTime()` reads `NODE_TOKEN_ACCESS_TIME` and
+nothing else, so the refresh fallback above can never leak into it.
+
+The choice has to survive every step that re-mints the session, or it silently reverts:
+
+```mermaid
+flowchart LR
+    L[login: remember?] -->|claim `remember` on the token| R[refresh rotation]
+    R -->|copied forward, like auth_time| R
+    L -->|2FA challenge| T["POST /login/2fa: remember field"]
+    T --> S[session]
+    S --> A["reauth / password change"]
+    A -->|read off the caller's own refresh cookie| S
+```
+
+- **Claim.** The refresh token carries `remember` only when a tier was ticked; absent means a
+  browser-session login. Rotation copies it (`carriedClaims` in `jwt.ts`) and hands the controller
+  `refreshMaxAgeMs: undefined` for a session login, so the rotated cookie stays a session cookie.
+- **2FA.** The password step answers a challenge and sets no cookie, so the box's value is asked
+  again: `POST /account/login/2fa` takes the same optional `remember` (`LoginTwoFactorRequest`).
+  ASP.NET Core Identity carries it the same way. An OAuth-originated challenge has no earlier
+  password step, so the 2FA request is the only place it can be said.
+- **Reauth and password change.** Both replace the session, so `reissueSession` reads the tier off
+  the request's own `jwt` cookie (signature only — a password change has already revoked the row)
+  and keeps it. No cookie, a stranger's cookie or an expired one all read as "no tier": a session
+  cookie, never a persistent one granted by accident.
+
 ## The signing key is a ring, not a single secret
 
 `NODE_TOKEN_ACCESS`/`NODE_TOKEN_REFRESH` are each an ordered, comma-separated list of secrets,
@@ -164,7 +205,9 @@ that changes on every use", so a copy presented after the original has moved is 
 
 The new token's absolute expiry is COPIED from the old one's own claim, never reset to a fresh full
 window — rotation changes the token's VALUE for theft detection, it does not extend how long the
-session may live past what it was granted at login.
+session may live past what it was granted at login. The "remember me" choice is copied forward too
+([above](#remember-me-unticked)): a rotation that dropped it would turn a session cookie persistent
+on the first refresh.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 32, 'rankSpacing': 46}}}%%

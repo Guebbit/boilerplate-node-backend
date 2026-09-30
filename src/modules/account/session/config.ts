@@ -20,38 +20,70 @@ export enum RefreshTokenExpiryTime {
 }
 
 /**
+ * Narrows the contract's wire literal (`'short' | 'medium' | 'long'`) to the enum the session
+ * code speaks. The generated request types carry plain literals, which a string enum won't accept.
+ *
+ * @param wire - the `remember` field of a request body, already schema-validated
+ * @returns the matching tier, `undefined` when the box was unticked
+ */
+export const toRememberTier = (
+    wire?: `${RefreshTokenExpiryTime}`
+): RefreshTokenExpiryTime | undefined =>
+    Object.values(RefreshTokenExpiryTime).find((tier) => tier === wire);
+
+/**
  * Each tier's env var and the number of seconds used when it is unset.
  *
  * The fallbacks exist so an unset variable cannot mean a TTL of zero, which would expire every
  * token the instant it is signed — a deployment that never sets these still issues usable ones.
  */
-const TOKEN_EXPIRY: Record<RefreshTokenExpiryTime | 'default', readonly [string, number]> = {
+const TOKEN_EXPIRY: Record<RefreshTokenExpiryTime, readonly [string, number]> = {
     [RefreshTokenExpiryTime.SHORT]: ['NODE_TOKEN_REFRESH_TIME_SHORT', 604_800],
     [RefreshTokenExpiryTime.MEDIUM]: ['NODE_TOKEN_REFRESH_TIME_MEDIUM', 2_592_000],
-    [RefreshTokenExpiryTime.LONG]: ['NODE_TOKEN_REFRESH_TIME_LONG', 31_536_000],
-    default: ['NODE_TOKEN_ACCESS_TIME', 600]
+    [RefreshTokenExpiryTime.LONG]: ['NODE_TOKEN_REFRESH_TIME_LONG', 31_536_000]
 };
 
 /**
- * Expiry time in seconds for the given token duration tier.
- * Falls back to `NODE_TOKEN_ACCESS_TIME` when no tier is given.
+ * Server-side lifetime in seconds of a REFRESH token.
  *
- * @param remember - optional tier (short/medium/long)
+ * No tier means the "remember me" box was left unticked (or there was none): the cookie is a
+ * browser-session one, but the token still needs a real limit — browsers restore session cookies,
+ * so the server TTL is the actual bound. That limit is the `short` tier.
+ *
+ * @param remember - the ticked tier, absent for a browser-session login
  * @returns seconds as integer, the tier's default if the env var is unset
  */
 export const getExpiryTime = (remember?: RefreshTokenExpiryTime) => {
-    const [environmentKey, fallback] = TOKEN_EXPIRY[remember ?? 'default'];
+    const [environmentKey, fallback] = TOKEN_EXPIRY[remember ?? RefreshTokenExpiryTime.SHORT];
     return environmentNumber(environmentKey, fallback);
 };
 
 /**
  * Millisecond wrapper around {@link getExpiryTime}.
  *
- * @param remember - optional tier
+ * @param remember - the ticked tier, absent for a browser-session login
  * @returns expiry in ms
  */
 export const getExpiryTimeMilliseconds = (remember?: RefreshTokenExpiryTime) =>
     getExpiryTime(remember) * 1000;
+
+/**
+ * Lifetime in seconds of an ACCESS token. Deliberately separate from {@link getExpiryTime}: an
+ * access token is short-lived whatever the session tier, so it must never inherit the refresh
+ * fallback.
+ *
+ * @returns seconds as integer, 600 if `NODE_TOKEN_ACCESS_TIME` is unset
+ */
+export const getAccessExpiryTime = () => environmentNumber('NODE_TOKEN_ACCESS_TIME', 600);
+
+/**
+ * The refresh cookie's `maxAge` for a login, or `undefined` for a browser-session cookie.
+ *
+ * @param remember - the ticked tier, absent when the box was unticked
+ * @returns milliseconds when the cookie must persist, otherwise `undefined` (no `Max-Age`)
+ */
+export const getCookieMaxAgeMilliseconds = (remember?: RefreshTokenExpiryTime) =>
+    remember ? getExpiryTimeMilliseconds(remember) : undefined;
 
 /**
  * Splits a ring env var on commas, newest first. A ring of one is just that value with no comma,

@@ -11,7 +11,7 @@
  * `session/key-ring.ts`.
  */
 
-import { sign } from 'jsonwebtoken';
+import { sign, decode } from 'jsonwebtoken';
 import type { SignOptions } from 'jsonwebtoken';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
@@ -21,12 +21,17 @@ import {
     createRefreshToken,
     createAccessToken,
     rotateRefreshToken,
+    rememberOfRefreshToken,
     TokenReuseError
 } from '@modules/account/session/jwt';
 import { runTokenCleanup } from '@modules/account/services';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { advanceDate, freezeDate } from '@tests/clock';
-import { RefreshTokenExpiryTime } from '@modules/account/session/config';
+import {
+    RefreshTokenExpiryTime,
+    getExpiryTime,
+    getExpiryTimeMilliseconds
+} from '@modules/account/session/config';
 import { keyId } from '@modules/account/session/key-ring';
 import { TokenType } from '@modules/users';
 import { hashToken } from '@modules/users';
@@ -363,6 +368,91 @@ describe('rotateRefreshToken', () => {
         await loaded!.save();
 
         await expect(rotateRefreshToken(refreshToken)).rejects.toThrow('User not found');
+    });
+
+    it('carries a ticked tier forward: persistent cookie, claim intact, remaining window', async () => {
+        const user = await createUser();
+        const refreshToken = await createRefreshToken(
+            String(user._id),
+            RefreshTokenExpiryTime.MEDIUM
+        );
+
+        const rotated = await rotateRefreshToken(refreshToken);
+
+        expect(decode(rotated.refreshToken)).toMatchObject({ remember: 'medium' });
+        expect(rotated.refreshMaxAgeMs).toBeGreaterThan(0);
+        expect(rotated.refreshMaxAgeMs).toBeLessThanOrEqual(
+            getExpiryTimeMilliseconds(RefreshTokenExpiryTime.MEDIUM)
+        );
+        // ...and the access token minted alongside carries it on to the next mint.
+        expect(decode(rotated.accessToken)).toMatchObject({ remember: 'medium' });
+    });
+
+    it('keeps a browser-session login a session login across TWO rotations', async () => {
+        const user = await createUser();
+        const refreshToken = await createRefreshToken(String(user._id));
+
+        const first = await rotateRefreshToken(refreshToken);
+        const second = await rotateRefreshToken(first.refreshToken);
+
+        for (const rotated of [first, second]) {
+            // `undefined`, not a number: the controller sets NO Max-Age for it.
+            expect(rotated.refreshMaxAgeMs).toBeUndefined();
+            expect(decode(rotated.refreshToken)).not.toHaveProperty('remember');
+        }
+    });
+
+    it('keeps the short-tier server limit on a rotated browser-session token', async () => {
+        const user = await createUser();
+        const refreshToken = await createRefreshToken(String(user._id));
+
+        const { refreshToken: rotated } = await rotateRefreshToken(refreshToken);
+
+        const { iat, exp } = decode(rotated) as { iat: number; exp: number };
+        expect(exp - iat).toBeLessThanOrEqual(getExpiryTime(RefreshTokenExpiryTime.SHORT));
+        expect(exp - iat).toBeGreaterThan(getExpiryTime(RefreshTokenExpiryTime.SHORT) - 5);
+    });
+});
+
+describe('rememberOfRefreshToken', () => {
+    it('reads the ticked tier off a refresh token naming the caller', async () => {
+        const user = await createUser();
+        const token = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.LONG);
+
+        await expect(rememberOfRefreshToken(token, String(user._id))).resolves.toBe(
+            RefreshTokenExpiryTime.LONG
+        );
+    });
+
+    it('answers undefined for a browser-session login', async () => {
+        const user = await createUser();
+        const token = await createRefreshToken(String(user._id));
+
+        await expect(rememberOfRefreshToken(token, String(user._id))).resolves.toBeUndefined();
+    });
+
+    it('answers undefined for a token naming somebody else', async () => {
+        const user = await createUser();
+        const token = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.LONG);
+
+        await expect(rememberOfRefreshToken(token, 'someone-else')).resolves.toBeUndefined();
+    });
+
+    it('answers undefined for no cookie, and for garbage, rather than rejecting', async () => {
+        await expect(rememberOfRefreshToken(undefined, 'anyone')).resolves.toBeUndefined();
+        await expect(rememberOfRefreshToken('not-a-jwt', 'anyone')).resolves.toBeUndefined();
+    });
+
+    it('still reads the tier after the token has been revoked, since it never asks the database', async () => {
+        // A password change revokes every session, THEN re-mints: the tier must outlive the row.
+        const user = await createUser();
+        const token = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.MEDIUM);
+        const loaded = await userRepository.findByIdWithCredentials(String(user._id));
+        await loaded!.tokenRemoveAll(TokenType.REFRESH);
+
+        await expect(rememberOfRefreshToken(token, String(user._id))).resolves.toBe(
+            RefreshTokenExpiryTime.MEDIUM
+        );
     });
 });
 

@@ -7,8 +7,6 @@
  */
 
 import type { Response } from 'express';
-import { type RefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './config';
-
 /**
  * Flags shared by every cookie this module treats as a credential — `createRefreshCookie`,
  * `destroyRefreshCookie`, and (via `../oauth/state.ts` and `../oauth/mfa-redirect.ts`) the
@@ -28,19 +26,17 @@ export const secureCookieOptions = () => ({
 /**
  * Set a secure httpOnly cookie containing the refresh token.
  *
- * @param remember - a tier (looked up against env), OR a raw `maxAge` in milliseconds — a
- *   rotated token carries its OWN remaining lifetime, copied
- *   forward from the token it replaced rather than any configured tier.
+ * @param maxAgeMs - how long the cookie persists, in milliseconds. `undefined` sets a
+ *   browser-session cookie (no `Max-Age`/`Expires`): the browser drops it on close, while the
+ *   token's own server-side TTL stays the real limit. A rotated token passes its OWN remaining
+ *   lifetime, copied forward from the token it replaced rather than any configured tier.
  */
-export const createRefreshCookie = (
-    response: Response,
-    token: string,
-    remember?: RefreshTokenExpiryTime | number
-) => {
+export const createRefreshCookie = (response: Response, token: string, maxAgeMs?: number) => {
     response.cookie('jwt', token, {
         ...secureCookieOptions(),
-        // Expires when the token does, rather than outliving it.
-        maxAge: typeof remember === 'number' ? remember : getExpiryTimeMilliseconds(remember)
+        // Express: `maxAge` undefined emits no `Max-Age`/`Expires`, i.e. a session cookie.
+        // https://expressjs.com/en/api.html#res.cookie
+        maxAge: maxAgeMs
     });
 };
 
@@ -55,16 +51,13 @@ export const destroyRefreshCookie = (response: Response) => {
 /**
  * Non-secure UI-hint cookie indicating logged-in state.
  *
- * @param remember - a tier, or a raw `maxAge` in milliseconds — see `createRefreshCookie`, which
- *   this is always set alongside with the same value.
+ * @param maxAgeMs - milliseconds, or `undefined` for a browser-session cookie — see
+ *   `createRefreshCookie`, which this is always set alongside with the same value.
  */
-export const createLoggedCookie = (
-    response: Response,
-    remember?: RefreshTokenExpiryTime | number
-) => {
+export const createLoggedCookie = (response: Response, maxAgeMs?: number) => {
     response.cookie('isAuth', 'true', {
         // No `httpOnly`/`secure`: this cookie holds no credential, only a hint the client may read.
-        maxAge: typeof remember === 'number' ? remember : getExpiryTimeMilliseconds(remember),
+        maxAge: maxAgeMs,
         sameSite: 'lax',
         path: '/'
     });

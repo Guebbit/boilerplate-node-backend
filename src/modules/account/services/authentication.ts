@@ -38,7 +38,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
-import { rotateRefreshToken, TokenReuseError } from '../session/jwt';
+import { rotateRefreshToken, TokenReuseError, type RotatedSession } from '../session/jwt';
 import { assignDefaultRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
@@ -267,7 +267,7 @@ class MissingRefreshTokenError extends Error {
 export const refreshAccessToken = (
     refreshToken: string | undefined,
     context: CallerContext
-): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
+): Promise<RotatedSession> =>
     (refreshToken
         ? rotateRefreshToken(refreshToken)
         : Promise.reject(new MissingRefreshTokenError())
