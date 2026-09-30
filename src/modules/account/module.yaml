@@ -1,3 +1,4 @@
+summary: 'Who is making this request: signup, login, sessions, two-factor, OAuth and the account lifecycle.'
 subdomain: generic
 group: foundation
 dependsOn:

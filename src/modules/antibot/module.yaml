@@ -1,3 +1,8 @@
+summary: 'The human-challenge port, and the endpoint that tells a frontend which provider is active.'
 subdomain: generic
 group: foundation
 dependsOn: []
+noAudit: 'Issues and verifies a stateless challenge to a caller who has no account or resource yet, so there is no subject an audit row could name. A spent budget is already audited by rate-limit.'
+frontend:
+    counterparts: []
+    why: 'It has no screen of its own: whichever form is guarded (signup, reset, contact) calls `POST /antibot/challenge` and attaches the solved headers inline, in the frontend module that owns that form.'

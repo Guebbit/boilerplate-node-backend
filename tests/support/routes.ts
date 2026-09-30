@@ -446,3 +446,16 @@ export const guardsOn = (router: Router, signature: string): string[] => {
  */
 export const chainOf = (router: Router, signature: string): string[] =>
     routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
+/**
+ * The routed modules of a registry, keyed by module name.
+ * @param modules - the registry to read: the real one, or a virtual one in a test
+ * @returns name to router, for every module that declares `routes`
+ */
+export const routedModulesOf = (
+    modules: readonly { name: string; routes?: Router }[]
+): Record<string, Router> =>
+    Object.fromEntries(
+        modules.flatMap((appModule) =>
+            appModule.routes ? [[appModule.name, appModule.routes] as const] : []
+        )
+    );

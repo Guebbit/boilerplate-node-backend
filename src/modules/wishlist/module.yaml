@@ -1,6 +1,8 @@
+summary: 'Saved products, one list per user. The smallest shop domain.'
 subdomain: supporting
 group: shop
 dependsOn:
     - cart # move-to-cart writes a line
     - products # a saved line is meaningless without one
     - users # the list belongs to an account
+noAudit: 'Saves and unsaves product references: low-stakes user data with no money, no stock and no identity attached.'

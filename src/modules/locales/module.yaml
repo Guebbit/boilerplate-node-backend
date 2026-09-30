@@ -1,3 +1,4 @@
+summary: "Language discovery and the API's own message dictionary."
 subdomain: generic
 group: foundation
 dependsOn: []

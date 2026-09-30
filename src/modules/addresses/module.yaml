@@ -1,4 +1,9 @@
+summary: "The address book, its own module so the cart's checkout can reach it without importing account."
 subdomain: supporting
 group: foundation
 dependsOn:
     - users # USER_DELETED, to clear an erased account's book — never a service call
+noAudit: "Edits the caller's own address book: your own data, no money, no stock, no identity beyond the caller."
+frontend:
+    counterparts: [account]
+    why: "The address book's own screen lives in the frontend's account module, alongside the profile, the same URL prefix `account` and `addresses` share on the backend."

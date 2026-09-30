@@ -1,143 +1,76 @@
 /**
  * Every domain here names the module that answers it in `boilerplate-vue-frontend`.
  *
- * Fourteen of nineteen domains exist on both sides under the same name. The other five don't —
- * `access` because it is routeless and has no screen of its own to have, `antibot` for the same
- * reason, `addresses` and `invoicing` because their own screens live inside a sibling's frontend
- * module (`account`, `orders`), and `audit-logs` because it shares the frontend's `observability`
- * screen with the backend module of that same name. An asymmetry that is real architecture rather
- * than drift, and that is written down nowhere else in either repository.
+ * Most domains exist on both sides under the same name, which needs no entry anywhere. The ones
+ * that do not carry a `frontend:` block in their own `module.yaml` (`counterparts`, plus a `why`):
+ * `access` and `antibot` because they have no screen of their own, `addresses` and `invoicing`
+ * because their screens live inside a sibling's frontend module, and `audit-logs` because it
+ * shares the frontend's `observability` screen. An asymmetry that is real architecture rather
+ * than drift.
  *
- * STATED, NOT DERIVED. A name matcher would call `audit-logs` unpaired, which is exactly the wrong
- * answer: the trail lives here, the endpoint that reads it belongs to `observability`, and the
- * screen that renders it is the frontend's `observability` module. Two backend names, one screen.
+ * STATED, NOT DERIVED FROM NAMES. A name matcher would call `audit-logs` unpaired, which is
+ * exactly the wrong answer: the trail lives here, the endpoint that reads it belongs to
+ * `observability`, and the screen that renders it is the frontend's `observability` module. The
+ * statement lives beside the module it describes, so adding or deleting a module edits nothing
+ * here.
  *
- * TWO HALVES, AND NEITHER WORKS WITHOUT `FRONTEND_PATH`. The cases against this repo hold the map
- * to the modules here: an added module with no entry, an entry for a module that is gone. On their
- * own they would be a completeness check on a hand-written list — they cannot notice the FRONTEND
- * renaming `admin`, dropping `realtime` or adding a module, which is most of the drift the map
- * exists to catch. So the second half reads the sibling checkout and holds the names to what is
- * actually over there, in both directions.
+ * TWO HALVES. The first holds each `frontend:` block to its own rule: a counterpart that is not
+ * simply the module's own name has to carry its reason. The second reads the sibling checkout and
+ * holds the names to what is actually over there, in both directions — it is the half that can
+ * notice the FRONTEND renaming `admin`, dropping `realtime` or adding a module.
  *
- * Both halves are conditional on `FRONTEND_PATH` (G-D5): a deployment with no paired frontend at
- * all owes this table nothing, and says so out loud rather than passing quietly — the same bargain
+ * The second half is conditional on `FRONTEND_PATH` (G-D5): a deployment with no paired frontend
+ * at all owes it nothing, and says so out loud rather than passing quietly — the same bargain
  * `tests/unit/scripts/pairing/spec-identity.test.ts` makes, for the same reason: a guard that
  * evaporates in silence is worse than one that is visibly absent.
- *
- * `why` is prose for a reader, on the entries where the counterpart is not simply the same name and
- * a reader could not guess. Nothing asserts its shape: a sentence held to a regex is a sentence
- * nobody has to mean.
  *
  * See: docs/modules/index.md#the-two-repositories
  */
 
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import { enabledModules } from '../../src/modules';
+import {
+    frontendCounterparts,
+    readAllModuleDescriptors
+} from '../../scripts/docs/module-descriptor';
+import { MODULES_ROOT } from '@tests/paths';
 import { resolveFrontendPath } from '../../scripts/pairing/paired-frontend-path';
 
-/** One module's counterpart in `boilerplate-vue-frontend`. */
-interface Pairing {
-    /** Frontend module names that cover this domain. Empty means nothing over there does. */
-    counterparts: readonly string[];
-    /** Required when the names differ or the list is empty. One sentence, present tense. */
-    why?: string;
-}
-
-const FRONTEND_PAIRING: Readonly<Partial<Record<string, Pairing>>> = {
-    access: {
-        counterparts: [],
-        why: "Routeless — tenants and memberships back every other module's auth resolution, but nothing renders a screen for them directly; role assignment happens through the frontend's own users/account admin views."
-    },
-    account: { counterparts: ['account'] },
-    addresses: {
-        counterparts: ['account'],
-        why: "The address book's own screen lives in the frontend's account module, alongside the profile — same URL prefix, same reason `account` and `addresses` share `/account` on the backend."
-    },
-    antibot: {
-        counterparts: [],
-        why: 'It has no screen of its own — whichever form is guarded (signup, reset, contact) calls `POST /antibot/challenge` and attaches the solved headers inline, in the frontend module that owns that form.'
-    },
-    'api-keys': { counterparts: ['api-keys'] },
-    'audit-logs': {
-        counterparts: ['observability'],
-        why: "Two endpoints read the one trail this module owns — its own `GET /audit` for a shop's staff, `observability`'s `GET /observability/audit` for the platform operator — and both render in the frontend's `observability` module."
-    },
-    cart: { counterparts: ['cart'] },
-    delivery: { counterparts: ['delivery'] },
-    feedback: { counterparts: ['feedback'] },
-    inventory: { counterparts: ['inventory'] },
-    invoicing: {
-        counterparts: ['orders'],
-        why: "It has no screen of its own — `GET /orders/{id}/invoice` and `/credit-notes` are two buttons on the frontend's own Order.vue, gated on the order's `actions.invoice` flag, the same as any other conditional order action."
-    },
-    locales: { counterparts: ['locales'] },
-    observability: { counterparts: ['observability'] },
-    orders: { counterparts: ['orders'] },
-    payments: { counterparts: ['payments'] },
-    products: { counterparts: ['products'] },
-    returns: { counterparts: ['returns'] },
-    users: { counterparts: ['users'] },
-    webhooks: { counterparts: ['webhooks'] },
-    wishlist: { counterparts: ['wishlist'] }
-};
+/** Every module's descriptor, read off disk. */
+const DESCRIPTORS = readAllModuleDescriptors(MODULES_ROOT);
 
 /** Frontend modules with no backend module at all, and what they pair with instead. */
 const FRONTEND_ONLY: Readonly<Record<string, string>> = {
     demo: 'A client-side showcase of the shared UI kit. It pairs with the demo profile and the seeded dataset rather than with any single domain.'
 };
 
-const moduleNames = (): string[] => enabledModules.map((appModule) => appModule.name);
-
-/**
- * Whether someone named a paired checkout at all, and so expects the pairing table — and the
- * live cross-repo cases below it — to actually be kept up to date.
- *
- * Not `CI`: the pipeline's cross-repo guard is the `spec-identity` job, which checks the sibling out
- * and fails on its own when it cannot — see `tests/unit/scripts/pairing/spec-identity.test.ts` for
- * the same reasoning at more length. Failing here as well only made a job that clones one repo red
- * for something it had no way to check.
- *
- * G-D5: an adopter who has stripped the frontend pairing out of this deployment entirely (no
- * `FRONTEND_PATH`) owes this hand-maintained table nothing — maintaining a list for a sibling
- * repo that no longer exists is exactly the policing this decision drops.
- */
-const siblingExpected = Boolean(process.env.FRONTEND_PATH?.trim());
-
 describe('the two repositories, module by module', () => {
     it('finds the modules it means to check', () => {
-        expect(moduleNames().length).toBeGreaterThan(0);
+        expect(Object.keys(DESCRIPTORS).length).toBeGreaterThan(0);
     });
 
-    it('gives every module here an entry, or the table is knowingly unmaintained', () => {
-        const missing = moduleNames().filter((name) => !FRONTEND_PAIRING[name]);
+    it('gives a reason wherever the counterpart is not simply the same name', () => {
+        const unexplained = Object.entries(DESCRIPTORS)
+            .filter(([name, descriptor]) => {
+                const counterparts = frontendCounterparts(name, descriptor);
+                const sameName = counterparts.length === 1 && counterparts[0] === name;
+                return !sameName && !descriptor.frontend?.why;
+            })
+            .map(([name]) => name);
 
-        if (!siblingExpected && missing.length > 0) {
-            // eslint-disable-next-line no-console -- the skip warning must reach a terminal with no logger configured
-            console.warn(
-                `⚠️  Frontend pairing table incomplete (no FRONTEND_PATH): ${missing.join(', ')} have no entry.`
-            );
-            return;
-        }
-
-        expect(missing).toEqual([]);
-    });
-
-    it('names no module that is not enabled, or the table is knowingly unmaintained', () => {
-        const enabled = new Set(moduleNames());
-        const stale = Object.keys(FRONTEND_PAIRING).filter((name) => !enabled.has(name));
-
-        if (!siblingExpected && stale.length > 0) {
-            // eslint-disable-next-line no-console -- the skip warning must reach a terminal with no logger configured
-            console.warn(
-                `⚠️  Frontend pairing table stale (no FRONTEND_PATH): ${stale.join(', ')} name a disabled module.`
-            );
-            return;
-        }
-
-        expect(stale).toEqual([]);
+        expect(unexplained).toEqual([]);
     });
 });
+
+/**
+ * Whether someone named a paired checkout at all, and so expects the live cross-repo cases below
+ * to actually run.
+ *
+ * Not `CI`: the pipeline's cross-repo guard is the `spec-identity` job, which checks the sibling out
+ * and fails on its own when it cannot — see `tests/unit/scripts/pairing/spec-identity.test.ts`.
+ * G-D5: an adopter who stripped the frontend pairing (no `FRONTEND_PATH`) owes it nothing.
+ */
+const siblingExpected = Boolean(process.env.FRONTEND_PATH?.trim());
 
 /*
  * The live pair. Everything above is about this repo's list; everything below is about whether the
@@ -156,7 +89,9 @@ const frontendModules = (): string[] =>
 /** Every frontend name this map claims exists, counterparts and stand-alones together. */
 const claimedNames = (): string[] => [
     ...new Set([
-        ...Object.values(FRONTEND_PAIRING).flatMap((pairing) => [...(pairing?.counterparts ?? [])]),
+        ...Object.entries(DESCRIPTORS).flatMap(([name, descriptor]) =>
+            frontendCounterparts(name, descriptor)
+        ),
         ...Object.keys(FRONTEND_ONLY)
     ])
 ];

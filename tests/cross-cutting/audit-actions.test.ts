@@ -19,39 +19,24 @@
  *      silence.
  *   4. **Coverage, not just shape.** The three checks above only ever see what a module declares —
  *      a module that should audit something and doesn't looks identical to one that legitimately
- *      has nothing to record. `EXPECTED_NON_AUDITING` below is the explicit, reviewed answer for
- *      the modules where that absence is a decision rather than an oversight — its own comment
- *      gives the reasoning per module, and docs/modules/audit-logs.md has the wider picture.
+ *      has nothing to record. A module's `module.yaml#noAudit` is the explicit, reviewed answer for
+ *      the modules where that absence is a decision rather than an oversight — it holds the
+ *      reason, and docs/modules/audit-logs.md has the wider picture.
  */
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { readAllModuleDescriptors } from '../../scripts/docs/module-descriptor';
 import { MODULES_ROOT } from '@tests/paths';
 
 /**
- * Modules that deliberately emit no audit action at all.
- *
- * `audit-logs` owns and reads the trail — it is the destination, not a writer. `observability` is
- * infrastructure (health, metrics, the audit read endpoint, the SSE stream) and records nothing of
- * its own. `wishlist` saves and unsaves product references — low-stakes user data with no money,
- * no stock and no identity attached. `antibot` issues and verifies a stateless challenge to a
- * caller who, by construction, has no account and no resource yet — there is no subject an audit
- * row could name. A refusal is already visible where it matters: `rate-limit.ts`'s own limiters
- * audit a spent budget, and a burst of solved-but-refused challenges is exactly that shape.
- * `addresses` edits the caller's own book — the same "your own thing" shape as `wishlist` — and
- * was never audited while it still lived inside `account`; nothing about the move changes that.
- * `invoicing` never receives an actor-driven write at all: both its documents are frozen from a
- * domain event (`ORDER_STATUS_CHANGED`, `PAYMENT_REFUNDED`), a system reaction to a decision
- * `orders`/`payments` already audited under their own action — its two routes are GETs.
+ * Modules that deliberately emit no audit action at all — the ones whose own `module.yaml`
+ * carries a `noAudit` reason. The decision and its reasoning live beside the module, so adding
+ * or deleting one never edits this file.
  */
-const EXPECTED_NON_AUDITING: string[] = [
-    'addresses',
-    'antibot',
-    'audit-logs',
-    'invoicing',
-    'observability',
-    'wishlist'
-];
+const EXPECTED_NON_AUDITING: string[] = Object.entries(readAllModuleDescriptors(MODULES_ROOT))
+    .filter(([, descriptor]) => descriptor.noAudit !== undefined)
+    .map(([name]) => name);
 
 /** Every directory under `src/modules/`. */
 const moduleFolders = (): string[] =>
@@ -138,7 +123,7 @@ describe('audit actions across modules', () => {
             .filter((folder) => !EXPECTED_NON_AUDITING.includes(folder))
             .map(
                 (folder) =>
-                    `${folder}: no audit.ts and not in EXPECTED_NON_AUDITING — decide whether it should audit`
+                    `${folder}: no audit.ts and has no noAudit reason in its module.yaml — decide whether it should audit`
             );
 
         expect(unaccounted).toEqual([]);
@@ -147,8 +132,8 @@ describe('audit actions across modules', () => {
     it('keeps the non-auditing list free of modules that started auditing', () => {
         const auditing = new Set(listAuditFiles().map(({ module }) => module));
 
-        // A listed module that no longer exists is not stale: deleting a module (`demo:remove`)
-        // must not force an edit to this list, and an entry for an absent folder grants nothing.
+        // The list is read off the modules that exist, so a deleted module drops out with its own
+        // `module.yaml` — nothing to keep in step.
         const stale = EXPECTED_NON_AUDITING.filter((module) => auditing.has(module));
 
         expect(stale).toEqual([]);

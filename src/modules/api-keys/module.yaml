@@ -1,3 +1,4 @@
+summary: 'Long-lived programmatic credentials, scoped to the same permission model a session uses.'
 subdomain: generic
 group: foundation
 dependsOn:

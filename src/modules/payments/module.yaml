@@ -1,3 +1,4 @@
+summary: "An order's money, behind a provider port."
 subdomain: supporting
 group: shop
 dependsOn:

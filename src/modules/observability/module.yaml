@@ -1,4 +1,6 @@
+summary: "Health, metrics, the platform operator's audit read and the SSE stream."
 subdomain: generic
 group: foundation
 dependsOn:
     - audit-logs # GET /observability/audit
+noAudit: 'Infrastructure (health, metrics, the audit read, the SSE stream) that records nothing of its own.'

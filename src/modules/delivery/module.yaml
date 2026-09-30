@@ -1,3 +1,4 @@
+summary: "Shipping rates as pure rules, and the staff doors that record a parcel's handover and arrival."
 subdomain: supporting
 group: shop
 dependsOn:
