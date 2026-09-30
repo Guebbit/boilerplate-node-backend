@@ -5,7 +5,7 @@
  * (2 decimals) unless it is specifically about a currency's own minor-unit exponent — that's its
  * own describe block at the end, JPY (0 decimals) and KWD (3 decimals) against the same basket.
  */
-import { orderTaxBreakdown, type TaxableLineItem } from '../../domain/tax';
+import { lineTaxFromRateTotals, orderTaxBreakdown, type TaxableLineItem } from '../../domain/tax';
 
 /** A line as `orderTaxBreakdown` actually receives one: raw aggregate output, loosely typed. */
 const line = (price: number, quantity: number, taxRate: number): TaxableLineItem => ({
@@ -397,5 +397,121 @@ describe("orderTaxBreakdown — each currency's own minor-unit exponent", () => 
         expect(eur.shippingTaxAmount).toBeCloseTo(0.9, 6);
         expect(jpy.shippingTaxAmount).toBe(1);
         expect(Number.isInteger(jpy.shippingTaxAmount)).toBe(true);
+    });
+});
+
+describe('orderTaxBreakdown — VAT rounded once per rate (EN 16931 BR-CO-17), worked examples', () => {
+    it('three 0.10 lines at 22%: 0.05 of VAT, not the 0.06 that per-line rounding gives', () => {
+        // Per line: round(10 x 0.22/1.22) = round(1.803) = 2, so 3 lines would sum to 6 cents.
+        // Per rate: gross 30 -> round(30 x 0.22/1.22) = round(5.409) = 5 cents, once.
+        const breakdown = orderTaxBreakdown({
+            items: [line(0.1, 1, 0.22), line(0.1, 1, 0.22), line(0.1, 1, 0.22)],
+            currency: 'EUR'
+        });
+
+        expect(breakdown.taxTotal).toBe(0.05);
+        expect(breakdown.netTotal).toBe(0.25);
+        expect(breakdown.taxSummary).toEqual([
+            { rate: 0.22, netAmount: 0.25, taxAmount: 0.05, grossAmount: 0.3 }
+        ]);
+    });
+
+    it("spreads the rate's one figure over its lines, so the lines still add up to it exactly", () => {
+        // 5 cents over three equal 10-cent lines: floor gives 1 each, the 2 left over go to the
+        // first of the equal weights -> [3, 1, 1]. Nets follow: 10 - tax.
+        const breakdown = orderTaxBreakdown({
+            items: [line(0.1, 1, 0.22), line(0.1, 1, 0.22), line(0.1, 1, 0.22)],
+            currency: 'EUR'
+        });
+
+        expect(breakdown.lines.map((row) => row.taxAmount)).toEqual([0.03, 0.01, 0.01]);
+        expect(breakdown.lines.map((row) => row.netAmount)).toEqual([0.07, 0.09, 0.09]);
+    });
+
+    it('mixed rates with shipping: each rate rounds once, on its goods AND its shipping share', () => {
+        // Goods: 19.90 x 2 at 22% (3980 cents), 5.50 x 3 at 10% (1650). Shipping 6.00 = 600.
+        // Shipping by gross weight: floor(600 x 3980/5630) = 424, floor(600 x 1650/5630) = 175,
+        // the 1 cent left over goes to the heavier line -> 425 and 175.
+        // 22%: taxable 3980 + 425 = 4405 -> round(4405 x 0.22/1.22) = round(794.36) = 794.
+        //   Split goods/shipping by weight: 718 / 76 (the odd cent to the heavier, goods).
+        // 10%: taxable 1650 + 175 = 1825 -> round(1825 x 0.1/1.1) = round(165.91) = 166.
+        //   Split: 151 / 15.
+        const breakdown = orderTaxBreakdown({
+            items: [line(19.9, 2, 0.22), line(5.5, 3, 0.1)],
+            shippingCost: 6,
+            currency: 'EUR'
+        });
+
+        expect(breakdown.taxSummary).toEqual([
+            { rate: 0.1, netAmount: 16.59, taxAmount: 1.66, grossAmount: 18.25 },
+            { rate: 0.22, netAmount: 36.11, taxAmount: 7.94, grossAmount: 44.05 }
+        ]);
+        expect(breakdown.shippingByRate).toEqual([
+            { rate: 0.1, netAmount: 1.6, taxAmount: 0.15, grossAmount: 1.75 },
+            { rate: 0.22, netAmount: 3.49, taxAmount: 0.76, grossAmount: 4.25 }
+        ]);
+        expect(breakdown.lines).toEqual([
+            { taxAmount: 7.18, netAmount: 32.62, grossAmount: 39.8 },
+            { taxAmount: 1.51, netAmount: 14.99, grossAmount: 16.5 }
+        ]);
+        expect(breakdown.netTotal).toBe(47.61);
+        expect(breakdown.shippingNetAmount).toBe(5.09);
+        expect(breakdown.shippingTaxAmount).toBe(0.91);
+        expect(breakdown.taxTotal).toBe(9.6);
+        // Reconciles to what was charged: 39.80 + 16.50 + 6.00.
+        expect(breakdown.netTotal + breakdown.shippingNetAmount + breakdown.taxTotal).toBeCloseTo(
+            62.3,
+            6
+        );
+    });
+
+    it('a zero-rated line carries no VAT and shares no rate with a taxed one', () => {
+        const breakdown = orderTaxBreakdown({
+            items: [line(10, 1, 0), line(10, 1, 0.22)],
+            currency: 'EUR'
+        });
+
+        expect(breakdown.taxSummary).toEqual([
+            { rate: 0, netAmount: 10, taxAmount: 0, grossAmount: 10 },
+            { rate: 0.22, netAmount: 8.2, taxAmount: 1.8, grossAmount: 10 }
+        ]);
+    });
+
+    it('JPY, no minor unit: three 105-yen lines at 8% owe 23 yen, not the 24 per-line rounding gives', () => {
+        // Per line round(105 x 0.08/1.08) = round(7.78) = 8, x3 = 24. Per rate: gross 315 ->
+        // round(23.33) = 23.
+        const breakdown = orderTaxBreakdown({
+            items: [line(105, 1, 0.08), line(105, 1, 0.08), line(105, 1, 0.08)],
+            currency: 'JPY'
+        });
+
+        expect(breakdown.taxTotal).toBe(23);
+        expect(breakdown.netTotal).toBe(292);
+    });
+
+    it('KWD, thousandths: three 0.101 lines at 22% owe 0.055, not the 0.054 per-line rounding gives', () => {
+        // Per line round(101 x 0.22/1.22) = round(18.21) = 18, x3 = 54 fils. Per rate: gross 303
+        // -> round(54.64) = 55 fils.
+        const breakdown = orderTaxBreakdown({
+            items: [line(0.101, 1, 0.22), line(0.101, 1, 0.22), line(0.101, 1, 0.22)],
+            currency: 'KWD'
+        });
+
+        expect(breakdown.taxTotal).toBe(0.055);
+        expect(breakdown.netTotal).toBe(0.248);
+    });
+});
+
+describe('lineTaxFromRateTotals — an issued document re-derives its lines from frozen rate totals', () => {
+    it("spreads each rate's frozen goods VAT over that rate's lines, leaving unlisted rates at zero", () => {
+        // 22% goods VAT frozen as 0.05 over three 0.10 lines; the 0% line is not in the map.
+        const lines = lineTaxFromRateTotals(
+            [line(0.1, 1, 0.22), line(0.1, 1, 0.22), line(0.1, 1, 0.22), line(1, 1, 0)],
+            'EUR',
+            new Map([[0.22, 0.05]])
+        );
+
+        expect(lines.map((row) => row.taxAmount)).toEqual([0.03, 0.01, 0.01, 0]);
+        expect(lines.map((row) => row.netAmount)).toEqual([0.07, 0.09, 0.09, 1]);
     });
 });
