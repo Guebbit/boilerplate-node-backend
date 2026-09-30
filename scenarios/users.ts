@@ -33,7 +33,12 @@ import {
     SEED_TWO_FACTOR_BACKUP_CODES,
     SEED_PENDING_EMAIL_ID,
     SEED_PENDING_EMAIL_TARGET,
-    SEED_BANNED_ID
+    SEED_BANNED_ID,
+    seedStaffCredentials,
+    SEED_MANAGER_ID,
+    SEED_WAREHOUSE_ID,
+    SEED_SUPPORT_ID,
+    SEED_OPERATOR_ID
 } from '@scenarios/accounts';
 import { generateBackupCodeSalt, hashBackupCodes } from '@modules/account/two-factor/backup-codes';
 import userImages from './users-images.generated.json';
@@ -128,6 +133,27 @@ const personaUsers = [
 ];
 
 /**
+ * The four staff accounts — three shop roles and a platform-only operator. Verified, because each
+ * exists to be logged into; the role itself is a membership, assigned by `seedAccessModel`.
+ */
+const staffUsers = (
+    [
+        { name: 'manager', id: SEED_MANAGER_ID },
+        { name: 'warehouse', id: SEED_WAREHOUSE_ID },
+        { name: 'support', id: SEED_SUPPORT_ID },
+        { name: 'operator', id: SEED_OPERATOR_ID }
+    ] as const
+).map(({ name, id }) =>
+    makeUser({
+        id,
+        username: name,
+        ...seedStaffCredentials[name],
+        verifiedAt: new Date(),
+        ...userImages.root
+    })
+);
+
+/**
  * The test-critical accounts — one per role a person actually logs in as. Exported so the
  * `blank` scenario ({@link seedNamedUsersCollection}) can seed exactly these and none of the
  * filler customer base below — `blank` has no shop for a customer to shop in.
@@ -175,7 +201,8 @@ export const namedUsers = [
         verifiedAt: new Date(),
         ...userImages.root
     }),
-    ...personaUsers
+    ...personaUsers,
+    ...staffUsers
 ];
 
 /**

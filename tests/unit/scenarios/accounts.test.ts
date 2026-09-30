@@ -111,6 +111,12 @@ describe('seedCredentials', () => {
             expect(satisfiesPolicy(seedCredentials[persona].password)).toBe(true);
     });
 
+    it('publishes the four staff accounts, each with a login the policy accepts', () => {
+        for (const staff of ['manager', 'warehouse', 'support', 'operator'] as const)
+            expect(satisfiesPolicy(seedCredentials[staff].password)).toBe(true);
+        expect(seedCredentials.operator.email).toBe('operator@example.com');
+    });
+
     it('publishes the two-factor persona’s backup codes beside its login', () => {
         expect(seedCredentials.twoFactor.backupCodes).toEqual(SEED_TWO_FACTOR_BACKUP_CODES);
     });

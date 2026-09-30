@@ -33,6 +33,15 @@ export const SEED_TWO_FACTOR_ID = '65df1a2b3c4d5e6f7a8b9c11';
 export const SEED_PENDING_EMAIL_ID = '65df1a2b3c4d5e6f7a8b9c12';
 export const SEED_BANNED_ID = '65df1a2b3c4d5e6f7a8b9c13';
 
+/**
+ * The four staff accounts: three shop roles (manager, warehouse, support) and a platform-only
+ * operator. Each holds exactly one role, so a journey can log in as it and see what that role sees.
+ */
+export const SEED_MANAGER_ID = '65df1a2b3c4d5e6f7a8b9c20';
+export const SEED_WAREHOUSE_ID = '65df1a2b3c4d5e6f7a8b9c21';
+export const SEED_SUPPORT_ID = '65df1a2b3c4d5e6f7a8b9c22';
+export const SEED_OPERATOR_ID = '65df1a2b3c4d5e6f7a8b9c23';
+
 /** The demo owner's login email. */
 export const SEED_ADMIN_EMAIL = 'root@root.it';
 
@@ -74,6 +83,12 @@ export const SEED_TWO_FACTOR_EMAIL = 'two-factor@example.com';
 export const SEED_PENDING_EMAIL_EMAIL = 'pending-email@example.com';
 export const SEED_BANNED_EMAIL = 'banned@example.com';
 
+/** Login emails of the staff accounts — see {@link SEED_MANAGER_ID}. */
+export const SEED_MANAGER_EMAIL = 'manager@example.com';
+export const SEED_WAREHOUSE_EMAIL = 'warehouse@example.com';
+export const SEED_SUPPORT_EMAIL = 'support@example.com';
+export const SEED_OPERATOR_EMAIL = 'operator@example.com';
+
 /** The address the pending-email persona asked to move to, and has not yet confirmed. */
 export const SEED_PENDING_EMAIL_TARGET = 'pending-new-address@example.com';
 
@@ -90,7 +105,7 @@ export const SEED_TWO_FACTOR_BACKUP_CODES = [
     'e0f1a2b3c4'
 ] as const;
 
-/** The persona accounts' passwords, read once — see {@link seedPasswordsConfig}. */
+/** The persona and staff accounts' passwords, read once — see {@link seedPasswordsConfig}. */
 const personaPasswords = seedPasswordsConfig();
 
 /** The logins for the persona accounts, by the name a spec asks for. */
@@ -112,13 +127,28 @@ export const seedPersonaCredentials = {
     banned: { email: SEED_BANNED_EMAIL, password: personaPasswords.NODE_SEED_BANNED_PASSWORD }
 } as const;
 
+/** The logins for the staff accounts, by the name a spec asks for. */
+export const seedStaffCredentials = {
+    manager: { email: SEED_MANAGER_EMAIL, password: personaPasswords.NODE_SEED_MANAGER_PASSWORD },
+    warehouse: {
+        email: SEED_WAREHOUSE_EMAIL,
+        password: personaPasswords.NODE_SEED_WAREHOUSE_PASSWORD
+    },
+    support: { email: SEED_SUPPORT_EMAIL, password: personaPasswords.NODE_SEED_SUPPORT_PASSWORD },
+    operator: {
+        email: SEED_OPERATOR_EMAIL,
+        password: personaPasswords.NODE_SEED_OPERATOR_PASSWORD
+    }
+} as const;
+
 /** The logins for the demo accounts. */
 export const seedCredentials = {
     admin: { email: SEED_ADMIN_EMAIL, password: SEED_ADMIN_PASSWORD },
     user: { email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD },
     editor: { email: SEED_EDITOR_EMAIL, password: SEED_EDITOR_PASSWORD },
     moderator: { email: SEED_MODERATOR_EMAIL, password: SEED_MODERATOR_PASSWORD },
-    ...seedPersonaCredentials
+    ...seedPersonaCredentials,
+    ...seedStaffCredentials
 } as const;
 
 /**
@@ -145,7 +175,12 @@ export const seedAccessModel = (): Promise<void> =>
                     SEED_TWO_FACTOR_ID,
                     SEED_PENDING_EMAIL_ID,
                     SEED_BANNED_ID
-                ].map((id) => assignRole(id, String(tenant._id), 'tenant', 'customer'))
+                ].map((id) => assignRole(id, String(tenant._id), 'tenant', 'customer')),
+                assignRole(SEED_MANAGER_ID, String(tenant._id), 'tenant', 'manager'),
+                assignRole(SEED_WAREHOUSE_ID, String(tenant._id), 'tenant', 'warehouse'),
+                assignRole(SEED_SUPPORT_ID, String(tenant._id), 'tenant', 'support'),
+                // Platform role only: no shop membership, so it holds no shop's keys.
+                assignRole(SEED_OPERATOR_ID, null, 'platform', 'operator')
             ])
         )
         .then(() => undefined);

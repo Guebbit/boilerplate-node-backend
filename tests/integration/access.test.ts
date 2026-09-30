@@ -17,6 +17,10 @@ import {
     SEED_USER_ID,
     SEED_EDITOR_ID,
     SEED_MODERATOR_ID,
+    SEED_MANAGER_ID,
+    SEED_WAREHOUSE_ID,
+    SEED_SUPPORT_ID,
+    SEED_OPERATOR_ID,
     seedAccessModel
 } from '@scenarios/accounts';
 import { userRepository } from '@modules/users/tests/factories';
@@ -57,6 +61,23 @@ describe('the seeded model', () => {
         expect(customer?.role).toBe('customer');
         expect(editor?.role).toBe('editor');
         expect(moderator?.role).toBe('moderator');
+    });
+
+    it('gives each staff account its one shop role, and the operator no shop at all', async () => {
+        await seedAccessModel();
+
+        const shopRoles = await Promise.all(
+            [SEED_MANAGER_ID, SEED_WAREHOUSE_ID, SEED_SUPPORT_ID].map((id) =>
+                membershipIn(id, DEPLOYMENT_TENANT_ID, 'tenant')
+            )
+        );
+        expect(shopRoles.map((one) => one?.role)).toEqual(['manager', 'warehouse', 'support']);
+
+        // A pure platform operator holds no shop's keys — that is what separates it from the admin.
+        const operatorMemberships = await membershipsOf(SEED_OPERATOR_ID);
+        expect(operatorMemberships.map((one) => ({ scope: one.scope, role: one.role }))).toEqual([
+            { scope: 'platform', role: 'operator' }
+        ]);
     });
 
     it('is idempotent, so a re-seed of a live database changes nothing', async () => {

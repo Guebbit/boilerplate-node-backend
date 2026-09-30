@@ -191,6 +191,14 @@ describe('each subject names a row that really has the property', () => {
         expect(pending?.email).toBe(seedCredentials.pendingEmail.email);
     });
 
+    it('the staff accounts are active, verified logins', async () => {
+        for (const staff of ['manager', 'warehouse', 'support', 'operator'] as const) {
+            const user = await userModel.findOne({ email: seedCredentials[staff].email });
+            expect(user?.active).toBe(true);
+            expect(user?.verifiedAt).toBeTruthy();
+        }
+    });
+
     it('the two-factor persona has email 2FA armed and backup codes that verify', async () => {
         const user = await userModel
             .findOne({ email: seedCredentials.twoFactor.email })

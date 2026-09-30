@@ -116,7 +116,7 @@ name a person without taking on the shape of a user.
 login form. Everything else about the dataset can move; these are the part a human reads off a
 page and types. Each password is overridable — `NODE_SEED_ADMIN_PASSWORD` for the owner,
 `NODE_SEED_USER_PASSWORD`, `NODE_SEED_EDITOR_PASSWORD`, `NODE_SEED_MODERATOR_PASSWORD`, and one per
-persona (below) — change both `.env` files together, never one alone.
+persona and staff account (below) — change both `.env` files together, never one alone.
 
 **The password is stored plaintext on purpose.** `userSchema`'s pre-save hook hashes it on the way
 in, so a hash written there would drift from that hook and lose its plaintext. It never reaches a
@@ -140,6 +140,19 @@ code the seeder never reads. Each password is `NODE_SEED_<NAME>_PASSWORD`.
 
 The banned persona is separate from `marcus`, whom the shop flow bans through the API so the audit
 trail records it. The persona exists so `blank` carries one too.
+
+## The staff accounts
+
+Four more logins, each holding exactly one role. Three are shop roles; the operator holds a
+platform role only, with no shop membership, so it holds none of a shop's keys. Each password is
+`NODE_SEED_<NAME>_PASSWORD`.
+
+| Account     | Login                   | Role                              |
+| ----------- | ----------------------- | --------------------------------- |
+| `manager`   | `manager@example.com`   | shop `manager`                    |
+| `warehouse` | `warehouse@example.com` | shop `warehouse`                  |
+| `support`   | `support@example.com`   | shop `support`                    |
+| `operator`  | `operator@example.com`  | platform `operator`, nothing else |
 
 ## How a scenario is built
 

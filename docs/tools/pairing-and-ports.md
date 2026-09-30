@@ -144,7 +144,7 @@ flowchart TD
 ### Seed credentials are published, not copied
 
 `NODE_SEED_ADMIN_PASSWORD` / `NODE_SEED_USER_PASSWORD` / `NODE_SEED_EDITOR_PASSWORD` /
-`NODE_SEED_MODERATOR_PASSWORD` (and the four persona overrides, see
+`NODE_SEED_MODERATOR_PASSWORD` (and the persona and staff overrides, see
 [Demo profile](./demo-profile.md#the-persona-accounts)) are resolved here and SERVED: the demo
 profile's `GET /__test/scenario` answers with every seeded login, and the frontend's
 `boilerplate-vue-frontend/tests/support/e2e/scenario.ts` reads them rather than keeping literals

@@ -376,7 +376,7 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | `NODE_TOKEN_ACCESS`              | key ring (comma-separated, newest first)                          | `empty`    | required, 16+ characters, never the `.env-example` placeholder; secret: never logged | Access-token signing ring, newest first.                                             |
 | `NODE_TOKEN_REFRESH`             | key ring (comma-separated, newest first)                          | `empty`    | required, 16+ characters, never the `.env-example` placeholder; secret: never logged | Refresh-token signing ring, newest first.                                            |
 | `NODE_TOTP_ENCRYPTION_KEY`       | versioned key ring (`version:key`, comma-separated, newest first) | `empty`    | required, 16+ characters, never the `.env-example` placeholder; secret: never logged | Ring encrypting second-factor material at rest, `version:key`, newest first.         |
-| `NODE_TOKEN_ROTATION_GRACE_MS`   | whole number >= 1                                                 | `10000`    | —                                                                                    | How long a just-rotated refresh token is still honoured (a page-load race).          |
+| `NODE_TOKEN_ROTATION_GRACE_MS`   | whole number >= 0                                                 | `10000`    | —                                                                                    | How long a just-rotated refresh token is still honoured (a page-load race).          |
 | `NODE_TOKEN_REUSE_WINDOW_MS`     | whole number >= 1                                                 | `86400000` | —                                                                                    | How long a rotated-away refresh token is remembered, so replaying it reads as theft. |
 
 ### account-oauth
@@ -513,6 +513,10 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | `NODE_SEED_TWO_FACTOR_PASSWORD`    | text | `Demo-TwoFactor1!`    | secret: never logged | The two-factor persona seed account's password. Keep it identical to the paired frontend's own `.env`.    |
 | `NODE_SEED_PENDING_EMAIL_PASSWORD` | text | `Demo-PendingEmail1!` | secret: never logged | The pending-email persona seed account's password. Keep it identical to the paired frontend's own `.env`. |
 | `NODE_SEED_BANNED_PASSWORD`        | text | `Demo-Banned1!`       | secret: never logged | The banned persona seed account's password. Keep it identical to the paired frontend's own `.env`.        |
+| `NODE_SEED_MANAGER_PASSWORD`       | text | `Demo-Manager1!`      | secret: never logged | The manager seed account's password. Keep it identical to the paired frontend's own `.env`.               |
+| `NODE_SEED_WAREHOUSE_PASSWORD`     | text | `Demo-Warehouse1!`    | secret: never logged | The warehouse seed account's password. Keep it identical to the paired frontend's own `.env`.             |
+| `NODE_SEED_SUPPORT_PASSWORD`       | text | `Demo-Support1!`      | secret: never logged | The support seed account's password. Keep it identical to the paired frontend's own `.env`.               |
+| `NODE_SEED_OPERATOR_PASSWORD`      | text | `Demo-Operator1!`     | secret: never logged | The platform operator seed account's password. Keep it identical to the paired frontend's own `.env`.     |
 
 <!-- config-reference:end -->
 
