@@ -121,6 +121,7 @@ export default {
         shop: [
             'order.ownerPending',
             'order.paid',
+            'order.paidExpress',
             'order.shipped',
             'order.delivered',
             'order.cancelled',

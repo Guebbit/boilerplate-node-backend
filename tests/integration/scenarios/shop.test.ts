@@ -33,6 +33,7 @@ import { presentProduct } from '@modules/products/presenter';
 import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
 import { paymentModel } from '@modules/payments/model';
+import { shipmentModel } from '@modules/delivery/model';
 import { userModel } from '@modules/users/model';
 import { auditLogModel } from '@modules/audit-logs/model';
 import { addressBookModel } from '@modules/addresses/model';
@@ -231,6 +232,19 @@ describe('each subject names a row that really has the property', () => {
     ])('%s is in status %s', async (subject, status) => {
         const order = await orderModel.findById(subjects[subject]).exec();
         expect(order?.status).toBe(status);
+    });
+
+    it('order.paidExpress is paid, tracked, unshipped, and sits on the non-admin account', async () => {
+        const order = await orderModel.findById(subjects['order.paidExpress']).exec();
+        expect(order?.status).toBe('paid');
+        expect(order?.shippingMethod).toBe('express');
+        expect(order?.userId?.toString()).toBe(SEED_USER_ID);
+
+        // Nobody has started it: a shipment row would make "mark started" unreachable.
+        const shipment = await shipmentModel
+            .findOne({ orderId: subjects['order.paidExpress'] })
+            .exec();
+        expect(shipment).toBeNull();
     });
 
     it('order.softDeleted is hidden, and sits on the non-admin account', async () => {
