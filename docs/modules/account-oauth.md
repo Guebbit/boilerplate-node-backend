@@ -162,6 +162,9 @@ read it like any other method. It returns no access token: the frontend's
 
 - **An OAuth-only account has no password.** `users.password` is deliberately not `required`, and
   sign-in for such an account works only through a provider — until a password reset gives it one.
+  Its step-up is a code mailed to its verified address, so enabling a provider needs mail that
+  delivers: boot refuses the pair otherwise outside development and test
+  ([how](./account-sessions.md#step-up-for-an-account-with-no-password)).
 - **The callback does not consult `twoFactorEnabledAt`.** An account with a linked provider
   therefore has an unchallenged way in, whatever
   [two-factor auth](./account-two-factor.md) it has armed. What that costs is

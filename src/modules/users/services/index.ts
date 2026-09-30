@@ -36,7 +36,8 @@ import {
     applyEmailChange,
     cancelPendingEmail,
     markInactivityWarned,
-    persistTwoFactorMethods
+    persistTwoFactorMethods,
+    persistReauthCode
 } from './credentials';
 import {
     consumeToken,
@@ -106,6 +107,7 @@ export const userService = {
     cancelPendingEmail,
     markInactivityWarned,
     persistTwoFactorMethods,
+    persistReauthCode,
     tokenAdd,
     tokenRemoveAll,
     sessionRemove,

@@ -359,7 +359,8 @@ const ACCOUNT_CODE_SEND_WINDOW_MS = 3_600_000;
 
 /**
  * Codes delivered to a SIGNED-IN account so it can prove a factor (`POST /account/2fa/methods/
- * {method}/send`). Keyed on the account, not the challenge: there is no challenge here, and an
+ * {method}/send`) or pass step-up (`POST /account/reauth/methods/{method}/send`) — one budget for
+ * both, since both spend the same mailbox. Keyed on the account, not the challenge: there is no challenge here, and an
  * address key would let one stolen session mail the owner from many places. The per-code cooldown
  * still paces a single button; this caps the total one account's mailbox can be made to receive.
  */
@@ -370,12 +371,12 @@ const ACCOUNT_CODE_SEND_BUDGET: RateLimitBudget = {
     defaultMax: 5,
     windowMs: ACCOUNT_CODE_SEND_WINDOW_MS,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
-    bounds: 'Deliveries to a signed-in account (`POST /account/2fa/methods/{method}/send`).',
+    bounds: 'Deliveries to a signed-in account (`POST /account/2fa/methods/{method}/send`, `POST /account/reauth/methods/{method}/send`).',
     audited: true,
     keyGenerator: accountIdOf
 };
 
-/** The budget for `POST /account/2fa/methods/{method}/send` — see {@link ACCOUNT_CODE_SEND_BUDGET}. */
+/** The budget for both signed-in code sends — see {@link ACCOUNT_CODE_SEND_BUDGET}. */
 export const accountCodeSendLimiter: RequestHandler = buildRateLimiter(ACCOUNT_CODE_SEND_BUDGET);
 
 /** This module's declared budgets — listed on `./module.ts`'s `rateLimits`. */

@@ -17,13 +17,13 @@ import {
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 
 /**
- * `password`, `tokens`, the 2FA secret fields, `oauthAccounts` and `pendingEmail` are
+ * `password`, `tokens`, the 2FA secret fields, `reauthCode`, `oauthAccounts` and `pendingEmail` are
  * `select: false` on the schema, so plain finders never load them. These two helpers are the ONLY
  * sanctioned way to get them back, keeping re-selection in one place instead of scattered
  * `.select('+password')` calls.
  */
 const CREDENTIAL_FIELDS =
-    '+password +tokens +twoFactorMethods +twoFactorBackupCodes +twoFactorBackupCodeSalt +oauthAccounts +pendingEmail';
+    '+password +tokens +twoFactorMethods +twoFactorBackupCodes +twoFactorBackupCodeSalt +reauthCode +oauthAccounts +pendingEmail';
 
 /**
  * The clause every login-adjacent lookup filters on. `{ $ne: false }` rather than `true`: a

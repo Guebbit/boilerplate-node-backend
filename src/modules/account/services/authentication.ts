@@ -617,37 +617,3 @@ export const verifyOwnPassword = (
                         : generateReject(422, [t(wrongKey)])
                 );
         });
-
-/**
- * Re-authenticate an already-signed-in caller by password — the verification half of
- * `POST /account/reauth`. Proves the password and audits the attempt; re-minting the session (a
- * fresh `auth_time`) is the CONTROLLER's job via `issueSession`, the same split `passwordChange`
- * keeps from `postPasswordChange`'s own re-mint.
- *
- * Not `login`'s path: `login`'s 401 and its dummy-compare exist to stop an ANONYMOUS caller telling
- *               "no such account" apart from "wrong password" by timing. There is no such caller
- *               here — the access token already names exactly who is asking.
- * Not re-checked: the active/deletedAt gate `isAuth` already ran for this request, same reason
- *               `passwordChangeWithCurrent` and `updateProfile` skip it too.
- *
- * @param userId - the caller's own id, from their already-verified access token
- * @param password - the password to confirm against the stored hash
- * @param context - for the audit record
- */
-export const reauth = (
-    userId: string,
-    password: string,
-    context: CallerContext
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const outcome = verifyOwnPassword(userId, password, 'account.reauth.wrong-password').catch(
-        (error: unknown) => rejectDatabaseEnvelope('auth', error)
-    );
-
-    return outcome.then((result) => {
-        recordAudit(context, {
-            action: accountAuditActions.AUTH_REAUTHENTICATED,
-            outcome: result.success ? 'success' : 'failure'
-        });
-        return result;
-    });
-};

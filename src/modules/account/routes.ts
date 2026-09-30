@@ -43,6 +43,8 @@ import { postResetConfirm } from './controllers/post-reset-confirm';
 import { postPasswordChange } from './controllers/post-password-change';
 import { postPasswordCheck } from './controllers/post-password-check';
 import { postReauth } from './controllers/post-reauth';
+import { getReauthMethods } from './controllers/get-reauth-methods';
+import { postReauthMethodSend } from './controllers/post-reauth-method-send';
 import { postLoginTwoFactor } from './controllers/post-login-2fa';
 import { postLoginTwoFactorSend } from './controllers/post-login-2fa-send';
 import { get2fa } from './controllers/get-2fa';
@@ -173,8 +175,18 @@ router.post('/password', isAuth, credentialLimiters, postPasswordChange);
 // block. Address-keyed directly instead, like `submissionLimiter`.
 router.post('/password/check', passwordCheckLimiter, postPasswordCheck);
 
-// POST /account/reauth — step-up: re-prove the password, refresh auth_time (requires auth)
+// GET /account/reauth — which methods this account can step up with. Plain `isAuth`: a stale
+// session has to be able to ask, or it could never learn how to get fresh.
+router.get('/reauth', isAuth, getReauthMethods);
+
+// POST /account/reauth — step-up: re-prove a password or a mailed code, refresh auth_time
+// (requires auth)
 router.post('/reauth', isAuth, credentialLimiters, postReauth);
+
+// POST /account/reauth/methods/:method/send — mail the step-up code to an account with no
+// password. No fresh-auth guard (it is what earns one); the delivery budget is the 2FA send's,
+// since both spend the same mailbox.
+router.post('/reauth/methods/:method/send', isAuth, accountCodeSendLimiter, postReauthMethodSend);
 
 /*
  * GET /account/abilities — the rules the server enforces, for a client to render from.

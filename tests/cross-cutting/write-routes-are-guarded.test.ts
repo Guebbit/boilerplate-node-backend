@@ -114,7 +114,11 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     },
     'account POST /reauth': {
         requiresAuth: true,
-        reason: "re-proving the caller's own password to refresh their session's freshness"
+        reason: "re-proving the caller's own password or mailed code to refresh their session's freshness"
+    },
+    'account POST /reauth/methods/:method/send': {
+        requiresAuth: true,
+        reason: "mailing the caller's own account the code that lets it pass step-up"
     },
     'account POST /export': {
         requiresAuth: true,

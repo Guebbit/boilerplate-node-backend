@@ -12,6 +12,7 @@
 
 import path from 'node:path';
 import { defineConfig, isRelaxedIn } from '@infrastructure/config/define';
+import type { Environment } from '@infrastructure/config/store';
 import { choice, csv, flag, int, text } from '@infrastructure/config/fields';
 
 /** The three transports a mail send may go through. */
@@ -79,6 +80,22 @@ export const mailConfig = defineConfig({
             : [])
     ]
 });
+
+/**
+ * Whether this environment sends mail to a real inbox: the `smtp` transport with a host, or the
+ * demo outbox. `log` renders and drops, so a code sent through it reaches nobody — a boot check
+ * that depends on a person receiving mail (an account with no password passing step-up) must not
+ * count it. Takes the raw environment because a slice's `check` runs against it, not the memo.
+ *
+ * @param environment - the environment a slice check was handed
+ */
+export const mailDeliversIn = (environment: Environment): boolean => {
+    const transport = (environment.NODE_MAIL_TRANSPORT ?? '').trim() || 'smtp';
+    return (
+        transport === 'outbox' ||
+        (transport === 'smtp' && Boolean((environment.NODE_SMTP_HOST ?? '').trim()))
+    );
+};
 
 /** Where a spooled attachment and the email templates live. */
 export const mailFilesConfig = defineConfig({
