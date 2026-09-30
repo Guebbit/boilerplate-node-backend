@@ -234,6 +234,18 @@ describe('the history reads as a history', () => {
         expect(drift / 1000).toBeLessThan(60);
     });
 
+    it('moves the withdrawal deadline with the order, so a delivered-weeks-ago order is past it', async () => {
+        const order = await orderModel.findById(subjects['order.delivered']).exec();
+        expect(order?.withdrawUntil).toBeDefined();
+
+        // Delivery follows the checkout within seconds, so the deadline sits one withdrawal period
+        // (14 days by default) after `createdAt`. Left at boot time it would be weeks later.
+        const gapMs = order!.withdrawUntil!.getTime() - order!.createdAt!.getTime();
+        const periodMs = 14 * 86_400_000;
+        expect(gapMs).toBeGreaterThanOrEqual(periodMs);
+        expect(gapMs - periodMs).toBeLessThan(10 * 60_000);
+    });
+
     it('accounts for every unit of stock with a movement the app wrote', async () => {
         // Nothing seeds `onHand`: the catalogue starts empty and takes delivery through
         // `POST /inventory/receipts`, so a product with stock and no receipt cannot exist. Rather
