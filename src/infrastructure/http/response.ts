@@ -132,6 +132,7 @@ const STATUS_ENVELOPE: Readonly<Partial<Record<number, { code?: ErrorCode; messa
     403: { code: 'FORBIDDEN', message: 'Forbidden' },
     404: { code: 'NOT_FOUND', message: 'Not Found' },
     409: { code: 'CONFLICT', message: 'Conflict' },
+    412: { code: 'PRECONDITION_FAILED', message: 'Precondition Failed' },
     422: { message: 'Unprocessable Entity' },
     429: { message: 'Too Many Requests' }
 };

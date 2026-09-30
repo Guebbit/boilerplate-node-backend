@@ -18,6 +18,7 @@ import {
     rejectDatabaseError
 } from '@infrastructure/http/errors';
 import { logger } from '@infrastructure/adapters/logger';
+import { PreconditionFailedError } from '@infrastructure/persistence/versioning';
 import type { CastError } from 'mongoose';
 import { ClientClosedError } from 'redis';
 import { makeResponseStub } from '@tests/express';
@@ -244,6 +245,24 @@ describe('ConflictError branch (D14)', () => {
             409,
             'Unknown error'
         ]);
+    });
+});
+
+describe('PreconditionFailedError branch', () => {
+    it("answers 412: the caller's If-Match no longer describes the row", () => {
+        expect(databaseErrorInterpreter(new PreconditionFailedError())).toEqual([
+            412,
+            'Precondition failed'
+        ]);
+    });
+
+    it('answers the PRECONDITION_FAILED code through the envelope', () => {
+        expect(
+            rejectDatabaseEnvelope('replaceProduct', new PreconditionFailedError())
+        ).toMatchObject({
+            status: 412,
+            errors: [{ code: 'PRECONDITION_FAILED' }]
+        });
     });
 });
 

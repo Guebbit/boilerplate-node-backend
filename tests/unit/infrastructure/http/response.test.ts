@@ -143,6 +143,7 @@ describe('generateReject', () => {
         [403, 'Forbidden'],
         [404, 'Not Found'],
         [409, 'Conflict'],
+        [412, 'Precondition Failed'],
         [422, 'Unprocessable Entity'],
         [429, 'Too Many Requests'],
         [500, 'Internal Server Error'],
@@ -181,6 +182,7 @@ describe('generateReject', () => {
         expect(codeFor(403)).toBe('FORBIDDEN');
         expect(codeFor(404)).toBe('NOT_FOUND');
         expect(codeFor(409)).toBe('CONFLICT');
+        expect(codeFor(412)).toBe('PRECONDITION_FAILED');
     });
 
     it('collapses any 5xx to a single internal code', () => {

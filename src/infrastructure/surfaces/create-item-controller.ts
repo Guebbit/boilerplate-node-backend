@@ -9,6 +9,7 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import { setEtag } from '@infrastructure/http/preconditions';
 import { catchAsNotFound, namedHandler, operationName } from '@infrastructure/http/controller';
 
 /** What makes one entity's read-one different from another's. */
@@ -59,6 +60,8 @@ export const createItemController = ({
                     rejectResponse(response, 404, [t(notFoundKey)]);
                     return;
                 }
+                // The version an edit form sends back as `If-Match`.
+                setEtag(response, item);
                 successResponse(response, item);
             })
             .catch(catchAsNotFound(response, operation, notFoundKey));

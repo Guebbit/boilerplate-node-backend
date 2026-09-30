@@ -47,6 +47,8 @@ paths:
 
     # --------- Authentication and profile ---------
     /account:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        x-versioned: [get, put, patch]
         get:
             tags: [Account]
             summary: Current user info

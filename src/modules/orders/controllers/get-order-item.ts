@@ -10,6 +10,7 @@ import { orderService } from '../services';
 import { rejectResponse } from '@infrastructure/http/response';
 import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
+import { setEtag } from '@infrastructure/http/preconditions';
 import { respondWithOrder } from './respond';
 
 /**
@@ -36,6 +37,8 @@ export const getOrderItem = (
                 rejectResponse(response, 404, [t('orders.not-found')]);
                 return;
             }
+            // The version an edit sends back as `If-Match`.
+            setEtag(response, order);
             // The body carries what THIS caller may do to the order, so the client renders its
             // controls from the server's answer rather than from a copy of the lifecycle.
             return respondWithOrder(response, order, request.authContext, 'getOrderItem');

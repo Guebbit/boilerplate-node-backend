@@ -148,6 +148,8 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /products/{id}:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        x-versioned: [get, put, patch, delete]
         # Same as /products/id={id}
         get:
             tags: [Products]
@@ -290,6 +292,8 @@ paths:
 
     # The editor's own read: every language a product has, not the caller's resolved one.
     /products/{id}/admin:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        x-versioned: [get]
         get:
             tags: [Products]
             summary: Product, every language at once
@@ -346,6 +350,8 @@ paths:
     # Same as DELETE /products/{id}?hardDelete=true — the flag spelled in the path instead of
     # in the query. Both reach the same handler; neither is the canonical one.
     /products/{id}/hard:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        x-versioned: [delete]
         delete:
             tags: [Products]
             summary: Permanently delete product

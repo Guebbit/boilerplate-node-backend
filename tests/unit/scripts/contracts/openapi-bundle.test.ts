@@ -12,7 +12,8 @@ import { stringify as stringifyYaml, parse as parseYaml } from 'yaml';
 import {
     withAppLevelResponses,
     withErrorCodes,
-    withModuleStamps
+    withModuleStamps,
+    withVersionedResources
 } from '../../../../scripts/contracts/openapi-bundle';
 
 /** A bundled document small enough to read in one glance, shaped exactly like `compile()` feeds in. */
@@ -208,5 +209,86 @@ describe('withErrorCodes', () => {
         expect(() => withErrorCodes(stringifyYaml('not an object'), {})).toThrow(
             /did not parse to an object/
         );
+    });
+});
+
+/**
+ * `withVersionedResources` — hangs `ETag`, `If-Match` and 412 on the operations a path item's
+ * `x-versioned` marker lists. Driven with a small document, same split as the suites above.
+ */
+
+/** One versioned path: a read, a PATCH, a DELETE — each with an inline 200. */
+const versionedPath = (marker: string[]) => ({
+    '/widgets/{id}': {
+        'x-versioned': marker,
+        get: { responses: { '200': { description: 'ok' } } },
+        patch: { parameters: [{ name: 'id' }], responses: { '200': { description: 'ok' } } },
+        delete: { responses: { '200': { description: 'ok' } } }
+    }
+});
+
+interface Operation {
+    parameters?: unknown[];
+    responses: Record<string, { headers?: unknown }>;
+}
+
+/** Bundles `paths`, and reads back the one path every case is about. */
+const run = (paths: Record<string, unknown>) =>
+    (
+        parseYaml(withVersionedResources(stringifyYaml({ openapi: '3.0.3', paths }))) as {
+            paths: Record<string, Record<string, Operation>>;
+        }
+    ).paths['/widgets/{id}'];
+
+describe('withVersionedResources', () => {
+    it('adds ETag to a listed read and to a listed PATCH 200', () => {
+        const item = run(versionedPath(['get', 'patch']));
+
+        expect(item?.get?.responses['200']?.headers).toEqual({
+            ETag: { $ref: '#/components/headers/ETag' }
+        });
+        expect(item?.patch?.responses['200']?.headers).toHaveProperty('ETag');
+    });
+
+    it("adds If-Match after the operation's own parameters, and the 412, to a listed write", () => {
+        const patch = run(versionedPath(['get', 'patch']))?.patch;
+
+        expect(patch?.parameters).toEqual([
+            { name: 'id' },
+            { $ref: '#/components/parameters/IfMatchHeader' }
+        ]);
+        expect(patch?.responses).toHaveProperty('412');
+    });
+
+    it('gives a listed DELETE the precondition but no ETag: it answers no row', () => {
+        const remove = run(versionedPath(['delete']))?.delete;
+
+        expect(remove?.responses).toHaveProperty('412');
+        expect(remove?.responses['200']).not.toHaveProperty('headers');
+    });
+
+    it('leaves an unlisted operation untouched', () => {
+        const item = run(versionedPath(['get']));
+
+        expect(item?.patch?.parameters).toEqual([{ name: 'id' }]);
+        expect(item?.delete?.responses).not.toHaveProperty('412');
+    });
+
+    it('throws for a method the path does not declare, or one that is neither read nor write', () => {
+        expect(() => run(versionedPath(['put']))).toThrow(/does not declare/);
+        expect(() =>
+            run({ '/widgets/{id}': { 'x-versioned': ['post'], post: { responses: {} } } })
+        ).toThrow(/cannot name post/);
+    });
+
+    it('throws when the 200 to hang ETag on is a $ref', () => {
+        expect(() =>
+            run({
+                '/widgets/{id}': {
+                    'x-versioned': ['get'],
+                    get: { responses: { '200': { $ref: '#/components/responses/Success' } } }
+                }
+            })
+        ).toThrow(/inline 200/);
     });
 });
