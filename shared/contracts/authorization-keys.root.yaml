@@ -36,8 +36,8 @@ version: 1
 # shop needs them apart: a support agent may update a user and may not delete one, a warehouse
 # operator may adjust stock and may not delete a product.
 #
-# `checkout`, `sweep`, `override` and `start` are the four additions beyond CASL's own CRUD
-# vocabulary, and all four follow the same rule: a verb is added only when CRUD cannot say the
+# `checkout`, `sweep`, `override`, `start` and `receive` are the five additions beyond CASL's own
+# CRUD vocabulary, and all five follow the same rule: a verb is added only when CRUD cannot say the
 # thing, never when CRUD is merely inconvenient, and the reason is recorded on the key itself.
 #   - `checkout` is `cart.self.checkout`'s action, and nowhere else. CRUD has no verb for "spend
 #     the basket": `create` on `Cart` collided with `orders.any.create` (raising an order on
@@ -50,6 +50,12 @@ version: 1
 #   - `start` is `delivery.any.start`'s action, and nowhere else. Moving a paid order into
 #     `processing` creates no shipment yet — there is no parcel row to `update` — and it is a
 #     narrower grant than `orders.any.update`, which lets an admin rewrite the order outright.
+#   - `receive` is `returns.any.receive`'s action, and nowhere else. It records that returned goods
+#     arrived, which puts the units back on sale and pays the customer back — `update` on `Return`
+#     is the decision to approve it, a narrower hand than the one that holds the parcel.
+#
+# THIS LIST IS THE ONE HOME of the vocabulary: `npm run gen:api` turns it into
+# `api/permission-actions.ts` (and the frontend's copy), so no code types it a second time.
 actions:
     - read
     - create
@@ -59,6 +65,7 @@ actions:
     - sweep
     - override
     - start
+    - receive
 
 # The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
 scopes:

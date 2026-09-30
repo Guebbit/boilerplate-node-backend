@@ -173,6 +173,7 @@ three of them are exactly that:
 | ----------------------------------------------------------------| ------------------------------------------------------------------------------------------------------- | ---------- |
 | `openapi.yaml`                                                  | spectral · orval · Prism · the frontend                                                                  | no — gitignored, rebuilt by `postinstall` |
 | `api/models/` · `api/schemas.zod.ts`                            | `@types` and the services that validate input                                                            | no — gitignored, rebuilt by `postinstall` |
+| `api/permission-actions.ts`                                     | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.yaml` (see [Permission Actions](../tools/permission-actions.md)) | no — gitignored, rebuilt by `postinstall` |
 | `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                                                              | no — gitignored, rebuilt by `postinstall` |
 | `asyncapi.yaml`                                                 | the AsyncAPI CLI · `gen:asyncapi`                                                                        | yes |
 | `asyncapi.public.yaml`                                          | the AsyncAPI CLI · the frontend's whole realtime pipeline                                                | yes |
@@ -185,7 +186,7 @@ fully derived — there is no diff to review because there is nothing committed 
 ## Handing the contract to the frontend
 
 The frontend holds **byte-identical copies** of the two bundles it consumes — `openapi.yaml` and
-`asyncapi.public.yaml` — and never bundles or authors them. The
+`asyncapi.public.yaml` — plus `shared/authorization-keys.yaml` (for its `actions:` list only), and never bundles or authors them. The
 four client collections stay here, and are not committed at all: they are derived from
 `openapi.yaml`, so a copy there could not disagree without the spec disagreeing first, and nothing
 in either repo reads them.
