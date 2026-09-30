@@ -58,6 +58,17 @@ describe('the template collection', () => {
     ])('resolves %s to a real file', (name) => {
         expect(() => templateFile(name)).not.toThrow();
     });
+
+    it.each(['../etc/passwd', 'a/b', String.raw`a\b`, '', '.hidden'])(
+        'refuses the name %p before it can become a path',
+        (name) => {
+            expect(() => templateFile(name)).toThrow(/not a valid template name/);
+        }
+    );
+
+    it('does not resolve an Object.prototype key as a template', () => {
+        expect(() => templateFile('constructor')).toThrow(/not a registered template/);
+    });
 });
 
 /**
