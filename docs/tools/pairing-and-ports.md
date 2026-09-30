@@ -163,16 +163,17 @@ favicons to `.prettierrc` — but **"does a fork cause a silent bug?"** Everythi
 quietly: both sides keep building, keep passing their own suites, and disagree only in production
 or in a live-API run.
 
-Two files are on it, and the rule is one line: **produced here, copied there.** Each one is an
+Three files are on it, and the rule is one line: **produced here, copied there.** Each one is an
 _output_ on the frontend's side, which is what makes a fork answerable — there is one correct
 resolution, and `npm run sync:frontend` applies it without asking. Editing the copy is the failure
 this list is worst at describing and best at catching: the next regeneration reverts it, and the
 diff looks like the backend broke something.
 
-| Produced here          | Lands over there as                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------- |
-| `openapi.yaml`         | `openapi.yaml`                                                                                          |
-| `asyncapi.public.yaml` | `asyncapi.yaml` — the shared subset is the whole of the async contract as far as that repo is concerned |
+| Produced here                    | Lands over there as                                                                                                                |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `openapi.yaml`                   | `openapi.yaml`                                                                                                                     |
+| `asyncapi.public.yaml`           | `asyncapi.yaml` — the shared subset is the whole of the async contract as far as that repo is concerned                            |
+| `shared/authorization-keys.yaml` | `<frontend>/contracts/authorization-keys.yaml` — read there only for `actions:`, see [Permission Actions](./permission-actions.md) |
 
 A third entry used to sit here: the analytics event names the frontend emitted. It emits none any
 more — pageviews are automatic and everything with a request behind it is reported from the handler

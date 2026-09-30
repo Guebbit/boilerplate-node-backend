@@ -29,6 +29,7 @@ import type {
     TenantCaller
 } from '@types';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { PERMISSION_ACTIONS, type PermissionAction } from '@api/permission-actions';
 
 /**
  * The prefix that marks a platform key.
@@ -44,26 +45,12 @@ export const scopeOfKey = (key: string): AuthorizationScope =>
     key.startsWith(PLATFORM_PREFIX) ? 'platform' : 'tenant';
 
 /**
- * The action vocabulary a declared KEY may carry, as a runtime array so both the type below and
- * the Zod schema that validates the shared YAML are drawn from the one list. `manage` is
- * deliberately absent: there is no wildcard of any kind, so nothing declares it as ITS action.
- * `checkout`, `sweep`, `override`, `start` and `receive` are the five additions beyond CASL's own CRUD set —
- * each one's own key in `shared/authorization-keys.yaml` says why CRUD couldn't say the thing.
+ * The action vocabulary a declared KEY may carry, generated from `shared/authorization-keys.yaml`'s
+ * `actions:` so the type and the Zod schema below draw on the one list. `manage` is deliberately
+ * absent: there is no wildcard of any kind, so nothing declares it as ITS action.
+ * See docs/tools/permission-actions.md.
  */
-const PERMISSION_ACTIONS = [
-    'read',
-    'create',
-    'update',
-    'delete',
-    'checkout',
-    'sweep',
-    'override',
-    'start',
-    'receive'
-] as const;
-
-/** See {@link PERMISSION_ACTIONS}. */
-export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
+export type { PermissionAction } from '@api/permission-actions';
 
 /** The two scopes a key or role may carry — kept here as a runtime array purely to validate the shared YAML against {@link AuthorizationScope} without duplicating the literal elsewhere. */
 const AUTHORIZATION_SCOPES = [
