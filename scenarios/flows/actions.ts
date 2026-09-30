@@ -147,21 +147,14 @@ export const recordOfflinePayment = (
     owner.call('POST', `/payments/order/${orderId}/offline`, { method }).then(() => undefined);
 
 /**
- * Move a paid order into `processing`, as an operator would. `paid → processing` left
- * `PUT /orders/{id}` with SH1 — it is `system`-only in `orders/domain/lifecycle.ts` until
- * `delivery` grows its own door for it, so the admin override
- * (`POST /orders/{id}/status-override`) is the only reachable path onto it today, the same one a
- * mis-scanned parcel or a manual correction uses.
+ * Move a paid order into `processing`, as an operator would: the warehouse's own door,
+ * `POST /delivery/order/{id}/start`. Going through it means a seeded order carries the ordinary
+ * history, not an override's status-correction audit rows.
  *
- * @param owner - a caller holding `orders.any.override`
+ * @param owner - a caller holding `delivery.any.start`
  */
 export const startProcessing = (owner: Caller, orderId: string): Promise<void> =>
-    owner
-        .call('POST', `/orders/${orderId}/status-override`, {
-            to: 'processing',
-            reason: 'scenario seed: begin fulfilment'
-        })
-        .then(() => undefined);
+    owner.call('POST', `/delivery/order/${orderId}/start`).then(() => undefined);
 
 /**
  * Record a parcel's handover to the carrier — the door that moves an order `processing → shipped`
