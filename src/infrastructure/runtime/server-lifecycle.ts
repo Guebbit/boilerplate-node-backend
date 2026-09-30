@@ -163,8 +163,9 @@ export const registerSignalHandlers = (stopFunction: () => Promise<void>) => {
         // Stryker disable next-line all
         logger.info(`Received ${signal}, starting graceful shutdown.`);
 
-        // Before anything else: `GET /readyz` must start answering 503 the moment a shutdown
-        // signal arrives, so a load balancer stops routing here before connections are cut.
+        // Before anything else: `GET /readyz` answers 503 from the moment a shutdown signal
+        // arrives. `server.close()` follows in the same tick, so no probe sees that 503 yet — a
+        // lame-duck delay between the two is what would let a load balancer react.
         markServerDraining();
 
         // Deadline: if teardown hangs (a socket that never drains, a broker that never

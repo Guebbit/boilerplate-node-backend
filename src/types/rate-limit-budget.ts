@@ -57,7 +57,7 @@ export interface RateLimitBudget {
     /**
      * Requests this budget never applies to at all — distinct from `skipSuccessfulRequests`,
      * which still counts the request, just not against the budget. Only the global brake uses
-     * this, to exempt `GET /readyz`: an orchestrator's health probe must never see a 429, and a
+     * this, to exempt `GET /livez` and `GET /readyz`: an orchestrator's health probe must never see a 429, and a
      * probe interval is fixed and cheap, so there is no abuse case to bound.
      */
     skip?: (request: Request) => boolean;

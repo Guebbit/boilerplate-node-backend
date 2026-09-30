@@ -20,6 +20,14 @@ describe('GET /', () => {
     });
 });
 
+describe('GET /livez', () => {
+    it('matches the contract (200, empty body)', async () => {
+        const response = await api().get('/livez');
+
+        expect(response.status).toBe(200);
+    });
+});
+
 describe('GET /readyz', () => {
     it('matches the contract while booting (503, empty body)', async () => {
         // Runs before `markServerListening` below — `src/app.ts`'s auto-start never fires under

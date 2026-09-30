@@ -42,7 +42,7 @@ These endpoints return **the same underlying numbers you see in Grafana, but as 
 The **readiness** answer: can this instance serve what it promises, and which backing service is
 missing when it cannot.
 
-This is neither the liveness probe (`GET /`) nor the load-balancer readiness check (`GET /readyz`)
+This is neither the liveness probe (`GET /livez`) nor the load-balancer readiness check (`GET /readyz`)
 — see [The Observability Layer](../tools/observability-layer.md#the-four-properties-any-change-has-to-preserve)
 for how the three divide up.
 

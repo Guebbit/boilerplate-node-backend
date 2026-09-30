@@ -262,3 +262,4 @@ Until then, Docker/Podman compose is the simpler mental model.
 - [Prometheus](./prometheus.md)
 - [Grafana](./grafana.md)
 - [Package Scripts](./package-scripts.md)
+- [Health checks](./health-checks.md)
