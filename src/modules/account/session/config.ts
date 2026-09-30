@@ -81,7 +81,7 @@ export const sessionConfig = defineConfig({
         }),
         NODE_TOKEN_ROTATION_GRACE_MS: int({
             default: 10_000,
-            min: 1,
+            min: 0,
             describe: 'How long a just-rotated refresh token is still honoured (a page-load race).'
         }),
         NODE_TOKEN_REUSE_WINDOW_MS: int({

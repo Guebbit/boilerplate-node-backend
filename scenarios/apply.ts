@@ -106,19 +106,6 @@ const bootAppInProcess = () =>
 
 /** Boots the app, refuses the unsafe cases, then builds and applies the named scenario. */
 async function seed() {
-    /*
-     * A boot-time seeder that can drop or overwrite a real database is a footgun, and its accounts
-     * carry public passwords (`root@root.it` / `Demo-Admin1!` hands out the shop owner and the
-     * platform operator to anyone who reads this repo). So it runs only where `NODE_ENV` says
-     * `development` or `test`: an unset value, `staging` and `production` all refuse.
-     */
-    if (!isRelaxedEnvironment()) {
-        logger.warn(
-            `scenario:apply refused to run: NODE_ENV is ${nodeEnvironment() || 'unset'}, not development or test.`
-        );
-        return;
-    }
-
     if (scenarioArgument !== undefined && !isScenarioName(scenarioArgument)) {
         logger.warn(`scenario:apply refused to run: unknown scenario "${scenarioArgument}".`);
         return;
@@ -205,7 +192,23 @@ async function seed() {
  * truncated. Every other `runScript` caller (`scripts/db/`, `scripts/ops/`) never imports `src/app.ts` and so
  * never hits this hook, which is why `run-script.ts` itself stays on `process.exitCode`.
  */
-// `undefined`: the demo seeder, not a `docker/crontab` job — see `run-script.ts`.
-void runScript(undefined, seed, () => app?.stop() ?? Promise.resolve()).then(() =>
-    process.exit(process.exitCode ?? 0)
-);
+/*
+ * A boot-time seeder that can drop or overwrite a real database is a footgun, and its accounts
+ * carry public passwords (`root@root.it` / `Demo-Admin1!` hands out the shop owner and the
+ * platform operator to anyone who reads this repo). So it runs only where `NODE_ENV` says
+ * `development` or `test`: an unset value, `staging` and `production` all refuse.
+ *
+ * Checked BEFORE `runScript`, whose own environment gate would otherwise answer a deployment's
+ * missing variables and hide the reason this script refuses.
+ */
+if (isRelaxedEnvironment()) {
+    // `undefined`: the demo seeder, not a `docker/crontab` job — see `run-script.ts`.
+    void runScript(undefined, seed, () => app?.stop() ?? Promise.resolve()).then(() =>
+        process.exit(process.exitCode ?? 0)
+    );
+} else {
+    logger.warn(
+        `scenario:apply refused to run: NODE_ENV is ${nodeEnvironment() || 'unset'}, not development or test.`
+    );
+    process.exit(0);
+}
