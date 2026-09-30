@@ -37,6 +37,7 @@ export interface SchemaNode {
     maxLength?: number;
     minItems?: number;
     maxItems?: number;
+    uniqueItems?: boolean;
     pattern?: string;
     nullable?: boolean;
     required?: string[];
@@ -320,6 +321,7 @@ export const SUPPORTED_KEYWORDS = new Set([
     'maxLength',
     'minItems',
     'maxItems',
+    'uniqueItems',
     'pattern',
     'nullable',
     'required',
