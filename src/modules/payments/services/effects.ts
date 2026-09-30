@@ -15,14 +15,15 @@ import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 import { paymentEffectRetryMinutes } from '../config';
 import { settleOpenRefunds } from './refunds';
+import { announcePaymentSucceeded } from './announce';
 
 /** How many payments one sweep pass retries before asking to be run again. */
 const SWEEP_BATCH_SIZE = 200;
 
 /**
- * Finish one payment's owed effect: commit the stock if the order can still use it, mark a refund
- * owed if the order moved on before settlement's own `orderLost` branch could react, or just drop
- * the marker if there is nothing left to do either way.
+ * Finish one payment's owed effect: commit the stock and announce `payment.succeeded` if the order
+ * can still use it, mark a refund owed if the order moved on before settlement's own `orderLost`
+ * branch could react, or just drop the marker if there is nothing left to do either way.
  *
  * @param payment - a payment whose `pendingEffects` names `commit`
  * @returns whether this payment's effect was discharged
@@ -33,18 +34,24 @@ const retryOne = (payment: PaymentDocument): Promise<boolean> => {
     // reaches the single `.catch` below instead of escaping the loop this feeds.
     return orderService
         .getById(orderId)
-        .then((order): Promise<void> => {
+        .then((order): Promise<unknown> => {
+            // The settlement died after charging: commit the stock, then announce — the announce
+            // clears the marker and writes `payment.succeeded` to the outbox in one transaction.
             if (order !== undefined && stockCommitted(order.status))
-                return inventoryService.commitForOrder(orderId).then(() => undefined);
+                return inventoryService
+                    .commitForOrder(orderId)
+                    .then(() => announcePaymentSucceeded(String(payment._id), orderId));
 
             // The order moved away before settlement's own `orderLost` branch could react — a
             // crash between writing `succeeded` and checking the order there. Nothing has marked
-            // the refund owed yet, so do it here, before the marker below clears.
-            return payment.status === 'succeeded'
-                ? orderService.markRefundOwed(orderId)
-                : Promise.resolve();
+            // the refund owed yet, so do it here, before the marker clears. Nothing is announced:
+            // the order never reached a paid state that stayed paid.
+            return (
+                payment.status === 'succeeded'
+                    ? orderService.markRefundOwed(orderId)
+                    : Promise.resolve()
+            ).then(() => paymentRepository.clearPendingEffects(orderId));
         })
-        .then(() => paymentRepository.clearPendingEffects(orderId))
         .then(() => true)
         .catch((error: unknown) => {
             // Stryker disable all

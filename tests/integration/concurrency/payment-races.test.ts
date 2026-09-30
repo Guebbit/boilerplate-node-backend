@@ -30,6 +30,7 @@ import { paymentModel } from '@modules/payments/model';
 import { stockMovementModel } from '@modules/inventory/model';
 import { orderModel } from '@modules/orders/model';
 import { onDomainEvent } from '@kernel/events';
+import { relayOutbox, settleOutboxNudges } from '@kernel/outbox';
 import { StockMovementReason } from '@types';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 
@@ -148,9 +149,14 @@ const countSucceededEvents = () => {
 };
 
 /**
- * Lets fire-and-forget emissions land before counting them.
+ * Lets the outbox deliver before counting: the settlements' own nudged passes first, then one
+ * pass of the test's own for anything still waiting — the event is written in the settlement's
+ * transaction, and delivered by the relay, not by the settlement.
  */
-const settleEvents = () => new Promise((resolve) => setImmediate(resolve));
+const settleEvents = () =>
+    settleOutboxNudges()
+        .then(() => relayOutbox())
+        .then(() => undefined);
 
 describe('P1 — the same intent confirmed many times at once', () => {
     it('settles once: one success, one commit, one event, the units sold once', async () => {

@@ -165,6 +165,12 @@ either way clears this marker once its own decision is made. It leaves the marke
 anything younger than `NODE_PAYMENT_EFFECT_RETRY_MINUTES` (default 1 minute), so it never races a
 settlement still mid-flight.
 
+The marker also owes the announcement. `payment.succeeded` is written to the
+[transactional outbox](../tools/outbox.md) in the same transaction that clears the marker
+(`src/modules/payments/services/announce.ts`), so a settlement that died after charging still announces: the sweep
+commits the stock, writes the row, and the relay publishes it. Nothing is announced for an order
+that was lost — the refund path owns that.
+
 `pendingEffects` is internal bookkeeping, omitted from the wire the same way `providerRef` is.
 
 ## Status transitions
