@@ -145,6 +145,20 @@ const NAMED_PRODUCT_COPY: Record<keyof typeof SEED_PRODUCT_IDS, ProductCopy> = {
                 'Un corso video a ritmo libero sulle prime dodici settimane di addestramento del cucciolo. ' +
                 'Consegna esclusivamente digitale — non viene spedito nulla.'
         }
+    },
+    catTreeHeavy: {
+        en: {
+            title: 'Extra-Large Cat Tree, 12kg',
+            description:
+                'A floor-to-ceiling cat tree with platforms, hideouts and sisal posts. Too heavy ' +
+                'for express delivery.'
+        },
+        it: {
+            title: 'Albero per Gatti Extra Large, 12kg',
+            description:
+                'Un albero per gatti da pavimento a soffitto con piattaforme, tane e tiragraffi in ' +
+                'sisal. Troppo pesante per la spedizione express.'
+        }
     }
 };
 
@@ -255,6 +269,20 @@ const namedProducts = [
         categories: ['dogs', 'training'],
         tags: ['digital', 'training'],
         requiresShipping: false
+    }),
+    /*
+     * The heavy one — 12 kg, past express's 5 kg ceiling (`SHIPPING_METHODS`) and inside standard's
+     * 30 kg, so a cart holding it makes the express refusal reachable. Priced under standard's
+     * free-shipping line, so a cart of one still pays for delivery.
+     */
+    makeUnstockedProduct({
+        id: SEED_PRODUCT_IDS.catTreeHeavy,
+        title: NAMED_PRODUCT_COPY.catTreeHeavy.en.title,
+        description: NAMED_PRODUCT_COPY.catTreeHeavy.en.description,
+        price: 40,
+        categories: ['cats'],
+        tags: ['cat-tree', 'heavy'],
+        weight: 12_000
     })
 ];
 
@@ -295,6 +323,7 @@ const OPENING_STOCK: ReadonlyMap<string, number> = new Map([
     [SEED_PRODUCT_IDS.bundleInactive, 18],
     [SEED_PRODUCT_IDS.barebones, 9],
     [SEED_PRODUCT_IDS.puppyCourseDigital, 50],
+    [SEED_PRODUCT_IDS.catTreeHeavy, 10],
     ...FILLER_PRODUCTS.map(
         (product, index) => [fillerProductId(index), product.openingStock] as const
     )

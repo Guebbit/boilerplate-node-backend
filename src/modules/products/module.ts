@@ -60,6 +60,8 @@ export default {
      * is what a detail page and a product form have to render to be worth auditing. `digital` is
      * the one row `requiresShipping: false` — E16's "digital = never shipped" needs a real product
      * to check `orders`/`delivery`'s digital-only branches against.
+     * `heavy` is 12 kg: past express's 5 kg ceiling, inside standard's — the subject of the
+     * shipping-weight refusal.
      * `scenarios/subjects.ts` pins the row behind each, and
      * `tests/integration/scenarios/shop.test.ts` checks each really has the property.
      */
@@ -71,7 +73,8 @@ export default {
             'product.barebones',
             'product.inStock',
             'product.rich',
-            'product.digital'
+            'product.digital',
+            'product.heavy'
         ]
     },
     // The catalogue — nothing here is scoped to a person. An order's line embeds its own frozen

@@ -157,6 +157,15 @@ describe('each subject names a row that really has the property', () => {
         expect(product?.active).toBe(true);
     });
 
+    it('product.heavy outweighs express and fits standard, and is in stock', async () => {
+        const product = await productModel.findById(subjects['product.heavy']).exec();
+        // `SHIPPING_METHODS`: express tops out at 5000 g, standard at 30000 g.
+        expect(product?.weight).toBeGreaterThan(5000);
+        expect(product?.weight).toBeLessThanOrEqual(30_000);
+        expect(presentProduct(product!).available).toBeGreaterThan(0);
+        expect(product?.active).toBe(true);
+    });
+
     it('the catalogue carries the VAT and shipping data the journeys need', async () => {
         const reduced = await productModel.countDocuments({ taxClass: 'reduced' }).exec();
         const zeroRated = await productModel
