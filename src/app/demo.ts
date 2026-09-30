@@ -3,11 +3,15 @@
  * The demo profile's control surface — mounted only when `enableDemoProfile()` was called (see
  * `npm run demo`).
  *
- * Three routes for the paired frontend's e2e suite, all under `/__test/*`:
+ * Five routes for the paired frontend's e2e suite, all under `/__test/*`:
  *
  * `POST /__test/restore`   empty the database and put a named scenario back, clearing the outbox
+ *                          and putting the clock back to real time
  * `GET /__test/scenario`   what is currently restored: the logins, and a row id per guarantee name
  * `GET /__test/emails`     what the app "sent" since the last restore
+ * `GET /__test/clock`      the demo clock: what `Date.now()` answers, and how far ahead of real time
+ * `POST /__test/clock`     move it FORWARD by `advanceMs` (never back); a job that should react
+ *                          is then triggered through its own door, e.g. the reservation sweep
  *
  * A scenario is BUILT once per process and REPLAYED thereafter — see {@link buildOnce}. App-tier
  * since it is the one tier `eslint-plugin-boundaries` lets reach `scenarios/`; unauthenticated
@@ -22,6 +26,7 @@ import {
     type DatabaseCopy
 } from '@infrastructure/runtime/database-snapshot';
 import { clearDemoOutbox, readDemoOutbox } from '@infrastructure/adapters/demo-outbox';
+import { getDemoClock } from '@infrastructure/runtime/demo-clock';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
@@ -122,6 +127,8 @@ const runRestore = (scenario: string | undefined): Promise<void> =>
         )
         .then(() => {
             clearDemoOutbox();
+            // A time-travelling spec must not leave its future behind for the next one.
+            getDemoClock()?.reset();
         })
         .then(() => refreshLocaleOverrides())
         .then(() => clearCache())
@@ -201,6 +208,38 @@ export const installDemo = (app: Express): void => {
                 logger.error({ message: 'scenario description failed', error });
                 response.status(500).json({ success: false });
             });
+    });
+
+    app.get('/__test/clock', (_request: Request, response: Response) => {
+        const clock = getDemoClock();
+        if (!clock) {
+            response
+                .status(501)
+                .json({ success: false, message: 'this profile has no demo clock' });
+            return;
+        }
+        response.json({ now: clock.now().toISOString(), offsetMs: clock.offsetMs() });
+    });
+
+    app.post('/__test/clock', (request: Request, response: Response) => {
+        const clock = getDemoClock();
+        if (!clock) {
+            response
+                .status(501)
+                .json({ success: false, message: 'this profile has no demo clock' });
+            return;
+        }
+
+        const advanceMs: unknown = (request.body as { advanceMs?: unknown } | undefined)?.advanceMs;
+        if (typeof advanceMs !== 'number' || !Number.isFinite(advanceMs) || advanceMs < 0) {
+            response
+                .status(400)
+                .json({ success: false, message: 'advanceMs must be a non-negative number' });
+            return;
+        }
+
+        clock.advance(advanceMs);
+        response.json({ now: clock.now().toISOString(), offsetMs: clock.offsetMs() });
     });
 
     app.get('/__test/emails', (_request: Request, response: Response) => {

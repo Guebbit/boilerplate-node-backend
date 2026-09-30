@@ -20,12 +20,14 @@ It is also the lightest way for a human to get a working API for anything — a 
 
 ## The control surface
 
-`npm run demo` calls `enableDemoProfile()` in-process, before `src/app.ts` is even imported — the only call site, so no environment variable can switch this on. It additionally mounts three routes, before the 404 catch-all and inert in every other profile:
+`npm run demo` calls `enableDemoProfile()` in-process, before `src/app.ts` is even imported — the only call site, so no environment variable can switch this on. It additionally mounts five routes, before the 404 catch-all and inert in every other profile:
 
 | Route                  | What it does                                                                                                                                                                                                                                                                                                                                                                                  |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST /__test/restore` | Empty every collection and put a named scenario back — `{ "scenario": "shop" }` (the default, the furnished shop) or `{ "scenario": "blank" }` (roles, the four named accounts and locales only) — then clear the outbox, refresh the locale overlay and flush the cache. A REPLAY of the copy this process built at boot, not a rebuild: roughly 10 ms, fast enough to run once per e2e spec |
 | `GET /__test/scenario` | What is currently restored: the name, every seed account's login, and `subjects` — one row id per guarantee name (`order.paid`, `product.outOfStock`, …). The only way to address a specific order, since order ids are minted at boot rather than pinned                                                                                                                                     |
+| `GET /__test/clock`    | The demo clock: `{ now, offsetMs }` — what `Date.now()` answers, and how far it is ahead of real time                                                                                                                                                                                                                                                                                         |
+| `POST /__test/clock`   | Move the clock FORWARD: `{ "advanceMs": 3600000 }`. Never back (a negative or non-numeric value is a 400). Moves nothing else: a job that should react is triggered through its own door — the reservation sweep is `POST /inventory/reservations/sweep`. A restore puts it back to real time. Jumps beyond the refresh-token lifetime end the session, so log in again                       |
 | `GET /__test/emails`   | The emails the app "sent" since the last restore. In demo mode the mailer (`src/infrastructure/adapters/mailer.ts`) records to an in-memory outbox (`demo-outbox.ts`) instead of talking to SMTP, with the reset/verify token lifted out of the link — a password-reset spec is the token in the email, or it is nothing                                                                      |
 
 The routes are unauthenticated on purpose: the profile only ever binds beside an in-memory database that `npm run demo` created seconds earlier. There is nothing to protect and no deployment that mounts them — `enableDemoProfile()` is called nowhere but `scenarios/run-server.ts`.
@@ -73,6 +75,23 @@ answers.
 ```
 ← 200 { "emails": [] }                          // nothing sent since the last restore
 ← 200 { "emails": [{ "to": "...", "subject": "...", "...": "..." }] }
+```
+
+### The clock
+
+`Date` alone is faked (`@sinonjs/fake-timers`, `toFake: ['Date']`, `shouldAdvanceTime`), installed by
+`scenarios/run-server.ts` before the app loads. Timers, the Mongo driver's heartbeats and
+`performance` stay real, so nothing freezes. The `src/` side only knows the `DemoClock` interface
+(`src/infrastructure/runtime/demo-clock.ts`); the package is a dev dependency and a production image
+never loads it. Why not short env windows: they cannot reach the 14-day withdrawal minimum or the
+constants that are hard-coded, and they are process-wide.
+
+```mermaid
+flowchart LR
+    Spec["spec: cy.travel(ms)"] -->|"POST /__test/clock"| Clock["demo clock: Date + ms"]
+    Spec -->|"then trigger the job"| Job["e.g. POST /inventory/reservations/sweep"]
+    Clock -. "every new Date() reads it" .-> Job
+    Restore["POST /__test/restore"] -->|"reset"| Clock
 ```
 
 ## The named accounts

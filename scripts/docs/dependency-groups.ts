@@ -127,7 +127,10 @@ export const DEV_GROUPS: DependencyGroup[] = [
             '@swc/core',
             '@swc/jest',
             'supertest',
-            'mongodb-memory-server'
+            'mongodb-memory-server',
+            // The demo profile's `Date`-only clock (`scenarios/support/demo-clock.ts`); jest's own
+            // fake timers depend on the same package.
+            '@sinonjs/fake-timers'
         ]
     },
     {
