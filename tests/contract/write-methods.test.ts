@@ -192,3 +192,48 @@ describe('a 201 names the new resource in Location (WM-D1)', () => {
         expect(response.headers.location).toBe('/account');
     });
 });
+
+describe('conditional writes (RFC 9110 §13.1.1)', () => {
+    // The shared response check (`@tests/contract`) fails a 200 that forgets the `ETag` the spec
+    // requires, and a 412 the operation never declared — so these cases pin the spec AND the server.
+    it('refuses a stale If-Match on a PATCH with a documented 412', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .patch(`/products/${product.id}`)
+            .set('Authorization', bearer)
+            .set('If-Match', '"1"')
+            .send({ active: false });
+
+        expect(response.status).toBe(412);
+        expect(response.body.errors[0].code).toBe('PRECONDITION_FAILED');
+    });
+
+    it('refuses a stale If-Match on a DELETE with a documented 412', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .delete(`/products/${product.id}`)
+            .set('Authorization', bearer)
+            .set('If-Match', '"1"');
+
+        expect(response.status).toBe(412);
+    });
+
+    it('sends the ETag on a read and on the write that follows it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const read = await api().get(`/products/${product.id}`).set('Authorization', bearer);
+        const write = await api()
+            .patch(`/products/${product.id}`)
+            .set('Authorization', bearer)
+            .set('If-Match', read.headers.etag)
+            .send({ active: false });
+
+        expect(write.status).toBe(200);
+        expect(write.headers.etag).not.toBe(read.headers.etag);
+    });
+});

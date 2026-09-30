@@ -7,10 +7,11 @@
  * boundary, never by assuming a neighbour's text is concatenated above.
  *
  * Compiled by `redocly bundle` rather than concatenated, because the comments that matter are in
- * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Three steps
+ * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Four steps
  * run after it, on the bundle: {@link withAppLevelResponses} merges the root's
  * `x-app-level-responses` (429, and 400/413/415 for a body-carrying operation) into every
- * operation that doesn't already declare its own; {@link withModuleStamps} tags every operation
+ * operation that doesn't already declare its own; {@link withVersionedResources} hangs `ETag`,
+ * `If-Match` and 412 on every path marked `x-versioned`; {@link withModuleStamps} tags every operation
  * with the `x-module` its owning fragment names — never hand-written per operation; and
  * {@link withErrorCodes} publishes every fragment's own `x-error-codes` as one collected catalogue.
  *
@@ -248,6 +249,76 @@ export const withAppLevelResponses = (bundled: string): string => {
     return stringifyYaml(document_, { lineWidth: 0 });
 };
 
+/** The methods an `x-versioned` marker may name: reads that hand out an `ETag`, writes that take `If-Match`. */
+const VERSIONED_READ_METHODS = new Set(['get']);
+const VERSIONED_WRITE_METHODS = new Set(['put', 'patch', 'delete']);
+
+/** As much of a versioned path item as {@link withVersionedResources} reads. */
+type VersionedPathItem = Record<string, unknown> & { 'x-versioned'?: string[] };
+
+/**
+ * Adds the `ETag` header to an operation's inline `200`. A `200` that is a `$ref` cannot take one
+ * — a sibling of `$ref` is ignored — so it is refused loudly rather than left silently bare.
+ */
+const withEtagHeader = (operation: Operation, where: string): void => {
+    const ok = operation.responses?.['200'];
+    if (typeof ok !== 'object' || ok === null || '$ref' in ok)
+        throw new Error(
+            `[openapi] ${where}: an \`x-versioned\` operation needs an inline 200 to hang \`ETag\` on, not a $ref.`
+        );
+    Object.assign(ok, { headers: { ETag: { $ref: '#/components/headers/ETag' } } });
+};
+
+/**
+ * Adds the `If-Match` parameter and the `412` to a write operation, leaving anything the
+ * operation already declares for itself.
+ */
+const withIfMatch = (operation: Operation): void => {
+    const withParameters = operation as Operation & { parameters?: unknown[] };
+    withParameters.parameters = [
+        ...(withParameters.parameters ?? []),
+        { $ref: '#/components/parameters/IfMatchHeader' }
+    ];
+    operation.responses = {
+        '412': { $ref: '#/components/responses/PreconditionFailed' },
+        ...operation.responses
+    };
+};
+
+/**
+ * Apply every path item's `x-versioned: [methods]` marker: `ETag` on the listed reads and on the
+ * listed `put`/`patch` `200`s, and `If-Match` plus `412` on the listed writes.
+ *
+ * Runs on the bundled document for the same reason {@link withAppLevelResponses} does, and the
+ * marker STAYS in the published contract — it is the machine-readable list of which resources
+ * are versioned, which the contract tests walk.
+ *
+ * @throws Error if a marker names a method the path item does not declare, or one that is neither read nor write
+ */
+export const withVersionedResources = (bundled: string): string => {
+    const parsed: unknown = parseYaml(bundled);
+    if (!isBundledDocument(parsed))
+        throw new Error('[openapi] the bundled document did not parse to an object.');
+
+    for (const [route, item] of Object.entries(parsed.paths ?? {})) {
+        const methods = (item as VersionedPathItem)['x-versioned'];
+        for (const method of methods ?? []) {
+            const operation = item[method];
+            if (!isOperation(operation))
+                throw new Error(
+                    `[openapi] ${route}: x-versioned names ${method}, which it does not declare.`
+                );
+            if (VERSIONED_READ_METHODS.has(method)) withEtagHeader(operation, `${method} ${route}`);
+            else if (VERSIONED_WRITE_METHODS.has(method)) withIfMatch(operation);
+            else throw new Error(`[openapi] ${route}: x-versioned cannot name ${method}.`);
+            if (method === 'put' || method === 'patch')
+                withEtagHeader(operation, `${method} ${route}`);
+        }
+    }
+
+    return stringifyYaml(parsed, { lineWidth: 0 });
+};
+
 /** Narrows a fragment's `x-error-codes` entry to the shape this step requires. */
 const isErrorCodeEntry = (value: unknown): value is ErrorCodeEntry =>
     typeof value === 'object' &&
@@ -431,7 +502,7 @@ const compile = (): string => {
         MARKER +
         withErrorCodes(
             withModuleStamps(
-                withAppLevelResponses(readFileSync(temporary, 'utf8')),
+                withVersionedResources(withAppLevelResponses(readFileSync(temporary, 'utf8'))),
                 moduleOfPath()
             ),
             collectErrorCodes()

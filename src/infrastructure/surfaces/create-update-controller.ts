@@ -16,6 +16,7 @@
 import type { Request, Response } from 'express';
 import type { ZodObject, ZodType } from 'zod';
 import { successResponse } from '@infrastructure/http/response';
+import { setEtag, withIfMatch } from '@infrastructure/http/preconditions';
 import {
     extractAndValidateId,
     readInput,
@@ -133,8 +134,8 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
 
     /**
      * The one pipeline both verbs run: id → decode → validate → (PUT only) fill and complete →
-     * `update()` → respond. `schema`, `fills` and `complete` are the only things that differ
-     * between the verbs.
+     * `update()` (under the request's `If-Match`, if any) → respond with the new `ETag`.
+     * `schema`, `fills` and `complete` are the only things that differ between the verbs.
      */
     const run =
         (
@@ -160,16 +161,23 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
             // the same shape, since every field it adds is one the PUT schema itself accepts null for.
             const changes = fillOmittedWithNull(body, fills) as TPatch['_output'];
 
-            return (complete ? complete(id, changes) : Promise.resolve(changes))
-                .then((completed) => update(id, completed, request))
-                .then((result) => {
-                    // Sends the error envelope (404, 409, 422) and stops here if refused.
-                    if (refused(response, result)) return;
-                    return Promise.resolve(present(result.data, request)).then((shaped) => {
-                        successResponse(response, shaped, 200, result.message);
-                    });
-                })
-                .catch(catchAs(response, operation));
+            return (
+                (complete ? complete(id, changes) : Promise.resolve(changes))
+                    // An `If-Match` on the request fences the row's write; without one this is just `update()`.
+                    .then((completed) =>
+                        withIfMatch(request, id, () => update(id, completed, request))
+                    )
+                    .then((result) => {
+                        // Sends the error envelope (404, 409, 422) and stops here if refused.
+                        if (refused(response, result)) return;
+                        // The saved row's new tag, so the caller's next edit needs no re-read.
+                        setEtag(response, result.data);
+                        return Promise.resolve(present(result.data, request)).then((shaped) => {
+                            successResponse(response, shaped, 200, result.message);
+                        });
+                    })
+                    .catch(catchAs(response, operation))
+            );
         };
 
     const replaceOperation = operationName('replace', entity);

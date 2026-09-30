@@ -176,6 +176,9 @@ export const installSecurity = (app: Express): void => {
                 // Declared by the contract on the retry-safe writes; a browser sending it would
                 // otherwise fail the preflight.
                 'Idempotency-Key',
+                // Declared by the contract on PUT/PATCH/DELETE of a versioned row — see
+                // `src/infrastructure/http/preconditions.ts`.
+                'If-Match',
                 // Read by humanChallengeGate (human-challenge.ts) once a provider is active.
                 'x-antibot-challenge-token',
                 // Read by callerContextOf (infrastructure/http/request.ts) for every request's
@@ -189,7 +192,9 @@ export const installSecurity = (app: Express): void => {
                 'traceparent',
                 'Retry-After',
                 'RateLimit',
-                'RateLimit-Policy'
+                'RateLimit-Policy',
+                // The version an edit form sends back as `If-Match`.
+                'ETag'
             ]
         })
     );

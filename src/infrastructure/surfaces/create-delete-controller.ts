@@ -10,6 +10,7 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
+import { withIfMatch } from '@infrastructure/http/preconditions';
 import { extractAndValidateId, readInput } from '@infrastructure/http/request';
 import { hardDeleteSchema } from '@infrastructure/http/schemas';
 import {
@@ -67,7 +68,8 @@ export const createDeleteController = ({ entity, remove, notFoundKey }: DeleteCo
             return Promise.resolve(rejectValidation(response, parseResult.error));
         const hardDelete = parseResult.data;
 
-        return remove(id, hardDelete, request)
+        // An `If-Match` on the request fences the delete; without one this is just `remove()`.
+        return withIfMatch(request, id, () => remove(id, hardDelete, request))
             .then((result) => {
                 // Sends the error envelope and stops here if the service refused.
                 if (refused(response, result)) return;

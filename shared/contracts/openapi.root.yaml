@@ -46,6 +46,11 @@ x-error-codes:
             status: 409,
             description: "The request is well-formed but conflicts with the resource's current state."
         }
+    PRECONDITION_FAILED:
+        {
+            status: 412,
+            description: "The write's `If-Match` no longer describes the stored resource — someone changed or removed it since the caller read it. Re-read, reapply the edit, resend."
+        }
     VALIDATION_ERROR:
         {
             status: 422,
@@ -261,6 +266,23 @@ components:
                 being processed by another in-flight request answers 409. Omitting the header
                 simply forgoes replay protection — the write still happens normally.
 
+        # Declared once here and added to a versioned path's PUT/PATCH/DELETE by the bundler, from
+        # the path item's `x-versioned` marker (`scripts/contracts/openapi-bundle.ts`) — never
+        # hand-copied per operation, so a fifth versioned resource cannot forget it.
+        IfMatchHeader:
+            name: If-Match
+            in: header
+            required: false
+            schema:
+                type: string
+                maxLength: 200
+            description: >
+                The `ETag` this client last read for the resource (RFC 9110 §13.1.1), quoted as
+                received. The write runs only if the stored resource is still at that version;
+                otherwise it answers 412 `PRECONDITION_FAILED` and changes nothing. `*` means "any
+                version, as long as it exists". Omitting the header keeps the old behaviour: the
+                write is unconditional, last writer wins.
+
         # Query ID parameters (just for filtering)
         #
         # `id` is a batch read, not a lookup: an array so `?id=a&id=b` reads many at once, filtered
@@ -338,6 +360,16 @@ components:
             schema:
                 type: string
 
+        ETag:
+            required: true
+            description: >-
+                The resource's current version as a strong entity-tag (RFC 9110 §8.8.3). Send it
+                back as `If-Match` on `PUT`, `PATCH` or `DELETE` to refuse the write if someone
+                else changed the resource in between. Opaque: compare it, never parse it. It
+                validates writes only — a read never answers `304` from it.
+            schema:
+                type: string
+
     responses:
         Success:
             description: Success
@@ -375,6 +407,15 @@ components:
                         $ref: '#/components/schemas/ErrorResponse'
         Conflict:
             description: The request conflicts with the current state of the resource
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        PreconditionFailed:
+            description: >-
+                The request's `If-Match` no longer matches the stored resource: it was changed
+                (or removed) after the caller read it. Nothing was written. Read it again,
+                reapply the edit, and resend with the new `ETag`.
             content:
                 application/json:
                     schema:

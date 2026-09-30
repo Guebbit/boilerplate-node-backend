@@ -13,6 +13,7 @@
 import { logger } from '@infrastructure/adapters/logger';
 import { t } from '@infrastructure/i18n';
 import { isDuplicateKey, isConnectionError } from '@infrastructure/persistence/mongo-errors';
+import { PreconditionFailedError } from '@infrastructure/persistence/versioning';
 import { isRedisConnectionError } from '@infrastructure/adapters/redis';
 import { generateReject, rejectResponse } from './response';
 // Type-only — see `response.ts`'s own import for why: this file sits on `contracts:bundle`'s
@@ -80,6 +81,8 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
         // question exactly like the other four branches above, not the server's fault, so it
         // belongs here and not as a one-off `.catch()` at each of `users`' three write paths.
         if (error instanceof ConflictError) return [409, error.message || 'Unknown error'];
+        // The caller's `If-Match` no longer describes the row: 412, and the row is untouched.
+        if (error instanceof PreconditionFailedError) return [412, 'Precondition failed'];
         // Mongo/Redis unreachable — the server is temporarily broken, not the request. Checked
         // before the generic fallback below, which would otherwise answer 500 and imply a bug.
         if (isInfrastructureError(error)) return [503, 'Service unavailable'];

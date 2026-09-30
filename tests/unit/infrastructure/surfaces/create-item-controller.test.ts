@@ -92,3 +92,24 @@ describe('createItemController — found/not-found round trip, unaffected by han
         expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
     });
 });
+
+describe('createItemController — ETag', () => {
+    it("stamps the row's version as ETag, so an edit form can send it back as If-Match", async () => {
+        const setHeader = jest.fn();
+        const response = asStub<Response>({
+            status: jest.fn().mockReturnThis(),
+            json: jest.fn().mockReturnThis(),
+            setHeader,
+            req: { headers: {} }
+        });
+        const handler = createItemController({
+            entity: 'widget',
+            fetch: (id) => Promise.resolve({ id, updatedAt: new Date(1_700_000_000_000) }),
+            notFoundKey: 'widgets.not-found'
+        });
+
+        await handler(makeRequest('1'), response);
+
+        expect(setHeader).toHaveBeenCalledWith('ETag', '"1700000000000"');
+    });
+});

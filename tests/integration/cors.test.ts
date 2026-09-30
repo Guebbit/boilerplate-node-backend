@@ -119,4 +119,23 @@ describe('CORS', () => {
         expect(allowedHeaders).toContain('x-antibot-challenge-token');
         expect(allowedHeaders).toContain('x-analytics-consent');
     });
+
+    /**
+     * The conditional-write pair: a browser edit form sends `If-Match` (pre-cleared here, or the
+     * preflight refuses the PATCH) and must be able to READ the `ETag` it sends back (exposed
+     * here, or the response header is invisible to JS).
+     */
+    it('lets a browser send If-Match and read ETag', async () => {
+        const preflight = await api()
+            .options('/products/507f1f77bcf86cd799439011')
+            .set('Origin', ALLOWED_ORIGIN)
+            .set('Access-Control-Request-Method', 'PATCH')
+            .set('Access-Control-Request-Headers', 'if-match');
+        const read = await api().get('/').set('Origin', ALLOWED_ORIGIN);
+
+        expect(preflight.headers['access-control-allow-headers']?.toLowerCase()).toContain(
+            'if-match'
+        );
+        expect(read.headers['access-control-expose-headers']?.toLowerCase()).toContain('etag');
+    });
 });
