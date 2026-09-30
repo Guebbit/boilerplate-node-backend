@@ -147,8 +147,7 @@ export const nonLocalE2eSmtpHost = (): string[] => {
  * @returns `['NODE_MAIL_TRANSPORT']` when it is unset in such an environment, otherwise `[]`
  */
 export const unsetMailTransportOutsideDevelopment = (): string[] => {
-    const relaxed = ['development', 'test'].includes(process.env.NODE_ENV ?? '');
-    return relaxed || process.env.NODE_MAIL_TRANSPORT ? [] : ['NODE_MAIL_TRANSPORT'];
+    return isRelaxedEnvironment() || process.env.NODE_MAIL_TRANSPORT ? [] : ['NODE_MAIL_TRANSPORT'];
 };
 
 /** The memoised transport. See {@link getTransporter}. */
