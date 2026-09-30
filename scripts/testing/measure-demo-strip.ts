@@ -88,6 +88,11 @@ const assembleScratchCopy = (): void => {
             '"strict": true,\n"preserveSymlinks": true,'
         )
     );
+
+    // `regenerate`'s `docs:graph` asks `git ls-files` which files each module owns, so the scratch
+    // tree has to be a repository.
+    runInScratch('git', ['init', '--quiet']);
+    runInScratch('git', ['add', '--all']);
 };
 
 /** A removal recipe: how to take one kind of module out of the scratch copy. */
