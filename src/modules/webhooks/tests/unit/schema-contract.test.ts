@@ -124,13 +124,14 @@ describe('webhookDeliverySchema', () => {
         ]);
     });
 
-    it('declares the log filters, the retry sweep index and the stranded-lease index, plus the TTL sweep', () => {
+    it('declares the log filters, the retry sweep index, the stranded-lease index and the per-event uniqueness, plus the TTL sweep', () => {
         expect(indexSpecs(webhookDeliverySchema)).toEqual([
             'createdAt_1: createdAt+1',
             'status_1_createdAt_-1: status+1, createdAt-1',
             'status_1_leaseExpiresAt_1: status+1, leaseExpiresAt+1',
             'status_1_nextAttemptAt_1: status+1, nextAttemptAt+1',
             'subscriptionId_1_createdAt_-1: subscriptionId+1, createdAt-1',
+            'subscriptionId_1_eventId_1: subscriptionId+1, eventId+1',
             'tenant_1_createdAt_-1: tenant+1, createdAt-1'
         ]);
     });
@@ -145,6 +146,7 @@ describe('webhookDeliverySchema', () => {
             'status_1_leaseExpiresAt_1: (none)',
             'status_1_nextAttemptAt_1: (none)',
             'subscriptionId_1_createdAt_-1: (none)',
+            'subscriptionId_1_eventId_1: unique=true',
             'tenant_1_createdAt_-1: (none)'
         ]);
     });

@@ -24,7 +24,7 @@ import {
     mailBuyer,
     paymentSucceededEmail
 } from '@modules/orders';
-import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '../events';
+import { PAYMENT_FAILED } from '../events';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -37,6 +37,7 @@ import { CONFIRMABLE_PAYMENT_STATUSES, SETTLEABLE_PAYMENT_STATUSES } from '../do
 import type { PaymentDocument } from '../model';
 import { callerScope } from './scope';
 import { performRefund } from './refunds';
+import { announcePaymentSucceeded } from './announce';
 import { notPayable } from './errors';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -195,14 +196,13 @@ export const settlePayment = (
          * way, and `inventory` tells the two apart and alarms only the second.
          */
         await inventoryService.commitForOrder(orderId);
-        // The commit landed (or was already a harmless replay) — the effect this marker tracked
-        // is done either way, so it stops being anyone's job to retry.
-        await paymentRepository.clearPendingEffects(orderId);
 
-        // Fire-and-forget, like `PAYMENT_FAILED` above: `webhooks` reacts to this from its own
-        // `subscribe()` hook, and a slow or failing listener there must not delay the response
-        // this settlement's callers (confirm, sync, the provider webhook) are already sending.
-        void emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: String(succeeded._id), orderId });
+        // The commit landed (or was already a harmless replay) — the effect this marker tracked
+        // is done, so the marker goes and `payment.succeeded` is written to the outbox in the
+        // same transaction. If this call dies before it, the marker stays and the sweep
+        // (`./effects.ts`) finishes both; if it dies after, the relay publishes the row. The
+        // `webhooks` fan-out and every other listener run from the relay, never from here.
+        await announcePaymentSucceeded(String(succeeded._id), orderId);
 
         // The customer's answer to "did my card go through" — `orderConfirmEmail` at checkout
         // only ever said the order was received, never that it was paid. Fire-and-forget, same
