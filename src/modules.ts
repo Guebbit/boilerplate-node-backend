@@ -3,11 +3,10 @@
  * THE registry: which domains this build serves. Adding one is a folder under `src/modules/` plus
  * one line here; removing one is `rm -rf` plus deleting its line, and any resulting break is real
  * coupling worth seeing. Order is alphabetical only to keep diffs boring — mount order, import
- * resolution and `subscribe` timing don't depend on it. A module shipping its own `openapi.yaml`
- * needs a matching line in `MODULE_ORDER` (`scripts/contracts/openapi-bundle.ts`) — that bundler
- * discovers membership from disk and throws, naming the module, if a line is missing; it can't
- * read this list itself to check that, since it has to run before `enabledModules` is even
- * importable (its modules import the generated `@api/` client the bundler produces).
+ * resolution and `subscribe` timing don't depend on it. The contract bundlers do not read this
+ * list: they run before `enabledModules` is even importable (its modules import the generated
+ * `@api/` client the bundler produces), so they discover modules from disk instead
+ * (`scripts/contracts/section-order.ts`).
  */
 
 import type { AppModule } from '@kernel/registry';

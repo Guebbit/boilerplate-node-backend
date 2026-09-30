@@ -591,9 +591,9 @@ what it measured.
 
 **It works because nothing central enumerates domains.** Route mounting, the seeder, the i18n boot,
 the audit vocabulary and the metrics registry all walk the registry rather than naming its entries,
-so none of them is on either checklist. `src/modules.ts` is the one file that names a domain, and
-the three `*_SECTION_ORDER` lists are the one exception — the price of a contract assembled from
-per-module fragments and shared with the paired frontend.
+so none of them is on either checklist. `src/modules.ts` is the one file that names a domain. The
+three contract order lists name domains too, but only as a preferred position — membership is read
+off disk (`scripts/contracts/section-order.ts`), so they are not a census and never need an edit.
 
 **And it is measured, in both directions.** `wishlist` was added under it: one folder, one registry
 line, its section-order entries, and **zero** edits to any existing file.
