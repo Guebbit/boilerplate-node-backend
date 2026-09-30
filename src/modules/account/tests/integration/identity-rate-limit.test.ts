@@ -1,4 +1,7 @@
+import type { RequestHandler } from 'express';
 import supertest from 'supertest';
+import type { AuthContext } from '@types';
+import { asStub } from '@tests/stub';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
@@ -21,6 +24,59 @@ const withAccountRateLimits = <T>(
     pick: (rateLimitsModule: typeof import('@modules/account/rate-limits')) => T
 ): Promise<T> =>
     withReloadedRateLimits(() => import('@modules/account/rate-limits'), overrides, pick);
+
+/** Stands in for `isAuth`: resolves the caller from a test header, as the real one does from a token. */
+const asAccount: RequestHandler = (request, _response, next) => {
+    const id = request.header('x-test-account');
+    if (id) request.authContext = asStub<AuthContext>({ id });
+    next();
+};
+
+describe('credentialLimiters on an authenticated route', () => {
+    afterEach(() => jest.resetModules());
+
+    it('spends one budget per ACCOUNT, however many address blocks the guesses come from', async () => {
+        const credentialLimiters = await withAccountRateLimits(
+            {
+                NODE_AUTH_RATE_LIMIT_MAX: '2',
+                NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '50',
+                NODE_AUTH_RATE_LIMIT_BLOCK_MAX: '50'
+            },
+            (module) => module.credentialLimiters
+        );
+
+        // 401: a wrong password, the only answer that spends `skipSuccessfulRequests` budgets.
+        const app = appAnswering(401, true, asAccount, ...credentialLimiters);
+        const guess = (account: string, ip: string) =>
+            supertest(app).post('/route').set('X-Forwarded-For', ip).set('x-test-account', account);
+
+        expect(await statusOf(guess('account-a', '203.0.113.5'))).toBe(401);
+        // A different /24: without account keying this would be a fresh identity bucket.
+        expect(await statusOf(guess('account-a', '198.51.100.5'))).toBe(401);
+        expect(await statusOf(guess('account-a', '192.0.2.5'))).toBe(429);
+
+        // Another account, from the very address already refused for the first, is untouched.
+        expect(await statusOf(guess('account-b', '203.0.113.5'))).toBe(401);
+    });
+
+    it('still keys an unauthenticated attempt on the email it names', async () => {
+        const credentialLimiters = await withAccountRateLimits(
+            {
+                NODE_AUTH_RATE_LIMIT_MAX: '1',
+                NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '50',
+                NODE_AUTH_RATE_LIMIT_BLOCK_MAX: '50'
+            },
+            (module) => module.credentialLimiters
+        );
+
+        const app = appAnswering(401, true, asAccount, ...credentialLimiters);
+        const guess = (email: string) => supertest(app).post('/route').send({ email });
+
+        expect(await statusOf(guess('victim@example.com'))).toBe(401);
+        expect(await statusOf(guess('victim@example.com'))).toBe(429);
+        expect(await statusOf(guess('other@example.com'))).toBe(401);
+    });
+});
 
 describe('signupLimiters', () => {
     afterEach(() => jest.resetModules());
