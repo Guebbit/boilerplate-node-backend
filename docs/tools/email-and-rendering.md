@@ -53,6 +53,36 @@ Two cases are **not** a deployment's to set, and sit above the variable:
 `scenarios/apply.ts` sets `log` for the same reason a staging box would: seeding PLACES orders, so
 every one of them wants to email a recipient the seeder invented.
 
+### Boot rules
+
+Two refusals, both in `src/app/required-config.ts`:
+
+- **Outside `development` and `test`, `NODE_MAIL_TRANSPORT` must be set.** Unset means `smtp`;
+  a deployment that never chose it would mail for real by accident, or fail at the first reset link.
+  `.env-example` ships `log`.
+- **The e2e guard** (below).
+
+### The e2e guard
+
+A live e2e run fires signup, reset and order mail at invented recipients. If `.env` holds real
+SMTP credentials, that mail leaves the machine. So the run has its own entry point:
+
+```sh
+npm run host -- e2e:serve
+```
+
+It sets `NODE_E2E_RUN=1`, and boot then refuses `smtp` unless `NODE_SMTP_HOST` is `localhost`,
+`127.0.0.1`, `::1` or `mailpit`. `log` and `outbox` open no socket and always pass.
+
+For a readable inbox, run Mailpit and point the app at it (`NODE_SMTP_HOST=127.0.0.1`,
+`NODE_SMTP_PORT=1025`, any user and password):
+
+```sh
+npm run compose -- --profile integrations up -d mailpit   # inbox at http://localhost:8025
+# no compose: docker run -d -p 127.0.0.1:1025:1025 -p 127.0.0.1:8025:8025 \
+#   -e MP_SMTP_AUTH_ACCEPT_ANY=1 -e MP_SMTP_AUTH_ALLOW_INSECURE=1 axllent/mailpit
+```
+
 ### SMTP configuration
 
 | Env var          | Meaning                                                   |

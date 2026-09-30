@@ -24,6 +24,7 @@ withoutEnvironmentInThisFile([
     'NODE_SMTP_SENDER',
     'NODE_ANALYTICS_PROVIDER',
     'NODE_MAIL_TRANSPORT',
+    'NODE_E2E_RUN',
     'NODE_LOG_PERSONAL_FIELDS',
     'NODE_ANTIBOT_PROVIDER',
     'NODE_ANTIBOT_ALTCHA_SECRET',
@@ -120,6 +121,81 @@ describe('the SMTP group', () => {
         process.env.NODE_SMTP_SENDER = 'Example <noreply@example.com>';
 
         expect(assertApp).not.toThrow();
+    });
+});
+
+/** A configured SMTP transport pointing at `host`, started as an e2e run. */
+const e2eSmtp = (host: string): void => {
+    configure();
+    process.env.NODE_E2E_RUN = '1';
+    process.env.NODE_MAIL_TRANSPORT = 'smtp';
+    process.env.NODE_SMTP_HOST = host;
+    process.env.NODE_SMTP_USER = 'x';
+    process.env.NODE_SMTP_PASS = 'x';
+    process.env.NODE_SMTP_SENDER = 'x@example.com';
+};
+
+describe('the mail guards', () => {
+    it('refuses to boot outside development and test with NODE_MAIL_TRANSPORT unset', () => {
+        configure();
+        process.env.NODE_ENV = 'production';
+
+        expect(assertApp).toThrow(/NODE_MAIL_TRANSPORT/);
+    });
+
+    it('refuses an unset NODE_ENV too, since unset is not development', () => {
+        configure();
+        delete process.env.NODE_ENV;
+
+        expect(assertApp).toThrow(/NODE_MAIL_TRANSPORT/);
+    });
+
+    it.each(['smtp', 'log'])('accepts an explicit NODE_MAIL_TRANSPORT=%s in production', (name) => {
+        configure();
+        process.env.NODE_ENV = 'production';
+        process.env.NODE_CORS_ORIGIN = 'https://app.example.com';
+        process.env.NODE_PSEUDONYM_KEY = 'a-long-enough-pseudonym-key';
+        process.env.NODE_MAIL_TRANSPORT = name;
+
+        expect(assertApp).not.toThrow();
+    });
+
+    describe('an e2e run (NODE_E2E_RUN=1)', () => {
+        it('refuses a real SMTP host', () => {
+            e2eSmtp('smtp.example.com');
+
+            expect(assertApp).toThrow(/NODE_SMTP_HOST=smtp\.example\.com is not a local mail sink/);
+        });
+
+        it('refuses smtp with no host at all', () => {
+            e2eSmtp('');
+            delete process.env.NODE_SMTP_HOST;
+
+            expect(assertApp).toThrow(/\(unset\)/);
+        });
+
+        it.each(['localhost', '127.0.0.1', '::1', 'mailpit'])(
+            'allows the local host %s',
+            (host) => {
+                e2eSmtp(host);
+
+                expect(assertApp).not.toThrow();
+            }
+        );
+
+        it.each(['log', 'outbox'])('allows %s whatever the SMTP host says', (name) => {
+            e2eSmtp('smtp.example.com');
+            process.env.NODE_MAIL_TRANSPORT = name;
+
+            expect(assertApp).not.toThrow();
+        });
+
+        it('leaves a real host alone when the run is not an e2e run', () => {
+            e2eSmtp('smtp.example.com');
+            delete process.env.NODE_E2E_RUN;
+
+            expect(assertApp).not.toThrow();
+        });
     });
 });
 

@@ -565,6 +565,29 @@ services:
             retries: 3
             start_period: 10s
 
+    # mailpit: a local SMTP sink with a web inbox. Somewhere for the app's mail to be delivered TO
+    # during a live e2e run, so reset links and 2FA codes are readable and nothing leaves the machine.
+    #
+    # Receives only. Point the app at it with NODE_SMTP_HOST=127.0.0.1 (host) or `mailpit` (the
+    # `app` container) and port 1025; the e2e mail guard allows exactly those hosts.
+    #
+    # Profile-gated, so a plain `up` is unchanged: `--profile integrations` starts it.
+    # https://mailpit.axllent.org/docs/configuration/runtime-options/
+    mailpit:
+        logging: *container-logging
+        profiles: ['integrations']
+        image: axllent/mailpit:latest
+        restart: unless-stopped
+        environment:
+            # Accept any login: the app sends NODE_SMTP_USER/PASS, and a sink has no accounts.
+            MP_SMTP_AUTH_ACCEPT_ANY: '1'
+            # Accept AUTH without TLS; the app's port-1025 connection is plain SMTP.
+            MP_SMTP_AUTH_ALLOW_INSECURE: '1'
+        ports:
+            # Loopback only: the inbox holds reset tokens. No volume: mail is in memory, gone on restart.
+            - '127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025'
+            - '127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025'
+
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:
     boilerplate_mongodb_volume:

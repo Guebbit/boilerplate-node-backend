@@ -106,6 +106,47 @@ const SMTP_COMPANIONS = ['NODE_SMTP_USER', 'NODE_SMTP_PASS', 'NODE_SMTP_SENDER']
 export const missingSmtpCompanions = (): string[] =>
     process.env.NODE_SMTP_HOST ? SMTP_COMPANIONS.filter((key) => !process.env[key]) : [];
 
+/**
+ * SMTP hosts a live e2e run may dial: this machine, or the compose `mailpit` service.
+ * Anything else is a real mail server.
+ */
+const E2E_LOCAL_SMTP_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '::1', 'mailpit'];
+
+/**
+ * Boot check: a run started through `npm run host -- e2e:serve` (which sets `NODE_E2E_RUN=1`)
+ * must not point `smtp` at a real server. A live suite fires signup, reset and order mail at
+ * invented recipients, and `.env` may hold real credentials.
+ *
+ * `log` and `outbox` open no socket, so they always pass.
+ *
+ * See: docs/tools/email-and-rendering.md#the-e2e-guard
+ *
+ * @returns one problem line when the guard refuses, otherwise `[]`
+ */
+export const nonLocalE2eSmtpHost = (): string[] => {
+    if (process.env.NODE_E2E_RUN !== '1') return [];
+    if (environmentChoice('NODE_MAIL_TRANSPORT', MAIL_TRANSPORTS, 'smtp') !== 'smtp') return [];
+
+    const host = process.env.NODE_SMTP_HOST ?? '';
+    return E2E_LOCAL_SMTP_HOSTS.includes(host)
+        ? []
+        : [
+              `NODE_SMTP_HOST=${host || '(unset)'} is not a local mail sink; an e2e run allows only ${E2E_LOCAL_SMTP_HOSTS.join(', ')} (or NODE_MAIL_TRANSPORT=log)`
+          ];
+};
+
+/**
+ * Boot check: outside `development` and `test`, `NODE_MAIL_TRANSPORT` must be named. Unset means
+ * `smtp`, and a deployment that never chose it would either mail for real by accident or fail on
+ * the first reset link.
+ *
+ * @returns `['NODE_MAIL_TRANSPORT']` when it is unset in such an environment, otherwise `[]`
+ */
+export const unsetMailTransportOutsideDevelopment = (): string[] => {
+    const relaxed = ['development', 'test'].includes(process.env.NODE_ENV ?? '');
+    return relaxed || process.env.NODE_MAIL_TRANSPORT ? [] : ['NODE_MAIL_TRANSPORT'];
+};
+
 /** The memoised transport. See {@link getTransporter}. */
 let transport: Transporter | undefined;
 

@@ -12,6 +12,8 @@
  * - The SMTP companions, since the kernel must not name the mail adapter directly — the probe
  *   itself lives with the adapter (`adapters/mailer.ts#missingSmtpCompanions`), this file only
  *   wires it in.
+ * - Two mail guards, also from the adapter: an e2e run may only use a local SMTP host, and a
+ *   deployment must name its transport.
  * - Four provider-selector probes: analytics, mail transport, the log personal-field mode and the
  *   antibot human-challenge ladder each pick an implementation by name; a wrong name must fail at
  *   boot, not on the first request that needs it. `checkSelector` turns each resolver's own throw
@@ -27,7 +29,12 @@
 
 import { checkSelector, type NonModuleChecks } from '@kernel/required-config';
 import type { RequiredConfig } from '@kernel/registry';
-import { missingSmtpCompanions, resolveMailTransport } from '@infrastructure/adapters/mailer';
+import {
+    missingSmtpCompanions,
+    nonLocalE2eSmtpHost,
+    resolveMailTransport,
+    unsetMailTransportOutsideDevelopment
+} from '@infrastructure/adapters/mailer';
 import { resolvePersonalFieldMode } from '@infrastructure/adapters/logger';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
 import { isEmailPolicy } from '@infrastructure/adapters/antibot';
@@ -98,6 +105,8 @@ export const APP_NON_MODULE_CHECKS: NonModuleChecks = {
     required: APP_REQUIRED_CONFIG,
     customChecks: [
         missingSmtpCompanions,
+        nonLocalE2eSmtpHost,
+        unsetMailTransportOutsideDevelopment,
         () => checkSelector('NODE_ANALYTICS_PROVIDER', resolveAnalyticsProvider),
         () => checkSelector('NODE_MAIL_TRANSPORT', resolveMailTransport),
         () => checkSelector('NODE_LOG_PERSONAL_FIELDS', resolvePersonalFieldMode),
