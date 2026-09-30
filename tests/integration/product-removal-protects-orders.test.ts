@@ -27,6 +27,7 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 
+import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, readProduct, productRepository } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
@@ -53,6 +54,7 @@ afterEach(() => {
 /** A pending order for one unit of `product`, through the real checkout flow. */
 const placePendingOrder = async (product: Awaited<ReturnType<typeof createProduct>>) => {
     const user = await createUser();
+    await giveAddress(user.id);
     await cartItemSetById(user.id, String(product._id), 1);
     await cartRepository.setShippingMethod(user.id, 'pickup');
     const result = await orderConfirm(user.id, testCallerContext, undefined);
@@ -157,6 +159,7 @@ describe('a payment attempt racing the removal event', () => {
     it('is refused with 409 ORDER_PRODUCT_UNAVAILABLE, naming the product', async () => {
         const product = await createProduct({ onHand: 5 });
         const user = await createUser();
+        await giveAddress(user.id);
         await cartItemSetById(user.id, String(product._id), 1);
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const checkout = await orderConfirm(user.id, testCallerContext, undefined);
@@ -186,6 +189,7 @@ describe('admin offline recording on an order whose product is gone', () => {
     it('still succeeds — the money already moved', async () => {
         const product = await createProduct({ onHand: 5 });
         const user = await createUser();
+        await giveAddress(user.id);
         await cartItemSetById(user.id, String(product._id), 1);
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const checkout = await orderConfirm(user.id, testCallerContext, undefined);

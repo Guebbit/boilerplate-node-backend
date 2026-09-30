@@ -28,9 +28,9 @@ flowchart TD
     A["1 · load the account<br/><i>users</i>"] --> P["2 · validate the payment method<br/><i>payments — listPaymentMethods</i>"]
     P --> Q["3 · the open-transfer cap<br/><i>orders — countOpenBankTransfers</i>"]
     Q --> B["4 · resolve the shipping method<br/>a stored choice the basket no longer fits counts as none<br/><i>cart — effectiveShippingChoice</i>"]
-    B --> C["5 · resolve the address,<br/>only when the method needs one<br/><i>account — addressForCheckout</i>"]
+    B --> C["5 · resolve the shipping address,<br/>only when a line ships to one<br/><i>addresses — addressForCheckout</i>"]
     C --> D["6 · join the lines against the catalogue<br/><i>products</i>"]
-    D --> E["7 · evaluate the rules<br/>and the method/address requirement<br/><i>cart/domain — evaluateShippingRequirement</i>"]
+    D --> E["7 · evaluate the rules, the method/address<br/>requirement, then resolve the billing address<br/><i>cart/domain — evaluateShippingRequirement;<br/>addresses — addressForCheckout</i>"]
     E --> F["8 · placeOrder<br/><i>orders — freeze lines, hold stock,<br/>invoice number, mint transfer reference, write</i>"]
     F --> H["9 · empty the cart, conditionally<br/><i>cart — on the __v it was read at</i>"]
     H --> I["10 · queue the email<br/><i>orders picks confirmation vs. transfer<br/>instructions off the order's paymentMethod</i>"]
@@ -39,9 +39,9 @@ flowchart TD
     A -.->|"no account"| R
     P -.->|"method not offered"| R
     Q -.->|"cap reached"| R
-        C -.->|"not the caller's address;<br/>or an addressId sent for a<br/>method that needs none"| R
+        C -.->|"not the caller's address;<br/>or an addressId sent when<br/>nothing ships to an address"| R
     D -.->|"product gone"| R
-    E -.->|"rule says no; a physical basket<br/>with no method, or an address-requiring<br/>method with none"| R
+    E -.->|"rule says no; a physical basket<br/>with no method, or an address-requiring<br/>method with none; no billing address<br/>to use"| R
     F -.->|"stock gone"| R
 
     L["lost the race — retract"]
@@ -57,14 +57,21 @@ flowchart TD
 ```
 
 Steps 1–7 are reads and refusals — genuinely checkout's own job: deciding whether this basket, this
-account and this address are allowed to become an order at all. Step 5 resolves an address only
-when the chosen method's `requiresAddress` is true — `pickup` ships to nobody, so it never even
-asks the address book for the caller's default; an explicit `addressId` sent alongside a method
-that needs none is refused (`CART_ADDRESS_NOT_APPLICABLE`) rather than silently dropped, so an
-order never freezes an address that means nothing. Step 7 also carries the shipping
+account and these addresses are allowed to become an order at all. Step 5 resolves a SHIPPING
+address only when a line ships to one — a physical basket under a method whose `requiresAddress` is
+true. A digital-only basket and `pickup` ship to nobody, so neither even asks the address book for
+the caller's default; an explicit `addressId` sent for them is refused
+(`CART_ADDRESS_NOT_APPLICABLE`) rather than silently dropped, so an order never freezes an address
+that means nothing. Step 7 also carries the shipping
 requirement: any `requiresShipping: true` line needs a method (`CART_SHIPPING_METHOD_REQUIRED`
 otherwise), and once a method is chosen, `ShippingMethod.requiresAddress` says whether it also needs
-an address (`CART_ADDRESS_REQUIRED` otherwise) — a digital-only basket needs neither. Step 4 reads the
+an address (`CART_ADDRESS_REQUIRED` otherwise) — a digital-only basket needs neither. It then
+resolves the BILLING address, which every order carries because the invoice prints it as the buyer's
+(EU VAT Directive Art. 226): the entry `billingAddressId` names, else "same as shipping" when a
+shipping address was resolved, else the book's default — and with none of those the checkout is
+refused (`CART_BILLING_ADDRESS_REQUIRED`). Billing is not held to `NODE_SHIP_TO_COUNTRIES`; an invoice
+may go anywhere. This is the Shopify model: the order's `billingAddress` always, its
+`shippingAddress` only when something travels. Step 4 reads the
 cart's stored choice through the same rule `GET /cart` uses (`effectiveShippingChoice`): a choice
 that is not among the basket's fitting options (gone digital-only, lost its last physical line,
 outgrown the method's weight range) counts as none, so a leftover choice never refuses a basket it
@@ -86,7 +93,7 @@ possible, and only checkout knows which basket it was clearing.
 | [`users`](./users.md)         | `conformist`         | The account record. An order records the address it was placed from, so a checkout for an account that no longer exists is the one cart operation that can still 404. |
 | [`payments`](./payments.md)   | `customer-supplier`  | `listPaymentMethods` — the same list `GET /payments/methods` answers, so checkout and that endpoint can never disagree about what this deployment offers.             |
 | [`delivery`](./delivery.md)   | `published-language` | `findShippingMethod` and `priceShipping` — pure functions. The cart never learns that a shipment record exists.                                                       |
-| [`addresses`](./addresses.md) | `customer-supplier`  | `addressForCheckout` — the one address this order ships to. The address CRUD stays behind that module's routes.                                                       |
+| [`addresses`](./addresses.md) | `customer-supplier`  | `addressForCheckout` — the addresses this order ships to and is invoiced to. The address CRUD stays behind that module's routes.                                      |
 | [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines and pre-flight availability.                                                                                    |
 | [`orders`](./orders.md)       | `customer-supplier`  | `placeOrder` — the one function every order is written through, admin's own `POST /orders` included — and `countOpenBankTransfers` for the open-transfer cap.         |
 

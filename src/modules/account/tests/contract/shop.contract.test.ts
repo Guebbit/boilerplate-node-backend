@@ -95,5 +95,10 @@ describe('the address book at checkout', () => {
             fullName: 'Ada Lovelace',
             street: 'Via Roma 1'
         });
+        // "Same as shipping" is the default when something ships.
+        expect(response.body.data.billingAddress).toMatchObject({
+            fullName: 'Ada Lovelace',
+            street: 'Via Roma 1'
+        });
     });
 });

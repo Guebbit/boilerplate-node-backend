@@ -478,23 +478,46 @@ const detachUserId = (
 /** The scrubbed-in-place values `scrubDueForAnonymization` replaces required PII with. */
 const ANONYMIZED_EMAIL = 'anonymized@deleted.invalid';
 
-/** Same placeholder for `shippingAddress.fullName` and `.street` — both required on the schema. */
+/** Same placeholder for an embedded address's `fullName` and `street` — both required on the schema. */
 const ANONYMIZED_TEXT = 'Anonymized';
+
+/**
+ * Replaces the PII of one embedded address on every due order that carries it.
+ *
+ * @param path - which embedded address to scrub
+ * @param due - the filter selecting the orders whose anonymization is due
+ */
+const scrubEmbeddedAddress = (
+    path: 'shippingAddress' | 'billingAddress',
+    due: { anonymizeAfter: { $lte: Date } }
+): Promise<unknown> =>
+    orderModel
+        .updateMany(
+            { ...due, [path]: { $exists: true } },
+            {
+                $set: {
+                    [`${path}.fullName`]: ANONYMIZED_TEXT,
+                    [`${path}.street`]: ANONYMIZED_TEXT
+                },
+                $unset: { [`${path}.phone`]: 1 }
+            }
+        )
+        .exec();
 
 /**
  * `scripts/ops/reap-orders.ts`'s sweep. Every order whose `anonymizeAfter` has elapsed gets its remaining
  * PII scrubbed.
  *
- * Scrub:      `email` and the required `shippingAddress` fields (`fullName`, `street`) are
- *             REPLACED, since the schema requires them; the optional `shippingAddress.phone` and
- *             the buyer's free-text `notes` are unset outright. City, country, zip, amounts, line
+ * Scrub:      `email` and the required fields (`fullName`, `street`) of BOTH embedded addresses
+ *             (`shippingAddress`, `billingAddress`) are REPLACED, since the schema requires them;
+ *             each address's optional `phone` and the buyer's free-text `notes` are unset outright. City, country, zip, amounts, line
  *             items and dates survive — none of it is personal data once the name and street are
  *             gone.
- * Two writes: an order placed by an account that kept no address book (pickup, or a guest with
- *             none) has no `shippingAddress` at all, and a single `$set` on its sub-fields would
- *             CREATE a partial one — present but missing the required `city`/`zip`/`country`,
- *             which no validator runs on a bulk update to catch. The second write is scoped to
- *             orders that actually have one.
+ * Separate writes: an order can lack either address (a digital-only order has no
+ *             `shippingAddress`, an admin-created one no `billingAddress`), and a single `$set`
+ *             on its sub-fields would CREATE a partial one — present but missing the required
+ *             `city`/`zip`/`country`, which no validator runs on a bulk update to catch. Each
+ *             address gets its own write, scoped to orders that actually have it.
  * Versioned:  the scrub is an edit, so `updatedAt` moves (no `timestamps: false`) — an open edit
  *             form holding the old ETag is refused instead of putting the email back.
  * Idempotent: `anonymizeAfter` is unset in the same write, so a later run cannot rescrub an
@@ -507,21 +530,11 @@ const ANONYMIZED_TEXT = 'Anonymized';
 const scrubDueForAnonymization = (cutoff: Date): Promise<number> => {
     const due = { anonymizeAfter: { $lte: cutoff } };
 
-    // Shipping address FIRST, filtered on `due` while `anonymizeAfter` still carries it — the
-    // second write below unsets that field, which would make this filter match nothing run
-    // the other way around.
-    return orderModel
-        .updateMany(
-            { ...due, shippingAddress: { $exists: true } },
-            {
-                $set: {
-                    'shippingAddress.fullName': ANONYMIZED_TEXT,
-                    'shippingAddress.street': ANONYMIZED_TEXT
-                },
-                $unset: { 'shippingAddress.phone': 1 }
-            }
-        )
-        .exec()
+    // The addresses FIRST, filtered on `due` while `anonymizeAfter` still carries it — the last
+    // write below unsets that field, which would make these filters match nothing run the other
+    // way around.
+    return scrubEmbeddedAddress('shippingAddress', due)
+        .then(() => scrubEmbeddedAddress('billingAddress', due))
         .then(() =>
             orderModel
                 .updateMany(due, {

@@ -1053,9 +1053,10 @@ components:
                     type: integer
                     minimum: 1
 
-        # The address an order ships to — a SNAPSHOT, exactly like the product snapshots the
-        # items embed: an order must keep where it was going, not what the address book says
-        # today. No `id`, no `default` — those are facts about the book entry, not the shipment.
+        # An address an order freezes, as `shippingAddress` or `billingAddress` — a SNAPSHOT,
+        # exactly like the product snapshots the items embed: an order must keep where it was
+        # going and who it was billed to, not what the address book says today. No `id`, no
+        # `default` — those are facts about the book entry, not the order.
         OrderAddress:
             type: object
             additionalProperties: false
@@ -1525,10 +1526,19 @@ components:
                     format: double
                     minimum: 0
                     description: What that method cost at checkout time — a later rate change cannot re-price history.
-                # Absent under the same conditions as `shippingMethod` above, or when the chosen
-                # method itself needs no address (`requiresAddress: false`, e.g. pickup) — present
-                # whenever a shipment actually needs somewhere to go.
+                # Where the goods go — present only when a line ships to an address. Absent under
+                # the same conditions as `shippingMethod` above, when the chosen method itself
+                # needs no address (`requiresAddress: false`, e.g. pickup), and on an all-digital
+                # order: nothing travels, so nothing is frozen here. `billingAddress` is the one
+                # every checkout order carries.
                 shippingAddress:
+                    $ref: '#/components/schemas/OrderAddress'
+                # Who the order is invoiced to — the address the invoice prints as the buyer's
+                # (EU VAT Directive Art. 226). Present on every order a checkout places: the
+                # shipping address when the buyer chose "same as shipping", otherwise the book
+                # entry they named, otherwise their default. Absent on an admin-created order
+                # (`POST /orders` runs no checkout) and on one placed before this field existed.
+                billingAddress:
                     $ref: '#/components/schemas/OrderAddress'
                 # Absent on orders placed before this existed, and on order creation that isn't a
                 # checkout (the admin `POST /orders` path names no method).

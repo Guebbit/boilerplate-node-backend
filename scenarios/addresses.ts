@@ -2,8 +2,8 @@
  * @module
  * The address book's slice of the demo dataset. The admin keeps two entries so "exactly one
  * default" is observable; the ordinary customer keeps one, the common case. The flow runner
- * freezes a copy of the owner's default entry as one order's `shippingAddress`, which is what
- * makes "an order remembers where it was sent" checkable against a book that can still change.
+ * freezes a copy of the owner's default entry as one order's `shippingAddress` (and its
+ * `billingAddress`), which is what makes "an order remembers where it was sent" checkable against a book that can still change.
  */
 
 import { Types } from 'mongoose';

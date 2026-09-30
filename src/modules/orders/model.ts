@@ -252,6 +252,23 @@ export interface OrderStatusOverride {
 export type OrderModel = Model<OrderDocument>;
 
 /**
+ * The embedded address both `shippingAddress` and `billingAddress` use — a frozen copy of a book
+ * entry. `_id: false` because the shared `OrderAddress` contract schema is
+ * `additionalProperties: false`.
+ */
+const orderAddressSchema = new Schema(
+    {
+        fullName: { type: String, required: true },
+        street: { type: String, required: true },
+        city: { type: String, required: true },
+        zip: { type: String, required: true },
+        country: { type: String, required: true },
+        phone: { type: String }
+    },
+    { _id: false }
+);
+
+/**
  * Schema for the product snapshot embedded on an order line — `openapi.root.yaml`'s
  * `OrderLineProduct`, not `Product`.
  *
@@ -433,21 +450,19 @@ export const orderSchema = new Schema<OrderDocument>(
         /*
          * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in
          * `items`: an order keeps where it was going, not what the address book says today.
-         * Absent on orders that predate the book and on checkouts by users who keep none;
-         * `_id: false` because the shared `OrderAddress` schema is `additionalProperties: false`.
+         * Present only when a line ships to an address: absent on an all-digital order, a pickup,
+         * and orders that predate the book.
          */
         shippingAddress: {
-            type: new Schema(
-                {
-                    fullName: { type: String, required: true },
-                    street: { type: String, required: true },
-                    city: { type: String, required: true },
-                    zip: { type: String, required: true },
-                    country: { type: String, required: true },
-                    phone: { type: String }
-                },
-                { _id: false }
-            )
+            type: orderAddressSchema
+        },
+        /*
+         * Who the order is invoiced to — a snapshot like `shippingAddress`, and the one the invoice
+         * reads (`invoicing/services/issue-invoice.ts`). Present on every order a checkout places;
+         * absent on an admin-created order (no checkout) and on one placed before this field.
+         */
+        billingAddress: {
+            type: orderAddressSchema
         },
         /*
          * Set when an order is soft-deleted. Orders carry no `active` flag, so unlike a product

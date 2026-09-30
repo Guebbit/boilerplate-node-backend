@@ -9,6 +9,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
+import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { cartService } from '../../services';
@@ -47,6 +48,7 @@ const withoutWindow = (body: () => Promise<void>) =>
 describe('checkout holds units without selling them', () => {
     it('a completed checkout reserves the ordered units and takes none off the shelf', async () => {
         const user = await createUser();
+        await giveAddress(user.id);
         const product = await createProduct({ onHand: 10 });
         await cartService.cartItemAddById(user.id, String(product._id), 3);
 
@@ -64,6 +66,7 @@ describe('checkout holds units without selling them', () => {
 
     it('refuses a cart over what is available and moves nothing', async () => {
         const user = await createUser();
+        await giveAddress(user.id);
         const product = await createProduct({ onHand: 2 });
         await cartService.cartItemAddById(user.id, String(product._id), 3);
 
@@ -98,7 +101,9 @@ describe('checkout holds units without selling them', () => {
 
     it('refuses a product whose units are all held by someone else', async () => {
         const holder = await createUser({ email: 'holder@example.com', username: 'holder' });
+        await giveAddress(holder.id);
         const latecomer = await createUser({ email: 'late@example.com', username: 'late' });
+        await giveAddress(latecomer.id);
         const product = await createProduct({ onHand: 4 });
 
         await cartService.cartItemAddById(holder.id, String(product._id), 4);
@@ -126,6 +131,7 @@ describe('checkout holds units without selling them', () => {
 
     it('names every short line at once, not just the first', async () => {
         const user = await createUser();
+        await giveAddress(user.id);
         const shortA = await createProduct({ title: 'Short A', onHand: 1 });
         const shortB = await createProduct({ title: 'Short B', onHand: 2 });
         const fine = await createProduct({ title: 'Fine', onHand: 99 });
@@ -148,6 +154,7 @@ describe('checkout holds units without selling them', () => {
 
     it('a failed line puts back what earlier lines already held', async () => {
         const user = await createUser();
+        await giveAddress(user.id);
         const plenty = await createProduct({ title: 'Plenty', onHand: 50 });
         const scarce = await createProduct({ title: 'Scarce', onHand: 1 });
         await cartService.cartItemAddById(user.id, String(plenty._id), 2);
@@ -163,7 +170,9 @@ describe('checkout holds units without selling them', () => {
 
     it('two checkouts cannot share the last unit', async () => {
         const alice = await createUser({ email: 'alice@example.com', username: 'alice' });
+        await giveAddress(alice.id);
         const bob = await createUser({ email: 'bob@example.com', username: 'bob' });
+        await giveAddress(bob.id);
         const lastOne = await createProduct({ onHand: 1 });
         await cartService.cartItemAddById(alice.id, String(lastOne._id), 1);
         await cartService.cartItemAddById(bob.id, String(lastOne._id), 1);
@@ -216,6 +225,7 @@ describe('a rollback that itself fails', () => {
      */
     it('writes no order and burns no order number when the hold is refused', async () => {
         const user = await createUser();
+        await giveAddress(user.id);
         const product = await createProduct({ onHand: 1 });
         await cartService.cartItemAddById(user.id, String(product._id), 2);
         const createSpy = jest.spyOn(orderRepository, 'create');
@@ -233,6 +243,7 @@ describe('a rollback that itself fails', () => {
 
     it('still retracts the order when the hold refuses to release', async () => {
         const user = await createUser();
+        await giveAddress(user.id);
         const product = await createProduct({ onHand: 5 });
         await cartService.cartItemAddById(user.id, String(product._id), 2);
         jest.spyOn(logger, 'error').mockImplementation(() => logger);
@@ -306,6 +317,7 @@ describe('the admin order create holds units like checkout', () => {
 describe('cancel releases the hold', () => {
     it('a cancelled unpaid order gives its units back', async () => {
         const user = await createUser();
+        await giveAddress(user.id);
         const product = await createProduct({ onHand: 10 });
         await cartService.cartItemAddById(user.id, String(product._id), 4);
         await cartRepository.setShippingMethod(user.id, 'pickup');
@@ -325,6 +337,7 @@ describe('cancel releases the hold', () => {
 
     it('a second cancel cannot release twice', async () => {
         const user = await createUser();
+        await giveAddress(user.id);
         const product = await createProduct({ onHand: 10 });
         await cartService.cartItemAddById(user.id, String(product._id), 4);
         await cartRepository.setShippingMethod(user.id, 'pickup');
@@ -345,6 +358,7 @@ describe('cancel releases the hold', () => {
 
     it("cancelling one order does not disturb other products' counters", async () => {
         const user = await createUser();
+        await giveAddress(user.id);
         const bought = await createProduct({ title: 'Bought', onHand: 10 });
         const untouched = await createProduct({ title: 'Untouched', onHand: 5 });
         await cartService.cartItemAddById(user.id, String(bought._id), 1);
@@ -364,6 +378,7 @@ describe('cancel releases the hold', () => {
     it('a customer cancel racing the expiry sweep releases the hold exactly once', async () =>
         withoutWindow(async () => {
             const user = await createUser();
+            await giveAddress(user.id);
             const product = await createProduct({ onHand: 10 });
             await cartService.cartItemAddById(user.id, String(product._id), 4);
             await cartRepository.setShippingMethod(user.id, 'pickup');
@@ -398,6 +413,7 @@ describe('the expiry sweep', () => {
     it('releases a stale hold and cancels the order behind it', async () =>
         withoutWindow(async () => {
             const user = await createUser();
+            await giveAddress(user.id);
             const product = await createProduct({ onHand: 10 });
             await cartService.cartItemAddById(user.id, String(product._id), 4);
             await cartRepository.setShippingMethod(user.id, 'pickup');
@@ -425,6 +441,7 @@ describe('the expiry sweep', () => {
     it('is idempotent — a second sweep releases nothing', async () =>
         withoutWindow(async () => {
             const user = await createUser();
+            await giveAddress(user.id);
             const product = await createProduct({ onHand: 10 });
             await cartService.cartItemAddById(user.id, String(product._id), 4);
             await cartRepository.setShippingMethod(user.id, 'pickup');

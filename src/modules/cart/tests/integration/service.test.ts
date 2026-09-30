@@ -691,6 +691,7 @@ describe('cartRemove', () => {
 describe('orderConfirm', () => {
     it('creates an order carrying the cart lines', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
         const mouse = await createProduct({ title: 'Mouse', price: 10 });
         await cartItemSetById(user.id, String(keyboard._id), 2);
@@ -710,6 +711,7 @@ describe('orderConfirm', () => {
 
     it('empties the cart once the order exists', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
@@ -723,6 +725,7 @@ describe('orderConfirm', () => {
 
     it('rejects an empty cart with 409 and creates nothing', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
 
         const result = await orderConfirm(user.id, testCallerContext);
 
@@ -739,6 +742,7 @@ describe('orderConfirm', () => {
      */
     it('names an empty cart CART_EMPTY, with translated copy for the user', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
 
         const result = await orderConfirm(user.id, testCallerContext);
 
@@ -758,6 +762,7 @@ describe('orderConfirm', () => {
     it('rejects with 404 when a line points at a deleted product', async () => {
         // An order embeds a snapshot, and there is nothing to snapshot.
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
         await product.deleteOne();
@@ -822,6 +827,7 @@ describe('orderConfirm', () => {
 
     it('reads a stored method nobody offers as none, refusing a physical basket before anything is written', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         const product = await createProduct({ onHand: 5 });
         await cartItemSetById(user.id, String(product._id), 2);
 
@@ -839,6 +845,7 @@ describe('orderConfirm', () => {
 
     it('an omitted method leaves both shipping fields absent', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         // Digital: a physical line would refuse checkout outright with no method chosen — this
         // case is about what an omitted method itself leaves behind, not that refusal.
         const product = await createProduct({ requiresShipping: false });
@@ -871,6 +878,7 @@ describe('orderConfirm', () => {
 
     it('buys a cart made entirely of digital products even with a method still stored, and orders no shipping', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         const ebook = await createProduct({ requiresShipping: false });
         await cartItemSetById(user.id, String(ebook._id), 1);
 
@@ -917,6 +925,7 @@ describe('orderConfirm', () => {
 
     it('refuses a physical basket with no shipping method at all', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
@@ -941,12 +950,13 @@ describe('orderConfirm', () => {
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 
-    it('accepts a physical basket under pickup with no address at all', async () => {
+    it('accepts a physical basket under pickup with no shipping address', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
-        // `pickup.requiresAddress` is false, so the empty address book is not an obstacle.
+        // `pickup.requiresAddress` is false, so no shipping address is frozen; the book's entry only bills.
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await orderConfirm(user.id, testCallerContext, undefined);
 
@@ -987,7 +997,7 @@ describe('orderConfirm', () => {
         await cartItemSetById(user.id, String(product._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
-        const result = await orderConfirm(user.id, testCallerContext, addressId);
+        const result = await orderConfirm(user.id, testCallerContext, { addressId });
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
@@ -1036,6 +1046,7 @@ describe('orderConfirm', () => {
 
     it('checks out a digital-only cart with no method at all, same as any other', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         const ebook = await createProduct({ requiresShipping: false });
         await cartItemSetById(user.id, String(ebook._id), 1);
 
@@ -1064,6 +1075,7 @@ describe('orderConfirm', () => {
     it('sends the customer a confirmation email listing the bought lines', async () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
         await cartItemSetById(user.id, String(keyboard._id), 2);
 
@@ -1086,6 +1098,7 @@ describe('orderConfirm', () => {
         // checkout must not congratulate anyone.
         mockEnqueueEmail.mockClear();
         const user = await createUser();
+        await giveUserAnAddress(user.id);
 
         await orderConfirm(user.id, testCallerContext);
 
@@ -1094,6 +1107,7 @@ describe('orderConfirm', () => {
 
     it('names a vanished product CART_PRODUCT_UNAVAILABLE', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
         await product.deleteOne();
@@ -1118,6 +1132,7 @@ describe('orderConfirm — paymentMethod', () => {
     // sweep's own timeout can never disagree.
     it('defaults to card, with payBy from the reservation hold', async () => {
         const user = await createUser();
+        await giveUserAnAddress(user.id);
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
@@ -1142,15 +1157,13 @@ describe('orderConfirm — paymentMethod', () => {
             ['NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],
             async () => {
                 const user = await createUser();
+                await giveUserAnAddress(user.id);
                 const product = await createProduct();
                 await cartItemSetById(user.id, String(product._id), 1);
 
-                const result = await orderConfirm(
-                    user.id,
-                    testCallerContext,
-                    undefined,
-                    'bank_transfer'
-                );
+                const result = await orderConfirm(user.id, testCallerContext, {
+                    paymentMethod: 'bank_transfer'
+                });
 
                 expect(asReject(result).status).toBe(409);
                 expect(asReject(result).errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
@@ -1164,17 +1177,15 @@ describe('orderConfirm — paymentMethod', () => {
             withBankTransferConfigured(() =>
                 withEnvironment('NODE_BANK_TRANSFER_HOLD_HOURS', '48', async () => {
                     const user = await createUser();
+                    await giveUserAnAddress(user.id);
                     const product = await createProduct();
                     await cartItemSetById(user.id, String(product._id), 1);
 
                     const before = Date.now();
                     await cartRepository.setShippingMethod(user.id, 'pickup');
-                    const result = await orderConfirm(
-                        user.id,
-                        testCallerContext,
-                        undefined,
-                        'bank_transfer'
-                    );
+                    const result = await orderConfirm(user.id, testCallerContext, {
+                        paymentMethod: 'bank_transfer'
+                    });
 
                     expect(result.success).toBe(true);
                     const order = await findOrder({ userId: user._id });
@@ -1192,11 +1203,12 @@ describe('orderConfirm — paymentMethod', () => {
     it('serves transferInstructions on the still-pending order, with its own RF reference', () =>
         withBankTransferConfigured(async () => {
             const user = await createUser();
+            await giveUserAnAddress(user.id);
             const product = await createProduct();
             await cartItemSetById(user.id, String(product._id), 1);
 
             await cartRepository.setShippingMethod(user.id, 'pickup');
-            await orderConfirm(user.id, testCallerContext, undefined, 'bank_transfer');
+            await orderConfirm(user.id, testCallerContext, { paymentMethod: 'bank_transfer' });
 
             const stored = await findOrder({ userId: user._id });
             // `toJSON()`'s static type mirrors the stored document, not the transform this
@@ -1223,11 +1235,12 @@ describe('orderConfirm — paymentMethod', () => {
         withBankTransferConfigured(async () => {
             mockEnqueueEmail.mockClear();
             const user = await createUser();
+            await giveUserAnAddress(user.id);
             const product = await createProduct();
             await cartItemSetById(user.id, String(product._id), 1);
 
             await cartRepository.setShippingMethod(user.id, 'pickup');
-            await orderConfirm(user.id, testCallerContext, undefined, 'bank_transfer');
+            await orderConfirm(user.id, testCallerContext, { paymentMethod: 'bank_transfer' });
             await flush();
 
             expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
@@ -1239,6 +1252,7 @@ describe('orderConfirm — paymentMethod', () => {
     it('refuses a third open transfer order past the cap', () =>
         withBankTransferConfigured(async () => {
             const user = await createUser();
+            await giveUserAnAddress(user.id);
             const product = await createProduct();
             // Two open transfer orders already on the books — the default cap.
             await createOrder(user, [toOrderItem(product)], {
@@ -1251,12 +1265,9 @@ describe('orderConfirm — paymentMethod', () => {
             });
             await cartItemSetById(user.id, String(product._id), 1);
 
-            const result = await orderConfirm(
-                user.id,
-                testCallerContext,
-                undefined,
-                'bank_transfer'
-            );
+            const result = await orderConfirm(user.id, testCallerContext, {
+                paymentMethod: 'bank_transfer'
+            });
 
             expect(asReject(result).status).toBe(409);
             expect(asReject(result).errors[0].code).toBe('CART_BANK_TRANSFER_LIMIT');
@@ -1267,6 +1278,7 @@ describe('orderConfirm — paymentMethod', () => {
     it('does not count a paid transfer order against the cap', () =>
         withBankTransferConfigured(async () => {
             const user = await createUser();
+            await giveUserAnAddress(user.id);
             const product = await createProduct();
             await createOrder(user, [toOrderItem(product)], {
                 status: 'paid',
@@ -1279,12 +1291,9 @@ describe('orderConfirm — paymentMethod', () => {
             await cartItemSetById(user.id, String(product._id), 1);
 
             await cartRepository.setShippingMethod(user.id, 'pickup');
-            const result = await orderConfirm(
-                user.id,
-                testCallerContext,
-                undefined,
-                'bank_transfer'
-            );
+            const result = await orderConfirm(user.id, testCallerContext, {
+                paymentMethod: 'bank_transfer'
+            });
 
             expect(result.success).toBe(true);
         }));

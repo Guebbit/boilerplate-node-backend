@@ -111,12 +111,16 @@ describe('orderSchema — the embedded snapshots', () => {
         expect(pathOptions(product, 'taxRate').max).toBe(1);
     });
 
-    it('freezes the shipping address without an _id, requiring everything but the phone', () => {
+    it('freezes the shipping and billing addresses without an _id, requiring everything but the phone', () => {
         const address = subSchema(orderSchema, 'shippingAddress');
 
         expect(optionsOf(address)._id).toBe(false);
         // An address that can be saved missing its street is not an address.
         expect(requiredPaths(address)).toEqual(['city', 'country', 'fullName', 'street', 'zip']);
+        // The billing address is frozen exactly the same way.
+        const billing = subSchema(orderSchema, 'billingAddress');
+        expect(optionsOf(billing)._id).toBe(false);
+        expect(requiredPaths(billing)).toEqual(['city', 'country', 'fullName', 'street', 'zip']);
         expect(requiredPaths(address)).not.toContain('phone');
     });
 });
