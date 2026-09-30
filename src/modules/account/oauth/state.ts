@@ -6,9 +6,9 @@
  * callback trusts a request only when the two agree; the PKCE `verifier`, which defeats a
  * stolen authorization CODE the way `state` defeats a forged CALLBACK — see
  * `docs/theory/defences/authentication.md#federated-login` for why both ship; and `continue`, the
- * frontend path to send the browser back to once the round trip is done, the one piece of this
- * handshake that is untrusted input and so the one cookie read back out validated, never trusted
- * blind. Neither `state` nor `verifier` needs a new server secret, unlike a signed token would.
+ * frontend path to send the browser back to once the round trip is done, and `locale`, the
+ * language the visitor was reading — the two pieces of this handshake that are untrusted input and
+ * so the cookies read back out validated, never trusted blind. Neither `state` nor `verifier` needs a new server secret, unlike a signed token would.
  */
 
 import { randomBytes, createHash } from 'node:crypto';
@@ -23,6 +23,9 @@ export const OAUTH_VERIFIER_COOKIE = 'oauth_verifier';
 
 /** The saved `?continue=` cookie — same lifetime and clearing points as {@link OAUTH_STATE_COOKIE}. */
 export const OAUTH_CONTINUE_COOKIE = 'oauth_continue';
+
+/** The saved `?locale=` cookie — same lifetime and clearing points as {@link OAUTH_STATE_COOKIE}. */
+export const OAUTH_LOCALE_COOKIE = 'oauth_locale';
 
 /** Minutes-scale on purpose: long enough to pick a Google account, short enough to bound reuse. */
 const OAUTH_COOKIE_TTL_MS = 5 * 60 * 1000;
@@ -83,6 +86,16 @@ export const destroyContinueCookie = (response: Response): void => {
     response.clearCookie(OAUTH_CONTINUE_COOKIE, oauthCookieOptions());
 };
 
+/** Set the `locale` cookie for one login attempt — only ever called with an already-validated tag. */
+export const createLocaleCookie = (response: Response, locale: string): void => {
+    response.cookie(OAUTH_LOCALE_COOKIE, locale, oauthCookieOptions());
+};
+
+/** Clear the `locale` cookie — called at every point {@link destroyStateCookie} is. */
+export const destroyLocaleCookie = (response: Response): void => {
+    response.clearCookie(OAUTH_LOCALE_COOKIE, oauthCookieOptions());
+};
+
 /**
  * Whether the callback's `state` query param matches the cookie set at the start of this attempt.
  * Neither side is secret — this defeats a forged callback, not a guessed one — so a plain
@@ -106,3 +119,19 @@ export const stateMatches = (cookieValue: unknown, queryValue: unknown): boolean
  */
 export const isSameOriginPath = (value: unknown): value is string =>
     typeof value === 'string' && value.startsWith('/') && !value.startsWith('//');
+
+/**
+ * Language subtags of a BCP 47 tag, `it`, `pt-BR`, `zh-Hant-TW`: 2-3 letters, then up to three
+ * 2-8 character alphanumeric subtags. Deliberately looser than the set of locales the deployment
+ * serves — the frontend decides what it speaks; this only keeps a value that will be echoed into
+ * a redirect URL from being anything but a tag.
+ */
+const LOCALE_TAG = /^[A-Za-z]{2,3}(?:-[\dA-Za-z]{2,8}){0,3}$/;
+
+/**
+ * Whether `value` is shaped like a locale tag — the one form a saved `locale` is ever allowed to
+ * take. Applied at the start controller and again at the callback, for the same reason
+ * {@link isSameOriginPath} is: a cookie is client-writable.
+ */
+export const isLocaleTag = (value: unknown): value is string =>
+    typeof value === 'string' && LOCALE_TAG.test(value);

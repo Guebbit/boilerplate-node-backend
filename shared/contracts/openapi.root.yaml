@@ -1952,6 +1952,8 @@ paths:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products'
     /products/categories:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1categories'
+    /products/settings:
+        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1settings'
     /products/{id}:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}'
     /products/{id}/admin:

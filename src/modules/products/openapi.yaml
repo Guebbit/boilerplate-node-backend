@@ -147,6 +147,26 @@ paths:
                                 $ref: '#/components/schemas/CatalogueFacetsEnvelope'
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /products/settings:
+        get:
+            tags: [Products]
+            summary: The shop's catalogue settings
+            description: >-
+                What the catalogue as a whole is configured with, as opposed to any one product:
+                today the currency every price is quoted in (`NODE_DEFAULT_CURRENCY`). A create
+                form reads it to size its price input before a product exists to ask. Public and
+                cheap to read; it never changes without a redeploy.
+            operationId: getProductSettings
+            security: []
+            responses:
+                '200':
+                    description: The catalogue settings
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductSettingsEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /products/{id}:
         # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
         x-versioned: [get, put, patch, delete]
@@ -644,6 +664,29 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/CatalogueFacetsResponse'
+
+        ProductSettingsResponse:
+            type: object
+            additionalProperties: false
+            required: [currency]
+            properties:
+                currency:
+                    type: string
+                    description: ISO-4217 currency code (e.g. EUR) — the shop's one currency, the same one `Product.currency` reports.
+
+        ProductSettingsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ProductSettingsResponse'
 
         SearchProductsRequest:
             type: object

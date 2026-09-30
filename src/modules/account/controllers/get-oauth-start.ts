@@ -16,7 +16,9 @@ import {
     codeChallengeOf,
     createVerifierCookie,
     createContinueCookie,
-    isSameOriginPath
+    createLocaleCookie,
+    isSameOriginPath,
+    isLocaleTag
 } from '../oauth/state';
 import { oauthRedirectUri } from '../oauth/config';
 
@@ -26,7 +28,8 @@ import { oauthRedirectUri } from '../oauth/config';
  * redirects to the provider's consent screen with the state and the verifier's challenge. Also
  * saves `?continue=` as a cookie of its own, same idiom, when it is a same-origin relative path —
  * an invalid or absent one is dropped silently rather than refused, since this route only ever
- * answers a browser navigation with nowhere to show a JSON error.
+ * answers a browser navigation with nowhere to show a JSON error. `?locale=` travels the same
+ * way, so a visitor reading `/it/login` comes back to Italian.
  */
 export const getOAuthStart = (request: Request, response: Response) => {
     const provider = resolveOAuthProvider(String(request.params.provider).toLowerCase());
@@ -45,6 +48,10 @@ export const getOAuthStart = (request: Request, response: Response) => {
 
     if (isSameOriginPath(request.query.continue)) {
         createContinueCookie(response, request.query.continue);
+    }
+
+    if (isLocaleTag(request.query.locale)) {
+        createLocaleCookie(response, request.query.locale);
     }
 
     const authorizeUrl = provider.authorizeUrl(

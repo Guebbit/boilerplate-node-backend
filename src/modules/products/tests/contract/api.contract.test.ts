@@ -339,6 +339,16 @@ describe('GET /products/categories', () => {
     });
 });
 
+describe('GET /products/settings', () => {
+    it('reports the configured shop currency, with no credential', () =>
+        withEnvironment('NODE_DEFAULT_CURRENCY', 'JPY', async () => {
+            const response = await api().get('/products/settings');
+
+            expect(response.status).toBe(200);
+            expect(response.body.data).toEqual({ currency: 'JPY' });
+        }));
+});
+
 /**
  * DELETE is one-way and safe to retry (RFC 9110 §9.2.2); undoing a soft delete is its own verb.
  */

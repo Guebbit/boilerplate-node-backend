@@ -2,7 +2,7 @@
  * @module
  * Express router for the product catalogue: public read, admin write, cached where the response
  * does not depend on the caller. Route order matters where a static segment (`/search`,
- * `/categories`) would otherwise be swallowed by `/:id`.
+ * `/categories`, `/settings`) would otherwise be swallowed by `/:id`.
  */
 
 import type { Request } from 'express';
@@ -18,6 +18,7 @@ import { restoreProducts } from './controllers/restore-products';
 import { getProductItem } from './controllers/get-product-item';
 import { getProductAdmin } from './controllers/get-product-admin';
 import { getCatalogueFacets } from './controllers/get-catalogue-facets';
+import { getProductSettings } from './controllers/get-product-settings';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { hasAnonymousReadScope } from '@kernel/access/query';
@@ -90,6 +91,10 @@ router.get(
     setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: () => true }),
     getCatalogueFacets
 );
+
+// GET /products/settings — the shop's currency; static, so before /:id. Uncached: it is one env
+// read, cheaper than the cache lookup that would guard it.
+router.get('/settings', getProductSettings);
 
 // GET /products/:id — public
 router.get(

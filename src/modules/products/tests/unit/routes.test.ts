@@ -40,6 +40,7 @@ describe('product routes — what is mounted', () => {
             'POST /',
             'DELETE /',
             'GET /categories',
+            'GET /settings',
             'GET /:id',
             'PUT /:id',
             'PATCH /:id',
@@ -56,6 +57,7 @@ describe('product routes — what is mounted', () => {
         // Express matches in mount order: the first `/:id` shadows every later literal segment.
         expect(paths.indexOf('/search')).toBeLessThan(paths.indexOf('/:id'));
         expect(paths.indexOf('/categories')).toBeLessThan(paths.indexOf('/:id'));
+        expect(paths.indexOf('/settings')).toBeLessThan(paths.indexOf('/:id'));
     });
 
     it('runs getAuth for every route, so admins get the wider scope', () => {
@@ -106,7 +108,7 @@ describe('product routes — authorization', () => {
         }
     );
 
-    it.each(['POST /search', 'GET /', 'GET /categories', 'GET /:id'])(
+    it.each(['POST /search', 'GET /', 'GET /categories', 'GET /settings', 'GET /:id'])(
         '%s stays public',
         (signature) => {
             const row = routeTable(router).find(
