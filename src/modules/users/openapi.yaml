@@ -110,6 +110,8 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /users/{id}:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        x-versioned: [get, put, patch, delete]
         # Same as GET /users?id={id}
         get:
             tags: [Users]
@@ -257,6 +259,8 @@ paths:
     # Same as DELETE /users/{id}?hardDelete=true — the flag spelled in the path instead of
     # in the query. Both reach the same handler; neither is the canonical one.
     /users/{id}/hard:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        x-versioned: [delete]
         delete:
             tags: [Users]
             summary: Permanently delete user

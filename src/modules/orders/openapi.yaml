@@ -167,6 +167,8 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /orders/{id}:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        x-versioned: [get, put, patch, delete]
         # Same as GET /orders?id={id}
         get:
             tags: [Orders]
@@ -312,6 +314,8 @@ paths:
     # Same as DELETE /orders/{id}?hardDelete=true — the flag spelled in the path instead of
     # in the query. Both reach the same handler; neither is the canonical one.
     /orders/{id}/hard:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        x-versioned: [delete]
         delete:
             tags: [Orders]
             summary: Permanently delete order
