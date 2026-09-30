@@ -190,6 +190,10 @@ Why once, and why a copy:
 - **The flows need a listening app.** They get a throwaway loopback listener of their own
   (`scenarios/flows/loopback.ts`), opened before `NODE_PORT` is bound and closed after — so the
   readiness probe never sees a shop halfway through its own history.
+- **The flows solve no challenge.** A script cannot, so the human-challenge provider is switched to
+  `none` while they run (`scenarios/support/no-human-challenge.ts`) and restored after. A backend
+  booted with `NODE_ANTIBOT_PROVIDER=altcha` (the frontend's antibot run) still serves the provider:
+  the build is over before it listens.
 
 The same `buildScenario` runs behind `npm run scenario:apply` against a real database, which boots
 the application in-process for exactly this reason. It refuses a database that already holds

@@ -21,6 +21,7 @@ import { seedBlank } from './blank';
 import { seedAccessModel } from './accounts';
 import { SHOP_SUBJECTS } from './subjects';
 import { withLoopbackServer } from './flows/loopback';
+import { withoutHumanChallenge } from './support/no-human-challenge';
 import { driveShopHistory, type ShopHistory } from './flows/shop-history';
 import { backdateHistory } from './flows/backdate';
 import type { SeedOutcome } from '@scenarios/seed';
@@ -112,11 +113,21 @@ export const buildScenario = (
     if (drive && !app)
         throw new Error(`scenario "${name}" lives its history over HTTP and needs the Express app`);
 
-    return seed()
-        .then(() => (drive && app ? withLoopbackServer(app, drive) : undefined))
-        .then((history) =>
-            history
-                ? backdateHistory(history.ages).then(() => ({ ...subjects, ...history.subjects }))
-                : subjects
-        );
+    return (
+        seed()
+            // The flows are a script: they can solve no human challenge, so the provider is off while they run.
+            .then(() =>
+                drive && app
+                    ? withoutHumanChallenge(() => withLoopbackServer(app, drive))
+                    : undefined
+            )
+            .then((history) =>
+                history
+                    ? backdateHistory(history.ages).then(() => ({
+                          ...subjects,
+                          ...history.subjects
+                      }))
+                    : subjects
+            )
+    );
 };
