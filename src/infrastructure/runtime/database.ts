@@ -126,6 +126,9 @@ export const start = () => {
 /** Whether {@link watchConnection} already attached its listeners — `start()` can run again. */
 let watching = false;
 
+/** True while {@link stopDatabase} closes the pool, so its own `disconnected` is not reported as a loss. */
+let stopping = false;
+
 /**
  * Log the connection dropping and coming back. The driver reconnects on its own and says nothing,
  * so without these a Mongo outage mid-run leaves no trace but the requests it failed.
@@ -135,7 +138,9 @@ const watchConnection = (): void => {
     if (watching) return;
     watching = true;
     // Stryker disable all
-    mongoose.connection.on('disconnected', () => logger.warn('MongoDB connection lost.'));
+    mongoose.connection.on('disconnected', () => {
+        if (!stopping) logger.warn('MongoDB connection lost.');
+    });
     mongoose.connection.on('reconnected', () => logger.info('MongoDB connection restored.'));
     // Stryker restore all
 };
@@ -147,18 +152,25 @@ const watchConnection = (): void => {
  * open until they time out. Rejections are logged and absorbed: we are already exiting, and
  * throwing here would abort the remaining teardown steps in the shutdown chain.
  */
-export const stopDatabase = () =>
-    mongoose.disconnect().then(
-        () => undefined,
-        (error: unknown) => {
-            // Stryker disable all
-            logger.warn({
-                message: 'MongoDB disconnect failed.',
-                error
-            });
-            // Stryker restore all
-        }
-    );
+export const stopDatabase = () => {
+    stopping = true;
+    return mongoose
+        .disconnect()
+        .then(
+            () => undefined,
+            (error: unknown) => {
+                // Stryker disable all
+                logger.warn({
+                    message: 'MongoDB disconnect failed.',
+                    error
+                });
+                // Stryker restore all
+            }
+        )
+        .finally(() => {
+            stopping = false;
+        });
+};
 
 /**
  * The active Mongoose connection. Available after `start()` resolves.
