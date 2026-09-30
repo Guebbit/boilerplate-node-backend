@@ -154,7 +154,8 @@ it('publishes the set the pair agreed on', () => {
      * delete or a deactivation cancelling a pending order) is likewise Node-only so far. So are
      * `orders.order-paid` (E5: a payment settling to `succeeded` now mails the buyer) and
      * `orders.order-card-expired` (E5: a `card` hold's own expiry notice, the twin of
-     * `orders.order-transfer-expired` for the other payment method) — both new here. The other
+     * `orders.order-transfer-expired` for the other payment method) — both new here. So is
+     * `account.two-factor-changed`, the notice that a second factor was added, replaced or removed. The other
      * eight are the agreed, mirrored set.
      */
     const agreedByPair = [
@@ -165,6 +166,7 @@ it('publishes the set the pair agreed on', () => {
         'account.reset-confirm',
         'account.reset-request',
         'account.setup-request',
+        'account.two-factor-changed',
         'account.two-factor-code',
         'account.verify-request',
         'delivery.shipment-shipped',
