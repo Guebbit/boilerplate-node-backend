@@ -368,7 +368,7 @@ rules:
           currently NOT-APPLICABLE: antibot (src/infrastructure/http/middlewares/human-challenge.ts,
           rate-limit.ts, adapters/antibot.ts) is a per-request throttle/challenge that never sets a
           ban/suspend flag on the user record and is always retryable next window — no persistent
-          adverse status to review. payments/service.ts settlePayment/applyWebhookSettlement only
+          adverse status to review. payments/services/settlement.ts settlePayment/applyWebhookSettlement only
           record whatever status the provider (Stripe/PayPal) reports; there is no local fraud
           scoring or business-rule decline, and a decline is retryable with another payment method
           (service.ts withActions exposes pay: true on a declined order). The account inactivity
@@ -380,7 +380,7 @@ rules:
       evidence:
           backend:
               - src/modules/antibot/**, src/infrastructure/http/middlewares/human-challenge.ts, rate-limit.ts
-              - src/modules/payments/service.ts (settlePayment, applyWebhookSettlement, applyWebhookDelivery)
+              - src/modules/payments/services/settlement.ts (settlePayment, applyWebhookSettlement, applyWebhookDelivery)
               - scripts/ops/reap-inactive-accounts.ts, src/modules/users/services/**
           frontend: []
       references:
