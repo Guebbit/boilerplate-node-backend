@@ -76,6 +76,7 @@ export const accountService = {
     passwordChange: profile.passwordChange,
     passwordChangeWithCurrent: profile.passwordChangeWithCurrent,
     passwordResetChange: profile.passwordResetChange,
+    completePasswordReset: profile.completePasswordReset,
     updateProfile: profile.updateProfile,
     cancelPendingEmailChange: profile.cancelPendingEmailChange,
     getOwnProfile: profile.getOwnProfile,

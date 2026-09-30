@@ -18,7 +18,8 @@ import {
 } from '../emails';
 import { sendAccountMail } from './mail';
 import { sendVerificationEmail, markVerified, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
-import { verifyOwnPassword } from './authentication';
+import { verifyOwnPassword, PASSWORD_RESET_TOKEN_TYPE } from './authentication';
+import { findLiveToken, spendLiveToken } from './tokens';
 import { UpdateAccountBody } from '@api/schemas.zod';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
 import {
@@ -115,17 +116,33 @@ export const passwordChange = (
     return assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
-        return Promise.resolve(beforeSave?.(user))
-            .then(() => userService.setPassword(user, password))
-            .then((savedUser) =>
-                userService
-                    .tokenRemoveAll(savedUser, TokenType.REFRESH)
-                    .catch(() => undefined)
-                    .then(() => generateSuccess<UserDocument>(savedUser))
-            )
-            .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+        return writePassword(user, password, beforeSave);
     });
 };
+
+/**
+ * The write half of {@link passwordChange}, for a caller that has already run every check on the
+ * password itself — shape, match, breach — and must not run the breach lookup a second time.
+ * Saves first and revokes every refresh token second, for the reason {@link passwordChange} gives.
+ *
+ * @param user - the account, carrying its credential fields
+ * @param password - the new password, already accepted
+ * @param beforeSave - a caller's own mutation to ride along in the same write
+ */
+const writePassword = (
+    user: UserDocument,
+    password: string,
+    beforeSave?: (user: UserDocument) => void | Promise<void>
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    Promise.resolve(beforeSave?.(user))
+        .then(() => userService.setPassword(user, password))
+        .then((savedUser) =>
+            userService
+                .tokenRemoveAll(savedUser, TokenType.REFRESH)
+                .catch(() => undefined)
+                .then(() => generateSuccess<UserDocument>(savedUser))
+        )
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
 /**
  * Read the caller's own profile.
@@ -170,46 +187,108 @@ export const passwordResetChange = (
     passwordConfirm: string,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    passwordChange(user, password, passwordConfirm, markVerified).then((result) => {
-        if (result.success) {
-            // Read fresh, after `markVerified` may have just promoted it — the document carries
-            // no role of its own to read synchronously. Same fire-and-forget shape as the
-            // mail below: the password change already succeeded, so a lookup hiccup here must not
-            // turn a successful reset into an error — worst case, this one audit row is missing.
-            void isUnrestrictedCaller(String(user._id))
-                .then((unrestricted) => {
-                    recordAudit(context, {
-                        action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
-                        actor_user_id: String(user._id),
-                        actor_role: unrestricted ? 'admin' : 'user',
-                        outcome: 'success'
-                    });
-                })
-                .catch((error: unknown) => {
-                    // Still just a missing audit row, not a reset failure — see the comment
-                    // above — but a swallowed lookup failure had no trail at all before this.
-                    logger.warn({
-                        message: 'Could not audit a completed password reset.',
-                        userId: String(user._id),
-                        error
-                    });
-                });
+    passwordChange(user, password, passwordConfirm, markVerified).then((result) =>
+        afterReset(result, user, context)
+    );
 
-            /*
-             * The recipient's OWN language first. These links are clicked from an email client,
-             * possibly on a shared or borrowed device, so the request's `Accept-Language` says
-             * very little about who the message is for — it is the fallback, not the answer. The
-             * copy is finished before the job is published, so the worker needs no locale at all.
-             *
-             * Fire-and-forget: the password has already changed, and a queue that is briefly
-             * unavailable must not turn a successful reset into an error.
-             */
-            const mail = resetConfirmEmail(recipientLocale(user.locale, context), user.username);
-            // Normal priority: a confirmation, not a link or code anyone is blocked on.
-            void sendAccountMail(user.email, mail, 'normal');
-        }
-        return result;
-    });
+/**
+ * What follows a finished reset: on success, the audit row and the confirmation mail. Shared by
+ * {@link passwordResetChange} and {@link completePasswordReset}, which differ only in how the
+ * password was checked.
+ *
+ * @param result - what writing the password answered
+ * @param user - the account
+ * @param context - the caller, for the audit row and the mail's language fallback
+ */
+const afterReset = (
+    result: ResponseSuccess<UserDocument> | ResponseReject,
+    user: UserDocument,
+    context: CallerContext
+): ResponseSuccess<UserDocument> | ResponseReject => {
+    if (result.success) {
+        // Read fresh, after `markVerified` may have just promoted it — the document carries
+        // no role of its own to read synchronously. Same fire-and-forget shape as the
+        // mail below: the password change already succeeded, so a lookup hiccup here must not
+        // turn a successful reset into an error — worst case, this one audit row is missing.
+        void isUnrestrictedCaller(String(user._id))
+            .then((unrestricted) => {
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
+                    actor_user_id: String(user._id),
+                    actor_role: unrestricted ? 'admin' : 'user',
+                    outcome: 'success'
+                });
+            })
+            .catch((error: unknown) => {
+                // Still just a missing audit row, not a reset failure — see the comment
+                // above — but a swallowed lookup failure had no trail at all before this.
+                logger.warn({
+                    message: 'Could not audit a completed password reset.',
+                    userId: String(user._id),
+                    error
+                });
+            });
+
+        /*
+         * The recipient's OWN language first. These links are clicked from an email client,
+         * possibly on a shared or borrowed device, so the request's `Accept-Language` says
+         * very little about who the message is for — it is the fallback, not the answer. The
+         * copy is finished before the job is published, so the worker needs no locale at all.
+         *
+         * Fire-and-forget: the password has already changed, and a queue that is briefly
+         * unavailable must not turn a successful reset into an error.
+         */
+        const mail = resetConfirmEmail(recipientLocale(user.locale, context), user.username);
+        // Normal priority: a confirmation, not a link or code anyone is blocked on.
+        void sendAccountMail(user.email, mail, 'normal');
+    }
+    return result;
+};
+
+/**
+ * `POST /account/reset-confirm` — the whole reset, in the order that never burns a link for a
+ * password that was going to be refused: shape and match, then the live token is FOUND, then the
+ * breach check, and only then is the token SPENT. The spend is the atomic `$pull` that settles two
+ * simultaneous uses of one link, so it stays last; everything before it is a read.
+ *
+ * The same find/spend split `two-factor.ts` uses for a login challenge.
+ *
+ * @param token - the token from the mailed link
+ * @param password - the new password
+ * @param passwordConfirm - the repeat
+ * @param context - the caller
+ * @returns the account on success; a 422 for a bad password pair, a breached password, or a link
+ *   that is unknown, expired or already used — the last three read alike on purpose
+ */
+export const completePasswordReset = (
+    token: string,
+    password: string,
+    passwordConfirm: string,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    const errors = validatePasswordChange(password, passwordConfirm);
+    if (errors.length > 0) return Promise.resolve(generateReject(422, errors));
+
+    const linkRefused = () => generateReject(422, [t('account.reset.token-not-found')]);
+
+    return findLiveToken(PASSWORD_RESET_TOKEN_TYPE, token)
+        .then((user) => {
+            if (!user) return linkRefused();
+
+            return assertPasswordNotBreached(password).then((breachErrors) => {
+                if (breachErrors.length > 0) return generateReject(422, breachErrors);
+
+                return spendLiveToken(user, token).then((spentByThisRequest) =>
+                    spentByThisRequest
+                        ? writePassword(user, password, markVerified).then((result) =>
+                              afterReset(result, user, context)
+                          )
+                        : linkRefused()
+                );
+            });
+        })
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+};
 
 /**
  * Hard-delete the caller's own account, confirmed by a one-time token.
