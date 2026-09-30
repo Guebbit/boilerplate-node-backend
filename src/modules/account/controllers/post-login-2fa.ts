@@ -11,6 +11,7 @@ import type { LoginTwoFactorRequest, AuthTokens } from '@types';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
 import { issueSession } from '../session/session';
+import { toRememberTier } from '../session/config';
 import { recordLoginSuccess } from '../session/login-observability';
 import { authTwoFactorChallengeTotal } from '../metrics';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
@@ -37,7 +38,7 @@ export const postLoginTwoFactor = (
         authTwoFactorChallengeTotal.inc({ status: 'failure' });
         return rejectValidation(response, parseResult.error);
     }
-    const { code } = parseResult.data;
+    const { code, remember } = parseResult.data;
     // Omitted from the body: an OAuth-originated challenge was never sent to the client at all —
     // see `oauth/mfa-redirect.ts`. A password-originated one always has it in the body.
     const challenge = parseResult.data.challenge ?? readMfaChallengeCookie(request);
@@ -57,19 +58,20 @@ export const postLoginTwoFactor = (
             const { user, amr } = result.data;
             const userId = user._id.toString();
 
-            return issueSession(response, userId, undefined, [...amr, 'otp']).then((accessToken) =>
-                // Read fresh from the membership — the document carries no role of its own.
-                isUnrestrictedCaller(userId).then((unrestricted) => {
-                    authTwoFactorChallengeTotal.inc({ status: 'success' });
-                    recordLoginSuccess(request, userId, unrestricted);
-                    destroyMfaChallengeCookie(response);
-                    successResponse<AuthTokens>(
-                        response,
-                        { token: accessToken },
-                        200,
-                        'Authentication successful'
-                    );
-                })
+            return issueSession(response, userId, toRememberTier(remember), [...amr, 'otp']).then(
+                (accessToken) =>
+                    // Read fresh from the membership — the document carries no role of its own.
+                    isUnrestrictedCaller(userId).then((unrestricted) => {
+                        authTwoFactorChallengeTotal.inc({ status: 'success' });
+                        recordLoginSuccess(request, userId, unrestricted);
+                        destroyMfaChallengeCookie(response);
+                        successResponse<AuthTokens>(
+                            response,
+                            { token: accessToken },
+                            200,
+                            'Authentication successful'
+                        );
+                    })
             );
         })
         .catch((error: unknown) => {

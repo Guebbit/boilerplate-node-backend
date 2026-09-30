@@ -11,7 +11,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { ReauthRequest, AuthTokens } from '@types';
 import { accountService } from '../services';
-import { issueSession } from '../session/session';
+import { reissueSession } from '../session/session';
 import { authReauthTotal } from '../metrics';
 import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -51,7 +51,7 @@ export const postReauth = (
              * must propagate to the outer `.catch` and answer 500 — a 200 with no token would
              * claim the challenge was cleared when it was not.
              */
-            return issueSession(response, id).then((token) => {
+            return reissueSession(request, response, id).then((token) => {
                 authReauthTotal.inc({ status: 'success' });
                 successResponse<AuthTokens>(response, { token }, 200, t('account.reauth.success'));
             });
