@@ -160,6 +160,42 @@ describe('confirmPayment', () => {
         expect(payment!.cardLast4).toBe('4242');
     });
 
+    it('says `card` on an order checked out as bank transfer once the card pays it (JB8)', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 25 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer'
+        });
+        const intent = await createIntent(String(order._id), auth(user));
+
+        await confirmPayment(
+            String(intent.success && intent.data?.id),
+            GOOD_METHOD,
+            auth(user),
+            testCallerContext
+        );
+
+        expect((await orderService.getById(String(order._id)))!.paymentMethod).toBe('card');
+    });
+
+    it('keeps `bank_transfer` when the money was recorded by hand instead of a card', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 25 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer'
+        });
+
+        await recordOfflinePayment(
+            String(order._id),
+            { method: 'bank_transfer', reference: 'TRX-JB8' },
+            testCallerContext
+        );
+
+        expect((await orderService.getById(String(order._id)))!.paymentMethod).toBe(
+            'bank_transfer'
+        );
+    });
+
     it('reports a decline with the stable code, leaves the order pending, and stays retryable', async () => {
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));

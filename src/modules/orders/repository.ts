@@ -189,13 +189,25 @@ const updateStatusIfIn = (
  * @param id - the order to move
  * @param from - the status this move must currently be in — see `domain/lifecycle.ts`'s
  *   `statusesLeadingTo`
+ * @param paymentMethod - how it was actually paid, when that is a fact the order should keep
+ *   (a card settling a bank-transfer order); absent leaves the checkout choice as it was
  * @returns the order as it now stands, or `null` if it was not in `from`
  */
-const markPaid = (id: string, from: OrderStatus): Promise<OrderDocument | null> =>
+const markPaid = (
+    id: string,
+    from: OrderStatus,
+    paymentMethod?: 'card'
+): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
             { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
-            { $set: { status: OrderStatus.paid, paidAt: new Date() } },
+            {
+                $set: {
+                    status: OrderStatus.paid,
+                    paidAt: new Date(),
+                    ...(paymentMethod ? { paymentMethod } : {})
+                }
+            },
             { returnDocument: 'after' }
         )
         .exec();
@@ -569,7 +581,11 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         effects?: readonly OrderPendingEffect[],
         session?: ClientSession
     ) => Promise<OrderDocument | null>;
-    markPaid: (id: string, from: OrderStatus) => Promise<OrderDocument | null>;
+    markPaid: (
+        id: string,
+        from: OrderStatus,
+        paymentMethod?: 'card'
+    ) => Promise<OrderDocument | null>;
     setProjection: (
         id: string,
         fields: { paymentStatus?: string | undefined; returnStatus?: string | undefined }

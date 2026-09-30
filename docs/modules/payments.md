@@ -333,7 +333,9 @@ stateDiagram-v2
 ```
 
 - **The order carries the chosen method as a preference, not a lock.** The card form stays offered
-  regardless, and a card payment settles through the ordinary pipeline above.
+  regardless, and a card payment settles through the ordinary pipeline above. When a card pays a
+  transfer order the order's `paymentMethod` becomes `card`, so the order page agrees with its
+  payment; money recorded by hand leaves it alone.
 - **The hold is longer, and the sweep needs no change to know it.** `cart`'s checkout hands
   `inventoryService.reserveForOrder` an explicit window — `NODE_BANK_TRANSFER_HOLD_HOURS` (default
   168, a week) instead of `NODE_RESERVATION_TTL_MINUTES` — and the same reservation sweep that

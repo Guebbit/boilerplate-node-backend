@@ -128,7 +128,10 @@ export const settlePayment = (
     // only `{ orderId }`, carries no stock figure that ordering could make stale, and nothing else
     // in this application listens. Reorder the two (commit, then report) if a future listener
     // ever needs to read committed stock in reaction to this event.
-    return orderService.markPaid(orderId).then(async () => {
+    // A card settling the order is how it was paid, whatever checkout chose: the order page shows
+    // its payment method beside "Paid, card ending …", and the two must agree.
+    const paidBy = payment.method === 'card' ? 'card' : undefined;
+    return orderService.markPaid(orderId, paidBy).then(async () => {
         // `pendingEffects: ['commit']` lands in the SAME write as the status move — the durable
         // note that the stock commit below is still owed, for `effects.ts#retryPendingEffects` to
         // find if this call dies before either branch below clears it.
