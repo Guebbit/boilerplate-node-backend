@@ -50,6 +50,8 @@
         "test": "npm run test:unit && npm run test:cross-cutting && npm run test:integration && npm run test:contract && npm run test:fuzz",
         "test:unit": "tsx scripts/testing/run-suite.ts unit",
         "test:cross-cutting": "tsx scripts/testing/run-suite.ts cross-cutting",
+        "scaffold:module": "tsx scripts/scaffold/scaffold-module.ts",
+        "measure:scaffold": "tsx scripts/testing/measure-scaffold.ts",
         "measure:demo-strip": "tsx scripts/testing/measure-demo-strip.ts",
         "demo:remove": "tsx scripts/ops/demo-remove.ts",
         "test:unit:coverage": "cross-env NODE_OPTIONS=--max-old-space-size=4096 tsx scripts/testing/run-suite.ts unit cross-cutting --unsharded --coverage --runInBand",

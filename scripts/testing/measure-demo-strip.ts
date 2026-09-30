@@ -15,19 +15,16 @@
  * Report-only, on purpose: turning this red would block every PR on work this step is not scoped
  * to do. Promote it into the `ci` gate once it is green.
  *
- * Runs against a SCRATCH COPY, never this checkout. `node_modules` is symlinked rather than
- * copied (or reinstalled): the question is what the SOURCE looks like with the module gone, not
- * whether npm still works.
+ * Runs against a SCRATCH COPY, never this checkout (`scripts/testing/scratch-copy.ts`).
  *
  * See: docs/theory/strategic-ddd.md#4a-foundation-and-shop
  */
 
-import { cpSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { removeModules } from '../ops/demo-remove-modules';
 import { readShopModuleNames } from './shop-module-names';
+import { assembleScratchCopy, runIn } from './scratch-copy';
 
 /** Repo root, two levels up from `scripts/testing/`. */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -38,9 +35,6 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
  * `tmp/` would be exactly that.
  */
 const SCRATCH = path.join(os.tmpdir(), 'demo-strip-measure');
-
-/** Top-level entries never copied into the scratch tree — regenerated or symlinked instead. */
-const SKIP_ENTRIES = new Set(['node_modules', '.git', '.claude', 'tmp']);
 
 /** One command this script runs against the scratch tree, and what it is asked about. */
 interface Check {
@@ -61,40 +55,6 @@ const CHECKS: readonly Check[] = [
     { label: 'docs:build', command: 'npm', args: ['run', 'docs:build'] }
 ];
 
-/** Copy the checkout into `SCRATCH`, skipping what {@link SKIP_ENTRIES} names. */
-const assembleScratchCopy = (): void => {
-    rmSync(SCRATCH, { recursive: true, force: true });
-    mkdirSync(SCRATCH, { recursive: true });
-
-    cpSync(REPO_ROOT, SCRATCH, {
-        recursive: true,
-        filter: (source) => !SKIP_ENTRIES.has(path.relative(REPO_ROOT, source).split(path.sep)[0])
-    });
-
-    // Node resolves through the symlink exactly as it would a real directory — the scratch copy
-    // needs working imports, not its own install.
-    symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(SCRATCH, 'node_modules'), 'dir');
-
-    // A symlinked `node_modules` resolves to a real path OUTSIDE the scratch tree, and TypeScript
-    // then refuses to name a type reached through it (TS2883 on `tests/support/routes.ts`) — an
-    // artifact of the measurement, not of the code. `preserveSymlinks` makes it resolve through
-    // the link the way a real install would.
-    // https://www.typescriptlang.org/tsconfig/#preserveSymlinks
-    const tsconfig = path.join(SCRATCH, 'tsconfig.json');
-    writeFileSync(
-        tsconfig,
-        readFileSync(tsconfig, 'utf8').replace(
-            '"strict": true,',
-            '"strict": true,\n"preserveSymlinks": true,'
-        )
-    );
-
-    // `regenerate`'s `docs:graph` asks `git ls-files` which files each module owns, so the scratch
-    // tree has to be a repository.
-    runInScratch('git', ['init', '--quiet']);
-    runInScratch('git', ['add', '--all']);
-};
-
 /** A removal recipe: how to take one kind of module out of the scratch copy. */
 interface Recipe {
     /** Applies the removal to the scratch tree. */
@@ -104,14 +64,13 @@ interface Recipe {
 }
 
 /**
- * Run a command in the scratch tree, refusing to go on when it fails — a recipe that does not
+ * Run a command in the scratch tree, refusing to go on when it fails: a recipe that does not
  * apply is a broken measurement, not a finding.
  * @param command - the executable
  * @param commandArguments - its arguments
  */
 const runInScratch = (command: string, commandArguments: readonly string[]): void => {
-    const result = spawnSync(command, commandArguments, { cwd: SCRATCH, stdio: 'inherit' });
-    if (result.status !== 0)
+    if (!runIn(SCRATCH, command, commandArguments))
         throw new Error(
             `[demo-strip] \`${command} ${commandArguments.join(' ')}\` failed while applying the recipe.`
         );
@@ -147,8 +106,7 @@ const RECIPES: Partial<Record<string, Recipe>> = {
  */
 const run = (check: Check): boolean => {
     console.info(`\n[demo-strip] ${check.label}`);
-    const result = spawnSync(check.command, check.args, { cwd: SCRATCH, stdio: 'inherit' });
-    return result.status === 0;
+    return runIn(SCRATCH, check.command, check.args);
 };
 
 const recipeName = process.argv.includes('--recipe')
@@ -162,7 +120,7 @@ if (!recipe)
 
 console.info(`[demo-strip] recipe ${recipeName}: removing ${recipe.describe()}`);
 
-assembleScratchCopy();
+assembleScratchCopy(REPO_ROOT, SCRATCH);
 recipe.apply();
 const results = CHECKS.map((check) => ({ check, passed: run(check) }));
 

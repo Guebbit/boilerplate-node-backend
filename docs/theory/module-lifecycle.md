@@ -103,6 +103,14 @@ What still names modules by hand, and why it is not a table a new module edits:
 
 ## Adding a module
 
+::: tip Steps 1 to 5 can be generated
+`npm run scaffold:module -- <name>` writes the folder, the contract fragment, the permission keys,
+the smoke tests, the docs page and the registry line, then regenerates. It also makes the three
+edits outside the folder that a keyed module still needs (the admin role list, its conformance
+copy, the PUT/PATCH parity canary). [Module scaffolder](../tools/module-scaffolder.md) has the
+flow; the steps below are what it automates, and what you do by hand for a module of another shape.
+:::
+
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
 flowchart LR
