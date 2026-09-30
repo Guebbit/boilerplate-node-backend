@@ -27,7 +27,7 @@ describe('contract scalars', () => {
         // A canary: if orval's naming changes, an empty sweep would pass over nothing.
         expect(constantsEndingIn('PageSizeMax').length).toBeGreaterThan(5);
         expect(constantsEndingIn('PageMax').length).toBeGreaterThan(5);
-        expect(constantsEndingIn('HardDeleteDefault').length).toBeGreaterThan(2);
+        expect(constantsEndingIn('HardDeleteDefault').length).toBeGreaterThan(1);
     });
 
     it('agrees with every operation on the maximum page size', () => {

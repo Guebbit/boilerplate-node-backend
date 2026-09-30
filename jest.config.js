@@ -115,6 +115,22 @@ const floor = (statements, branches, functions, lines = statements) => ({
 });
 
 /**
+ * A floor for one file of a module that may not be deployed — the entry exists only while the
+ * module's folder does. A key matching no file is ignored by Jest but fails
+ * `tests/cross-cutting/coverage-thresholds.test.ts`, so a deleted module (`demo:remove`) must not
+ * leave one behind. Spread it into `coverageThreshold` at the position the key belongs.
+ *
+ * @param moduleName the module folder under `src/modules/`
+ * @param file the file inside it, relative to the module
+ * @param thresholds the `floor(...)` for it
+ * @returns `{ [key]: thresholds }`, or `{}` when the module is not there
+ */
+const moduleFloor = (moduleName, file, thresholds) =>
+    existsSync(path.join(__dirname, 'src', 'modules', moduleName))
+        ? { [`src/modules/${moduleName}/${file}`]: thresholds }
+        : {};
+
+/**
  * What a file with its own unit suite is expected to clear. Raising this raises four keys at once,
  * which is the point of it being one value.
  */
@@ -179,7 +195,7 @@ module.exports = {
         'src/modules/api-keys/model.ts': floor(100, 100, 0),
         // The richest schema in the repo: nine methods and virtuals, four of which only a real
         // document reaches. The rest of the file is the best-covered model here.
-        'src/modules/products/model.ts': floor(89, 69, 44),
+        ...moduleFloor('products', 'model.ts', floor(89, 69, 44)),
         'src/modules/*/repository.ts': PARTIAL,
         'src/modules/*/service.ts': PARTIAL,
         'src/modules/!(webhooks)/services/*.ts': PARTIAL,

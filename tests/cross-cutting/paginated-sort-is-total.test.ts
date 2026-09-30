@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { isDeployed } from '@tests/paths';
 
 /**
  * Guard: a `$sort` that a `$skip` pages through must be TOTAL — its last key unique.
@@ -84,6 +85,7 @@ describe('every paged $sort is total', () => {
         // aggregation pipeline today — `inventory`'s stock board pages through a plain
         // `find().sort().skip()` instead, which this regex (deliberately syntactic — see the
         // module docblock) does not match.
-        expect(pagedSortStages().length).toBeGreaterThanOrEqual(1);
+        // `orders` is the one that does, so without it there may be nothing to find.
+        if (isDeployed('orders')) expect(pagedSortStages().length).toBeGreaterThanOrEqual(1);
     });
 });

@@ -254,7 +254,13 @@ describe('every write route is guarded by default', () => {
             )
         );
 
-        expect(Object.keys(WRITE_EXCEPTIONS).filter((key) => !mountedWrites.has(key))).toEqual([]);
+        // An exception for a module that is not deployed at all (removed, e.g. by `demo:remove`) has
+        // nothing to be stale against; one for a module that IS deployed must still match a route.
+        const forDeployedModules = Object.keys(WRITE_EXCEPTIONS).filter((key) =>
+            Object.hasOwn(ROUTED_MODULES, key.split(' ')[0])
+        );
+
+        expect(forDeployedModules.filter((key) => !mountedWrites.has(key))).toEqual([]);
     });
 
     for (const [moduleName, router] of Object.entries(ROUTED_MODULES)) {

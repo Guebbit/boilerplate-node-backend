@@ -118,11 +118,20 @@ const namesReadByLiteral = (): string[] =>
         )
     ].map(([, name]) => name);
 
+/** The names the controller treats as optional, read from its `SHOP_METRIC_NAMES` literal. */
+const shopMetricNames = (): string[] => {
+    const block = /SHOP_METRIC_NAMES = \[([^\]]*)]/.exec(
+        withoutComments(readFileSync(OVERVIEW_CONTROLLER, 'utf8'))
+    );
+    return [...(block?.[1] ?? '').matchAll(/'([^']+)'/g)].map(([, name]) => name);
+};
+
 describe('metric names', () => {
     it('finds the metrics and the readers it means to check', () => {
         // A canary: a renamed file or a changed call shape would otherwise make every case below a
         // sweep over an empty list, which passes and proves nothing.
-        expect(metricFiles().length).toBeGreaterThanOrEqual(5);
+        expect(metricFiles().length).toBeGreaterThanOrEqual(3);
+        expect(shopMetricNames().length).toBeGreaterThan(0);
         expect(declarations().length).toBeGreaterThanOrEqual(12);
         expect(namesReadByLiteral().length).toBeGreaterThanOrEqual(5);
     });
@@ -134,8 +143,14 @@ describe('metric names', () => {
          * anyone reading its output.
          */
         const declared = new Set(declarations().map(({ name }) => name));
+        // The controller's own `SHOP_METRIC_NAMES` are optional as a group: with no shop module
+        // deployed none of them is declared, and the `business` block is left out. If ANY is
+        // declared, all must be.
+        const shopNames = shopMetricNames();
+        const shopDeployed = shopNames.some((name) => declared.has(name));
         const unresolved = namesReadByLiteral()
             .filter((name) => !declared.has(name))
+            .filter((name) => shopDeployed || !shopNames.includes(name))
             .map(
                 (name) =>
                     `${name} — read by get-observability-metrics-overview.ts, declared by no module`

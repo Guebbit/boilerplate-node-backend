@@ -28,6 +28,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { isDeployed } from '@tests/paths';
 import { parse } from 'yaml';
 
 /** The bundle, because a `$ref` in a fragment points across files and this needs it resolved. */
@@ -92,12 +93,12 @@ describe('a search accepts the same filters in both spellings', () => {
     // Discovered by walking `x-alias-of`, so a new pair is covered without editing this file —
     // and a regex that stopped matching would make every case below vacuous.
     it('found every search pair', () => {
-        expect(searchPairs.map(({ searchRoute }) => searchRoute).toSorted()).toEqual([
-            '/feedback/search',
-            '/orders/search',
-            '/products/search',
-            '/users/search'
-        ]);
+        // Route prefix and owning module share a name for every search pair.
+        const expected = ['feedback', 'orders', 'products', 'users']
+            .filter((module) => isDeployed(module))
+            .map((module) => `/${module}/search`);
+
+        expect(searchPairs.map(({ searchRoute }) => searchRoute).toSorted()).toEqual(expected);
     });
 
     it.each(searchPairs)(
