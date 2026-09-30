@@ -82,7 +82,7 @@ full contract is compared against nothing and is marked `shared: false` to say s
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
 flowchart TD
     subgraph BE["boilerplate-node-api-mongodb-mongoose  (owns the contract)"]
-        H["shared/contracts/openapi.root.yaml<br/><i>preamble · tags · shared components · GET /</i>"] --> B["redocly bundle"]
+        H["shared/contracts/openapi.root.yaml<br/><i>preamble · tags · shared components · GET /</i>"] --> AR["assembleRoot<br/><i>paths + tags from the fragments</i>"] --> B["redocly bundle"]
         F1["modules/products/openapi.yaml"] --> B
         F2["modules/orders/openapi.yaml"] --> B
         F3["modules/…/openapi.yaml"] --> B
@@ -100,7 +100,7 @@ flowchart TD
     classDef tool fill:#fef3c7,stroke:#d97706,color:#111827;
     class H,F1,F2,F3 frag;
     class ROOT,FEROOT root;
-    class B,ORVAL,CLIENT tool;
+    class B,AR,ORVAL,CLIENT tool;
 ```
 
 The picture is drawn for `openapi.yaml`; the other five bundles differ only in what reads the output
@@ -234,8 +234,8 @@ DELETE /products/{id}           DELETE /products/{id}/hard
 At which point the goal test the whole module architecture exists to satisfy finally includes the
 contract:
 
-> Deleting a domain is `rm -rf` of one folder plus removing one line from `src/modules.ts` —
-> **and one line from the bundler's input list.**
+> Deleting a domain is `rm -rf` of one folder plus removing one line from `src/modules.ts`. The
+> bundler's input is what is on disk, so it needs no edit.
 
 ## Current state
 
@@ -245,6 +245,7 @@ that owns it.
 ```
 shared/contracts/openapi.root.yaml    preamble · tags · securitySchemes · parameters · responses ·
                                       the 20 shared types · GET / · the per-module path index
+                                      (a preference: completed from the fragments, see below)
 src/modules/<name>/openapi.yaml       one standalone OpenAPI document per module:
                                       its paths, and the schemas only its paths reference
 ```
@@ -253,6 +254,12 @@ src/modules/<name>/openapi.yaml       one standalone OpenAPI document per module
 npm run contracts:bundle              # rebuild every bundle from the fragments
 npm run check:contracts-bundle        # fail if any committed bundle is stale
 ```
+
+**The root's path index is completed, not trusted.** `scripts/contracts/root-assembly.ts` reads
+every fragment on disk, drops the root's `$ref` for a path no fragment declares any more, appends
+the paths and tags of a fragment the root has not heard of, and stages the completed tree under
+`tmp/` for redocly. The root's hand order is kept for what it already lists, so the committed
+bundle does not move; a new module is in the contract from its own `openapi.yaml` alone.
 
 To rebuild one document while iterating, name it: `npm run contracts:bundle -- openapi`. The
 ordering lives inside `scripts/contracts/build-bundles.ts` rather than as an `&&` chain in `package.json`,

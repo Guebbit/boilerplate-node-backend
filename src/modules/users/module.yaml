@@ -1,3 +1,4 @@
+summary: 'Admin-side user management; the self-service half is account.'
 subdomain: generic
 group: foundation
 dependsOn:

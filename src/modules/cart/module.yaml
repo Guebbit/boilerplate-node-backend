@@ -1,3 +1,4 @@
+summary: 'One document per user, and checkout, the transaction the whole shop turns on.'
 subdomain: core
 group: shop
 dependsOn:

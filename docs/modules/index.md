@@ -157,51 +157,52 @@ have — could not express any of the three: an edge no import backed was reject
 
 ## Every module
 
-Grouped by subdomain, which is the first thing worth knowing about a domain: whether it is the
-reason the product exists, something specific to this business that is not a differentiator, or a
-solved problem where modelling effort would be waste.
-[Strategic DDD](../theory/strategic-ddd.md) is where those three words are defined.
+Grouped by `group` (declared in each module's own `module.yaml`): the **foundation** every
+deployment keeps, then the **demo shop** that `npm run demo:remove` deletes. Which of the two a
+module is, is an enforced fact rather than a label —
+[Foundation and shop](../theory/strategic-ddd.md#4a-foundation-and-shop). The subdomain each one
+belongs to (core, supporting, generic) is the colouring of the map above, and is defined in
+[Strategic DDD](../theory/strategic-ddd.md).
 
-**core** — the reason the product exists.
+::: tip Generated, not listed
+The list below is produced by `npm run docs:graph` from each module's `module.yaml`
+(`group`, `summary`) and the pages beside this one, the same way the sidebar is. A new module
+appears here by declaring them.
+:::
 
-- [`cart`](./cart.md) — `/cart`. One document per user, and checkout, the transaction the whole
-  shop turns on. Deeper: [Checkout](./cart-checkout.md).
-- [`orders`](./orders.md) — `/orders`. What a checkout produces, its status machine, and its
-  invoice.
-- [`products`](./products.md) — `/products`. The catalogue, its search surface and its cache.
+<!-- module-list:start -->
 
-**supporting** — specific to this business, but not a differentiator.
+### Foundation
 
-- [`addresses`](./addresses.md) — `/account`, shared with `account`. The address book, its own
-  module so `cart`'s checkout can reach it without importing `account`.
-- [`delivery`](./delivery.md) — `/delivery`. Shipping rates as pure rules, and the staff doors
-  that record a parcel's handover and arrival.
-- [`inventory`](./inventory.md) — `/inventory`. The only writer of stock in the application.
-  Deeper: [Reservations](./inventory-reservations.md).
-- [`payments`](./payments.md) — `/payments`. An order's money, behind a provider port. Deeper:
-  [The provider port](./payments-provider-port.md).
-- [`wishlist`](./wishlist.md) — `/wishlist`. The smallest domain here, and the one to read first.
+Ships with every deployment, whatever the project becomes. Copy `feedback` to start a new module.
 
-**generic** — a solved problem, kept plain.
+- [`access`](./access.md) — Headless. The tenant and membership model every role check reads, owned apart from account and users so neither has to.
+- [`account`](./account.md) — Who is making this request: signup, login, sessions, two-factor, OAuth and the account lifecycle. Deeper: [OAuth](./account-oauth.md), [Sessions](./account-sessions.md), [Two-factor authentication](./account-two-factor.md).
+- [`addresses`](./addresses.md) — The address book, its own module so the cart's checkout can reach it without importing account.
+- [`antibot`](./antibot.md) — The human-challenge port, and the endpoint that tells a frontend which provider is active.
+- [`api-keys`](./api-keys.md) — Long-lived programmatic credentials, scoped to the same permission model a session uses.
+- [`audit-logs`](./audit-logs.md) — Owns the audit trail; the read endpoint is its own, the platform operator's view lives in observability.
+- [`feedback`](./feedback.md) — Contact submissions and what an admin does with them. The reference module to copy for a new domain.
+- [`locales`](./locales.md) — Language discovery and the API's own message dictionary.
+- [`observability`](./observability.md) — Health, metrics, the platform operator's audit read and the SSE stream.
+- [`users`](./users.md) — Admin-side user management; the self-service half is account.
+- [`webhooks`](./webhooks.md) — Outbound event delivery to a subscriber's own URL.
 
-- [`access`](./access.md) — headless. The tenant/membership model every role check reads, owned
-  apart from `account`/`users` so neither has to.
-- [`account`](./account.md) — `/account`. Who is making this request. Deeper:
-  [Sessions](./account-sessions.md), [Two-factor auth](./account-two-factor.md),
-  [OAuth](./account-oauth.md).
-- [`antibot`](./antibot.md) — `/antibot`. Rung 3 of the anti-automation ladder: the human-challenge
-  port, and the endpoint that tells a frontend which provider is active.
-- [`api-keys`](./api-keys.md) — `/api-keys`. Long-lived programmatic credentials, scoped to the
-  same permission model a session uses.
-- [`audit-logs`](./audit-logs.md) — `/audit`. Owns the trail; the read endpoint is its own, the
-  admin surface for it lives in `observability`.
-- [`feedback`](./feedback.md) — `/feedback`. Contact submissions and what an admin does with them.
-- [`locales`](./locales.md) — `/locales`. Language discovery and the API's own message dictionary.
-- [`observability`](./observability.md) — `/observability`. Health, metrics, the audit read and the
-  SSE stream.
-- [`users`](./users.md) — `/users`. Admin-side user management; the self-service half is
-  `account`.
-- [`webhooks`](./webhooks.md) — `/webhooks`. Outbound event delivery to a subscriber's own URL.
+### Demo shop
+
+The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in the foundation may depend on it, and `npm run demo:remove` deletes it.
+
+- [`cart`](./cart.md) — One document per user, and checkout, the transaction the whole shop turns on. Deeper: [Checkout](./cart-checkout.md).
+- [`delivery`](./delivery.md) — Shipping rates as pure rules, and the staff doors that record a parcel's handover and arrival.
+- [`inventory`](./inventory.md) — The only writer of stock in the application. Deeper: [Reservations](./inventory-reservations.md).
+- [`invoicing`](./invoicing.md) — Frozen invoice and credit-note documents, issued from payment and refund events.
+- [`orders`](./orders.md) — What a checkout produces: its status machine, its totals and its invoice link.
+- [`payments`](./payments.md) — An order's money, behind a provider port. Deeper: [The provider port](./payments-provider-port.md).
+- [`products`](./products.md) — The catalogue, its search surface and its cache.
+- [`returns`](./returns.md) — Sending goods back, including the EU withdrawal button.
+- [`wishlist`](./wishlist.md) — Saved products, one list per user. The smallest shop domain.
+
+<!-- module-list:end -->
 
 Every route in the application, in one table, is [Endpoints](../api/endpoints.md). What each file
 inside a module folder is, is [Modules (files)](../reference/src-modules.md).
@@ -209,8 +210,8 @@ inside a module folder is, is [Modules (files)](../reference/src-modules.md).
 ## The two repositories
 
 Most domains exist on both sides under the same name. **A few do not**, and neither does the
-frontend's one extra module — an asymmetry that is real architecture rather than drift, and that
-is written down nowhere else in either repository.
+frontend's one extra module — an asymmetry that is real architecture rather than drift. It is
+declared where it belongs: a `frontend:` block in the backend module's own `module.yaml`.
 
 | This repository | `boilerplate-vue-frontend` | Note                                                                                                                                                                                                                                           |
 | --------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -222,6 +223,6 @@ is written down nowhere else in either repository.
 And one frontend module answers to nothing here: `demo`, a client-side showcase of the shared UI
 kit, which pairs with the demo profile and the seeded dataset rather than with any single domain.
 
-`tests/cross-cutting/frontend-pairing.test.ts` holds this map to the code: a module added here with
-no entry fails, an entry naming a module that no longer exists fails, and a counterpart that is not
-simply the same name has to carry its reason. The gap cannot widen quietly.
+`tests/cross-cutting/frontend-pairing.test.ts` holds this to the code: a counterpart that is not
+simply the same name has to carry its reason, and with a paired checkout every name has to exist
+over there, in both directions. The gap cannot widen quietly.

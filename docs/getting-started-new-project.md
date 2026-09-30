@@ -19,10 +19,8 @@ boilerplate demos itself with, and nothing else may depend on it —
 `.dependency-cruiser.cjs`'s `foundation-cannot-reach-shop` rule fails closed on that, so "is the
 demo actually removable" is an enforced fact, not a claim.
 
-| Group        | Modules                                                                                                                                              |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shop`       | `cart`, `delivery`, `inventory`, `invoicing`, `orders`, `payments`, `products`, `wishlist`                                                           |
-| `foundation` | everything else — `account`, `addresses`, `antibot`, `api-keys`, `audit-logs`, `feedback`, `locales`, `observability`, `users`, `webhooks`, `access` |
+[The module index](./modules/index.md#every-module) lists every module under its group. It is
+generated from each module's own `module.yaml`, so it is never behind.
 
 `npm run measure:demo-strip` is the checked version of that claim: on every push and PR, CI copies
 the repo to a scratch directory, applies a removal recipe (`--recipe shop` runs the real
@@ -38,7 +36,7 @@ passes the cross-cutting suite.
 ```mermaid
 flowchart TD
     Names["read every module.yaml,\ncollect group: shop"] --> Folders["rm -rf each\nsrc/modules/&lt;shop module&gt;"]
-    Folders --> Registry["edit src/modules.ts and\ntests/support/routed-modules.ts"]
+    Folders --> Registry["edit src/modules.ts"]
     Registry --> Ops["delete the reap/sweep scripts\na shop module owns, their\npackage.json + docker/crontab lines"]
     Ops --> Shared["edit the shared files: the contract's paths census,\nthe roles' and conformance cases' permission keys,\nthe scenario fixtures"]
     Shared --> Scenario["delete the demo catalogue's\nown scenario data; drop the shop's\nhistory-drive step; default scenario\nbecomes blank"]
@@ -62,10 +60,11 @@ branch, or after committing whatever you had in progress. It touches:
 
 - **Every `group: shop` module folder**, deleted outright — its routes, model, tests, everything.
 - **The handful of central files a module folder cannot own by itself**: the module registry
-  (`src/modules.ts`), the test suite's own router map (`tests/support/routed-modules.ts`), and the
-  shared contract fragment (`shared/contracts/openapi.root.yaml`) that lists every module's paths and
-  the account data-export schema. The contract bundlers need no edit — they discover modules from
-  disk, and their order lists are only a preference — `account`'s own export service already reads its section list off the module registry at
+  (`src/modules.ts`) and the shared contract fragment (`shared/contracts/openapi.root.yaml`), for
+  the account data-export schema. Everything else that names a module is read from disk or from the
+  registry — the contract's path index, the client collections' probes, the test suite's router
+  map, the docs index and sidebar — and their order lists are only a preference.
+  `account`'s own export service already reads its section list off the module registry at
   runtime (`src/modules/account/services/personal-data-registry.ts`) and just omits a section no
   module registers, so only the **contract text** was behind, not the code.
 - **The reap/sweep scripts a shop module owns** (`scripts/ops/reap-orders.ts` and friends), found by
@@ -100,10 +99,13 @@ module in a string or a table rather than an import. `ts-check` and the suites n
 ## Next: build your own domain
 
 Once `demo:remove` leaves you with a green `npm run complete`,
-the remaining `foundation` modules — account, addresses, users, access, webhooks, feedback,
-observability, locales, antibot, api-keys, audit-logs — are what every deployment of this boilerplate
-keeps, whatever it becomes next. `docs/theory/modules.md#the-module-template` is the shape a new
-module follows; `docs/theory/module-lifecycle.md#adding-a-module` walks through adding one from
+the remaining `foundation` modules are what every deployment of this boilerplate keeps, whatever it
+becomes next.
+
+**The module to copy is `feedback`.** It is `foundation`, so it is still there after the strip and
+depends on nothing shop-shaped, and it carries most of what a new module needs. Do not start from a
+shop module: the strip deletes it, and its dependencies with it.
+`docs/theory/modules.md#the-module-template` is the shape a new module follows; `docs/theory/module-lifecycle.md#adding-a-module` walks through adding one from
 nothing, the same way this page walks through removing one.
 
 ## Related pages

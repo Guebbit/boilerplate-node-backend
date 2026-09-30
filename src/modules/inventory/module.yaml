@@ -1,3 +1,4 @@
+summary: 'The only writer of stock in the application.'
 subdomain: supporting
 group: shop
 dependsOn:

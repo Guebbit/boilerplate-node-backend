@@ -1,3 +1,4 @@
+summary: 'What a checkout produces: its status machine, its totals and its invoice link.'
 subdomain: core
 group: shop
 dependsOn:

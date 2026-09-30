@@ -72,7 +72,8 @@ export interface CompiledBundle extends BundleIdentity {
  * first, so the generator has a current contract to read.
  */
 export interface GeneratedBundle extends BundleIdentity {
-    content: () => string;
+    /** Async because the collections load every module's `probes.ts` by scan. */
+    content: () => Promise<string>;
     generated: true;
 }
 
@@ -98,7 +99,8 @@ export const isGenerated = (bundle: ContractBundle): bundle is GeneratedBundle =
  * is made: each one already knows how to build itself, and the ordering that keeps a generated
  * bundle reading a fresh contract is `scripts/contracts/build-bundles.ts`'s job, not this function's.
  */
-export const assembleBundle = (bundle: ContractBundle): string => bundle.content();
+export const assembleBundle = (bundle: ContractBundle): Promise<string> =>
+    Promise.resolve(bundle.content());
 
 /**
  * The bundle as committed on disk.

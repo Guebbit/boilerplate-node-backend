@@ -1,3 +1,7 @@
+summary: 'Headless. The tenant and membership model every role check reads, owned apart from account and users so neither has to.'
 subdomain: generic
 group: foundation
 dependsOn: []
+frontend:
+    counterparts: []
+    why: "Routeless: tenants and memberships back every other module's auth resolution, but nothing renders a screen for them directly; role assignment happens through the frontend's own users/account admin views."

@@ -28,11 +28,11 @@ sentence and a link, carry on with what you were doing.
 flowchart TD
     A["1 · src/app.ts<br/><i>the boot sequence</i>"] --> B["2 · src/modules.ts<br/><i>what is enabled</i>"]
     B --> C["3 · src/kernel/registry.ts<br/><i>what a module IS</i>"]
-    C --> D["4 · modules/products/module.ts<br/><i>one module, declared</i>"]
-    D --> E["5 · modules/products/routes.ts<br/><i>the URL surface</i>"]
-    E --> F["6 · controllers/get-products.ts<br/><i>one request, end to end</i>"]
-    F --> G["7 · products/services/read.ts<br/><i>the domain decision</i>"]
-    G --> H["8 · products/repository.ts<br/><i>the database</i>"]
+    C --> D["4 · modules/feedback/module.ts<br/><i>one module, declared</i>"]
+    D --> E["5 · modules/feedback/routes.ts<br/><i>the URL surface</i>"]
+    E --> F["6 · controllers/post-feedback-contact.ts<br/><i>one request, end to end</i>"]
+    F --> G["7 · feedback/service.ts<br/><i>the domain decision</i>"]
+    G --> H["8 · feedback/repository.ts<br/><i>the database</i>"]
     H --> I["9 · infrastructure/http/response.ts<br/><i>what every answer looks like</i>"]
 
     classDef boot fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -59,8 +59,8 @@ order is behaviour, not documentation.
 
 Mostly imports. Every domain, one array.
 
-**Take away:** enabling or disabling a domain is one line here. There is no filesystem discovery,
-no auto-registration, no magic.
+**Take away:** enabling or disabling a domain is one line here. Nothing else names a module: the
+contract, the docs and the guard tests read each module's own folder.
 
 ### 3 · `src/kernel/registry.ts` — what a module _is_
 
@@ -73,47 +73,48 @@ it declares.
 `scenarios/check.ts`'s guarantee comparison. A field nothing reads is a comment with extra syntax,
 which is why several used to be here and are not.
 
-### 4 · `src/modules/products/module.ts` — one module, declared
+### 4 · `src/modules/feedback/module.ts` — one module, declared
 
-20 lines. **`products` is the reference module** — when you add a domain, copy this one. It depends
-on nothing, so it shows the shape without the complications.
+**`feedback` is the reference module** — when you add a domain, copy this one. It is a foundation
+module (it outlives `npm run demo:remove`) and depends on nothing, so it shows the shape without
+the complications. Start the tour here rather than in a shop module for the same reason.
 
 **Take away:** compare it with `src/modules/orders/module.ts`, which declares `subscribe` and whose
 docblock explains what it reaches for. That is the whole difference between a leaf domain and a
 connected one.
 
-### 5 · `src/modules/products/routes.ts` — the URL surface
+### 5 · `src/modules/feedback/routes.ts` — the URL surface
 
-**Take away:** two things that are easy to miss. Static segments (`/search`, `/categories`) are
-declared **before** `/:id` or Express matches them as ids. And several routes point at the same
-controller on purpose — `GET /products` and `POST /products/search` are one handler, as are
-`PUT /products` and `PUT /products/:id`.
+**Take away:** two things that are easy to miss. The gate is **positional**: the one public route
+(`POST /contact`) sits above `router.use(getAuth, …)` and everything below it is admin-only, purely
+by where it was typed. And static segments (`/search`) are declared **before** `/:id` or Express
+matches them as ids. Several routes also point at the same controller on purpose — `GET /feedback`
+and `POST /feedback/search` are one handler.
 
-### 6 · `src/modules/products/controllers/get-products.ts` — one request, end to end
+### 6 · `src/modules/feedback/controllers/post-feedback-contact.ts` — one request, end to end
 
 The most important single file on this list. Every controller in every module has this shape:
 
 ```
-readInput(request, declaration)     ← collect input from params/query/body
-schema.safeParse(...)               ← validate against the contract
-  ↳ on failure: rejectResponse(422)
-service.doTheThing(...)             ← the actual work
-  ↳ then:  successResponse(...)
-  ↳ catch: rejectDatabaseError(...)
+parseBody(schema, request.body, response)   ← validate against the contract
+  ↳ on failure: a 422 is already sent, return
+service.doTheThing(...)                     ← the actual work
+  ↳ then:  createdResponse(...) / successResponse(...)
+  ↳ catch: catchAs(response, 'name')
 ```
 
 **Take away:** once you have read one controller, you have read all 60. The variation between them
 is the schema and the service call.
 
-### 7 · `src/modules/products/services/read.ts` — the domain decision
+### 7 · `src/modules/feedback/service.ts` — the domain decision
 
-Where "a caller holding `products.any.update` sees deleted products, the public does not" lives.
-Services take decisions; they do not touch Express (no `request`, no `response`) and do not write
-Mongo queries.
+Where "a submission with the honeypot filled is filed as spam and nobody's inbox hears about it"
+lives. Services take decisions; they do not touch Express (no `request`, no `response`) and do not
+write Mongo queries.
 
-### 8 · `src/modules/products/repository.ts` — the database
+### 8 · `src/modules/feedback/repository.ts` — the database
 
-Built on `createRepository`. Note the `SearchSpec`: filters are declared as **data** — filter
+Built on `createRepository`. Note the `searchable` spec: filters are declared as **data** — filter
 key → Mongo path — so `$regex`, `$elemMatch` and `ObjectId` never leak up into a service.
 
 ### 9 · `src/infrastructure/http/response.ts` — what every answer looks like
@@ -148,7 +149,7 @@ all of it is easier to read once you have one.
 | `src/infrastructure/adapters/*` (cache, queue, storage, mailer, pdf) | You need that specific capability. Each is self-contained.                                                                 |
 | `src/infrastructure/observability/*`                                 | You are debugging a trace or adding a metric.                                                                              |
 | `src/modules/*/openapi/*`                                            | The contract, one module at a time. Authored — see [Contract Ownership & Fragmentation](../api/contract-fragmentation.md). |
-| `src/modules/account/*`                                              | It is the biggest and least typical module (21 routes, JWT, cookies, sessions, tokens). Read `products` first.             |
+| `src/modules/account/*`                                              | It is the biggest and least typical module (21 routes, JWT, cookies, sessions, tokens). Read `feedback` first.             |
 | `src/cluster.ts`                                                     | You are changing process management. See [Clustering & Shutdown](./clustering.md).                                         |
 | `eslint.config.ts`, `stryker.json`, `jest.config.js`                 | You are changing the gate itself.                                                                                          |
 

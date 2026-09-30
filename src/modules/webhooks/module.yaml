@@ -1,3 +1,4 @@
+summary: "Outbound event delivery to a subscriber's own URL."
 subdomain: supporting
 group: foundation
 dependsOn:

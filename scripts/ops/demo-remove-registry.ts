@@ -4,8 +4,9 @@
  * down outside its own folder, edited generically off that name rather than by a second hand-kept
  * list — `demo-remove.ts`'s registry-editing steps.
  *
- * `src/modules.ts` and `tests/support/routed-modules.ts` share one shape (an import line per
- * module, then one entry per module in a literal), so one line-filtering helper edits both. A
+ * `src/modules.ts` is the one central file that names a module (an import line per module, then one
+ * entry per module in a literal); everything else — the contract's path index, the test suite's
+ * router map, the docs — reads what is on disk or in the registry. A
  * `scripts/ops/*.ts` file's own "Removal: owned by `<module>`" comment (DDD-D5) is what tells this
  * script which reap/sweep scripts, npm-script lines and `docker/crontab` entries belong to a
  * module being removed — nothing here hand-lists them either.
@@ -30,7 +31,7 @@ export const removeModuleFolders = (repoRoot: string, names: readonly string[]):
 /**
  * Drop every line in `content` that is either an import of `./modules/<name>/module` for one of
  * `names`, or a bare-identifier entry naming one of `names` inside a literal (an `enabledModules`
- * array element, a `ModuleName` union member, or a `ROUTED_MODULES` map entry) — every shop
+ * array element or a `ModuleName` union member) — every shop
  * module name is a single word, so its array/union/map spelling is always the bare name itself,
  * never a camelCase alias.
  * @param content - the file's current text
@@ -69,19 +70,6 @@ export const stripModuleRegistry = (repoRoot: string, names: readonly string[]):
     );
     writeFileSync(file, after);
     return { file: 'src/modules.ts', detail: `removed ${names.join(', ')}` };
-};
-
-/** Edit `tests/support/routed-modules.ts`: remove each shop module's router import and map entry. */
-export const stripRoutedModules = (repoRoot: string, names: readonly string[]): RemovalNote => {
-    const file = path.join(repoRoot, 'tests', 'support', 'routed-modules.ts');
-    const before = readFileSync(file, 'utf8');
-    const after = stripModuleLines(
-        before,
-        names,
-        (name) => new RegExp(`from '@modules/${name}/routes'`)
-    );
-    writeFileSync(file, after);
-    return { file: 'tests/support/routed-modules.ts', detail: `removed ${names.join(', ')}` };
 };
 
 /** One `scripts/ops/*.ts` file this script found, and the module its own doc comment says owns it. */

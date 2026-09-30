@@ -1,3 +1,8 @@
+summary: "Owns the audit trail; the read endpoint is its own, the platform operator's view lives in observability."
 subdomain: generic
 group: foundation
 dependsOn: []
+noAudit: 'It owns and reads the trail; it is the destination, not a writer.'
+frontend:
+    counterparts: [observability]
+    why: "Two endpoints read the one trail this module owns, its own `GET /audit` for a shop's staff and observability's `GET /observability/audit` for the platform operator, and both render in the frontend's observability module."
