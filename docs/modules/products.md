@@ -128,6 +128,13 @@ whole-string-decimal grammar the reader itself uses — `@infrastructure/runtime
 silently fall back on. `resolveTaxRate` (`./tax`) is the one place either rate is resolved for a
 product; `orders` freezes the result onto an order line at checkout and never reads a rate itself.
 
+The shop's one currency (`NODE_DEFAULT_CURRENCY`, documented under
+[payments](./payments.md)) is published on `GET /products/settings` as `{ currency }`, public and
+uncached. It is a shop setting, not a product field (Shopify's `shop.currency`): a create form has
+no product yet to read `currency` from, and needs it to size the price input to that currency's
+minor unit. Read through `productCurrency()`, never `orders`' own reader, for the cycle reason
+that function's docblock gives.
+
 ## Translated content
 
 `title`/`description` are not columns this module resolves on its own. They live as per-locale rows
