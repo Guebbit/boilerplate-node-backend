@@ -27,7 +27,7 @@ import {
     listLevels,
     lowStockCount,
     listMovements
-} from '../../service';
+} from '../../services';
 import { reservationRepository, stockLevelRepository } from '../../repository';
 import { reservationModel } from '../../model';
 import { inventoryAuditActions } from '../../audit';

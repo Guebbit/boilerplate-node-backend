@@ -15,14 +15,14 @@ import { resolvePersonalDataErasers, type AppModule } from '@kernel/registry';
 import type { ExportSession } from '@types';
 import { router } from './routes';
 import { userRepository } from './repository';
-import { userService } from './service';
+import { userService } from './services';
 import { isLiveRefreshSession, type Token } from './model';
 import { setPersonalDataErasers } from './erasure-registry';
 import './events';
 
 /**
  * DDD-D6: resolves every module's `personalData.erase` hook once every module is known, and
- * hands the list to `./service.ts`'s hard-delete path through `./erasure-registry.ts` — the same
+ * hands the list to `./services/remove.ts`'s hard-delete path through `./erasure-registry.ts` — the same
  * pattern `account/module.ts`'s `onRegistered` follows for `personalData` export sections.
  *
  * @param modules - every enabled module, for the erase-hook list

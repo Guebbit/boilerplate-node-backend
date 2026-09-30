@@ -9,8 +9,8 @@ import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { userRepository } from '../../repository';
-import * as userService from '@modules/users/service';
-import { userService as userServiceObject } from '../../service';
+import * as userService from '@modules/users/services';
+import { userService as userServiceObject } from '../../services';
 import { TokenType, normalizeEmail } from '../../model';
 
 setupTestDb();

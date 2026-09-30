@@ -37,7 +37,7 @@ export enum TokenType {
  * `randomBytes(16)` or a signed JWT — there is no low-entropy secret to stretch, and bcrypt would
  * only slow the refresh path every authenticated client hits on a timer. Exported so callers that
  * compare an in-memory token against an already-loaded document (`account/services/tokens.ts`,
- * `users/service.ts` `consumeToken`) hash the same way storage does — a one-off script that ever
+ * `users/services/tokens.ts` `consumeToken`) hash the same way storage does — a one-off script that ever
  * rewrites stored rows must reuse it rather than reimplement the digest.
  */
 export const hashToken = (token: string): string =>

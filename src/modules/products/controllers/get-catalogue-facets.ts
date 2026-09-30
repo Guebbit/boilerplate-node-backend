@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { productService } from '../service';
+import { productService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 import type { CatalogueFacetsResponse } from '@types';
 

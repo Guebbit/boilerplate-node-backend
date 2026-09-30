@@ -1,13 +1,13 @@
 /**
  * @module
- * The two token-facing lookups on `service.ts` — `findByEmail` and `consumeToken`; a live
+ * The two token-facing lookups on `services/tokens.ts` and `services/read.ts` — `findByEmail` and `consumeToken`; a live
  * reset/delete/verify token goes through `accountService.findLiveToken` instead. `findByEmail`
  * uses `findOneWithCredentials` since `select: false` on `tokens` would leave callers pushing
  * onto `undefined`; `consumeToken` pins the one-time-use behaviour the concurrency suite races.
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
-import * as userService from '@modules/users/service';
+import * as userService from '@modules/users/services';
 import { userRepository } from '../../repository';
 import { hashToken, type Token } from '../../model';
 

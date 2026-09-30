@@ -118,7 +118,7 @@ const collectDeclaredActions = async (): Promise<DeclaredAction[]> => {
  * follows the action a few lines later; and the shared `createDeleteController` spec, where
  * `entity:` — its own docblock: "used for the audit target_type" — sits a few lines BEFORE the
  * `auditAction:` that names this identifier. A third shape, an action chosen by a same-file helper
- * (`auditActionForUpdate` in `users/service.ts`) and read back at a call site further away than
+ * (`auditActionForUpdate` in `users/services/update.ts`) and read back at a call site further away than
  * this window, is left as "not discoverable" rather than risking a wrong attribution from a wider
  * search.
  */

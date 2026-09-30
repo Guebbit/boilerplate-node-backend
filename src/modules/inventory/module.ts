@@ -19,7 +19,7 @@ import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_CREATED, PRODUCT_DELETED } from '@modules/products';
 import { router } from './routes';
-import { ensureLevel, receive, removeLevel } from './service';
+import { ensureLevel, receive, removeLevel } from './services';
 import './events';
 // Registers the two domain gauges with the metrics registry at module load.
 import './metrics';

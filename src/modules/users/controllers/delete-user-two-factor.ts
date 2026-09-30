@@ -9,7 +9,7 @@ import { t } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';
 import { refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { userService } from '../service';
+import { userService } from '../services';
 
 /**
  * DELETE /users/:id/2fa — strips a user's second factor with no code required, unlike the

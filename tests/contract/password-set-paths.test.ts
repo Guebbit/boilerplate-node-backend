@@ -10,7 +10,7 @@
  * is the shared funnel `passwordResetChange` (reset) and `passwordChangeWithCurrent` (change) both
  * end at, so "change" and "reset" are two ENTRY POINTS sharing one already-tested rule, not two
  * independent implementations. Signup, admin create and admin update each run their own check —
- * see `authentication.ts#signup`, `users/service.ts#create` and `#update`.
+ * see `authentication.ts#signup`, `users/services/create.ts#create` and `services/update.ts#update`.
  */
 
 import '@tests/contract';

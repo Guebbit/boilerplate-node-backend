@@ -9,7 +9,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { ReceiveStockBody } from '@api/schemas.zod';
-import { inventoryService } from '../service';
+import { inventoryService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import type { InventoryLevel } from '@types';
 

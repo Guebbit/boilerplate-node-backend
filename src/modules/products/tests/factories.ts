@@ -11,7 +11,7 @@ import { productRepository } from '../repository';
 import { makeProduct } from '../factories';
 import type { ProductOverrides } from '../factories';
 import { availableStock } from '../domain/stock';
-import { productService } from '../service';
+import { productService } from '../services';
 
 export { makeProduct, type ProductOverrides } from '../factories';
 

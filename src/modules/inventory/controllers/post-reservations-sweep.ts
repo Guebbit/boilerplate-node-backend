@@ -12,7 +12,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
-import { inventoryService } from '../service';
+import { inventoryService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 import type { ReservationSweepResponse } from '@types';
 

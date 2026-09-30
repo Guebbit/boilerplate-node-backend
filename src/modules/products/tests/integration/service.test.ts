@@ -9,7 +9,7 @@ import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import * as productService from '@modules/products/service';
+import * as productService from '@modules/products/services';
 import { productRepository } from '../../repository';
 import type { ResponseReject } from '@infrastructure/http/response';
 import type { ProductDocument } from '../../model';
@@ -189,7 +189,7 @@ describe('productService.validateCreateData', () => {
     /**
      * The messages are what the API sends a client verbatim, so a wrong i18n key is a user-visible
      * bug the assertions above can't see — a missing key makes i18next return the key itself, still a
-     * non-empty string. This caught exactly that: `users/service.ts`'s `validateData` asked for
+     * non-empty string. This caught exactly that: `users/services/validation.ts`'s `validateData` asked for
      * `signup.user-field-*` while `en.json` defined them under `login.*`, so a failed email showed
      * "users.field-email-invalid".
      */
@@ -722,7 +722,7 @@ describe('productService.remove', () => {
         afterEach(() => registerTranslationPort(undefined));
 
         // A hard delete destroys the row nothing else can point `_id` at again, so its
-        // translations must go with it IN THIS OPERATION — see `../../service.ts`'s own comment
+        // translations must go with it IN THIS OPERATION — see `../../services/remove.ts`'s own comment
         // on `remove`. `locales/tests/integration/repository.test.ts` proves the STORAGE side of
         // this cascade (a real `removeEntityTranslations` call actually deletes rows); this proves
         // the WIRING side — that a hard delete makes the call at all, a soft delete does not —

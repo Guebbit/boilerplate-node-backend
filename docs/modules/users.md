@@ -85,7 +85,7 @@ merges (a field left out keeps its current value) — the same replace/merge spl
 shared factory.
 
 `phone` is stored AES-256-GCM under `NODE_PII_ENCRYPTION_KEY`
-(`@infrastructure/security/pii-encryption`) — `service.ts`'s `update` encrypts it on the one write
+(`@infrastructure/security/pii-encryption`) — `services/update.ts`'s `update` encrypts it on the one write
 path, `toUser` (`model.ts`) decrypts it on the way out, whether the source document was hydrated or
 `search()`'s `.lean()` result. See
 [Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest).

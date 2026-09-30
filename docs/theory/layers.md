@@ -174,9 +174,7 @@ have nowhere below `services/` to go. `keys.ts` is where they live instead — t
 | File                              | Why it is over                                                                                        |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `orders/services/crud.ts`         | `getById`/`create`/`update`/`updateById`/`remove`/`removeById` — the whole write half                 |
-| `inventory/service.ts`            | reserve, commit, release, the sweep, and the operator's own writes                                    |
 | `payments/services/settlement.ts` | confirm, sync and webhook reconciliation — the one settlement choreography every path funnels through |
-| `products/service.ts`             | the CRUD writes, the visibility scope, and the catalogue's own facets                                 |
 
 That is recorded rather than quietly fixed, because the number's job is to make the split feel
 sanctioned instead of furtive — and a threshold silently re-fitted to whatever the largest file
@@ -316,7 +314,7 @@ For a product flow you usually move through:
 
 - `src/modules/products/routes.ts`
 - `src/modules/products/controllers/*`
-- `src/modules/products/service.ts`
+- `src/modules/products/services/*`
 - `src/modules/products/repository.ts`
 - `src/modules/products/model.ts`
 

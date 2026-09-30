@@ -9,7 +9,7 @@
  * See: docs/modules/products.md
  */
 
-export * from './service';
+export * from './services';
 
 export * from './events';
 

@@ -538,7 +538,7 @@ export const resolvePersonalDataSections = (
  * none contributes nothing, the same way `'none'` does for {@link resolvePersonalDataSections}.
  *
  * `users/module.ts`'s own `onRegistered` hook builds this once every module is known and hands it
- * to `users/service.ts`'s hard-delete path, the same pattern `resolvePersonalDataSections` and
+ * to `users/services/remove.ts`'s hard-delete path, the same pattern `resolvePersonalDataSections` and
  * `account`'s registry follow — this file stays free of any `src/modules/*` import either way.
  *
  * @param appModules - the enabled module list

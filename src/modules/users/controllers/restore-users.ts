@@ -7,7 +7,7 @@
 
 import { createRestoreController } from '@infrastructure/surfaces/create-restore-controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { userService } from '../service';
+import { userService } from '../services';
 
 /**
  * POST /users/:id/restore — undo a soft delete (admin). 409 when the account is not deleted.

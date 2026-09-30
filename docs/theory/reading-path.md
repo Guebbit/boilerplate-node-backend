@@ -31,7 +31,7 @@ flowchart TD
     C --> D["4 · modules/products/module.ts<br/><i>one module, declared</i>"]
     D --> E["5 · modules/products/routes.ts<br/><i>the URL surface</i>"]
     E --> F["6 · controllers/get-products.ts<br/><i>one request, end to end</i>"]
-    F --> G["7 · products/service.ts<br/><i>the domain decision</i>"]
+    F --> G["7 · products/services/read.ts<br/><i>the domain decision</i>"]
     G --> H["8 · products/repository.ts<br/><i>the database</i>"]
     H --> I["9 · infrastructure/http/response.ts<br/><i>what every answer looks like</i>"]
 
@@ -105,7 +105,7 @@ service.doTheThing(...)             ← the actual work
 **Take away:** once you have read one controller, you have read all 60. The variation between them
 is the schema and the service call.
 
-### 7 · `src/modules/products/service.ts` — the domain decision
+### 7 · `src/modules/products/services/read.ts` — the domain decision
 
 Where "a caller holding `products.any.update` sees deleted products, the public does not" lives.
 Services take decisions; they do not touch Express (no `request`, no `response`) and do not write

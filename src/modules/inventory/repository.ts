@@ -35,7 +35,7 @@ import { StockMovementReason, type StockMovement } from '@types';
 
 /**
  * Which condition guards a given transition, in Mongo's own filter syntax. Kept here, not in
- * `service.ts` — `QueryFilter` stays a repository-only import, so a service can only ask this
+ * `services/` — `QueryFilter` stays a repository-only import, so a service can only ask this
  * module to move counters, never hand it a raw Mongo condition to run.
  *
  * Stays in step with `counterDeltaFor`'s reason→deltas table (`./domain`) by hand: a manual
@@ -76,7 +76,7 @@ const conditionFor = (
 /**
  * One row of the stock board — this module's own counters ONLY, no product fields. The title a
  * board actually displays is `products`' to give out, not this module's to join for: see
- * `service.ts`'s `listLevels`, which asks `productService.findManyByIds` for the page it just
+ * `services/levels.ts`'s `listLevels`, which asks `productService.findManyByIds` for the page it just
  * read here — API composition rather than a database join across the module boundary.
  */
 export interface StockLevelRow {
@@ -217,7 +217,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * A page of the stock board, scarcest first — THIS module's rows alone, no join. Sorted on
      * `available` then `_id`: the `stocklevels_available__id` index already covers exactly this
      * order, and `_id` is what breaks a tie between two equally scarce products deterministically
-     * (not alphabetically — `service.ts`'s `listLevels` reads titles back from `products` AFTER
+     * (not alphabetically — `services/levels.ts`'s `listLevels` reads titles back from `products` AFTER
      * this page is settled, which is one round trip too late to sort by them). See
      * `docs/theory/strategic-ddd.md` §5: the board reads the real counters, and
      * asks `products` for names through its service, never through a database join.
@@ -253,7 +253,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * Every product id at or under `threshold` available units — the low-stock gauge's OWN half
      * of the answer. Counts AVAILABILITY, not `onHand`: fully-reserved stock reads as out of
      * stock to a customer. Deliberately NOT the count itself, and no join into `products` to
-     * apply its visibility rule here: `service.ts`'s `lowStockCount` asks `productService`'s own
+     * apply its visibility rule here: `services/levels.ts`'s `lowStockCount` asks `productService`'s own
      * `countPublic` for that half, the same API-composition shape `stockBoard` uses.
      *
      * @param threshold - the low-availability mark

@@ -8,7 +8,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
-import { productService } from '../../service';
+import { productService } from '../../services';
 import { productsAuditActions } from '../../audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';

@@ -7,7 +7,7 @@
  */
 
 import { SearchUsersBody } from '@api/schemas.zod';
-import { userService } from '../service';
+import { userService } from '../services';
 import { optionalBooleanSchema, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 import { rolesOfMany } from '@modules/access';

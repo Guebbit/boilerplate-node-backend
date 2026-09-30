@@ -1,7 +1,7 @@
 /**
  * @module
  * The one place a product document becomes the `Product` contract — every read path agrees here,
- * `service.ts`'s `getById` included, which used to reach for its own `.toJSON() as Product` cast
+ * `services/read.ts`'s `getById` included, which used to reach for its own `.toJSON() as Product` cast
  * instead of this shared transform.
  */
 

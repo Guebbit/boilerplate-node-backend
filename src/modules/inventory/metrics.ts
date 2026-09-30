@@ -12,7 +12,7 @@
 import { Gauge } from 'prom-client';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 import { stockLevelRepository } from './repository';
-import { lowStockCount } from './service';
+import { lowStockCount } from './services';
 
 /**
  * How many products a customer would find unbuyable-ish, computed AT SCRAPE TIME via `collect`.

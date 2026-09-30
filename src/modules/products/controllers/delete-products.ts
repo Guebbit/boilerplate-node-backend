@@ -6,7 +6,7 @@
 
 import { createDeleteController } from '@infrastructure/surfaces/create-delete-controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { productService } from '../service';
+import { productService } from '../services';
 
 /**
  * DELETE /products/:id — delete a product by path id (admin). `?hardDelete=true` deletes

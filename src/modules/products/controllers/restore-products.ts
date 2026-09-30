@@ -6,7 +6,7 @@
 
 import { createRestoreController } from '@infrastructure/surfaces/create-restore-controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { productService } from '../service';
+import { productService } from '../services';
 
 /**
  * POST /products/:id/restore — undo a soft delete (admin). 409 when the product is not deleted.
