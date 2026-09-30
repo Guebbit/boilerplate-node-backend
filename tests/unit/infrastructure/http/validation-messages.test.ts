@@ -174,7 +174,7 @@ describe('nothing falls through to Zod English', () => {
             email: z.email()
         });
         const messages = messagesOf(schema, { name: 'a', age: 99, email: 'nope' });
-        const known = new Set(Object.values(copy).map((sentence) => sentence.split('{{')[0]));
+        const known = new Set(Object.values(copy).map((sentence) => sentence.split('{{', 1)[0]));
 
         expect(messages).toHaveLength(3);
         for (const message of messages)

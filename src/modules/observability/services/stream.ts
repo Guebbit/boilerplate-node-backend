@@ -152,10 +152,12 @@ export const streamObservabilityMetrics = (
         void reverify()
             .catch(() => false)
             .then((allowed) => {
-                if (!allowed) {
-                    response.end();
-                    teardown();
+                if (allowed) {
+                    return;
                 }
+
+                response.end();
+                teardown();
             });
     }, REVERIFY_INTERVAL_MS);
 

@@ -79,7 +79,8 @@ export const stripAccountExportSchema = (repoRoot: string): RemovalNote => {
             throw new Error(
                 `[demo-remove] expected AccountExportResponse text not found in ${label}`
             );
-        content = content.replace(search, replace);
+        // A function replacer: a string one would read `$&` / `$1` in `replace` as patterns.
+        content = content.replace(search, () => replace);
     };
 
     mustReplace(

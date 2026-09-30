@@ -38,6 +38,6 @@ export const cookieHeader = (
         .map((name) => {
             const cookie = setCookie(response, name);
             if (!cookie) throw new Error(`Response set no "${name}" cookie`);
-            return cookie.split(';')[0];
+            return cookie.split(';', 1)[0];
         })
         .join('; ');

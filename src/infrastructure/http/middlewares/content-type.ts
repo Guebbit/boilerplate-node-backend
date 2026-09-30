@@ -73,7 +73,7 @@ export const requireDeclaredContentType = (
 ): RequestHandler => {
     const operations: DeclaredOperation[] = Object.entries(table)
         .map(([key, types]) => {
-            const [method = '', template = ''] = key.split(' ');
+            const [method = '', template = ''] = key.split(' ', 2);
             return { method, ...compileTemplate(template), types };
         })
         // Static segments before parameters, so `/products/search` never reads as `/products/{id}`.

@@ -167,7 +167,7 @@ const planTranslationWrites = async (
     entityType: string,
     payload: Record<string, LocaleWrite>
 ): Promise<
-    { target: TranslatableTarget; fallbackLocale: string; planned: PlannedWrite[] } | ResponseReject
+    ResponseReject | { target: TranslatableTarget; fallbackLocale: string; planned: PlannedWrite[] }
 > => {
     const target = translatableTarget(entityType);
     if (!target) return entityTypeUnknown(entityType);

@@ -259,7 +259,7 @@ export const orderTaxBreakdown = ({
         grossAmount: toDecimalAmount(grossAmounts[index], currency)
     }));
 
-    const sortedGroups = [...groups.entries()].toSorted(([left], [right]) => left - right);
+    const sortedGroups = [...groups].toSorted(([left], [right]) => left - right);
     const sumOf = (pick: (group: RateGroup) => Money): Money =>
         addMoney(...sortedGroups.map(([, group]) => pick(group)));
 

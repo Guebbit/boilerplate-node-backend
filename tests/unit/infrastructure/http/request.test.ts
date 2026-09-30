@@ -576,6 +576,10 @@ describe('isValidObjectId', () => {
         expect(isValidObjectId('')).toBe(false);
         expect(isValidObjectId('not-an-id')).toBe(false);
     });
+
+    it('rejects a 12-character string, which Mongoose alone would accept', () => {
+        expect(isValidObjectId('abcdefghijkl')).toBe(false);
+    });
 });
 
 describe('parseFormBoolean', () => {

@@ -319,7 +319,7 @@ const renderChannelNamespace = (namespace: string, channelNames: string[]): stri
 const groupChannelsByNamespace = (channelNames: string[]): Map<string, string[]> => {
     const groups = new Map<string, string[]>();
     for (const channelName of channelNames) {
-        const namespace = channelName.split('.')[0];
+        const namespace = channelName.split('.', 1)[0];
         if (!namespace) continue;
         groups.set(namespace, [...(groups.get(namespace) ?? []), channelName]);
     }
@@ -368,8 +368,8 @@ const channelNamespaceBlocks = [...groupChannelsByNamespace(Object.keys(channels
     ([namespace, channelNames]) => renderChannelNamespace(namespace, channelNames)
 );
 
-const messageTypeBlocks = Object.entries(messages)
-    .map(([messageName]) => {
+const messageTypeBlocks = Object.keys(messages)
+    .map((messageName) => {
         const aliasName = toPascalCase(messageName);
         const targetName = resolveMessagePayloadType(messageName, messages);
         // Skip self-referential aliases (message name resolves to same type as schema)

@@ -46,7 +46,7 @@ export const selectShards = (
 ): ShardSelection => {
     const asked = only.length > 0 ? shards.filter(({ name }) => only.includes(name)) : [...shards];
     const done = force ? [] : asked.filter(({ name }) => completed.includes(name));
-    const outstanding = asked.filter(({ name }) => !done.some((shard) => shard.name === name));
+    const outstanding = asked.filter(({ name }) => done.every((shard) => shard.name !== name));
 
     return { run: limit === undefined ? outstanding : outstanding.slice(0, limit), done };
 };

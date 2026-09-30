@@ -53,7 +53,7 @@ export const checkRequestedLines = (
     requested: readonly RequestedLine[] | undefined
 ): LinesVerdict => {
     if (requested === undefined || requested.length === 0) {
-        const lines = [...remaining.entries()]
+        const lines = [...remaining]
             .filter(([, quantity]) => quantity > 0)
             .map(([productId, quantity]) => ({ productId, quantity }));
         return lines.length > 0 ? { ok: true, lines } : { ok: false, reason: 'nothing-returnable' };
@@ -70,6 +70,6 @@ export const checkRequestedLines = (
 
     return {
         ok: true,
-        lines: [...summed.entries()].map(([productId, quantity]) => ({ productId, quantity }))
+        lines: [...summed].map(([productId, quantity]) => ({ productId, quantity }))
     };
 };

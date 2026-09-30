@@ -104,7 +104,7 @@ describe('verifyAccessToken', () => {
 
     it('rejects a token whose payload was tampered with', async () => {
         const token = signAs(ACCESS_SECRET, { id: 'user-1' }, { expiresIn: 900 });
-        const [header, , signature] = token.split('.');
+        const [header, , signature] = token.split('.', 3);
         const forgedPayload = Buffer.from(JSON.stringify({ id: 'admin' })).toString('base64url');
 
         await expect(

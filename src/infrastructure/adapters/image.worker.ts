@@ -124,7 +124,8 @@ export const registerImageWritebackResolver = (
  *   id where one already exists; `key` itself where it does not yet (`upload.ts`'s pre-write
  *   inline call)
  * @throws {@link UnsupportedImageFormatError} when the bytes will never decode as one of the
- *   three accepted formats (the caller dead-letters/discards); anything else (a storage failure)
+ *   three accepted formats, whether the signature is wrong or the body is corrupt (the caller
+ *   dead-letters/discards); anything else (a storage failure)
  *   as a plain `Error` (the caller retries).
  */
 export const digestQuarantinedImage = (key: string, owner: string): Promise<DigestedImageUrls> =>
@@ -136,6 +137,15 @@ export const digestQuarantinedImage = (key: string, owner: string): Promise<Dige
             );
 
         return Promise.all([digestImage(raw, mime), thumbnailImage(raw)])
+            .catch((error: unknown) => {
+                // Decoding is deterministic: bytes sharp cannot decode (a valid signature over a
+                // truncated or corrupt body, or past the pixel limit) fail identically on every
+                // redelivery, so this is permanent, not the transient kind the storage steps below are.
+                throw new UnsupportedImageFormatError(
+                    `Quarantined image ${key} could not be decoded.`,
+                    { cause: error }
+                );
+            })
             .then(([digested, thumbnail]) => {
                 const stem = contentStem(owner, digested);
                 return Promise.all([

@@ -48,7 +48,7 @@ export const isMutable = (file: string, patterns: string[] = mutatePatterns()): 
 
     return (
         include.some((pattern) => minimatch(file, pattern)) &&
-        !exclude.some((pattern) => minimatch(file, pattern))
+        exclude.every((pattern) => !minimatch(file, pattern))
     );
 };
 

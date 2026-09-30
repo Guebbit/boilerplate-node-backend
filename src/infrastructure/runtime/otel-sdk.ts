@@ -74,7 +74,7 @@ const redactIncomingUrl = (span: Span, request: ClientRequest | IncomingMessage)
     span.setAttributes({
         'http.target': target,
         'http.url': `http://${request.headers.host ?? 'localhost'}${target}`,
-        'url.query': target.split('?')[1] ?? ''
+        'url.query': target.split('?', 2)[1] ?? ''
     });
 };
 

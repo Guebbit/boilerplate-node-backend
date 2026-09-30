@@ -9,7 +9,6 @@
  * scratch instead of augmenting it — which silently erases every property Express's own types
  * declare on `Request`/`Response`/`Express` everywhere in the program.
  */
-// eslint-disable-next-line unicorn/require-module-specifiers -- the module marker itself IS the fix (see the docblock above), not an import left over by accident
 export {};
 
 declare module 'express-serve-static-core' {

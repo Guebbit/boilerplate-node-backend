@@ -13,7 +13,7 @@ setupTestDb();
 
 /** Splits `{year}-{sequence}` back into its two parts, as a number pair. */
 const parse = (orderNumber: string): [year: number, sequence: number] => {
-    const [year, sequence] = orderNumber.split('-');
+    const [year, sequence] = orderNumber.split('-', 2);
     return [Number(year), Number(sequence)];
 };
 

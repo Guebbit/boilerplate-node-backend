@@ -94,7 +94,7 @@ const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolv
 
 /** The single `fetch` call the Umami provider made, decoded. */
 const sentRequest = (): { url: string; headers: Record<string, string>; body: JsonPayload } => {
-    const [url, init] = (globalThis.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    const [url, init] = (fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
     return {
         url,
         headers: init.headers as Record<string, string>,
@@ -183,7 +183,7 @@ describe('the umami provider', () => {
             event: productsAnalyticsEvents.PRODUCT_VIEWED
         });
 
-        const [, init] = (globalThis.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+        const [, init] = (fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
         expect(init.signal).toBeInstanceOf(AbortSignal);
     });
 
@@ -370,14 +370,14 @@ describe('the umami provider', () => {
             event: productsAnalyticsEvents.PRODUCT_VIEWED
         });
 
-        expect(globalThis.fetch).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
         // Once, not twice: a misconfigured provider would otherwise fill the log with itself.
         expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
     });
 
     it('warns when Umami rejects the event, because every later one fails the same way', () => {
         configureUmami();
-        (globalThis.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 404 });
+        (fetch as jest.Mock).mockResolvedValue({ ok: false, status: 404 });
         emitAnalyticsEvent({
             analyticsConsent: true,
             distinctId: 'u1',
@@ -393,7 +393,7 @@ describe('the umami provider', () => {
 
     it('swallows a transport failure rather than rejecting into the request that caused it', () => {
         configureUmami();
-        (globalThis.fetch as jest.Mock).mockRejectedValue(new Error('ECONNREFUSED'));
+        (fetch as jest.Mock).mockRejectedValue(new Error('ECONNREFUSED'));
 
         expect(() =>
             emitAnalyticsEvent({
@@ -509,7 +509,7 @@ describe('the none provider', () => {
             event: accountAnalyticsEvents.USER_LOGGED_IN
         });
 
-        expect(globalThis.fetch).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
         expect(mockedPostHog).not.toHaveBeenCalled();
         expect(mockLoggerWarn).not.toHaveBeenCalled();
     });
@@ -647,7 +647,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
 
         emitAnalyticsEvent({ ...baseEvent, analyticsConsent: false });
 
-        expect(globalThis.fetch).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
     });
 
     it('never lets the internal consent field itself reach the provider', () => {
@@ -665,7 +665,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
 
         emitAnalyticsEvent({ ...baseEvent, analyticsConsent: false });
 
-        expect(globalThis.fetch).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
     });
 });
 

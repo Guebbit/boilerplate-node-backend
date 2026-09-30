@@ -43,7 +43,7 @@ export const isInBundledBreachList = (password: string): boolean => bundledList.
 
 /** One line of an HIBP range response, `<35-char-suffix>:<count>`. */
 const parseRangeLine = (line: string): { suffix: string; count: number } | undefined => {
-    const [suffix, countText] = line.split(':');
+    const [suffix, countText] = line.split(':', 2);
     const count = Number(countText);
     return suffix && Number.isFinite(count) ? { suffix, count } : undefined;
 };

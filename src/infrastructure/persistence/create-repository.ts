@@ -344,7 +344,6 @@ export function createRepository<TDocument extends Document, TWire>(
         mongooseModel
             .find({ ...where })
             .lean<Lean<TDocument>[]>()
-            // eslint-disable-next-line unicorn/no-array-sort -- Mongoose's Query#sort, not Array#sort
             .sort(sort)
             .skip(skip)
             .limit(limit)

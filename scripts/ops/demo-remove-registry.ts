@@ -50,7 +50,7 @@ const stripModuleLines = (
     );
     return content
         .split('\n')
-        .filter((line) => !names.some((name) => importPattern(name).test(line)))
+        .filter((line) => names.every((name) => !importPattern(name).test(line)))
         .filter((line) => !entryPattern.test(line))
         .join('\n');
 };

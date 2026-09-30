@@ -43,7 +43,7 @@ export const buildSecurityTxt = (environment: SecurityTxtEnvironment): string | 
     const policy = environment.NODE_SECURITY_POLICY_URL?.trim();
     // `new URL` tolerates a `NODE_URL` with or without a trailing slash.
     const canonical = environment.NODE_URL
-        ? new URL('/.well-known/security.txt', environment.NODE_URL).toString()
+        ? new URL('/.well-known/security.txt', environment.NODE_URL).href
         : undefined;
 
     return (

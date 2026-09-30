@@ -26,7 +26,8 @@ const replaceOnce = (content: string, search: string, replace: string, label: st
         throw new Error(
             `[demo-remove] expected text not found in ${label}: ${JSON.stringify(search.slice(0, 80))}…`
         );
-    return content.replace(search, replace);
+    // A function replacer: a string one would read `$&` / `$1` in `replace` as patterns.
+    return content.replace(search, () => replace);
 };
 
 /** Files deleted outright — entirely the shop catalogue's own demo data, nothing else reads them. */
@@ -105,7 +106,7 @@ export const stripScenarioModuleEntries = (
         const kept = inner
             .split(',')
             .map((each) => each.trim())
-            .filter((each) => each !== '' && !names.some((name) => each === `'${name}'`));
+            .filter((each) => each !== '' && names.every((name) => each !== `'${name}'`));
         return kept.length > 0
             ? `${whole.startsWith(',') ? ',' : ''} after: [${kept.join(', ')}]`
             : '';

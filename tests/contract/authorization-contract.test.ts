@@ -34,7 +34,7 @@ setupTestDb();
 const PLACEHOLDER_ID = '000000000000000000000000';
 
 /** `/inventory/:id` → `/inventory/000000000000000000000000`. */
-const fillParams = (path: string): string => path.replaceAll(/:[^/]+/g, PLACEHOLDER_ID);
+const fillParams = (path: string): string => path.replaceAll(/:[^/]+/g, () => PLACEHOLDER_ID);
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 

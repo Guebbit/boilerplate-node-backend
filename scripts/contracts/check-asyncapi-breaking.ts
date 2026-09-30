@@ -45,7 +45,7 @@ const describe = (change: DiffOutputItem): string =>
     `  ${change.path}  (${change.action}): ${JSON.stringify(change.before)} -> ${JSON.stringify(change.after)}`;
 
 /** The leading `MAJOR` segment of an AsyncAPI version string. */
-const majorVersion = (version: string): string => version.split('.')[0] ?? version;
+const majorVersion = (version: string): string => version.split('.', 1)[0] ?? version;
 
 const baseCommit = mergeBase(base, 'asyncapi-breaking');
 if (baseCommit === undefined) process.exit(0);

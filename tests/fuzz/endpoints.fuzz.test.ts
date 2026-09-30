@@ -94,7 +94,7 @@ markServerListening();
  */
 const SEED = (() => {
     const raw = process.env.RANDOM_DATA_SEED;
-    const parsed = raw ? Number(raw) : Number.NaN;
+    const parsed = raw ? Number(raw) : NaN;
     const seed = Number.isFinite(parsed) ? parsed : Math.floor(Math.random() * 1e9);
     // eslint-disable-next-line no-console -- the reproduction seed must reach the terminal even where the logger is mocked
     console.log(`[fuzz] seed=${seed} (rerun with RANDOM_DATA_SEED=${seed} to reproduce)`);

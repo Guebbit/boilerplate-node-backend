@@ -89,7 +89,7 @@ interface ApplyResult {
 const freshDbUri = (): string => {
     const uri = new URL(process.env.NODE_TEST_MONGO_URI ?? '');
     uri.pathname = `/apply-${randomUUID().slice(0, 8)}`;
-    return uri.toString();
+    return uri.href;
 };
 
 describe('scenarios/apply.ts', () => {

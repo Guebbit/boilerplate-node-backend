@@ -226,7 +226,7 @@ interface CacheOptions {
 const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], keyAs?: string) => {
     // Path only. `originalUrl` is the sole place the mounted prefix and the route path are
     // already joined, so it is split rather than reassembled from `baseUrl` + `path`.
-    const [path] = request.originalUrl.split('?');
+    const [path] = request.originalUrl.split('?', 1);
     // A declared identity replaces BOTH halves of the default prefix, because the two spellings
     // it unifies differ in both — `GET /products` and `POST /products/search`.
     const identity = keyAs ?? `${request.method}:${path}`;

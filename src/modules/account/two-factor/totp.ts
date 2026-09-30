@@ -53,7 +53,7 @@ export const buildOtpauthUri = (secret: string, label: string): string =>
     generateURI({
         // The issuer shown in an authenticator app. Reuses `NODE_SMTP_SENDER`'s display name
         // rather than adding a dedicated branding variable — this deployment already named itself.
-        issuer: process.env.NODE_SMTP_SENDER?.split('<')[0]?.trim() || 'Account',
+        issuer: process.env.NODE_SMTP_SENDER?.split('<', 1)[0]?.trim() || 'Account',
         label,
         secret
     });

@@ -37,7 +37,7 @@ const allBudgets: (RateLimitBudget & { owner: string })[] = [
 const duplicatesOf = (field: 'name' | 'namespace' | 'environmentVariable'): string[] => {
     const seen = new Map<string, number>();
     for (const budget of allBudgets) seen.set(budget[field], (seen.get(budget[field]) ?? 0) + 1);
-    return [...seen.entries()].filter(([, count]) => count > 1).map(([value]) => value);
+    return [...seen].filter(([, count]) => count > 1).map(([value]) => value);
 };
 
 /**

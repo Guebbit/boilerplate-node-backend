@@ -189,7 +189,7 @@ const countTestFiles = (): number => {
     // returns for that case is the documented answer above, not a count of zero files.
     if (listed.error) return 0;
 
-    return listed.stdout.split('\n').filter((line) => line.trim().endsWith('.test.ts')).length;
+    return listed.stdout.split('\n').filter((line) => line.trimEnd().endsWith('.test.ts')).length;
 };
 
 /** This layer's spending limit, from `JEST_PROCESS_BUDGET_MB` or the machine's free memory. */
@@ -315,10 +315,12 @@ const main = async () => {
         // so this await inside a loop is the feature rather than an oversight.
         const code = await runShard(shard);
 
-        if (code !== 0) {
-            console.error(`\n[test] ${suiteName}: shard ${shard}/${shards} failed (exit ${code})`);
-            process.exit(code);
+        if (code === 0) {
+            continue;
         }
+
+        console.error(`\n[test] ${suiteName}: shard ${shard}/${shards} failed (exit ${code})`);
+        process.exit(code);
     }
 
     console.log(`\n[test] ${suiteName}: all ${shards} shard(s) passed`);

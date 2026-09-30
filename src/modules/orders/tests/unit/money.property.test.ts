@@ -62,7 +62,7 @@ describe('toMinorUnits — totality', () => {
     });
 
     it('treats junk as nothing owed rather than as a number to argue with', () => {
-        for (const junk of [undefined, null, 'free', {}, [], Number.NaN, Infinity, -Infinity])
+        for (const junk of [undefined, null, 'free', {}, [], NaN, Infinity, -Infinity])
             expect(toMinorUnits(junk, EUR)).toBe(NO_MONEY);
     });
 

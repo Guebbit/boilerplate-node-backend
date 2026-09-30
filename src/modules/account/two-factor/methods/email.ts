@@ -27,7 +27,7 @@ import {
  * client, so two clients cannot redact the same address two different ways.
  */
 const maskEmail = (email: string): string => {
-    const [local = '', domain = ''] = email.split('@');
+    const [local = '', domain = ''] = email.split('@', 2);
     if (local.length <= 2) return `${'*'.repeat(local.length)}@${domain}`;
     return `${local[0]}***${local.at(-1)}@${domain}`;
 };

@@ -58,6 +58,7 @@ import {
     enqueueImageDigest,
     handleImageDigestJob,
     registerImageWritebackResolver,
+    UnsupportedImageFormatError,
     type ImageWriteback
 } from '@infrastructure/adapters/image.worker';
 
@@ -125,6 +126,29 @@ describe('digestQuarantinedImage', () => {
             'does not match an accepted format'
         );
         expect(mockedDigestImage).not.toHaveBeenCalled();
+    });
+});
+
+describe('a body that will not decode', () => {
+    it('is a permanent failure, not a transient one to retry', async () => {
+        primeSuccessfulDigest();
+        mockedDigestImage.mockRejectedValue(new Error('VipsJpeg: premature end of input'));
+
+        await expect(digestQuarantinedImage('abc123.png', 'doc1')).rejects.toBeInstanceOf(
+            UnsupportedImageFormatError
+        );
+        expect(mockedPromote).not.toHaveBeenCalled();
+    });
+
+    it('is discarded by the job handler, quarantine file removed', async () => {
+        primeSuccessfulDigest();
+        mockedDigestImage.mockRejectedValue(new Error('corrupt'));
+        registerImageWritebackResolver(() => jest.fn());
+
+        await expect(
+            handleImageDigestJob({ collection: 'products', documentId: 'doc1', key: 'abc123.png' })
+        ).resolves.toBe(false);
+        expect(mockedRemoveQuarantined).toHaveBeenCalledWith('abc123.png');
     });
 });
 

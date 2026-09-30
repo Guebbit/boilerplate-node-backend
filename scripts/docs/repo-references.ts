@@ -106,7 +106,7 @@ export const trackedTargets = (root: string): { targets: Set<string>; roots: Set
     const targets = new Set<string>();
     // What actually sits at the root, taken from the file list rather than from `targets` — that
     // set holds every TAIL, so `orders/model.ts` would make `orders` look top-level.
-    const roots = new Set(files.map((file) => file.split('/')[0]));
+    const roots = new Set(files.map((file) => file.split('/', 1)[0]));
 
     const addTails = (candidate: string) => {
         const segments = candidate.split('/');
@@ -153,7 +153,7 @@ export const resolves = (targets: Set<string>, token: string): boolean =>
  * Whether this token is claiming a path in THIS repo at all.
  *
  * A slash alone does not mean a path — `text/event-stream`, `grafana/loki`, `prom/prometheus`,
- * `unicorn/prevent-abbreviations` and `try/catch` are all a MIME type, two container images, a
+ * `unicorn/name-replacements` and `try/catch` are all a MIME type, two container images, a
  * lint rule and a language feature. So a token qualifies two ways only: it ends in a real
  * filename, or its first segment is something that actually sits at the root of the repo. The
  * second half is read from the tree rather than listed, so a new top-level directory needs no
@@ -162,7 +162,7 @@ export const resolves = (targets: Set<string>, token: string): boolean =>
 export const claimsAPath = (roots: Set<string>, token: string): boolean =>
     // Anchored on the LAST segment, so `.visual.cy.ts` — a suffix convention, not a file — is not
     // read as one because a filename happens to sit inside it.
-    FILENAME.test(token.split('/').at(-1) ?? '') || roots.has(token.split('/')[0]);
+    FILENAME.test(token.split('/').at(-1) ?? '') || roots.has(token.split('/', 1)[0]);
 
 /**
  * `tsconfig`'s path aliases, as `@modules/` → `src/modules/`, read rather than transcribed — a

@@ -212,7 +212,7 @@ describe('account routes — signup and reset rate limiting', () => {
         ['POST /reset', ['reset-identity', 'reset-address', 'reset-block']]
     ])('%s carries ALL THREE budgets, and no credentialLimiters', (signature, labels) => {
         const chain = chainOf(router, signature);
-        const [prefix] = labels[0].split('-');
+        const [prefix] = labels[0].split('-', 1);
 
         expect(chain.filter((entry) => entry.startsWith(`${prefix}-`))).toEqual(labels);
         expect(chain.some((entry) => entry.startsWith('credentials-'))).toBe(false);
