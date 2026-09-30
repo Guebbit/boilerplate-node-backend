@@ -21,7 +21,6 @@ import { readShopModuleNames } from '../testing/shop-module-names';
 import {
     removeModuleFolders,
     removeShopOwnedOpsScripts,
-    stripModuleOrder,
     stripModuleRegistry,
     stripRoutedModules,
     type RemovalNote
@@ -81,8 +80,7 @@ report(removeModuleFolders(REPO_ROOT, shopModuleNames));
 console.info('\n[demo-remove] the module registry:');
 report([
     stripModuleRegistry(REPO_ROOT, shopModuleNames),
-    stripRoutedModules(REPO_ROOT, shopModuleNames),
-    stripModuleOrder(REPO_ROOT, shopModuleNames)
+    stripRoutedModules(REPO_ROOT, shopModuleNames)
 ]);
 
 console.info('\n[demo-remove] reap/sweep scripts, package.json and docker/crontab:');

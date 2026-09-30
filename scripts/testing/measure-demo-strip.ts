@@ -28,7 +28,6 @@ import os from 'node:os';
 import path from 'node:path';
 import {
     removeModuleFolders,
-    stripModuleOrder,
     stripModuleRegistry,
     stripRoutedModules
 } from '../ops/demo-remove-registry';
@@ -129,7 +128,6 @@ const RECIPES: Partial<Record<string, Recipe>> = {
             removeModuleFolders(SCRATCH, LOCALES);
             stripModuleRegistry(SCRATCH, LOCALES);
             stripRoutedModules(SCRATCH, LOCALES);
-            stripModuleOrder(SCRATCH, LOCALES);
             stripContractPathCensus(SCRATCH, LOCALES);
         },
         describe: () => 'the locales module'
