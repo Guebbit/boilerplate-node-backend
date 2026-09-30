@@ -171,6 +171,9 @@ paths:
                 state). The tag itself is immutable — it is what every entry references, so
                 changing it would be a rename of the whole dictionary rather than an edit of this
                 record.
+
+                Refuses with 409 when it would deactivate the deployment's fallback language: every
+                translatable row's source lives there.
             operationId: replaceLocale
             security:
                 - bearerAuth: []
@@ -192,6 +195,7 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
@@ -202,6 +206,9 @@ paths:
                 omitted field is left unchanged). The tag itself is immutable — it is what every
                 entry references, so changing it would be a rename of the whole dictionary rather
                 than an edit of this record.
+
+                Refuses with 409 when it would deactivate the deployment's fallback language: every
+                translatable row's source lives there.
             operationId: updateLocale
             security:
                 - bearerAuth: []
@@ -226,6 +233,7 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
