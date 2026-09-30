@@ -22,12 +22,6 @@
         </address>
     <% } %>
 
-    <ul>
-        <% lines.forEach(function(line) { %>
-            <li><%= line %></li>
-        <% }); %>
-    </ul>
-
     <%- include("./invoicing.document.vat-table.ejs", { columns: vat.columns, rows: vat.rows, showQuantity: true }); %>
     <% if (vat.shipping) { %>
         <h2><%= vat.shipping.title %></h2>

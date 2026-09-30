@@ -55,3 +55,44 @@ describe('partialCredit', () => {
         expect(breakdown.shippingByRate).toEqual([]);
     });
 });
+
+describe('partialCredit — worked examples, VAT rounded once per rate', () => {
+    /** The mixed-rate invoice of `orders/tests/unit/tax.test.ts`: 18.25 at 10% and 44.05 at 22%, shipping included. */
+    const mixed = asStub<InvoiceDocument>({
+        currency: 'EUR',
+        taxSummary: [
+            { rate: 0.1, netAmount: 16.59, taxAmount: 1.66, grossAmount: 18.25 },
+            { rate: 0.22, netAmount: 36.11, taxAmount: 7.94, grossAmount: 44.05 }
+        ]
+    });
+
+    it('refunding 10.00 of 62.30: 2.92 at 10%, 7.08 at 22%, each rate taxed once', () => {
+        // Shares of 1000 cents by gross weight 1825 : 4405 -> floor 292 and 707, the odd cent goes
+        // to the heavier rate -> 292 / 708.
+        // 10%: round(292 x 0.1/1.1) = round(26.55) = 27, net 265.
+        // 22%: round(708 x 0.22/1.22) = round(127.67) = 128, net 580.
+        const { lines, breakdown } = partialCredit(mixed, 10, 'Refund');
+
+        expect(lines.map((line) => line.unitPrice)).toEqual([2.92, 7.08]);
+        expect(breakdown.taxSummary).toEqual([
+            { rate: 0.1, netAmount: 2.65, taxAmount: 0.27, grossAmount: 2.92 },
+            { rate: 0.22, netAmount: 5.8, taxAmount: 1.28, grossAmount: 7.08 }
+        ]);
+        expect(breakdown.netTotal).toBe(8.45);
+        expect(breakdown.taxTotal).toBe(1.55);
+    });
+
+    it('a zero-decimal currency (JPY) refunds whole yen and rounds the VAT to a whole yen', () => {
+        // 105 yen at 8%: round(105 x 0.08/1.08) = round(7.78) = 8, net 97.
+        const yen = asStub<InvoiceDocument>({
+            currency: 'JPY',
+            taxSummary: [{ rate: 0.08, netAmount: 292, taxAmount: 23, grossAmount: 315 }]
+        });
+
+        const { breakdown } = partialCredit(yen, 105, 'Refund');
+
+        expect(breakdown.taxSummary).toEqual([
+            { rate: 0.08, netAmount: 97, taxAmount: 8, grossAmount: 105 }
+        ]);
+    });
+});
