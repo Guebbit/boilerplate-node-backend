@@ -184,3 +184,58 @@ export const addRegexFilter = (
  * pages or neither. `_id` is unique and monotonic, so adding it makes paging stable.
  */
 export const DEFAULT_SORT: Record<string, 1 | -1> = { createdAt: -1, _id: -1 };
+
+/**
+ * Case-insensitive, accent-tolerant ordering for a caller-chosen sort: without it "apple" files
+ * after "Zebra", which no shopper expects from a Title column.
+ * https://www.mongodb.com/docs/manual/reference/collation/
+ */
+export const SORT_COLLATION = { locale: 'en', strength: 2 } as const;
+
+/**
+ * Flatten a request's `sort` into a list of tokens (`price`, `-title`).
+ *
+ * Accepts every spelling a transport produces: the JSON:API CSV (`?sort=-price,title`), a
+ * repeated key (`?sort=a&sort=b`) and a JSON body's array. Absent or blank stays `undefined`, so
+ * `?sort=` is "no sort", not a 422. Membership is NOT checked here — the contract's enum does that,
+ * which is why a non-string entry is kept rather than dropped: the schema must get to refuse it.
+ *
+ * @param value - the raw `sort` off the merged request input
+ * @returns the tokens, or `undefined` when none were sent
+ */
+export const splitSortParameter = (value: unknown): unknown[] | undefined => {
+    const parts = (Array.isArray(value) ? value : [value]).flatMap((entry: unknown) =>
+        typeof entry === 'string' ? entry.split(',') : [entry]
+    );
+    const tokens = parts.map((part) => (typeof part === 'string' ? part.trim() : part));
+    const present = tokens.filter((token) => token !== '' && token !== undefined);
+    return present.length > 0 ? present : undefined;
+};
+
+/**
+ * Turn sort tokens into a Mongo sort, through a per-collection whitelist.
+ *
+ * A token is a wire field, `-` prefixed for descending. A field outside `sortable` is dropped —
+ * the contract enum already 422s it at the edge, so this is the repository's own guard for a
+ * caller that skips the edge. `_id` closes the order, for the reason {@link DEFAULT_SORT} gives.
+ *
+ * @param tokens - what {@link splitSortParameter} returned
+ * @param sortable - wire field → Mongo path
+ * @returns the sort, or `undefined` when no token survived (the caller falls back to the default)
+ */
+export const resolveSort = (
+    tokens: unknown,
+    sortable: Readonly<Record<string, string>> = {}
+): Record<string, 1 | -1> | undefined => {
+    const sort: Record<string, 1 | -1> = {};
+    for (const token of splitSortParameter(tokens) ?? []) {
+        if (typeof token !== 'string') continue;
+        const descending = token.startsWith('-');
+        const field = descending ? token.slice(1) : token;
+        // `hasOwn`: a token like `constructor` must not resolve through the prototype.
+        const path = Object.hasOwn(sortable, field) ? sortable[field] : undefined;
+        // The first mention of a field wins: `price,-price` cannot mean both.
+        if (path !== undefined && !(path in sort)) sort[path] = descending ? -1 : 1;
+    }
+    return Object.keys(sort).length > 0 ? { ...sort, _id: -1 } : undefined;
+};

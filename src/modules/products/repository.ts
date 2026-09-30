@@ -62,7 +62,9 @@ export const productRepository: Repository<ProductDocument, Product> & {
              */
             booleans: { active: 'active' },
             presence: { deleted: 'deletedAt' },
-            ranges: { price: { min: 'minPrice', max: 'maxPrice' } }
+            ranges: { price: { min: 'minPrice', max: 'maxPrice' } },
+            // `title` is the fallback-locale column, the one the public catalogue exposes.
+            sortable: { createdAt: 'createdAt', price: 'price', title: 'title' }
         }
     }),
 

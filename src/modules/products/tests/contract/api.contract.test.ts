@@ -172,6 +172,91 @@ describe('POST /products/search', () => {
     });
 });
 
+const titlesOf = (response: { body: { data: { items: { title: string }[] } } }) =>
+    response.body.data.items.map((product) => product.title);
+
+describe('sort — GET /products?sort= and POST /products/search { sort }', () => {
+    beforeEach(async () => {
+        await createProduct({ title: 'banana', price: 5 });
+        await createProduct({ title: 'Apple', price: 9 });
+        await createProduct({ title: 'cherry', price: 5 });
+    });
+
+    it('orders by one field, descending with a "-" prefix', async () => {
+        const up = await api().get('/products?sort=price,title');
+        const down = await api().get('/products?sort=-price');
+
+        expect(titlesOf(up)).toEqual(['banana', 'cherry', 'Apple']);
+        expect(titlesOf(down)[0]).toBe('Apple');
+    });
+
+    it('sorts text case-insensitively, so "Apple" files before "banana"', async () => {
+        const response = await api().get('/products?sort=title');
+
+        expect(titlesOf(response)).toEqual(['Apple', 'banana', 'cherry']);
+    });
+
+    it('ranks earlier entries first', async () => {
+        const response = await api().get('/products?sort=-price,-title');
+
+        expect(titlesOf(response)).toEqual(['Apple', 'cherry', 'banana']);
+    });
+
+    it('sorts the whole result, not the page held: page 2 continues page 1', async () => {
+        const first = await api().get('/products?sort=title&pageSize=2&page=1');
+        const second = await api().get('/products?sort=title&pageSize=2&page=2');
+
+        expect([...titlesOf(first), ...titlesOf(second)]).toEqual(['Apple', 'banana', 'cherry']);
+    });
+
+    it('accepts the same field in the search body, as an array', async () => {
+        const response = await api()
+            .post('/products/search')
+            .send({ sort: ['-title'] });
+
+        expect(response.status).toBe(200);
+        expect(titlesOf(response)).toEqual(['cherry', 'banana', 'Apple']);
+    });
+
+    it('accepts a repeated key as well as the CSV', async () => {
+        const response = await api().get('/products?sort=price&sort=title');
+
+        expect(titlesOf(response)).toEqual(['banana', 'cherry', 'Apple']);
+    });
+
+    it('treats a blank sort as absent, and keeps the newest-first default', async () => {
+        const blank = await api().get('/products?sort=');
+        const none = await api().get('/products');
+
+        expect(blank.status).toBe(200);
+        expect(titlesOf(blank)).toEqual(titlesOf(none));
+    });
+
+    it.each(['description', 'password', 'price,price,title,createdAt', '--price'])(
+        'answers 422 for a sort outside the whitelist: %s',
+        async (sort) => {
+            const response = await api().get(`/products?sort=${sort}`);
+
+            expect(response.status).toBe(422);
+        }
+    );
+
+    it('answers 422 for a body sort outside the whitelist', async () => {
+        const response = await api()
+            .post('/products/search')
+            .send({ sort: ['imageUrl'] });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('does not let two different sorts share one cached answer', async () => {
+        const up = await api().get('/products?sort=price,title');
+        const down = await api().get('/products?sort=-price,-title');
+
+        expect(titlesOf(up)).not.toEqual(titlesOf(down));
+    });
+});
+
 describe('GET /products/{id}', () => {
     it('matches the contract for an existing product', async () => {
         const product = await createProduct();

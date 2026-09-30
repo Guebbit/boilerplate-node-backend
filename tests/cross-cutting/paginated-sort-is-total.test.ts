@@ -44,7 +44,7 @@ const listSourceFiles = (directory: string): string[] =>
  * The value is either an inline object literal — no nesting is possible in a sort spec, so a
  * non-greedy match to the first `}` is exact — or an identifier naming a shared constant.
  */
-const SORT_STAGE = /\$sort:\s*({[^{}]*}|[$A-Z_a-z][\w$]*)/g;
+const SORT_STAGE = /\$sort:\s*({[^{}]*}|[$A-Z_a-z][\w$]*(?:\s*\?\?\s*[$A-Z_a-z][\w$]*)?)/g;
 
 /** The keys of an inline sort spec, in the order they were declared. */
 const sortKeys = (literal: string): string[] =>
@@ -52,6 +52,9 @@ const sortKeys = (literal: string): string[] =>
 
 /** Does this sort spec end in a key that cannot tie? */
 const isTotal = (spec: string): boolean => {
+    // `chosen ?? DEFAULT_SORT`: the left side is a caller's `resolveSort`, which always closes on
+    // `_id`, so the expression is total exactly when its fallback is.
+    if (spec.includes('??')) return isTotal(spec.split('??').at(-1)!.trim());
     if (!spec.startsWith('{')) return TOTAL_SORT_CONSTANTS.has(spec);
     const keys = sortKeys(spec);
     return keys.length > 0 && UNIQUE_KEYS.has(keys.at(-1)!);

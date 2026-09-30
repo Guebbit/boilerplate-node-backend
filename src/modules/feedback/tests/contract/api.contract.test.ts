@@ -347,3 +347,22 @@ describe('DELETE /feedback/{id}', () => {
         expect(response.status).toBe(404);
     });
 });
+
+describe('GET /feedback — sort', () => {
+    it('orders by email, and answers 422 for a field outside the whitelist', async () => {
+        for (const email of ['zed@example.com', 'amy@example.com'])
+            await api()
+                .post('/feedback/contact')
+                .send({ ...CONTACT_PAYLOAD, email });
+        const { bearer } = await authenticateAs('admin');
+
+        const up = await api().get('/feedback?sort=email').set('Authorization', bearer);
+        const refused = await api().get('/feedback?sort=message').set('Authorization', bearer);
+
+        expect(up.body.data.items.map((item: { email: string }) => item.email)).toEqual([
+            'amy@example.com',
+            'zed@example.com'
+        ]);
+        expect(refused.status).toBe(422);
+    });
+});

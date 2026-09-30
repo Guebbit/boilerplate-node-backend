@@ -19,6 +19,8 @@ import {
     addRegexFilter,
     toSearchPattern,
     DEFAULT_SORT,
+    SORT_COLLATION,
+    resolveSort,
     type PaginatedMeta
 } from './search';
 import { trackDatabaseQuery } from './metrics';
@@ -53,6 +55,8 @@ const FIND_ALL_LIMIT = 1000;
 export interface FindAllOptions {
     /** Sort order, per Mongo query syntax. */
     sort?: Record<string, 1 | -1>;
+    /** Apply {@link SORT_COLLATION}: set for a caller-chosen sort, where text order is visible. */
+    collated?: boolean;
     /** Documents to skip before the page starts. */
     skip?: number;
     /** How many documents at most. Defaults to {@link FIND_ALL_LIMIT}. */
@@ -86,6 +90,11 @@ export interface SearchSpec {
     arrayRegex?: Record<string, string>;
     /** Mongo paths the single `text` filter searches together. */
     text?: string[];
+    /**
+     * What `sort` may order by: wire field (as the contract's enum spells it) → Mongo path.
+     * A field absent here is unsortable, however the caller spells it.
+     */
+    sortable?: Record<string, string>;
     /** Mongo path → the two filter keys bounding it, e.g. `price: { min: 'minPrice', … }`. */
     ranges?: Record<string, { min: string; max: string }>;
     /**
@@ -339,16 +348,26 @@ export function createRepository<TDocument extends Document, TWire>(
         where: QueryFilter<TDocument> = {},
         // `sort` defaults to `DEFAULT_SORT` because this applies `skip`, and a non-unique sort
         // makes which documents a page contains undefined.
-        { sort = DEFAULT_SORT, skip = 0, limit = FIND_ALL_LIMIT }: FindAllOptions = {}
-    ): Promise<Lean<TDocument>[]> =>
-        mongooseModel
-            .find({ ...where })
-            .lean<Lean<TDocument>[]>()
-            // eslint-disable-next-line unicorn/no-array-sort -- Mongoose's Query#sort, not Array#sort
-            .sort(sort)
-            .skip(skip)
-            .limit(limit)
-            .exec();
+        {
+            sort = DEFAULT_SORT,
+            collated = false,
+            skip = 0,
+            limit = FIND_ALL_LIMIT
+        }: FindAllOptions = {}
+    ): Promise<Lean<TDocument>[]> => {
+        const query = mongooseModel.find({ ...where }).lean<Lean<TDocument>[]>();
+        // Query#collation: string comparison rules for the sort; the default binary order stays
+        // for every read that did not ask for one.
+        if (collated) query.collation(SORT_COLLATION);
+        return (
+            query
+                // eslint-disable-next-line unicorn/no-array-sort -- Mongoose's Query#sort, not Array#sort
+                .sort(sort)
+                .skip(skip)
+                .limit(limit)
+                .exec()
+        );
+    };
 
     /** Count the documents matching a filter. */
     const count = (where: QueryFilter<TDocument> = {}): Promise<number> =>
@@ -401,23 +420,29 @@ export function createRepository<TDocument extends Document, TWire>(
     const search = async (
         filters: object = {},
         scope: Record<string, unknown> = {},
-        // Total sort by default: `count` and `findAll` are separate queries, so a tie can put
-        // one document on two pages — see `DEFAULT_SORT`.
-        sort: Record<string, 1 | -1> = DEFAULT_SORT
+        sort?: Record<string, 1 | -1>
     ): Promise<PaginatedResult<TWire>> => {
         const pagination = normalizePagination(filters);
+        // Explicit argument, else the caller's `sort` filter through the whitelist, else the total
+        // default: `count` and `findAll` are separate queries, so a tie can put one document on
+        // two pages — see `DEFAULT_SORT`.
+        const chosen =
+            sort ?? resolveSort((filters as { sort?: unknown }).sort, searchable.sortable);
         // `scope` is the caller's authorization boundary (own rows, publicly visible rows), which
         // no client-supplied filter may widen — so both must hold, under `$and`. A spread would
         // let one side's key replace the other's: two `$or`s, and one is silently dropped.
         const where = withScope(buildWhere(filters, searchable), scope) as QueryFilter<TDocument>;
 
         return count(where).then((totalItems) =>
-            findAll(where, { sort, skip: pagination.skip, limit: pagination.pageSize }).then(
-                (items) => ({
-                    items: normalize(items),
-                    meta: buildPaginatedMeta(pagination, totalItems)
-                })
-            )
+            findAll(where, {
+                sort: chosen ?? DEFAULT_SORT,
+                collated: chosen !== undefined,
+                skip: pagination.skip,
+                limit: pagination.pageSize
+            }).then((items) => ({
+                items: normalize(items),
+                meta: buildPaginatedMeta(pagination, totalItems)
+            }))
         );
     };
 
