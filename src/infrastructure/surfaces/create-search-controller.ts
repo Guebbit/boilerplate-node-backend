@@ -11,6 +11,7 @@ import type { Request, Response } from 'express';
 import type { ZodType } from 'zod';
 import { successResponse } from '@infrastructure/http/response';
 import { readInput } from '@infrastructure/http/request';
+import { splitSortParameter } from '@infrastructure/persistence/search';
 import { catchAs, namedHandler, operationName, parseBody } from '@infrastructure/http/controller';
 
 /** What makes one entity's search different from another's. */
@@ -54,7 +55,10 @@ export const createSearchController = <TSchema extends ZodType, TResult>({
         // goes through `stringArrays`, not `ids` — `ids` collapses a repeated key to its first
         // entry, which is correct for `update`/`delete` (one row) but would silently turn
         // `?id=a&id=b` into `?id=a` here.
-        const input = readInput(request, { surface: 'search', stringArrays: ['id'] });
+        const read = readInput(request, { surface: 'search', stringArrays: ['id'] });
+        // `sort` arrives as JSON:API CSV in a query and as an array in a body; one list either
+        // way, so the schema's enum validates each token. Blank stays absent.
+        const input = 'sort' in read ? { ...read, sort: splitSortParameter(read.sort) } : read;
         // extendInput: the module's own overlay — coercions or request-derived values a plain
         // field list can't express.
         const merged = extendInput ? { ...input, ...extendInput(input, request) } : input;

@@ -91,7 +91,8 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             // (membership rows holding that role, then the users among those ids) that this
             // generic `exact` filter can't express; deliberately not rebuilt yet.
             booleans: { active: 'active' },
-            presence: { deleted: 'deletedAt' }
+            presence: { deleted: 'deletedAt' },
+            sortable: { createdAt: 'createdAt', email: 'email', username: 'username' }
         }
     }),
 

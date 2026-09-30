@@ -515,3 +515,36 @@ describe('an id nobody holds', () => {
         expect(response.status).toBe(404);
     });
 });
+
+const emailsOf = (response: { body: { data: { items: { email: string }[] } } }) =>
+    response.body.data.items
+        .map((user) => user.email)
+        .filter((email) => email.endsWith('@sort.test'));
+
+describe('GET /users — sort', () => {
+    it('orders by email in either direction, and answers 422 for a column outside the whitelist', async () => {
+        await createUser({ email: 'b@sort.test' });
+        await createUser({ email: 'A@sort.test' });
+        await createUser({ email: 'c@sort.test' });
+        const { bearer } = await authenticateAs('admin');
+
+        const up = await api().get('/users?sort=email').set('Authorization', bearer);
+        const down = await api()
+            .post('/users/search')
+            .set('Authorization', bearer)
+            .send({ sort: ['-email'] });
+        const refused = await api().get('/users?sort=password').set('Authorization', bearer);
+
+        expect(emailsOf(up).map((email) => email.toLowerCase())).toEqual([
+            'a@sort.test',
+            'b@sort.test',
+            'c@sort.test'
+        ]);
+        expect(emailsOf(down).map((email) => email.toLowerCase())).toEqual([
+            'c@sort.test',
+            'b@sort.test',
+            'a@sort.test'
+        ]);
+        expect(refused.status).toBe(422);
+    });
+});

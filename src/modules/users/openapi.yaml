@@ -16,6 +16,14 @@ paths:
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: sort
+                  in: query
+                  required: false
+                  # JSON:API grammar: `?sort=-price,title` — comma-separated, `-` for descending.
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/UserSort'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdParam'
                 - name: email
@@ -327,6 +335,18 @@ paths:
 
 components:
     schemas:
+        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # descending; earlier entries rank first; ties end on the id. Text fields sort
+        # case-insensitively.
+        UserSort:
+            type: array
+            minItems: 1
+            maxItems: 3
+            uniqueItems: true
+            items:
+                type: string
+                enum: [createdAt, -createdAt, email, -email, username, -username]
+
         # ---------- users — the schemas only this module's paths reference. ----------
         UsersResponseEnvelope:
             type: object
@@ -350,6 +370,8 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'
                 pageSize:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PageSize'
+                sort:
+                    $ref: '#/components/schemas/UserSort'
                 text:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text'
                 id:

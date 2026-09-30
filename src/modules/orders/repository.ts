@@ -20,9 +20,17 @@ import {
     normalizePagination,
     buildPaginatedMeta,
     DEFAULT_SORT,
+    SORT_COLLATION,
+    resolveSort,
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
+
+/**
+ * What `sort` may order by: wire field → column. `totalPrice` is derived at serialisation, so it
+ * is not a column and not sortable.
+ */
+const ORDER_SORTABLE = { createdAt: 'createdAt', status: 'status', email: 'email' };
 
 /** Plain CRUD from the repository factory; `search` below overrides its aggregation-free default. */
 const base = createRepository<OrderDocument, Order>(orderModel, {
@@ -38,15 +46,22 @@ const base = createRepository<OrderDocument, Order>(orderModel, {
         exact: { email: 'email', status: 'status', paymentMethod: 'paymentMethod' },
         // Staff-written text on the order, so the filter is only reachable by someone who sees it.
         regex: { notes: 'notes' },
-        presence: { deleted: 'deletedAt' }
+        presence: { deleted: 'deletedAt' },
+        sortable: ORDER_SORTABLE
     }
 });
 
 /**
  * Run an aggregation pipeline against the Order collection.
  */
-const aggregate = <T = OrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =>
-    orderModel.aggregate<T>(pipeline);
+const aggregate = <T = OrderDocument>(
+    pipeline: PipelineStage[],
+    collation?: typeof SORT_COLLATION
+): Promise<T[]> => {
+    const run = orderModel.aggregate<T>(pipeline);
+    // Aggregate#collation: string comparison rules for the `$sort`.
+    return (collation ? run.collation(collation) : run).exec();
+};
 
 /**
  * The `email` filter, normalised the same way the schema casts the stored field (PL-29) — `$match`
@@ -77,17 +92,18 @@ const search = async (
     // `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips
     // another. Orders arrive in bursts (a seed, a bulk import, two concurrent checkouts), which
     // makes ties the normal case rather than the edge one.
-    const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: DEFAULT_SORT }];
+    const chosen = resolveSort((filters as { sort?: unknown }).sort, ORDER_SORTABLE);
+    const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: chosen ?? DEFAULT_SORT }];
 
     return aggregate<{ totalItems?: number }>([...basePipeline, { $count: 'totalItems' }]).then(
         (countResults) => {
             const totalItems = countResults.at(0)?.totalItems ?? 0;
 
-            return aggregate([
-                ...basePipeline,
-                { $skip: pagination.skip },
-                { $limit: pagination.pageSize }
-            ]).then((items) => ({
+            // Aggregate#collation via the options tail: same text ordering as the other lists.
+            return aggregate(
+                [...basePipeline, { $skip: pagination.skip }, { $limit: pagination.pageSize }],
+                chosen ? SORT_COLLATION : undefined
+            ).then((items) => ({
                 items: base.normalize(items),
                 meta: buildPaginatedMeta(pagination, totalItems)
             }));

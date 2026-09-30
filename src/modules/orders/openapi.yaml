@@ -23,6 +23,14 @@ paths:
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: sort
+                  in: query
+                  required: false
+                  # JSON:API grammar: `?sort=-price,title` — comma-separated, `-` for descending.
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/OrderSort'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/UserIdParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/ProductIdParam'
@@ -420,6 +428,18 @@ paths:
 
 components:
     schemas:
+        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # descending; earlier entries rank first; ties end on the id. Text fields sort
+        # case-insensitively.
+        OrderSort:
+            type: array
+            minItems: 1
+            maxItems: 3
+            uniqueItems: true
+            items:
+                type: string
+                enum: [createdAt, -createdAt, status, -status, email, -email]
+
         # ---------- orders — the schemas only this module's paths reference. ----------
         OrderEnvelope:
             type: object
@@ -486,6 +506,8 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'
                 pageSize:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PageSize'
+                sort:
+                    $ref: '#/components/schemas/OrderSort'
                 id:
                     type: array
                     minItems: 1

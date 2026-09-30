@@ -513,3 +513,27 @@ describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
         expect(response.status).toBe(404);
     });
 });
+
+describe('GET /orders — sort', () => {
+    it('orders by status through the aggregation, and refuses the derived total', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await createOrder(user, [toOrderItem(product, 1)], { status: 'shipped' });
+        await createOrder(user, [toOrderItem(product, 1)], { status: 'pending' });
+        const { bearer } = await authenticateAs('admin');
+
+        const up = await api().get('/orders?sort=status').set('Authorization', bearer);
+        const down = await api().get('/orders?sort=-status').set('Authorization', bearer);
+        const refused = await api().get('/orders?sort=totalPrice').set('Authorization', bearer);
+
+        expect(up.body.data.items.map((order: { status: string }) => order.status)).toEqual([
+            'pending',
+            'shipped'
+        ]);
+        expect(down.body.data.items.map((order: { status: string }) => order.status)).toEqual([
+            'shipped',
+            'pending'
+        ]);
+        expect(refused.status).toBe(422);
+    });
+});

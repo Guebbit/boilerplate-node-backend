@@ -21,7 +21,8 @@ export const feedbackRequestRepository = createRepository<FeedbackRequestDocumen
         searchable: {
             objectIds: { id: '_id' },
             regex: { email: 'email' },
-            text: ['name', 'email', 'subject', 'message']
+            text: ['name', 'email', 'subject', 'message'],
+            sortable: { createdAt: 'createdAt', status: 'status', email: 'email' }
         }
     }
 );
