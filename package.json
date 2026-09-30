@@ -44,6 +44,7 @@
         "check:docker-dockerignore": "tsx scripts/docker/generate-dockerfile-dockerignore.ts --check",
         "sync:frontend": "tsx scripts/pairing/sync-to-frontend.ts",
         "regenerate": "tsx scripts/regenerate-artifacts.ts",
+        "gen:permission-actions": "tsx scripts/contracts/generate-permission-actions.ts --in shared/authorization-keys.yaml --out api/permission-actions.ts",
         "gen:api": "rm -rf ./api && orval --config orval.config.ts && tsx scripts/contracts/generate-error-codes.ts --out api/error-codes.ts && tsx scripts/contracts/generate-request-content-types.ts --out api/request-content-types.ts && tsx scripts/contracts/generate-permission-actions.ts --in shared/authorization-keys.yaml --out api/permission-actions.ts",
         "gen:asyncapi": "tsx scripts/contracts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts",
         "test": "npm run test:unit && npm run test:cross-cutting && npm run test:integration && npm run test:contract && npm run test:fuzz",

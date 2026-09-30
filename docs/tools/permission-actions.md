@@ -11,7 +11,7 @@ flowchart LR
     ROOT["shared/contracts/<br/>authorization-keys.root.yaml<br/><i>you edit this</i>"]
     BUNDLE["authorization:bundle"]
     KEYS["shared/authorization-keys.yaml"]
-    GEN["gen:api<br/>generate-permission-actions.ts"]
+    GEN["gen:permission-actions<br/>(also run by gen:api)"]
     BE["api/permission-actions.ts<br/><i>gitignored</i>"]
     SYNC["sync:frontend<br/><i>copies the yaml</i>"]
     FEGEN["frontend gen:api<br/>same script"]
@@ -25,6 +25,10 @@ flowchart LR
 | -------- | ----------------------------------------------------- | -------------------------------------------- | --------------------- |
 | Backend  | `shared/authorization-keys.yaml`                      | `api/permission-actions.ts`                  | no, like `api/`       |
 | Frontend | `<frontend>/contracts/authorization-keys.yaml` (copy) | `<frontend>/contracts/permission-actions.ts` | yes, like `routes.ts` |
+
+`regenerate` runs `gen:permission-actions` **before** `contracts:bundle`: the bundler loads the kernel,
+and the kernel imports this generated file, so on a clean checkout it has to exist first. `gen:api`
+runs the same script again because its `rm -rf ./api` removes the file.
 
 ## What consumes it
 

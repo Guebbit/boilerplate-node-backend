@@ -49,6 +49,11 @@ const STEPS: readonly Step[] = [
             'shared/authorization-keys.yaml, from one fragment per module — read by kernel/permissions.ts at boot, so this runs before anything below that boots the app to read docs off it'
     },
     {
+        script: 'gen:permission-actions',
+        because:
+            'api/permission-actions.ts, from shared/authorization-keys.yaml — kernel/permissions.ts imports it, and the bundler below loads the kernel, so it must exist before the first bundle on a clean checkout'
+    },
+    {
         script: 'contracts:bundle',
         because: 'openapi.yaml and the two asyncapi bundles, from the per-module sources'
     },

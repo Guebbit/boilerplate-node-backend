@@ -12,7 +12,7 @@
  *
  * Usage: tsx scripts/contracts/generate-permission-actions.ts --in <yaml> --out <path> [--check]
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readPermissionActions, renderPermissionActions } from './permission-actions-render';
@@ -43,6 +43,8 @@ const checkOnly = process.argv.includes('--check');
 const output = renderPermissionActions(readPermissionActions(readFileSync(INPUT, 'utf8')));
 
 if (!checkOnly) {
+    // The `api/` folder may not exist yet: `regenerate` writes this file BEFORE orval creates it.
+    mkdirSync(path.dirname(OUTPUT), { recursive: true });
     writeFileSync(OUTPUT, output, 'utf8');
     console.log(`✓ Generated ${OUTPUT}`);
 } else if (existsSync(OUTPUT) && readFileSync(OUTPUT, 'utf8') === output) {
