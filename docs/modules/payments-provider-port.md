@@ -126,8 +126,8 @@ and never more, the same rule the payment document follows.
 
 ::: warning A test-mode key never boots in production
 `NODE_STRIPE_SECRET_KEY` is checked regardless of whether `stripe.ts` exists yet <!-- doc-paths:ignore -->
-(ST-1): a value starting `sk_test_` — Stripe's own test-mode prefix — refuses to boot under
-`NODE_ENV=production`, rather than silently running every "real" payment through Stripe's test
+(ST-1): a value starting `sk_test_` — Stripe's own test-mode prefix — refuses to boot outside
+`NODE_ENV=development`/`test` (staging included), rather than silently running every "real" payment through Stripe's test
 ledger.
 :::
 

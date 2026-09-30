@@ -136,8 +136,8 @@ so it **skips a database that already holds anything** and exits 0. That is what
 rebuilds on purpose.
 
 A deployment never runs any of it: `npm run deploy:setup` is `db:sync` plus `access:bootstrap`,
-which upserts the shop row and nothing else, and `scenario:apply` refuses outright when
-`NODE_ENV=production`.
+which upserts the shop row and nothing else, and `scenario:apply` refuses outright unless
+`NODE_ENV` is `development` or `test`.
 
 | Local                                           | Production                                      |
 | ----------------------------------------------- | ----------------------------------------------- |

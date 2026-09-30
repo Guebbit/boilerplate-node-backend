@@ -79,6 +79,15 @@ describe('the demo-sink exemption', () => {
         expect(() => assertRequiredConfig([webhooksModule])).toThrow(/NODE_WEBHOOK_DEMO_SINK_URL/);
     });
 
+    it('refuses to boot with NODE_ENV unset and it set, since only development/test may use it', () => {
+        configure();
+        delete process.env.NODE_ENV;
+        process.env.NODE_CORS_ORIGIN = 'https://example.com';
+        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'http://webhook-tester:8080';
+
+        expect(() => assertRequiredConfig([webhooksModule])).toThrow(/NODE_WEBHOOK_DEMO_SINK_URL/);
+    });
+
     it('accepts production with it unset', () => {
         configure();
         process.env.NODE_ENV = 'production';

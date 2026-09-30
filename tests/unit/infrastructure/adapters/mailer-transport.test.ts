@@ -192,6 +192,7 @@ describe('resolveMailTransport', () => {
     });
 
     it.each(['smtp', 'log', 'outbox'] as const)('honours a named %s transport', (named) => {
+        process.env.NODE_ENV = 'development';
         process.env.NODE_MAIL_TRANSPORT = named;
 
         expect(resolveMailTransport()).toBe(named);
@@ -203,12 +204,15 @@ describe('resolveMailTransport', () => {
         expect(() => resolveMailTransport()).toThrow(/Unknown NODE_MAIL_TRANSPORT/);
     });
 
-    it('refuses the outbox in production, where it would silently send nothing', () => {
-        process.env.NODE_ENV = 'production';
-        process.env.NODE_MAIL_TRANSPORT = 'outbox';
+    it.each(['production', 'staging', undefined])(
+        'refuses the outbox when NODE_ENV is %p, where it would silently send nothing',
+        (value) => {
+            if (value !== undefined) process.env.NODE_ENV = value;
+            process.env.NODE_MAIL_TRANSPORT = 'outbox';
 
-        expect(() => resolveMailTransport()).toThrow(/demo profile only/);
-    });
+            expect(() => resolveMailTransport()).toThrow(/demo profile only/);
+        }
+    );
 
     it('refuses to let a test run reach a real mail server', () => {
         // Losing this is not a failing test, it is mail leaving the building.

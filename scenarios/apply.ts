@@ -26,9 +26,10 @@ import { writeFile } from 'node:fs/promises';
 import { emptyDatabase, isDatabaseEmpty } from '@infrastructure/runtime/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
+import { isRelaxedEnvironment } from '@infrastructure/runtime/environment';
 import { runScript } from '../scripts/run-script';
 import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/index';
-import { hasFallbackSeedPassword, seedCredentials } from '@scenarios/accounts';
+import { seedCredentials } from '@scenarios/accounts';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from '@scenarios/rate-limits';
 
 /*
@@ -93,9 +94,16 @@ const bootAppInProcess = () =>
 
 /** Boots the app, refuses the unsafe cases, then builds and applies the named scenario. */
 async function seed() {
-    /* A boot-time seeder that can drop or overwrite a production database is a footgun. */
-    if (process.env.NODE_ENV === 'production') {
-        logger.warn('scenario:apply refused to run: NODE_ENV is production.');
+    /*
+     * A boot-time seeder that can drop or overwrite a real database is a footgun, and its accounts
+     * carry public passwords (`root@root.it` / `Demo-Admin1!` hands out the shop owner and the
+     * platform operator to anyone who reads this repo). So it runs only where `NODE_ENV` says
+     * `development` or `test`: an unset value, `staging` and `production` all refuse.
+     */
+    if (!isRelaxedEnvironment()) {
+        logger.warn(
+            `scenario:apply refused to run: NODE_ENV is ${process.env.NODE_ENV || 'unset'}, not development or test.`
+        );
         return;
     }
 
@@ -105,23 +113,6 @@ async function seed() {
     }
 
     const scenarioName = scenarioArgument ?? DEFAULT_SCENARIO;
-
-    /*
-     * Outside development/test, a still-public password is the one thing this refuses: a
-     * reachable staging database seeded with `root@root.it` / `Demo-Admin1!` hands out both the
-     * shop owner and the platform operator to anyone who reads this repo. Development and test
-     * are exempt because that is the whole point of a fixed, documented demo login — `npm run
-     * demo` and CI both run there, and neither is reachable by anyone this refusal protects
-     * against.
-     */
-    const isDevelopmentOrTest =
-        process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
-    if (!isDevelopmentOrTest && hasFallbackSeedPassword()) {
-        logger.warn(
-            'scenario:apply refused to run: a seed account is still using its public fallback password outside development/test. Set every NODE_SEED_*_PASSWORD first.'
-        );
-        return;
-    }
 
     const app = await bootAppInProcess();
 

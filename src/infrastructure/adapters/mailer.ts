@@ -23,7 +23,11 @@ import {
 import { ATTR_MESSAGING_SYSTEM } from '@opentelemetry/semantic-conventions/incubating';
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentNumber, environmentChoice } from '@infrastructure/runtime/environment';
+import {
+    environmentNumber,
+    environmentChoice,
+    isRelaxedEnvironment
+} from '@infrastructure/runtime/environment';
 import { recordDemoEmail } from '@infrastructure/adapters/demo-outbox';
 import { resolveSpooled, discardSpooled } from '@infrastructure/adapters/mail-spool';
 import { withSpan } from '@infrastructure/observability/tracer';
@@ -72,7 +76,7 @@ const MAIL_TRANSPORTS: readonly MailTransport[] = ['smtp', 'log', 'outbox'];
  * behaviour every existing caller already had.
  *
  * @throws {Error} when it is set to something none of the three transports recognise, or to
- *   `outbox` in production
+ *   `outbox` outside development/test
  */
 export const resolveMailTransport = (): MailTransport => {
     if (process.env.NODE_ENV === 'test') return 'log';
@@ -80,9 +84,9 @@ export const resolveMailTransport = (): MailTransport => {
     const named = environmentChoice('NODE_MAIL_TRANSPORT', MAIL_TRANSPORTS, 'smtp');
     // The outbox sends nothing and keeps every message, reset tokens included, in memory for
     // good. In a deployment that is silent non-delivery, so the boot gate refuses it.
-    if (named === 'outbox' && process.env.NODE_ENV === 'production')
+    if (named === 'outbox' && !isRelaxedEnvironment())
         throw new Error(
-            'NODE_MAIL_TRANSPORT=outbox sends no mail and is for the demo profile only; use smtp in production.'
+            'NODE_MAIL_TRANSPORT=outbox sends no mail and is for the demo profile only; use smtp outside development/test.'
         );
     return named;
 };

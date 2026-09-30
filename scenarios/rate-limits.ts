@@ -12,8 +12,8 @@
  * default throttles a script exactly as the global one would. `docs/tools/security.md` lists what
  * each bounds.
  *
- * Never for a deployment. Both callers refuse production — `run-server.ts` binds loopback with
- * throwaway secrets, and `apply.ts`'s first gate is `NODE_ENV === 'production'`.
+ * Never for a deployment. Both callers refuse a deployment — `run-server.ts` binds loopback with
+ * throwaway secrets, and `apply.ts`'s first gate is `isRelaxedEnvironment()`.
  */
 
 /**

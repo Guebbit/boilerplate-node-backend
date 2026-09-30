@@ -115,6 +115,25 @@ describe('validateStripeSecretKey', () => {
             return Promise.resolve();
         }));
 
+    it('refuses a test-mode key when NODE_ENV is staging, like production', () =>
+        withEnvironment('NODE_ENV', 'staging', () => {
+            process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
+            expect(validateStripeSecretKey()).toEqual(['NODE_STRIPE_SECRET_KEY']);
+            return Promise.resolve();
+        }));
+
+    it('refuses a test-mode key when NODE_ENV is unset', () => {
+        const original = process.env.NODE_ENV;
+        delete process.env.NODE_ENV;
+        process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
+
+        try {
+            expect(validateStripeSecretKey()).toEqual(['NODE_STRIPE_SECRET_KEY']);
+        } finally {
+            if (original !== undefined) process.env.NODE_ENV = original;
+        }
+    });
+
     it('refuses a test-mode key in production', () =>
         withEnvironment('NODE_ENV', 'production', () => {
             process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';

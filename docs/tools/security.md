@@ -500,6 +500,34 @@ One detail is load-bearing: a term that vanishes under stripping returns **`unde
 empty pattern. `$regex: ''` matches every document, so it would silently turn a filter into
 "everything" — the exact inversion of what the caller asked for.
 
+## One environment switch
+
+`NODE_ENV` has two settings that matter: **development or test** (a developer's machine, CI) and
+**everything else**. Everything else is strict, an unset value and `staging` included. One helper
+says which, `isRelaxedEnvironment()` in `infrastructure/runtime/environment.ts`, and every switch
+below reads it. The failure it closes: a safety switch that turned on only for the exact word
+`production` stayed off for a server that forgot to set it.
+
+| Switch                                                    | Strict (a deployment)        | Relaxed (development/test)        |
+| --------------------------------------------------------- | ---------------------------- | --------------------------------- |
+| Session and OAuth cookies                                 | `Secure`                     | not `Secure`, so local HTTP works |
+| `scenario:apply` (the seeder)                             | refuses to run               | runs                              |
+| `productionOnly` required config, `forbiddenInProduction` | checked                      | skipped                           |
+| The demo profile (`/__test` routes)                       | refused, and logged          | mounted when asked                |
+| Stripe `sk_test_` key                                     | refused at boot              | accepted                          |
+| `NODE_MAIL_TRANSPORT=outbox`                              | refused                      | accepted                          |
+| Webhook demo sink exemption                               | none                         | the sink host is exempt           |
+| Stack traces in logs                                      | left out                     | kept                              |
+| Log level, console format                                 | `info`, JSON                 | `debug`, pretty on a terminal     |
+| Cache `max-age`, `autoIndex`                              | as declared, `autoIndex` off | clamped, Mongoose's default       |
+| Trust-proxy hops of `0`                                   | a boot warning               | silent                            |
+
+A staging server therefore cannot seed demo data or use a Stripe test key. That is intended: a
+switch that must differ gets its own explicit variable, never a relaxed `NODE_ENV`. Standards:
+[OWASP secure by default](https://devguide.owasp.org/en/04-design/02-web-app-checklist/01-secure-by-default/),
+[Node.js: run with `NODE_ENV=production`](https://nodejs.org/en/learn/getting-started/nodejs-the-difference-between-development-and-production),
+[Twelve-Factor config](https://12factor.net/config).
+
 ## `trust proxy`, and the two ways to get it wrong
 
 Everything that identifies a caller by address — the rate limiter's bucket key, the audit log's

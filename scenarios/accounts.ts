@@ -32,8 +32,8 @@ export const SEED_ADMIN_EMAIL = 'root@root.it';
  * holds (see {@link seedAccessModel} below), the same name the paired frontend's own `.env`
  * already used. The fallback is a real demo value, not a placeholder, since this repo commits its
  * `.env` in the clear and the demo profile is never a production deployment.
- * {@link hasFallbackSeedPassword} is what stops it reaching a database anyone but a developer or
- * CI can see.
+ * `scenario:apply` refuses to run outside development/test, which is what stops it reaching a
+ * database anyone but a developer or CI can see.
  */
 const SEED_ADMIN_PASSWORD_FALLBACK = 'Demo-Admin1!';
 export const SEED_ADMIN_PASSWORD =
@@ -73,19 +73,6 @@ export const seedCredentials = {
     editor: { email: SEED_EDITOR_EMAIL, password: SEED_EDITOR_PASSWORD },
     moderator: { email: SEED_MODERATOR_EMAIL, password: SEED_MODERATOR_PASSWORD }
 } as const;
-
-/**
- * `true` when any seed account is still logging in with its committed, public fallback password
- * — the four `Demo-*1!` values anyone can read in this file or `.env-example`. `scenario:apply`
- * refuses to run when this is `true` outside development/test, so a reachable staging database
- * never ends up handing out `root@root.it` / `Demo-Admin1!` as both the shop owner and the
- * platform operator.
- */
-export const hasFallbackSeedPassword = (): boolean =>
-    SEED_ADMIN_PASSWORD === SEED_ADMIN_PASSWORD_FALLBACK ||
-    SEED_USER_PASSWORD === SEED_USER_PASSWORD_FALLBACK ||
-    SEED_EDITOR_PASSWORD === SEED_EDITOR_PASSWORD_FALLBACK ||
-    SEED_MODERATOR_PASSWORD === SEED_MODERATOR_PASSWORD_FALLBACK;
 
 /**
  * The whole access model, seeded: one shop, the presets, and the seed accounts placed in it.

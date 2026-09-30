@@ -8,7 +8,8 @@
 import {
     environmentFlag,
     environmentNumber,
-    environmentDecimal
+    environmentDecimal,
+    isRelaxedEnvironment
 } from '@infrastructure/runtime/environment';
 
 /**
@@ -140,5 +141,39 @@ describe('environmentFlag', () => {
     ])('takes the default for %s rather than reading it as off', (_label, value) => {
         expect(withValue(value, () => environmentFlag(CANARY, true))).toBe(true);
         expect(withValue(value, () => environmentFlag(CANARY, false))).toBe(false);
+    });
+});
+
+/**
+ * The one definition of "not a deployment". Exhaustive on what is NOT relaxed, because the failure
+ * it exists to close is silent: an unset or misspelt `NODE_ENV` that left every safety switch off.
+ */
+describe('isRelaxedEnvironment', () => {
+    const original = process.env.NODE_ENV;
+
+    afterEach(() => {
+        if (original === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = original;
+    });
+
+    it.each(['development', 'test'])('is relaxed for %s', (value) => {
+        process.env.NODE_ENV = value;
+
+        expect(isRelaxedEnvironment()).toBe(true);
+    });
+
+    it.each(['production', 'staging', 'Production', 'dev', ' development', ''])(
+        'is strict for %p',
+        (value) => {
+            process.env.NODE_ENV = value;
+
+            expect(isRelaxedEnvironment()).toBe(false);
+        }
+    );
+
+    it('is strict when NODE_ENV is unset', () => {
+        delete process.env.NODE_ENV;
+
+        expect(isRelaxedEnvironment()).toBe(false);
     });
 });

@@ -124,3 +124,21 @@ export const environmentChoice = <T extends string>(
     if ((allowed as readonly string[]).includes(raw)) return raw as T;
     throw new Error(`Unknown ${key}: "${raw}". Allowed: ${allowed.join(', ')}.`);
 };
+
+/**
+ * Whether this process may run with its safety switches off: `NODE_ENV` is exactly `development`
+ * or `test`, and nothing else.
+ *
+ * The one definition of "not a deployment". Every protection that turns on for a real server —
+ * `Secure` cookies, the seeder's refusal, the production-only secrets, stack traces kept out of
+ * logs — keys off this, so an unset `NODE_ENV`, a `staging` one or a typo gets the strict
+ * behaviour, not the loose one. Fail closed: there are two settings, a developer's machine or CI,
+ * and every server.
+ *
+ * Read per call, like every reader here, so a test can change `NODE_ENV` between cases.
+ *
+ * See: docs/tools/security.md#one-environment-switch
+ * OWASP "secure by default": https://devguide.owasp.org/en/04-design/02-web-app-checklist/01-secure-by-default/
+ */
+export const isRelaxedEnvironment = (): boolean =>
+    process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';

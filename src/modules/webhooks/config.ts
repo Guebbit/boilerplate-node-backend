@@ -4,7 +4,7 @@
  * sets, so a deployment can change these without a restart.
  */
 
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { environmentNumber, isRelaxedEnvironment } from '@infrastructure/runtime/environment';
 import {
     parseVersionedKeyRing,
     type VersionedKey
@@ -32,16 +32,14 @@ export const getWebhookSubscriptionCap = (): number =>
  * `https:` or a publicly-routable address — `NODE_WEBHOOK_DEMO_SINK_URL`'s host, so
  * `docker compose --profile integrations`'s `webhook-tester` (plain HTTP, a private compose-network
  * address) is reachable at all. `undefined` outside development/test even when the variable is
- * set: `src/kernel/required-config.ts` refuses to boot with it set under production, but this is
- * the second gate, for whichever `NODE_ENV` that check does not cover.
+ * set: `src/kernel/required-config.ts` refuses to boot with it set there too, and this is the
+ * second gate.
  *
  * @returns the hostname to exempt, or `undefined` when there is nothing to exempt
  */
 export const getWebhookDemoAllowedHost = (): string | undefined => {
-    const isDevelopmentOrTest =
-        process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
     const sinkUrl = process.env.NODE_WEBHOOK_DEMO_SINK_URL;
-    if (!isDevelopmentOrTest || !sinkUrl) return undefined;
+    if (!isRelaxedEnvironment() || !sinkUrl) return undefined;
 
     // eslint-disable-next-line no-restricted-syntax -- URL's constructor has no non-throwing form; a malformed sink URL means no exemption, not a crash
     try {

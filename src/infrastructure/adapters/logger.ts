@@ -13,7 +13,7 @@ import winston from 'winston';
 // chain (via `scenarios/support/ephemeral-mongo.ts`), which is loaded outside jest's normal
 // module resolution — see that file's own comment. An alias resolves at `tsc`/`eslint` time but
 // fails at jest's globalSetup runtime.
-import { environmentChoice } from '../runtime/environment';
+import { environmentChoice, isRelaxedEnvironment } from '../runtime/environment';
 import { pseudonymise } from '../security/pseudonymise';
 
 /** A structured log call's own object form: a `message` plus whatever context goes with it. */
@@ -235,8 +235,8 @@ export const serializeError = (error: unknown): Record<string, unknown> => {
             name: error.name,
             message: error.message,
             // Stack traces expose absolute paths and dependency internals — useful locally,
-            // an information leak in aggregated production logs.
-            ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
+            // an information leak in aggregated server logs. Kept only on a developer's machine or CI.
+            ...(isRelaxedEnvironment() && { stack: error.stack }),
             // The wrapped error is usually the one that explains the failure.
             ...(error.cause !== undefined && { cause: error.cause })
         };
@@ -280,7 +280,7 @@ export const redactFormat = winston.format((info) => {
  */
 export const resolveLogLevel = (): string => {
     if (process.env.NODE_LOG_LEVEL) return process.env.NODE_LOG_LEVEL;
-    return process.env.NODE_ENV === 'production' ? 'info' : 'debug';
+    return isRelaxedEnvironment() ? 'debug' : 'info';
 };
 
 /**
@@ -328,7 +328,7 @@ const prettyFormat = winston.format.combine(
  * See: docs/tools/loki.md
  */
 export const resolveConsoleFormat = (): winston.Logform.Format =>
-    process.env.NODE_ENV !== 'production' && process.stdout.isTTY ? prettyFormat : baseFormat;
+    isRelaxedEnvironment() && process.stdout.isTTY ? prettyFormat : baseFormat;
 
 /**
  * Main application logger. Pretty on an interactive terminal, JSON everywhere else.

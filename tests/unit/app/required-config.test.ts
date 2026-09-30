@@ -76,6 +76,18 @@ describe('application-wide variables', () => {
         expect(assertApp).toThrow(/NODE_CORS_ORIGIN/);
     });
 
+    it.each([undefined, 'staging'])(
+        'refuses to boot with NODE_ENV=%p and no NODE_CORS_ORIGIN: a server is not a developer',
+        (value) => {
+            configure();
+            if (value === undefined) delete process.env.NODE_ENV;
+            else process.env.NODE_ENV = value;
+            delete process.env.NODE_CORS_ORIGIN;
+
+            expect(assertApp).toThrow(/NODE_CORS_ORIGIN/);
+        }
+    );
+
     it('ignores an unset NODE_PSEUDONYM_KEY outside production', () => {
         // `productionOnly`: the logger's own dev fallback key (`adapters/logger.ts`) is right for
         // a developer and certainly wrong for a deployment, so only the deployment is asked.

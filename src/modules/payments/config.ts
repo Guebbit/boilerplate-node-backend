@@ -14,7 +14,7 @@
  */
 
 import { electronicFormatIBAN, isValidBIC, isValidIBAN } from 'ibantools';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { environmentNumber, isRelaxedEnvironment } from '@infrastructure/runtime/environment';
 import {
     bankTransferBeneficiary,
     bankTransferBic,
@@ -79,17 +79,16 @@ export const paymentEffectRetryMinutes = (): number =>
     environmentNumber('NODE_PAYMENT_EFFECT_RETRY_MINUTES', 1, 0);
 
 /**
- * Refuse to boot in production on a Stripe TEST-mode key. `sk_test_` is Stripe's own prefix
+ * Refuse to boot on a deployment (any `NODE_ENV` but development/test) with a Stripe TEST-mode key. `sk_test_` is Stripe's own prefix
  * for one — https://docs.stripe.com/keys#test-live-modes — and a deployment that pastes one into
  * production would silently run every "real" payment through Stripe's test ledger: orders marked
- * paid, and no money ever actually moving. Checked only under `NODE_ENV=production`; a test key is
- * exactly right everywhere else, `NODE_STRIPE_SECRET_KEY` unset included — there is no shipped
+ * paid, and no money ever actually moving. Checked outside development/test only; a test key is
+ * exactly right there, `NODE_STRIPE_SECRET_KEY` unset included — there is no shipped
  * Stripe implementation yet, so this stays dormant until a deployment sets one.
- * @returns `['NODE_STRIPE_SECRET_KEY']` when a production boot is configured with a test-mode
+ * @returns `['NODE_STRIPE_SECRET_KEY']` when a deployment boot is configured with a test-mode
  *   Stripe key; empty otherwise
  */
 export const validateStripeSecretKey = (): string[] => {
     const key = process.env.NODE_STRIPE_SECRET_KEY;
-    const isProduction = process.env.NODE_ENV === 'production';
-    return isProduction && key?.startsWith('sk_test_') ? ['NODE_STRIPE_SECRET_KEY'] : [];
+    return !isRelaxedEnvironment() && key?.startsWith('sk_test_') ? ['NODE_STRIPE_SECRET_KEY'] : [];
 };

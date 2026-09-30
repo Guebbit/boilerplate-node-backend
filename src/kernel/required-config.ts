@@ -10,6 +10,7 @@
  */
 
 import type { AppModule, RequiredConfig } from '@kernel/registry';
+import { isRelaxedEnvironment } from '@infrastructure/runtime/environment';
 
 /**
  * Checks owned by neither a module nor the kernel — the app tier's own variables, plus whatever
@@ -49,10 +50,10 @@ export const checkSelector = (key: string, resolve: () => unknown): string[] => 
 };
 
 /**
- * Whether a `productionOnly` entry is in scope for the current `NODE_ENV`.
+ * Whether a `productionOnly` entry is in scope: any `NODE_ENV` but development or test.
  */
 const applies = ({ productionOnly }: RequiredConfig): boolean =>
-    !productionOnly || process.env.NODE_ENV === 'production';
+    !productionOnly || !isRelaxedEnvironment();
 
 /**
  * Whether any comma-separated member of the configured value is absent, too short, or still the
@@ -76,18 +77,18 @@ const fails = ({ key, minLength, placeholder }: RequiredConfig): boolean => {
 
 /**
  * Every module-declared {@link AppModule.forbiddenInProduction} variable that is actually set,
- * under `NODE_ENV=production` — the opposite of every other check here, which refuses an ABSENT
+ * outside development/test — the opposite of every other check here, which refuses an ABSENT
  * value rather than a present one.
  *
  * @param appModules - the enabled module list, each contributing its own `forbiddenInProduction`
- * @returns the offending variable names, empty outside production
+ * @returns the offending variable names, empty in development and test
  */
 const forbiddenUnderProduction = (appModules: AppModule[]): string[] =>
-    process.env.NODE_ENV === 'production'
-        ? appModules
+    isRelaxedEnvironment()
+        ? []
+        : appModules
               .flatMap((appModule) => appModule.forbiddenInProduction ?? [])
-              .filter((key) => (process.env[key] ?? '') !== '')
-        : [];
+              .filter((key) => (process.env[key] ?? '') !== '');
 
 /**
  * Refuse to boot on a missing, truncated or still-placeholder required variable — or on

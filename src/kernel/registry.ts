@@ -33,7 +33,8 @@ export interface RequiredConfig {
      */
     placeholder?: string;
     /**
-     * Check only under `NODE_ENV=production`. For a variable whose code-side default is correct
+     * Check only outside development/test (`isRelaxedEnvironment()`), so a deployment — staging
+     * included — is checked. For a variable whose code-side default is correct
      * for a developer and certainly wrong for a deployment.
      */
     productionOnly?: boolean;
@@ -381,12 +382,12 @@ export interface AppModule {
     customCheck?: () => string[];
 
     /**
-     * Env vars that must be ABSENT under `NODE_ENV=production` — the opposite of
+     * Env vars that must be ABSENT outside development/test — the opposite of
      * {@link requiredConfig}, and reported with its own wording (`assertRequiredConfig`'s "set,
      * which must never happen here" rather than `customCheck`'s "missing, too short, or still
      * placeholder"). Most modules have none; a module declares one for a value that only makes
      * sense in a non-production profile — a demo/test fixture endpoint, a relaxed guard — where
-     * being SET in production is itself the mistake, regardless of what it is set to.
+     * being SET on a deployment is itself the mistake, regardless of what it is set to.
      */
     forbiddenInProduction?: readonly string[];
 
