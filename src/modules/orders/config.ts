@@ -21,9 +21,71 @@
  * infrastructure may not know a module by name.
  */
 
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { defineConfig } from '@infrastructure/config/define';
+import { csv, int, text } from '@infrastructure/config/fields';
 import { frontendLink } from '@infrastructure/http/frontend-link';
 import type { OrderTransferInstructions } from '@types';
+
+/**
+ * What the shop is and how it takes a transfer.
+ *
+ * `NODE_SHOP_COUNTRY` is required at boot: the invoice prints the shop's own jurisdiction, and an
+ * invoice with no country on it is not one. The other identity fields (`@modules/invoicing`'s
+ * config) are genuinely optional, so neither is here.
+ */
+export const ordersConfig = defineConfig({
+    name: 'orders',
+    shape: {
+        NODE_SHOP_COUNTRY: text({
+            required: { minLength: 1 },
+            describe: 'The shop’s own country, ISO-3166: the only jurisdiction VAT is charged at.'
+        }),
+        NODE_SHIP_TO_COUNTRIES: csv({
+            upper: true,
+            describe:
+                'Countries a physical order may ship to, ISO-3166, comma-separated. Unset: the shop’s own.'
+        }),
+        NODE_DEFAULT_CURRENCY: text({
+            default: 'EUR',
+            describe: 'The one ISO-4217 currency this shop trades in.'
+        }),
+        NODE_BANK_TRANSFER_BENEFICIARY: text({
+            describe:
+                'Account name a transfer is made out to. Unset with the IBAN: transfer is not offered.'
+        }),
+        NODE_BANK_TRANSFER_IBAN: text({ describe: 'Account IBAN, validated at boot.' }),
+        NODE_BANK_TRANSFER_BIC: text({ describe: 'Account BIC/SWIFT. Optional.' }),
+        NODE_BANK_TRANSFER_HOLD_HOURS: int({
+            default: 168,
+            min: 1,
+            describe: 'Hours stock is held for an unpaid transfer order.'
+        }),
+        NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT: int({
+            default: 2,
+            min: 0,
+            describe: 'Pending transfer orders one account may hold at once.'
+        }),
+        NODE_ORDER_EFFECT_RETRY_MINUTES: int({
+            default: 5,
+            min: 0,
+            describe: 'Grace before the sweep retries a cancelled order’s refund.'
+        }),
+        NODE_WITHDRAWAL_PERIOD_DAYS: int({
+            default: 14,
+            min: 14,
+            describe: 'Days a consumer may withdraw. 14 is the legal floor (CRD Art. 9).'
+        }),
+        NODE_ORDER_PII_RETENTION_DAYS: int({
+            default: 3650,
+            min: 1,
+            describe: 'Days before a terminal order’s personal data is erased.'
+        }),
+        NODE_FRONTEND_LINK_ORDER: text({
+            default: 'orders/{id}',
+            describe: 'Template of the link to an order page.'
+        })
+    }
+});
 
 /**
  * The shop's own country — the ONLY jurisdiction VAT is ever charged at: no destination lookup,
@@ -33,7 +95,7 @@ import type { OrderTransferInstructions } from '@types';
  * deployment must (SK-08).
  * @returns the configured ISO-3166 country code, or `undefined`
  */
-export const shopCountry = (): string | undefined => process.env.NODE_SHOP_COUNTRY || undefined;
+export const shopCountry = (): string | undefined => ordersConfig().NODE_SHOP_COUNTRY;
 
 /**
  * Which ISO-3166 countries this deployment will ship a physical order to — checkout refuses
@@ -44,12 +106,8 @@ export const shopCountry = (): string | undefined => process.env.NODE_SHOP_COUNT
  * @returns the configured list, upper-cased; empty when neither this nor `NODE_SHOP_COUNTRY` is set
  */
 export const shipToCountries = (): string[] => {
-    const raw = process.env.NODE_SHIP_TO_COUNTRIES;
-    if (raw)
-        return raw
-            .split(',')
-            .map((code) => code.trim().toUpperCase())
-            .filter(Boolean);
+    const configured = ordersConfig().NODE_SHIP_TO_COUNTRIES;
+    if (configured.length > 0) return configured;
     const shop = shopCountry();
     return shop ? [shop] : [];
 };
@@ -63,7 +121,7 @@ export const shipToCountries = (): string[] => {
  * currency needs a real design, not several modules quietly reading the same env var.
  * @returns the configured ISO-4217 currency code
  */
-export const shopCurrency = (): string => process.env.NODE_DEFAULT_CURRENCY ?? 'EUR';
+export const shopCurrency = (): string => ordersConfig().NODE_DEFAULT_CURRENCY;
 
 /**
  * An order's own frozen currency, falling back to the shop's current one only for an order that
@@ -81,7 +139,7 @@ export const orderCurrency = (order: { currency?: string }): string =>
  * @returns the configured beneficiary, or `undefined`
  */
 export const bankTransferBeneficiary = (): string | undefined =>
-    process.env.NODE_BANK_TRANSFER_BENEFICIARY || undefined;
+    ordersConfig().NODE_BANK_TRANSFER_BENEFICIARY;
 
 /**
  * The account IBAN, exactly as configured — whatever shape it was typed in, spaces included.
@@ -89,8 +147,7 @@ export const bankTransferBeneficiary = (): string | undefined =>
  * validating, so this getter does no normalising of its own.
  * @returns the configured IBAN, or `undefined`
  */
-export const bankTransferIban = (): string | undefined =>
-    process.env.NODE_BANK_TRANSFER_IBAN || undefined;
+export const bankTransferIban = (): string | undefined => ordersConfig().NODE_BANK_TRANSFER_IBAN;
 
 /**
  * The IBAN grouped into 4-character blocks, the way a bank's own transfer form shows one — what
@@ -114,16 +171,14 @@ export const bankTransferIbanFriendly = (): string | undefined => {
  * is often enough on its own.
  * @returns the configured BIC, or `undefined`
  */
-export const bankTransferBic = (): string | undefined =>
-    process.env.NODE_BANK_TRANSFER_BIC || undefined;
+export const bankTransferBic = (): string | undefined => ordersConfig().NODE_BANK_TRANSFER_BIC;
 
 /**
  * How long checkout holds stock for a `bank_transfer` order before the reservation sweep
  * releases it — a week by default, since a transfer is not a same-day action the way a card is.
  * @returns the hold window, in hours
  */
-export const bankTransferHoldHours = (): number =>
-    environmentNumber('NODE_BANK_TRANSFER_HOLD_HOURS', 168, 1);
+export const bankTransferHoldHours = (): number => ordersConfig().NODE_BANK_TRANSFER_HOLD_HOURS;
 
 /**
  * How many of one account's orders may sit `pending` on a transfer at once. A week-long hold is
@@ -132,7 +187,7 @@ export const bankTransferHoldHours = (): number =>
  * @returns the cap on open transfer orders per account
  */
 export const bankTransferMaxOpenPerAccount = (): number =>
-    environmentNumber('NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT', 2, 0);
+    ordersConfig().NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT;
 
 /**
  * Whether this deployment offers `bank_transfer` at all — both the beneficiary and the IBAN must
@@ -170,8 +225,7 @@ export const transferInstructionsFor = (reference: string): OrderTransferInstruc
  * applies to the next sweep tick and a test can vary it per case.
  * @returns the grace window in minutes
  */
-export const orderEffectRetryMinutes = (): number =>
-    environmentNumber('NODE_ORDER_EFFECT_RETRY_MINUTES', 5, 0);
+export const orderEffectRetryMinutes = (): number => ordersConfig().NODE_ORDER_EFFECT_RETRY_MINUTES;
 
 /**
  * How many days a consumer has to withdraw. 14 is the law's floor (Consumer Rights Directive
@@ -179,28 +233,21 @@ export const orderEffectRetryMinutes = (): number =>
  * every getter here.
  * @returns the withdrawal period, in days
  */
-export const withdrawalPeriodDays = (): number =>
-    environmentNumber('NODE_WITHDRAWAL_PERIOD_DAYS', 14, 14);
-
-/** This module's env var for its one frontend link — `.env-example` documents the default. */
-const ORDER_LINK_ENV_VAR = 'NODE_FRONTEND_LINK_ORDER';
+export const withdrawalPeriodDays = (): number => ordersConfig().NODE_WITHDRAWAL_PERIOD_DAYS;
 
 /**
- * Default template — the paired frontend's own order page
- * (`<paired-frontend>/src/modules/orders/routes.ts`). `{id}` is filled in by
- * `frontendLink`, never left for the frontend to parse out of the path itself.
+ * Days a terminal order's personal data is kept before the sweep erases it.
+ * @returns the retention, in days
  */
-const ORDER_LINK_DEFAULT_TEMPLATE = 'orders/{id}';
+export const orderPiiRetentionDays = (): number => ordersConfig().NODE_ORDER_PII_RETENTION_DAYS;
 
 /**
- * A link into the paired frontend's own order page.
+ * A link into the paired frontend's own order page. The default template is the frontend's own
+ * route (`<paired-frontend>/src/modules/orders/routes.ts`); `{id}` is filled in by
+ * `frontendLink`, never left for the frontend to parse out of the path itself.
  * @param parameters - `locale` the email is written in; `id` the order to link to
  */
 export const orderFrontendLink = (parameters: { locale: string; id: string }): string =>
-    frontendLink(
-        process.env[ORDER_LINK_ENV_VAR] ?? ORDER_LINK_DEFAULT_TEMPLATE,
-        parameters.locale,
-        {
-            id: parameters.id
-        }
-    );
+    frontendLink(ordersConfig().NODE_FRONTEND_LINK_ORDER, parameters.locale, {
+        id: parameters.id
+    });

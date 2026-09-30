@@ -12,22 +12,26 @@
 import { createHash } from 'node:crypto';
 import type { Request } from 'express';
 import { asStub } from '@tests/stub';
+import { rateLimitConfig } from '@infrastructure/http/config';
+import { withoutEnvironment } from '@tests/environment';
 import {
     identityOf,
     DEFAULT_RATE_LIMIT_MAX,
-    DEFAULT_RATE_LIMIT_WINDOW_MS,
     DEFAULT_API_KEY_RATE_LIMIT_MAX,
     DEFAULT_UPLOAD_RATE_LIMIT_MAX,
     INFRASTRUCTURE_RATE_LIMITS
 } from '@infrastructure/http/middlewares/rate-limit';
 
 describe('rate limit defaults', () => {
-    it('measures the browsing budget per minute', () => {
+    it('measures the browsing budget per minute', () =>
         // The window is the load-bearing half of the pair: the same 100 requests spread over a
-        // quarter of an hour is a session quota an ordinary browsing session trips.
-        expect(DEFAULT_RATE_LIMIT_WINDOW_MS).toBe(60 * 1000);
-        expect(DEFAULT_RATE_LIMIT_MAX).toBe(100);
-    });
+        // quarter of an hour is a session quota an ordinary browsing session trips. Unset first:
+        // `tests/support/setup.ts` raises it tenfold for the suites.
+        withoutEnvironment(['NODE_RATE_LIMIT_WINDOW_MS'], () => {
+            expect(rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS).toBe(60 * 1000);
+            expect(DEFAULT_RATE_LIMIT_MAX).toBe(100);
+            return Promise.resolve();
+        }));
 
     it('keeps the upload budget a small fraction of the browsing budget', () => {
         expect(DEFAULT_UPLOAD_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 2);

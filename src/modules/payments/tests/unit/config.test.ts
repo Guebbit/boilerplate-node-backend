@@ -98,27 +98,31 @@ describe('validateBankTransferConfig', () => {
     });
 });
 
+/** `validateStripeSecretKey` against the environment this case set up. */
+const stripeProblems = (): string[] =>
+    validateStripeSecretKey(process.env.NODE_STRIPE_SECRET_KEY, process.env);
+
 describe('validateStripeSecretKey', () => {
     it('reports nothing when no key is configured', () => {
-        expect(validateStripeSecretKey()).toEqual([]);
+        expect(stripeProblems()).toEqual([]);
     });
 
     it('reports nothing for a test-mode key outside production', () => {
         process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
-        expect(validateStripeSecretKey()).toEqual([]);
+        expect(stripeProblems()).toEqual([]);
     });
 
     it('reports nothing for a live key in production', () =>
         withEnvironment('NODE_ENV', 'production', () => {
             process.env.NODE_STRIPE_SECRET_KEY = 'sk_live_abc123';
-            expect(validateStripeSecretKey()).toEqual([]);
+            expect(stripeProblems()).toEqual([]);
             return Promise.resolve();
         }));
 
     it('refuses a test-mode key when NODE_ENV is staging, like production', () =>
         withEnvironment('NODE_ENV', 'staging', () => {
             process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
-            expect(validateStripeSecretKey()).toEqual(['NODE_STRIPE_SECRET_KEY']);
+            expect(stripeProblems()).toEqual(['NODE_STRIPE_SECRET_KEY']);
             return Promise.resolve();
         }));
 
@@ -128,7 +132,7 @@ describe('validateStripeSecretKey', () => {
         process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
 
         try {
-            expect(validateStripeSecretKey()).toEqual(['NODE_STRIPE_SECRET_KEY']);
+            expect(stripeProblems()).toEqual(['NODE_STRIPE_SECRET_KEY']);
         } finally {
             if (original !== undefined) process.env.NODE_ENV = original;
         }
@@ -137,7 +141,7 @@ describe('validateStripeSecretKey', () => {
     it('refuses a test-mode key in production', () =>
         withEnvironment('NODE_ENV', 'production', () => {
             process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
-            expect(validateStripeSecretKey()).toEqual(['NODE_STRIPE_SECRET_KEY']);
+            expect(stripeProblems()).toEqual(['NODE_STRIPE_SECRET_KEY']);
             return Promise.resolve();
         }));
 });

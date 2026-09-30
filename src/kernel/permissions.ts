@@ -12,7 +12,7 @@
  * Read once at import, not per request: the file is small, it cannot change while the process
  * lives, and parsing it per request would put YAML on the hot path of every authorization
  * decision. A malformed file throws here, at boot, rather than on the first request that needs a
- * rule — see `required-config.ts` for the same stance about configuration.
+ * rule — see `module-config.ts` for the same stance about configuration.
  */
 
 import { readFileSync } from 'node:fs';

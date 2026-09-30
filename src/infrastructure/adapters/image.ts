@@ -10,7 +10,7 @@
 
 import sharp from 'sharp';
 import type { Sharp } from 'sharp';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { imageConfig } from '@infrastructure/adapters/config';
 
 /**
  * The three formats an upload can declare, per `SUPPORTED_IMAGE_FORMATS` in `image-signatures.ts`.
@@ -49,7 +49,7 @@ const decode = (input: Buffer): Sharp =>
          *
          * Read at call time, not frozen at import, like every other adapter's env reads.
          */
-        limitInputPixels: environmentNumber('NODE_IMAGE_MAX_INPUT_PIXELS', 50_000_000, 1)
+        limitInputPixels: imageConfig().NODE_IMAGE_MAX_INPUT_PIXELS
     }).rotate();
 
 /**
@@ -92,7 +92,7 @@ const reencode = (pipeline: Sharp, mime: ReencodableImageMime): Sharp => {
  */
 export const digestImage = (input: Buffer, mime: ReencodableImageMime): Promise<Buffer> => {
     /** Longest edge a digested original is allowed to keep. Smaller images are left alone. */
-    const maxDimension = environmentNumber('NODE_IMAGE_MAX_DIMENSION', 2048, 1);
+    const maxDimension = imageConfig().NODE_IMAGE_MAX_DIMENSION;
 
     return reencode(
         decode(input).resize(maxDimension, maxDimension, {
@@ -118,7 +118,7 @@ export const digestImage = (input: Buffer, mime: ReencodableImageMime): Promise<
  */
 export const thumbnailImage = (input: Buffer): Promise<Buffer> => {
     /** Longest edge a thumbnail is allowed to keep. */
-    const maxDimension = environmentNumber('NODE_IMAGE_THUMBNAIL_DIMENSION', 320, 1);
+    const maxDimension = imageConfig().NODE_IMAGE_THUMBNAIL_DIMENSION;
 
     return decode(input)
         .resize(maxDimension, maxDimension, {

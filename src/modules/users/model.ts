@@ -12,6 +12,7 @@ import bcrypt from 'bcrypt';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
+import { localeConfig } from '@infrastructure/i18n/config';
 import {
     CreateUserBody,
     createUserBodyPasswordMin,
@@ -385,7 +386,7 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
          */
         locale: {
             type: String,
-            default: process.env.NODE_DEFAULT_LOCALE ?? 'en'
+            default: localeConfig().NODE_DEFAULT_LOCALE
         },
         // Self-service profile fields, no format enforced: a phone number's valid shapes vary too
         // widely by country to regex safely, and a website is free text the same way `imageUrl` is.

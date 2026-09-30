@@ -6,6 +6,7 @@
 import path from 'node:path';
 import express from 'express';
 import type { Express } from 'express';
+import { imageConfig } from '@infrastructure/adapters/config';
 
 /** How long a fixed-name asset (favicon, web manifest) may be cached: a day, so a change lands. */
 const FIXED_NAME_CACHE_CONTROL = 'public, max-age=86400';
@@ -33,7 +34,7 @@ export const installStatic = (app: Express): void => {
      *   URL's bytes never change. Everything else (favicon, web manifest) keeps its name across
      *   edits, so it gets a day; set here, `express.static` leaves an existing `Cache-Control` be.
      */
-    const root = process.env.NODE_PUBLIC_PATH ?? 'public';
+    const root = imageConfig().NODE_PUBLIC_PATH;
     app.use(
         express.static(root, {
             dotfiles: 'ignore',

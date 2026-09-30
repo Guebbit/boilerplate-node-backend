@@ -10,7 +10,7 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import { isRelaxedEnvironment } from '@infrastructure/runtime/environment';
+import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
 
 /** Set only by {@link enableDemoProfile}. Module-level: a restart clears it. */
 let demoProfileEnabled = false;

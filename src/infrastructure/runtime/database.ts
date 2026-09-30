@@ -12,7 +12,7 @@
 import mongoose from 'mongoose';
 import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
-import { isRelaxedEnvironment } from '@infrastructure/runtime/environment';
+import { databaseConfig, isRelaxedEnvironment } from '@infrastructure/runtime/config';
 
 /** Give up after this many attempts so a misconfigured URI fails the deploy instead of retrying forever. */
 const MAX_RETRIES = 10;
@@ -43,9 +43,6 @@ export const isPermanentConnectError = (error: unknown): boolean => {
     );
 };
 
-/** Fallback database name when only host/port are configured. */
-const DEFAULT_DATABASE_NAME = 'boilerplate-node-backend';
-
 /**
  * Backoff delays should yield to the event loop instead of blocking the whole process.
  *
@@ -66,12 +63,10 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 export const getDatabaseUri = () => {
     // A full URI wins outright — it may carry credentials or options the fragments cannot express.
-    if (process.env.NODE_DB_URI) return process.env.NODE_DB_URI;
+    const config = databaseConfig();
+    if (config.NODE_DB_URI) return config.NODE_DB_URI;
 
-    const host = process.env.NODE_MONGODB_HOST ?? '127.0.0.1';
-    const port = process.env.NODE_MONGODB_PORT ?? '27017';
-    const databaseName = process.env.NODE_MONGODB_NAME ?? DEFAULT_DATABASE_NAME;
-    return `mongodb://${host}:${port}/${databaseName}`;
+    return `mongodb://${config.NODE_MONGODB_HOST}:${String(config.NODE_MONGODB_PORT)}/${config.NODE_MONGODB_NAME}`;
 };
 
 /**

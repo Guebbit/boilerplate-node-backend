@@ -65,15 +65,14 @@ describe('applyServerTimeouts', () => {
         expect(server.keepAliveTimeout).toBe(72_000);
     });
 
-    it('ignores an unusable value rather than disabling the bound it names', () => {
-        // `0` would mean "no timeout" if it were honoured — the one value that must not pass.
-        process.env.NODE_HTTP_HEADERS_TIMEOUT_MS = '0';
-        process.env.NODE_HTTP_REQUEST_TIMEOUT_MS = 'soon';
-        const server = serverStub();
+    it.each([
+        ['0', 'NODE_HTTP_HEADERS_TIMEOUT_MS'],
+        ['soon', 'NODE_HTTP_REQUEST_TIMEOUT_MS']
+    ])('refuses %p rather than disabling the bound %s names', (value, variable) => {
+        // `0` would mean "no timeout" if it were honoured — the one value that must not pass. It
+        // is refused outright (at boot, by the gate), not quietly replaced by the default.
+        process.env[variable] = value;
 
-        applyServerTimeouts(server);
-
-        expect(server.headersTimeout).toBe(15_000);
-        expect(server.requestTimeout).toBe(120_000);
+        expect(() => applyServerTimeouts(serverStub())).toThrow(new RegExp(variable));
     });
 });

@@ -14,7 +14,7 @@ import type { Document, Model } from 'mongoose';
 import { FeedbackRequestStatus } from '@types';
 import type { FeedbackRequest } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { feedbackConfig } from './config';
 
 /**
  * How long a ticket survives, in days, before Mongo's TTL index removes it. Read at import time
@@ -22,7 +22,7 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
  * see the note on the index below. Default: 730 (24 months) — a contact request can be evidence
  * in a commercial dispute, and 24 months sits inside the common limitation periods.
  */
-const retentionDays = environmentNumber('NODE_FEEDBACK_RETENTION_DAYS', 730, 1);
+const retentionDays = feedbackConfig().NODE_FEEDBACK_RETENTION_DAYS;
 
 /** Mongoose document type for feedback tickets. Overrides the API-generated
  * FeedbackRequest's 'respondedAt'/'createdAt'/'updatedAt' (string vs Date). */

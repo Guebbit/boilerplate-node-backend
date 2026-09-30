@@ -11,13 +11,12 @@
 import {
     encryptVersionedSecret,
     decryptVersionedSecret,
-    parseVersionedKeyRing,
     type VersionedKey
 } from './versioned-secret';
+import { piiConfig } from './config';
 
 /** `NODE_PII_ENCRYPTION_KEY`'s ring — see `parseVersionedKeyRing` for the env var's wire format. */
-const getPiiEncryptionKeyRing = (): VersionedKey[] =>
-    parseVersionedKeyRing(process.env.NODE_PII_ENCRYPTION_KEY);
+const getPiiEncryptionKeyRing = (): VersionedKey[] => piiConfig().NODE_PII_ENCRYPTION_KEY;
 
 /** Encrypt one PII field for storage. See `encryptVersionedSecret` for the wire format. */
 export const encryptPii = (plaintext: string): string =>

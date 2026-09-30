@@ -30,6 +30,8 @@ import {
 // `OTLPTraceExporter` speaks OTLP over HTTP/protobuf — the vendor-neutral wire format
 // understood by Jaeger, Tempo, Honeycomb, Datadog, the OTel Collector, etc.
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+// Relative: this file loads first, before anything that resolves path aliases is wired.
+import { loggingConfig, tracingConfig } from './config';
 // Auto-instrumentations: each one monkey-patches its target library so spans are created
 // without touching business code. Only the four libraries this app actually uses are loaded,
 // which keeps startup cost lower than the `@opentelemetry/auto-instrumentations-node` bundle.
@@ -105,7 +107,8 @@ let started = false;
  */
 export const buildProcessors = (): SpanProcessor[] => {
     const endpoint =
-        process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+        tracingConfig().OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ??
+        tracingConfig().OTEL_EXPORTER_OTLP_ENDPOINT;
     if (!endpoint) return [new NoopSpanProcessor()];
 
     // `@opentelemetry/sdk-trace`'s `BatchSpanProcessor` takes one options object (`{ exporter,
@@ -122,10 +125,10 @@ export const startTracing = (): void => {
     // traces under "unknown_service", making them impossible to tell apart from other apps.
     const resource = resourceFromAttributes({
         // `service.name` — primary grouping key in every tracing UI.
-        [ATTR_SERVICE_NAME]: process.env.NODE_SERVICE_NAME ?? 'api',
+        [ATTR_SERVICE_NAME]: loggingConfig().NODE_SERVICE_NAME ?? 'api',
         // `service.version` — npm injects `npm_package_version` when started via an npm script,
         // which lets you correlate a latency/error regression with a specific release.
-        [ATTR_SERVICE_VERSION]: process.env.npm_package_version ?? '0.0.0'
+        [ATTR_SERVICE_VERSION]: tracingConfig().npm_package_version ?? '0.0.0'
     });
 
     // Instantiate the SDK. Nothing is patched or exported yet — that happens in `start()` below.

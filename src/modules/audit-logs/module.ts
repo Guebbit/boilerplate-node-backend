@@ -19,6 +19,7 @@ import type { AppModule } from '@kernel/registry';
 import { registerAuditSink } from '@infrastructure/observability/audit';
 import { auditLogService, findOwnAuditEntries } from './service';
 import { router } from './routes';
+import { auditLogsConfig } from './config';
 
 /**
  * Installs the persistence sink once this module is known to be enabled (D15) — see the module
@@ -34,6 +35,7 @@ export default {
     name: 'audit-logs',
     basePath: '/audit',
     routes: router,
+    config: [auditLogsConfig.slice],
     onRegistered,
     locales: path.join(__dirname, 'locales'),
     personalData: [

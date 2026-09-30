@@ -38,13 +38,13 @@ import { isInfrastructureError } from '@infrastructure/http/errors';
 import { rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
 import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 import { callerContextOf } from '@infrastructure/http/request';
-import { environmentNumber } from '@infrastructure/runtime/environment';
 import { apiKeyLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import {
     recordAudit,
     coreAuditActions,
     buildAuditEvent
 } from '@infrastructure/observability/audit';
+import { reauthConfig } from '@kernel/config';
 
 /**
  * The `errors[].code` locale key follows one rule everywhere in this codebase: `FORBIDDEN` reads
@@ -535,15 +535,15 @@ export const stillHoldsKeyViaCookie = (
         .catch(() => false);
 
 /**
- * The two step-up tiers, read through `environmentNumber` exactly like the token TTLs are.
+ * The two step-up tiers (`NODE_REAUTH_TIME_*`), read through the kernel's config slice.
  * Kernel-level, not `account`'s: `requireFreshAuth` is mounted
  * by any module with a money or identity route — `cart`, `payments`, `account` itself — and none
  * of them may reach into a sibling's config to get at it.
  */
-export const REAUTH_TIME_CRITICAL = environmentNumber('NODE_REAUTH_TIME_CRITICAL', 300);
+export const REAUTH_TIME_CRITICAL = reauthConfig().NODE_REAUTH_TIME_CRITICAL;
 
 /** Identity changes, session management — the lighter of the two tiers. */
-export const REAUTH_TIME_SENSITIVE = environmentNumber('NODE_REAUTH_TIME_SENSITIVE', 900);
+export const REAUTH_TIME_SENSITIVE = reauthConfig().NODE_REAUTH_TIME_SENSITIVE;
 
 /** What {@link requireFreshAuth} may additionally demand, beyond how recently. */
 export interface FreshAuthOptions {

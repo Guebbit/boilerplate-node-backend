@@ -4,8 +4,8 @@
  * JWT lifetime or signing secret — a tier reading the wrong variable produces sessions too long
  * (security) or too short (support), and neither shows up as a failing request elsewhere.
  * Assertions follow the documented contract: each tier reads its own env var, falling back to
- * `NODE_TOKEN_ACCESS_TIME`, seconds-as-integer, and each signing ring defaulting to `['']`, never
- * `undefined`.
+ * `NODE_TOKEN_ACCESS_TIME`, seconds-as-integer, and each signing ring defaulting to the empty ring,
+ * never `undefined` (the boot gate refuses an unset one outside test).
  */
 
 import {
@@ -17,7 +17,7 @@ import {
     toRememberTier,
     getAccessTokenRing,
     getRefreshTokenRing,
-    invalidTokenWindows
+    sessionConfig
 } from '@modules/account/session/config';
 
 /**
@@ -132,11 +132,10 @@ describe('token signing rings', () => {
         expect(getAccessTokenRing()).toEqual(['new-access-secret', 'old-access-secret']);
     });
 
-    it('falls back to a ring holding one empty string when unset', () => {
-        // `jsonwebtoken` throws on an `undefined` secret but accepts ''. Neither is good, but ''
-        // is the documented shape and keeps the failure inside the signing call.
-        expect(getAccessTokenRing()).toEqual(['']);
-        expect(getRefreshTokenRing()).toEqual(['']);
+    it('is the empty ring when unset, never undefined', () => {
+        // The boot gate refuses an unset ring outside test; this is the shape a test run sees.
+        expect(getAccessTokenRing()).toEqual([]);
+        expect(getRefreshTokenRing()).toEqual([]);
     });
 });
 
@@ -193,35 +192,40 @@ describe('toRememberTier', () => {
     });
 });
 
-describe('invalidTokenWindows', () => {
-    it('reports no problem when the reuse window comfortably outlives the grace window', () => {
-        process.env.NODE_TOKEN_ROTATION_GRACE_MS = '10000';
-        process.env.NODE_TOKEN_REUSE_WINDOW_MS = '86400000';
+/**
+ * What the slice's boot check says about a pair of windows — the one relationship between them
+ * that must hold, or refresh-token reuse can never be detected.
+ *
+ * @param grace - `NODE_TOKEN_ROTATION_GRACE_MS`, unset when omitted
+ * @param reuse - `NODE_TOKEN_REUSE_WINDOW_MS`, unset when omitted
+ */
+const windowProblems = (grace?: string, reuse?: string): string[] =>
+    sessionConfig.slice.inspect({
+        NODE_ENV: 'production',
+        NODE_TOKEN_ROTATION_GRACE_MS: grace,
+        NODE_TOKEN_REUSE_WINDOW_MS: reuse
+    }).checks;
 
-        expect(invalidTokenWindows()).toEqual([]);
+describe('the token windows check', () => {
+    it('reports no problem when the reuse window comfortably outlives the grace window', () => {
+        expect(windowProblems('10000', '86400000')).toEqual([]);
     });
 
     it('reports no problem on the documented defaults (10s grace, 24h reuse)', () => {
-        expect(invalidTokenWindows()).toEqual([]);
+        expect(windowProblems()).toEqual([]);
     });
 
     it('refuses a reuse window equal to the grace window', () => {
         // Equal, not just smaller: `reuse > grace` is the boot check's own condition, and a token
         // superseded exactly `grace` ago is already past both cutoffs at once -- there is no
         // instant in which a replay reads as reuse rather than an ordinary expired token.
-        process.env.NODE_TOKEN_ROTATION_GRACE_MS = '10000';
-        process.env.NODE_TOKEN_REUSE_WINDOW_MS = '10000';
-
-        expect(invalidTokenWindows()).toEqual([
+        expect(windowProblems('10000', '10000')).toEqual([
             'NODE_TOKEN_REUSE_WINDOW_MS (10000ms) must exceed NODE_TOKEN_ROTATION_GRACE_MS (10000ms), or refresh-token reuse can never be detected'
         ]);
     });
 
     it('refuses a reuse window shorter than the grace window', () => {
-        process.env.NODE_TOKEN_ROTATION_GRACE_MS = '86400000';
-        process.env.NODE_TOKEN_REUSE_WINDOW_MS = '10000';
-
-        expect(invalidTokenWindows()).toEqual([
+        expect(windowProblems('86400000', '10000')).toEqual([
             'NODE_TOKEN_REUSE_WINDOW_MS (10000ms) must exceed NODE_TOKEN_ROTATION_GRACE_MS (86400000ms), or refresh-token reuse can never be detected'
         ]);
     });

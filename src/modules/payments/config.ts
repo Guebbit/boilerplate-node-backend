@@ -13,7 +13,8 @@
  */
 
 import { electronicFormatIBAN, isValidBIC, isValidIBAN } from 'ibantools';
-import { environmentNumber, isRelaxedEnvironment } from '@infrastructure/runtime/environment';
+import { defineConfig, isRelaxedIn } from '@infrastructure/config/define';
+import { int, secret, text } from '@infrastructure/config/fields';
 import {
     bankTransferBeneficiary,
     bankTransferBic,
@@ -45,7 +46,7 @@ export const listPaymentMethods = (): PaymentMethodInfo[] => [
 ];
 
 /**
- * The boot-time gate on `NODE_BANK_TRANSFER_*`, registered as this module's `customCheck`.
+ * The boot-time gate on `NODE_BANK_TRANSFER_*`, run as {@link paymentsConfig}'s check.
  * `ibantools` — https://github.com/Simplify/ibantools — validates the IBAN and, when set, the
  * BIC; `electronicFormatIBAN` strips spaces before either check runs, since a deployment is as
  * likely to paste one with them as without. A misconfigured value would otherwise only throw on
@@ -67,6 +68,50 @@ export const validateBankTransferConfig = (): string[] => {
 };
 
 /**
+ * What a deployment tunes about payments, and what refuses boot.
+ *
+ * `NODE_PAYMENT_WEBHOOK_SECRET` is `productionOnly`: `tests/support/setup.ts` supplies a dev
+ * value, and the `fake` provider needs none locally — booting without it there is not the failure
+ * this guards against. `NODE_PAYMENT_PROVIDER`'s own probe lives in `./module` (the resolver
+ * imports this file, so it cannot be probed from here).
+ */
+export const paymentsConfig = defineConfig({
+    name: 'payments',
+    shape: {
+        NODE_PAYMENT_PROVIDER: text({
+            default: 'fake',
+            lower: true,
+            describe:
+                'The payment provider implementation: `fake` or whatever a deployment registers.'
+        }),
+        NODE_PAYMENT_WEBHOOK_SECRET: secret({
+            minLength: 16,
+            placeholder: 'your-payment-webhook-secret-here',
+            productionOnly: true,
+            describe: 'The secret the provider signs webhook deliveries with.'
+        }),
+        NODE_STRIPE_SECRET_KEY: text({
+            sensitive: true,
+            describe: 'Stripe secret key. A test-mode key refuses boot outside development/test.'
+        }),
+        NODE_PAYMENT_EFFECT_RETRY_MINUTES: int({
+            default: 1,
+            min: 0,
+            describe: 'Age a `pendingEffects` marker must reach before the sweep acts on it.'
+        }),
+        NODE_PAYMENT_ABANDONED_RETENTION_DAYS: int({
+            default: 30,
+            min: 1,
+            describe: 'Days an abandoned payment attempt is kept before the sweep deletes it.'
+        })
+    },
+    check: (config, environment) => [
+        ...validateBankTransferConfig(),
+        ...validateStripeSecretKey(config.NODE_STRIPE_SECRET_KEY, environment)
+    ]
+});
+
+/**
  * How old a `pendingEffects` marker must be before `effects.ts#retryPendingEffects` will act on
  * it. A settlement still between setting the marker and clearing it must never be raced by the
  * sweep that exists only for the crash case — this is that buffer. Read per call, like
@@ -75,7 +120,21 @@ export const validateBankTransferConfig = (): string[] => {
  * @returns the grace window in minutes
  */
 export const paymentEffectRetryMinutes = (): number =>
-    environmentNumber('NODE_PAYMENT_EFFECT_RETRY_MINUTES', 1, 0);
+    paymentsConfig().NODE_PAYMENT_EFFECT_RETRY_MINUTES;
+
+/**
+ * Days an abandoned payment attempt is kept before `reapAbandonedPayments` deletes it.
+ * @returns the retention, in days
+ */
+export const abandonedPaymentRetentionDays = (): number =>
+    paymentsConfig().NODE_PAYMENT_ABANDONED_RETENTION_DAYS;
+
+/**
+ * The provider's signing secret, `undefined` when unset.
+ * @returns the configured webhook secret
+ */
+export const paymentWebhookSecret = (): string | undefined =>
+    paymentsConfig().NODE_PAYMENT_WEBHOOK_SECRET;
 
 /**
  * Refuse to boot on a deployment (any `NODE_ENV` but development/test) with a Stripe TEST-mode key. `sk_test_` is Stripe's own prefix
@@ -84,10 +143,13 @@ export const paymentEffectRetryMinutes = (): number =>
  * paid, and no money ever actually moving. Checked outside development/test only; a test key is
  * exactly right there, `NODE_STRIPE_SECRET_KEY` unset included — there is no shipped
  * Stripe implementation yet, so this stays dormant until a deployment sets one.
+ * @param key - the configured secret key, if any
+ * @param environment - judged for development/test
  * @returns `['NODE_STRIPE_SECRET_KEY']` when a deployment boot is configured with a test-mode
  *   Stripe key; empty otherwise
  */
-export const validateStripeSecretKey = (): string[] => {
-    const key = process.env.NODE_STRIPE_SECRET_KEY;
-    return !isRelaxedEnvironment() && key?.startsWith('sk_test_') ? ['NODE_STRIPE_SECRET_KEY'] : [];
-};
+export const validateStripeSecretKey = (
+    key: string | undefined,
+    environment: Readonly<Record<string, string | undefined>>
+): string[] =>
+    !isRelaxedIn(environment) && key?.startsWith('sk_test_') ? ['NODE_STRIPE_SECRET_KEY'] : [];

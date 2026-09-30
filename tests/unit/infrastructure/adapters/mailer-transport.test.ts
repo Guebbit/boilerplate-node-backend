@@ -201,7 +201,9 @@ describe('resolveMailTransport', () => {
     it('refuses an unrecognised value instead of silently falling back to SMTP', () => {
         process.env.NODE_MAIL_TRANSPORT = 'carrier-pigeon';
 
-        expect(() => resolveMailTransport()).toThrow(/Unknown NODE_MAIL_TRANSPORT/);
+        expect(() => resolveMailTransport()).toThrow(
+            /NODE_MAIL_TRANSPORT: expected one of smtp, log, outbox/
+        );
     });
 
     it.each(['production', 'staging', undefined])(

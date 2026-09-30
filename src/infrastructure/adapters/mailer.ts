@@ -23,11 +23,8 @@ import {
 import { ATTR_MESSAGING_SYSTEM } from '@opentelemetry/semantic-conventions/incubating';
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
-import {
-    environmentNumber,
-    environmentChoice,
-    isRelaxedEnvironment
-} from '@infrastructure/runtime/environment';
+import { mailConfig } from '@infrastructure/adapters/config';
+import { isRelaxedEnvironment, isTestEnvironment } from '@infrastructure/runtime/config';
 import { recordDemoEmail } from '@infrastructure/adapters/demo-outbox';
 import { resolveSpooled, discardSpooled } from '@infrastructure/adapters/mail-spool';
 import { withSpan } from '@infrastructure/observability/tracer';
@@ -58,9 +55,6 @@ export {
  */
 export type MailTransport = 'smtp' | 'log' | 'outbox';
 
-/** {@link MailTransport}, as a list — `environmentChoice`'s own `allowed` set. */
-const MAIL_TRANSPORTS: readonly MailTransport[] = ['smtp', 'log', 'outbox'];
-
 /**
  * Which transport this process uses, resolved per send.
  *
@@ -79,9 +73,9 @@ const MAIL_TRANSPORTS: readonly MailTransport[] = ['smtp', 'log', 'outbox'];
  *   `outbox` outside development/test
  */
 export const resolveMailTransport = (): MailTransport => {
-    if (process.env.NODE_ENV === 'test') return 'log';
+    if (isTestEnvironment()) return 'log';
 
-    const named = environmentChoice('NODE_MAIL_TRANSPORT', MAIL_TRANSPORTS, 'smtp');
+    const named = mailConfig().NODE_MAIL_TRANSPORT;
     // The outbox sends nothing and keeps every message, reset tokens included, in memory for
     // good. In a deployment that is silent non-delivery, so the boot gate refuses it.
     if (named === 'outbox' && !isRelaxedEnvironment())
@@ -89,65 +83,6 @@ export const resolveMailTransport = (): MailTransport => {
             'NODE_MAIL_TRANSPORT=outbox sends no mail and is for the demo profile only; use smtp outside development/test.'
         );
     return named;
-};
-
-/**
- * The mailer's companions to `NODE_SMTP_HOST` — the ones a transport cannot authenticate or
- * address without.
- */
-const SMTP_COMPANIONS = ['NODE_SMTP_USER', 'NODE_SMTP_PASS', 'NODE_SMTP_SENDER'] as const;
-
-/**
- * SMTP is all-or-nothing rather than required: `account/two-factor/methods/email.ts` gates the
- * email second factor on `NODE_SMTP_HOST` being set at all, so leaving mail unconfigured is a
- * choice. A host set *without* its credentials is not — it builds a transport that only fails
- * when something first tries to send, which is a real user asking to reset a password. Called
- * from the boot gate (`src/app/required-config.ts`), not the kernel — the kernel does not know
- * this module owns SMTP.
- *
- * @returns the companion variables left unset alongside a configured host
- */
-export const missingSmtpCompanions = (): string[] =>
-    process.env.NODE_SMTP_HOST ? SMTP_COMPANIONS.filter((key) => !process.env[key]) : [];
-
-/**
- * SMTP hosts a live e2e run may dial: this machine, or the compose `mailpit` service.
- * Anything else is a real mail server.
- */
-const E2E_LOCAL_SMTP_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '::1', 'mailpit'];
-
-/**
- * Boot check: a run started through `npm run host -- e2e:serve` (which sets `NODE_E2E_RUN=1`)
- * must not point `smtp` at a real server. A live suite fires signup, reset and order mail at
- * invented recipients, and `.env` may hold real credentials.
- *
- * `log` and `outbox` open no socket, so they always pass.
- *
- * See: docs/tools/email-and-rendering.md#the-e2e-guard
- *
- * @returns one problem line when the guard refuses, otherwise `[]`
- */
-export const nonLocalE2eSmtpHost = (): string[] => {
-    if (process.env.NODE_E2E_RUN !== '1') return [];
-    if (environmentChoice('NODE_MAIL_TRANSPORT', MAIL_TRANSPORTS, 'smtp') !== 'smtp') return [];
-
-    const host = process.env.NODE_SMTP_HOST ?? '';
-    return E2E_LOCAL_SMTP_HOSTS.includes(host)
-        ? []
-        : [
-              `NODE_SMTP_HOST=${host || '(unset)'} is not a local mail sink; an e2e run allows only ${E2E_LOCAL_SMTP_HOSTS.join(', ')} (or NODE_MAIL_TRANSPORT=log)`
-          ];
-};
-
-/**
- * Boot check: outside `development` and `test`, `NODE_MAIL_TRANSPORT` must be named. Unset means
- * `smtp`, and a deployment that never chose it would either mail for real by accident or fail on
- * the first reset link.
- *
- * @returns `['NODE_MAIL_TRANSPORT']` when it is unset in such an environment, otherwise `[]`
- */
-export const unsetMailTransportOutsideDevelopment = (): string[] => {
-    return isRelaxedEnvironment() || process.env.NODE_MAIL_TRANSPORT ? [] : ['NODE_MAIL_TRANSPORT'];
 };
 
 /** The memoised transport. See {@link getTransporter}. */
@@ -176,7 +111,8 @@ const getTransporter = (): Transporter => {
     if (transport) return transport;
 
     /** The port the SMTP client dials, and the one fact `secure` is derived from. */
-    const port = environmentNumber('NODE_SMTP_PORT', 587, 1);
+    const smtp = mailConfig();
+    const port = smtp.NODE_SMTP_PORT;
 
     transport =
         // Two calls rather than one with a ternary argument: `createTransport` is overloaded per
@@ -186,9 +122,9 @@ const getTransporter = (): Transporter => {
             : createTransport({
                   // Hostname this client announces in the SMTP EHLO greeting. Some strict servers
                   // check it.
-                  name: process.env.NODE_SMTP_NAME ?? '',
+                  name: smtp.NODE_SMTP_NAME ?? '',
                   // SMTP server to connect to.
-                  host: process.env.NODE_SMTP_HOST ?? '',
+                  host: smtp.NODE_SMTP_HOST ?? '',
                   // 587 = submission with STARTTLS (the modern default); 465 = implicit TLS;
                   // 25 = relay.
                   port,
@@ -207,8 +143,8 @@ const getTransporter = (): Transporter => {
                   // surfaces at send time, not at boot, because email is not a hard startup
                   // dependency.
                   auth: {
-                      user: process.env.NODE_SMTP_USER ?? '',
-                      pass: process.env.NODE_SMTP_PASS ?? ''
+                      user: smtp.NODE_SMTP_USER ?? '',
+                      pass: smtp.NODE_SMTP_PASS ?? ''
                   }
               });
 
@@ -323,7 +259,7 @@ export const sendTemplatedEmail = (
                 .then((html) =>
                     send({
                         // Default sender; spread below lets a caller override it.
-                        from: process.env.NODE_SMTP_SENDER,
+                        from: mailConfig().NODE_SMTP_SENDER,
                         // The rendered template becomes the HTML body.
                         html,
                         // Spread last, so caller-supplied fields (to/subject, and even

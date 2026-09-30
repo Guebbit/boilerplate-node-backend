@@ -87,6 +87,11 @@ const STEPS: readonly Step[] = [
             "docs/tools/security.md's rate-limit budget table, read off every module's own manifest"
     },
     {
+        script: 'docs:config',
+        because:
+            "docs/tools/configuration.md's variable reference, read off every config slice the boot gate validates"
+    },
+    {
         script: 'docs:audit-actions',
         because:
             "docs/tools/winston.md's audit action table, read off every module's audit.ts and its call sites' target types"

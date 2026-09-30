@@ -1,15 +1,15 @@
 /**
  * The catalogue's own boot gate: the two VAT rates, declared on this module's manifest and
- * range-checked by its `customCheck`.
+ * range-checked by its slice check.
  *
- * Driven through `assertRequiredConfig` rather than by calling `invalidVatRateConfig` directly —
+ * Driven through `assertModuleConfig` rather than by calling `invalidVatRateConfig` directly —
  * the manifest wiring is half of what makes the check run at all, and a test that skipped it
- * would still pass with `customCheck` unset.
+ * would still pass with slice check unset.
  *
  * Every case sets `NODE_ENV` away from `test` first: the gate short-circuits under the test
  * environment, so a suite that left it alone would assert nothing.
  */
-import { assertRequiredConfig } from '@kernel/required-config';
+import { assertModuleConfig } from '@kernel/module-config';
 import { vatRateDefault, vatRateReduced } from '../../config';
 import productsModule from '../../module';
 import { withoutEnvironmentInThisFile } from '@tests/environment';
@@ -33,7 +33,7 @@ describe('the VAT rate boot gate', () => {
         delete process.env.NODE_VAT_RATE_DEFAULT;
         delete process.env.NODE_VAT_RATE_REDUCED;
 
-        expect(() => assertRequiredConfig([productsModule])).toThrow(
+        expect(() => assertModuleConfig([productsModule], [])).toThrow(
             /NODE_VAT_RATE_DEFAULT.*NODE_VAT_RATE_REDUCED|NODE_VAT_RATE_REDUCED.*NODE_VAT_RATE_DEFAULT/
         );
     });
@@ -51,7 +51,7 @@ describe('the VAT rate boot gate', () => {
             configure();
             process.env.NODE_VAT_RATE_DEFAULT = rate;
 
-            expect(() => assertRequiredConfig([productsModule])).toThrow(/NODE_VAT_RATE_DEFAULT/);
+            expect(() => assertModuleConfig([productsModule], [])).toThrow(/NODE_VAT_RATE_DEFAULT/);
         }
     );
 
@@ -59,13 +59,13 @@ describe('the VAT rate boot gate', () => {
         configure();
         process.env.NODE_VAT_RATE_DEFAULT = '0';
 
-        expect(() => assertRequiredConfig([productsModule])).not.toThrow();
+        expect(() => assertModuleConfig([productsModule], [])).not.toThrow();
     });
 
     it('accepts a fully configured catalogue', () => {
         configure();
 
-        expect(() => assertRequiredConfig([productsModule])).not.toThrow();
+        expect(() => assertModuleConfig([productsModule], [])).not.toThrow();
     });
 });
 

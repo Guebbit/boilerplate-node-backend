@@ -66,7 +66,7 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_PII_ENCRYPTION_KEY: 'demo-pii-encryption-key',
     NODE_TOTP_ENCRYPTION_KEY: 'demo-totp-encryption-key',
     NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'demo-webhook-secret-encryption-key',
-    // `orders`' and `products`' own boot-time requirements (SK-08) — `assertRequiredConfig` no
+    // `orders`' and `products`' own boot-time requirements (SK-08) — `assertModuleConfig` no
     // longer exempts this profile, so it satisfies the gate the ordinary way, with the same
     // values `.env-example` ships for a plain developer checkout.
     NODE_SHOP_COUNTRY: 'IT',

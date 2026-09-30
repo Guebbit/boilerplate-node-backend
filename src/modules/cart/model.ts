@@ -11,7 +11,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { cartConfig } from './config';
 
 /**
  * A stored cart line.
@@ -131,7 +131,7 @@ cartSchema.index({ 'items.productId': 1 });
  * import time since a TTL index is created once, at startup, from whatever value is configured
  * then (same caveat as `audit-logs/model.ts`'s).
  */
-const cartRetentionDays = environmentNumber('NODE_CART_RETENTION_DAYS', 365, 1);
+const cartRetentionDays = cartConfig().NODE_CART_RETENTION_DAYS;
 
 /*
  * TTL index: an abandoned cart is convenience state with no legal basis for

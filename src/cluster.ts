@@ -14,56 +14,30 @@ startTracing();
 import os from 'node:os';
 import cluster from 'node:cluster';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
+import { clusterConfig } from '@infrastructure/runtime/config';
 import { crashVerdict, workerTarget } from '@infrastructure/runtime/cluster-policy';
 
 /**
  * Cluster management
  * https://www.digitalocean.com/community/tutorials/how-to-scale-node-js-applications-with-clustering
  */
-const CLUSTER_ENABLED = environmentFlag('NODE_ENABLE_CLUSTERING', false);
+const CLUSTER_ENABLED = clusterConfig().NODE_ENABLE_CLUSTERING;
 
-/** Fallback for `NODE_CLUSTER_CRASH_WINDOW_MS`: window a worker's crashes are counted over. */
-const DEFAULT_CRASH_WINDOW_MS = 60_000;
-
-/** Fallback for `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS`: delay before the first respawn after a crash. */
-const DEFAULT_CRASH_BACKOFF_BASE_MS = 500;
-
-/** Fallback for `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`: ceiling the respawn backoff doubles up to. */
-const DEFAULT_CRASH_BACKOFF_MAX_MS = 30_000;
-
-/** Fallback for `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`: grace period before the primary kills a worker. */
-const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
-
-/** Fallback for `NODE_CLUSTER_CRASH_LIMIT`: crashes in one window before the primary gives up. */
-const DEFAULT_CRASH_LIMIT = 10;
-
-if (cluster.isPrimary && CLUSTER_ENABLED) {
-    const workers = workerTarget(
-        environmentNumber('NODE_CLUSTER_WORKERS', 0),
-        os.availableParallelism()
-    );
-    const crashWindowMs = environmentNumber(
-        'NODE_CLUSTER_CRASH_WINDOW_MS',
-        DEFAULT_CRASH_WINDOW_MS,
-        1
-    );
-    const crashBackoffBaseMs = environmentNumber(
-        'NODE_CLUSTER_CRASH_BACKOFF_BASE_MS',
-        DEFAULT_CRASH_BACKOFF_BASE_MS,
-        1
-    );
-    const crashBackoffMaxMs = environmentNumber(
-        'NODE_CLUSTER_CRASH_BACKOFF_MAX_MS',
-        DEFAULT_CRASH_BACKOFF_MAX_MS,
-        1
-    );
-    const shutdownTimeoutMs = environmentNumber(
-        'NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS',
-        DEFAULT_SHUTDOWN_TIMEOUT_MS,
-        1
-    );
-    const crashLimit = environmentNumber('NODE_CLUSTER_CRASH_LIMIT', DEFAULT_CRASH_LIMIT, 1);
+/**
+ * The primary's whole job: fork workers, respawn the ones that crash, and shut them down together.
+ * Only reached once the environment has been judged, so a bad variable is one clean error here
+ * instead of every worker crash-looping on it.
+ */
+const supervise = (): void => {
+    const {
+        NODE_CLUSTER_WORKERS: configuredWorkers,
+        NODE_CLUSTER_CRASH_WINDOW_MS: crashWindowMs,
+        NODE_CLUSTER_CRASH_BACKOFF_BASE_MS: crashBackoffBaseMs,
+        NODE_CLUSTER_CRASH_BACKOFF_MAX_MS: crashBackoffMaxMs,
+        NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS: shutdownTimeoutMs,
+        NODE_CLUSTER_CRASH_LIMIT: crashLimit
+    } = clusterConfig();
+    const workers = workerTarget(configuredWorkers, os.availableParallelism());
 
     let isShuttingDown = false;
     const crashHistory: number[] = [];
@@ -187,6 +161,20 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
 
     process.on('SIGTERM', () => startPrimaryShutdown('SIGTERM'));
     process.on('SIGINT', () => startPrimaryShutdown('SIGINT'));
+};
+
+if (cluster.isPrimary && CLUSTER_ENABLED) {
+    // Lazy: the primary loads every module's config only to judge it, once, before forking.
+    void import('@app/config')
+        .then(({ assertProcessConfig }) => assertProcessConfig())
+        .then(supervise)
+        .catch((error: unknown) => {
+            logger.error({
+                message: 'Refusing to start: invalid configuration.',
+                error: error instanceof Error ? error.message : String(error)
+            });
+            process.exitCode = 1;
+        });
 } else {
     /*
      * Workers execute `./serve` — `createApp()` (SK-D2) built, started, and wired to this

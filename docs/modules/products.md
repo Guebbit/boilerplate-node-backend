@@ -121,11 +121,9 @@ money already received is not the race this guard exists to catch.
 | `NODE_VAT_RATE_DEFAULT` | `0.22`  | The rate charged on a product with no `taxClass` — every product's fallback. Range-checked at boot: outside `[0, 1)` refuses to start |
 | `NODE_VAT_RATE_REDUCED` | `0.1`   | The rate charged on a product whose `taxClass` is `reduced`. Same boot-time range check as the default                                |
 
-Both are read fresh per call (`config.ts`), so a corrected rate needs no restart. The boot check
-(`invalidVatRateConfig`, this module's `customCheck`) parses a set value through the same
-whole-string-decimal grammar the reader itself uses — `@infrastructure/runtime/environment`'s
-`parseEnvironmentDecimal` — so a value the check accepts is never one the reader would then
-silently fall back on. `resolveTaxRate` (`./tax`) is the one place either rate is resolved for a
+Both are read per call from one slice (`config.ts`), which parses a set value through a
+whole-string-decimal grammar and refuses anything outside `[0, 1)` — at boot, and again on every
+read — so a value the gate accepts is never one the reader would then silently fall back on. `resolveTaxRate` (`./tax`) is the one place either rate is resolved for a
 product; `orders` freezes the result onto an order line at checkout and never reads a rate itself.
 
 The shop's one currency (`NODE_DEFAULT_CURRENCY`, documented under

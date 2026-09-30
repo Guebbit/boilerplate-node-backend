@@ -12,7 +12,7 @@
 import i18next from 'i18next';
 import { logger } from '@infrastructure/adapters/logger';
 import { listSupportedLocales, readLocaleDictionary } from './catalog';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { localeConfig } from '@infrastructure/i18n/config';
 
 /**
  * Supplies the current overrides, keyed by locale, already nested.
@@ -118,8 +118,7 @@ export const refreshLocaleOverrides = (): Promise<void> => {
 };
 
 /** How long a worker may serve copy edited by another worker. */
-export const getOverrideRefreshMs = (): number =>
-    environmentNumber('NODE_LOCALE_OVERRIDE_REFRESH_MS', 60_000, 1);
+export const getOverrideRefreshMs = (): number => localeConfig().NODE_LOCALE_OVERRIDE_REFRESH_MS;
 
 /** The interval handle from {@link startLocaleOverrideRefresh}, or `undefined` when stopped. */
 let refreshTimer: NodeJS.Timeout | undefined;

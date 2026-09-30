@@ -171,6 +171,7 @@ export default withMermaid(
                             { text: 'Demo profile', link: '/tools/demo-profile' },
                             { text: 'Module scaffolder', link: '/tools/module-scaffolder' },
                             { text: 'The Flow Runner', link: '/tools/flow-runner' },
+                            { text: 'Configuration', link: '/tools/configuration' },
                             { text: 'Security', link: '/tools/security' },
                             {
                                 text: 'Deployment Hardening',

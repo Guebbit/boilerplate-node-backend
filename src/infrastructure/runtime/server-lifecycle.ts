@@ -17,23 +17,17 @@ import { stopRateLimitStore } from '@infrastructure/http/middlewares/rate-limit-
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { stopLocaleOverrideRefresh } from '@infrastructure/i18n';
 import { settleRenders } from '@infrastructure/adapters/pdf';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { isTestEnvironment, serverConfig } from '@infrastructure/runtime/config';
 import { markServerDraining } from '@infrastructure/runtime/readiness';
 
-/** Upper bound on graceful shutdown before we stop being polite and kill the process. */
-const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
-
 /**
- * Read shutdown timeout from env, falling back to the default 15 s.
+ * The graceful shutdown deadline (`NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`, default 15 s), after which we stop being polite and kill the process.
  *
  * Keep this below the orchestrator's own grace period (Kubernetes
  * `terminationGracePeriodSeconds`, default 30 s; Docker `stop_grace_period`, default 10 s),
  * otherwise the platform SIGKILLs the container mid-drain and the timeout never fires.
  */
-export const getShutdownTimeoutMs = () =>
-    // `min: 1` — zero or negative would fire the forced-exit timer immediately, which is not a
-    // grace period at all, so garbage and non-positive input both fall back to the default.
-    environmentNumber('NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS', DEFAULT_SHUTDOWN_TIMEOUT_MS, 1);
+export const getShutdownTimeoutMs = () => serverConfig().NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS;
 
 /**
  * Bind `app` and resolve once it is actually listening; reject when the bind fails.
@@ -157,7 +151,7 @@ export const shutdownInfra = (server?: Server) =>
 export const registerSignalHandlers = (stopFunction: () => Promise<void>) => {
     // Jest runs many suites in one process and sends signals of its own; installing
     // `process.exit()` handlers there would kill the test runner mid-run.
-    if (process.env.NODE_ENV === 'test') return;
+    if (isTestEnvironment()) return;
 
     const onProcessSignal = (signal: NodeJS.Signals) => {
         // Stryker disable next-line all

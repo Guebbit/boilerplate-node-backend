@@ -31,7 +31,7 @@ import {
     clearRateLimitCounters,
     rateLimitRedisUrl
 } from '@infrastructure/http/middlewares/rate-limit-store';
-import { isRelaxedEnvironment } from '@infrastructure/runtime/environment';
+import { isRelaxedEnvironment, nodeEnvironment } from '@infrastructure/runtime/config';
 import { runScript } from '../scripts/run-script';
 import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/index';
 import { seedCredentials } from '@scenarios/accounts';
@@ -114,7 +114,7 @@ async function seed() {
      */
     if (!isRelaxedEnvironment()) {
         logger.warn(
-            `scenario:apply refused to run: NODE_ENV is ${process.env.NODE_ENV || 'unset'}, not development or test.`
+            `scenario:apply refused to run: NODE_ENV is ${nodeEnvironment() || 'unset'}, not development or test.`
         );
         return;
     }

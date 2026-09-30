@@ -77,10 +77,11 @@ describe('normalizePagination', () => {
         expect(normalizePagination({ pageSize: 50 }).pageSize).toBe(50);
     });
 
-    // A typo in deployment config must not silently disable paging.
-    it('ignores a non-numeric env page size', () => {
+    // A typo in deployment config must not silently disable paging, nor be quietly replaced: the
+    // boot gate refuses it, and a read that slips past the gate throws the same error.
+    it('refuses a non-numeric env page size', () => {
         process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE = 'not-a-number';
 
-        expect(normalizePagination().pageSize).toBe(10);
+        expect(() => normalizePagination()).toThrow(/NODE_SETTINGS_PAGINATION_PAGE_SIZE/);
     });
 });

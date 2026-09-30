@@ -1,11 +1,23 @@
 /**
  * @module
- * Who pays to send the goods back. Read per call, like every getter in this repo, so a deployment
- * corrects it without a restart.
+ * Who pays to send the goods back. Read per call, like every getter in this repo, so a test can vary
+ * it per case.
  */
 
-import { environmentChoice } from '@infrastructure/runtime/environment';
+import { defineConfig } from '@infrastructure/config/define';
+import { choice } from '@infrastructure/config/fields';
 import type { ReturnPostagePayer } from './model';
+
+/** Who pays return postage. */
+export const returnsConfig = defineConfig({
+    name: 'returns',
+    shape: {
+        NODE_RETURN_POSTAGE_PAYER: choice(['consumer', 'shop'], {
+            default: 'consumer',
+            describe: 'Who bears the direct cost of returning goods. Drives the withdrawal wording.'
+        })
+    }
+});
 
 /**
  * Who bears the direct cost of returning the goods. The consumer by default — Consumer Rights
@@ -15,4 +27,4 @@ import type { ReturnPostagePayer } from './model';
  * @returns `consumer` (default) or `shop`
  */
 export const returnPostagePayer = (): ReturnPostagePayer =>
-    environmentChoice('NODE_RETURN_POSTAGE_PAYER', ['consumer', 'shop'], 'consumer');
+    returnsConfig().NODE_RETURN_POSTAGE_PAYER;

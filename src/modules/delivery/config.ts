@@ -3,8 +3,26 @@
  * The shop's return address — where goods are sent back to. `delivery` owns it because it already
  * owns everything carrier-facing (methods, rates, shipments): all of that stays in one module, and
  * `returns` reads the address from here rather than keeping its own copy. Read per call, like every
- * config getter in this repo, so a deployment corrects it without a restart.
+ * config getter in this repo, so a test can vary it per case.
  */
+
+import { defineConfig } from '@infrastructure/config/define';
+import { text } from '@infrastructure/config/fields';
+
+/** The return address's variables. Partial config is treated as none — see {@link returnAddress}. */
+export const deliveryConfig = defineConfig({
+    name: 'delivery',
+    shape: {
+        NODE_RETURN_ADDRESS_NAME: text({ describe: 'Who the return parcel is addressed to.' }),
+        NODE_RETURN_ADDRESS_STREET: text({ describe: 'Return address street.' }),
+        NODE_RETURN_ADDRESS_CITY: text({ describe: 'Return address city.' }),
+        NODE_RETURN_ADDRESS_ZIP: text({ describe: 'Return address postal code.' }),
+        NODE_RETURN_ADDRESS_COUNTRY: text({
+            upper: true,
+            describe: 'Return address country, ISO-3166 alpha-2.'
+        })
+    }
+});
 
 /** Where returned goods go. */
 export interface ReturnAddress {
@@ -24,12 +42,14 @@ export interface ReturnAddress {
  * @returns the address, when street, city, zip and country are all set
  */
 export const returnAddress = (): ReturnAddress | undefined => {
-    const street = process.env.NODE_RETURN_ADDRESS_STREET?.trim();
-    const city = process.env.NODE_RETURN_ADDRESS_CITY?.trim();
-    const zip = process.env.NODE_RETURN_ADDRESS_ZIP?.trim();
-    const country = process.env.NODE_RETURN_ADDRESS_COUNTRY?.trim().toUpperCase();
+    const {
+        NODE_RETURN_ADDRESS_STREET: street,
+        NODE_RETURN_ADDRESS_CITY: city,
+        NODE_RETURN_ADDRESS_ZIP: zip,
+        NODE_RETURN_ADDRESS_COUNTRY: country,
+        NODE_RETURN_ADDRESS_NAME: name
+    } = deliveryConfig();
     if (!street || !city || !zip || !country) return undefined;
 
-    const name = process.env.NODE_RETURN_ADDRESS_NAME?.trim();
     return { ...(name ? { name } : {}), street, city, zip, country };
 };

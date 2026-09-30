@@ -249,7 +249,7 @@ flowchart LR
 
 | Variable                      | Default             | Meaning                                                                                                                                                                                          |
 | ----------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NODE_SHOP_COUNTRY`           | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it                          |
+| `NODE_SHOP_COUNTRY`           | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; its slice (`config.ts`) refuses to start without it                                  |
 | `NODE_SHIP_TO_COUNTRIES`      | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
 | `NODE_WITHDRAWAL_PERIOD_DAYS` | `14`                | Days a consumer has to withdraw. 14 is the legal minimum, so a smaller value is refused at read; a shop may offer longer                                                                         |
 

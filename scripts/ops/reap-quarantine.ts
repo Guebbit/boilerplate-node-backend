@@ -22,14 +22,13 @@ import 'dotenv/config';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { reapDirectory } from '@infrastructure/adapters/filesystem';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { imageConfig } from '@infrastructure/adapters/config';
 import { quarantineRoot } from '@infrastructure/adapters/image-store';
 import { runScript } from '../run-script';
 
 /** How long a quarantine file is left alone before it counts as abandoned. 24 hours by default —
  * long enough that a broker outage lasting a normal maintenance window does not lose anything. */
-const retentionMs = (): number =>
-    environmentNumber('NODE_QUARANTINE_RETENTION_HOURS', 24, 1) * 60 * 60 * 1000;
+const retentionMs = (): number => imageConfig().NODE_QUARANTINE_RETENTION_HOURS * 60 * 60 * 1000;
 
 /**
  * Sweep first, connect after: the sweep itself never touches Mongo, only `runScript`'s outcome

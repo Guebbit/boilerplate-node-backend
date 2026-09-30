@@ -1,15 +1,24 @@
 /**
  * @module
  * The `/.well-known/security.txt` body (RFC 9116) and the boot warning that guards its `Expires`
- * field. Pure functions over an environment record, so the route and the tests share one source.
+ * field. Pure functions over parsed settings, so the route and the tests share one source.
  *
  * Off by default: a fork must never publish the boilerplate author's contact.
  *
  * See: docs/tools/security.md#reporting-a-vulnerability
  */
 
-/** The subset of `process.env` these functions read. */
-export type SecurityTxtEnvironment = Readonly<Record<string, string | undefined>>;
+/** The variables these functions read, already parsed (`app/config.ts#securityTxtSettings`). */
+export interface SecurityTxtSettings {
+    /** Where a researcher reports to. */
+    NODE_SECURITY_CONTACT?: string | undefined;
+    /** When the file expires, an ISO date. */
+    NODE_SECURITY_EXPIRES?: string | undefined;
+    /** A link to the disclosure policy. */
+    NODE_SECURITY_POLICY_URL?: string | undefined;
+    /** This API's own origin, for the `Canonical` line. */
+    NODE_URL?: string | undefined;
+}
 
 /** How close to `Expires` the boot warning starts, in milliseconds (30 days). */
 const RENEWAL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -32,10 +41,10 @@ const parseExpires = (raw: string | undefined): Date | undefined => {
  * `Contact` and `Expires` are the only fields RFC 9116 requires, so the file is published only
  * when both are usable; otherwise the route answers 404 and nothing is published.
  *
- * @param environment - the variables to read, normally `process.env`
+ * @param environment - the parsed settings
  * @returns the text, or `undefined` when the deployment has not opted in
  */
-export const buildSecurityTxt = (environment: SecurityTxtEnvironment): string | undefined => {
+export const buildSecurityTxt = (environment: SecurityTxtSettings): string | undefined => {
     const contact = environment.NODE_SECURITY_CONTACT?.trim();
     const expires = parseExpires(environment.NODE_SECURITY_EXPIRES);
     if (!contact || !expires) return undefined;
@@ -63,12 +72,12 @@ export const buildSecurityTxt = (environment: SecurityTxtEnvironment): string | 
 /**
  * What is wrong with an opted-in deployment's `Expires`, if anything.
  *
- * @param environment - the variables to read, normally `process.env`
+ * @param environment - the parsed settings
  * @param now - the clock, injected so a test does not wait for a date
  * @returns a warning sentence, or `undefined` when unconfigured or healthy
  */
 export const securityTxtWarning = (
-    environment: SecurityTxtEnvironment,
+    environment: SecurityTxtSettings,
     now: Date = new Date()
 ): string | undefined => {
     if (!environment.NODE_SECURITY_CONTACT?.trim()) return undefined;

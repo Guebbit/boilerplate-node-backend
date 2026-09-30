@@ -9,6 +9,7 @@ import { Router } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { buildSecurityTxt } from './security-txt';
 import { isServerReady } from '@infrastructure/runtime/readiness';
+import { securityTxtSettings } from './config';
 
 /** This file's router, mounted at `/` by `app/routes.ts`. */
 export const router = Router();
@@ -46,7 +47,7 @@ router.get('/readyz', (_request, response) => {
  * 404 until the deployment sets `NODE_SECURITY_CONTACT` and `NODE_SECURITY_EXPIRES`.
  */
 router.get('/.well-known/security.txt', (_request, response, next) => {
-    const body = buildSecurityTxt(process.env);
+    const body = buildSecurityTxt(securityTxtSettings());
     // Falling through reaches the ordinary 404 envelope mounted after this router.
     if (body === undefined) {
         next();

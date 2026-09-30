@@ -55,7 +55,7 @@ every one of them wants to email a recipient the seeder invented.
 
 ### Boot rules
 
-Two refusals, both in `src/app/required-config.ts`:
+Two refusals, both checks on `mailConfig` (`src/infrastructure/adapters/config.ts`):
 
 - **Outside `development` and `test`, `NODE_MAIL_TRANSPORT` must be set.** Unset means `smtp`;
   a deployment that never chose it would mail for real by accident, or fail at the first reset link.

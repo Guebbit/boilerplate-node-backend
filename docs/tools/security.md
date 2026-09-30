@@ -504,23 +504,23 @@ empty pattern. `$regex: ''` matches every document, so it would silently turn a 
 
 `NODE_ENV` has two settings that matter: **development or test** (a developer's machine, CI) and
 **everything else**. Everything else is strict, an unset value and `staging` included. One helper
-says which, `isRelaxedEnvironment()` in `infrastructure/runtime/environment.ts`, and every switch
+says which, `isRelaxedEnvironment()` in `infrastructure/runtime/config.ts`, and every switch
 below reads it. The failure it closes: a safety switch that turned on only for the exact word
 `production` stayed off for a server that forgot to set it.
 
-| Switch                                                    | Strict (a deployment)        | Relaxed (development/test)        |
-| --------------------------------------------------------- | ---------------------------- | --------------------------------- |
-| Session and OAuth cookies                                 | `Secure`                     | not `Secure`, so local HTTP works |
-| `scenario:apply` (the seeder)                             | refuses to run               | runs                              |
-| `productionOnly` required config, `forbiddenInProduction` | checked                      | skipped                           |
-| The demo profile (`/__test` routes)                       | refused, and logged          | mounted when asked                |
-| Stripe `sk_test_` key                                     | refused at boot              | accepted                          |
-| `NODE_MAIL_TRANSPORT=outbox`                              | refused                      | accepted                          |
-| Webhook demo sink exemption                               | none                         | the sink host is exempt           |
-| Stack traces in logs                                      | left out                     | kept                              |
-| Log level, console format                                 | `info`, JSON                 | `debug`, pretty on a terminal     |
-| Cache `max-age`, `autoIndex`                              | as declared, `autoIndex` off | clamped, Mongoose's default       |
-| Trust-proxy hops of `0`                                   | a boot warning               | silent                            |
+| Switch                                                           | Strict (a deployment)        | Relaxed (development/test)        |
+| ---------------------------------------------------------------- | ---------------------------- | --------------------------------- |
+| Session and OAuth cookies                                        | `Secure`                     | not `Secure`, so local HTTP works |
+| `scenario:apply` (the seeder)                                    | refuses to run               | runs                              |
+| Presence rules marked production-only, `forbiddenOutsideRelaxed` | checked                      | skipped                           |
+| The demo profile (`/__test` routes)                              | refused, and logged          | mounted when asked                |
+| Stripe `sk_test_` key                                            | refused at boot              | accepted                          |
+| `NODE_MAIL_TRANSPORT=outbox`                                     | refused                      | accepted                          |
+| Webhook demo sink exemption                                      | none                         | the sink host is exempt           |
+| Stack traces in logs                                             | left out                     | kept                              |
+| Log level, console format                                        | `info`, JSON                 | `debug`, pretty on a terminal     |
+| Cache `max-age`, `autoIndex`                                     | as declared, `autoIndex` off | clamped, Mongoose's default       |
+| Trust-proxy hops of `0`                                          | a boot warning               | silent                            |
 
 A staging server therefore cannot seed demo data or use a Stripe test key. That is intended: a
 switch that must differ gets its own explicit variable, never a relaxed `NODE_ENV`. Standards:

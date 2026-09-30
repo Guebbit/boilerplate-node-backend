@@ -39,6 +39,8 @@ import { feedbackAuditActions } from './audit';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { toFeedbackStatus, initialFeedbackStatus, shouldStampRespondedAt } from './domain';
+import { feedbackConfig } from './config';
+import { mailConfig } from '@infrastructure/adapters/config';
 
 /**
  * Where the operator's notification goes: the dedicated contact mailbox, then the generic SMTP
@@ -48,7 +50,7 @@ import { toFeedbackStatus, initialFeedbackStatus, shouldStampRespondedAt } from 
  * `inventory/config.ts` sets for this repo. A deployment changes it with a restart.
  */
 const notifyMailbox = (): string =>
-    process.env.NODE_CONTACT_NOTIFY_EMAIL ?? process.env.NODE_SMTP_SENDER ?? '';
+    feedbackConfig().NODE_CONTACT_NOTIFY_EMAIL ?? mailConfig().NODE_SMTP_SENDER ?? '';
 
 /**
  * Record a contact request and tell the support mailbox about it — unless the honeypot caught it.

@@ -455,7 +455,9 @@ describe('the personal-data policy', () => {
     it('refuses an unrecognised value instead of silently falling back to hash', () => {
         process.env.NODE_LOG_PERSONAL_FIELDS = 'not-a-real-mode';
 
-        expect(() => resolvePersonalFieldMode()).toThrow(/Unknown NODE_LOG_PERSONAL_FIELDS/);
+        expect(() => resolvePersonalFieldMode()).toThrow(
+            /NODE_LOG_PERSONAL_FIELDS: expected one of hash, redact, plain/
+        );
     });
 
     it('is case-insensitive for personal field names, like the sensitive-field policy', () => {

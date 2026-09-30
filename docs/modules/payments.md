@@ -399,7 +399,7 @@ flowchart LR
 
 `ibantools` is this module's alone — see [Package Dependencies](../tools/package-dependencies.md)
 for where it sits among everything else this repo depends on. Used once, at boot: it is what
-`customCheck` runs `NODE_BANK_TRANSFER_IBAN`/`_BIC` through before the deployment is allowed to
+the `paymentsConfig` boot check runs `NODE_BANK_TRANSFER_IBAN`/`_BIC` through before the deployment is allowed to
 advertise `bank_transfer` at all.
 
 | Library                      | Maintained    | What it costs you                                                              |

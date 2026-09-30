@@ -10,6 +10,7 @@
 
 import path from 'node:path';
 import { readdirSync } from 'node:fs';
+import { mailFilesConfig } from '@infrastructure/adapters/config';
 
 /** Every collected template's absolute path, keyed by name without `.ejs` — see {@link registerTemplateDirectories}. */
 let collectedTemplates: Record<string, string> = {};
@@ -50,10 +51,10 @@ export const registerTemplateDirectories = (directories: readonly string[]): voi
  * `NODE_EMAIL_TEMPLATES_DIR` — the escape hatch for a project that forks this template set
  * wholesale, kept working exactly as before templates were collected per module.
  */
-const overrideTemplatesDirectory = (): string | undefined =>
-    process.env.NODE_EMAIL_TEMPLATES_DIR
-        ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR)
-        : undefined;
+const overrideTemplatesDirectory = (): string | undefined => {
+    const directory = mailFilesConfig().NODE_EMAIL_TEMPLATES_DIR;
+    return directory ? path.resolve(directory) : undefined;
+};
 
 /**
  * What a template name may look like: `<module>.<mail-name>`, letters, digits, dots and dashes.

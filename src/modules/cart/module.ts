@@ -17,6 +17,7 @@ import { onDomainEvent } from '@kernel/events';
 import { router } from './routes';
 import { PRODUCT_DELETED } from '@modules/products';
 import { cartDeleteByUserId, productRemoveFromCartsById, cartGet } from './services';
+import { cartConfig } from './config';
 
 /** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
@@ -29,6 +30,7 @@ export default {
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
     routes: router,
+    config: [cartConfig.slice],
     personalData: [
         {
             section: 'cart',

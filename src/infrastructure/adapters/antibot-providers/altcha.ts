@@ -12,7 +12,7 @@ import { verify } from 'altcha-lib/frameworks/shared';
 import type { HumanChallengeProvider, IssuedChallenge } from './index';
 import type { RungVerdict } from '../antibot-verdict';
 import { altchaStore } from './altcha-store';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { antibotConfig } from '@infrastructure/adapters/config';
 
 /**
  * PBKDF2 rather than Argon2id: it runs on WebCrypto everywhere, while Argon2 is native only on
@@ -20,9 +20,6 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
  * https://github.com/altcha-org/altcha-lib/blob/main/docs/algorithms.md
  */
 const ALGORITHM = 'PBKDF2/SHA-256';
-
-/** Iteration count the solver must work through, and the dial a deployment turns. */
-const DEFAULT_COST = 100_000;
 
 /** How long a challenge stays solvable, in seconds. */
 const TTL_SECONDS = 300;
@@ -35,17 +32,11 @@ const TTL_SECONDS = 300;
  *   caller mint itself a trivial one.
  */
 const signatureSecret = (): string => {
-    const secret = process.env.NODE_ANTIBOT_ALTCHA_SECRET ?? '';
+    const secret = antibotConfig().NODE_ANTIBOT_ALTCHA_SECRET ?? '';
     if (secret.length < 16)
         throw new Error('NODE_ANTIBOT_PROVIDER is altcha but its secret is unset or too short.');
     return secret;
 };
-
-/**
- * Higher taxes a bot's CPU and an honest visitor's alike — raise it only as far as abuse
- * justifies. `min: 1` — a `0` cost is not a smaller challenge, it is no challenge at all.
- */
-const cost = (): number => environmentNumber('NODE_ANTIBOT_ALTCHA_COST', DEFAULT_COST, 1);
 
 /**
  * altcha-lib: build a signed challenge for the widget to solve. `expiresAt` is what makes a stale
@@ -55,7 +46,9 @@ const cost = (): number => environmentNumber('NODE_ANTIBOT_ALTCHA_COST', DEFAULT
 const issue = (): Promise<IssuedChallenge> =>
     createChallenge({
         algorithm: ALGORITHM,
-        cost: cost(),
+        // Iteration count the solver works through, and the dial a deployment turns. Higher taxes a
+        // bot's CPU and an honest visitor's alike — raise it only as far as abuse justifies.
+        cost: antibotConfig().NODE_ANTIBOT_ALTCHA_COST,
         deriveKey,
         expiresAt: new Date(Date.now() + TTL_SECONDS * 1000),
         hmacSignatureSecret: signatureSecret()

@@ -5,13 +5,13 @@
  * for invoicing (legal name, VAT number, street address) is `@modules/invoicing`'s own config —
  * see that module's `tests/unit/config.test.ts`.
  *
- * Driven through `assertRequiredConfig` rather than by reading the manifest — the wiring is half
+ * Driven through `assertModuleConfig` rather than by reading the manifest — the wiring is half
  * of what makes the check run at all.
  *
  * Every case sets `NODE_ENV` away from `test` first: the gate short-circuits under the test
  * environment, so a suite that left it alone would assert nothing.
  */
-import { assertRequiredConfig } from '@kernel/required-config';
+import { assertModuleConfig } from '@kernel/module-config';
 import {
     bankTransferBeneficiary,
     bankTransferBic,
@@ -56,7 +56,7 @@ describe('the shop jurisdiction boot gate', () => {
         configure();
         delete process.env.NODE_SHOP_COUNTRY;
 
-        expect(() => assertRequiredConfig([ordersModule])).toThrow(/NODE_SHOP_COUNTRY/);
+        expect(() => assertModuleConfig([ordersModule], [])).toThrow(/NODE_SHOP_COUNTRY/);
     });
 });
 

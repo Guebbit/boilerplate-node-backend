@@ -1,179 +1,29 @@
 /**
- * `src/infrastructure/runtime/environment.ts` — the coercions every reader shares.
+ * `src/infrastructure/runtime/environment.ts` — the one vocabulary a switch is written in.
  *
- * Small on purpose and tested exhaustively for it: every spelling of "read it as a whole number",
- * "read it as a decimal" or "read it as a switch" in this codebase goes through these functions,
- * and the failure modes they exist for are silent ones.
+ * An environment variable, a query string and a form field all spell "on" and "off" the same way,
+ * and a word outside the vocabulary must answer "not a switch" rather than guess.
  */
-import {
-    environmentFlag,
-    environmentNumber,
-    environmentDecimal,
-    isRelaxedEnvironment
-} from '@infrastructure/runtime/environment';
+import { FALSY_WORDS, TRUTHY_WORDS, parseBooleanWord } from '@infrastructure/runtime/environment';
 
-/**
- * The two coercions every reader shares.
- *
- * Exhaustive on the unusable inputs rather than the working one, because the working one was never
- * the problem: a variable is always a string, and the failures worth a suite are the strings that
- * are not the number or the switch someone meant. The pre-share spellings answered `NaN` for a
- * typo, which propagates into a `Date` or a `maxAge` and misbehaves with no error attached.
- */
-const CANARY = 'NODE_TEST_CANARY';
-
-const withValue = <T>(value: string | undefined, read: () => T): T => {
-    const previous = process.env[CANARY];
-    if (value === undefined) delete process.env[CANARY];
-    else process.env[CANARY] = value;
-    try {
-        return read();
-    } finally {
-        if (previous === undefined) delete process.env[CANARY];
-        else process.env[CANARY] = previous;
-    }
-};
-
-describe('environmentNumber', () => {
-    it('reads an integer a deployment set', () => {
-        expect(withValue('900', () => environmentNumber(CANARY, 30))).toBe(900);
+describe('parseBooleanWord', () => {
+    it.each(['1', 'true', 'TRUE', 'yes', 'on', ' true '])('reads %p as on', (word) => {
+        expect(parseBooleanWord(word)).toBe(true);
     });
 
-    it('parses base 10, so a zero-padded value is not read as octal', () => {
-        expect(withValue('0900', () => environmentNumber(CANARY, 30))).toBe(900);
+    it.each(['0', 'false', 'FALSE', 'no', 'off', ' 0 '])('reads %p as off', (word) => {
+        expect(parseBooleanWord(word)).toBe(false);
     });
 
-    it('tolerates surrounding whitespace, which .env files and CI injection both produce', () => {
-        expect(withValue('  900  ', () => environmentNumber(CANARY, 30))).toBe(900);
-    });
-
-    it.each([
-        ['unset', undefined],
-        ['blank', ''],
-        ['whitespace', '   '],
-        ['prose', 'thirty']
-    ])('falls back rather than answering NaN for %s', (_label, value) => {
-        // The defect this helper exists for. `Number(process.env.X ?? 30)` answers NaN here, and
-        // NaN minutes becomes an Invalid Date rather than an error anyone sees.
-        expect(withValue(value, () => environmentNumber(CANARY, 30))).toBe(30);
-    });
-
-    it.each(['30m', '5mb', '1.5', '9 0 0'])(
-        'refuses %p rather than reading the numeric prefix off it',
-        (value) => {
-            // Bare `parseInt` reads `5mb` as 5, so a mistyped upload ceiling becomes a five-BYTE
-            // limit — an answer that looks configured and rejects every upload.
-            expect(withValue(value, () => environmentNumber(CANARY, 90))).toBe(90);
+    it.each(['', '  ', 'maybe', 'constructor', '__proto__'])(
+        'says %p is not a switch, prototype names included',
+        (word) => {
+            expect(parseBooleanWord(word)).toBeUndefined();
         }
     );
 
-    it('accepts zero and negatives when no minimum is declared', () => {
-        expect(withValue('0', () => environmentNumber(CANARY, 30))).toBe(0);
-        expect(withValue('-5', () => environmentNumber(CANARY, 30))).toBe(-5);
-    });
-
-    it('falls back below the declared minimum, because a size of zero is broken not smaller', () => {
-        expect(withValue('0', () => environmentNumber(CANARY, 30, 1))).toBe(30);
-        expect(withValue('-5', () => environmentNumber(CANARY, 30, 1))).toBe(30);
-        expect(withValue('1', () => environmentNumber(CANARY, 30, 1))).toBe(1);
-    });
-});
-
-describe('environmentDecimal', () => {
-    it('reads a decimal a deployment set', () => {
-        expect(withValue('0.22', () => environmentDecimal(CANARY, 0.1))).toBe(0.22);
-    });
-
-    it('tolerates surrounding whitespace', () => {
-        expect(withValue('  0.1  ', () => environmentDecimal(CANARY, 0.22))).toBe(0.1);
-    });
-
-    it.each([
-        ['unset', undefined],
-        ['blank', ''],
-        ['whitespace', '   '],
-        ['prose', 'abc']
-    ])('falls back for %s', (_label, value) => {
-        expect(withValue(value, () => environmentDecimal(CANARY, 0.22))).toBe(0.22);
-    });
-
-    /*
-     * The defect this parser exists to close: a bare `Number(raw)` accepts both of these (0.5 and
-     * 0.1 respectively) — so a value that PASSES `products/config.ts`'s boot-time VAT check would
-     * then silently read back as the fallback rate here, the moment an order actually needed it.
-     */
-    it.each(['.5', '1e-1', '+.1', 'Infinity', '0x10'])(
-        'refuses %p rather than reading it the way a bare Number() would',
-        (value) => {
-            expect(withValue(value, () => environmentDecimal(CANARY, 0.22))).toBe(0.22);
-        }
-    );
-
-    it('accepts zero and negatives, since a caller with its own range check decides those', () => {
-        expect(withValue('0', () => environmentDecimal(CANARY, 0.22))).toBe(0);
-        expect(withValue('-0.1', () => environmentDecimal(CANARY, 0.22))).toBe(-0.1);
-    });
-});
-
-describe('environmentFlag', () => {
-    it.each(['1', 'true', 'TRUE', 'yes', 'on', ' true '])('reads %p as on', (value) => {
-        expect(withValue(value, () => environmentFlag(CANARY, false))).toBe(true);
-    });
-
-    it.each(['0', 'false', 'FALSE', 'no', 'off', ' 0 '])('reads %p as off', (value) => {
-        expect(withValue(value, () => environmentFlag(CANARY, true))).toBe(false);
-    });
-
-    it('accepts both vocabularies for the same flag', () => {
-        // The bug this closes: kill switches were `!== '0'` and opt-ins `=== 'true'`, so
-        // `NODE_ENABLE_CLUSTERING=1` turned clustering off and `NODE_RABBITMQ_ENABLED=false` left
-        // the queue on.
-        expect(withValue('1', () => environmentFlag(CANARY, false))).toBe(true);
-        expect(withValue('true', () => environmentFlag(CANARY, false))).toBe(true);
-        expect(withValue('0', () => environmentFlag(CANARY, true))).toBe(false);
-        expect(withValue('false', () => environmentFlag(CANARY, true))).toBe(false);
-    });
-
-    it.each([
-        ['unset', undefined],
-        ['blank', ''],
-        ['unrecognised', 'maybe']
-    ])('takes the default for %s rather than reading it as off', (_label, value) => {
-        expect(withValue(value, () => environmentFlag(CANARY, true))).toBe(true);
-        expect(withValue(value, () => environmentFlag(CANARY, false))).toBe(false);
-    });
-});
-
-/**
- * The one definition of "not a deployment". Exhaustive on what is NOT relaxed, because the failure
- * it exists to close is silent: an unset or misspelt `NODE_ENV` that left every safety switch off.
- */
-describe('isRelaxedEnvironment', () => {
-    const original = process.env.NODE_ENV;
-
-    afterEach(() => {
-        if (original === undefined) delete process.env.NODE_ENV;
-        else process.env.NODE_ENV = original;
-    });
-
-    it.each(['development', 'test'])('is relaxed for %s', (value) => {
-        process.env.NODE_ENV = value;
-
-        expect(isRelaxedEnvironment()).toBe(true);
-    });
-
-    it.each(['production', 'staging', 'Production', 'dev', ' development', ''])(
-        'is strict for %p',
-        (value) => {
-            process.env.NODE_ENV = value;
-
-            expect(isRelaxedEnvironment()).toBe(false);
-        }
-    );
-
-    it('is strict when NODE_ENV is unset', () => {
-        delete process.env.NODE_ENV;
-
-        expect(isRelaxedEnvironment()).toBe(false);
+    it('exposes the same words it decodes, for the config fields to share', () => {
+        expect(TRUTHY_WORDS.every((word) => parseBooleanWord(word) === true)).toBe(true);
+        expect(FALSY_WORDS.every((word) => parseBooleanWord(word) === false)).toBe(true);
     });
 });

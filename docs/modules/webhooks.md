@@ -240,7 +240,7 @@ The standard procedure catches most of it: `tsc` stops on every file that import
 (`scripts/ops/sweep-webhook-retries.ts`, `scenarios/webhooks.ts`, the cross-cutting tests), and the
 cross-cutting suite names the permissions, the page and the pairing entries. The module owns its
 queue consumer, its required/forbidden env checks, and its delivery substrate now (`consumers`,
-`requiredConfig` and `forbiddenInProduction` on its own `module.ts`; `transport/` for the signing
+its `config` slice (`config.ts`, on its own `module.ts`) with the required key and the forbidden demo sink; `transport/` for the signing
 and delivery code) — deleting the folder deletes all of that too, with nothing left in `app/` or
 `kernel/` to also touch. What still sits outside the module and **nothing flags** — delete these by
 hand:

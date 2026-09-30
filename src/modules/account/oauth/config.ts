@@ -1,11 +1,14 @@
 /**
  * @module
  * OAuth configuration — env var access, in one place so `./providers/*` and the controllers never
- * spell a `process.env.NODE_OAUTH_*` name themselves. Named `config.ts` like `../session/config`:
+ * spell a `NODE_OAUTH_*` name themselves. Named `config.ts` like `../session/config`:
  * it reads policy, it doesn't hold or mint anything.
  */
 
 import type { MfaChallenge } from '@types';
+import { defineConfig } from '@infrastructure/config/define';
+import { text } from '@infrastructure/config/fields';
+import { siteConfig } from '@infrastructure/http/config';
 
 /**
  * How long a provider's own HTTP calls (token exchange, and GitHub's profile/email follow-ups)
@@ -17,6 +20,23 @@ import type { MfaChallenge } from '@types';
  */
 export const OAUTH_FETCH_TIMEOUT_MS = 5000;
 
+/** Each provider's OAuth client, absent until a deployment registers one. */
+export const oauthConfig = defineConfig({
+    name: 'account-oauth',
+    shape: {
+        NODE_OAUTH_GOOGLE_CLIENT_ID: text({ describe: 'Google OAuth client id.' }),
+        NODE_OAUTH_GOOGLE_CLIENT_SECRET: text({
+            sensitive: true,
+            describe: 'Google OAuth client secret.'
+        }),
+        NODE_OAUTH_GITHUB_CLIENT_ID: text({ describe: 'GitHub OAuth client id.' }),
+        NODE_OAUTH_GITHUB_CLIENT_SECRET: text({
+            sensitive: true,
+            describe: 'GitHub OAuth client secret.'
+        })
+    }
+});
+
 /** One provider's client credentials, absent when a deployment never set them. */
 export interface OAuthCredentials {
     clientId?: string;
@@ -26,14 +46,21 @@ export interface OAuthCredentials {
 /**
  * A provider's `NODE_OAUTH_<NAME>_CLIENT_ID`/`_CLIENT_SECRET` pair.
  *
- * @param name - the registry key (`'google'`, `'github'`), upper-cased to build the var names
+ * @param name - the registry key (`'google'`, `'github'`); a name with no variables is unset
  */
 export const getOAuthCredentials = (name: string): OAuthCredentials => {
-    const key = name.toUpperCase();
-    return {
-        clientId: process.env[`NODE_OAUTH_${key}_CLIENT_ID`],
-        clientSecret: process.env[`NODE_OAUTH_${key}_CLIENT_SECRET`]
-    };
+    const config = oauthConfig();
+    if (name === 'google')
+        return {
+            clientId: config.NODE_OAUTH_GOOGLE_CLIENT_ID,
+            clientSecret: config.NODE_OAUTH_GOOGLE_CLIENT_SECRET
+        };
+    if (name === 'github')
+        return {
+            clientId: config.NODE_OAUTH_GITHUB_CLIENT_ID,
+            clientSecret: config.NODE_OAUTH_GITHUB_CLIENT_SECRET
+        };
+    return {};
 };
 
 /** Whether BOTH halves of a provider's credentials are set — the registry's "configured" check. */
@@ -49,12 +76,12 @@ export const isOAuthProviderConfigured = (name: string): boolean => {
  * `https://api.example.com` with no slash produced `https://api.example.comaccount/oauth/…`, and
  * `NODE_URL` unset produced a path with no leading slash. `URL` resolves both. The localhost
  * fallback only ever applies where the boot-time `NODE_URL` check is skipped — which is
- * `NODE_ENV=test`, and nothing else (`kernel/required-config.ts`).
+ * `NODE_ENV=test`, and nothing else (`infrastructure/config/define.ts`).
  *
  * @param path - relative to `NODE_URL`, no leading slash
  */
 const backendUrl = (path: string): string =>
-    new URL(path, process.env.NODE_URL ?? 'http://localhost:3000/').href;
+    new URL(path, siteConfig().NODE_URL ?? 'http://localhost:3000/').href;
 
 /**
  * The redirect URI this app presents to every provider for `provider` — always derived from
@@ -68,8 +95,7 @@ export const oauthRedirectUri = (provider: string): string =>
     backendUrl(`account/oauth/${provider}/callback`);
 
 /** The paired frontend's OAuth landing page — everything below appends its own query to this. */
-const oauthFrontendCallbackBase = (): string =>
-    `${process.env.NODE_FRONTEND_URL ?? 'http://localhost:8080'}/oauth/callback`;
+const oauthFrontendCallbackBase = (): string => `${siteConfig().NODE_FRONTEND_URL}/oauth/callback`;
 
 /**
  * Where `GET /account/oauth/:provider/callback` sends the browser once it is done — the paired

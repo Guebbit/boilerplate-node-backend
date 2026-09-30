@@ -1,11 +1,10 @@
+import { persistenceConfig } from '@infrastructure/persistence/config';
 /**
  * @module
  * Shared pagination/filter helpers.
  * Extracts common search logic to satisfy OCP — new filter conventions
  * require changes in one place instead of every service.
  */
-
-import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /** Raw page/size as they arrive off a request, before {@link normalizePagination} coerces them. */
 export interface PaginationInput {
@@ -30,9 +29,6 @@ export interface PaginatedMeta {
     totalItems: number;
     totalPages: number;
 }
-
-/** Page size used when neither the caller nor the deployment specifies one. */
-const FALLBACK_PAGE_SIZE = 10;
 
 /**
  * Upper bound for the deployment-configured page size.
@@ -61,7 +57,7 @@ export const normalizePagination = (input: PaginationInput = {}): PaginationResu
     const requestedPageSize = Number(input.pageSize) || 0;
     const configuredPageSize = Math.min(
         MAX_CONFIGURED_PAGE_SIZE,
-        environmentNumber('NODE_SETTINGS_PAGINATION_PAGE_SIZE', FALLBACK_PAGE_SIZE, 1)
+        persistenceConfig().NODE_SETTINGS_PAGINATION_PAGE_SIZE
     );
     const pageSize = requestedPageSize > 0 ? requestedPageSize : configuredPageSize;
     return { page, pageSize, skip: (page - 1) * pageSize };

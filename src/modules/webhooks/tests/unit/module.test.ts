@@ -1,17 +1,17 @@
 /**
  * This module's own boot gate: `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` (required) and
  * `NODE_WEBHOOK_DEMO_SINK_URL` (forbidden in production) — both declared on the manifest, both
- * driven through `assertRequiredConfig` rather than by asserting on the manifest's data directly,
+ * driven through `assertModuleConfig` rather than by asserting on the manifest's data directly,
  * the same reasoning `products/tests/unit/config.test.ts` gives: the manifest wiring is half of
  * what makes either check run at all.
  *
- * `tests/unit/kernel/required-config.test.ts` covers the generic `forbiddenInProduction`
+ * `tests/unit/kernel/module-config.test.ts` covers the generic `forbiddenOutsideRelaxed`
  * mechanism against a fake module; this file is the one real case.
  *
  * Every case sets `NODE_ENV` away from `test` first: the gate short-circuits under the test
  * environment, so a suite that left it alone would assert nothing.
  */
-import { assertRequiredConfig } from '@kernel/required-config';
+import { assertModuleConfig } from '@kernel/module-config';
 import { withoutEnvironmentInThisFile } from '@tests/environment';
 import { logger } from '@infrastructure/adapters/logger';
 import webhooksModule from '../../module';
@@ -41,7 +41,7 @@ describe('the secret-ring encryption key', () => {
         configure();
         delete process.env.NODE_WEBHOOK_SECRET_ENCRYPTION_KEY;
 
-        expect(() => assertRequiredConfig([webhooksModule])).toThrow(
+        expect(() => assertModuleConfig([webhooksModule], [])).toThrow(
             /NODE_WEBHOOK_SECRET_ENCRYPTION_KEY/
         );
     });
@@ -50,7 +50,7 @@ describe('the secret-ring encryption key', () => {
         configure();
         process.env.NODE_WEBHOOK_SECRET_ENCRYPTION_KEY = 'your-webhook-secret-encryption-key-here';
 
-        expect(() => assertRequiredConfig([webhooksModule])).toThrow(
+        expect(() => assertModuleConfig([webhooksModule], [])).toThrow(
             /NODE_WEBHOOK_SECRET_ENCRYPTION_KEY/
         );
     });
@@ -58,7 +58,7 @@ describe('the secret-ring encryption key', () => {
     it('accepts a real key', () => {
         configure();
 
-        expect(() => assertRequiredConfig([webhooksModule])).not.toThrow();
+        expect(() => assertModuleConfig([webhooksModule], [])).not.toThrow();
     });
 });
 
@@ -67,7 +67,7 @@ describe('the demo-sink exemption', () => {
         configure();
         process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'http://webhook-tester:8080';
 
-        expect(() => assertRequiredConfig([webhooksModule])).not.toThrow();
+        expect(() => assertModuleConfig([webhooksModule], [])).not.toThrow();
     });
 
     it('refuses to boot in production with it set', () => {
@@ -76,7 +76,9 @@ describe('the demo-sink exemption', () => {
         process.env.NODE_CORS_ORIGIN = 'https://example.com';
         process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'http://webhook-tester:8080';
 
-        expect(() => assertRequiredConfig([webhooksModule])).toThrow(/NODE_WEBHOOK_DEMO_SINK_URL/);
+        expect(() => assertModuleConfig([webhooksModule], [])).toThrow(
+            /NODE_WEBHOOK_DEMO_SINK_URL/
+        );
     });
 
     it('refuses to boot with NODE_ENV unset and it set, since only development/test may use it', () => {
@@ -85,7 +87,9 @@ describe('the demo-sink exemption', () => {
         process.env.NODE_CORS_ORIGIN = 'https://example.com';
         process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'http://webhook-tester:8080';
 
-        expect(() => assertRequiredConfig([webhooksModule])).toThrow(/NODE_WEBHOOK_DEMO_SINK_URL/);
+        expect(() => assertModuleConfig([webhooksModule], [])).toThrow(
+            /NODE_WEBHOOK_DEMO_SINK_URL/
+        );
     });
 
     it('accepts production with it unset', () => {
@@ -93,7 +97,7 @@ describe('the demo-sink exemption', () => {
         process.env.NODE_ENV = 'production';
         process.env.NODE_CORS_ORIGIN = 'https://example.com';
 
-        expect(() => assertRequiredConfig([webhooksModule])).not.toThrow();
+        expect(() => assertModuleConfig([webhooksModule], [])).not.toThrow();
     });
 });
 

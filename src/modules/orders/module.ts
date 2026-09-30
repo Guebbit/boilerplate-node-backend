@@ -28,6 +28,7 @@ import { cancelById, cancelPendingOrdersHolding, detachUserId, findOwnOrders } f
 // ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
 // module's own barrel — see CLAUDE.md's module-barrel rule.
 import { ORDER_CANCELLED, ORDER_CREATED, ORDER_STATUS_CHANGED } from './events';
+import { ordersConfig } from './config';
 
 /**
  * DDD-D4: this module's public (webhook-visible) events — `webhooks/services/publish.ts`
@@ -73,9 +74,8 @@ export default {
      */
     routes: router,
     publicEvents,
-    // The invoice prints the shop's own jurisdiction, and an invoice with no country on it is not
-    // one. The other two identity fields (`./config`) are genuinely optional, so neither is here.
-    requiredConfig: [{ key: 'NODE_SHOP_COUNTRY', minLength: 1 }],
+    // Jurisdiction, currency, bank transfer and the order link: see `./config`.
+    config: [ordersConfig.slice],
     personalData: [
         {
             section: 'orders',

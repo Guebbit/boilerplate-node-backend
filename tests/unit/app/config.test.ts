@@ -1,14 +1,14 @@
 /**
- * `APP_NON_MODULE_CHECKS` — the app tier's own boot-time entries, folded into
- * `assertRequiredConfig` (`@kernel/required-config`) by `src/app.ts`. The gate's own mechanism —
- * collecting, reporting once, skipping under test/demo — is covered in
- * `tests/unit/kernel/required-config.test.ts`; this file only asserts what THESE entries are.
+ * `APP_CONFIG_SLICES` — the app tier's own boot-time slices, folded into `assertModuleConfig`
+ * (`@kernel/module-config`) by `src/app.ts`. The gate's own mechanism — collecting, reporting once,
+ * skipping presence rules under test — is covered in `tests/unit/kernel/module-config.test.ts`;
+ * this file only asserts what THESE slices are.
  *
  * Every case sets `NODE_ENV` away from `test` first: the gate short-circuits under the test
  * environment, so a suite that left it alone would assert nothing at all.
  */
-import { assertRequiredConfig } from '@kernel/required-config';
-import { APP_NON_MODULE_CHECKS } from '@app/required-config';
+import { assertModuleConfig } from '@kernel/module-config';
+import { APP_CONFIG_SLICES } from '@app/config';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 import { resetAnalyticsProvider } from '@infrastructure/observability/analytics';
 import { withoutEnvironmentInThisFile } from '@tests/environment';
@@ -30,7 +30,8 @@ withoutEnvironmentInThisFile([
     'NODE_ANTIBOT_ALTCHA_SECRET',
     'NODE_ANTIBOT_TURNSTILE_SITE_KEY',
     'NODE_ANTIBOT_TURNSTILE_SECRET',
-    'NODE_ANTIBOT_EMAIL_POLICY'
+    'NODE_ANTIBOT_EMAIL_POLICY',
+    'NODE_ANALYTICS_REQUIRE_CONSENT'
 ]);
 
 /**
@@ -42,8 +43,8 @@ const configure = (): void => {
     process.env.NODE_URL = 'https://api.example.com/';
 };
 
-/** `assertRequiredConfig` wired the way `src/app.ts` wires it — the whole point of this file. */
-const assertApp = (): void => assertRequiredConfig([], APP_NON_MODULE_CHECKS);
+/** `assertModuleConfig` wired the way `src/app.ts` wires it — the whole point of this file. */
+const assertApp = (): void => assertModuleConfig([], APP_CONFIG_SLICES);
 
 afterEach(() => {
     enableDemoProfile(false);

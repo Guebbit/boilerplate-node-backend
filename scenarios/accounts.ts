@@ -10,6 +10,7 @@
  */
 
 import { assignRole, bootstrapAccessModel } from '@modules/access';
+import { seedPasswordsConfig } from './config';
 
 /** The demo owner's id — 24-char hex, and a real ObjectId: its leading bytes date it to February 2024. */
 export const SEED_ADMIN_ID = '65dd2bdb923652b7800fe180';
@@ -44,9 +45,7 @@ export const SEED_ADMIN_EMAIL = 'root@root.it';
  * `scenario:apply` refuses to run outside development/test, which is what stops it reaching a
  * database anyone but a developer or CI can see.
  */
-const SEED_ADMIN_PASSWORD_FALLBACK = 'Demo-Admin1!';
-export const SEED_ADMIN_PASSWORD =
-    process.env.NODE_SEED_ADMIN_PASSWORD ?? SEED_ADMIN_PASSWORD_FALLBACK;
+export const SEED_ADMIN_PASSWORD = seedPasswordsConfig().NODE_SEED_ADMIN_PASSWORD;
 
 /** The demo user's login email. */
 export const SEED_USER_EMAIL = 'customer@example.com';
@@ -55,25 +54,19 @@ export const SEED_USER_EMAIL = 'customer@example.com';
  * The demo user's login password — PLAINTEXT; see the file header for why. `NODE_SEED_USER_PASSWORD`
  * overrides it, same reasoning as {@link SEED_ADMIN_PASSWORD}.
  */
-const SEED_USER_PASSWORD_FALLBACK = 'Demo-User1!';
-export const SEED_USER_PASSWORD =
-    process.env.NODE_SEED_USER_PASSWORD ?? SEED_USER_PASSWORD_FALLBACK;
+export const SEED_USER_PASSWORD = seedPasswordsConfig().NODE_SEED_USER_PASSWORD;
 
 /** The demo editor's login email. */
 export const SEED_EDITOR_EMAIL = 'editor@example.com';
 
 /** The demo editor's login password — PLAINTEXT; same reasoning as {@link SEED_ADMIN_PASSWORD}. */
-const SEED_EDITOR_PASSWORD_FALLBACK = 'Demo-Editor1!';
-export const SEED_EDITOR_PASSWORD =
-    process.env.NODE_SEED_EDITOR_PASSWORD ?? SEED_EDITOR_PASSWORD_FALLBACK;
+export const SEED_EDITOR_PASSWORD = seedPasswordsConfig().NODE_SEED_EDITOR_PASSWORD;
 
 /** The demo moderator's login email. */
 export const SEED_MODERATOR_EMAIL = 'moderator@example.com';
 
 /** The demo moderator's login password — PLAINTEXT; same reasoning as {@link SEED_ADMIN_PASSWORD}. */
-const SEED_MODERATOR_PASSWORD_FALLBACK = 'Demo-Moderator1!';
-export const SEED_MODERATOR_PASSWORD =
-    process.env.NODE_SEED_MODERATOR_PASSWORD ?? SEED_MODERATOR_PASSWORD_FALLBACK;
+export const SEED_MODERATOR_PASSWORD = seedPasswordsConfig().NODE_SEED_MODERATOR_PASSWORD;
 
 /** Login emails of the persona accounts — see {@link SEED_UNVERIFIED_ID}. */
 export const SEED_UNVERIFIED_EMAIL = 'unverified@example.com';
@@ -97,40 +90,26 @@ export const SEED_TWO_FACTOR_BACKUP_CODES = [
     'e0f1a2b3c4'
 ] as const;
 
-/**
- * One persona's password: `NODE_SEED_<NAME>_PASSWORD` when set, else its committed fallback.
- * The same rule as the four accounts above, in one place instead of four more copies.
- */
-const personaPassword = (variable: string, fallback: string) => ({
-    value: process.env[variable] ?? fallback,
-    fallback
-});
-
-const SEED_UNVERIFIED_PASSWORD = personaPassword(
-    'NODE_SEED_UNVERIFIED_PASSWORD',
-    'Demo-Unverified1!'
-);
-const SEED_TWO_FACTOR_PASSWORD = personaPassword(
-    'NODE_SEED_TWO_FACTOR_PASSWORD',
-    'Demo-TwoFactor1!'
-);
-const SEED_PENDING_EMAIL_PASSWORD = personaPassword(
-    'NODE_SEED_PENDING_EMAIL_PASSWORD',
-    'Demo-PendingEmail1!'
-);
-const SEED_BANNED_PASSWORD = personaPassword('NODE_SEED_BANNED_PASSWORD', 'Demo-Banned1!');
+/** The persona accounts' passwords, read once — see {@link seedPasswordsConfig}. */
+const personaPasswords = seedPasswordsConfig();
 
 /** The logins for the persona accounts, by the name a spec asks for. */
 export const seedPersonaCredentials = {
-    unverified: { email: SEED_UNVERIFIED_EMAIL, password: SEED_UNVERIFIED_PASSWORD.value },
+    unverified: {
+        email: SEED_UNVERIFIED_EMAIL,
+        password: personaPasswords.NODE_SEED_UNVERIFIED_PASSWORD
+    },
     twoFactor: {
         email: SEED_TWO_FACTOR_EMAIL,
-        password: SEED_TWO_FACTOR_PASSWORD.value,
+        password: personaPasswords.NODE_SEED_TWO_FACTOR_PASSWORD,
         // Published beside the login: a journey that gets in with a backup code must know one.
         backupCodes: SEED_TWO_FACTOR_BACKUP_CODES
     },
-    pendingEmail: { email: SEED_PENDING_EMAIL_EMAIL, password: SEED_PENDING_EMAIL_PASSWORD.value },
-    banned: { email: SEED_BANNED_EMAIL, password: SEED_BANNED_PASSWORD.value }
+    pendingEmail: {
+        email: SEED_PENDING_EMAIL_EMAIL,
+        password: personaPasswords.NODE_SEED_PENDING_EMAIL_PASSWORD
+    },
+    banned: { email: SEED_BANNED_EMAIL, password: personaPasswords.NODE_SEED_BANNED_PASSWORD }
 } as const;
 
 /** The logins for the demo accounts. */

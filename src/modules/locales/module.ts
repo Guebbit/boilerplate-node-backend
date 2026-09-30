@@ -19,6 +19,7 @@ import { router } from './routes';
 import { localeService } from './services';
 import { translationRepository } from './repository';
 import { planForPort, writeForPort } from './services/translations';
+import { localesConfig } from './tenants';
 
 /**
  * Everything this module installs once every enabled module is known: the two kernel ports it
@@ -72,6 +73,7 @@ export default {
      * so the keys do too.
      */
     routes: router,
+    config: [localesConfig.slice],
     onRegistered,
     /*
      * Its own copy, for its own error messages: without it, the module that owns the translation

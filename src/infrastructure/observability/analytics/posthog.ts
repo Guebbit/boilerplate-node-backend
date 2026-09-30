@@ -13,6 +13,7 @@
 import { PostHog } from 'posthog-node';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AnalyticsEvent, AnalyticsProvider } from './index';
+import { analyticsConfig } from '@infrastructure/observability/config';
 
 /** Upper bound on the final flush — see `shutdown` below. */
 const SHUTDOWN_TIMEOUT_MS = 3000;
@@ -22,7 +23,7 @@ const SHUTDOWN_TIMEOUT_MS = 3000;
  * EU/US cloud, and defaulting it would silently ship product data to the wrong region.
  */
 export const isPostHogConfigured = (): boolean =>
-    Boolean(process.env.NODE_POSTHOG_API_KEY && process.env.NODE_POSTHOG_HOST);
+    Boolean(analyticsConfig().NODE_POSTHOG_API_KEY && analyticsConfig().NODE_POSTHOG_HOST);
 
 /**
  * Lazily created so the client is never instantiated when the credentials are absent.
@@ -38,8 +39,8 @@ let _client: PostHog | undefined;
 const getClient = (): PostHog => {
     // PostHog client: key is a write-only server key (safe here); host is the target region/
     // self-host URL; flushAt/flushInterval batch events and cap staleness — flushed manually on shutdown.
-    _client ??= new PostHog(process.env.NODE_POSTHOG_API_KEY!, {
-        host: process.env.NODE_POSTHOG_HOST,
+    _client ??= new PostHog(analyticsConfig().NODE_POSTHOG_API_KEY!, {
+        host: analyticsConfig().NODE_POSTHOG_HOST,
         flushAt: 20,
         flushInterval: 10_000
     });

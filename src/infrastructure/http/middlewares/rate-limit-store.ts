@@ -10,7 +10,6 @@
 import { MemoryStore, type Options, type Store } from 'express-rate-limit';
 import { RedisStore, type RedisReply } from 'rate-limit-redis';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
 import {
     manageConnection,
     type ManagedConnection
@@ -19,16 +18,18 @@ import { drainMatchingKeys } from '@infrastructure/adapters/cache';
 import {
     closeRedisClient,
     createRedisClient,
-    redisUrlFromHostPort,
+    configuredRedisUrl,
     type RedisClient
 } from '@infrastructure/adapters/redis';
+import { rateLimitConfig } from '@infrastructure/http/config';
+import { clusterConfig } from '@infrastructure/runtime/config';
 
 /**
  * Key namespace for every limiter counter. Separate from the cache's prefix so
  * `NODE_REDIS_CACHE_PREFIX` can be rotated — or the cache flushed wholesale — without also
  * resetting everyone's budget.
  */
-const KEY_PREFIX = process.env.NODE_RATE_LIMIT_REDIS_PREFIX ?? 'rate-limit';
+const KEY_PREFIX = rateLimitConfig().NODE_RATE_LIMIT_REDIS_PREFIX;
 
 /**
  * The limiter's own Redis URL. Falls back to the cache's, because one Redis is the normal
@@ -41,14 +42,11 @@ export const rateLimitRedisUrl = (): string | undefined => {
      * unset — `src/app.ts` imports `dotenv/config`, so `.env`'s compose hostname reaches every
      * test, and without this the limiters would fail open against a Redis that is not there.
      */
-    if (!environmentFlag('NODE_RATE_LIMIT_REDIS_ENABLED', true)) return;
+    const config = rateLimitConfig();
+    if (!config.NODE_RATE_LIMIT_REDIS_ENABLED) return;
     // `||`, not `??`: an env file carries `NAME=` as an empty string, and an empty URL is "not
     // configured" — `??` would stop at it and count in memory while Redis is right there.
-    return (
-        process.env.NODE_RATE_LIMIT_REDIS_URL?.trim() ||
-        process.env.NODE_REDIS_URL?.trim() ||
-        redisUrlFromHostPort('NODE_REDIS_HOST', 'NODE_REDIS_PORT')
-    );
+    return config.NODE_RATE_LIMIT_REDIS_URL ?? configuredRedisUrl();
 };
 
 /**
@@ -226,7 +224,7 @@ export const rateLimitStore = (namespace: string): Store => {
          * doing what its config claims, off by a factor of the worker count — that belongs at the
          * level someone is paged for, not in the noise.
          */
-        if (environmentNumber('NODE_CLUSTER_WORKERS', 0) !== 1)
+        if (clusterConfig().NODE_CLUSTER_WORKERS !== 1)
             // Stryker disable all
             logger.error({
                 message:

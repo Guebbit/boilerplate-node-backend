@@ -9,15 +9,32 @@
  * See: docs/modules/inventory.md
  */
 
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { defineConfig } from '@infrastructure/config/define';
+import { int } from '@infrastructure/config/fields';
+
+/** Stock holds and the restock mark. */
+export const inventoryConfig = defineConfig({
+    name: 'inventory',
+    shape: {
+        NODE_RESERVATION_TTL_MINUTES: int({
+            default: 30,
+            min: 0,
+            describe: 'Minutes a stock hold survives without payment.'
+        }),
+        NODE_LOW_STOCK_THRESHOLD: int({
+            default: 5,
+            min: 0,
+            describe: 'Availability at or under which a product wants restocking.'
+        })
+    }
+});
 
 /**
  * How long a hold survives without payment. Stamped at reserve time, so a change applies to new
  * checkouts and leaves promises already made alone.
  * @returns the reservation window in minutes
  */
-export const reservationTtlMinutes = (): number =>
-    environmentNumber('NODE_RESERVATION_TTL_MINUTES', 30, 0);
+export const reservationTtlMinutes = (): number => inventoryConfig().NODE_RESERVATION_TTL_MINUTES;
 
 /**
  * The availability at or under which a product wants restocking. Deliberately shared by two
@@ -25,4 +42,4 @@ export const reservationTtlMinutes = (): number =>
  * only public products — so the two counts won't match, and shouldn't.
  * @returns the low-availability mark
  */
-export const lowStockThreshold = (): number => environmentNumber('NODE_LOW_STOCK_THRESHOLD', 5, 0);
+export const lowStockThreshold = (): number => inventoryConfig().NODE_LOW_STOCK_THRESHOLD;
