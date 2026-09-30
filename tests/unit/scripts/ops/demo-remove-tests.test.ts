@@ -76,6 +76,15 @@ describe('removeResidueTests', () => {
         expect(existsSync(path.join(root, 'tests', 'unrelated.test.ts'))).toBe(true);
     });
 
+    it('deletes a test that declares it requires a removed module without importing it', () => {
+        write('tests/kernel.test.ts', '// requires-module: cart, orders\nit("x", () => {});\n');
+        write('tests/other.test.ts', '// requires-module: users\nit("x", () => {});\n');
+
+        const files = removeResidueTests(root, ['cart']).map((note) => note.file);
+
+        expect(files).toEqual([path.join('tests', 'kernel.test.ts')]);
+    });
+
     it('also sweeps the tests folder of a surviving module', () => {
         write(
             'src/modules/users/tests/x.test.ts',

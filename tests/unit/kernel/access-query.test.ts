@@ -1,3 +1,4 @@
+// requires-module: products, orders
 /**
  * @module
  * `accessibleFilter` — the rules, compiled into the filter a collection is actually read with.

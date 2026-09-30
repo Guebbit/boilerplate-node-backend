@@ -10,7 +10,7 @@
  * own module system — the same reason `apply.test.ts` shells out to `scenarios/apply.ts` rather
  * than importing it. A subprocess is also what `npm run lint` itself is.
  *
- * Against a REAL file under `src/modules/products/`, briefly: `parserOptions.project` resolves
+ * Against a REAL file under `src/modules/users/`, briefly: `parserOptions.project` resolves
  * against the physical TypeScript program, so a virtual path fails to parse before the boundaries
  * rule ever runs. The probe file is written and removed around the one run that needs it.
  */
@@ -20,7 +20,7 @@ import path from 'node:path';
 import { REPO_ROOT } from '@tests/paths';
 
 const ESLINT_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'eslint');
-const PROBE_PATH = path.join(REPO_ROOT, 'src/modules/products/__self-barrel-probe.ts');
+const PROBE_PATH = path.join(REPO_ROOT, 'src/modules/users/__self-barrel-probe.ts');
 const PROBE_RELATIVE = path.relative(REPO_ROOT, PROBE_PATH);
 
 /** One run of the real `eslint` CLI, `--format json` parsed back into its message list. */
@@ -50,7 +50,7 @@ describe('a module cannot import its own barrel', () => {
     it('is refused by boundaries/dependencies, not silently allowed', async () => {
         writeFileSync(
             PROBE_PATH,
-            "import { productService } from '@modules/products';\nvoid productService;\n"
+            "import { userService } from '@modules/users';\nvoid userService;\n"
         );
 
         const messages = await lintProbe();

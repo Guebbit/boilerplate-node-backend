@@ -20,7 +20,7 @@ jest.mock('nodemailer', () => ({
 import { sendTemplatedEmail, resetTransporter } from '@infrastructure/adapters/mailer';
 import { spoolAttachment } from '@infrastructure/adapters/mail-spool';
 
-/** The copy `orders.order-confirm.ejs` needs — irrelevant to what this file asserts on. */
+/** The copy `account.reset-confirm.ejs` needs — irrelevant to what this file asserts on. */
 const DATA = {
     locale: 'en',
     pageMetaTitle: '',
@@ -57,7 +57,7 @@ describe('resolveAttachments — resolving attachments', () => {
 
         await sendTemplatedEmail(
             { to: 'ada@example.com', attachments: [{ filename: 'invoice-2026-000041.pdf', key }] },
-            'orders.order-confirm',
+            'account.reset-confirm',
             DATA
         );
 
@@ -68,7 +68,7 @@ describe('resolveAttachments — resolving attachments', () => {
     });
 
     it('carries no attachments key at all when the request names none', async () => {
-        await sendTemplatedEmail({ to: 'ada@example.com' }, 'orders.order-confirm', DATA);
+        await sendTemplatedEmail({ to: 'ada@example.com' }, 'account.reset-confirm', DATA);
 
         const [sent] = sendMailMock.mock.calls[0] as [{ attachments?: unknown }];
         expect(sent).not.toHaveProperty('attachments');
@@ -80,7 +80,7 @@ describe('resolveAttachments — resolving attachments', () => {
                 to: 'ada@example.com',
                 attachments: [{ filename: 'x.pdf', key: '../../etc/passwd' }]
             },
-            'orders.order-confirm',
+            'account.reset-confirm',
             DATA
         );
 
@@ -99,7 +99,7 @@ describe('sendTemplatedEmail — never discards its own attachment', () => {
 
         await sendTemplatedEmail(
             { to: 'ada@example.com', attachments: [{ filename: 'x.pdf', key }] },
-            'orders.order-confirm',
+            'account.reset-confirm',
             DATA
         );
 

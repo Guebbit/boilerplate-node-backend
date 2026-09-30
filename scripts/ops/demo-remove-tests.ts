@@ -1,7 +1,7 @@
 /**
  * @module
- * The tests that go with a removed module: every test file that imports one, directly or through
- * another test file that does — `demo-remove.ts`'s test step.
+ * The tests that go with a removed module: every test file that imports one (or says it
+ * `requires-module` one), directly or through another test file that does — `demo-remove.ts`'s test step.
  *
  * Why a file can be deleted whole: a test that cannot import its subject cannot run, and a test
  * that only borrowed a removed module as sample data (a product to translate, an order to export)
@@ -43,6 +43,22 @@ const SPECIFIER_PATTERNS: readonly RegExp[] = [
     /^\s*import\s+["']([^"']+)["']/gm,
     /^[^\n"'`]*\b(?:jest\.(?:mock|requireActual|doMock)|import|require)\(\s*["']([^"']+)["']/gm
 ];
+
+/**
+ * A test that needs a module without importing it — it drives the kernel through the shop's
+ * subjects and roles, say — says so on a `// requires-module: a, b` line. Deleting a listed module
+ * deletes the file, the same as an import would.
+ */
+const REQUIRES_MODULE = /^\/\/ requires-module:\s*(.+)$/gm;
+
+/**
+ * The module names a file declares it requires.
+ * @param source - the file's text
+ */
+const requiredModules = (source: string): string[] =>
+    [...source.matchAll(REQUIRES_MODULE)].flatMap((match) =>
+        match[1].split(',').map((name) => name.trim())
+    );
 
 /**
  * Every module specifier a file names.
@@ -95,11 +111,13 @@ export const removeResidueTests = (repoRoot: string, names: readonly string[]): 
     for (let changed = true; changed; ) {
         changed = false;
         for (const file of files.filter((candidate) => !deleted.includes(candidate))) {
-            const importsGone = specifiersOf(readFileSync(file, 'utf8')).some((specifier) => {
+            const source = readFileSync(file, 'utf8');
+            const importsGone = specifiersOf(source).some((specifier) => {
                 const resolved = resolveSpecifier(specifier, file, repoRoot);
                 return resolved !== undefined && isGone(resolved, gone);
             });
-            if (!importsGone) continue;
+            const requiresGone = requiredModules(source).some((name) => names.includes(name));
+            if (!importsGone && !requiresGone) continue;
             deleted.push(file);
             gone.push(file.replace(/\.ts$/, ''));
             changed = true;
@@ -109,6 +127,6 @@ export const removeResidueTests = (repoRoot: string, names: readonly string[]): 
     for (const file of deleted) unlinkSync(file);
     return deleted.map((file) => ({
         file: path.relative(repoRoot, file),
-        detail: 'deleted — imports a removed module'
+        detail: 'deleted — imports or requires a removed module'
     }));
 };

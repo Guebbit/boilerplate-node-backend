@@ -88,7 +88,7 @@ report([
     stripConformanceCases(REPO_ROOT, removedAuthorization)
 ]);
 
-console.info('\n[demo-remove] tests that import a removed module:');
+console.info('\n[demo-remove] tests that import or require a removed module:');
 report(removeResidueTests(REPO_ROOT, shopModuleNames));
 
 console.info('\n[demo-remove] done. Next:');
