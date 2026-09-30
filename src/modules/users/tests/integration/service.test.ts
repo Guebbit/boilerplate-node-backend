@@ -1002,13 +1002,21 @@ describe('userService.remove', () => {
         );
     });
 
-    it('records no audit row for a soft delete even with a system audit context', async () => {
+    it('records SYSTEM_USER_SOFT_DELETED, not an admin action, for a system-context soft delete', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
+        const id = user._id.toString();
 
         await userService.remove(user, false, systemCallerContext('User'));
 
-        expect(auditSpy).not.toHaveBeenCalled();
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.SYSTEM_USER_SOFT_DELETED,
+                outcome: 'success',
+                target_type: 'user',
+                target_id: id
+            })
+        );
     });
 
     // DDD-D6: the erasure cascade and the document delete run in one transaction — a failure

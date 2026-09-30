@@ -19,6 +19,8 @@ export const usersAuditActions = {
     ADMIN_USER_SOFT_DELETED: 'admin.user.soft_deleted',
     ADMIN_USER_ERASED: 'admin.user.erased',
     ADMIN_USER_RESTORED: 'admin.user.restored',
+    /** The inactivity reaper's own soft delete — the trail for the account it takes offline. */
+    SYSTEM_USER_SOFT_DELETED: 'system.user.soft_deleted',
     /** T6: the inactivity reaper's own hard delete — nobody at the keyboard, so not `admin.*`. */
     SYSTEM_USER_ERASED: 'system.user.erased',
     /** An admin stripped a user's second factor — the one non-self-service 2FA recovery path. */

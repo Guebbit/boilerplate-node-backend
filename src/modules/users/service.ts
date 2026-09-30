@@ -468,12 +468,9 @@ const runErasureCascade = async (user: UserDocument, session: ClientSession): Pr
  *
  * @param context - who did this. Absent for a caller with no request behind it that also has no
  * stake in the trail (a test, a script's dry run). Present and `caller.system` for the inactivity
- * reaper's own hard delete, which records `SYSTEM_USER_ERASED` rather than an `admin.*` action —
- * nobody was at the keyboard. Present and NOT `caller.system` for the admin `DELETE /users(/:id)`
- * route, which records `ADMIN_USER_ERASED`/`ADMIN_USER_SOFT_DELETED`. The soft branch never
- * records under a system context: nothing today calls it that way, and the day something does, it
- * still shouldn't — a reaper's soft delete stays a step in ITS OWN sweep, not a fact for the
- * `admin.*` vocabulary to carry.
+ * reaper, which records `SYSTEM_USER_SOFT_DELETED`/`SYSTEM_USER_ERASED` rather than an `admin.*`
+ * action — nobody was at the keyboard. Present and NOT `caller.system` for the admin
+ * `DELETE /users(/:id)` route, which records `ADMIN_USER_SOFT_DELETED`/`ADMIN_USER_ERASED`.
  */
 export const remove = (
     user: UserDocument,
@@ -509,9 +506,11 @@ export const remove = (
             .tokenRemoveAll(TokenType.REFRESH)
             .catch(() => undefined)
             .then(() => {
-                if (context && !context.caller.system)
+                if (context)
                     recordAudit(context, {
-                        action: usersAuditActions.ADMIN_USER_SOFT_DELETED,
+                        action: context.caller.system
+                            ? usersAuditActions.SYSTEM_USER_SOFT_DELETED
+                            : usersAuditActions.ADMIN_USER_SOFT_DELETED,
                         outcome: 'success',
                         target_type: 'user',
                         target_id: user.id,
