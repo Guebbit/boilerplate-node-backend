@@ -197,13 +197,15 @@ export const SORT_COLLATION = { locale: 'en', strength: 2 } as const;
  *
  * Accepts every spelling a transport produces: the JSON:API CSV (`?sort=-price,title`), a
  * repeated key (`?sort=a&sort=b`) and a JSON body's array. Absent or blank stays `undefined`, so
- * `?sort=` is "no sort", not a 422. Membership is NOT checked here — the contract's enum does that,
+ * `?sort=` is "no sort", not a 422; an EMPTY array is kept as `[]` so the contract's `minItems`
+ * refuses it, rather than reading a malformed body as "no sort". Membership is NOT checked here — the contract's enum does that,
  * which is why a non-string entry is kept rather than dropped: the schema must get to refuse it.
  *
  * @param value - the raw `sort` off the merged request input
  * @returns the tokens, or `undefined` when none were sent
  */
 export const splitSortParameter = (value: unknown): unknown[] | undefined => {
+    if (Array.isArray(value) && value.length === 0) return [];
     const parts = (Array.isArray(value) ? value : [value]).flatMap((entry: unknown) =>
         typeof entry === 'string' ? entry.split(',') : [entry]
     );

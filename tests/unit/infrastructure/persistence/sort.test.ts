@@ -18,12 +18,16 @@ describe('splitSortParameter', () => {
         expect(splitSortParameter(input)).toEqual(expected);
     });
 
-    it.each([[undefined], [''], [' '], [','], [[]]])('reads %j as "no sort"', (input) => {
+    it.each([[undefined], [''], [' '], [',']])('reads %j as "no sort"', (input) => {
         expect(splitSortParameter(input)).toBeUndefined();
     });
 });
 
 describe('splitSortParameter — foreign values', () => {
+    it('keeps an empty array, so the contract schema refuses it instead of reading it as "no sort"', () => {
+        expect(splitSortParameter([])).toEqual([]);
+    });
+
     it('keeps a non-string entry, so the contract schema can refuse it', () => {
         expect(splitSortParameter(['price', 7, null])).toEqual(['price', 7, null]);
     });
