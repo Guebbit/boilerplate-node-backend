@@ -246,7 +246,7 @@ components:
         ShippingMethodsResponse:
             type: object
             additionalProperties: false
-            required: [methods, shipToCountries]
+            required: [methods, shipToCountries, returnAddress]
             properties:
                 methods:
                     type: array
@@ -268,9 +268,8 @@ components:
             additionalProperties: false
             required: [street, city, zip, country]
             description: >-
-                Where returned goods are sent. Absent from `ShippingMethodsResponse` until a
-                deployment configures one (`NODE_RETURN_ADDRESS_*`) — a customer is told where to
-                post goods back only once there is somewhere to post them.
+                Where returned goods are sent: the configured return address
+                (`NODE_RETURN_ADDRESS_*`), or the shop's legal address when none is fully set.
             properties:
                 name:
                     type: string

@@ -9,6 +9,7 @@ import {
     choice,
     csv,
     decimal,
+    email,
     flag,
     int,
     keyRing,
@@ -114,6 +115,20 @@ describe('choice', () => {
 
     it('takes the default when blank', () => {
         expect(choice(['a', 'b'], { default: 'b' }).schema.parse('')).toBe('b');
+    });
+});
+
+describe('email', () => {
+    it('reads an address, trimmed', () => {
+        expect(email().schema.parse('  shop@example.com ')).toBe('shop@example.com');
+    });
+
+    it('refuses a value that is not an address, rather than reading it as unset', () => {
+        expect(() => email().schema.parse('not-an-address')).toThrow(/email address/);
+    });
+
+    it('reads a blank value as unset', () => {
+        expect(email().schema.parse('  ')).toBeUndefined();
     });
 });
 

@@ -245,20 +245,56 @@ flowchart LR
 - An admin override into `delivered` starts the clock at the override, since no delivery timestamp
   exists for it.
 
+## Shop identity
+
+`orders` owns who the shop is, because `invoicing`, `delivery` and `returns` all import `orders` and
+`orders` may not import them back. One slice (`config.ts`), three getters:
+
+| Getter                 | Returns                                                                      | Read by                                   |
+| ---------------------- | ---------------------------------------------------------------------------- | ----------------------------------------- |
+| `shopIdentity()`       | legal name, VAT number (if set), address, country, email, phone              | `invoicing` (the seller block), the email |
+| `returnAddress()`      | the configured return address, or the legal address when it is not fully set | `delivery`, `returns`, the email          |
+| `returnPostagePayer()` | `consumer` (default) or `shop`                                               | `returns`, the email                      |
+
+Everything but the VAT number and the return address is required at boot, so a getter never answers
+`undefined`. A partly-set return address counts as none.
+
+### What the placed-order emails carry
+
+Both placed-order emails, the confirmation and the bank-transfer instructions that replace it, end
+with the same partial (`templates/partials/orders.withdrawal-notice.ejs`). The text goes in the body,
+not behind a link: a web page is not a durable medium (CJEU C-49/11). `withdrawalNotice()` in
+`emails.ts` builds it from the official Annex I wording, and picks one of three cases:
+
+| Case    | When                                 | What it says                                                      |
+| ------- | ------------------------------------ | ----------------------------------------------------------------- |
+| goods   | a withdrawable line ships            | Annex I(A), period from receipt, where goods go, who pays postage |
+| digital | every withdrawable line is digital   | Annex I(A), period from the contract; no return paragraphs        |
+| none    | every line is excluded under Art. 16 | only the Art. 6(1)(k) sentence: no instructions, no form          |
+
+Lines excluded under Art. 16 are named when others are not. The model form (Annex I(B)) has its "To"
+row filled with the shop. The refund and return legs always say 14 days, the statutory figure, even
+when the shop offers a longer withdrawal period.
+
 ## Configuration
 
-| Variable                      | Default             | Meaning                                                                                                                                                                                          |
-| ----------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NODE_SHOP_COUNTRY`           | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; its slice (`config.ts`) refuses to start without it                                  |
-| `NODE_SHIP_TO_COUNTRIES`      | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
-| `NODE_WITHDRAWAL_PERIOD_DAYS` | `14`                | Days a consumer has to withdraw. 14 is the legal minimum, so a smaller value is refused at read; a shop may offer longer                                                                         |
+| Variable                                                           | Default             | Meaning                                                                                                                                                                                          |
+| ------------------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_SHOP_COUNTRY`                                                | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; its slice (`config.ts`) refuses to start without it                                  |
+| `NODE_SHOP_LEGAL_NAME`                                             | —                   | The shop's legal name. Required. Printed on invoices and in the withdrawal notice                                                                                                                |
+| `NODE_SHOP_STREET`, `_CITY`, `_ZIP`                                | —                   | The shop's postal address. Required                                                                                                                                                              |
+| `NODE_SHOP_EMAIL`                                                  | —                   | Where a customer writes to (checked as an email). Required. Not the no-reply sender                                                                                                              |
+| `NODE_SHOP_PHONE`                                                  | —                   | The shop's telephone number. Required                                                                                                                                                            |
+| `NODE_SHOP_VAT_NUMBER`                                             | —                   | VAT identification number. Optional: a shop below the registration threshold prints none                                                                                                         |
+| `NODE_RETURN_ADDRESS_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY` | —                   | Where returned goods go. Optional; street, city, zip and country must all be set, or the shop's own address is used                                                                              |
+| `NODE_RETURN_POSTAGE_PAYER`                                        | `consumer`          | Who pays to send the goods back: `consumer` or `shop`. Said in the order email, frozen on each return                                                                                            |
+| `NODE_SHIP_TO_COUNTRIES`                                           | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
+| `NODE_WITHDRAWAL_PERIOD_DAYS`                                      | `14`                | Days a consumer has to withdraw. 14 is the legal minimum, so a smaller value is refused at read; a shop may offer longer                                                                         |
 
-The seller's own legal identity for invoicing (VAT number, legal name, street address) is
-[`invoicing`'s own configuration](./invoicing.md#configuration), not this module's — `orders` keeps
-only `NODE_SHOP_COUNTRY`, since it is also the checkout/VAT-jurisdiction fact above. Both are read
-fresh per call (`config.ts`), so a correction needs no restart. The VAT RATES charged against an
-order line are a different thing with a different owner — see [products](./products.md#configuration); this
-module only freezes onto the order the rate `products` hands it at checkout.
+The VAT RATES charged against an order line are a different thing with a different owner — see
+[products](./products.md#configuration); this module only freezes onto the order the rate `products`
+hands it at checkout. Every getter is read fresh per call (`config.ts`), so a correction needs no
+restart.
 
 ## Related pages
 

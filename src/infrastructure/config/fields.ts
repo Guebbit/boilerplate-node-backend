@@ -1,7 +1,7 @@
 /**
  * @module
  * The field builders a configuration slice is written with: `int`, `decimal`, `flag`, `choice`,
- * `text`, `secret`, `csv`, `keyRing`, `versionedKeyRing`.
+ * `text`, `email`, `secret`, `csv`, `keyRing`, `versionedKeyRing`.
  *
  * One rule for all of them: a value is trimmed, and a blank one counts as unset (the same
  * "empty string is not a value" rule t3-environment calls `emptyStringAsUndefined`). A value that is set
@@ -311,6 +311,20 @@ export function text(options: TextOptions & { default?: string } = {}): Field<st
         return options.upper ? value.toUpperCase() : value;
     };
     return build(z.string().transform(normalise), 'text', options);
+}
+
+/**
+ * An email address, trimmed. Blank is unset; a set value that is not an address is refused.
+ *
+ * @param options - `default` for an unset value
+ */
+export function email(options: CommonOptions & { default: string }): Field<string>;
+export function email(options?: CommonOptions): Field<string | undefined>;
+export function email(
+    options: CommonOptions & { default?: string } = {}
+): Field<string | undefined> {
+    // Zod: `z.email` is the library's own address rule, no hand-written pattern. https://zod.dev/api#emails
+    return build(z.email('email address'), 'email address', options);
 }
 
 /**

@@ -29,12 +29,12 @@ import {
     isForceMoveRefusal,
     isDigitalOnlyOrder,
     shopCurrency,
-    shipToCountries
+    shipToCountries,
+    returnAddress
 } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { holdsKey } from '@kernel/ability';
 import { findShippingMethod, SHIPPING_METHODS } from './domain';
-import { returnAddress } from './config';
 import { shipmentShippedEmail } from './emails';
 import { shipmentRepository } from './repository';
 import type { ShipmentDocument } from './model';
@@ -56,18 +56,9 @@ const listMethods = (): ResponseSuccess<ShippingMethodsResponse> => {
         // Spread: `SHIPPING_METHODS` itself is `readonly`, and the response type isn't.
         methods: SHIPPING_METHODS.map((method) => ({ ...method, currency })),
         shipToCountries: shipToCountries(),
-        // Absent until a deployment configures one — the customer is told where to post goods back
-        // only once there is somewhere to post them.
-        ...(returnAddress() ? { returnAddress: returnAddress() } : {})
+        returnAddress: returnAddress()
     });
 };
-
-/**
- * Where returned goods are sent — the deployment's configured return address, or `undefined`.
- * `returns` names it in the approval notice; it stays here because carrier-facing configuration is
- * this module's, in one place.
- */
-export { returnAddress } from './config';
 
 /**
  * The shipment behind one of the caller's orders. Ownership is the order's, scoped like every

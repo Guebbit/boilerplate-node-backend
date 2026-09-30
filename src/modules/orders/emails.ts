@@ -8,8 +8,16 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-import { orderFrontendLink, orderCurrency } from './config';
-import { orderTotal } from './domain';
+import {
+    orderFrontendLink,
+    orderCurrency,
+    returnAddress,
+    returnPostagePayer,
+    shopIdentity,
+    withdrawalPeriodDays,
+    type ReturnAddress
+} from './config';
+import { isExcludedFromWithdrawal, isShippedItem, orderTotal } from './domain';
 import type { OrderTransferInstructions } from '@types';
 
 /**
@@ -23,7 +31,17 @@ import type { OrderTransferInstructions } from '@types';
  * request's. Neither builder below re-resolves it; they only interpolate.
  */
 export interface OrderLines {
-    items: { quantity: number; product: { title: string; price: number } }[];
+    items: {
+        quantity: number;
+        product: {
+            title: string;
+            price: number;
+            /** Frozen at checkout; absent counts as shipped. */
+            requiresShipping?: boolean | null;
+            /** Frozen at checkout: Art. 16 takes the right of withdrawal away from this line. */
+            noWithdrawal?: boolean | null;
+        };
+    }[];
     /** The shipping frozen at checkout. Absent on an order that chose no delivery method. */
     shippingCost?: number;
     /** The order's own frozen currency; `orderCurrency`'s fallback covers an order that predates it. */
@@ -42,6 +60,147 @@ const totalOf = (order: OrderLines): number =>
         shippingCost: order.shippingCost,
         currency: orderCurrency(order)
     });
+
+/** Days the law gives to hand goods back and to reimburse, whatever longer window the shop offers. */
+const STATUTORY_DAYS = 14;
+
+/** What the withdrawal notice says, as finished strings; `effects` and `form` are empty when they do not apply. */
+export interface WithdrawalNotice {
+    heading: string;
+    /** The right, its period, how to use it, and the exclusions. */
+    terms: string[];
+    effectsHeading: string;
+    /** What happens to money and goods once a consumer withdraws. */
+    effects: string[];
+    formHeading: string;
+    /** The model withdrawal form, one row per string. */
+    form: string[];
+}
+
+/**
+ * A postal address on one line, skipping whatever is absent.
+ * @param address - the address to print
+ */
+const addressLine = (address: ReturnAddress): string =>
+    [address.name, address.street, `${address.zip} ${address.city}`, address.country]
+        .filter(Boolean)
+        .join(', ');
+
+/**
+ * Which clock the notice describes: `goods` when a withdrawable line ships (period from receipt),
+ * `digital` when every withdrawable line is digital (period from the contract), `none` when
+ * Art. 16 excludes every line. The same split the code uses to start the clock.
+ * @param order - the order's lines
+ */
+const withdrawalCase = (order: OrderLines): 'goods' | 'digital' | 'none' => {
+    const withdrawable = order.items.filter((item) => !isExcludedFromWithdrawal(item));
+    if (withdrawable.length === 0) return 'none';
+    return withdrawable.some((item) => isShippedItem(item)) ? 'goods' : 'digital';
+};
+
+/**
+ * The rows of the model withdrawal form (Annex I(B)), the "To" row filled with the trader.
+ * @param t - the translator
+ * @param trader - the shop's name, address, phone and e-mail, as one line
+ */
+const withdrawalForm = (t: ReturnType<typeof translator>, trader: string): string[] => [
+    t('orders.email-withdrawal.form-intro'),
+    t('orders.email-withdrawal.form-to', { trader }),
+    t('orders.email-withdrawal.form-notice'),
+    t('orders.email-withdrawal.form-ordered'),
+    t('orders.email-withdrawal.form-name'),
+    t('orders.email-withdrawal.form-address'),
+    t('orders.email-withdrawal.form-signature'),
+    t('orders.email-withdrawal.form-date'),
+    t('orders.email-withdrawal.form-delete')
+];
+
+/**
+ * What the goods-only half of the notice adds: where to send them, who pays, and the refund hold
+ * (Annex I(A) notes 4 and 5).
+ * @param t - the translator
+ */
+const goodsEffects = (t: ReturnType<typeof translator>): string[] => [
+    t('orders.email-withdrawal.withhold'),
+    t('orders.email-withdrawal.send-back', {
+        recipient: addressLine(returnAddress()),
+        returnDays: STATUTORY_DAYS
+    }),
+    t(
+        returnPostagePayer() === 'shop'
+            ? 'orders.email-withdrawal.postage-shop'
+            : 'orders.email-withdrawal.postage-consumer'
+    ),
+    t('orders.email-withdrawal.diminished')
+];
+
+/**
+ * The right-of-withdrawal information and model form every placed-order email must carry on a
+ * durable medium (CRD Art. 6(1)(h), 8(7) and Annex I). Every placeholder is filled: the period, the
+ * shop's identity, where goods go, who pays postage. Lines Art. 16 excludes are named.
+ *
+ * @param locale - the recipient's language
+ * @param order - the order's lines
+ * @param orderId - the order the withdrawal button lives on
+ */
+export const withdrawalNotice = (
+    locale: string,
+    order: OrderLines,
+    orderId: string
+): WithdrawalNotice => {
+    const t = translator(locale);
+    const heading = t('orders.email-withdrawal.heading');
+    const kind = withdrawalCase(order);
+    const excluded = order.items.filter((item) => isExcludedFromWithdrawal(item));
+    const excludedNote =
+        excluded.length > 0 && kind !== 'none'
+            ? [
+                  t('orders.email-withdrawal.excluded', {
+                      titles: new Intl.ListFormat(locale, { type: 'conjunction' }).format(
+                          excluded.map((item) => item.product.title)
+                      )
+                  })
+              ]
+            : [];
+    if (kind === 'none')
+        return {
+            heading,
+            terms: [t('orders.email-withdrawal.none')],
+            effectsHeading: '',
+            effects: [],
+            formHeading: '',
+            form: []
+        };
+
+    const identity = shopIdentity();
+    const trader = t('orders.email-withdrawal.trader', {
+        name: identity.legalName,
+        address: addressLine(identity),
+        phone: identity.phone,
+        email: identity.email
+    });
+    const days = withdrawalPeriodDays();
+    return {
+        heading,
+        terms: [
+            t('orders.email-withdrawal.right', { days }),
+            t(`orders.email-withdrawal.period-${kind}`, { days }),
+            t('orders.email-withdrawal.how', { trader }),
+            t('orders.email-withdrawal.online', {
+                url: orderFrontendLink({ locale, id: orderId })
+            }),
+            t('orders.email-withdrawal.deadline'),
+            ...excludedNote
+        ],
+        effectsHeading: t('orders.email-withdrawal.effects-heading'),
+        effects: [
+            t('orders.email-withdrawal.effects', { refundDays: STATUTORY_DAYS }),
+            ...(kind === 'goods' ? goodsEffects(t) : [])
+        ],
+        formHeading: t('orders.email-withdrawal.form-heading'),
+        form: withdrawalForm(t, trader)
+    };
+};
 
 /**
  * The placed-order email, sent to the customer — "order received, awaiting payment", never
@@ -62,6 +221,7 @@ export const orderConfirmEmail = (
     orderId: string
 ): EmailContent => {
     const t = translator(locale);
+    const withdrawal = withdrawalNotice(locale, order, orderId);
     return {
         template: 'orders.order-confirm',
         subject: t('orders.email-confirm.subject'),
@@ -81,6 +241,12 @@ export const orderConfirmEmail = (
             total: t('orders.email-confirm.total', { total: totalOf(order) }),
             linkLabel: t('orders.email-confirm.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
+            withdrawalHeading: withdrawal.heading,
+            withdrawalTerms: withdrawal.terms,
+            withdrawalEffectsHeading: withdrawal.effectsHeading,
+            withdrawalEffects: withdrawal.effects,
+            withdrawalFormHeading: withdrawal.formHeading,
+            withdrawalForm: withdrawal.form,
             footer: t('email.footer')
         }
     };
@@ -139,6 +305,7 @@ export const bankTransferInstructionsEmail = (
     orderId: string
 ): EmailContent => {
     const t = translator(locale);
+    const withdrawal = withdrawalNotice(locale, order, orderId);
     return {
         template: 'orders.order-transfer-instructions',
         subject: t('orders.email-transfer.subject'),
@@ -166,6 +333,12 @@ export const bankTransferInstructionsEmail = (
             // same link, rendering the same receipt on demand, applies here as on the paid path.
             linkLabel: t('orders.email-transfer.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
+            withdrawalHeading: withdrawal.heading,
+            withdrawalTerms: withdrawal.terms,
+            withdrawalEffectsHeading: withdrawal.effectsHeading,
+            withdrawalEffects: withdrawal.effects,
+            withdrawalFormHeading: withdrawal.formHeading,
+            withdrawalForm: withdrawal.form,
             footer: t('email.footer')
         }
     };
