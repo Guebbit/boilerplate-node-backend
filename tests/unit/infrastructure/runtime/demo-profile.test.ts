@@ -27,3 +27,12 @@ it('refuses production even after enableDemoProfile(), and logs it', () => {
         expect.objectContaining({ message: expect.stringContaining('production') })
     );
 });
+
+it('refuses an unset NODE_ENV too: only development and test may mount the demo', () => {
+    const error = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    enableDemoProfile();
+    delete process.env.NODE_ENV;
+
+    expect(isDemoMode()).toBe(false);
+    expect(error).toHaveBeenCalled();
+});

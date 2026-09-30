@@ -71,7 +71,7 @@ not an oversight — the table below is what earns each file its place, module s
 
 | File                            | Why it cannot be infrastructure                                                                          |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `registry.ts`                   | it _is_ the module system — `AppModule`, the required-config check, `registerModules`                    |
+| `registry.ts`                   | it _is_ the module system — `AppModule`, `registerModules`                                               |
 | `events.ts`                     | it exists so two modules can talk without importing each other                                           |
 | `authentication.ts`             | the socket `account` plugs into, so guards need no module import                                         |
 | `middlewares/authorizations.ts` | the guard that consumes that socket                                                                      |
@@ -79,7 +79,8 @@ not an oversight — the table below is what earns each file its place, module s
 | `ability.ts`                    | a resolved caller's rules, built once per request from what `permissions.ts` declares                    |
 | `access/query.ts`               | a caller's rules turned into the Mongo filter that enforces them, so no module writes its own            |
 | `access/tenant.ts`              | the one shop's pinned `_id`, needed by `permissions.ts` before `@modules/access` can be imported         |
-| `required-config.ts`            | the boot-time gate collecting every module's — and no module's — required config                         |
+| `module-config.ts`              | the boot-time gate collecting every module's — and no module's — configuration slices                    |
+| `config.ts`                     | the kernel's own variables: step-up windows and the outbox retry policy                                  |
 | `translation.ts`                | the hook `modules/locales` answers, so a decorator can resolve content without importing `src/modules/*` |
 
 The seed accounts' ids and credentials — the two demo identities `users`, `orders`, `cart` and

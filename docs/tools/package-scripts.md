@@ -150,13 +150,13 @@ the order book by driving the real checkout, payment and shipping endpoints, so 
 the same database would give the shop a second history. It skips a database that already holds
 anything and says so; `scenario:apply:reset` is how you rebuild on purpose.
 
-| Script                 | Job                                                         | Read more                         |
-| ---------------------- | ----------------------------------------------------------- | --------------------------------- |
-| `db:sync`              | make every index match the schemas; `-- --check` plans only | [Data](../reference/data.md)      |
-| `scenario:apply`       | build the demo dataset (skipped if anything is present)     | [Demo profile](./demo-profile.md) |
-| `scenario:apply:reset` | empty the database, then build it                           | [Demo profile](./demo-profile.md) |
-| `db:cache:clear`       | drop every cached response under the app's prefix           | [Redis cache](./redis-cache.md)   |
-| `db:bootstrap`         | `db:sync` followed by `scenario:apply`                      | runs on container boot            |
+| Script                 | Job                                                           | Read more                         |
+| ---------------------- | ------------------------------------------------------------- | --------------------------------- |
+| `db:sync`              | make every index match the schemas; `-- --check` plans only   | [Data](../reference/data.md)      |
+| `scenario:apply`       | build the demo dataset (skipped if anything is present)       | [Demo profile](./demo-profile.md) |
+| `scenario:apply:reset` | empty the database and the rate-limit counters, then build it | [Demo profile](./demo-profile.md) |
+| `db:cache:clear`       | drop every cached response under the app's prefix             | [Redis cache](./redis-cache.md)   |
+| `db:bootstrap`         | `db:sync` followed by `scenario:apply`                        | runs on container boot            |
 
 `scenario:apply` calls `db:cache:clear`'s logic itself after building. Run the
 script by hand after editing the database another way (`mongosh`, a GUI) — those writes never

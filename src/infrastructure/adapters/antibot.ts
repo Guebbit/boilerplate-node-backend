@@ -10,17 +10,10 @@
 import { Resolver } from 'node:dns/promises';
 import { isDisposableEmailDomain } from 'disposable-email-domains-js';
 import type { RungVerdict } from './antibot-verdict';
+import { antibotConfig } from '@infrastructure/adapters/config';
 
 /** The three postures a deployment can pick via `NODE_ANTIBOT_EMAIL_POLICY`. */
 export type EmailPolicy = 'off' | 'disposable' | 'mx';
-
-/**
- * Narrows a raw env string onto {@link EmailPolicy}, so `resolveEmailPolicy` needs no cast.
- * Exported so `kernel/required-config.ts` can refuse an unrecognized value at boot without
- * needing `resolveEmailPolicy`'s throw.
- */
-export const isEmailPolicy = (value: string): value is EmailPolicy =>
-    value === 'off' || value === 'disposable' || value === 'mx';
 
 /**
  * The active policy, read fresh per call — same arrangement as `orders/config.ts`'s
@@ -29,23 +22,7 @@ export const isEmailPolicy = (value: string): value is EmailPolicy =>
  * @throws {Error} when the variable names something outside the closed set; silently falling
  *   back to `off` would turn a deployment's typo into an unnoticed loss of protection.
  */
-export const resolveEmailPolicy = (): EmailPolicy => {
-    const raw = process.env.NODE_ANTIBOT_EMAIL_POLICY ?? 'off';
-    if (!isEmailPolicy(raw)) throw new Error(`Unknown NODE_ANTIBOT_EMAIL_POLICY: "${raw}"`);
-    return raw;
-};
-
-/**
- * A comma-separated domain list from the environment, lower-cased and trimmed — the same parsing
- * `app/security.ts` uses for `NODE_CORS_ORIGIN`.
- */
-const domainSetFrom = (value: string | undefined): Set<string> =>
-    new Set(
-        (value ?? '')
-            .split(',')
-            .map((domain) => domain.trim().toLowerCase())
-            .filter(Boolean)
-    );
+export const resolveEmailPolicy = (): EmailPolicy => antibotConfig().NODE_ANTIBOT_EMAIL_POLICY;
 
 /**
  * The resolver the MX rung asks: one try, two seconds. The default (`resolveMx` on its own)
@@ -85,7 +62,7 @@ export const checkEmailPolicy = (email: string): Promise<RungVerdict> =>
         // Domains this deployment exempts even when they would otherwise be refused — a
         // forwarding or aliasing service the upstream list is too broad about, or a customer's
         // own domain flagged by mistake.
-        if (domainSetFrom(process.env.NODE_ANTIBOT_EMAIL_ALLOWLIST).has(domain)) return 'ok';
+        if (antibotConfig().NODE_ANTIBOT_EMAIL_ALLOWLIST.includes(domain)) return 'ok';
 
         /*
          * disposable-email-domains-js: wraps the community-maintained `disposable-email-domains`
@@ -99,7 +76,7 @@ export const checkEmailPolicy = (email: string): Promise<RungVerdict> =>
          * https://github.com/disposable-email-domains/disposable-email-domains
          */
         if (
-            domainSetFrom(process.env.NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA).has(domain) ||
+            antibotConfig().NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA.includes(domain) ||
             isDisposableEmailDomain(domain)
         )
             return 'refused';

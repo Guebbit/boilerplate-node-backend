@@ -20,22 +20,13 @@ import type { RateLimitInfo } from 'express-rate-limit';
 import { t } from '@infrastructure/i18n';
 import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
 import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { rateLimitBudgetConfig, rateLimitConfig } from '@infrastructure/http/config';
 import { callerContextOf } from '@infrastructure/http/request';
 import { refuseAntibot } from '@infrastructure/http/middlewares/antibot-log';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
 import type { RateLimitBudget } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
-
-/**
- * Default window, in ms, used when `NODE_RATE_LIMIT_WINDOW_MS` is unset: one minute.
- *
- * The test suites raise it tenfold — see `tests/support/setup.ts`.
- *
- * See: docs/tools/security.md#the-rate-limit-budgets
- */
-export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 
 /**
  * Default per-address budget, used when `NODE_RATE_LIMIT_MAX` is unset: 100 requests per window,
@@ -91,6 +82,14 @@ const refuse =
     };
 
 /**
+ * The request ceiling a budget's variable configures, or its default.
+ *
+ * @param budget - the budget to read
+ */
+const budgetLimit = (budget: RateLimitBudget): number =>
+    rateLimitBudgetConfig(budget.namespace, [budget])()[budget.environmentVariable];
+
+/**
  * A {@link RateLimitBudget}'s data, turned into the actual Express middleware — the single place
  * every module-owned and infrastructure-owned limiter alike is built from.
  */
@@ -99,7 +98,7 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
         store: rateLimitStore(budget.namespace),
         windowMs:
             budget.windowMs === 'shared'
-                ? environmentNumber('NODE_RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS, 1)
+                ? rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS
                 : budget.windowMs,
         // draft-7 rate-limit headers (RateLimit-*), not the deprecated X-RateLimit-* set.
         standardHeaders: 'draft-7',
@@ -111,7 +110,7 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
          */
         passOnStoreError: true,
         handler: refuse(budget.audited),
-        limit: environmentNumber(budget.environmentVariable, budget.defaultMax, 1),
+        limit: budgetLimit(budget),
         skipSuccessfulRequests: budget.skipSuccessfulRequests ?? false,
         ...(budget.keyGenerator ? { keyGenerator: budget.keyGenerator } : {}),
         ...(budget.requestWasSuccessful
@@ -231,8 +230,10 @@ const GLOBAL_RATE_LIMIT_BUDGET: RateLimitBudget = {
         'Every request across the whole surface — a scanner sweeping for paths that do not exist ' +
         'is the traffic most worth braking, same as a browsing session.',
     audited: false,
-    // `GET /readyz` is an orchestrator's own probe, on a fixed interval — see `RateLimitBudget.skip`.
-    skip: (request) => request.method === 'GET' && request.path === '/readyz'
+    // `GET /livez` and `GET /readyz` are an orchestrator's own probes, on a fixed interval — see
+    // `RateLimitBudget.skip`.
+    skip: (request) =>
+        request.method === 'GET' && (request.path === '/livez' || request.path === '/readyz')
 };
 
 /**

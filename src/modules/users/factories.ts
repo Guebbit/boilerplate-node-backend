@@ -17,7 +17,7 @@ import {
     type OverridesFor
 } from '@infrastructure/persistence/factories';
 import type { User } from '@types';
-import type { Token, UserDocument } from './model';
+import type { Token, TwoFactorMethodRecord, UserDocument } from './model';
 
 /**
  * The password every unpinned fixture gets. Exported so a test that logs in types the same
@@ -40,6 +40,12 @@ export type UserOverrides = Omit<OverridesFor<User>, 'verifiedAt' | 'role'> & {
     /** Plaintext. Hashed by the model's pre-save hook, never by a fixture. */
     password?: string;
     tokens?: Token[];
+    /** Enrolled second factors — the contract exposes only `twoFactorEnabledAt`. */
+    twoFactorMethods?: TwoFactorMethodRecord[];
+    /** Salted-scrypt digests of unused backup codes (`account/two-factor/backup-codes.ts`). */
+    twoFactorBackupCodes?: string[];
+    /** The salt those digests were made under. */
+    twoFactorBackupCodeSalt?: string;
     /** Same `Date`-or-string widening `OverridesFor` gives `deletedAt` — commonly pinned inline. */
     verifiedAt?: Date | string;
 };

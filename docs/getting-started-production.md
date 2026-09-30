@@ -91,7 +91,7 @@ what's running is exactly what was built.
 
 ```bash
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml logs -f app
-curl http://127.0.0.1:3000/          # health probe
+curl http://127.0.0.1:3000/livez     # liveness probe
 ```
 
 The port is published to `127.0.0.1`, not `0.0.0.0` — reachable from the host, not from the

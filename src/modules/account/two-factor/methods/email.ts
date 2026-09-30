@@ -6,6 +6,7 @@
  * email.
  */
 
+import { mailConfig } from '@infrastructure/adapters/config';
 import { t } from '@infrastructure/i18n';
 import type { CallerContext } from '@types';
 import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
@@ -82,7 +83,7 @@ export const emailMethod: TwoFactorMethodHandler = {
     // itself (`scenarios/run-server.ts`, SK-08) — this reads the same setting `resolveMailTransport`
     // would, rather than asking whether it is specifically the demo profile asking.
     available: () =>
-        process.env.NODE_MAIL_TRANSPORT === 'outbox' || Boolean(process.env.NODE_SMTP_HOST),
+        mailConfig().NODE_MAIL_TRANSPORT === 'outbox' || Boolean(mailConfig().NODE_SMTP_HOST),
 
     eligibility: (user) =>
         user.verifiedAt

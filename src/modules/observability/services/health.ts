@@ -12,6 +12,9 @@ import { dependencyHealth, overallStatus } from './dependency-health';
 import { jobHealth } from './job-health';
 import { queueHealth } from './parked-jobs';
 import { processSnapshot } from './process-snapshot';
+import { nodeEnvironment, loggingConfig, tracingConfig } from '@infrastructure/runtime/config';
+import { observabilityConfig } from '../config';
+import { analyticsConfig } from '@infrastructure/observability/config';
 
 /**
  * Assembles the full readiness snapshot returned by `GET /observability/health`.
@@ -30,8 +33,8 @@ export const buildObservabilityHealth = (): Promise<ObservabilityHealth> =>
 
         return {
             status: overallStatus(dependencies),
-            environment: process.env.NODE_ENV ?? 'development',
-            service: process.env.NODE_SERVICE_NAME ?? 'boilerplate-node-backend',
+            environment: nodeEnvironment() ?? 'development',
+            service: loggingConfig().NODE_SERVICE_NAME ?? 'boilerplate-node-backend',
             runtimeVersion: process.version,
             uptimeSeconds: snapshot.uptimeSeconds,
             /*
@@ -50,16 +53,16 @@ export const buildObservabilityHealth = (): Promise<ObservabilityHealth> =>
              * a name that reads like a health check invites this block to be mistaken for one.
              */
             telemetry: {
-                loki: Boolean(process.env.NODE_LOKI_HOST),
-                otel: Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT),
+                loki: Boolean(observabilityConfig().NODE_LOKI_HOST),
+                otel: Boolean(tracingConfig().OTEL_EXPORTER_OTLP_ENDPOINT),
                 /*
                  * Frontend observability: the origin a browser loads the Umami tracking
                  * script from, plus the Faro collector. Declarative, and NOT the backend's
                  * own analytics wiring — that is `analytics` below, which needs a website id
                  * this origin says nothing about.
                  */
-                umami: Boolean(process.env.NODE_UMAMI_HOST),
-                faro: Boolean(process.env.NODE_FARO_COLLECTOR_URL),
+                umami: Boolean(analyticsConfig().NODE_UMAMI_HOST),
+                faro: Boolean(observabilityConfig().NODE_FARO_COLLECTOR_URL),
                 /*
                  * Which backend receives product events, and whether it can actually deliver
                  * them.

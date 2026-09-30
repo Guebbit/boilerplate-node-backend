@@ -14,6 +14,7 @@ import type { AppModule } from '@kernel/registry';
 import { ownOrderIds } from '@modules/orders';
 import { router } from './routes';
 import { findShipmentsForOrders } from './service';
+import { deliveryConfig } from './config';
 
 /** This module's manifest entry: routes, the export section, and its locales. */
 export default {
@@ -25,6 +26,7 @@ export default {
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
     routes: router,
+    config: [deliveryConfig.slice],
     personalData: [
         {
             section: 'shipments',

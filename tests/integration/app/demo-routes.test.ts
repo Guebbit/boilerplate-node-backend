@@ -17,8 +17,12 @@ import { installRequestParsing, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
 import { installRoutes } from '@app/routes';
 import { installErrorHandling } from '@app/error-handling';
+import { registerDemoClock, type DemoClock } from '@infrastructure/runtime/demo-clock';
 import { productModel } from '@modules/products/model';
 import { orderModel } from '@modules/orders/model';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
+import { createOrder, toOrderItem, detachOrderUserId } from '@modules/orders/tests/factories';
 
 /**
  * A one-shot switch: the next `emptyDatabase()` call rejects instead of doing its real work, then
@@ -128,11 +132,120 @@ describe('POST /__test/restore', () => {
     });
 });
 
+describe('POST /__test/jobs/:name', () => {
+    it('refuses a job it does not carry, with a 404', async () => {
+        const response = await request(testApp()).post('/__test/jobs/not-a-job');
+
+        expect(response.status).toBe(404);
+    });
+
+    it('does not mistake an inherited property for a job', async () => {
+        const response = await request(testApp()).post('/__test/jobs/constructor');
+
+        expect(response.status).toBe(404);
+    });
+
+    it('reap-orders scrubs an order past its retention window and says how many', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
+
+        const response = await request(testApp()).post('/__test/jobs/reap-orders');
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ job: 'reap-orders', result: 1 });
+        const scrubbed = await orderModel.findById(order._id);
+        expect(scrubbed?.email).toBe('anonymized@deleted.invalid');
+    });
+
+    it('answers 0 when nothing is due', async () => {
+        const response = await request(testApp()).post('/__test/jobs/reap-orders');
+
+        expect(response.body).toEqual({ job: 'reap-orders', result: 0 });
+    });
+});
+
 describe('GET /__test/emails', () => {
     it('answers the outbox as JSON, empty on a freshly reset one', async () => {
         const response = await request(testApp()).get('/__test/emails');
 
         expect(response.status).toBe(200);
         expect(response.body).toEqual({ emails: [] });
+    });
+});
+
+/** A recording stand-in: the route's job is validation and plumbing, not time. */
+const stubClock = (): DemoClock & { advanced: number[]; resets: number } => {
+    const clock = {
+        advanced: [] as number[],
+        resets: 0,
+        now: () => new Date('2030-01-01T00:00:00.000Z'),
+        offsetMs: () => clock.advanced.reduce((total, ms) => total + ms, 0),
+        advance: (ms: number) => {
+            clock.advanced.push(ms);
+        },
+        reset: () => {
+            clock.resets += 1;
+        }
+    };
+    return clock;
+};
+
+describe('/__test/clock', () => {
+    afterEach(() => {
+        registerDemoClock(undefined);
+    });
+
+    it('answers 501 on both verbs when the process installed no clock', async () => {
+        const app = testApp();
+
+        await expect(request(app).get('/__test/clock')).resolves.toMatchObject({ status: 501 });
+        await expect(
+            request(app).post('/__test/clock').send({ advanceMs: 1000 })
+        ).resolves.toMatchObject({ status: 501 });
+    });
+
+    it('reads the clock', async () => {
+        registerDemoClock(stubClock());
+
+        const response = await request(testApp()).get('/__test/clock');
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ now: '2030-01-01T00:00:00.000Z', offsetMs: 0 });
+    });
+
+    it('moves it forward by advanceMs and reports the new offset', async () => {
+        const clock = stubClock();
+        registerDemoClock(clock);
+
+        const response = await request(testApp()).post('/__test/clock').send({ advanceMs: 5000 });
+
+        expect(response.status).toBe(200);
+        expect(clock.advanced).toEqual([5000]);
+        expect(response.body).toMatchObject({ offsetMs: 5000 });
+    });
+
+    it.each([
+        ['a negative number', { advanceMs: -1 }],
+        ['a string', { advanceMs: '5000' }],
+        ['nothing', {}]
+    ])('refuses %s, without touching the clock', async (_label, body) => {
+        const clock = stubClock();
+        registerDemoClock(clock);
+
+        const response = await request(testApp()).post('/__test/clock').send(body);
+
+        expect(response.status).toBe(400);
+        expect(clock.advanced).toEqual([]);
+    });
+
+    it('is put back by a restore', async () => {
+        const clock = stubClock();
+        registerDemoClock(clock);
+
+        await request(testApp()).post('/__test/restore').send({ scenario: 'blank' });
+
+        expect(clock.resets).toBe(1);
     });
 });

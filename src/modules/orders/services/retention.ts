@@ -7,8 +7,8 @@
 
 import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentNumber } from '@infrastructure/runtime/environment';
 import { orderRepository } from '../repository';
+import { orderPiiRetentionDays } from '../config';
 
 /**
  * DDD-D6's `personalData.erase` hook. Unsets `userId` on every order this account placed and
@@ -23,7 +23,7 @@ import { orderRepository } from '../repository';
  * @param session - joins the detach to the hard-delete transaction calling this hook
  */
 export const detachUserId = (userId: string, session: ClientSession): Promise<void> => {
-    const retentionDays = environmentNumber('NODE_ORDER_PII_RETENTION_DAYS', 3650, 1);
+    const retentionDays = orderPiiRetentionDays();
 
     return orderRepository.detachUserId(userId, retentionDays, session).then((detached) => {
         if (detached > 0)

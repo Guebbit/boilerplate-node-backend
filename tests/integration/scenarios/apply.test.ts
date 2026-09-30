@@ -1,5 +1,5 @@
 /**
- * `scenarios/apply.ts`'s own gates: the production refusal, the non-empty-database refusal, and
+ * `scenarios/apply.ts`'s own gates: the refusal outside development/test, the non-empty-database refusal, and
  * `--reset`.
  *
  * Spawned ASYNCHRONOUSLY, and that is load-bearing: `spawnSync` blocks jest's event loop for the
@@ -17,6 +17,8 @@
 
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import mongoose from 'mongoose';
 import { seedCredentials } from '@scenarios/accounts';
@@ -93,15 +95,16 @@ const freshDbUri = (): string => {
 };
 
 describe('scenarios/apply.ts', () => {
-    it(
-        'refuses to run in production, and never opens the database',
-        async () => {
+    // An empty value stands for "unset": `dotenv/config` would fill a truly absent one from `.env`.
+    it.each(['production', 'staging', ''])(
+        'refuses to run with NODE_ENV=%p, and never opens the database',
+        async (nodeEnv) => {
             const dbUri = freshDbUri();
 
-            const result = await runApply(['blank'], dbUri, 'production');
+            const result = await runApply(['blank'], dbUri, nodeEnv);
 
             expect(result.status).toBe(0);
-            expect(result.stdout + result.stderr).toContain('NODE_ENV is production');
+            expect(result.stdout + result.stderr).toContain('not development or test');
 
             // The gate returns before `bootAppInProcess()` ever connects — nothing to drop.
             const connection = await mongoose.createConnection(dbUri).asPromise();
@@ -137,5 +140,26 @@ describe('scenarios/apply.ts', () => {
             await connection.close();
         },
         APPLY_TIMEOUT_MS * 3
+    );
+
+    it(
+        'writes --describe-to into a directory that does not exist yet, with every login in it',
+        async () => {
+            const scratch = await mkdtemp(path.join(os.tmpdir(), 'apply-describe-'));
+            const describeTo = path.join(scratch, 'reports', 'e2e', 'scenario.json');
+
+            const result = await runApply([`--describe-to=${describeTo}`, 'blank'], freshDbUri());
+
+            expect(result.status).toBe(0);
+            const described = JSON.parse(await readFile(describeTo, 'utf8')) as {
+                scenario: string;
+                accounts: Record<string, { email: string }>;
+            };
+            expect(described.scenario).toBe('blank');
+            expect(Object.keys(described.accounts)).toEqual(Object.keys(seedCredentials));
+
+            await rm(scratch, { recursive: true });
+        },
+        APPLY_TIMEOUT_MS
     );
 });

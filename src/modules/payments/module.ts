@@ -23,14 +23,13 @@ import {
     detachUserId,
     findOwnPaymentsForExport
 } from './services';
-import { validateBankTransferConfig, validateStripeSecretKey } from './config';
 import { paymentsRateLimits } from './rate-limits';
-import { checkSelector } from '@kernel/required-config';
-import { resolvePaymentProvider } from './providers';
 // Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED,
 // PAYMENT_REFUNDED). Reached directly, never through this module's own barrel — see CLAUDE.md's
 // module-barrel rule.
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED, PAYMENT_REFUNDED } from './events';
+import { paymentsConfig } from './config';
+import { paymentProviderProbe } from './providers';
 
 /**
  * DDD-D4: this module's public (webhook-visible) events — `webhooks/services/publish.ts`
@@ -83,28 +82,9 @@ export default {
     // The provider signs over the exact bytes it sent — relative to `basePath`, composed by the
     // app tier, so the mount point is stated once and the two cannot drift.
     rawBodyPaths: ['/webhook'],
-    // `productionOnly`: `tests/support/setup.ts` supplies a dev value, and the `fake` provider
-    // needs none locally — booting without it there is not the failure this guards against.
-    requiredConfig: [
-        {
-            key: 'NODE_PAYMENT_WEBHOOK_SECRET',
-            minLength: 16,
-            placeholder: 'your-payment-webhook-secret-here',
-            productionOnly: true
-        }
-    ],
-    // What `requiredConfig` cannot express: `validateBankTransferConfig` bundles the
-    // `NODE_BANK_TRANSFER_IBAN`/`_BIC` values needing `ibantools` to validate with the
-    // cross-field rule (an IBAN set with no `_BENEFICIARY`). `NODE_PAYMENT_PROVIDER` itself —
-    // `resolvePaymentProvider` already throws a good message on an unknown name; this is what
-    // makes that throw happen at boot instead of on the first payment. And
-    // `NODE_STRIPE_SECRET_KEY` — a test-mode key is a value problem, not a missing/short one, so
-    // it needs a check of its own too.
-    customCheck: () => [
-        ...validateBankTransferConfig(),
-        ...checkSelector('NODE_PAYMENT_PROVIDER', resolvePaymentProvider),
-        ...validateStripeSecretKey()
-    ],
+    // The webhook secret, the Stripe key gate and the bank-transfer values: see `./config`. The
+    // provider selector is probed beside its registry, since the resolver imports the config.
+    config: [paymentsConfig.slice, paymentProviderProbe.slice],
     personalData: [
         {
             section: 'payments',

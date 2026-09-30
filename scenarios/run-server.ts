@@ -24,6 +24,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseDotenv } from 'dotenv';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
+import { registerDemoClock } from '@infrastructure/runtime/demo-clock';
+import { installDemoClock } from './support/demo-clock';
 import { registerOAuthProvider } from '@modules/account/oauth/providers';
 import { fakeOAuthProvider } from '@modules/account/oauth/providers/fake';
 import { startEphemeralMongo } from './support/ephemeral-mongo';
@@ -64,7 +66,10 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_PII_ENCRYPTION_KEY: 'demo-pii-encryption-key',
     NODE_TOTP_ENCRYPTION_KEY: 'demo-totp-encryption-key',
     NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'demo-webhook-secret-encryption-key',
-    // `orders`' and `products`' own boot-time requirements (SK-08) — `assertRequiredConfig` no
+    // Known, so the paired e2e suite can sign a payment-provider delivery (`POST /payments/webhook`)
+    // itself; the frontend's `paymentWebhookSecret` carries the same value.
+    NODE_PAYMENT_WEBHOOK_SECRET: 'demo-payment-webhook-secret',
+    // `orders`' and `products`' own boot-time requirements (SK-08) — `assertModuleConfig` no
     // longer exempts this profile, so it satisfies the gate the ordinary way, with the same
     // values `.env-example` ships for a plain developer checkout.
     NODE_SHOP_COUNTRY: 'IT',
@@ -172,6 +177,11 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
         // The only call site in the whole codebase, on purpose: no copied `.env` can mount the
         // control surface on a host that isn't this one.
         enableDemoProfile();
+
+        // The movable clock behind `/__test/clock`. Installed before the app is imported, so every
+        // module sees the fake `Date` from its first read; a time journey moves it, and the next
+        // restore puts it back. See `scenarios/support/demo-clock.ts`.
+        registerDemoClock(installDemoClock());
 
         // This profile's own OAuth identity provider (SK-08) — production's registry seeds none,
         // so a Cypress spec clicking "Continue with Google" needs this profile to put one there

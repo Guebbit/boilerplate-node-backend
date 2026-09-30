@@ -530,6 +530,38 @@ export default tseslint.config(
     },
 
     /**
+     * The environment is read in ONE layer: each owner's `config.ts` (a `defineConfig` slice) and the
+     * store beneath them. Everything else asks a slice for a typed value.
+     *
+     * `no-restricted-properties` is core ESLint and covers the destructured spelling too
+     * (`const { env } = process`). `no-process-env` is deprecated, and its replacement lives in
+     * `eslint-plugin-n`, which this repo does not install.
+     *
+     * A test may still write `process.env` today: that is what `tests/support/environment.ts` and
+     * `tests/support/setup.ts` do, and rule 2 of the plan (no writes in tests) waits on the store
+     * taking overrides. See docs/tools/configuration.md.
+     */
+    {
+        files: ['src/**/*.ts'],
+        ignores: [
+            'src/**/config.ts',
+            'src/infrastructure/config/store.ts',
+            'src/modules/*/tests/**/*.ts'
+        ],
+        rules: {
+            'no-restricted-properties': [
+                'error',
+                {
+                    object: 'process',
+                    property: 'env',
+                    message:
+                        'Read the environment through your owner’s config.ts (defineConfig), never process.env — see docs/tools/configuration.md.'
+                }
+            ]
+        }
+    },
+
+    /**
      * Exported API carries its own documentation, and the documentation is checked.
      *
      * Two halves, both of them MUSTs in CLAUDE.md, both checked by this one rule:

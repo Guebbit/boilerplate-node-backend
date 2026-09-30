@@ -20,15 +20,25 @@ It is also the lightest way for a human to get a working API for anything — a 
 
 ## The control surface
 
-`npm run demo` calls `enableDemoProfile()` in-process, before `src/app.ts` is even imported — the only call site, so no environment variable can switch this on. It additionally mounts three routes, before the 404 catch-all and inert in every other profile:
+`npm run demo` calls `enableDemoProfile()` in-process, before `src/app.ts` is even imported — the only call site, so no environment variable can switch this on. It additionally mounts six routes, before the 404 catch-all and inert in every other profile:
 
-| Route                  | What it does                                                                                                                                                                                                                                                                                                                                                                                  |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /__test/restore` | Empty every collection and put a named scenario back — `{ "scenario": "shop" }` (the default, the furnished shop) or `{ "scenario": "blank" }` (roles, the four named accounts and locales only) — then clear the outbox, refresh the locale overlay and flush the cache. A REPLAY of the copy this process built at boot, not a rebuild: roughly 10 ms, fast enough to run once per e2e spec |
-| `GET /__test/scenario` | What is currently restored: the name, every seed account's login, and `subjects` — one row id per guarantee name (`order.paid`, `product.outOfStock`, …). The only way to address a specific order, since order ids are minted at boot rather than pinned                                                                                                                                     |
-| `GET /__test/emails`   | The emails the app "sent" since the last restore. In demo mode the mailer (`src/infrastructure/adapters/mailer.ts`) records to an in-memory outbox (`demo-outbox.ts`) instead of talking to SMTP, with the reset/verify token lifted out of the link — a password-reset spec is the token in the email, or it is nothing                                                                      |
+| Route                     | What it does                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /__test/restore`    | Empty every collection and put a named scenario back — `{ "scenario": "shop" }` (the default, the furnished shop) or `{ "scenario": "blank" }` (roles, the four named accounts and locales only) — then clear the outbox, refresh the locale overlay and flush the cache. A REPLAY of the copy this process built at boot, not a rebuild: roughly 10 ms, fast enough to run once per e2e spec |
+| `GET /__test/scenario`    | What is currently restored: the name, every seed account's login, and `subjects` — one row id per guarantee name (`order.paid`, `product.outOfStock`, …). The only way to address a specific order, since order ids are minted at boot rather than pinned                                                                                                                                     |
+| `GET /__test/clock`       | The demo clock: `{ now, offsetMs }` — what `Date.now()` answers, and how far it is ahead of real time                                                                                                                                                                                                                                                                                         |
+| `POST /__test/clock`      | Move the clock FORWARD: `{ "advanceMs": 3600000 }`. Never back (a negative or non-numeric value is a 400). Moves nothing else: a job that should react is triggered through its own door — the reservation sweep is `POST /inventory/reservations/sweep`. A restore puts it back to real time. Jumps beyond the refresh-token lifetime end the session, so log in again                       |
+| `POST /__test/jobs/:name` | Run one background job now, through the same service function its `scripts/ops/` script calls. `reap-orders` scrubs the PII of orders past their retention window and answers `{ job, result }` (how many it scrubbed); any other name is a 404. Move the clock first, then run the job                                                                                                       |
+| `GET /__test/emails`      | The emails the app "sent" since the last restore. In demo mode the mailer (`src/infrastructure/adapters/mailer.ts`) records to an in-memory outbox (`demo-outbox.ts`) instead of talking to SMTP, with the reset/verify token lifted out of the link — a password-reset spec is the token in the email, or it is nothing                                                                      |
 
 The routes are unauthenticated on purpose: the profile only ever binds beside an in-memory database that `npm run demo` created seconds earlier. There is nothing to protect and no deployment that mounts them — `enableDemoProfile()` is called nowhere but `scenarios/run-server.ts`.
+
+Two values the paired e2e suite needs from the demo backend, both set in `scenarios/run-server.ts` or by whoever boots it:
+
+| Variable                      | Demo value                                        | Why                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_WEBHOOK_SECRET` | `demo-payment-webhook-secret` (filled when blank) | Known, so a spec can sign a payment-provider delivery for `POST /payments/webhook`                                                        |
+| `NODE_WEBHOOK_DEMO_SINK_URL`  | unset; the frontend's runner sets it              | Seeds the demo subscription at that URL (`scenarios/webhooks.ts`). The suite hosts the receiver itself, so a replay has somewhere to land |
 
 Not mounted at all when `enableDemoProfile()` was never called — every route 404s, same as a path
 that does not exist.
@@ -75,6 +85,23 @@ answers.
 ← 200 { "emails": [{ "to": "...", "subject": "...", "...": "..." }] }
 ```
 
+### The clock
+
+`Date` alone is faked (`@sinonjs/fake-timers`, `toFake: ['Date']`, `shouldAdvanceTime`), installed by
+`scenarios/run-server.ts` before the app loads. Timers, the Mongo driver's heartbeats and
+`performance` stay real, so nothing freezes. The `src/` side only knows the `DemoClock` interface
+(`src/infrastructure/runtime/demo-clock.ts`); the package is a dev dependency and a production image
+never loads it. Why not short env windows: they cannot reach the 14-day withdrawal minimum or the
+constants that are hard-coded, and they are process-wide.
+
+```mermaid
+flowchart LR
+    Spec["spec: cy.travel(ms)"] -->|"POST /__test/clock"| Clock["demo clock: Date + ms"]
+    Spec -->|"then trigger the job"| Job["e.g. POST /inventory/reservations/sweep"]
+    Clock -. "every new Date() reads it" .-> Job
+    Restore["POST /__test/restore"] -->|"reset"| Clock
+```
+
 ## The named accounts
 
 Their ids and credentials live in `scenarios/accounts.ts` — outside `src/` entirely, like every
@@ -96,8 +123,8 @@ name a person without taking on the shape of a user.
 **The credentials must stay fixed.** `cy.loginAs()` in the paired frontend types them into a real
 login form. Everything else about the dataset can move; these are the part a human reads off a
 page and types. Each password is overridable — `NODE_SEED_ADMIN_PASSWORD` for the owner,
-`NODE_SEED_USER_PASSWORD`, `NODE_SEED_EDITOR_PASSWORD`, `NODE_SEED_MODERATOR_PASSWORD` — change
-both `.env` files together, never one alone.
+`NODE_SEED_USER_PASSWORD`, `NODE_SEED_EDITOR_PASSWORD`, `NODE_SEED_MODERATOR_PASSWORD`, and one per
+persona and staff account (below) — change both `.env` files together, never one alone.
 
 **The password is stored plaintext on purpose.** `userSchema`'s pre-save hook hashes it on the way
 in, so a hash written there would drift from that hook and lose its plaintext. It never reaches a
@@ -105,6 +132,35 @@ response — `password` is `select: false` and the user transform omits it — w
 `scenarios/subjects.ts` and `@scenarios/accounts` state these credentials as literals rather than
 reading them back off a serialized user.
 :::
+
+## The persona accounts
+
+Four more customers, each in one state a journey starts from. They are written straight to the
+collection (`scenarios/users.ts`), because reaching the state through the API needs a mail or a
+code the seeder never reads. Each password is `NODE_SEED_<NAME>_PASSWORD`.
+
+| Persona        | Login                       | State                                                                            |
+| -------------- | --------------------------- | -------------------------------------------------------------------------------- |
+| `unverified`   | `unverified@example.com`    | signed up, never proved the address                                              |
+| `twoFactor`    | `two-factor@example.com`    | email 2FA armed; five known single-use backup codes (published as `backupCodes`) |
+| `pendingEmail` | `pending-email@example.com` | asked to move to another address, has not confirmed                              |
+| `banned`       | `banned@example.com`        | switched off (`active: false`), so a login is refused                            |
+
+The banned persona is separate from `marcus`, whom the shop flow bans through the API so the audit
+trail records it. The persona exists so `blank` carries one too.
+
+## The staff accounts
+
+Four more logins, each holding exactly one role. Three are shop roles; the operator holds a
+platform role only, with no shop membership, so it holds none of a shop's keys. Each password is
+`NODE_SEED_<NAME>_PASSWORD`.
+
+| Account     | Login                   | Role                              |
+| ----------- | ----------------------- | --------------------------------- |
+| `manager`   | `manager@example.com`   | shop `manager`                    |
+| `warehouse` | `warehouse@example.com` | shop `warehouse`                  |
+| `support`   | `support@example.com`   | shop `support`                    |
+| `operator`  | `operator@example.com`  | platform `operator`, nothing else |
 
 ## How a scenario is built
 
@@ -134,6 +190,10 @@ Why once, and why a copy:
 - **The flows need a listening app.** They get a throwaway loopback listener of their own
   (`scenarios/flows/loopback.ts`), opened before `NODE_PORT` is bound and closed after — so the
   readiness probe never sees a shop halfway through its own history.
+- **The flows solve no challenge.** A script cannot, so the human-challenge provider is switched to
+  `none` while they run (`scenarios/support/no-human-challenge.ts`) and restored after. A backend
+  booted with `NODE_ANTIBOT_PROVIDER=altcha` (the frontend's antibot run) still serves the provider:
+  the build is over before it listens.
 
 The same `buildScenario` runs behind `npm run scenario:apply` against a real database, which boots
 the application in-process for exactly this reason. It refuses a database that already holds

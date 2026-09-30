@@ -4,7 +4,7 @@
  * whether to render a widget before it submits a guarded form. The gate itself is a cross-cutting
  * middleware (`humanChallengeGate`), so `account` and `feedback` depend on
  * `infrastructure/adapters/antibot-providers` directly rather than on this module — which is why
- * this manifest carries no boot-time checks of its own: `app/required-config.ts` validates the
+ * this manifest carries no boot-time checks of its own: `app/config.ts` validates the
  * provider selection and its secrets, since that gate keeps running whether or not this module's
  * two HTTP routes are even mounted (SK-06).
  *

@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
+import { breachedPasswordsConfig } from '@infrastructure/security/config';
 import type { ResponseErrorItem } from '@infrastructure/http/response';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -64,7 +64,7 @@ export const checkHibpRange = (
     const hash = createHash('sha1').update(password).digest('hex').toUpperCase();
     const prefix = hash.slice(0, 5);
     const suffix = hash.slice(5);
-    const timeoutMs = environmentNumber('NODE_PASSWORD_BREACH_HIBP_TIMEOUT_MS', 1500, 1);
+    const timeoutMs = breachedPasswordsConfig().NODE_PASSWORD_BREACH_HIBP_TIMEOUT_MS;
 
     return fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
         headers: { 'Add-Padding': 'true' },
@@ -104,10 +104,10 @@ export const checkHibpRange = (
 export const checkPasswordBreach = (
     password: string
 ): Promise<{ breached: boolean; count?: number }> => {
-    if (environmentFlag('NODE_PASSWORD_BREACH_LIST', true) && isInBundledBreachList(password))
+    if (breachedPasswordsConfig().NODE_PASSWORD_BREACH_LIST && isInBundledBreachList(password))
         return Promise.resolve({ breached: true });
 
-    if (!environmentFlag('NODE_PASSWORD_BREACH_HIBP', false))
+    if (!breachedPasswordsConfig().NODE_PASSWORD_BREACH_HIBP)
         return Promise.resolve({ breached: false });
 
     return checkHibpRange(password);

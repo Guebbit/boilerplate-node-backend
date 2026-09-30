@@ -61,7 +61,8 @@ describe('resolveTranslatables', () => {
                         fields: ['title'],
                         cacheTag: 'products',
                         exists: jest.fn(),
-                        writeDerived: writeProduct
+                        writeDerived: writeProduct,
+                        markEdited: jest.fn()
                     }
                 },
                 personalData: 'none'
@@ -74,7 +75,8 @@ describe('resolveTranslatables', () => {
                         fields: ['body'],
                         cacheTag: 'pages',
                         exists: jest.fn(),
-                        writeDerived: writePage
+                        writeDerived: writePage,
+                        markEdited: jest.fn()
                     }
                 },
                 personalData: 'none'
@@ -87,14 +89,16 @@ describe('resolveTranslatables', () => {
                 fields: ['title'],
                 cacheTag: 'products',
                 exists: expect.any(Function),
-                writeDerived: writeProduct
+                writeDerived: writeProduct,
+                markEdited: expect.any(Function)
             },
             page: {
                 collection: 'pages',
                 fields: ['body'],
                 cacheTag: 'pages',
                 exists: expect.any(Function),
-                writeDerived: writePage
+                writeDerived: writePage,
+                markEdited: expect.any(Function)
             }
         });
     });
@@ -109,7 +113,8 @@ describe('resolveTranslatables', () => {
             fields: ['title'],
             cacheTag: 'products',
             exists: jest.fn(),
-            writeDerived: jest.fn()
+            writeDerived: jest.fn(),
+            markEdited: jest.fn()
         };
         const modules: AppModule[] = [
             { name: 'products', translatables: { product: target }, personalData: 'none' },

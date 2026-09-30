@@ -255,7 +255,7 @@ the reuse check could recognise it. The check fell through to "genuinely absent"
 ordinary 401, and revoked nothing. Nothing failed; the defence was simply unreachable.
 
 So the sweep now uses the RETENTION window, and `account`'s manifest refuses to boot unless
-retention exceeds grace (`session/config.ts#invalidTokenWindows`) — the failure is silent by
+retention exceeds grace (the check on `sessionConfig` in `session/config.ts`) — the failure is silent by
 nature, so it is made loud at the only moment it can be.
 
 The retention default is a trade, stated plainly: an active client rotates about once per

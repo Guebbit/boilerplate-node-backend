@@ -113,6 +113,7 @@ flowchart LR
     DIS -->|yes| OFF["subscription disabled<br/>+ owner emailed"]
     DIS -->|no| DONE["status: exhausted"]
     BACK -.->|sweep, per minute<br/>publishes, does not claim| Q
+    BACK -.->|sweep, no broker<br/>claims and sends itself| CLAIM
 ```
 
 **An event that came through the [outbox](../tools/outbox.md) is fanned out idempotently.** The
@@ -161,6 +162,12 @@ carries when a failed row is due again; `npm run sweep:webhook-retries` (`script
 — the one job in `docker/crontab` that runs every minute instead of nightly — publishes every due
 row (and every stranded one, below) to the queue. See
 [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
+
+**No broker: the sweep sends.** With no RabbitMQ configured (or a broker that refuses the message),
+the sweep takes the claim itself and makes the one HTTP attempt a worker would, five rows at a time —
+the mailer's "degrade, don't drop" rule, run out of band so a slow subscriber never slows the API.
+A first attempt then waits for the next sweep, up to a minute, instead of going out at once.
+`webhooks` logs a warning at boot when no broker is configured.
 
 **The sweep publishes; only a claim delivers — a visibility-timeout lease, the way SQS does it.**
 The sweep does NOT claim a row before publishing it: publishing is safe to do more than once (the
@@ -233,7 +240,7 @@ The standard procedure catches most of it: `tsc` stops on every file that import
 (`scripts/ops/sweep-webhook-retries.ts`, `scenarios/webhooks.ts`, the cross-cutting tests), and the
 cross-cutting suite names the permissions, the page and the pairing entries. The module owns its
 queue consumer, its required/forbidden env checks, and its delivery substrate now (`consumers`,
-`requiredConfig` and `forbiddenInProduction` on its own `module.ts`; `transport/` for the signing
+its `config` slice (`config.ts`, on its own `module.ts`) with the required key and the forbidden demo sink; `transport/` for the signing
 and delivery code) — deleting the folder deletes all of that too, with nothing left in `app/` or
 `kernel/` to also touch. What still sits outside the module and **nothing flags** — delete these by
 hand:

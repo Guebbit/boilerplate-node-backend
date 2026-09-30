@@ -985,6 +985,12 @@ describe('resolveCacheTtl', () => {
         expect(resolveCacheTtl(3600)).toBe(3600);
     });
 
+    it('leaves the declared TTL alone when NODE_ENV is unset, like any server', () => {
+        delete process.env.NODE_ENV;
+
+        expect(resolveCacheTtl(3600)).toBe(3600);
+    });
+
     it('clamps long TTLs to the 30s default outside production', () => {
         process.env.NODE_ENV = 'development';
         delete process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
@@ -1013,13 +1019,18 @@ describe('resolveCacheTtl', () => {
         expect(resolveCacheTtl(3600)).toBe(3600);
     });
 
-    it('falls back to the default when the ceiling is not a usable number', () => {
+    it('takes the default for a blank ceiling, which is an unset one', () => {
         process.env.NODE_ENV = 'development';
+        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '';
 
-        for (const value of ['not-a-number', '-1', '']) {
-            process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = value;
-            expect(resolveCacheTtl(3600)).toBe(30);
-        }
+        expect(resolveCacheTtl(3600)).toBe(30);
+    });
+
+    it.each(['not-a-number', '-1'])('refuses %p as a ceiling instead of guessing', (value) => {
+        process.env.NODE_ENV = 'development';
+        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = value;
+
+        expect(() => resolveCacheTtl(3600)).toThrow(/NODE_REDIS_CACHE_DEV_TTL_MAX/);
     });
 });
 

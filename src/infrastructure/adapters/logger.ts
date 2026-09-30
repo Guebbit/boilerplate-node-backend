@@ -13,7 +13,7 @@ import winston from 'winston';
 // chain (via `scenarios/support/ephemeral-mongo.ts`), which is loaded outside jest's normal
 // module resolution — see that file's own comment. An alias resolves at `tsc`/`eslint` time but
 // fails at jest's globalSetup runtime.
-import { environmentChoice } from '../runtime/environment';
+import { isRelaxedEnvironment, loggingConfig } from '../runtime/config';
 import { pseudonymise } from '../security/pseudonymise';
 
 /** A structured log call's own object form: a `message` plus whatever context goes with it. */
@@ -127,19 +127,13 @@ export const PERSONAL_FIELDS = new Set(['email', 'ip', 'phone', 'street', 'zip',
  */
 type PersonalFieldMode = 'hash' | 'redact' | 'plain';
 
-/** {@link PersonalFieldMode}, as a list — `environmentChoice`'s own `allowed` set. */
-const PERSONAL_FIELD_MODES: readonly PersonalFieldMode[] = ['hash', 'redact', 'plain'];
-
 /**
- * Reads `NODE_LOG_PERSONAL_FIELDS`, falling back to `hash` when it is unset. An explicit but
- * unrecognised value throws rather than falling back the same way — silently keeping the safest
- * mode is right for "unset", wrong for a typo nobody would otherwise notice. Exported so the boot
- * gate (`src/app/required-config.ts`) can probe it once at startup instead of on the first log line.
- *
- * @throws {Error} when it is set to something none of the three modes recognise
+ * Reads `NODE_LOG_PERSONAL_FIELDS`, `hash` when it is unset. An unrecognised value is refused at
+ * boot by its slice (`runtime/config.ts`) rather than falling back — silently keeping the safest
+ * mode is right for "unset", wrong for a typo nobody would otherwise notice.
  */
 export const resolvePersonalFieldMode = (): PersonalFieldMode =>
-    environmentChoice('NODE_LOG_PERSONAL_FIELDS', PERSONAL_FIELD_MODES, 'hash');
+    loggingConfig().NODE_LOG_PERSONAL_FIELDS;
 
 /**
  * Applies the resolved {@link PersonalFieldMode} to one personal-data value.
@@ -235,8 +229,8 @@ export const serializeError = (error: unknown): Record<string, unknown> => {
             name: error.name,
             message: error.message,
             // Stack traces expose absolute paths and dependency internals — useful locally,
-            // an information leak in aggregated production logs.
-            ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
+            // an information leak in aggregated server logs. Kept only on a developer's machine or CI.
+            ...(isRelaxedEnvironment() && { stack: error.stack }),
             // The wrapped error is usually the one that explains the failure.
             ...(error.cause !== undefined && { cause: error.cause })
         };
@@ -279,8 +273,7 @@ export const redactFormat = winston.format((info) => {
  * the environment matrix can be asserted rather than assumed.
  */
 export const resolveLogLevel = (): string => {
-    if (process.env.NODE_LOG_LEVEL) return process.env.NODE_LOG_LEVEL;
-    return process.env.NODE_ENV === 'production' ? 'info' : 'debug';
+    return loggingConfig().NODE_LOG_LEVEL ?? (isRelaxedEnvironment() ? 'debug' : 'info');
 };
 
 /**
@@ -328,7 +321,7 @@ const prettyFormat = winston.format.combine(
  * See: docs/tools/loki.md
  */
 export const resolveConsoleFormat = (): winston.Logform.Format =>
-    process.env.NODE_ENV !== 'production' && process.stdout.isTTY ? prettyFormat : baseFormat;
+    isRelaxedEnvironment() && process.stdout.isTTY ? prettyFormat : baseFormat;
 
 /**
  * Main application logger. Pretty on an interactive terminal, JSON everywhere else.
@@ -345,7 +338,7 @@ export const logger: Logger = winston.createLogger({
     // Merged into every record — lets a log aggregator filter by service when several
     // apps ship to the same backend.
     defaultMeta: {
-        service: process.env.NODE_SERVICE_NAME ?? 'api'
+        service: loggingConfig().NODE_SERVICE_NAME ?? 'api'
     },
     transports: [
         // stdout only, deliberately: in containers the platform owns log collection and
@@ -368,7 +361,7 @@ export const auditLogger: Logger = winston.createLogger({
     level: 'info',
     format: baseFormat,
     defaultMeta: {
-        service: process.env.NODE_SERVICE_NAME ?? 'api',
+        service: loggingConfig().NODE_SERVICE_NAME ?? 'api',
         // Discriminator so the collector can route these to a separate index/retention policy.
         log_type: 'audit'
     },

@@ -8,6 +8,7 @@
 
 import type { HumanChallengeProvider } from './index';
 import type { RungVerdict } from '../antibot-verdict';
+import { antibotConfig } from '@infrastructure/adapters/config';
 
 /** Where a token is exchanged for a verdict. */
 const VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
@@ -22,7 +23,7 @@ const VERIFY_TIMEOUT_MS = 5000;
  *   would pass every caller, which is worse than refusing every caller.
  */
 const secretKey = (): string => {
-    const secret = process.env.NODE_ANTIBOT_TURNSTILE_SECRET ?? '';
+    const secret = antibotConfig().NODE_ANTIBOT_TURNSTILE_SECRET ?? '';
     if (!secret) throw new Error('NODE_ANTIBOT_PROVIDER is turnstile but its secret is unset.');
     return secret;
 };
@@ -54,7 +55,7 @@ const siteverify = (token: string, remoteAddress?: string): Promise<RungVerdict>
 export const turnstileProvider: HumanChallengeProvider = {
     name: 'turnstile',
     publicParameters: () => ({
-        siteKey: process.env.NODE_ANTIBOT_TURNSTILE_SITE_KEY ?? '',
+        siteKey: antibotConfig().NODE_ANTIBOT_TURNSTILE_SITE_KEY ?? '',
         scriptUrl: 'https://challenges.cloudflare.com/turnstile/v0/api.js'
     }),
     verify: (token, remoteAddress) => siteverify(token, remoteAddress).catch(() => 'refused')

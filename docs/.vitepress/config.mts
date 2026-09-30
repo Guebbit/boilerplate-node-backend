@@ -157,6 +157,7 @@ export default withMermaid(
                             { text: 'Testing — Quick Start', link: '/tools/testing-quickstart' },
                             { text: 'Package Scripts', link: '/tools/package-scripts' },
                             { text: 'Docker & Podman', link: '/tools/docker-and-podman' },
+                            { text: 'Health checks', link: '/tools/health-checks' },
                             { text: 'Two Client Stacks', link: '/tools/two-client-stacks' },
                             { text: 'Hosting', link: '/tools/hosting' },
                             {
@@ -170,6 +171,7 @@ export default withMermaid(
                             { text: 'Demo profile', link: '/tools/demo-profile' },
                             { text: 'Module scaffolder', link: '/tools/module-scaffolder' },
                             { text: 'The Flow Runner', link: '/tools/flow-runner' },
+                            { text: 'Configuration', link: '/tools/configuration' },
                             { text: 'Security', link: '/tools/security' },
                             {
                                 text: 'Deployment Hardening',

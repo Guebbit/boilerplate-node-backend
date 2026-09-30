@@ -201,7 +201,7 @@ This is why silo maps onto Kubernetes cleanly: the model does not change, only t
 | separate stacks can't reach each other | **NetworkPolicy**                                                                             |
 | secrets in an untracked `.env`         | **Sealed Secrets** or **External Secrets Operator** — per-client secrets that can live in git |
 | Traefik's ACME resolver                | **cert-manager**                                                                              |
-| the app's `GET /` healthcheck          | a **liveness probe** — already there                                                          |
+| the app's `GET /livez` healthcheck     | a **liveness probe** — already there; `GET /readyz` is the **readiness probe**                |
 | the one-shot `setup` service           | a **Job**, or a pre-upgrade Helm hook                                                         |
 | the `mongo-data` volume                | **StatefulSet** + **PersistentVolumeClaim**                                                   |
 

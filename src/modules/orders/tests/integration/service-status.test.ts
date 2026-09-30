@@ -136,12 +136,12 @@ describe('markDelivered', () => {
         expect(updated).toBeNull();
     });
 
-    it('freezes the withdrawal deadline 14 days after the delivery it was told about', async () => {
+    it('freezes the withdrawal deadline at the end of the 14th day after the delivery it was told about', async () => {
         const order = await seedOrder(OrderStatus.shipped);
 
         const updated = await markDelivered(String(order._id), new Date('2026-03-01T10:00:00Z'));
 
-        expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-15T10:00:00.000Z');
+        expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-15T23:59:59.999Z');
     });
 
     it('honours a longer period a deployment offers', () =>
@@ -153,7 +153,7 @@ describe('markDelivered', () => {
                 new Date('2026-03-01T10:00:00Z')
             );
 
-            expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-31T10:00:00.000Z');
+            expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-31T23:59:59.999Z');
         }));
 });
 
@@ -184,7 +184,7 @@ describe('markFulfilled', () => {
 
         const updated = await markFulfilled(String(order._id));
 
-        expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-15T10:00:00.000Z');
+        expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-15T23:59:59.999Z');
     });
 
     it('refuses from paid — the digital-only door still needs `start` first', async () => {

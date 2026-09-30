@@ -11,8 +11,8 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { environmentNumber } from '@infrastructure/runtime/environment';
 import { WebhookDeliveryStatus } from '@types';
+import { getWebhookDeliveryRetentionDays } from './config';
 
 /**
  * One secret in a subscription's ring — see `./secrets` for encryption at rest and rotation.
@@ -207,7 +207,7 @@ export type WebhookDeliveryModel = Model<WebhookDeliveryDocument>;
  * How long a delivery row survives, in days, before Mongo's TTL index removes it. Same pattern as
  * `audit-logs`/`feedback`: read at import time, since the TTL index is created once at startup.
  */
-const deliveryRetentionDays = environmentNumber('NODE_WEBHOOK_DELIVERY_RETENTION_DAYS', 30, 1);
+const deliveryRetentionDays = getWebhookDeliveryRetentionDays();
 
 /** Delivery collection schema. */
 export const webhookDeliverySchema = new Schema<WebhookDeliveryDocument, WebhookDeliveryModel>(

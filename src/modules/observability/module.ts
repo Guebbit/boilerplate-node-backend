@@ -20,6 +20,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
+import { observabilityConfig } from './config';
 
 /** This module's manifest entry: routes and locales — no event subscriptions, no seeds. */
 export default {
@@ -31,15 +32,8 @@ export default {
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
     routes: router,
-    /*
-     * `.env-example` ships `change-me-dev-metrics-token`, which
-     * scrapes `/observability/metrics` if left as-is. `minLength: 0` on purpose — UNSET is a
-     * supported, already-fail-closed state (`isMetricsScraper` denies by default, 503), so this
-     * only refuses to boot on the one dangerous state: the token SET to the known placeholder.
-     */
-    requiredConfig: [
-        { key: 'NODE_METRICS_TOKEN', minLength: 0, placeholder: 'change-me-dev-metrics-token' }
-    ],
+    // The scrape token's placeholder gate and the telemetry sinks: see `./config`.
+    config: [observabilityConfig.slice],
     locales: path.join(__dirname, 'locales'),
     // Infrastructure — health, metrics, the audit read endpoint, the SSE stream. Owns no
     // collection of its own; records nothing personal.

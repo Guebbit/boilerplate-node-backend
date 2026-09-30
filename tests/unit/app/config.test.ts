@@ -1,14 +1,14 @@
 /**
- * `APP_NON_MODULE_CHECKS` — the app tier's own boot-time entries, folded into
- * `assertRequiredConfig` (`@kernel/required-config`) by `src/app.ts`. The gate's own mechanism —
- * collecting, reporting once, skipping under test/demo — is covered in
- * `tests/unit/kernel/required-config.test.ts`; this file only asserts what THESE entries are.
+ * `APP_CONFIG_SLICES` — the app tier's own boot-time slices, folded into `assertModuleConfig`
+ * (`@kernel/module-config`) by `src/app.ts`. The gate's own mechanism — collecting, reporting once,
+ * skipping presence rules under test — is covered in `tests/unit/kernel/module-config.test.ts`;
+ * this file only asserts what THESE slices are.
  *
  * Every case sets `NODE_ENV` away from `test` first: the gate short-circuits under the test
  * environment, so a suite that left it alone would assert nothing at all.
  */
-import { assertRequiredConfig } from '@kernel/required-config';
-import { APP_NON_MODULE_CHECKS } from '@app/required-config';
+import { assertModuleConfig } from '@kernel/module-config';
+import { APP_CONFIG_SLICES } from '@app/config';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 import { resetAnalyticsProvider } from '@infrastructure/observability/analytics';
 import { withoutEnvironmentInThisFile } from '@tests/environment';
@@ -24,12 +24,14 @@ withoutEnvironmentInThisFile([
     'NODE_SMTP_SENDER',
     'NODE_ANALYTICS_PROVIDER',
     'NODE_MAIL_TRANSPORT',
+    'NODE_E2E_RUN',
     'NODE_LOG_PERSONAL_FIELDS',
     'NODE_ANTIBOT_PROVIDER',
     'NODE_ANTIBOT_ALTCHA_SECRET',
     'NODE_ANTIBOT_TURNSTILE_SITE_KEY',
     'NODE_ANTIBOT_TURNSTILE_SECRET',
-    'NODE_ANTIBOT_EMAIL_POLICY'
+    'NODE_ANTIBOT_EMAIL_POLICY',
+    'NODE_ANALYTICS_REQUIRE_CONSENT'
 ]);
 
 /**
@@ -41,8 +43,8 @@ const configure = (): void => {
     process.env.NODE_URL = 'https://api.example.com/';
 };
 
-/** `assertRequiredConfig` wired the way `src/app.ts` wires it — the whole point of this file. */
-const assertApp = (): void => assertRequiredConfig([], APP_NON_MODULE_CHECKS);
+/** `assertModuleConfig` wired the way `src/app.ts` wires it — the whole point of this file. */
+const assertApp = (): void => assertModuleConfig([], APP_CONFIG_SLICES);
 
 afterEach(() => {
     enableDemoProfile(false);
@@ -75,6 +77,18 @@ describe('application-wide variables', () => {
 
         expect(assertApp).toThrow(/NODE_CORS_ORIGIN/);
     });
+
+    it.each([undefined, 'staging'])(
+        'refuses to boot with NODE_ENV=%p and no NODE_CORS_ORIGIN: a server is not a developer',
+        (value) => {
+            configure();
+            if (value === undefined) delete process.env.NODE_ENV;
+            else process.env.NODE_ENV = value;
+            delete process.env.NODE_CORS_ORIGIN;
+
+            expect(assertApp).toThrow(/NODE_CORS_ORIGIN/);
+        }
+    );
 
     it('ignores an unset NODE_PSEUDONYM_KEY outside production', () => {
         // `productionOnly`: the logger's own dev fallback key (`adapters/logger.ts`) is right for
@@ -120,6 +134,81 @@ describe('the SMTP group', () => {
         process.env.NODE_SMTP_SENDER = 'Example <noreply@example.com>';
 
         expect(assertApp).not.toThrow();
+    });
+});
+
+/** A configured SMTP transport pointing at `host`, started as an e2e run. */
+const e2eSmtp = (host: string): void => {
+    configure();
+    process.env.NODE_E2E_RUN = '1';
+    process.env.NODE_MAIL_TRANSPORT = 'smtp';
+    process.env.NODE_SMTP_HOST = host;
+    process.env.NODE_SMTP_USER = 'x';
+    process.env.NODE_SMTP_PASS = 'x';
+    process.env.NODE_SMTP_SENDER = 'x@example.com';
+};
+
+describe('the mail guards', () => {
+    it('refuses to boot outside development and test with NODE_MAIL_TRANSPORT unset', () => {
+        configure();
+        process.env.NODE_ENV = 'production';
+
+        expect(assertApp).toThrow(/NODE_MAIL_TRANSPORT/);
+    });
+
+    it('refuses an unset NODE_ENV too, since unset is not development', () => {
+        configure();
+        delete process.env.NODE_ENV;
+
+        expect(assertApp).toThrow(/NODE_MAIL_TRANSPORT/);
+    });
+
+    it.each(['smtp', 'log'])('accepts an explicit NODE_MAIL_TRANSPORT=%s in production', (name) => {
+        configure();
+        process.env.NODE_ENV = 'production';
+        process.env.NODE_CORS_ORIGIN = 'https://app.example.com';
+        process.env.NODE_PSEUDONYM_KEY = 'a-long-enough-pseudonym-key';
+        process.env.NODE_MAIL_TRANSPORT = name;
+
+        expect(assertApp).not.toThrow();
+    });
+
+    describe('an e2e run (NODE_E2E_RUN=1)', () => {
+        it('refuses a real SMTP host', () => {
+            e2eSmtp('smtp.example.com');
+
+            expect(assertApp).toThrow(/NODE_SMTP_HOST=smtp\.example\.com is not a local mail sink/);
+        });
+
+        it('refuses smtp with no host at all', () => {
+            e2eSmtp('');
+            delete process.env.NODE_SMTP_HOST;
+
+            expect(assertApp).toThrow(/\(unset\)/);
+        });
+
+        it.each(['localhost', '127.0.0.1', '::1', 'mailpit'])(
+            'allows the local host %s',
+            (host) => {
+                e2eSmtp(host);
+
+                expect(assertApp).not.toThrow();
+            }
+        );
+
+        it.each(['log', 'outbox'])('allows %s whatever the SMTP host says', (name) => {
+            e2eSmtp('smtp.example.com');
+            process.env.NODE_MAIL_TRANSPORT = name;
+
+            expect(assertApp).not.toThrow();
+        });
+
+        it('leaves a real host alone when the run is not an e2e run', () => {
+            e2eSmtp('smtp.example.com');
+            delete process.env.NODE_E2E_RUN;
+
+            expect(assertApp).not.toThrow();
+        });
     });
 });
 

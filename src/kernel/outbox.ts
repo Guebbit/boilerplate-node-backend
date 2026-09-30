@@ -20,7 +20,6 @@ import type { ClientSession, Document, Model } from 'mongoose';
 import { Gauge } from 'prom-client';
 import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentNumber } from '@infrastructure/runtime/environment';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 import {
     outboxEventsDeadTotal,
@@ -33,6 +32,7 @@ import {
     type DomainEventMap,
     type DomainEventName
 } from './events';
+import { outboxConfig } from '@kernel/config';
 
 /** Where an outbox row is in its life. `dead` is terminal and needs an operator. */
 export type OutboxStatus = 'pending' | 'published' | 'dead';
@@ -81,7 +81,7 @@ export const outboxEventSchema = new Schema<OutboxEventDocument, OutboxEventMode
  * Days a PUBLISHED row is kept before Mongo's TTL index removes it. Dead rows have no
  * `publishedAt`, so they stay until an operator deals with them.
  */
-const outboxRetentionDays = environmentNumber('NODE_OUTBOX_RETENTION_DAYS', 7, 1);
+const outboxRetentionDays = outboxConfig().NODE_OUTBOX_RETENTION_DAYS;
 
 /*
  * The relay's read: pending rows in write order, grouped by aggregate.
@@ -104,10 +104,10 @@ export const outboxEventModel = model<OutboxEventDocument, OutboxEventModel>(
 );
 
 /** Failed dispatches before a row is parked as `dead`. */
-const outboxMaxAttempts = (): number => environmentNumber('NODE_OUTBOX_MAX_ATTEMPTS', 10, 1);
+const outboxMaxAttempts = (): number => outboxConfig().NODE_OUTBOX_MAX_ATTEMPTS;
 
 /** Seconds a relay's claim on a row lasts. Must outlast one dispatch, or a slow one is duplicated. */
-const outboxLeaseSeconds = (): number => environmentNumber('NODE_OUTBOX_LEASE_SECONDS', 60, 1);
+const outboxLeaseSeconds = (): number => outboxConfig().NODE_OUTBOX_LEASE_SECONDS;
 
 /** Backoff after the first failure. Doubles each time. */
 const BACKOFF_BASE_MS = 5000;

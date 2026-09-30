@@ -9,7 +9,7 @@
 
 import { z } from 'zod';
 import { getCurrentLocale, t } from '@infrastructure/i18n';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { accountConfig } from '../config';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
@@ -111,19 +111,12 @@ const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), 12)
  */
 export const PASSWORD_RESET_TOKEN_TYPE = 'password';
 
-/** Fallback for `NODE_PASSWORD_RESET_TTL_MS`: an hour, in milliseconds. */
-const DEFAULT_PASSWORD_RESET_TTL_MS = 3_600_000;
-
 /**
  * How long a reset link works — how long a stolen mailbox stays useful. Tunable because the safe
  * direction is SHORTER, and that trade against a user who reads mail on a delay is a
  * deployment's call, not this file's.
  */
-const PASSWORD_RESET_TOKEN_TTL_MS = environmentNumber(
-    'NODE_PASSWORD_RESET_TTL_MS',
-    DEFAULT_PASSWORD_RESET_TTL_MS,
-    1
-);
+const PASSWORD_RESET_TOKEN_TTL_MS = accountConfig().NODE_PASSWORD_RESET_TTL_MS;
 
 /**
  * Issue a password-reset token and deliver it — or silently do nothing for an unregistered

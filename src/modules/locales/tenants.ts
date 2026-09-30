@@ -9,32 +9,46 @@
  */
 
 import { LocaleTenantKind, type LocaleTenant, type LocaleTenantDescriptor } from '@types';
+import { defineConfig } from '@infrastructure/config/define';
+import { csv, text } from '@infrastructure/config/fields';
+
+/** The tenant ids this deployment holds words for. */
+export const localesConfig = defineConfig({
+    name: 'locales-tenants',
+    shape: {
+        NODE_LOCALE_TENANT_BACKEND: text({
+            default: 'demo-be',
+            describe: 'The id of the API’s own translation tenant.'
+        }),
+        NODE_LOCALE_TENANT_FRONTEND: text({
+            default: 'demo-fe',
+            describe: 'The id of the default frontend translation tenant.'
+        }),
+        NODE_LOCALE_TENANTS_EXTRA: csv({
+            describe: 'Further frontend tenants as `id=Label` pairs, comma-separated.'
+        })
+    }
+});
 
 /** The id of the API's own tenant — `NODE_LOCALE_TENANT_BACKEND`, `demo-be` by default. */
-export const backendTenant = (): LocaleTenant =>
-    process.env.NODE_LOCALE_TENANT_BACKEND?.trim() || 'demo-be';
+export const backendTenant = (): LocaleTenant => localesConfig().NODE_LOCALE_TENANT_BACKEND;
 
 /**
  * The id of the default frontend tenant — `NODE_LOCALE_TENANT_FRONTEND`, `demo-fe` by default.
  * Used when the client omits which tenant it wants, since a frontend paired one-to-one with this
  * API never needs to say.
  */
-export const frontendTenant = (): LocaleTenant =>
-    process.env.NODE_LOCALE_TENANT_FRONTEND?.trim() || 'demo-fe';
+export const frontendTenant = (): LocaleTenant => localesConfig().NODE_LOCALE_TENANT_FRONTEND;
 
 /**
  * Further frontend tenants — `NODE_LOCALE_TENANTS_EXTRA`, a comma-separated list of `id=Label`
  * pairs (`mobile=Mobile app,kiosk=Store kiosk`). The label is optional; omitted, the id is shown.
  */
 const extraFrontendTenants = (): LocaleTenantDescriptor[] =>
-    (process.env.NODE_LOCALE_TENANTS_EXTRA ?? '')
-        .split(',')
-        .map((pair) => pair.trim())
-        .filter((pair) => pair.length > 0)
-        .map((pair) => {
-            const [id, label] = pair.split('=').map((part) => part.trim());
-            return { id, label: label || id, kind: LocaleTenantKind.frontend };
-        });
+    localesConfig().NODE_LOCALE_TENANTS_EXTRA.map((pair) => {
+        const [id, label] = pair.split('=').map((part) => part.trim());
+        return { id, label: label || id, kind: LocaleTenantKind.frontend };
+    });
 
 /** Every tenant, the backend one first, then the default frontend, then the extras. */
 export const listTenants = (): LocaleTenantDescriptor[] => {

@@ -144,19 +144,20 @@ services:
             rabbitmq:
                 condition: service_started
 
-        # Health check to verify the container is ready to accept traffic
+        # Health check to verify the container is alive (liveness, not readiness)
         # Inspect with "podman ps" or "podman inspect <container name>"
         healthcheck:
+            # Liveness (`/livez`), never a dependency — see docs/tools/health-checks.md.
             # `node -e`, not `curl -f`: the image is node:*-alpine and does not ship curl, so the
             # curl form exited non-zero every time and parked the container on `unhealthy` while
-            # the API was answering 200 on `/` throughout. Node's built-in fetch needs nothing
-            # added to the image.
+            # the API was answering 200 throughout. Node's built-in fetch needs nothing added to
+            # the image.
             test:
                 [
                     'CMD',
                     'node',
                     '-e',
-                    "fetch('http://localhost:${NODE_PORT:-3000}/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                    "fetch('http://localhost:${NODE_PORT:-3000}/livez').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
                 ]
             # How often to run the test
             interval: 2m
@@ -200,7 +201,28 @@ services:
             - .:/app:Z
             - /app/node_modules
             - ./docker/crontab:/app/crontab:ro,Z
-        command: ['supercronic', '-passthrough-logs', '/app/crontab']
+        # Same as production: supercronic serves `/health` on loopback, and that is this
+        # container's own check — see docs/tools/health-checks.md.
+        command:
+            [
+                'supercronic',
+                '-passthrough-logs',
+                '-prometheus-listen-address',
+                '127.0.0.1:9746',
+                '/app/crontab'
+            ]
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:9746/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
         depends_on:
             database:
                 condition: service_healthy
@@ -564,6 +586,29 @@ services:
             timeout: 5s
             retries: 3
             start_period: 10s
+
+    # mailpit: a local SMTP sink with a web inbox. Somewhere for the app's mail to be delivered TO
+    # during a live e2e run, so reset links and 2FA codes are readable and nothing leaves the machine.
+    #
+    # Receives only. Point the app at it with NODE_SMTP_HOST=127.0.0.1 (host) or `mailpit` (the
+    # `app` container) and port 1025; the e2e mail guard allows exactly those hosts.
+    #
+    # Profile-gated, so a plain `up` is unchanged: `--profile integrations` starts it.
+    # https://mailpit.axllent.org/docs/configuration/runtime-options/
+    mailpit:
+        logging: *container-logging
+        profiles: ['integrations']
+        image: axllent/mailpit:latest
+        restart: unless-stopped
+        environment:
+            # Accept any login: the app sends NODE_SMTP_USER/PASS, and a sink has no accounts.
+            MP_SMTP_AUTH_ACCEPT_ANY: '1'
+            # Accept AUTH without TLS; the app's port-1025 connection is plain SMTP.
+            MP_SMTP_AUTH_ALLOW_INSECURE: '1'
+        ports:
+            # Loopback only: the inbox holds reset tokens. No volume: mail is in memory, gone on restart.
+            - '127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025'
+            - '127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025'
 
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:

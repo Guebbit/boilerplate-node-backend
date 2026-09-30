@@ -12,8 +12,8 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { environmentNumber } from '@infrastructure/runtime/environment';
 import type { AuditEntry } from '@infrastructure/observability/audit';
+import { auditLogsConfig } from './config';
 
 /**
  * A stored audit entry — `AuditEntry` from `@infrastructure/observability/audit`, as a document.
@@ -42,7 +42,7 @@ export type AuditLogModel = Model<AuditLogDocument>;
  * How long an entry survives, in days. Read at import time because a TTL index is created once,
  * at startup, from whatever value is configured then — see the note on the index below.
  */
-const retentionDays = environmentNumber('NODE_AUDIT_RETENTION_DAYS', 90, 1);
+const retentionDays = auditLogsConfig().NODE_AUDIT_RETENTION_DAYS;
 
 /** Audit collection schema. */
 export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(

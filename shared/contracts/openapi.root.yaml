@@ -1764,7 +1764,9 @@ paths:
         get:
             tags: [System]
             summary: API health check
-            description: Public ping endpoint. Returns a simple liveness indicator confirming the API process is running.
+            description: |
+                Public ping for clients (the frontend's API-down banner), rate-limited like any
+                browser call. Not an orchestrator probe: `/livez` is liveness, `/readyz` readiness.
             operationId: getHealth
             responses:
                 '200':
@@ -1774,18 +1776,33 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/HealthPingEnvelope'
 
+    /livez:
+        get:
+            tags: [System]
+            summary: Liveness check
+            description: |
+                Is the process up. For an orchestrator (Kubernetes' own `/livez` + `/readyz`
+                convention) and for every container HEALTHCHECK. Empty body, no I/O: it checks
+                nothing else, on purpose. A failing dependency must never fail liveness, because
+                a restart does not bring a downed database back.
+            operationId: getLivez
+            responses:
+                '200':
+                    description: The process is up.
+
     /readyz:
         get:
             tags: [System]
             summary: Readiness check
             description: |
-                Public readiness probe for an orchestrator (Kubernetes' own `/livez` + `/readyz`
-                convention). Empty body either way: 200 once this instance has finished booting,
-                has not started draining for shutdown, and can reach the database; 503 otherwise.
+                Public readiness probe, for a load balancer's own probe (a Kubernetes
+                readinessProbe, an AWS ALB target group, Traefik's service health check). Empty
+                body either way: 200 once this instance has finished booting, has not started
+                draining for shutdown, and can reach the database; 503 otherwise.
 
-                NOT the liveness probe — `GET /` is that, and answers regardless of readiness.
-                Point a load balancer or a container HEALTHCHECK here instead of at `/`, so a
-                draining instance stops receiving new traffic before its connections are cut.
+                NOT for a container HEALTHCHECK: the tools that read Docker's health status treat
+                it as liveness, so a database blip would restart or replace healthy containers.
+                `GET /livez` is that probe.
             operationId: getReadyz
             responses:
                 '200':

@@ -9,13 +9,14 @@
  */
 
 import { getDefaultLocale, listSupportedLocales } from '@infrastructure/i18n';
+import { siteConfig } from '@infrastructure/http/config';
 
 /**
  * The paired frontend's own origin. Same fallback as `account/oauth/config.ts`'s
  * `oauthFrontendCallbackBase` — both read `NODE_FRONTEND_URL` lazily, so a test can set it after
  * import, and both fall back to the frontend's own local dev port rather than the backend's.
  */
-const frontendOrigin = (): string => process.env.NODE_FRONTEND_URL ?? 'http://localhost:8080';
+const frontendOrigin = (): string => siteConfig().NODE_FRONTEND_URL;
 
 /**
  * `locale`, or the deployment's default when it names a language this API cannot answer in — a

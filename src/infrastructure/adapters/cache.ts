@@ -16,17 +16,17 @@ import {
 import {
     closeRedisClient,
     createRedisClient,
-    redisUrlFromHostPort,
+    configuredRedisUrl,
     type RedisClient
 } from '@infrastructure/adapters/redis';
-import { environmentFlag } from '@infrastructure/runtime/environment';
+import { redisConfig } from '@infrastructure/adapters/config';
 import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/metrics-cache';
 
 /**
  * Prefix for every key this app owns. Redis has no namespaces beyond numbered databases, so
  * staging and production need different prefixes or they read each other's cached responses.
  */
-const CACHE_PREFIX = process.env.NODE_REDIS_CACHE_PREFIX ?? 'boilerplate-node-backend';
+const CACHE_PREFIX = redisConfig().NODE_REDIS_CACHE_PREFIX;
 
 /**
  * Support both a full Redis URI and host/port fragments so deployment config can stay flexible.
@@ -34,16 +34,14 @@ const CACHE_PREFIX = process.env.NODE_REDIS_CACHE_PREFIX ?? 'boilerplate-node-ba
  * Returns `undefined` when neither is set — which is the signal that caching is off
  * (see `isCacheEnabled`), not an error.
  */
-const getRedisUrl = (): string | undefined =>
-    process.env.NODE_REDIS_URL ?? redisUrlFromHostPort('NODE_REDIS_HOST', 'NODE_REDIS_PORT');
+const getRedisUrl = (): string | undefined => configuredRedisUrl();
 
 /**
  * Cache usage is on only when Redis is configured and not explicitly disabled — two independent
  * switches, since `NODE_REDIS_CACHE_ENABLED=0` is a kill switch for debugging a stale cache
  * without tearing down Redis itself.
  */
-const isCacheEnabled = () =>
-    Boolean(getRedisUrl()) && environmentFlag('NODE_REDIS_CACHE_ENABLED', true);
+const isCacheEnabled = () => Boolean(getRedisUrl()) && redisConfig().NODE_REDIS_CACHE_ENABLED;
 
 /**
  * The one connection this process opens to Redis — a client per request exhausts Redis' limit.
@@ -397,7 +395,10 @@ export interface ClearCacheResult {
  * @param pattern - glob pattern passed to Redis `SCAN` (`MATCH`)
  * @returns total number of keys deleted across every batch
  */
-const drainMatchingKeys = async (redisClient: RedisClient, pattern: string): Promise<number> => {
+export const drainMatchingKeys = async (
+    redisClient: RedisClient,
+    pattern: string
+): Promise<number> => {
     let deleted = 0;
 
     // `scanIterator` yields batches of keys (node-redis v5), so one DEL per batch.

@@ -483,6 +483,8 @@ const ANONYMIZED_TEXT = 'Anonymized';
  *             CREATE a partial one — present but missing the required `city`/`zip`/`country`,
  *             which no validator runs on a bulk update to catch. The second write is scoped to
  *             orders that actually have one.
+ * Versioned:  the scrub is an edit, so `updatedAt` moves (no `timestamps: false`) — an open edit
+ *             form holding the old ETag is refused instead of putting the email back.
  * Idempotent: `anonymizeAfter` is unset in the same write, so a later run cannot rescrub an
  *             already-scrubbed row — the sparse index this field carries no longer holds it, so
  *             the next sweep's `$lte` filter cannot match it again.
@@ -505,20 +507,15 @@ const scrubDueForAnonymization = (cutoff: Date): Promise<number> => {
                     'shippingAddress.street': ANONYMIZED_TEXT
                 },
                 $unset: { 'shippingAddress.phone': 1 }
-            },
-            { timestamps: false }
+            }
         )
         .exec()
         .then(() =>
             orderModel
-                .updateMany(
-                    due,
-                    {
-                        $set: { email: ANONYMIZED_EMAIL },
-                        $unset: { anonymizeAfter: 1, notes: 1 }
-                    },
-                    { timestamps: false }
-                )
+                .updateMany(due, {
+                    $set: { email: ANONYMIZED_EMAIL },
+                    $unset: { anonymizeAfter: 1, notes: 1 }
+                })
                 .exec()
                 .then(({ modifiedCount }) => modifiedCount)
         );

@@ -6,8 +6,9 @@
  * what each costs a deployment live in `docs/modules/antibot.md`.
  */
 
-import { environmentChoice } from '@infrastructure/runtime/environment';
-import { createProviderRegistry } from '@infrastructure/runtime/provider-registry';
+import { createProviderRegistry, requireProvider } from '@infrastructure/runtime/provider-registry';
+import { defineConfig, probe } from '@infrastructure/config/define';
+import { antibotConfig } from '@infrastructure/adapters/config';
 import { noneProvider } from './none';
 import { turnstileProvider } from './turnstile';
 import { altchaProvider } from './altcha';
@@ -115,12 +116,24 @@ export const registerHumanChallengeProvider = (
  *   as it would for `NODE_ANTIBOT_EMAIL_POLICY`
  */
 export const resolveHumanChallengeProvider = (): HumanChallengeProvider => {
-    const name = environmentChoice('NODE_ANTIBOT_PROVIDER', registry.names(), 'none');
-    // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are names
-    // the registry holds by construction, a guarantee the compiler cannot follow across the call.
-    return registry.resolve(name)!;
+    return requireProvider(
+        registry,
+        'NODE_ANTIBOT_PROVIDER',
+        antibotConfig().NODE_ANTIBOT_PROVIDER
+    );
 };
 
 /** Whether this deployment has switched rung 3 on — i.e. picked anything but the no-op. */
 export const isHumanChallengeEnabled = (): boolean =>
     resolveHumanChallengeProvider().name !== 'none';
+
+/**
+ * Boot probe for `NODE_ANTIBOT_PROVIDER`: falling back to `none` on a typo would turn it into an
+ * unnoticed loss of protection. A shape-less slice, because the resolver imports the config and
+ * the config therefore cannot import the resolver.
+ */
+export const humanChallengeProviderProbe = defineConfig({
+    name: 'antibot-provider',
+    shape: {},
+    check: () => probe(resolveHumanChallengeProvider)
+});

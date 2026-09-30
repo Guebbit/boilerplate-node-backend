@@ -24,7 +24,7 @@ import {
     type PaginatedMeta
 } from './search';
 import { trackDatabaseQuery } from './metrics';
-import { checkedDelete, fencedSave } from './versioning';
+import { checkedDelete, fencedSave, type DeleteOutcome } from './versioning';
 import type { SerializeTransform } from './serialize';
 
 /**
@@ -394,11 +394,10 @@ export function createRepository<TDocument extends Document, TWire>(
      * against the request's `If-Match` when one names this row (`./versioning`).
      */
     const deleteOne = (document: TDocument, session?: ClientSession): Promise<void> =>
-        checkedDelete(document, () =>
-            // mongoose types `Document#deleteOne` as `any`; the cast restores the promise it returns
-            (document.deleteOne(session ? { session } : undefined) as Promise<unknown>).then(
-                () => undefined
-            )
+        checkedDelete(
+            document,
+            // mongoose types `Document#deleteOne` as `any`; the cast restores the result it resolves to
+            () => document.deleteOne(session ? { session } : undefined) as Promise<DeleteOutcome>
         );
 
     /**

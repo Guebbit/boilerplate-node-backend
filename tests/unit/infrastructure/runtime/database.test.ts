@@ -54,6 +54,18 @@ describe('start', () => {
             setSpy.mockRestore();
         });
 
+        it('turns autoIndex off when NODE_ENV is unset, like any server', async () => {
+            delete process.env.NODE_ENV;
+            const setSpy = jest.spyOn(mongoose, 'set');
+            const connect = jest.spyOn(mongoose, 'connect').mockResolvedValue(mongoose);
+
+            await start();
+
+            expect(setSpy).toHaveBeenCalledWith('autoIndex', false);
+            connect.mockRestore();
+            setSpy.mockRestore();
+        });
+
         it('leaves the development default untouched', async () => {
             process.env.NODE_ENV = 'development';
             const setSpy = jest.spyOn(mongoose, 'set');

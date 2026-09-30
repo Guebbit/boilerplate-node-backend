@@ -71,7 +71,16 @@ describe('createRefreshCookie', () => {
         expect(response.cookie.mock.calls[0][2].secure).toBe(true);
     });
 
-    it('leaves the cookie non-secure outside production, so local HTTP still works', () => {
+    it('marks the cookie secure when NODE_ENV is unset, like any server', () => {
+        delete process.env.NODE_ENV;
+        const response = makeResponse();
+
+        createRefreshCookie(response, 'token');
+
+        expect(response.cookie.mock.calls[0][2].secure).toBe(true);
+    });
+
+    it('leaves the cookie non-secure in development, so local HTTP still works', () => {
         process.env.NODE_ENV = 'development';
         const response = makeResponse();
 

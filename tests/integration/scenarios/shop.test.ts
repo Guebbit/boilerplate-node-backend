@@ -39,7 +39,14 @@ import { addressBookModel } from '@modules/addresses/model';
 import { decryptAddressItem } from '@modules/addresses/pii';
 import { reservationModel, stockMovementModel } from '@modules/inventory/model';
 import { Types } from 'mongoose';
-import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
+import {
+    SEED_ADMIN_ID,
+    SEED_PENDING_EMAIL_TARGET,
+    SEED_TWO_FACTOR_BACKUP_CODES,
+    SEED_USER_ID,
+    seedCredentials
+} from '@scenarios/accounts';
+import { hashBackupCode } from '@modules/account/two-factor/backup-codes';
 import {
     CreateProduct201Response,
     CreateOrder201Response,
@@ -149,6 +156,62 @@ describe('each subject names a row that really has the property', () => {
         expect(product?.active).toBe(true);
     });
 
+    it('the catalogue carries the VAT and shipping data the journeys need', async () => {
+        const reduced = await productModel.countDocuments({ taxClass: 'reduced' }).exec();
+        const zeroRated = await productModel
+            .countDocuments({ taxClass: 'zero', rateType: 'zero-rated' })
+            .exec();
+        const exempt = await productModel
+            .countDocuments({ taxClass: 'zero', rateType: 'exempt' })
+            .exec();
+        const weighed = await productModel.countDocuments({ weight: { $gt: 0 } }).exec();
+        const digital = await productModel
+            .countDocuments({ requiresShipping: false, deletedAt: { $exists: false } })
+            .exec();
+
+        expect(reduced).toBeGreaterThan(0);
+        expect(zeroRated).toBeGreaterThan(0);
+        expect(exempt).toBeGreaterThan(0);
+        expect(weighed).toBeGreaterThan(100);
+        // The hand-written course plus the two downloadable guides.
+        expect(digital).toBeGreaterThanOrEqual(3);
+    });
+
+    it('each persona account is in the state its name promises', async () => {
+        const unverified = await userModel.findOne({ email: seedCredentials.unverified.email });
+        expect(unverified?.verifiedAt).toBeFalsy();
+
+        const banned = await userModel.findOne({ email: seedCredentials.banned.email });
+        expect(banned?.active).toBe(false);
+
+        const pending = await userModel
+            .findOne({ email: seedCredentials.pendingEmail.email })
+            .select('+pendingEmail');
+        expect(pending?.pendingEmail).toBe(SEED_PENDING_EMAIL_TARGET);
+        expect(pending?.email).toBe(seedCredentials.pendingEmail.email);
+    });
+
+    it('the staff accounts are active, verified logins', async () => {
+        for (const staff of ['manager', 'warehouse', 'support', 'operator'] as const) {
+            const user = await userModel.findOne({ email: seedCredentials[staff].email });
+            expect(user?.active).toBe(true);
+            expect(user?.verifiedAt).toBeTruthy();
+        }
+    });
+
+    it('the two-factor persona has email 2FA armed and backup codes that verify', async () => {
+        const user = await userModel
+            .findOne({ email: seedCredentials.twoFactor.email })
+            .select('+twoFactorMethods +twoFactorBackupCodes +twoFactorBackupCodeSalt');
+
+        expect(user?.twoFactorEnabledAt).toBeDefined();
+        expect(user?.twoFactorMethods.map((entry) => entry.method)).toEqual(['email']);
+        for (const code of SEED_TWO_FACTOR_BACKUP_CODES)
+            expect(user?.twoFactorBackupCodes).toContain(
+                hashBackupCode(code, user!.twoFactorBackupCodeSalt!)
+            );
+    });
+
     it('order.ownerPending is pending, the admin account owns it, and it holds real stock', async () => {
         const order = await orderModel.findById(subjects['order.ownerPending']).exec();
         expect(order?.status).toBe('pending');
@@ -232,6 +295,19 @@ describe('the history reads as a history', () => {
         // `createdAt` is optional on the contract type but always written by `timestamps: true`.
         const drift = Math.abs(entry!.timestamp.getTime() - order!.createdAt!.getTime());
         expect(drift / 1000).toBeLessThan(60);
+    });
+
+    it('moves the withdrawal deadline with the order, so a delivered-weeks-ago order is past it', async () => {
+        const order = await orderModel.findById(subjects['order.delivered']).exec();
+        expect(order?.withdrawUntil).toBeDefined();
+
+        // Delivery follows the checkout within seconds, so the deadline sits one withdrawal period
+        // (14 days by default) after `createdAt`, rounded up to the end of that UTC day (the
+        // window ends with the last hour of its last day). Left at boot time it would be weeks later.
+        const gapMs = order!.withdrawUntil!.getTime() - order!.createdAt!.getTime();
+        const periodMs = 14 * 86_400_000;
+        expect(gapMs).toBeGreaterThanOrEqual(periodMs);
+        expect(gapMs - periodMs).toBeLessThan(2 * 86_400_000);
     });
 
     it('accounts for every unit of stock with a movement the app wrote', async () => {

@@ -161,18 +161,22 @@ describe('the override refresh interval', () => {
         expect(getOverrideRefreshMs()).toBe(5000);
     });
 
+    it('falls back to a minute when the period is unset', () => {
+        delete process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS;
+
+        expect(getOverrideRefreshMs()).toBe(60_000);
+    });
+
     // A zero or negative period would be a busy loop, and a typo'd one is not a reason to hammer
-    // Mongo — both fall back to the minute rather than being taken literally.
+    // Mongo — each is refused outright rather than taken literally or quietly replaced.
     it.each([
-        ['unset', undefined],
         ['0', '0'],
         ['-1', '-1'],
         ['nonsense', 'soon']
-    ])('falls back to a minute when the period is %s', (_label, value) => {
-        if (value === undefined) delete process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS;
-        else process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS = value;
+    ])('refuses a period of %s', (_label, value) => {
+        process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS = value;
 
-        expect(getOverrideRefreshMs()).toBe(60_000);
+        expect(() => getOverrideRefreshMs()).toThrow(/NODE_LOCALE_OVERRIDE_REFRESH_MS/);
     });
 
     it('re-reads the overrides once per period', () => {

@@ -17,26 +17,21 @@ import {
     SocketClosedUnexpectedlyError,
     SocketTimeoutError
 } from 'redis';
+import { redisConfig } from '@infrastructure/adapters/config';
 
 /**
- * `redis://host:port`, built from separate host/port variables — the fallback shape when no full
- * URI is configured.
+ * The Redis URL this deployment configured: a full `NODE_REDIS_URL` wins, otherwise one assembled
+ * from `NODE_REDIS_HOST` and `NODE_REDIS_PORT`.
  *
- * `undefined` when the port is unset: the signal that this piece of config was not supplied,
- * for the caller to fall back to a default URL or treat Redis as unconfigured.
- *
- * @param hostVariable - the env var carrying the host; defaults to `127.0.0.1` when unset
- * @param portVariable - the env var carrying the port
+ * `undefined` when neither is set: the signal that Redis was not supplied, for the caller to
+ * treat as unconfigured rather than an error.
  */
-export const redisUrlFromHostPort = (
-    hostVariable: string,
-    portVariable: string
-): string | undefined => {
-    const port = process.env[portVariable];
-    if (!port) return undefined;
+export const configuredRedisUrl = (): string | undefined => {
+    const config = redisConfig();
+    if (config.NODE_REDIS_URL) return config.NODE_REDIS_URL;
+    if (!config.NODE_REDIS_PORT) return undefined;
 
-    const host = process.env[hostVariable] ?? '127.0.0.1';
-    return `redis://${host}:${port}`;
+    return `redis://${config.NODE_REDIS_HOST}:${String(config.NODE_REDIS_PORT)}`;
 };
 
 /**

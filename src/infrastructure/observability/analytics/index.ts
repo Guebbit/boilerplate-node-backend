@@ -9,8 +9,9 @@
  */
 
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
-import { environmentFlag, environmentChoice } from '@infrastructure/runtime/environment';
-import { createProviderRegistry } from '@infrastructure/runtime/provider-registry';
+import { createProviderRegistry, requireProvider } from '@infrastructure/runtime/provider-registry';
+import { defineConfig, probe } from '@infrastructure/config/define';
+import { analyticsConfig } from '@infrastructure/observability/config';
 import type { CallerContext } from '@types';
 import { umamiAnalyticsProvider } from './umami';
 import { posthogAnalyticsProvider } from './posthog';
@@ -129,20 +130,18 @@ let provider: AnalyticsProvider | undefined;
  * The configured provider, memoised on first use. Lazy so tests can vary the env per case, and so
  * a typo'd `NODE_ANALYTICS_PROVIDER` throws loudly here rather than resolving to `undefined`
  * silently. Turning analytics off has its own spelling (`none`). Also probed once at boot
- * (`src/app/required-config.ts`), so the typo is refused before the first request rather than on
+ * (`analyticsProviderProbe`, wired in `src/app/config.ts`), so the typo is refused before the first request rather than on
  * the first event emitted.
  *
  * @returns the implementation `NODE_ANALYTICS_PROVIDER` names (default `umami`)
  * @throws {Error} when the variable names an implementation this build does not have
  */
 export const resolveAnalyticsProvider = (): AnalyticsProvider => {
-    if (!provider) {
-        const name = environmentChoice('NODE_ANALYTICS_PROVIDER', registry.names(), 'umami');
-        // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are
-        // names the registry holds by construction, a guarantee the compiler cannot follow
-        // across the call.
-        provider = registry.resolve(name)!;
-    }
+    provider ??= requireProvider(
+        registry,
+        'NODE_ANALYTICS_PROVIDER',
+        analyticsConfig().NODE_ANALYTICS_PROVIDER
+    );
     return provider;
 };
 
@@ -202,7 +201,7 @@ export const emitAnalyticsEvent = (event: AnalyticsEventInput): void => {
     // Defaults `true`: Art. 25(2) says the PRIVATE setting is the default one, so a boilerplate
     // that shipped the permissive default would ship it into every project built on it. A
     // deployment with its own legal advice about server-side, non-cookie analytics can opt out.
-    if (environmentFlag('NODE_ANALYTICS_REQUIRE_CONSENT', true) && !analyticsConsent) return;
+    if (analyticsConfig().NODE_ANALYTICS_REQUIRE_CONSENT && !analyticsConsent) return;
 
     resolveAnalyticsProvider().capture(capturable);
 };
@@ -221,3 +220,14 @@ export const shutdownAnalytics = (): Promise<void> => {
         provider = undefined;
     });
 };
+
+/**
+ * Boot probe for `NODE_ANALYTICS_PROVIDER`: a typo would otherwise throw on the first event. A
+ * shape-less slice, because the resolver imports the config and the config therefore cannot
+ * import the resolver.
+ */
+export const analyticsProviderProbe = defineConfig({
+    name: 'analytics-provider',
+    shape: {},
+    check: () => probe(resolveAnalyticsProvider)
+});

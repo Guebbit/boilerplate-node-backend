@@ -194,10 +194,18 @@ describe('serializeError — the production stack guard', () => {
         });
     });
 
-    it('treats an unset NODE_ENV as non-production', () => {
-        // The comparison is `!== 'production'`, so an unset variable keeps the stack — which is
-        // the right default for a developer running the app with no env file.
-        delete process.env.NODE_ENV;
+    it.each([undefined, '', 'staging'])(
+        'keeps the stack out of the log when NODE_ENV is %p: only development and test relax it',
+        (value) => {
+            if (value === undefined) delete process.env.NODE_ENV;
+            else process.env.NODE_ENV = value;
+
+            expect(serializeError(new Error('boom'))).not.toHaveProperty('stack');
+        }
+    );
+
+    it.each(['development', 'test'])('keeps the stack when NODE_ENV is %s', (value) => {
+        process.env.NODE_ENV = value;
 
         expect(serializeError(new Error('boom'))).toHaveProperty('stack');
     });
@@ -447,7 +455,9 @@ describe('the personal-data policy', () => {
     it('refuses an unrecognised value instead of silently falling back to hash', () => {
         process.env.NODE_LOG_PERSONAL_FIELDS = 'not-a-real-mode';
 
-        expect(() => resolvePersonalFieldMode()).toThrow(/Unknown NODE_LOG_PERSONAL_FIELDS/);
+        expect(() => resolvePersonalFieldMode()).toThrow(
+            /NODE_LOG_PERSONAL_FIELDS: expected one of hash, redact, plain/
+        );
     });
 
     it('is case-insensitive for personal field names, like the sensitive-field policy', () => {
@@ -567,11 +577,12 @@ describe('resolveLogLevel', () => {
         expect(resolveLogLevel()).toBe('debug');
     });
 
-    it('treats an unset NODE_ENV as non-production', () => {
+    it.each([undefined, 'staging'])('is quiet when NODE_ENV is %p, like a deployment', (value) => {
         delete process.env.NODE_LOG_LEVEL;
-        delete process.env.NODE_ENV;
+        if (value === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = value;
 
-        expect(resolveLogLevel()).toBe('debug');
+        expect(resolveLogLevel()).toBe('info');
     });
 
     it('treats an empty NODE_LOG_LEVEL as unset rather than as a level', () => {
@@ -650,6 +661,13 @@ describe('resolveConsoleFormat', () => {
 
         expect(() => JSON.parse(line)).toThrow();
         expect(line).toContain('hello');
+    });
+
+    it('stays JSON when NODE_ENV is unset, even on a terminal', () => {
+        delete process.env.NODE_ENV;
+        setTty(true);
+
+        expect(() => JSON.parse(render())).not.toThrow();
     });
 
     it('stays JSON in production even on a terminal', () => {

@@ -19,6 +19,7 @@ import { userService } from './services';
 import { isLiveRefreshSession, type Token } from './model';
 import { setPersonalDataErasers } from './erasure-registry';
 import './events';
+import { usersConfig } from './config';
 
 /**
  * DDD-D6: resolves every module's `personalData.erase` hook once every module is known, and
@@ -81,15 +82,6 @@ export default {
                     .then((user) => (user ? ownSessions(user.tokens) : []))
         }
     ],
-    requiredConfig: [
-        // A phone number encrypted under the shipped placeholder is recoverable by anyone who has
-        // read this repository — same failure shape `NODE_TOTP_ENCRYPTION_KEY` guards against,
-        // same fix. Shared with `addresses` (never optional without this module, per its own
-        // `dependsOn`), so declaring it here covers both.
-        {
-            key: 'NODE_PII_ENCRYPTION_KEY',
-            minLength: 16,
-            placeholder: 'your-pii-encryption-key-here'
-        }
-    ]
+    // The PII encryption key: see `./config`.
+    config: [usersConfig.slice]
 } satisfies AppModule;

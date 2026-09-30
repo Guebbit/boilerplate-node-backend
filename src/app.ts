@@ -28,7 +28,7 @@ import { startQueue } from '@infrastructure/adapters/queue';
 import { registerWorkers } from '@app/workers';
 import { registerTemplateDirectories } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { serverConfig } from '@infrastructure/runtime/config';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
 import { listenOn, shutdownInfra } from '@infrastructure/runtime/server-lifecycle';
 import { markServerListening } from '@infrastructure/runtime/readiness';
@@ -42,7 +42,7 @@ import { isTranslationAvailable } from '@kernel/translation';
 
 import { registerModules } from '@kernel/registry';
 import { enabledModules, enabledModuleLocales, enabledModuleTemplateDirectories } from './modules';
-import { APP_NON_MODULE_CHECKS } from '@app/required-config';
+import { APP_CONFIG_SLICES, securityTxtSettings } from '@app/config';
 import { securityTxtWarning } from '@app/security-txt';
 
 import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
@@ -53,9 +53,6 @@ import { installRoutes } from '@app/routes';
 import { installErrorHandling } from '@app/error-handling';
 import { installDemo, restoreScenario } from '@app/demo';
 import { isDemoMode } from '@infrastructure/runtime/demo-profile';
-
-/** Fallback port when `NODE_PORT` is unset. */
-const DEFAULT_PORT = 3000;
 
 /** One built application's lifecycle — what {@link createApp} hands back (SK-D2). */
 export interface AppInstance {
@@ -156,15 +153,14 @@ export const createApp = (): AppInstance => {
                  */
                 .then(() => (isDemoMode() ? restoreScenario() : undefined))
                 .then(() => {
-                    const port = environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
+                    const { NODE_PORT: port, NODE_HOST: host } = serverConfig();
                     // Unset by default, which binds every interface — the shape every profile but
                     // the demo one wants. `run-server.ts` sets it to loopback: the demo profile's
                     // tokens are signed with a public, hard-coded secret, so binding every interface
                     // would let anyone on the LAN mint one.
-                    const host = process.env.NODE_HOST?.trim();
                     // Stryker disable next-line all
                     logger.info('------------- SERVER START -------------');
-                    return listenOn(app, port, host || undefined).then((server) => {
+                    return listenOn(app, port, host).then((server) => {
                         /*
                          * Before the first request can arrive, because they bound how long one may
                          * take to send. See `app/security.ts`.
@@ -192,10 +188,10 @@ export const createApp = (): AppInstance => {
         return shutdownPromise;
     };
 
-    registerModules(enabledModules, APP_NON_MODULE_CHECKS);
+    registerModules(enabledModules, APP_CONFIG_SLICES);
 
     // Not a refusal: a boilerplate must boot unconfigured. But a stale security.txt is worse than none.
-    const securityTxtProblem = securityTxtWarning(process.env);
+    const securityTxtProblem = securityTxtWarning(securityTxtSettings());
     if (securityTxtProblem) logger.warn({ message: securityTxtProblem });
 
     // LOCALES_OPTIONAL_0925 D-LO1: `locales` being absent is a supported deployment shape, not a

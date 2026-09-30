@@ -39,9 +39,11 @@ other page in this section is one of those boxes, opened up.
 
 ## What the shop sells
 
-132 products — a pet-supply retailer. Six are hand-picked, each there to show the shop behaving
-differently; the other 126 are a combinatorial grid (six animals × seven product types × three
-quality tiers) so lists, pagination and the category filters have enough real rows to work with:
+134 products — a pet-supply retailer. Six are hand-picked, each there to show the shop behaving
+differently; the other 128 are a combinatorial grid (six animals × seven product types × three
+quality tiers) plus two downloadable guides, so lists, pagination and the category filters have
+enough real rows to work with. The grid carries shipping weights, and three of its product types
+have a VAT treatment of their own (supplements reduced, bowls zero-rated, dispensers exempt):
 
 | Product                                              | Price | In stock | Why it exists                                      |
 | ---------------------------------------------------- | ----- | -------- | -------------------------------------------------- |
@@ -51,10 +53,10 @@ quality tiers) so lists, pagination and the category filters have enough real ro
 | Universal Small Animal Water Bottle                  | €9    | 100      | has only a name and a price, nothing else          |
 | 150W Ceramic Heat Emitter                            | €55   | 12       | **deleted** — proves a deleted product disappears  |
 | Rabbit Starter Bundle — Hutch, Feeder & Water Bottle | €96   | 18       | **switched off** — visible to staff, not to buyers |
-| _...126 more_                                        | —     | —        | a generated catalogue, e.g. "Premium Bird Carrier" |
+| _...128 more_                                        | —     | —        | a generated catalogue, e.g. "Premium Bird Carrier" |
 
-So a visitor sees **130** products (the four ordinary ones above, plus all 126 generated).
-Staff see all 132. That difference is deliberate and it is explained on
+So a visitor sees **132** products (the four ordinary ones above, plus all 128 generated).
+Staff see all 134. That difference is deliberate and it is explained on
 [the shop manager's page](./manager.md).
 
 ## The people in it

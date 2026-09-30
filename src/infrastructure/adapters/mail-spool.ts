@@ -18,6 +18,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { reapDirectory, unlinkIfPresent } from './filesystem';
+import { mailFilesConfig } from '@infrastructure/adapters/config';
 
 /**
  * Where a spooled attachment lives between the request that staged it and the mail that sends it.
@@ -25,8 +26,7 @@ import { reapDirectory, unlinkIfPresent } from './filesystem';
  * sets `NODE_MAIL_SPOOL_PATH` to its own mounted volume, so durability comes from that mount, not
  * from this default — same reasoning as `image-store.ts`'s quarantine directory.
  */
-const spoolRoot = (): string =>
-    path.resolve(process.env.NODE_MAIL_SPOOL_PATH ?? path.join('tmp', 'storage', 'mail-spool'));
+const spoolRoot = (): string => path.resolve(mailFilesConfig().NODE_MAIL_SPOOL_PATH);
 
 /**
  * A spooled key's own shape: random hex, a short lowercase extension. Never anything a producer

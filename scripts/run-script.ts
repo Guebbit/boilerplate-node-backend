@@ -21,22 +21,33 @@ import { logger } from '@infrastructure/adapters/logger';
 import { recordJobOutcome } from '@infrastructure/persistence/lease';
 
 /**
- * Run a script body to completion, then always clean up.
+ * A script whose environment failed validation: say why, exit non-zero, and still close whatever
+ * the caller opened. No job outcome is recorded — the job never ran, and recording one needs the
+ * database the bad configuration may describe.
  *
- * @param name    - this job's identity, the same string across every run — the npm script name
- *                  (`reap:orders`), so it reads the same in `docker/crontab`,
- *                  `job_last_success_timestamp_seconds{job="…"}` and an operator's own shell
- *                  history. `undefined` for a one-off `db:*`/`access:*` setup script: it has no
- *                  scheduled interval to alert on, and `db:cache:clear` never opens Mongo at all,
- *                  so writing a lease row for it would fail outright
- * @param main    - the script's work; throwing marks the run as failed
- * @param cleanup - close whatever `main` opened. Runs on both the success and failure paths.
- *                  Required, not defaulted: every script here opens a connection, and a silent
- *                  no-op default is how one of them would quietly stop closing it
- * @returns a promise that always resolves — failure is reported via `process.exitCode`, so
- *          callers do not need their own `.catch`
+ * @param error - what the validation threw
+ * @param cleanup - the caller's own teardown
  */
-export const runScript = async (
+const refuseToRun = (error: unknown, cleanup: () => Promise<unknown>): Promise<void> => {
+    logger.error({
+        message: 'Script refused to run: invalid configuration.',
+        error: error instanceof Error ? error.message : String(error)
+    });
+    process.exitCode = 1;
+    return cleanup().then(
+        () => undefined,
+        () => undefined
+    );
+};
+
+/**
+ * The body of {@link runScript} once the configuration is known good.
+ *
+ * @param name - the job's identity, see {@link runScript}
+ * @param main - the script's work
+ * @param cleanup - closes whatever `main` opened; runs on both paths
+ */
+const runChecked = async (
     name: string | undefined,
     main: () => Promise<void>,
     cleanup: () => Promise<unknown>
@@ -68,3 +79,33 @@ export const runScript = async (
         }
     }
 };
+
+/**
+ * Run a script body to completion, then always clean up.
+ *
+ * @param name    - this job's identity, the same string across every run — the npm script name
+ *                  (`reap:orders`), so it reads the same in `docker/crontab`,
+ *                  `job_last_success_timestamp_seconds{job="…"}` and an operator's own shell
+ *                  history. `undefined` for a one-off `db:*`/`access:*` setup script: it has no
+ *                  scheduled interval to alert on, and `db:cache:clear` never opens Mongo at all,
+ *                  so writing a lease row for it would fail outright
+ * @param main    - the script's work; throwing marks the run as failed
+ * @param cleanup - close whatever `main` opened. Runs on both the success and failure paths.
+ *                  Required, not defaulted: every script here opens a connection, and a silent
+ *                  no-op default is how one of them would quietly stop closing it
+ * @returns a promise that always resolves — failure is reported via `process.exitCode`, so
+ *          callers do not need their own `.catch`
+ */
+export const runScript = (
+    name: string | undefined,
+    main: () => Promise<void>,
+    cleanup: () => Promise<unknown>
+): Promise<void> =>
+    // Judged first, so a typo in the environment names itself here instead of surfacing halfway
+    // through the job. Lazy: a script that fails validation never loads what it would have run.
+    import('../src/app/config')
+        .then(({ assertProcessConfig }) => assertProcessConfig())
+        .then(
+            () => runChecked(name, main, cleanup),
+            (error: unknown) => refuseToRun(error, cleanup)
+        );

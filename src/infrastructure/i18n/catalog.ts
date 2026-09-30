@@ -12,6 +12,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Resource } from 'i18next';
 import { isPlainObject } from '@infrastructure/object-guards';
+import { localeConfig } from '@infrastructure/i18n/config';
 
 /**
  * Where the shared dictionaries live. Resolved from this file rather than from `process.cwd()`, so
@@ -21,10 +22,10 @@ import { isPlainObject } from '@infrastructure/object-guards';
 const LOCALES_DIRECTORY = path.join(__dirname, '..', '..', 'locales');
 
 /** The locale a request falls back to when it asks for none. Read lazily, so a test can set it after import. */
-export const getDefaultLocale = (): string => process.env.NODE_DEFAULT_LOCALE ?? 'en';
+export const getDefaultLocale = (): string => localeConfig().NODE_DEFAULT_LOCALE;
 
 /** The locale a MISSING KEY falls back to. Same lazy read, same `.env-example` default. */
-export const getFallbackLocale = (): string => process.env.NODE_FALLBACK_LOCALE ?? 'en';
+export const getFallbackLocale = (): string => localeConfig().NODE_FALLBACK_LOCALE;
 
 /**
  * The locale chain a resolver query walks, most specific first: the exact tag, its base language,
@@ -54,17 +55,16 @@ let supportedLocalesCache: string[] | undefined;
 export const listSupportedLocales = (): string[] => {
     if (supportedLocalesCache) return supportedLocalesCache;
 
-    const declared = process.env.NODE_SUPPORTED_LOCALES?.split(',')
-        .map((locale) => locale.trim())
-        .filter(Boolean);
+    const declared = localeConfig().NODE_SUPPORTED_LOCALES;
 
     // The env var wins when set; otherwise the directory listing IS the declaration.
-    supportedLocalesCache = declared?.length
-        ? declared
-        : readdirSync(LOCALES_DIRECTORY)
-              .filter((fileName) => fileName.endsWith('.json'))
-              .map((fileName) => path.basename(fileName, '.json'))
-              .toSorted();
+    supportedLocalesCache =
+        declared.length > 0
+            ? declared
+            : readdirSync(LOCALES_DIRECTORY)
+                  .filter((fileName) => fileName.endsWith('.json'))
+                  .map((fileName) => path.basename(fileName, '.json'))
+                  .toSorted();
 
     return supportedLocalesCache;
 };

@@ -16,9 +16,12 @@
 
 import path from 'node:path';
 import { resolvePublicEvents, type AppModule } from '@kernel/registry';
+import { logger } from '@infrastructure/adapters/logger';
+import { isQueueEnabled } from '@infrastructure/adapters/queue';
 import { WORKER_CHANNELS, WebhookDeliverJobPayloadSchema } from '@types';
 import { router } from './routes';
 import { subscribeToWebhookEvents, processDeliveryJob } from './services';
+import { webhooksConfig } from './config';
 
 /**
  * Once every enabled module is known, collect their `publicEvents` declarations and subscribe —
@@ -30,6 +33,12 @@ import { subscribeToWebhookEvents, processDeliveryJob } from './services';
  */
 const onRegistered = (modules: readonly AppModule[]): void => {
     subscribeToWebhookEvents(resolvePublicEvents(modules));
+    if (!isQueueEnabled())
+        logger.warn({
+            message:
+                'webhooks: no message broker configured, so deliveries are sent by the retry sweep ' +
+                '(npm run sweep:webhook-retries, per minute) instead of at once'
+        });
 };
 
 /** This module's manifest entry. */
@@ -61,20 +70,8 @@ export default {
             prefetch: 5
         }
     ],
-    requiredConfig: [
-        // A subscription's secret ring is encrypted under this key (`./secrets.ts`); the shipped
-        // placeholder would make every stored secret recoverable by anyone who has read this repo —
-        // same failure shape `NODE_TOTP_ENCRYPTION_KEY` guards against, same fix.
-        {
-            key: 'NODE_WEBHOOK_SECRET_ENCRYPTION_KEY',
-            minLength: 16,
-            placeholder: 'your-webhook-secret-encryption-key-here'
-        }
-    ],
-    // The one variable in this repo that must be ABSENT under NODE_ENV=production — see
-    // `kernel/required-config.ts`'s `forbiddenUnderProduction` for the generic check, and
-    // `config.ts`'s `getWebhookDemoAllowedHost` for the second, narrower gate this backs up.
-    forbiddenInProduction: ['NODE_WEBHOOK_DEMO_SINK_URL'],
+    // The secret-ring key, retention and the demo-sink gate: see `./config`.
+    config: [webhooksConfig.slice],
     // `ownerUserId` on a subscription points at whoever configured the shop's integration — an
     // operator, not a `POST /account/export` subject. A pointer, never a copy: nothing here
     // duplicates personal data that `users` already owns, and no email is stored at all.

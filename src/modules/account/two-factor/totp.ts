@@ -10,6 +10,7 @@ import {
     encryptVersionedSecret,
     decryptVersionedSecret
 } from '@infrastructure/security/versioned-secret';
+import { mailConfig } from '@infrastructure/adapters/config';
 import { getTotpEncryptionKeyRing } from '../session/config';
 
 /** RFC 6238 default: a code is valid for this many seconds. */
@@ -53,7 +54,7 @@ export const buildOtpauthUri = (secret: string, label: string): string =>
     generateURI({
         // The issuer shown in an authenticator app. Reuses `NODE_SMTP_SENDER`'s display name
         // rather than adding a dedicated branding variable — this deployment already named itself.
-        issuer: process.env.NODE_SMTP_SENDER?.split('<', 1)[0]?.trim() || 'Account',
+        issuer: mailConfig().NODE_SMTP_SENDER?.split('<', 1)[0]?.trim() || 'Account',
         label,
         secret
     });

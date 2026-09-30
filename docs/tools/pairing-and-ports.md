@@ -63,6 +63,7 @@ The paired frontend owns **`8080–8099`**.
 | API                          | `3000`            | `NODE_PORT`                                       |
 | Grafana                      | `3001`            | `GRAFANA_PORT`                                    |
 | webhook-tester (sink UI)     | `3070`            | `WEBHOOK_TESTER_PORT`                             |
+| Mailpit (SMTP / inbox UI)    | `1025` / `8025`   | `MAILPIT_SMTP_PORT` / `MAILPIT_UI_PORT`           |
 | Umami dashboard / tracker    | `3080`            | `UMAMI_PORT`                                      |
 | Docs (VitePress + Nginx)     | `3090`            | `DOCS_PORT`                                       |
 | Loki                         | `3100`            | `LOKI_PORT`                                       |
@@ -143,7 +144,8 @@ flowchart TD
 ### Seed credentials are published, not copied
 
 `NODE_SEED_ADMIN_PASSWORD` / `NODE_SEED_USER_PASSWORD` / `NODE_SEED_EDITOR_PASSWORD` /
-`NODE_SEED_MODERATOR_PASSWORD` are resolved here and SERVED: the demo
+`NODE_SEED_MODERATOR_PASSWORD` (and the persona and staff overrides, see
+[Demo profile](./demo-profile.md#the-persona-accounts)) are resolved here and SERVED: the demo
 profile's `GET /__test/scenario` answers with every seeded login, and the frontend's
 `boilerplate-vue-frontend/tests/support/e2e/scenario.ts` reads them rather than keeping literals
 of its own. Override a
