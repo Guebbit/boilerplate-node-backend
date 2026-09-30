@@ -263,6 +263,20 @@ describe('each subject names a row that really has the property', () => {
         expect(payment?.method).toBe('card');
     });
 
+    it('order.deliveredLongAgo was delivered at the start of the history, and its withdrawal window has closed', async () => {
+        const order = await orderModel.findById(subjects['order.deliveredLongAgo']).exec();
+        expect(order?.status).toBe('delivered');
+        expect(order?.userId?.toString()).toBe(SEED_USER_ID);
+        // Closed by a wide margin, so a deployment offering a longer period than today's still finds it shut.
+        const closedFor = Date.now() - order!.withdrawUntil!.getTime();
+        expect(closedFor).toBeGreaterThan(30 * 24 * 60 * 60 * 1000);
+
+        const shipment = await shipmentModel
+            .findOne({ orderId: subjects['order.deliveredLongAgo'] })
+            .exec();
+        expect(shipment?.deliveredAt!.getTime()).toBeLessThan(Date.now() - 60 * 24 * 60 * 60 * 1000);
+    });
+
     it('return.requested and return.requestedSecond await an answer, each on its own open-window order', async () => {
         const returns = await Promise.all(
             ['return.requested', 'return.requestedSecond'].map((name) =>

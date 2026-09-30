@@ -433,6 +433,14 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     };
     subjects['order.deliveredRecent'] = await deliveredToday();
 
+    /*
+     * Delivered at the very start of the shop's history, so its withdrawal window closed long ago
+     * whatever period a deployment offers: `order.delivered` is only as old as its place in the
+     * sequence, which a longer period can put back inside the window. Not in `dated()`: its age is
+     * this one, not a share of the spread, so it is set explicitly when the ages are built below.
+     */
+    subjects['order.deliveredLongAgo'] = await deliveredToday();
+
     // Two defective-goods requests nobody has answered — the queue support works through.
     const firstDefective = await deliveredToday();
     subjects['return.requested'] = await requestReturn(
@@ -570,6 +578,8 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
             Math.round(OLDEST_DAYS * (1 - index / placed.length))
         ])
     );
+
+    ages[subjects['order.deliveredLongAgo']] = OLDEST_DAYS;
 
     return { subjects, ages };
 };
