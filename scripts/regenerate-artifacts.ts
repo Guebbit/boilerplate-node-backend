@@ -54,7 +54,8 @@ const STEPS: readonly Step[] = [
     },
     {
         script: 'gen:api',
-        because: 'api/ — the typed client and zod schemas the app itself imports, from openapi.yaml'
+        because:
+            'api/ — the typed client, zod schemas and error codes from openapi.yaml, and the permission actions from shared/authorization-keys.yaml; the app itself imports them'
     },
     {
         script: 'gen:asyncapi',

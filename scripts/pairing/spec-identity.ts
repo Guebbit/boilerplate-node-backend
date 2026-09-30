@@ -83,7 +83,13 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * `asyncapi.yaml`. Both come out of one set of section documents, so the two bundles cannot
      * describe a shared channel differently — see `scripts/contracts/asyncapi-bundles.ts`.
      */
-    { backend: 'asyncapi.public.yaml', frontend: 'asyncapi.yaml' }
+    { backend: 'asyncapi.public.yaml', frontend: 'asyncapi.yaml' },
+    /*
+     * The authorization keys, read here only for `actions:` — `gen:api` turns that list into
+     * `<frontend>/contracts/permission-actions.ts`, so the frontend's `PermissionAction` cannot drift from the
+     * vocabulary the backend enforces.
+     */
+    { backend: 'shared/authorization-keys.yaml', frontend: 'contracts/authorization-keys.yaml' }
     /*
      * `src/types/asyncapi.generated.ts` is deliberately absent: an OUTPUT whose every input is
      * already compared, and the two are not meant to match — this repo's carries the queue
