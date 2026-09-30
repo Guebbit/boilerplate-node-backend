@@ -1,5 +1,7 @@
 import { defineConfig } from 'vitepress';
+import { fileURLToPath } from 'node:url';
 import { withMermaid } from 'vitepress-plugin-mermaid';
+import { moduleSidebar, readCatalogue } from '../../scripts/docs/module-catalogue';
 
 export default withMermaid(
     defineConfig({
@@ -126,81 +128,14 @@ export default withMermaid(
                         ]
                     }
                 ],
-                '/modules/': [
-                    {
-                        text: 'Overview',
-                        items: [{ text: 'The whole map', link: '/modules/' }]
-                    },
-                    {
-                        text: 'core',
-                        collapsed: false,
-                        items: [
-                            {
-                                text: 'cart',
-                                link: '/modules/cart',
-                                items: [{ text: 'Checkout', link: '/modules/cart-checkout' }]
-                            },
-                            { text: 'orders', link: '/modules/orders' },
-                            { text: 'products', link: '/modules/products' }
-                        ]
-                    },
-                    {
-                        text: 'supporting',
-                        collapsed: false,
-                        items: [
-                            { text: 'access', link: '/modules/access' },
-                            { text: 'addresses', link: '/modules/addresses' },
-                            { text: 'api-keys', link: '/modules/api-keys' },
-                            { text: 'delivery', link: '/modules/delivery' },
-                            {
-                                text: 'inventory',
-                                link: '/modules/inventory',
-                                items: [
-                                    {
-                                        text: 'Reservations',
-                                        link: '/modules/inventory-reservations'
-                                    }
-                                ]
-                            },
-                            {
-                                text: 'payments',
-                                link: '/modules/payments',
-                                items: [
-                                    {
-                                        text: 'The provider port',
-                                        link: '/modules/payments-provider-port'
-                                    }
-                                ]
-                            },
-                            { text: 'webhooks', link: '/modules/webhooks' },
-                            { text: 'wishlist', link: '/modules/wishlist' }
-                        ]
-                    },
-                    {
-                        text: 'generic',
-                        collapsed: false,
-                        items: [
-                            {
-                                text: 'account',
-                                link: '/modules/account',
-                                items: [
-                                    { text: 'Sessions', link: '/modules/account-sessions' },
-                                    {
-                                        text: 'Two-factor auth',
-                                        link: '/modules/account-two-factor'
-                                    },
-                                    { text: 'OAuth', link: '/modules/account-oauth' }
-                                ]
-                            },
-                            { text: 'antibot', link: '/modules/antibot' },
-                            { text: 'audit-logs', link: '/modules/audit-logs' },
-                            { text: 'feedback', link: '/modules/feedback' },
-                            { text: 'locales', link: '/modules/locales' },
-                            { text: 'observability', link: '/modules/observability' },
-                            { text: 'users', link: '/modules/users' }
-                        ]
-                    }
-                ],
+                // Generated from each module's `module.yaml` and the pages beside the index —
+                // see ../../scripts/docs/module-catalogue.ts. Nothing to edit when a module is added.
+                '/modules/': moduleSidebar(
+                    readCatalogue(
+                        fileURLToPath(new URL('../../src/modules', import.meta.url)),
+                        fileURLToPath(new URL('../modules', import.meta.url))
+                    )
+                ),
                 '/tools/': [
                     {
                         text: 'Overview',

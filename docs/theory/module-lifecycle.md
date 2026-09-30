@@ -13,26 +13,54 @@ That claim is not aspirational — `wishlist` was added under it, and three doma
 it. What each one actually cost is recorded below, honestly, including the parts that are more than
 one line.
 
-## The registries, and the order lists that are not
+## The one registry, and everything that reads from the folder
 
-A module is named in two places that decide whether it exists, and three that only decide where it
-sits:
+A module is named in exactly one place that decides whether it exists: `enabledModules` in
+`src/modules.ts`. Everything else a module has to say about itself sits in its own folder, and the
+tables that used to be edited by hand read it from there.
 
-| List                 | File                                           | What it decides                                             |
-| -------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
-| `enabledModules`     | `src/modules.ts`                               | **registry** — the module is served                         |
-| `FRONTEND_PAIRING`   | `tests/cross-cutting/frontend-pairing.test.ts` | **registry** — the paired frontend's view of it             |
-| `MODULE_ORDER`       | `scripts/contracts/openapi-bundle.ts`          | order only — where its paths sit in the OpenAPI bundle      |
-| `MODULE_ASYNC_ORDER` | `scripts/contracts/asyncapi-bundles.ts`        | order only — where its channels sit in the AsyncAPI bundle  |
-| `PREFERRED_ORDER`    | `scripts/contracts/authorization-bundle.ts`    | order only — where its keys sit in the authorization bundle |
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
+flowchart LR
+    M["src/modules/&lt;name&gt;/"] --> Y["module.yaml<br/><i>group, summary, dependsOn,<br/>noAudit, frontend</i>"]
+    M --> F["openapi.yaml · asyncapi.yaml<br/>authorization.yaml · probes.ts"]
+    M --> T["module.ts<br/><i>name, routes, personalData…</i>"]
+    R["src/modules.ts<br/><i>the one line</i>"] --> T
+    Y --> D["docs index + sidebar<br/>audit-exemption check<br/>frontend pairing check"]
+    F --> B["contract bundles<br/>client collections"]
+    T --> A["app tier: routes, seeding,<br/>i18n, personal data<br/>+ the router-guard tests"]
+    classDef own fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef read fill:#dbeafe,stroke:#2563eb,color:#111827;
+    class M,Y,F,T,R own;
+    class D,B,A read;
+```
 
-The three order lists are a PREFERENCE. MEMBERSHIP is discovered from disk: a module folder either
-ships an `openapi.yaml` / `asyncapi.yaml` / `authorization.yaml` or it doesn't, and
-`scripts/contracts/section-order.ts` puts the discovered ones in the listed
-order, drops a listed module whose folder is gone, and appends one the list has never heard of in
-alphabetical order. So neither adding nor removing a module needs an edit to any of them — an edit
-only moves where the module sits, and the bundles of a full checkout keep their historical order
-byte for byte.
+| What a module declares                         | Read by                                                                                   |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `module.yaml#group`, `summary`                 | the docs index and the `/modules/` sidebar (`scripts/docs/module-catalogue.ts`)           |
+| `module.yaml#noAudit` (a reason)               | `tests/cross-cutting/audit-actions.test.ts` — the reviewed "emits no audit action" answer |
+| `module.yaml#frontend` (only if not same-name) | `tests/cross-cutting/frontend-pairing.test.ts`                                            |
+| `openapi.yaml` (paths and tags)                | the root contract, completed by `scripts/contracts/root-assembly.ts`                      |
+| `probes.ts`                                    | the client collections, loaded by directory scan                                          |
+| `module.ts#routes`                             | the router-guard tests, through `enabledModules`                                          |
+
+Three order lists remain, and they are a PREFERENCE, not a registry:
+
+| List                 | File                                        | What it decides                                             |
+| -------------------- | ------------------------------------------- | ----------------------------------------------------------- |
+| `MODULE_ORDER`       | `scripts/contracts/openapi-bundle.ts`       | order only — where its paths sit in the OpenAPI bundle      |
+| `MODULE_ASYNC_ORDER` | `scripts/contracts/asyncapi-bundles.ts`     | order only — where its channels sit in the AsyncAPI bundle  |
+| `PREFERRED_ORDER`    | `scripts/contracts/authorization-bundle.ts` | order only — where its keys sit in the authorization bundle |
+
+MEMBERSHIP is discovered from disk: a module folder either ships an `openapi.yaml` /
+`asyncapi.yaml` / `authorization.yaml` or it doesn't, and `scripts/contracts/section-order.ts` puts
+the discovered ones in the listed order, drops a listed module whose folder is gone, and appends
+one the list has never heard of in alphabetical order. The root OpenAPI document is treated the
+same way: `shared/contracts/openapi.root.yaml` keeps one `$ref` per module path in the order the
+bundle has always had, and `assembleRoot` drops the entries of a module that is gone and appends
+the paths and tags of one it has not seen. So neither adding nor removing a module needs an edit
+to any of them — an edit only moves where the module sits, and the bundles of a full checkout keep
+their historical order byte for byte.
 
 An `asyncapi.internal.yaml` (a queue nothing outside this service reaches) and whether a module's
 public `asyncapi.yaml` is frontend-visible are both fully automatic — see step 3 below — so neither
@@ -40,18 +68,6 @@ needs a registry line at all.
 
 An `analytics.ts` needs no entry anywhere: `tests/cross-cutting/analytics-events.test.ts` sweeps the
 module folders for one.
-
-`FRONTEND_PAIRING` is the newest of the four and the only one that names the other repository: which
-frontend module answers this domain, or a sentence saying why none does.
-`tests/cross-cutting/frontend-pairing.test.ts` fails on a missing entry, which is what stops the
-FE/BE gap from widening unnoticed.
-
-A fifth list is _nearly_ one and is worth knowing about: a module that declares `probes.ts` is
-imported by name in `scripts/contracts/client-collections-bundle.ts`. Deleting the module stops the build
-on its own rather than waiting for a bundle to come out quietly short — but ADDING one needs the map
-edited, and forgetting that is silent, so `tests/cross-cutting/probes-are-wired.test.ts` fails when a
-`probes.ts` on disk is missing from it. The import stays static: the compile-time deletion failure is
-stronger than a test, and this keeps both halves.
 
 A library exactly one module imports is that module's too, though it needs no entry anywhere:
 [Package Dependencies](../tools/package-dependencies.md) derives ownership straight from the
@@ -71,17 +87,17 @@ Nothing else enumerates domains. Route mounting, the seeder, the i18n boot, the 
 the metrics registry all walk the registry instead — which is why none of them appears in either
 checklist.
 
-The two conditional registries exist because **the contract is fragmented and shared with the paired
-frontend**. They are the price of one document assembled from per-module pieces, not a leak. Leaving
-one stale is a hard error naming the missing file:
+What still names modules by hand, and why it is not a table a new module edits:
 
-```
-Error: [openapi] openapi.yaml
-  names a fragment that does not exist:
-  src/modules/products/openapi.yaml
-  Deleting a domain means deleting its entry from the bundle's section list too —
-  and mirroring both in the paired repo.
-```
+- **`AccountExportResponse`** in `shared/contracts/openapi.root.yaml` has one field per module that
+  contributes a personal-data section — the export envelope is a contract, and a section a module
+  adds is a contract change made deliberately.
+- **Role grants** in `shared/authorization-roles.yaml` and the cases in
+  `shared/authorization-conformance.yaml`. A module that introduces permission keys decides which
+  roles hold them; the keys themselves live in the module's own `authorization.yaml`.
+- **`WRITE_EXCEPTIONS`** in `tests/cross-cutting/write-routes-are-guarded.test.ts`, only for a
+  module whose write route deliberately needs no permission key. A module whose writes all sit
+  behind `requirePermission` adds nothing.
 
 ---
 
@@ -91,8 +107,8 @@ Error: [openapi] openapi.yaml
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
 flowchart LR
     A["1 · mkdir src/modules/&lt;name&gt;/<br/>write module.ts"] --> B["2 · one line in<br/>src/modules.ts"]
-    B --> C["3 · fragments + section order<br/><i>if it serves HTTP</i>"]
-    C --> D["4 · npm run contracts:bundle"]
+    B --> C["3 · the contract fragments<br/><i>if it serves HTTP</i>"]
+    C --> D["4 · npm run regenerate"]
     D --> E["5 · write<br/>docs/modules/&lt;name&gt;.md"]
     E --> F["6 · copy shared files<br/>to the frontend"]
     F --> G["7 · npm run complete"]
@@ -110,7 +126,7 @@ file when the domain needs it, not because the table has a row for it.
 ```
 src/modules/<name>/
     module.ts                      the manifest — the only file src/modules.ts imports
-    module.yaml                    always — which siblings it may reach, and its subdomain; see strategic-ddd.md §2
+    module.yaml                    always — group, summary, subdomain, siblings it may reach; see strategic-ddd.md §2
     routes.ts                      if it serves HTTP
     controllers/*.ts               ditto
     service.ts                     if it has behaviour
@@ -137,8 +153,15 @@ is a folder named for it. That is the rule, and it is what decides where a new f
 list above has no row for it. `openapi.yaml` and `probes.ts` are the contract slice this module
 owns; [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) is what reads them.
 
-`wishlist` is the reference: it was the first module added after the registry existed, and its tree
-is exactly the list above minus the parts it does not need (no `audit.ts`, no `emails.ts`).
+::: tip The module to copy is `feedback`
+Start from [`feedback`](../modules/feedback.md), not from a shop module. It is `group: foundation`,
+so it survives `npm run demo:remove` and depends on nothing; it also carries most of what a new
+module reaches for — a public route above an admin gate, keyed writes, a rate-limit budget,
+locales, a template, a personal-data section, an audit vocabulary and a contract slice.
+`wishlist` was the first module added after the registry existed and is the smallest shop domain,
+but a copy of a shop module starts life with a dependency on the shop that the foundation may
+not have.
+:::
 
 A new `package.json` dependency this module alone needs is this module's, the moment nothing else
 imports it — no registry entry, just the vetting rules and a `## Libraries` section on the
@@ -163,25 +186,25 @@ failing test rather than a silent 2am cron failure.
 The manifest is the whole contract between the domain and the application:
 
 ```ts
-// src/modules/wishlist/module.ts
+// src/modules/feedback/module.ts (abridged)
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 
 /**
- * Saved products, one list per user.
- *
- * Reads catalogue documents as they are — a saved line is meaningless without the product it points
- * at — and reads the account the list belongs to, listening for its destruction. Both are
- * `conformist` reads: the shapes are theirs, and this module has no say in them.
+ * Contact requests: anyone may file one, admins read and triage them. Records an email address
+ * rather than referencing a user, since the form is open to people with no account. A leaf in
+ * both directions.
  */
 export default {
-    name: 'wishlist',
-    basePath: '/wishlist',
+    name: 'feedback',
+    basePath: '/feedback',
     routes: router,
     // REQUIRED, not optional — a module cannot compile without answering this. 'none' is the
     // explicit, reviewed answer for a module with nothing personal to export.
-    personalData: [{ section: 'wishlist', collect: wishlistExport, erase: wishlistDeleteByUserId }],
+    personalData: [
+        { section: 'feedback', collect: (subject) => findOwnTicketsForExport(subject.email) }
+    ],
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;
 ```
@@ -202,9 +225,9 @@ point is a type error rather than a route that silently never registers.
 
 ```ts
 // src/modules.ts
-import wishlist from './modules/wishlist/module';
+import feedback from './modules/feedback/module';
 
-export const enabledModules: AppModule[] = [account, auditLogs, cart /* … */, wishlist];
+export const enabledModules: AppModule[] = [account, auditLogs, cart /* … */, feedback];
 ```
 
 Keep the array alphabetical. Order only decides route-mounting sequence, which is irrelevant for
@@ -213,9 +236,10 @@ distinct base paths, so alphabetical keeps diffs boring.
 **Stop here if the domain serves no HTTP.** It is mounted, seeded, translated, audited and measured
 already — nothing below applies.
 
-### 3 · The fragments and their section entries
+### 3 · The fragments
 
-Write `openapi.yaml` and add its paths to the root's index. A line in `MODULE_ORDER` is optional —
+Write `openapi.yaml`; its paths and tags reach the root contract by themselves
+(`scripts/contracts/root-assembly.ts`). A line in `MODULE_ORDER` is optional —
 it only chooses where the paths sit; without one the module is appended alphabetically. The same
 goes for `MODULE_ASYNC_ORDER` if you wrote a top-level `asyncapi.yaml` (not `asyncapi.internal.yaml`
 — see below). An `analytics.ts` needs no entry anywhere — the name is swept off disk. A
@@ -229,12 +253,13 @@ copied to the paired frontend. `asyncapi.internal.yaml` is a queue crossing a br
 cannot open, and never leaves this bundle. A domain can own either, both, or neither.
 
 A listed order entry with no fragment on disk is ignored, and a fragment on disk with no entry is
-appended — neither fails the bundle, because membership is what is on disk.
+appended — neither fails the bundle, because membership is what is on disk. The same goes for a
+`probes.ts`: the client collections find it by scanning the module folders.
 
 ### 4 · Bundle
 
 ```bash
-npm run contracts:bundle          # assembles openapi.yaml, both asyncapi bundles, analytics, seed identities
+npm run regenerate -- --no-sync   # bundles, generated client and schemas, every generated doc block
 npm run lint:openapi              # spectral
 ```
 
@@ -258,17 +283,19 @@ follows is three parts:
 - **The story** — why the domain exists, the decisions that are not obvious from the code, the traps
 - **Related pages** — the siblings and the horizontal pages a reader will want next
 
-Copy the smallest page in the section, [`wishlist`](../modules/wishlist.md), and replace it. Do not
+Copy [`feedback`'s page](../modules/feedback.md) — the same module you copied the code from — and
+replace it. Do not
 restate what the code already says — the routes are in `src/modules/<name>/routes.ts` and
 `openapi.yaml`, the fields are in `model.ts`, and a page repeating either goes stale the first time
 someone edits the source and not the prose. A module page owns the DECISION; the mechanism belongs
 to a page under [Tools](../tools/) or [Theory](../theory/).
 
-Then two registrations:
+Then fill in the descriptor the page is listed from — no other registration:
 
-- the entry in `FRONTEND_PAIRING`, in `tests/cross-cutting/frontend-pairing.test.ts` — which `npm
-run test` fails on if it is missing
-- the page in the `/modules/` sidebar, in `docs/.vitepress/config.mts`
+- `summary` and `group` in `module.yaml` put the module in the index and the `/modules/` sidebar,
+  under Foundation or Demo shop
+- `frontend:` in `module.yaml`, only if the paired frontend module has a different name
+- `noAudit:` in `module.yaml`, with the reason, only if the module deliberately emits no audit action
 
 If the domain carries a file shape no other module has, give it a row in
 [`docs/reference/src-modules.md`](../reference/src-modules.md) so the vocabulary stays written
@@ -294,7 +321,8 @@ npm run complete
 
 ### What it actually cost
 
-`wishlist`, measured:
+`wishlist`, measured when the registry tables were still edited by hand (today the section-order
+entries and the docs registrations below are gone too):
 
 |                                                  |                                                            |
 | ------------------------------------------------ | ---------------------------------------------------------- |
@@ -312,21 +340,23 @@ npm run complete
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
 flowchart LR
     A["1 · rm -rf<br/>src/modules/&lt;name&gt;/"] --> B["2 · delete its line<br/>from src/modules.ts"]
-    B --> C["3 · delete its<br/>section-order entries"]
-    C --> D["4 · re-bundle +<br/>copy to the frontend"]
+    B --> C["3 · nothing else<br/><i>the order lists are a preference</i>"]
+    C --> D["4 · npm run regenerate +<br/>copy to the frontend"]
     D --> E["5 · npm run complete"]
     E --> F["whatever fails is<br/><b>real coupling</b>"]
     classDef s fill:#fee2e2,stroke:#dc2626,color:#111827;
     class A,B,C,D,E,F s;
 ```
 
-### 1–3 · Delete the folder, the line, the entries
+### 1–3 · Delete the folder and the line
 
 ```bash
 rm -rf src/modules/<name>
 # delete the import and the array entry in src/modules.ts
-# and, if it declared probes, from scripts/contracts/client-collections-bundle.ts
 ```
+
+Its paths leave the contract, its probes leave the collections and its `module.yaml` entries leave
+the docs with the folder — each is read from disk.
 
 Deleting a module another one imports stops `tsc` on the importing file, naming the line. Either
 delete the dependant too, or drop the import.
@@ -351,11 +381,8 @@ rm docs/modules/<name>.md
 # and any sub-pages it had, e.g. docs/modules/<name>-<flow>.md
 ```
 
-Then drop its entry from `FRONTEND_PAIRING` and its sub-page slugs from `SUB_PAGES` (both in
-`tests/cross-cutting/`), and its sidebar entries from `docs/.vitepress/config.mts`.
-
-`tests/cross-cutting/frontend-pairing.test.ts` fails, naming the module, if its `FRONTEND_PAIRING`
-entry is left behind — run `npm run test` and work the list. Deleting the page itself is still a
+Its index entry, its sidebar entry and its pairing statement all lived in its own `module.yaml`,
+which went with the folder, so there is nothing to un-register. Deleting the page itself is still a
 step you do by hand; nothing currently refuses a leftover one.
 
 ### 5 · Re-bundle and mirror
@@ -494,7 +521,7 @@ pick a different set. An earlier run of this check reported "zero files in `src/
 
 **Correct — the section lists and the co-located specs that assert a deleted domain.** Six of the
 errors were the section lists and `client-collections-bundle.ts` naming `products`/`cart`/`orders`, which
-is step 3 of the removal procedure announcing itself rather than residue. Ten more are the four dependent modules' own `tests/unit` and `tests/contract` files, which
+was the removal procedure announcing itself rather than residue (both are read from disk now). Ten more are the four dependent modules' own `tests/unit` and `tests/contract` files, which
 go with their modules.
 
 **Residue — the rest.** Central specs using a domain as sample data:

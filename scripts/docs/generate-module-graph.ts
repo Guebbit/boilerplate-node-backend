@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 /**
- * The module graph in `docs/modules/index.md`, plus one neighbourhood diagram per module page,
+ * The module graph and the grouped module list in `docs/modules/index.md`, plus one neighbourhood
+ * diagram per module page,
  * generated from the imports and subscriptions they describe.
  *
  * Generated rather than hand-drawn: a hand-drawn graph of thirteen modules is a published number
@@ -31,6 +32,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { readModuleDescriptor } from './module-descriptor';
 import { applyMarkerBlocks } from './marker-block';
+import { readCatalogue, renderModuleList } from './module-catalogue';
 
 const checkOnly = process.argv.includes('--check');
 
@@ -46,6 +48,10 @@ const PAGE = path.join(ROOT, 'docs', 'modules', 'index.md');
 /** Markers bounding the generated block — everything between them is replaced, nothing outside. */
 const START = '<!-- module-graph:start -->';
 const END = '<!-- module-graph:end -->';
+
+/** Markers bounding the generated module list on the same page. */
+const LIST_START = '<!-- module-list:start -->';
+const LIST_END = '<!-- module-list:end -->';
 
 /** One module announcing a domain event that another module subscribes to. */
 interface EventEdge {
@@ -313,6 +319,12 @@ const targets = (): Target[] => {
 
     return [
         { file: PAGE, start: START, end: END, body: render(edges) },
+        {
+            file: PAGE,
+            start: LIST_START,
+            end: LIST_END,
+            body: renderModuleList(readCatalogue(MODULES_ROOT, path.dirname(PAGE)))
+        },
         ...Object.keys(SUBDOMAIN)
             .toSorted()
             .map((name) => ({
