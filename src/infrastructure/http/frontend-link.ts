@@ -44,7 +44,8 @@ export const frontendLink = (
 ): string => {
     let path = template;
     for (const [name, value] of Object.entries(parameters))
-        path = path.replaceAll(`{${name}}`, encodeURIComponent(value));
+        // A function replacer, so a `$&` in a value is text, not a replacement pattern.
+        path = path.replaceAll(`{${name}}`, () => encodeURIComponent(value));
 
     return `${frontendOrigin()}/${supportedLocale(locale)}/${path}`;
 };

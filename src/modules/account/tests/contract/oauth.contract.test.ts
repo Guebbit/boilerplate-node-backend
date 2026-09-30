@@ -104,7 +104,7 @@ describe('GET /account/oauth/:provider/callback', () => {
 
     it('answers 400 when the verifier cookie is missing, without ever reaching the token exchange', async () => {
         const start = await api().get('/account/oauth/fake');
-        const stateCookie = setCookie(start, 'oauth_state')!.split(';')[0];
+        const stateCookie = setCookie(start, 'oauth_state')!.split(';', 1)[0];
         const callbackUrl = new URL(start.headers.location);
 
         // The state cookie rides along, the verifier does not — the trap the build order warns

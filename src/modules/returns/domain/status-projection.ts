@@ -48,7 +48,7 @@ export const projectReturnStatus = (
         for (const { productId, quantity } of lines)
             back.set(productId, (back.get(productId) ?? 0) + quantity);
 
-    const everything = [...ordered.entries()].every(
+    const everything = [...ordered].every(
         ([productId, quantity]) => (back.get(productId) ?? 0) >= quantity
     );
     return everything ? 'returned' : 'partially_returned';

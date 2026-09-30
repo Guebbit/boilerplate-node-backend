@@ -10,5 +10,4 @@
  * See: docs/modules/antibot.md
  */
 
-// eslint-disable-next-line unicorn/require-module-specifiers -- every module gets a barrel (docs/theory/strategic-ddd.md §5); this one has nothing to publish yet
 export {};

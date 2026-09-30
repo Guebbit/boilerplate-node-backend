@@ -239,7 +239,7 @@ describe('the SSE metrics stream', () => {
             const fake = open();
             await jest.advanceTimersByTimeAsync(0);
 
-            const [, dataLine] = fake.frames[0].split('\n');
+            const [, dataLine] = fake.frames[0].split('\n', 2);
 
             expect(dataLine).toBeDefined();
             expect(dataLine).not.toContain('\n');

@@ -50,7 +50,7 @@ describe('encryptVersionedSecret / decryptVersionedSecret', () => {
 
     it('throws when the ciphertext or auth tag has been tampered with', () => {
         const ciphertext = encryptVersionedSecret('tamper-me', RING);
-        const [version, iv, tag, data] = ciphertext.split(':');
+        const [version, iv, tag, data] = ciphertext.split(':', 4);
         const flippedData = data.slice(0, -2) + (data.at(-2) === '0' ? '1' : '0') + data.at(-1);
         expect(() =>
             decryptVersionedSecret(`${version}:${iv}:${tag}:${flippedData}`, RING, 'test')
@@ -59,7 +59,7 @@ describe('encryptVersionedSecret / decryptVersionedSecret', () => {
 
     it('refuses a truncated auth tag, which would be far easier to forge', () => {
         const ciphertext = encryptVersionedSecret('JBSWY3DPEHPK3PXP', RING);
-        const [version, iv, tag, data] = ciphertext.split(':');
+        const [version, iv, tag, data] = ciphertext.split(':', 4);
 
         expect(() =>
             decryptVersionedSecret(`${version}:${iv}:${tag.slice(0, 8)}:${data}`, RING, 'TOTP')

@@ -31,7 +31,7 @@ describe('rawBodyPaths', () => {
 
             const mounted = new Set(
                 (appModule.routes ? routeSignatures(appModule.routes) : []).map(
-                    (signature) => signature.split(' ')[1]
+                    (signature) => signature.split(' ', 2)[1]
                 )
             );
 

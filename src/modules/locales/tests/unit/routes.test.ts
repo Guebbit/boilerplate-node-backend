@@ -44,18 +44,18 @@ const ADMIN = [
 ];
 
 /** The two entry reads — the editing screen, uncached, and never a reason to invalidate. */
-const ENTRY_READS = ['GET /:locale/entries', 'GET /:locale/tenants/:tenant/entries'];
+const ENTRY_READS = new Set(['GET /:locale/entries', 'GET /:locale/tenants/:tenant/entries']);
 
 /**
  * The three translator-door routes: uncached like `GET /:locale/entries` (the editing screen), and
  * clearing a registry-declared tag inside the service rather than `['locales']` via route
  * middleware — the tag varies with `entityType`, which the middleware's fixed array cannot say.
  */
-const TRANSLATIONS = [
+const TRANSLATIONS = new Set([
     'GET /translations/:entityType/:id',
     'PUT /translations/:entityType/:id',
     'PATCH /translations/:entityType/:id'
-];
+]);
 
 describe('locale routes — what is mounted', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
@@ -142,9 +142,7 @@ describe('locale routes — caching', () => {
     });
 
     it.each(
-        ADMIN.filter(
-            (signature) => !ENTRY_READS.includes(signature) && !TRANSLATIONS.includes(signature)
-        )
+        ADMIN.filter((signature) => !ENTRY_READS.has(signature) && !TRANSLATIONS.has(signature))
     )('%s invalidates the locales tag it just changed', (signature) => {
         // Every write changes what every visitor reads, and the tag reaches shared Redis, so
         // one call covers every app instance.

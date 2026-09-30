@@ -98,7 +98,7 @@ describe('static files', () => {
 describe('CORS', () => {
     it('lets a browser send Idempotency-Key and read the rate-limit answer', async () => {
         const origin = (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:8080')
-            .split(',')[0]
+            .split(',', 1)[0]
             .trim();
         const preflight = await api()
             .options('/account/login')

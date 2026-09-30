@@ -122,8 +122,8 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             waitForInvoice(String(orderB._id))
         ]);
 
-        const [yearA, seqA] = invoiceA.number.split('-');
-        const [yearB, seqB] = invoiceB.number.split('-');
+        const [yearA, seqA] = invoiceA.number.split('-', 2);
+        const [yearB, seqB] = invoiceB.number.split('-', 2);
         expect(yearA).toBe(yearB);
         expect(Number(seqB) - Number(seqA)).toBe(1);
     });

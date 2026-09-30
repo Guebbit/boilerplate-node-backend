@@ -153,7 +153,7 @@ describe('every side effect is published from one layer', () => {
 
     it('publishes each one from the layer that owns it, or says why not', () => {
         const sites = callSites();
-        const strays = [...sites.entries()].flatMap(([marker, files]) =>
+        const strays = [...sites].flatMap(([marker, files]) =>
             files
                 .filter(({ layer }) => layer !== EXPECTED_LAYER[marker])
                 .filter(({ file }) => !(`${marker} @ ${label(file)}` in ALLOWED_ELSEWHERE))
@@ -169,7 +169,7 @@ describe('every side effect is published from one layer', () => {
     it('keeps no exception for a file that has stopped emitting', () => {
         const sites = callSites();
         const stale = Object.keys(ALLOWED_ELSEWHERE).filter((key) => {
-            const [marker, file] = key.split(' @ ');
+            const [marker, file] = key.split(' @ ', 2);
             return !sites.get(marker)?.some((site) => label(site.file) === file);
         });
 

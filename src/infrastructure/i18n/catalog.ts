@@ -37,7 +37,7 @@ export const getFallbackLocale = (): string => process.env.NODE_FALLBACK_LOCALE 
  * (`kernel/authentication.ts`) would not move: a helper with no state and no module to answer it.
  */
 export const localeCandidatesFor = (locale: string): string[] => {
-    const base = locale.split('-')[0];
+    const base = locale.split('-', 1)[0];
     return [...new Set([locale, base, getFallbackLocale()])].filter((tag) => tag.length > 0);
 };
 

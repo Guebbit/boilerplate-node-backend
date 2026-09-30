@@ -180,7 +180,7 @@ it('publishes the set the pair agreed on', () => {
     ];
     // A name's first segment is the module that publishes it, so deleting a module (`demo:remove`)
     // takes its names out of the expected set too.
-    const agreed = agreedByPair.filter((name) => isDeployed(name.split('.')[0]));
+    const agreed = agreedByPair.filter((name) => isDeployed(name.split('.', 1)[0]));
 
     expect(
         publishedNames()

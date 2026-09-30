@@ -65,7 +65,7 @@ const pairedSchemas = (): Map<string, [SchemaShape, SchemaShape]> => {
     }
 
     return new Map(
-        [...byEntity.entries()].filter(
+        [...byEntity].filter(
             (entry): entry is [string, [SchemaShape, SchemaShape]] => entry[1].length === 2
         )
     );
@@ -95,7 +95,7 @@ describe('Replace/Update schema parity', () => {
     });
 
     it('declares the same property names on both verbs of every resource that has both', () => {
-        const mismatches = [...pairedSchemas().entries()]
+        const mismatches = [...pairedSchemas()]
             .map(([entity, [first, second]]) => {
                 const onlyInFirst = [...first.properties].filter((p) => !second.properties.has(p));
                 const onlyInSecond = [...second.properties].filter((p) => !first.properties.has(p));

@@ -24,7 +24,7 @@ setupTestDb();
  * rather than hardcoded — a test naming `http://localhost:8080` would start asserting the
  * fallback the moment a checkout configures `NODE_CORS_ORIGIN`, and pass for the wrong reason.
  */
-const ALLOWED_ORIGIN = (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:8080').split(',')[0];
+const ALLOWED_ORIGIN = (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:8080').split(',', 1)[0];
 
 /** An origin no deployment could have allowed, whatever `NODE_CORS_ORIGIN` holds. */
 const DISALLOWED_ORIGIN = 'https://evil.example.com';

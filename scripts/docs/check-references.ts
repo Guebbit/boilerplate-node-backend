@@ -119,9 +119,9 @@ const toPath = (span: string): { path: string; anchor?: string } | undefined => 
     // An HTTP route. The contract owns those, and `lint:openapi` refuses one that does not exist.
     if (span.startsWith('/')) return undefined;
 
-    const [beforeAnchor, anchor] = span.split('#');
+    const [beforeAnchor, anchor] = span.split('#', 2);
     const path = beforeAnchor
-        .split(':')[0]
+        .split(':', 1)[0]
         .replaceAll(/[,.;]+$/g, '')
         .replaceAll(/\/+$/g, '');
     if (!path || path.startsWith('-') || path.startsWith('$')) return undefined;
@@ -239,7 +239,7 @@ const run = (): number => {
     const aliases = readAliases();
     const own = trackedTargets(ROOT);
     /* The tracked roots, plus the generated ones git never sees. */
-    const roots = new Set([...own.roots, ...ALLOWED.map((entry) => entry.prefix.split('/')[0])]);
+    const roots = new Set([...own.roots, ...ALLOWED.map((entry) => entry.prefix.split('/', 1)[0])]);
     const peerRoot = resolveFrontendPath();
     // Absent in a bare checkout or a worktree; the cross-repo half is skipped rather than fatal.
     const peerTargets = existsSync(path.join(peerRoot, '.git'))

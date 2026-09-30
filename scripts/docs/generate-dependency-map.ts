@@ -110,8 +110,8 @@ const importSpecifiers = (source: string): string[] =>
         .filter(
             (specifier) =>
                 !specifier.startsWith('.') &&
-                !ALIAS_PREFIXES.some(
-                    (prefix) => specifier === prefix || specifier.startsWith(prefix)
+                ALIAS_PREFIXES.every(
+                    (prefix) => !(specifier === prefix || specifier.startsWith(prefix))
                 )
         );
 
@@ -128,7 +128,7 @@ const isBuiltin = (specifier: string): boolean =>
 const packageRootOf = (specifier: string): string =>
     specifier.startsWith('@')
         ? specifier.split('/').slice(0, 2).join('/')
-        : (specifier.split('/')[0] ?? specifier);
+        : (specifier.split('/', 1)[0] ?? specifier);
 
 /**
  * An import `node_modules` resolves but `package.json` never declared — exactly the D1 defect:
@@ -208,7 +208,7 @@ const moduleOwnedRow = (
     ownership: Map<string, Set<string>>
 ): Row | undefined => {
     const owned = packages
-        .filter((packageName) => !groups.some((group) => matchesGroup(packageName, group.match)))
+        .filter((packageName) => groups.every((group) => !matchesGroup(packageName, group.match)))
         .map((packageName) => ({
             packageName,
             module: soleModuleOwner(ownership.get(packageName))
@@ -243,7 +243,7 @@ const ungroupedTable = (
 ): string => {
     const leftover = packages.filter(
         (packageName) =>
-            !groups.some((group) => matchesGroup(packageName, group.match)) &&
+            groups.every((group) => !matchesGroup(packageName, group.match)) &&
             !soleModuleOwner(ownership.get(packageName))
     );
     if (leftover.length === 0) return '';

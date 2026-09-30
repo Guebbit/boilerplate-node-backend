@@ -34,7 +34,7 @@ const setLeaf = (
 ): void => {
     if (isPlainObject(node[segment]))
         throw new Error(
-            `locale key "${key}" is both a string and a group; ` + `one of the two must be renamed`
+            `locale key "${key}" is both a string and a group; one of the two must be renamed`
         );
     node[segment] = value;
 };
@@ -53,7 +53,7 @@ const descend = (
     if (node[segment] === undefined) node[segment] = Object.create(null) as unknown;
     else if (!isPlainObject(node[segment]))
         throw new Error(
-            `locale key "${key}" needs "${path}" ` + `to be a group, but it is already a string`
+            `locale key "${key}" needs "${path}" to be a group, but it is already a string`
         );
     return node[segment] as Record<string, unknown>;
 };

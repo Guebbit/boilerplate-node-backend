@@ -94,7 +94,8 @@ const continueOrFailInfra = (next: NextFunction, error: unknown): void => {
  * @param request - the incoming request
  * @returns the token, or `undefined` when the header is absent or has no second segment
  */
-export const getTokenBearer = (request: Request) => request.header('Authorization')?.split(' ')[1];
+export const getTokenBearer = (request: Request) =>
+    request.header('Authorization')?.split(' ', 2)[1];
 
 /**
  * Resolve `request.authContext` from a bearer token when one is present, then continue. This sits

@@ -206,10 +206,12 @@ const syncArmedState = (user: UserDocument): void => {
  */
 const discardIfDisarmed = (user: UserDocument): void => {
     syncArmedState(user);
-    if (!user.twoFactorEnabledAt) {
-        user.twoFactorBackupCodes = [];
-        user.twoFactorBackupCodeSalt = undefined;
+    if (user.twoFactorEnabledAt) {
+        return;
     }
+
+    user.twoFactorBackupCodes = [];
+    user.twoFactorBackupCodeSalt = undefined;
 };
 
 /**
