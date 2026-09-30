@@ -68,34 +68,61 @@ export const removeGeneratedProductImages = (repoRoot: string): RemovalNote[] =>
     });
 };
 
-/** Remove the `products`/`wishlist` fixture entries from `scenarios/shop-modules.ts`'s table. */
+/**
+ * Remove each removed module's slice of the scenario fixtures: its own `scenarios/<name>.ts`, its
+ * import and entry in `scenarios/shop-modules.ts`'s table, and its name from any other entry's
+ * `after` list. Generic over the module, so `demo:remove` and a single-module removal share it.
+ * A module with no scenario file and no entry is left alone.
+ * @param repoRoot - the checkout to edit
+ * @param names - the removed module names
+ */
+export const stripScenarioModuleEntries = (
+    repoRoot: string,
+    names: readonly string[]
+): RemovalNote => {
+    const file = path.join(repoRoot, 'scenarios', 'shop-modules.ts');
+    let content = readFileSync(file, 'utf8');
+
+    for (const name of names) {
+        rmSync(path.join(repoRoot, 'scenarios', `${name}.ts`), { force: true });
+        // `import { … } from './<name>';` — the module's own scenario file.
+        content = content.replaceAll(
+            new RegExp(String.raw`^import [^\n]*from './${name}';\n`, 'gm'),
+            ''
+        );
+        // The table entry: one line, or a block that closes on a 4-space `}`.
+        content = content.replace(
+            new RegExp(
+                String.raw`^ {4}${name}: \{(?:[^\n]*\},?\n|\n(?:[^\n]*\n)*? {4}\},?\n)`,
+                'm'
+            ),
+            ''
+        );
+    }
+
+    // `after: ['a', 'b']` — drop the removed names, and the whole property once it is empty.
+    content = content.replaceAll(/,? ?after: \[([^\]]*)]/g, (whole, inner: string) => {
+        const kept = inner
+            .split(',')
+            .map((each) => each.trim())
+            .filter((each) => each !== '' && !names.some((name) => each === `'${name}'`));
+        return kept.length > 0
+            ? `${whole.startsWith(',') ? ',' : ''} after: [${kept.join(', ')}]`
+            : '';
+    });
+
+    writeFileSync(file, content);
+    return { file: 'scenarios/shop-modules.ts', detail: `removed ${names.join(', ')} fixtures` };
+};
+
+/**
+ * Rewrite the two comments in `scenarios/shop-modules.ts` that name the deleted
+ * `flows/shop-history.ts`.
+ */
 export const stripShopModulesTable = (repoRoot: string): RemovalNote => {
     const file = path.join(repoRoot, 'scenarios', 'shop-modules.ts');
     const label = 'scenarios/shop-modules.ts';
     let content = readFileSync(file, 'utf8');
-
-    content = replaceOnce(
-        content,
-        "import { seedProductsCollection } from './products';\n",
-        '',
-        label
-    );
-    content = replaceOnce(
-        content,
-        "import { seedWishlistsCollection } from './wishlist';\n",
-        '',
-        label
-    );
-    content = replaceOnce(
-        content,
-        "    products: { seed: seedProductsCollection, after: ['locales'] },\n",
-        '',
-        label
-    );
-    content = replaceOnce(content, '    wishlist: { seed: seedWishlistsCollection }\n', '', label);
-    // The entry above `wishlist` (now the table's last one) keeps its trailing comma from when a
-    // sibling followed it — an object literal tolerates that, so this is cosmetic, not a compile
-    // fix, and `npm run prettier:fix` normalises it along with everything else this script wrote.
 
     // Both comments below named `flows/shop-history.ts` by path — deleted alongside the shop, so
     // `local/comment-links` refuses to leave the reference dangling. Reworded rather than deleted:
@@ -115,7 +142,7 @@ export const stripShopModulesTable = (repoRoot: string): RemovalNote => {
     );
 
     writeFileSync(file, content);
-    return { file: label, detail: 'removed the products and wishlist fixture entries' };
+    return { file: label, detail: 'reworded the comments naming the deleted shop history flow' };
 };
 
 /**

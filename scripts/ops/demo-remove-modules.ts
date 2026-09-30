@@ -1,0 +1,51 @@
+/**
+ * @module
+ * Taking any set of modules out of the tree — the part of a removal that does not care WHICH
+ * modules: their folders, every central line that names them, the shared authorization and
+ * contract files, the reap/sweep scripts they own and the tests that need them.
+ *
+ * `demo-remove.ts` calls this with every `group: shop` module and then does the shop-only work
+ * (the demo catalogue, the scenarios); `measure-demo-strip.ts` calls it with `locales` for its
+ * second recipe. One function, so the two cannot drift.
+ */
+
+import {
+    readRemovedAuthorization,
+    stripConformanceCases,
+    stripRoleGrants
+} from './demo-remove-authorization';
+import { stripContractPathCensus } from './demo-remove-contract';
+import {
+    removeModuleFolders,
+    removeShopOwnedOpsScripts,
+    stripModuleRegistry,
+    stripRoutedModules,
+    type RemovalNote
+} from './demo-remove-registry';
+import { stripScenarioModuleEntries } from './demo-remove-scenarios';
+import { removeResidueTests } from './demo-remove-tests';
+
+/**
+ * Remove modules from the checkout at `repoRoot`.
+ *
+ * Order matters in one place: the permission keys are read from each module's own fragment, so
+ * that read happens before the folders go.
+ * @param repoRoot - the checkout to edit (this one, or a scratch copy)
+ * @param names - the module folders to remove
+ * @returns one note per edit, in the order they were made
+ */
+export const removeModules = (repoRoot: string, names: readonly string[]): RemovalNote[] => {
+    const removedAuthorization = readRemovedAuthorization(repoRoot, names);
+
+    return [
+        ...removeModuleFolders(repoRoot, names),
+        stripModuleRegistry(repoRoot, names),
+        stripRoutedModules(repoRoot, names),
+        ...removeShopOwnedOpsScripts(repoRoot, names),
+        stripContractPathCensus(repoRoot, names),
+        stripScenarioModuleEntries(repoRoot, names),
+        stripRoleGrants(repoRoot, removedAuthorization),
+        stripConformanceCases(repoRoot, removedAuthorization),
+        ...removeResidueTests(repoRoot, names)
+    ];
+};

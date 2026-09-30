@@ -25,7 +25,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { MODULES_ROOT } from '@tests/paths';
+import { isDeployed, MODULES_ROOT } from '@tests/paths';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { TenantCallerContext } from '@types';
 import { createUser } from '@modules/users/tests/factories';
@@ -82,7 +82,7 @@ describe('an api key over the real chain', () => {
         const secret = await credentialHolding(['users.any.read']);
 
         const response = await api()
-            .get('/inventory/levels')
+            .get('/webhooks/subscriptions')
             .set('Authorization', `Bearer ${secret}`);
 
         expect(response.status).toBe(403);
@@ -94,11 +94,16 @@ describe('an api key over the real chain', () => {
      * answer is 401, and the thing that must never happen is a 500 from a credential getting
      * through to a controller that assumes a user.
      */
-    it.each([
-        ['GET', '/cart'],
-        ['GET', '/account/sessions'],
-        ['GET', '/account']
-    ])('answers 401, never 500, on %s %s', async (method, route) => {
+    it.each(
+        [
+            { method: 'GET', route: '/cart', owner: 'cart' },
+            { method: 'GET', route: '/account/sessions', owner: 'account' },
+            { method: 'GET', route: '/account', owner: 'account' }
+        ]
+            // A route of a module that is not deployed (`demo:remove`) has nothing to answer 401.
+            .filter(({ owner }) => isDeployed(owner))
+            .map(({ method, route }) => [method, route])
+    )('answers 401, never 500, on %s %s', async (method, route) => {
         const secret = await credentialHolding(['users.any.read']);
 
         const response = await api()

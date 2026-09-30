@@ -16,6 +16,7 @@ import {
     getRefreshTokenRing,
     getExpiryTime,
     getExpiryTimeMilliseconds,
+    getAccessExpiryTime,
     getRotationGraceMilliseconds
 } from './config';
 import type { RefreshTokenExpiryTime } from './config';
@@ -40,7 +41,35 @@ export interface TokenData {
      * would add `'otp'`. Copied forward exactly like `auth_time`, same reasoning.
      */
     amr: string[];
+    /**
+     * The "remember me" tier the user ticked at login. ABSENT means a browser-session login: no
+     * persistent cookie, server TTL of the `short` tier. Copied forward like `auth_time` — on
+     * every access-token mint and every rotation — because a rotation that dropped it would turn
+     * the session cookie persistent again on the first refresh.
+     */
+    remember?: RefreshTokenExpiryTime;
 }
+
+/**
+ * What a rotation hands the controller. `refreshMaxAgeMs` is the new refresh cookie's `maxAge`,
+ * or `undefined` for a browser-session login, whose cookie must stay a session cookie.
+ */
+export interface RotatedSession {
+    accessToken: string;
+    refreshToken: string;
+    refreshMaxAgeMs: number | undefined;
+}
+
+/**
+ * The claims to carry forward from one token to the next: `auth_time`, `amr`, and `remember`
+ * only when one was ticked (an `undefined` claim would otherwise sit in the payload).
+ */
+const carriedClaims = ({ id, auth_time: authTime, amr, remember }: TokenData): TokenData => ({
+    id,
+    auth_time: authTime,
+    amr,
+    ...(remember && { remember })
+});
 
 /**
  * Refuse to mint for a user already loaded (unfiltered, by id) rather than found through a
@@ -115,7 +144,11 @@ export const verifyRefreshToken = (token: string): Promise<TokenData> =>
 /** Sign an access-token payload with the ring's current key, stamping `kid` so a verifier can find it again. */
 const signAccessToken = (claims: TokenData): string => {
     const key = getAccessTokenRing()[0];
-    return sign(claims, key, { expiresIn: getExpiryTime(), algorithm: 'HS256', keyid: keyId(key) });
+    return sign(claims, key, {
+        expiresIn: getAccessExpiryTime(),
+        algorithm: 'HS256',
+        keyid: keyId(key)
+    });
 };
 
 /**
@@ -138,7 +171,8 @@ const signRefreshToken = (claims: TokenData, expiresInSeconds: number): string =
  * Create a refresh token, sign it, and persist it on the user document.
  *
  * @param id - user ID
- * @param remember - optional expiry tier
+ * @param remember - the ticked "remember me" tier; absent for a browser-session login, whose token
+ *   still lives for the `short` tier
  * @param amr - how `auth_time` was proved — `['pwd']` unless a 2FA login supplies `['pwd', 'otp']`
  * @returns updated user document
  */
@@ -168,7 +202,8 @@ export const createRefreshToken = (
                     id,
                     // Stamped HERE, at login, and nowhere else — see the TokenData doc above.
                     auth_time: Math.floor(Date.now() / 1000),
-                    amr
+                    amr,
+                    ...(remember && { remember })
                 },
                 getExpiryTime(remember)
             );
@@ -208,9 +243,7 @@ export const recordRefreshTokenUse = (refreshToken: string): Promise<void> =>
  * @returns signed access JWT string
  */
 export const createAccessToken = (refreshToken: string) =>
-    verifyRefreshToken(refreshToken).then(({ id, auth_time: authTime, amr }) =>
-        signAccessToken({ id, auth_time: authTime, amr })
-    );
+    verifyRefreshToken(refreshToken).then((claims) => signAccessToken(carriedClaims(claims)));
 
 /**
  * A refresh token was presented that this document does not currently hold LIVE — genuinely
@@ -238,20 +271,14 @@ const revokeAllRefreshTokens = (userId: string): Promise<void> =>
  * account holder's side this is a continuation of the same session, not a new one, and
  * `GET /account/sessions` should read it that way.
  *
- * `authTime`/`amr` are the OLD token's claims, copied forward — same rule as `createAccessToken`,
+ * `claims` are the OLD token's (`auth_time`, `amr`, `remember`), copied forward — same rule as `createAccessToken`,
  * and for the same reason: rotation mints a new token, and stamping the clock is what minting
  * normally does, which is exactly the trap here.
  */
-const reissueRotated = (
-    id: string,
-    remainingMs: number,
-    authTime: number,
-    amr: string[]
-): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
-    userService.findByIdWithCredentials(id).then((user) => {
+const reissueRotated = (claims: TokenData, remainingMs: number): Promise<RotatedSession> =>
+    userService.findByIdWithCredentials(claims.id).then((user) => {
         if (!user || !isAuthenticatable(user)) throw new Error('User not found');
 
-        const claims = { id, auth_time: authTime, amr };
         const newRefreshToken = signRefreshToken(claims, Math.ceil(remainingMs / 1000));
 
         return userService
@@ -260,7 +287,8 @@ const reissueRotated = (
             .then((refreshToken) => ({
                 accessToken: signAccessToken(claims),
                 refreshToken,
-                refreshMaxAgeMs: remainingMs
+                // Only a persistent login keeps a persistent cookie.
+                refreshMaxAgeMs: claims.remember ? remainingMs : undefined
             }));
     });
 
@@ -271,20 +299,16 @@ const reissueRotated = (
  * function reads as one decision (won the race, or didn't); the revoke-then-throw at the bottom
  * stays sequential, unchanged, since the throw must never be a lie about the account's state.
  *
- * @param id - the token's own `id` claim
+ * @param claims - the OLD token's claims (`id`, `auth_time`, `amr`, `remember`), copied forward on a reissue
  * @param oldToken - the refresh JWT the caller presented
  * @param remainingMs - the losing token's remaining lifetime, carried forward on a reissue
- * @param authTime - the OLD token's `auth_time`, copied forward on a reissue
- * @param amr - the OLD token's `amr`, copied forward on a reissue
  * @throws {Error} when the token is genuinely absent, or {@link TokenReuseError} on detected reuse
  */
 const resolveLostRotation = (
-    id: string,
+    claims: TokenData,
     oldToken: string,
-    remainingMs: number,
-    authTime: number,
-    amr: string[]
-): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
+    remainingMs: number
+): Promise<RotatedSession> =>
     userService.findByTokenValue(oldToken).then((user) => {
         const digest = hashToken(oldToken);
         const entry = user?.tokens.find((tk) => tk.token === digest);
@@ -299,20 +323,20 @@ const resolveLostRotation = (
         // Still live (no `supersededAt`) despite losing the claim: only reachable through
         // a race tighter than `tokenSupersede` itself allows for. Treat it as live — the
         // credential is exactly as valid as the caller believes it is.
-        if (!entry.supersededAt) return reissueRotated(id, remainingMs, authTime, amr);
+        if (!entry.supersededAt) return reissueRotated(claims, remainingMs);
 
         const supersededMsAgo = Date.now() - entry.supersededAt.getTime();
         if (supersededMsAgo <= getRotationGraceMilliseconds())
             // The benign race: someone else's rotation of this SAME token already won,
             // moments ago. Reissue rather than reject — see the module doc above.
-            return reissueRotated(id, remainingMs, authTime, amr);
+            return reissueRotated(claims, remainingMs);
 
         // Superseded well outside the grace window: THIS is the signal that distinguishes
         // reuse from an ordinary dead credential — a token this account rotated away, on
         // purpose, being replayed long after. Revoke first, so the throw below is never a
         // lie about what state the account is left in.
-        return revokeAllRefreshTokens(id).then(() => {
-            throw new TokenReuseError(id);
+        return revokeAllRefreshTokens(claims.id).then(() => {
+            throw new TokenReuseError(claims.id);
         });
     });
 
@@ -325,26 +349,47 @@ const resolveLostRotation = (
  * docs/modules/account-sessions.md#refresh-rotation.
  *
  * @param oldToken - the refresh JWT the caller presented
- * @returns the new access/refresh tokens and the refresh cookie's new `maxAge`
+ * @returns the new access/refresh tokens and the refresh cookie's new `maxAge` (`undefined` for a
+ *   browser-session login)
  * @throws when the JWT itself doesn't verify, or {@link TokenReuseError} on detected reuse
  */
-export const rotateRefreshToken = (
-    oldToken: string
-): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
+export const rotateRefreshToken = (oldToken: string): Promise<RotatedSession> =>
     // Signature/expiry/ring lookup only, no DB round trip yet — same as `verifyAccessToken`.
-    verifyAgainstRing(oldToken, getRefreshTokenRing()).then(
-        ({ id, exp, auth_time: authTime, amr }) => {
-            // `exp` is seconds since epoch (the JWT convention); clamp to at least 1s so a token that
-            // verified with almost no time left still signs rather than producing `expiresIn: 0`,
-            // which `jsonwebtoken` treats as "no expiry" — the opposite of what's intended here.
-            const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
+    verifyAgainstRing(oldToken, getRefreshTokenRing()).then(({ exp, ...oldClaims }) => {
+        const claims = carriedClaims(oldClaims);
+        // `exp` is seconds since epoch (the JWT convention); clamp to at least 1s so a token that
+        // verified with almost no time left still signs rather than producing `expiresIn: 0`,
+        // which `jsonwebtoken` treats as "no expiry" — the opposite of what's intended here.
+        const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
 
-            return userService
-                .tokenSupersede(oldToken)
-                .then((won) =>
-                    won
-                        ? reissueRotated(id, remainingMs, authTime, amr)
-                        : resolveLostRotation(id, oldToken, remainingMs, authTime, amr)
-                );
-        }
-    );
+        return userService
+            .tokenSupersede(oldToken)
+            .then((won) =>
+                won
+                    ? reissueRotated(claims, remainingMs)
+                    : resolveLostRotation(claims, oldToken, remainingMs)
+            );
+    });
+
+/**
+ * The "remember me" tier of the session behind a refresh cookie, so a flow that re-mints the
+ * session (reauth, password change) can keep its persistence instead of resetting it.
+ *
+ * Signature and expiry only, no database read: a password change has already revoked the token
+ * by the time it re-mints. Anything unreadable — no cookie, an expired or foreign token, a bearer
+ * client — answers `undefined`, the conservative browser-session default, never an error.
+ *
+ * @param refreshToken - the refresh cookie's value, if the request carried one
+ * @param userId - the authenticated caller; a token naming anyone else is ignored
+ * @returns the tier that was ticked at login, or `undefined`
+ */
+export const rememberOfRefreshToken = (
+    refreshToken: string | undefined,
+    userId: string
+): Promise<RefreshTokenExpiryTime | undefined> =>
+    refreshToken
+        ? verifyAgainstRing(refreshToken, getRefreshTokenRing())
+              .then((claims) => (claims.id === userId ? claims.remember : undefined))
+              // An unreadable cookie is an answer ("no known persistence"), not a failure.
+              .catch(() => undefined)
+        : Promise.resolve(undefined);

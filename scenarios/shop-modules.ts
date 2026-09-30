@@ -82,6 +82,19 @@ export const asWaveEntries = (
     );
 
 /**
+ * Every history step a `shopModules` entry contributes, in table order — what a scenario's drive
+ * runs, so a deleted module drops its step by dropping its entry.
+ */
+export const historyEdits = (): ((owner: Caller) => Promise<void>)[] => {
+    // Widened to the common entry shape for the same reason as in {@link baselineShopModules}.
+    const entries: Record<string, ShopModuleEntry> = shopModules;
+
+    return Object.values(entries).flatMap((entry) =>
+        entry.driveHistoryEdit ? [entry.driveHistoryEdit] : []
+    );
+};
+
+/**
  * `shopModules`, narrowed to the entries `blank` also seeds — `blank.ts` runs this (via
  * {@link asWaveEntries}) alongside its own blank-specific fixtures (the named accounts) rather
  * than duplicating a second copy of whichever entries happen to be baseline today.

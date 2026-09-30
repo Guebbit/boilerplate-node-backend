@@ -7,10 +7,8 @@
  * real counter; the absent-counter path is asserted too, since that's what a deleted module leaves.
  */
 
-import { asStub } from '@tests/stub';
-import { getObservabilityMetricsOverview } from '@modules/observability/controllers/get-observability-metrics-overview';
-import { successResponse } from '@infrastructure/http/response';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
+import { counter, runOverview } from './metrics-overview.support';
 
 /*
  * Loading the MANIFESTS, not the counters.
@@ -22,39 +20,12 @@ import { metricsRegistry } from '@infrastructure/observability/metrics-registry'
  * domain being deleted.
  */
 import '@modules/account/module';
-import '@modules/cart/module';
-import '@modules/orders/module';
 
 jest.mock('@infrastructure/http/response', () => ({
     __esModule: true,
     successResponse: jest.fn(),
     rejectResponse: jest.fn()
 }));
-
-/** Shape of the payload the controller hands to `successResponse` — the subset this suite asserts on. */
-interface Overview {
-    auth: { loginSuccess: number; loginFailure: number; signupSuccess: number };
-    business?: { checkoutSuccess: number; ordersCreated: number };
-    database: { queriesTotal: number; errorsTotal: number };
-}
-
-/**
- * A registered counter, resolved by metric NAME exactly as the controller resolves it.
- *
- * Typed loosely on purpose: `getSingleMetric` returns the registry's `Metric` union, and narrowing
- * it back to `Counter` would mean asserting the very thing the lookup is here to leave open.
- */
-const counter = (name: string) =>
-    asStub<{
-        inc: (labelsOrValue?: Record<string, string> | number, value?: number) => void;
-    }>(metricsRegistry.getSingleMetric(name));
-
-/** Run the controller and return the payload it handed to `successResponse`. */
-const runOverview = async (): Promise<Overview> => {
-    await getObservabilityMetricsOverview({} as never, {} as never);
-    const { calls } = (successResponse as jest.Mock).mock;
-    return calls.at(-1)?.[1] as Overview;
-};
 
 describe('observability metrics overview', () => {
     beforeEach(() => jest.clearAllMocks());
@@ -78,22 +49,6 @@ describe('observability metrics overview', () => {
         expect(after.auth.signupSuccess).toBe(before.auth.signupSuccess + 1);
     });
 
-    it('reports checkouts from the cart module counter', async () => {
-        const before = await runOverview();
-        counter('cart_checkout_total').inc({ status: 'success' }, 4);
-
-        const after = await runOverview();
-        expect(after.business?.checkoutSuccess).toBe((before.business?.checkoutSuccess ?? 0) + 4);
-    });
-
-    it('reports created orders from the orders module counter', async () => {
-        const before = await runOverview();
-        counter('order_created_total').inc(5);
-
-        const after = await runOverview();
-        expect(after.business?.ordersCreated).toBe((before.business?.ordersCreated ?? 0) + 5);
-    });
-
     it('reports database query and error totals from the persistence layer counters', async () => {
         const before = await runOverview();
 
@@ -103,19 +58,6 @@ describe('observability metrics overview', () => {
         const after = await runOverview();
         expect(after.database.queriesTotal).toBe(before.database.queriesTotal + 7);
         expect(after.database.errorsTotal).toBe(before.database.errorsTotal + 2);
-    });
-
-    it('reports zero for a counter no enabled module registered', async () => {
-        // What a deleted module leaves behind. `metricsRegistry.getSingleMetric` returns undefined
-        // and the row has to degrade to 0 while the rest of the shop block is still reported.
-        const removed = metricsRegistry.getSingleMetric('cart_checkout_total');
-        metricsRegistry.removeSingleMetric('cart_checkout_total');
-
-        const after = await runOverview();
-        expect(after.business?.checkoutSuccess).toBe(0);
-
-        // Put it back: the registry is process-global and later suites read the same instance.
-        if (removed) metricsRegistry.registerMetric(removed);
     });
 
     it('leaves the business block out when no shop module registered a metric', async () => {

@@ -22,17 +22,11 @@
  * See: docs/theory/strategic-ddd.md#4a-foundation-and-shop
  */
 
-import { cpSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import {
-    removeModuleFolders,
-    stripModuleOrder,
-    stripModuleRegistry,
-    stripRoutedModules
-} from '../ops/demo-remove-registry';
-import { stripContractPathCensus } from '../ops/demo-remove-contract';
+import { removeModules } from '../ops/demo-remove-modules';
 import { readShopModuleNames } from './shop-module-names';
 
 /** Repo root, two levels up from `scripts/testing/`. */
@@ -81,8 +75,22 @@ const assembleScratchCopy = (): void => {
     // needs working imports, not its own install.
     symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(SCRATCH, 'node_modules'), 'dir');
 
-    // `demo:remove` ends with a `git grep` for tests that still import what it deleted, and that
-    // needs a repository to search.
+    // A symlinked `node_modules` resolves to a real path OUTSIDE the scratch tree, and TypeScript
+    // then refuses to name a type reached through it (TS2883 on `tests/support/routes.ts`) — an
+    // artifact of the measurement, not of the code. `preserveSymlinks` makes it resolve through
+    // the link the way a real install would.
+    // https://www.typescriptlang.org/tsconfig/#preserveSymlinks
+    const tsconfig = path.join(SCRATCH, 'tsconfig.json');
+    writeFileSync(
+        tsconfig,
+        readFileSync(tsconfig, 'utf8').replace(
+            '"strict": true,',
+            '"strict": true,\n"preserveSymlinks": true,'
+        )
+    );
+
+    // `regenerate`'s `docs:graph` asks `git ls-files` which files each module owns, so the scratch
+    // tree has to be a repository.
     runInScratch('git', ['init', '--quiet']);
     runInScratch('git', ['add', '--all']);
 };
@@ -126,11 +134,7 @@ const RECIPES: Partial<Record<string, Recipe>> = {
     },
     locales: {
         apply: () => {
-            removeModuleFolders(SCRATCH, LOCALES);
-            stripModuleRegistry(SCRATCH, LOCALES);
-            stripRoutedModules(SCRATCH, LOCALES);
-            stripModuleOrder(SCRATCH, LOCALES);
-            stripContractPathCensus(SCRATCH, LOCALES);
+            removeModules(SCRATCH, LOCALES);
         },
         describe: () => 'the locales module'
     }

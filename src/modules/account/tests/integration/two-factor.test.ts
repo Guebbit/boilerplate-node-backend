@@ -12,6 +12,8 @@ import { decode } from 'jsonwebtoken';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { codeFor } from '@tests/totp';
+import { setCookie } from '@tests/cookies';
+import { getExpiryTime, RefreshTokenExpiryTime } from '@modules/account/session/config';
 import { TokenType, hashToken } from '@modules/users';
 import { userRepository } from '@modules/users/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
@@ -370,6 +372,57 @@ describe('logging in with a device factor', () => {
         expect(response.status).toBe(200);
         const claims = decode(response.body.data.token as string) as { amr?: string[] };
         expect(claims.amr).toEqual(['pwd', 'otp']);
+    });
+
+    it('carries the ticked "remember me" tier through the 2FA step into a persistent cookie', async () => {
+        const { user, bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        const login = await api()
+            .post('/account/login')
+            .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'medium' });
+
+        const response = await api()
+            .post('/account/login/2fa')
+            .send({
+                challenge: login.body.data.challenge,
+                code: await codeFor(secret, 1),
+                remember: 'medium'
+            });
+
+        expect(response.status).toBe(200);
+        const maxAge = /max-age=(\d+)/i.exec(setCookie(response, 'jwt') ?? '')?.[1];
+        expect(Number(maxAge)).toBe(getExpiryTime(RefreshTokenExpiryTime.MEDIUM));
+    });
+
+    it('answers the 2FA step with a browser-session cookie when no tier was ticked', async () => {
+        const { user, bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        const login = await startLogin(user.email);
+
+        const response = await api()
+            .post('/account/login/2fa')
+            .send({ challenge: login.body.data.challenge, code: await codeFor(secret, 1) });
+
+        expect(response.status).toBe(200);
+        expect(setCookie(response, 'jwt')).toBeDefined();
+        expect(setCookie(response, 'jwt')).not.toMatch(/max-age=|expires=/i);
+        expect(setCookie(response, 'isAuth')).not.toMatch(/max-age=|expires=/i);
+    });
+
+    it('refuses a tier the contract does not declare on the 2FA step', async () => {
+        const { user, bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        const login = await startLogin(user.email);
+
+        const response = await api()
+            .post('/account/login/2fa')
+            .send({
+                challenge: login.body.data.challenge,
+                code: await codeFor(secret, 1),
+                remember: 'forever'
+            });
+
+        expect(response.status).toBe(422);
     });
 
     it('refuses the identical code on a second, separate login — replay protection', async () => {

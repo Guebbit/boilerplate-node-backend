@@ -144,13 +144,12 @@ describe('audit actions across modules', () => {
         expect(unaccounted).toEqual([]);
     });
 
-    it('keeps the non-auditing list free of modules that started auditing, or stopped existing', () => {
+    it('keeps the non-auditing list free of modules that started auditing', () => {
         const auditing = new Set(listAuditFiles().map(({ module }) => module));
-        const folders = moduleFolders();
 
-        const stale = EXPECTED_NON_AUDITING.filter(
-            (module) => !folders.includes(module) || auditing.has(module)
-        );
+        // A listed module that no longer exists is not stale: deleting a module (`demo:remove`)
+        // must not force an edit to this list, and an entry for an absent folder grants nothing.
+        const stale = EXPECTED_NON_AUDITING.filter((module) => auditing.has(module));
 
         expect(stale).toEqual([]);
     });

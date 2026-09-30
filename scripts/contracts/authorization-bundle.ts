@@ -27,6 +27,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import { orderSections } from './section-order';
 
 /** Repo root, from `scripts/contracts/`. */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -44,12 +45,11 @@ const OUTPUT_FILE = path.join(REPO_ROOT, 'shared', 'authorization-keys.yaml');
 const SPLICE_MARKER = '# %AUTHORIZATION_KEYS%';
 
 /**
- * The order sections appear in — the order the original hand-written file had them in, kept so a
- * PHP port's own diff of this file stays small. `core`'s two keys sit between `locales` and
- * `users`, exactly where they always have: `translations.any.*` was carved out of `locales`'
- * own section, not appended as an afterthought.
+ * The order the original hand-written file had its sections in, kept so a PHP port's own diff of
+ * this file stays small. A preference, not a registry — see `scripts/contracts/section-order.ts`. `core`'s two keys
+ * sit between `locales` and `users`, where they always have.
  */
-const SECTION_ORDER = [
+const PREFERRED_ORDER = [
     'products',
     'cart',
     'orders',
@@ -66,7 +66,7 @@ const SECTION_ORDER = [
     'webhooks',
     'api-keys',
     'observability'
-] as const;
+];
 
 /** One key, as `authorization.yaml` and the root's `keys:` shape both declare it — only the field this bundler checks. */
 interface FragmentKey {
@@ -79,7 +79,7 @@ interface FragmentDocument {
 }
 
 /** A section's own fragment file, on disk. */
-const fragmentPath = (section: (typeof SECTION_ORDER)[number]): string =>
+const fragmentPath = (section: string): string =>
     section === 'core'
         ? CORE_FILE
         : path.join(REPO_ROOT, 'src', 'modules', section, 'authorization.yaml');
@@ -92,7 +92,7 @@ const fragmentPath = (section: (typeof SECTION_ORDER)[number]): string =>
  * @param section - the module name, or `core` for the app-level fragment
  * @throws Error if the fragment is missing, malformed, or misattributes one of its own keys
  */
-const fragmentKeysBlock = (section: (typeof SECTION_ORDER)[number]): string => {
+const fragmentKeysBlock = (section: string): string => {
     const file = fragmentPath(section);
     if (!existsSync(file)) throw new Error(`[authorization] missing fragment: ${file}`);
 
@@ -110,35 +110,30 @@ const fragmentKeysBlock = (section: (typeof SECTION_ORDER)[number]): string => {
     return withoutHeading.replace(/\n+$/, '');
 };
 
-/** Every module folder that carries its own `authorization.yaml` — used only to catch a fragment `SECTION_ORDER` forgot to list. */
-const modulesWithFragments = (): string[] =>
-    readdirSync(path.join(REPO_ROOT, 'src', 'modules'), { withFileTypes: true })
+/** Every section that has a fragment on disk: each module folder carrying an `authorization.yaml`, plus `core`. */
+const sectionsOnDisk = (): string[] => [
+    ...readdirSync(path.join(REPO_ROOT, 'src', 'modules'), { withFileTypes: true })
         .filter((entry) => entry.isDirectory())
         .map((entry) => entry.name)
         .filter((name) =>
             existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'authorization.yaml'))
-        );
+        ),
+    'core'
+];
 
 /**
- * Assemble the bundle from the root file plus every section's fragment, in `SECTION_ORDER`.
- * @throws Error if a module has an `authorization.yaml` `SECTION_ORDER` does not know about —
- * the new-module case `moduleCouplingRules` reads from disk for the same reason
+ * Assemble the bundle from the root file plus every fragment that exists, in `PREFERRED_ORDER`, extras appended.
+ * A module deleted from the tree drops out with its own fragment — nothing lists it by hand.
  */
 export const assembleAuthorizationKeys = (): string => {
-    const forgotten = modulesWithFragments().filter(
-        (name) => !(SECTION_ORDER as readonly string[]).includes(name)
-    );
-    if (forgotten.length > 0)
-        throw new Error(
-            `[authorization] add to SECTION_ORDER in authorization-bundle.ts: ${forgotten.join(', ')}`
-        );
-
     const root = readFileSync(ROOT_FILE, 'utf8');
     if (!root.includes(SPLICE_MARKER))
         throw new Error(`[authorization] ${ROOT_FILE} is missing the ${SPLICE_MARKER} marker`);
     const [before, after] = root.split(SPLICE_MARKER);
 
-    const keys = SECTION_ORDER.map((section) => fragmentKeysBlock(section)).join('\n\n');
+    const keys = orderSections(PREFERRED_ORDER, sectionsOnDisk())
+        .map((section) => fragmentKeysBlock(section))
+        .join('\n\n');
 
     return `${before.replace(/\n+$/, '')}\nkeys:\n${keys}\n${after.replace(/^\n+/, '\n')}`;
 };

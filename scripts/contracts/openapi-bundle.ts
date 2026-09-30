@@ -25,18 +25,16 @@ import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import path from 'node:path';
 import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
+import { orderSections } from './section-order';
 
 /**
  * The narrative order the contract has always had — what a caller meets first, then the path a
  * customer walks through the shop — and the order the client collections group their requests in.
  *
- * The ONLY hand-kept list left for this bundle: it says nothing about which modules exist, only
- * where a module that does goes. {@link MODULE_SECTIONS} discovers MEMBERSHIP from disk and throws
- * if a module ships an `openapi.yaml` this array hasn't placed yet — the same "one line, or a
- * named failure" shape `authorization-bundle.ts`'s `SECTION_ORDER` already uses for its own
- * fragments.
+ * A PREFERENCE, not a registry: {@link MODULE_SECTIONS} discovers membership from disk, so a
+ * module that is deleted drops out and a new one is appended alphabetically (`scripts/contracts/section-order.ts`).
  */
-const MODULE_ORDER = [
+const MODULE_ORDER: readonly string[] = [
     'locales',
     'observability',
     'audit-logs',
@@ -56,9 +54,10 @@ const MODULE_ORDER = [
     'inventory',
     'webhooks',
     'api-keys'
-] as const;
+];
 
-type ModuleSection = (typeof MODULE_ORDER)[number];
+/** A module folder's name. */
+type ModuleSection = string;
 
 /** Every module folder that ships its own standalone `openapi.yaml`, discovered from disk. */
 const modulesWithOpenapi = (): string[] =>
@@ -67,30 +66,11 @@ const modulesWithOpenapi = (): string[] =>
         .map((entry) => entry.name)
         .filter((name) => existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'openapi.yaml')));
 
-/**
- * Which modules contribute to the bundle, in {@link MODULE_ORDER}'s order.
- *
- * Membership is discovery, not a second hand list a completeness test would have to reconcile
- * against the first — adding a module folder with an `openapi.yaml` needs exactly one line here,
- * naming where it sits in the narrative; forgetting that line fails the bundle immediately, naming
- * the module. Removing a module's folder without removing its line here fails just as loudly,
- * further down, the moment this list's owner tries to read a file that is no longer there.
- * @throws Error if a module ships an `openapi.yaml` that MODULE_ORDER does not know about
- */
-const resolveModuleSections = (): readonly ModuleSection[] => {
-    const forgotten = modulesWithOpenapi().filter(
-        (name) => !(MODULE_ORDER as readonly string[]).includes(name)
-    );
-    if (forgotten.length > 0)
-        throw new Error(
-            `[openapi] add to MODULE_ORDER in openapi-bundle.ts: ${forgotten.join(', ')}`
-        );
-
-    return MODULE_ORDER;
-};
-
 /** The modules contributing a standalone document, in the order the contract is assembled in. */
-export const MODULE_SECTIONS: readonly ModuleSection[] = resolveModuleSections();
+export const MODULE_SECTIONS: readonly ModuleSection[] = orderSections(
+    MODULE_ORDER,
+    modulesWithOpenapi()
+);
 
 /**
  * Every section a path can be filed under: the modules, plus the shell.
@@ -99,9 +79,9 @@ export const MODULE_SECTIONS: readonly ModuleSection[] = resolveModuleSections()
  * the root document rather than into a module. It is still a section for anything that groups paths
  * by owner, which is why the client collections show a System folder.
  */
-export const SECTION_ORDER = ['system', ...MODULE_SECTIONS] as const;
+export const SECTION_ORDER: readonly SectionName[] = ['system', ...MODULE_SECTIONS];
 
-export type SectionName = (typeof SECTION_ORDER)[number];
+export type SectionName = string;
 
 /** A module's standalone contract. */
 export const moduleSpec = (section: ModuleSection): string =>

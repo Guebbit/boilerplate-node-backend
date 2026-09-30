@@ -182,7 +182,7 @@ const PROBES: Partial<Record<SectionName, Probe[]>> = {
 };
 
 /** Which sections {@link PROBES} carries. Read by the completeness guard, nothing else. */
-export const PROBED_SECTIONS: readonly SectionName[] = Object.keys(PROBES) as SectionName[];
+export const PROBED_SECTIONS: readonly SectionName[] = Object.keys(PROBES);
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────
  * 4. The four documents
@@ -199,7 +199,9 @@ const generate = (): GenerateResult =>
     generateCollections({
         spec: loadSpec(path.join(REPO_ROOT, 'openapi.yaml')),
         sections: sections(),
-        probes: PROBES,
+        // Narrowing cast: the generator reads `probes[section]` only for sections it walks, so a
+        // section with no entry is simply absent — `Partial` says so, its index signature cannot.
+        probes: PROBES as Record<string, Probe[]>,
         values,
         collection: { name: COLLECTION_NAME },
         targets: COLLECTION_TOOLS

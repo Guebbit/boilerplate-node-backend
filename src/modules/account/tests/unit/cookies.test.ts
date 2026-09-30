@@ -15,7 +15,6 @@ import {
     createLoggedCookie,
     destroyLoggedCookie
 } from '@modules/account/session/cookies';
-import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 
 /** Captures the (name, value, options) triples the module hands to Express. */
 const makeResponse = () =>
@@ -81,21 +80,24 @@ describe('createRefreshCookie', () => {
         expect(response.cookie.mock.calls[0][2].secure).toBe(false);
     });
 
-    it('derives maxAge from the requested expiry tier', () => {
+    it('persists for the maxAge it is given', () => {
         const response = makeResponse();
 
-        createRefreshCookie(response, 'token', RefreshTokenExpiryTime.SHORT);
+        createRefreshCookie(response, 'token', 3_600_000);
 
-        // 3600s from NODE_TOKEN_REFRESH_TIME_SHORT, in milliseconds.
         expect(response.cookie.mock.calls[0][2].maxAge).toBe(3_600_000);
     });
 
-    it('falls back to the access-token window when no tier is given', () => {
+    it('is a browser-session cookie when no maxAge is given', () => {
         const response = makeResponse();
 
         createRefreshCookie(response, 'token');
 
-        expect(response.cookie.mock.calls[0][2].maxAge).toBe(900_000);
+        // No Max-Age and no Expires: the browser drops it on close. `maxAge` undefined is what
+        // makes Express emit neither.
+        const options = response.cookie.mock.calls[0][2];
+        expect(options.maxAge).toBeUndefined();
+        expect(options.expires).toBeUndefined();
     });
 });
 
@@ -128,7 +130,7 @@ describe('createLoggedCookie', () => {
     it('sets a readable isAuth hint rather than a credential', () => {
         const response = makeResponse();
 
-        createLoggedCookie(response, RefreshTokenExpiryTime.SHORT);
+        createLoggedCookie(response, 3_600_000);
 
         const [name, value, options] = response.cookie.mock.calls[0];
         expect(name).toBe('isAuth');
@@ -143,11 +145,21 @@ describe('createLoggedCookie', () => {
     it('expires in step with the refresh cookie it describes', () => {
         const response = makeResponse();
 
-        createLoggedCookie(response, RefreshTokenExpiryTime.SHORT);
+        createLoggedCookie(response, 3_600_000);
 
         // If the hint outlived the credential the UI would show a logged-in state for a session
         // the API has already stopped honouring.
         expect(response.cookie.mock.calls[0][2].maxAge).toBe(3_600_000);
+    });
+});
+
+describe('createLoggedCookie without a maxAge', () => {
+    it('is a browser-session cookie, in step with the refresh cookie', () => {
+        const response = makeResponse();
+
+        createLoggedCookie(response);
+
+        expect(response.cookie.mock.calls[0][2].maxAge).toBeUndefined();
     });
 });
 

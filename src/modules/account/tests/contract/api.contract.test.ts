@@ -12,24 +12,24 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
 import { TokenType, userService } from '@modules/users';
+import { decode } from 'jsonwebtoken';
 import { logger } from '@infrastructure/adapters/logger';
 import * as mailerPort from '@infrastructure/adapters/mailer';
 import itUsers from '@modules/users/locales/it.json';
 import itShared from '../../../../locales/it.json';
 import { WEAK_PASSWORD } from '@modules/users/tests/factories';
-import { getExpiryTime, RefreshTokenExpiryTime } from '@modules/account/session/config';
-import { createIntent } from '@modules/payments';
-import { asCustomer } from '@tests/callers';
+import { loginWithCookie } from './support';
+import {
+    getExpiryTime,
+    getAccessExpiryTime,
+    RefreshTokenExpiryTime
+} from '@modules/account/session/config';
 import { MISSING_ID } from '@tests/ids';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { REAUTH_TIME_SENSITIVE } from '@kernel/middlewares/authorizations';
-import type { ResponseSuccess } from '@infrastructure/http/response';
-import type { Payment } from '@types';
 
 setupTestDb();
 
@@ -45,31 +45,6 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     ...jest.requireActual('@infrastructure/adapters/mailer'),
     enqueueEmail: jest.fn().mockResolvedValue(undefined)
 }));
-
-/**
- * Log a user in keeping BOTH credentials: the bearer token and the refresh cookie. The cookie is
- * what `current`, logout and refresh hang on, and `authenticateAs` deliberately drops it.
- */
-const loginWithCookie = async (overrides: Parameters<typeof createUser>[0] = {}) => {
-    const user = await createUser(overrides);
-    const response = await api()
-        .post('/account/login')
-        .send({ email: user.email, password: PLAIN_PASSWORD });
-
-    if (response.status !== 200)
-        throw new Error(
-            `login setup failed: ${response.status} — ${JSON.stringify(response.body)}`
-        );
-
-    const jwtCookie = setCookie(response, 'jwt');
-    if (!jwtCookie) throw new Error('login set no jwt cookie');
-
-    return {
-        user,
-        bearer: `Bearer ${response.body.data.token as string}` as const,
-        jwtCookie
-    };
-};
 
 /** Whether the account holds a verify token — a digest at rest, so only presence is checkable. */
 const readVerifyToken = async (userId: string) => {
@@ -131,14 +106,29 @@ describe('POST /account/login — remember me', () => {
         expect(cookieMaxAge(response, 'isAuth')).toBe(expected);
     });
 
-    it('keeps the access-token window when no tier is asked for', async () => {
+    it('sets browser-session cookies (no Max-Age, no Expires) when no tier is asked for', async () => {
         const user = await createUser();
         const response = await api()
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
-        expect(cookieMaxAge(response, 'jwt')).toBe(getExpiryTime());
+        for (const name of ['jwt', 'isAuth']) {
+            expect(setCookie(response, name)).toBeDefined();
+            expect(cookieMaxAge(response, name)).toBeUndefined();
+            expect(setCookie(response, name)).not.toMatch(/expires=/i);
+        }
+    });
+
+    it('still gives the access token the short window, not the refresh fallback', async () => {
+        const user = await createUser();
+        const response = await api()
+            .post('/account/login')
+            .send({ email: user.email, password: PLAIN_PASSWORD });
+
+        const { iat, exp } = decode(response.body.data.token) as { iat: number; exp: number };
+        expect(exp - iat).toBe(getAccessExpiryTime());
+        expect(getAccessExpiryTime()).toBeLessThan(getExpiryTime());
     });
 
     it('answers 422 for a tier the contract does not declare, before checking credentials', async () => {
@@ -147,6 +137,172 @@ describe('POST /account/login — remember me', () => {
             .send({ email: 'nobody@example.com', password: 'whatever-it-is', remember: 'forever' });
 
         expect(response.status).toBe(422);
+    });
+});
+
+/**
+ * Log in choosing (or not) the "remember me" tier, keeping the bearer and the refresh cookie.
+ *
+ * @param remember - the tier to tick, omitted for a browser-session login
+ * @param email - the account's address, only when a case needs two accounts
+ */
+const loginRemembering = async (remember?: 'short' | 'medium' | 'long', email?: string) => {
+    const user = await createUser(email ? { email } : {});
+    const response = await api()
+        .post('/account/login')
+        .send({ email: user.email, password: PLAIN_PASSWORD, ...(remember && { remember }) });
+    const jwtCookie = setCookie(response, 'jwt');
+    if (!jwtCookie) throw new Error('login set no jwt cookie');
+    return {
+        user,
+        bearer: `Bearer ${response.body.data.token as string}` as const,
+        jwtCookie
+    };
+};
+
+/** Asserts the response sets BOTH session cookies with no `Max-Age` and no `Expires`. */
+const expectSessionCookies = (response: { headers: Record<string, unknown> }) => {
+    for (const name of ['jwt', 'isAuth']) {
+        expect(setCookie(response, name)).toBeDefined();
+        expect(cookieMaxAge(response, name)).toBeUndefined();
+        expect(setCookie(response, name)).not.toMatch(/expires=/i);
+    }
+};
+
+describe('the "remember me" choice survives every re-mint', () => {
+    const MEDIUM = getExpiryTime(RefreshTokenExpiryTime.MEDIUM);
+
+    it('signup gets browser-session cookies', async () => {
+        const response = await api().post('/account/signup').send({
+            email: 'session-signup@example.com',
+            username: 'sessionsignup',
+            password: PLAIN_PASSWORD,
+            passwordConfirm: PLAIN_PASSWORD,
+            termsAccepted: true
+        });
+
+        expect(response.status).toBe(201);
+        expectSessionCookies(response);
+    });
+
+    it('refresh rotation keeps a browser-session login a session cookie', async () => {
+        const { jwtCookie } = await loginRemembering();
+
+        const rotated = await api().get('/account/refresh').set('Cookie', jwtCookie);
+        expect(rotated.status).toBe(200);
+        expectSessionCookies(rotated);
+
+        // A second rotation, off the rotated cookie: the flag must survive being copied twice.
+        const again = await api().get('/account/refresh').set('Cookie', setCookie(rotated, 'jwt')!);
+        expect(again.status).toBe(200);
+        expectSessionCookies(again);
+    });
+
+    it('refresh rotation keeps a remembered login persistent, for what is left of its window', async () => {
+        const { jwtCookie } = await loginRemembering('medium');
+
+        const rotated = await api().get('/account/refresh').set('Cookie', jwtCookie);
+
+        expect(rotated.status).toBe(200);
+        // Rotation carries the REMAINING lifetime, so a whole second may have elapsed.
+        expect(cookieMaxAge(rotated, 'jwt')).toBeGreaterThan(MEDIUM - 5);
+        expect(cookieMaxAge(rotated, 'jwt')).toBeLessThanOrEqual(MEDIUM);
+        expect(cookieMaxAge(rotated, 'isAuth')).toBe(cookieMaxAge(rotated, 'jwt'));
+    });
+
+    it('refresh rotation keeps the access token on its own short window', async () => {
+        const { jwtCookie } = await loginRemembering();
+
+        const rotated = await api().get('/account/refresh').set('Cookie', jwtCookie);
+
+        const { iat, exp } = decode(rotated.body.data.token as string) as {
+            iat: number;
+            exp: number;
+        };
+        expect(exp - iat).toBe(getAccessExpiryTime());
+    });
+
+    it('gives a browser-session login a server-side limit of the short tier', async () => {
+        const { jwtCookie } = await loginRemembering();
+
+        const value = /jwt=([^;]+)/.exec(jwtCookie)![1];
+        const { iat, exp } = decode(value) as { iat: number; exp: number };
+        expect(exp - iat).toBe(getExpiryTime(RefreshTokenExpiryTime.SHORT));
+    });
+
+    it('reauth keeps a remembered login at its tier', async () => {
+        const { bearer, jwtCookie } = await loginRemembering('medium');
+
+        const response = await api()
+            .post('/account/reauth')
+            .set('Authorization', bearer)
+            .set('Cookie', jwtCookie)
+            .send({ password: PLAIN_PASSWORD });
+
+        expect(response.status).toBe(200);
+        expect(cookieMaxAge(response, 'jwt')).toBe(MEDIUM);
+        expect(cookieMaxAge(response, 'isAuth')).toBe(MEDIUM);
+    });
+
+    it('reauth keeps a browser-session login a session cookie', async () => {
+        const { bearer, jwtCookie } = await loginRemembering();
+
+        const response = await api()
+            .post('/account/reauth')
+            .set('Authorization', bearer)
+            .set('Cookie', jwtCookie)
+            .send({ password: PLAIN_PASSWORD });
+
+        expect(response.status).toBe(200);
+        expectSessionCookies(response);
+    });
+
+    it('a password change keeps a remembered login at its tier', async () => {
+        const { bearer, jwtCookie } = await loginRemembering('medium');
+
+        const response = await api()
+            .post('/account/password')
+            .set('Authorization', bearer)
+            .set('Cookie', jwtCookie)
+            .send({
+                currentPassword: PLAIN_PASSWORD,
+                password: REPLACEMENT_PASSWORD,
+                passwordConfirm: REPLACEMENT_PASSWORD
+            });
+
+        expect(response.status).toBe(200);
+        expect(cookieMaxAge(response, 'jwt')).toBe(MEDIUM);
+    });
+
+    it('a password change keeps a browser-session login a session cookie', async () => {
+        const { bearer, jwtCookie } = await loginRemembering();
+
+        const response = await api()
+            .post('/account/password')
+            .set('Authorization', bearer)
+            .set('Cookie', jwtCookie)
+            .send({
+                currentPassword: PLAIN_PASSWORD,
+                password: REPLACEMENT_PASSWORD,
+                passwordConfirm: REPLACEMENT_PASSWORD
+            });
+
+        expect(response.status).toBe(200);
+        expectSessionCookies(response);
+    });
+
+    it("reauth ignores another user's refresh cookie rather than adopting its tier", async () => {
+        const remembered = await loginRemembering('long', 'other@example.com');
+        const { bearer } = await loginRemembering();
+
+        const response = await api()
+            .post('/account/reauth')
+            .set('Authorization', bearer)
+            .set('Cookie', remembered.jwtCookie)
+            .send({ password: PLAIN_PASSWORD });
+
+        expect(response.status).toBe(200);
+        expectSessionCookies(response);
     });
 });
 
@@ -191,11 +347,8 @@ describe('PUT /account', () => {
 });
 
 /**
- * `remember: 'short'` so the refresh cookie outlives the clock advance {@link staleButRefreshedBearer}
- * makes — an unqualified login's refresh token shares the ACCESS token's short TTL (a separate
- * gap; `session/session.ts` `issueSession`'s `remember` falls through to `getExpiryTime`'s
- * 'default' case, `NODE_TOKEN_ACCESS_TIME`), which would expire before that advance and mask the
- * freshness gate behind a plain "token expired" 401.
+ * `remember: 'short'` so the login is a persistent one, the shape a real "remember me" client
+ * has; the clock advance {@link staleButRefreshedBearer} makes fits inside it either way.
  */
 const loginRemembered = async () => {
     const user = await createUser();
@@ -546,48 +699,17 @@ describe('POST /account/reauth', () => {
 });
 
 describe('POST /account/export', () => {
-    it("returns the caller's own data across collections, and satisfies the contract", async () => {
+    it("returns the caller's profile and sessions, and satisfies the contract", async () => {
         const { user, bearer } = await loginWithCookie();
-        const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 2)]);
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
-        const payment = (intent as ResponseSuccess<Payment>).data;
 
         const response = await api().post('/account/export').set('Authorization', bearer).send();
 
         expect(response.status).toBe(200);
         const { data } = response.body as {
-            data: {
-                profile: { email: string };
-                orders: { id: string }[];
-                payments: { id: string; orderId: string }[];
-                cart: unknown[];
-                wishlist: unknown[];
-                sessions: { id: string; type: string }[];
-            };
+            data: { profile: { email: string }; sessions: { id: string; type: string }[] };
         };
         expect(data.profile.email).toBe(user.email);
-        expect(data.orders.map((each) => each.id)).toContain(String(order._id));
-        // `paymentService.findOwnPaymentsForExport` (payments/services/retention.ts) is the only
-        // path this hits — nothing else exercises its pagination read, so a broken page-walk (or
-        // the whole read swallowed) would only ever surface here.
-        expect(data.payments.map((each) => each.id)).toContain(payment.id);
-        expect(data.payments.find((each) => each.id === payment.id)?.orderId).toBe(
-            String(order._id)
-        );
         expect(data.sessions.some((session) => session.type === 'refresh')).toBe(true);
-    });
-
-    it("never includes another account's orders", async () => {
-        const { bearer } = await loginWithCookie();
-        const stranger = await createUser({ email: 'export-stranger@example.com' });
-        const product = await createProduct();
-        const strangerOrder = await createOrder(stranger, [toOrderItem(product, 1)]);
-
-        const response = await api().post('/account/export').set('Authorization', bearer).send();
-
-        const { data } = response.body as { data: { orders: { id: string }[] } };
-        expect(data.orders.map((each) => each.id)).not.toContain(String(strangerOrder._id));
     });
 });
 
@@ -1241,27 +1363,5 @@ describe('the address book: /account/addresses', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-    });
-
-    it('checkout carries the snapshot the contract declares', async () => {
-        const { bearer } = await authenticateAs('user');
-        await api().post('/account/addresses').set('Authorization', bearer).send(HOME);
-        const product = await createProduct({ onHand: 5 });
-        await api()
-            .post('/cart')
-            .set('Authorization', bearer)
-            .send({ productId: String(product._id), quantity: 1 });
-
-        await api()
-            .put('/cart/shipping-method')
-            .set('Authorization', bearer)
-            .send({ shippingMethodId: 'standard' });
-        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
-
-        expect(response.status).toBe(201);
-        expect(response.body.data.shippingAddress).toMatchObject({
-            fullName: 'Ada Lovelace',
-            street: 'Via Roma 1'
-        });
     });
 });
