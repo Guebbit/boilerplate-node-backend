@@ -51,20 +51,28 @@ const armTotp = async (bearer: string) => {
         .set('Authorization', bearer)
         .send();
     const { secret } = setup.body.data as { secret: string };
-    await api()
+    const confirm = await api()
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', bearer)
         .send({ code: await codeFor(secret, 0) });
+    backupCodesOf.set(secret, confirm.body.data.backupCodes as string[]);
     return secret;
 };
+
+/** The backup codes each armed secret came with — what a SECOND factor proves itself against. */
+const backupCodesOf = new Map<string, string[]>();
 
 /**
  * Arms the email factor with the mailed code.
  *
  * @param bearer - the caller's session
+ * @param proof - a code from a factor already armed, which a second factor needs
  */
-const armEmail = async (bearer: string) => {
-    await api().post('/account/2fa/methods/email/setup').set('Authorization', bearer).send();
+const armEmail = async (bearer: string, proof?: string) => {
+    await api()
+        .post('/account/2fa/methods/email/setup')
+        .set('Authorization', bearer)
+        .send(proof ? { code: proof } : {});
     const mail = mockOutbox.findLast(({ template }) => template === 'account.two-factor-code');
     await api()
         .post('/account/2fa/methods/email/confirm')
@@ -123,7 +131,7 @@ describe('DELETE /account/2fa/methods/{method}', () => {
     it('matches the contract when one of two factors is removed', async () => {
         const { bearer } = await verifiedSession();
         const secret = await armTotp(bearer);
-        await armEmail(bearer);
+        await armEmail(bearer, backupCodesOf.get(secret)?.[0]);
 
         const response = await api()
             .delete('/account/2fa/methods/email')
@@ -190,5 +198,51 @@ describe('POST /account/login/2fa/send', () => {
             .send({ challenge: 'forged', method: 'email' });
 
         expect(response.status).toBe(401);
+    });
+});
+
+describe('POST /account/2fa/methods/{method}/send', () => {
+    it('matches the contract, mailing the signed-in account a code for an armed method', async () => {
+        const { bearer } = await verifiedSession();
+        await armEmail(bearer);
+
+        const response = await api()
+            .post('/account/2fa/methods/email/send')
+            .set('Authorization', bearer)
+            .send();
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.sentTo).toBe('a***a@example.com');
+    });
+
+    it('matches the error contract for a method that is not armed', async () => {
+        const { bearer } = await verifiedSession();
+
+        const response = await api()
+            .post('/account/2fa/methods/email/send')
+            .set('Authorization', bearer)
+            .send();
+
+        expect(response.status).toBe(422);
+    });
+
+    it('matches the error contract for an anonymous caller', async () => {
+        const response = await api().post('/account/2fa/methods/email/send').send();
+
+        expect(response.status).toBe(401);
+    });
+});
+
+describe('POST /account/2fa/methods/{method}/setup with a code', () => {
+    it('matches the error contract when a second method is started without one', async () => {
+        const { bearer } = await verifiedSession();
+        await armTotp(bearer);
+
+        const response = await api()
+            .post('/account/2fa/methods/email/setup')
+            .set('Authorization', bearer)
+            .send();
+
+        expect(response.status).toBe(422);
     });
 });

@@ -67,6 +67,7 @@ const AUTHENTICATED = [
     'GET /2fa',
     'DELETE /2fa',
     'POST /2fa/methods/:method/setup',
+    'POST /2fa/methods/:method/send',
     'POST /2fa/methods/:method/confirm',
     'DELETE /2fa/methods/:method',
     'POST /2fa/backup-codes'
@@ -104,6 +105,7 @@ describe('account routes — what is mounted', () => {
             'GET /2fa',
             'DELETE /2fa',
             'POST /2fa/methods/:method/setup',
+            'POST /2fa/methods/:method/send',
             'POST /2fa/methods/:method/confirm',
             'DELETE /2fa/methods/:method',
             'POST /2fa/backup-codes',

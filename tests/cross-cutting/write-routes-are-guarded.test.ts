@@ -132,6 +132,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "enrolling a second factor on the caller's own account"
     },
+    'account POST /2fa/methods/:method/send': {
+        requiresAuth: true,
+        reason: "mailing the caller's own account a code to prove an armed factor"
+    },
     'account POST /2fa/methods/:method/confirm': {
         requiresAuth: true,
         reason: "arming the caller's own pending factor"

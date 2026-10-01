@@ -33,6 +33,7 @@
         "two-factor": {
             "setup-not-started": "Avvia la configurazione di questo metodo prima di confermare un codice.",
             "wrong-code": "Il codice non è corretto. Controllalo e riprova.",
+            "code-required": "Inserisci un codice da uno dei tuoi metodi attivi, o un codice di backup, per modificare i tuoi secondi fattori.",
             "not-enabled": "L'autenticazione a due fattori non è attiva su questo account.",
             "unknown-method": "Questo metodo di autenticazione a due fattori non è disponibile.",
             "not-delivered": "Questo metodo non invia codici: leggilo dal tuo dispositivo.",
@@ -129,6 +130,15 @@
                 "meta-title": "Modifica email richiesta",
                 "greeting": "Ciao, {{name}}!",
                 "body": "Qualcuno ha richiesto di modificare l'indirizzo email di questo account in {{newEmail}}. Se sei stato tu, non devi fare nulla — la modifica avrà effetto una volta confermato il nuovo indirizzo. Se non sei stato tu, cambia subito la password e disconnetti tutti i dispositivi."
+            },
+            "two-factor-changed": {
+                "subject": "Le tue impostazioni di verifica in due passaggi sono cambiate",
+                "meta-title": "Verifica in due passaggi modificata",
+                "greeting": "Ciao, {{name}}!",
+                "body-enrolled": "Un secondo passaggio di accesso ({{method}}) è stato aggiunto o sostituito sul tuo account.",
+                "body-removed": "Il secondo passaggio di accesso ({{method}}) è stato rimosso dal tuo account.",
+                "body-disabled": "La verifica in due passaggi è stata disattivata sul tuo account.",
+                "advice": "Se non sei stato tu, cambia la password ed esci da tutti i dispositivi adesso."
             }
         },
         "oauth": {

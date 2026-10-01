@@ -12,6 +12,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { t } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import {
     userService,
     TokenType,
@@ -38,6 +39,8 @@ import type {
     TwoFactorStatus
 } from '@types';
 import { accountAuditActions } from '../audit';
+import { twoFactorChangedEmail, recipientLocale, type TwoFactorChange } from '../emails';
+import { sendAccountMail } from './mail';
 import { findLiveTokenEntry, findLiveToken, spendLiveToken } from './tokens';
 import { resendTooSoon } from '../cooldown';
 import { ERROR_CODES } from '@api/error-codes';
@@ -61,6 +64,30 @@ import {
  * an exported constant.
  */
 const RESEND_TOO_SOON_CODE = ERROR_CODES.TWO_FACTOR_RESEND_TOO_SOON;
+
+/**
+ * Tell the account holder, out of band, that their second factors changed. Fire-and-forget: the
+ * change already happened, and a queue that is briefly down must not turn it into an error.
+ *
+ * @param user - the account, carrying its address and locale
+ * @param change - what happened
+ * @param method - the factor concerned, for an add, replace or removal
+ * @param context - the caller, whose locale is the fallback
+ */
+const notifyChange = (
+    user: UserDocument,
+    change: TwoFactorChange,
+    method: string,
+    context: CallerContext
+): void => {
+    void sendAccountMail(
+        user.email,
+        twoFactorChangedEmail(recipientLocale(user.locale, context), user.username, change, method),
+        'normal'
+    ).catch((error: unknown) => {
+        logger.warn({ message: 'Could not queue a two-factor change notice.', error });
+    });
+};
 
 /**
  * Record one method-scoped 2FA action and pass the outcome through untouched. Both halves are
@@ -297,7 +324,9 @@ export const twoFactorStatus = (
         .then<ResponseSuccess<TwoFactorStatus> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);
 
-            const enrolled = orderedEntries(user.twoFactorMethods);
+            // Armed ones only: an entry that has a pending code but no `enrolledAt` is an
+            // enrollment in progress, and listing it would show a factor login does not ask for.
+            const enrolled = armedEntries(user);
             const enrolledNames = new Set(enrolled.map(({ handler }) => handler.name));
 
             return generateSuccess({
@@ -329,6 +358,7 @@ export const twoFactorStatus = (
 export const setupTwoFactorMethod = (
     userId: string,
     method: string,
+    code: string | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<TwoFactorSetup> | ResponseReject> => {
     const handler = twoFactorMethod(method);
@@ -346,23 +376,84 @@ export const setupTwoFactorMethod = (
                     eligibility.reason ?? t('account.two-factor.unknown-method')
                 ]);
 
-            const entry = entryFor(user, method);
-            const wait = handler.delivers ? deliveryCooldownRemaining(entry) : 0;
-            if (wait > 0) return tooSoon(wait);
+            // The first factor needs only the fresh password the route demands: there is nothing
+            // to prove yet, and a backup code is what an account that lost its phone has.
+            if (armedEntries(user).length === 0) return beginSetup(user, handler, context);
 
-            // Disarmed BEFORE the handler runs: a restart that fails halfway must not leave the
-            // old secret armed next to a new pending one.
-            entry.enrolledAt = undefined;
-            clearDeliveredCode(entry);
-
-            return handler.setup(user, entry, context).then((payload) => {
-                syncArmedState(user);
-                return userService
-                    .persistTwoFactorMethods(user)
-                    .then(() => generateSuccess(payload));
-            });
+            // Once anything is armed, changing the factors needs a factor (or a backup code), so
+            // a stolen-but-fresh session cannot swap out the very thing it would have to pass.
+            if (!code) return generateReject(422, [t('account.two-factor.code-required')]);
+            return verifyAnyFactor(user, code).then((matched) =>
+                matched ? beginSetup(user, handler, context) : rejectWrongCode(user)
+            );
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+};
+
+/**
+ * The enrollment itself, once the caller is allowed to start one: honour the send cooldown,
+ * disarm whatever this method had, and let the handler mint its pending secret or code.
+ * Runs after a code was verified, so a cooldown left by the very code that proved the caller
+ * (a mailed one, now spent) no longer counts.
+ */
+const beginSetup = (
+    user: UserDocument,
+    handler: TwoFactorMethodHandler,
+    context: CallerContext
+): Promise<ResponseSuccess<TwoFactorSetup> | ResponseReject> => {
+    const entry = entryFor(user, handler.name);
+    const wait = handler.delivers ? deliveryCooldownRemaining(entry) : 0;
+    if (wait > 0) return Promise.resolve(tooSoon(wait));
+
+    // Disarmed BEFORE the handler runs: a restart that fails halfway must not leave the
+    // old secret armed next to a new pending one.
+    entry.enrolledAt = undefined;
+    clearDeliveredCode(entry);
+
+    return handler.setup(user, entry, context).then((payload) => {
+        syncArmedState(user);
+        return userService.persistTwoFactorMethods(user).then(() => generateSuccess(payload));
+    });
+};
+
+/**
+ * `POST /account/2fa/methods/{method}/send` — delivers a code for one ARMED delivered method to a
+ * signed-in caller, so an account whose only factor is delivered can prove itself before changing
+ * its factors without spending a backup code.
+ *
+ * @param userId - the caller, already fresh-auth'd by the route guard
+ * @param method - the wire name from the path
+ * @param context - caller context; the mail needs its locale
+ */
+export const sendMethodCode = (
+    userId: string,
+    method: string,
+    context: CallerContext
+): Promise<ResponseSuccess<TwoFactorDelivery> | ResponseReject> => {
+    if (!twoFactorMethod(method))
+        return Promise.resolve(generateReject(404, [t('account.two-factor.unknown-method')]));
+
+    const outcome = userService
+        .findByIdWithCredentials(userId)
+        .then<ResponseSuccess<TwoFactorDelivery> | ResponseReject>((user) => {
+            if (!user) return generateReject(401, []);
+
+            const armed = armedEntries(user).find(({ handler }) => handler.name === method);
+            if (!armed?.handler.send)
+                return generateReject(422, [t('account.two-factor.not-delivered')]);
+
+            const wait = deliveryCooldownRemaining(armed.entry);
+            if (wait > 0) return tooSoon(wait);
+
+            return armed.handler
+                .send(user, armed.entry, context)
+                .then((delivery) =>
+                    userService.persistTwoFactorMethods(user).then(() => generateSuccess(delivery))
+                );
+        })
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+
+    return audited(outcome, context, accountAuditActions.AUTH_2FA_CODE_SENT, method);
 };
 
 /** This flow's code and copy bound onto the shared builder, so both call sites stay one argument. */
@@ -400,9 +491,14 @@ export const confirmTwoFactorMethod = (
 
             return handler
                 .verify(user, entry, code)
-                .then<
-                    ResponseSuccess<TwoFactorConfirmed> | ResponseReject
-                >((matched) => (matched ? armMethod(user, entry) : rejectWrongCode(user)));
+                .then<ResponseSuccess<TwoFactorConfirmed> | ResponseReject>((matched) =>
+                    matched
+                        ? armMethod(user, entry).then((armed) => {
+                              notifyChange(user, 'enrolled', method, context);
+                              return armed;
+                          })
+                        : rejectWrongCode(user)
+                );
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
@@ -476,7 +572,16 @@ export const removeTwoFactorMethod = (
         (user) => {
             user.twoFactorMethods.splice(enrolledIndex, 1);
             discardIfDisarmed(user);
-            return userService.persistTwoFactorMethods(user).then(() => generateSuccess(undefined));
+            return userService.persistTwoFactorMethods(user).then(() => {
+                // Removing the last factor is 2FA going off: say that, not just "a method left".
+                notifyChange(
+                    user,
+                    user.twoFactorEnabledAt ? 'removed' : 'disabled',
+                    method,
+                    context
+                );
+                return generateSuccess(undefined);
+            });
         }
     );
 
@@ -506,7 +611,10 @@ export const disableTwoFactor = (
         (user) => {
             user.twoFactorMethods = [];
             discardIfDisarmed(user);
-            return userService.persistTwoFactorMethods(user).then(() => generateSuccess(undefined));
+            return userService.persistTwoFactorMethods(user).then(() => {
+                notifyChange(user, 'disabled', '', context);
+                return generateSuccess(undefined);
+            });
         }
     );
 

@@ -141,6 +141,7 @@ process.env.NODE_RATE_LIMIT_WINDOW_MS ??= '600000';
  * would make that assertion untestable rather than merely more permissive.
  */
 process.env.NODE_MFA_SEND_MAX ??= '1000';
+process.env.NODE_MFA_ACCOUNT_SEND_MAX ??= '1000';
 
 /**
  * `apiKeyLimiter` needs the same treatment: keyed on the credential rather than the address, so

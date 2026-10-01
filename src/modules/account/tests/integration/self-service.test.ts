@@ -1020,3 +1020,86 @@ describe('spendLiveToken', () => {
         await expect(accountService.findLiveToken('password', 'burn-me')).resolves.toBeUndefined();
     });
 });
+
+/**
+ * A refused password must never burn the link it arrived with: the breach check needs the found
+ * user, so it sits between the find and the atomic spend (`services/profile.ts`).
+ */
+describe('completePasswordReset', () => {
+    /** On the bundled breach list and strong enough to clear the composition rules. */
+    const BREACHED = 'Password1!';
+    const GOOD = 'Fresh_Secret_9!x';
+
+    it('refuses a breached password, and the SAME link still works with a good one', async () => {
+        const user = await createUser();
+        await user.tokenAdd('password', 3_600_000, 'reset-link');
+
+        const refused = asReject(
+            await accountService.completePasswordReset(
+                'reset-link',
+                BREACHED,
+                BREACHED,
+                testCallerContext
+            )
+        );
+        const accepted = await accountService.completePasswordReset(
+            'reset-link',
+            GOOD,
+            GOOD,
+            testCallerContext
+        );
+
+        expect(refused.status).toBe(422);
+        expect(asSuccess(accepted).status).toBe(200);
+    });
+
+    it('refuses a mistyped pair without touching the link', async () => {
+        const user = await createUser();
+        await user.tokenAdd('password', 3_600_000, 'typo-link');
+
+        const refused = asReject(
+            await accountService.completePasswordReset(
+                'typo-link',
+                GOOD,
+                `${GOOD}x`,
+                testCallerContext
+            )
+        );
+
+        expect(refused.status).toBe(422);
+        await expect(accountService.findLiveToken('password', 'typo-link')).resolves.toBeDefined();
+    });
+
+    it('spends the link: a second use of it is refused like a link that never existed', async () => {
+        const user = await createUser();
+        await user.tokenAdd('password', 3_600_000, 'once-link');
+        await accountService.completePasswordReset('once-link', GOOD, GOOD, testCallerContext);
+
+        const second = asReject(
+            await accountService.completePasswordReset('once-link', GOOD, GOOD, testCallerContext)
+        );
+        const invented = asReject(
+            await accountService.completePasswordReset(
+                'never-issued',
+                GOOD,
+                GOOD,
+                testCallerContext
+            )
+        );
+
+        expect(second.status).toBe(422);
+        expect(second.errors).toEqual(invented.errors);
+    });
+
+    it('lets exactly one of two simultaneous uses win', async () => {
+        const user = await createUser();
+        await user.tokenAdd('password', 3_600_000, 'race-link');
+
+        const results = await Promise.all([
+            accountService.completePasswordReset('race-link', GOOD, GOOD, testCallerContext),
+            accountService.completePasswordReset('race-link', GOOD, GOOD, testCallerContext)
+        ]);
+
+        expect(results.filter((result) => result.success)).toHaveLength(1);
+    });
+});
