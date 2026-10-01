@@ -548,13 +548,16 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
 
     /*
      * One delivered order per withdrawal-window state, aged from the period rather than a literal.
+     * Shipped by standard, so a withdrawal journey's refund has a delivery charge to give back.
      * Backdating moves `withdrawUntil` by the same days as the delivery, so each keeps its state
      * whatever the period is. Kept out of `placed`: the even spread below would land them anywhere.
      */
     const period = withdrawalPeriodDays();
     const windowAges: Record<string, number> = {};
     const deliveredForWindow = async (subject: string, daysBack: number): Promise<void> => {
-        const orderId = await checkoutAndPay(customer, DOG_FOOD(1));
+        const orderId = await checkoutAndPay(customer, DOG_FOOD(1), {
+            shippingMethodId: 'standard'
+        });
         await startProcessing(owner, orderId);
         await shipOrder(owner, orderId);
         await deliverOrder(owner, orderId);
