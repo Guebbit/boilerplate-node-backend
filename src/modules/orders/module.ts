@@ -131,6 +131,8 @@ export default {
             'order.withdrawal-closed',
             // Delivered today, so the withdrawal window is still open; `order.delivered` is weeks past it.
             'order.deliveredRecent',
+            // Delivered at the start of the shop's history, so its withdrawal window is long closed.
+            'order.deliveredLongAgo',
             'order.cancelled',
             'order.softDeleted',
             'order.paidOffline',
