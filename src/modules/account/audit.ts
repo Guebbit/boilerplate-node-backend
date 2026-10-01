@@ -33,8 +33,10 @@ export const accountAuditActions = {
      * breath.
      */
     AUTH_REFRESH_TOKEN_REUSE_DETECTED: 'auth.refresh_token.reuse_detected',
-    /** A caller re-proved their password to earn a fresh session. */
+    /** A caller re-proved who they are to earn a fresh session — `metadata.method` names how. */
     AUTH_REAUTHENTICATED: 'auth.reauth',
+    /** A step-up code was mailed to an account with no password. */
+    AUTH_REAUTH_CODE_SENT: 'auth.reauth.code_sent',
     AUTH_LOGGED_OUT: 'auth.logout',
     AUTH_LOGGED_OUT_EVERYWHERE: 'auth.logout_all',
     AUTH_SESSION_REVOKED: 'auth.session.revoked',

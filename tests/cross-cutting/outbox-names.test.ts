@@ -155,7 +155,8 @@ it('publishes the set the pair agreed on', () => {
      * `orders.order-paid` (E5: a payment settling to `succeeded` now mails the buyer) and
      * `orders.order-card-expired` (E5: a `card` hold's own expiry notice, the twin of
      * `orders.order-transfer-expired` for the other payment method) — both new here. So is
-     * `account.two-factor-changed`, the notice that a second factor was added, replaced or removed. The other
+     * `account.two-factor-changed`, the notice that a second factor was added, replaced or removed. So is
+     * `account.reauth-code`, the step-up code an account with no password passes with. The other
      * eight are the agreed, mirrored set.
      */
     const agreedByPair = [
@@ -163,6 +164,7 @@ it('publishes the set the pair agreed on', () => {
         'account.delete-request',
         'account.email-change-notice',
         'account.inactivity-warning',
+        'account.reauth-code',
         'account.reset-confirm',
         'account.reset-request',
         'account.setup-request',

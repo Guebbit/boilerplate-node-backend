@@ -8,6 +8,8 @@
 import type { MfaChallenge } from '@types';
 import { defineConfig } from '@infrastructure/config/define';
 import { text } from '@infrastructure/config/fields';
+import { isRelaxedIn } from '@infrastructure/config/define';
+import { mailDeliversIn } from '@infrastructure/adapters/config';
 import { siteConfig } from '@infrastructure/http/config';
 
 /**
@@ -19,6 +21,12 @@ import { siteConfig } from '@infrastructure/http/config';
  * https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/timeout_static
  */
 export const OAUTH_FETCH_TIMEOUT_MS = 5000;
+
+/** Each provider's client id and secret variable, for the check that any provider is enabled. */
+const PROVIDER_PAIRS = [
+    ['NODE_OAUTH_GOOGLE_CLIENT_ID', 'NODE_OAUTH_GOOGLE_CLIENT_SECRET'],
+    ['NODE_OAUTH_GITHUB_CLIENT_ID', 'NODE_OAUTH_GITHUB_CLIENT_SECRET']
+] as const;
 
 /** Each provider's OAuth client, absent until a deployment registers one. */
 export const oauthConfig = defineConfig({
@@ -34,7 +42,18 @@ export const oauthConfig = defineConfig({
             sensitive: true,
             describe: 'GitHub OAuth client secret.'
         })
-    }
+    },
+    // An account made through a provider has no password, so its step-up is a code mailed to its
+    // address. A deployment that enables a provider but cannot deliver mail would lock those
+    // accounts out of checkout, payment and self-deletion.
+    check: (config, environment) =>
+        !isRelaxedIn(environment) &&
+        PROVIDER_PAIRS.some(([id, secret]) => config[id] && config[secret]) &&
+        !mailDeliversIn(environment)
+            ? [
+                  'An OAuth provider is enabled but mail cannot be delivered (NODE_MAIL_TRANSPORT=smtp with NODE_SMTP_HOST): accounts with no password could not pass step-up.'
+              ]
+            : []
 });
 
 /** One provider's client credentials, absent when a deployment never set them. */

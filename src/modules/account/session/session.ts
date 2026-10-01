@@ -43,13 +43,17 @@ export const issueSession = (
  * @param request - the authenticated request, carrying the current refresh cookie if any
  * @param response - the live response to set the refresh/logged cookies on
  * @param userId - whose session this is
+ * @param amr - how the re-minted session's `auth_time` was proved; absent keeps `issueSession`'s
+ *   own `['pwd']`, right for a password change and wrong for a re-authentication, which passes
+ *   the session's earlier proofs plus the new one
  * @returns the signed access token to hand back in the response body
  */
 export const reissueSession = (
     request: Pick<Request, 'cookies'>,
     response: Response,
-    userId: string
+    userId: string,
+    amr?: string[]
 ): Promise<string> =>
     rememberOfRefreshToken(readRefreshCookie(request), userId).then((remember) =>
-        issueSession(response, userId, remember)
+        issueSession(response, userId, remember, amr)
     );

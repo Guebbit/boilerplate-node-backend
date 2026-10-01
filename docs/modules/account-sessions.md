@@ -138,10 +138,45 @@ its first sensitive action instead of reading as freshly authenticated. Fail-clo
 direction that is safe.
 :::
 
-`POST /account/reauth` is how a caller refreshes `auth_time` without logging out — re-prove the
-password, get a new stamp. What consumes all of this is the `stepUp` tier declared on a permission
+`POST /account/reauth` is how a caller refreshes `auth_time` without logging out — re-prove who you
+are, get a new stamp. What consumes all of this is the `stepUp` tier declared on a permission
 key, in [Authorization](../theory/authorization.md); the "remember me" tiers above set the cookie's
 lifetime and **do not** exempt a sensitive action from the freshness check.
+
+## Step-up for an account with no password
+
+An account made through Google or GitHub has no password, so "re-prove the password" cannot be its
+step-up. `GET /account/reauth` tells the client which methods apply; the body of `POST /account/reauth`
+is tagged by `method`:
+
+```mermaid
+flowchart TD
+    C[401 REAUTH_REQUIRED] --> G["GET /account/reauth"]
+    G -->|has a password| P["{ method: 'password', password }"]
+    G -->|no password, verified address, mail deliverable| S["POST /account/reauth/methods/email/send"]
+    S --> E["{ method: 'email', code }"]
+    P --> R[new session: fresh auth_time]
+    E --> R
+    G -->|no password, no way to mail| X["methods: [] — a dead end, shown as one"]
+```
+
+- **Why a mailed code is enough.** Forgot-password already works on an OAuth-only account, so the
+  mailbox is the account's root key; a code to it adds no new trust. GitHub's sudo mode offers the
+  same for social-login accounts. A provider round trip cannot replace it: Google honours neither
+  `prompt=login` nor `max_age`, and GitHub returns no `auth_time`.
+- **Only for accounts with no password.** A password account keeps the password, and the send route
+  refuses it, so the route cannot mail unrequested codes to an account with a better proof.
+- **Storage.** The code's HMAC sits on the user as `reauthCode`, separate from `twoFactorMethods`
+  because it is not a factor: never armed, never challenges a login. Lifetime, cooldown and the
+  five-guess ceiling are `two-factor/delivered-codes.ts`'s, shared.
+- **Budget.** The send spends the same per-account hourly budget as
+  `POST /account/2fa/methods/{method}/send`, since both fill the same mailbox.
+- **`amr`.** The re-minted session keeps what it had and adds the method: `pwd` or the new `email`
+  (not `otp`, which means a second factor here). A session that passed 2FA at login keeps `otp` after
+  a re-auth, so a route that requires it still opens.
+- **Boot.** An enabled OAuth provider with no deliverable mail (`smtp` with a host) refuses to boot
+  outside `development` and `test`: those accounts would be locked out of checkout, payment and
+  self-deletion. The demo registers its fake provider in code, not through these variables.
 
 ## The cookie, flag by flag
 

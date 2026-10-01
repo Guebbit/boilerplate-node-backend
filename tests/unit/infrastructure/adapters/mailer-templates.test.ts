@@ -25,6 +25,7 @@ import {
     deleteConfirmEmail,
     inactivityWarningEmail,
     twoFactorCodeEmail,
+    reauthCodeEmail,
     emailChangeNoticeEmail,
     twoFactorChangedEmail
 } from '@modules/account/emails';
@@ -87,6 +88,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'account.delete-confirm': deleteConfirmEmail(locale, 'Ada'),
     'account.inactivity-warning': inactivityWarningEmail(locale, 'Ada', 30),
     'account.two-factor-code': twoFactorCodeEmail(locale, 'Ada', '492013', 10),
+    'account.reauth-code': reauthCodeEmail(locale, 'Ada', '492013', 10),
     'account.email-change-notice': emailChangeNoticeEmail(locale, 'Ada', 'new@example.com'),
     'account.two-factor-changed': twoFactorChangedEmail(locale, 'Ada', 'enrolled', 'email'),
     'orders.order-confirm': orderConfirmEmail(

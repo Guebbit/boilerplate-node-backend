@@ -107,6 +107,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_PASSWORD_RESET_COMPLETED`             | `auth.password_reset.completed`             | —                      |
 | `account`        | `AUTH_PASSWORD_RESET_REQUESTED`             | `auth.password_reset.requested`             | —                      |
 | `account`        | `AUTH_PROFILE_UPDATED`                      | `auth.profile.updated`                      | —                      |
+| `account`        | `AUTH_REAUTH_CODE_SENT`                     | `auth.reauth.code_sent`                     | —                      |
 | `account`        | `AUTH_REAUTHENTICATED`                      | `auth.reauth`                               | —                      |
 | `account`        | `AUTH_REFRESH_TOKEN_REUSE_DETECTED`         | `auth.refresh_token.reuse_detected`         | —                      |
 | `account`        | `AUTH_SESSION_REVOKED`                      | `auth.session.revoked`                      | —                      |

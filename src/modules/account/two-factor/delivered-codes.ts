@@ -6,7 +6,7 @@
  */
 
 import { createHmac, hkdfSync, randomInt } from 'node:crypto';
-import type { TwoFactorMethodRecord } from '@modules/users';
+import type { DeliveredCodeState } from '@modules/users';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
 import { getTotpEncryptionKeyRing } from '../session/config';
 import { cooldownRemaining } from '../cooldown';
@@ -63,18 +63,18 @@ export const generateDeliveredCode = (): string =>
  * Whether another delivery of this method is allowed yet — this method's anchor and window
  * handed to the shared {@link cooldownRemaining}, which the verification re-send uses too.
  *
- * @param entry - the method entry, whose `codeSentAt` anchors the cooldown
+ * @param entry - the entry, whose `codeSentAt` anchors the cooldown
  * @param now - the clock, injectable for tests
  * @returns seconds still to wait, or 0 when a send may go ahead
  */
 export const deliveryCooldownRemaining = (
-    entry: TwoFactorMethodRecord,
+    entry: DeliveredCodeState,
     now: Date = new Date()
 ): number => cooldownRemaining(entry.codeSentAt, DELIVERED_CODE_RESEND_SECONDS, now);
 
 /** Stamp a freshly minted code onto the entry, replacing whatever was in flight. */
 export const armDeliveredCode = (
-    entry: TwoFactorMethodRecord,
+    entry: DeliveredCodeState,
     code: string,
     now: Date = new Date()
 ): void => {
@@ -85,7 +85,7 @@ export const armDeliveredCode = (
 };
 
 /** Forget the code in flight — after it is spent, or after too many wrong guesses. */
-export const clearDeliveredCode = (entry: TwoFactorMethodRecord): void => {
+export const clearDeliveredCode = (entry: DeliveredCodeState): void => {
     entry.codeHash = undefined;
     entry.codeSentAt = undefined;
     entry.codeExpiresAt = undefined;
@@ -97,13 +97,13 @@ export const clearDeliveredCode = (entry: TwoFactorMethodRecord): void => {
  * clears the code (one use, always), a miss counts an attempt and clears it at the ceiling.
  * Mutates `entry`; the caller still has to persist it.
  *
- * @param entry - the method entry holding the code in flight
+ * @param entry - the entry holding the code in flight
  * @param code - the digits the caller typed
  * @param now - the clock, injectable for tests
  * @returns whether the code was accepted
  */
 export const consumeDeliveredCode = (
-    entry: TwoFactorMethodRecord,
+    entry: DeliveredCodeState,
     code: string,
     now: Date = new Date()
 ): boolean => {

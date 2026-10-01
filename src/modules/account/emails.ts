@@ -150,6 +150,38 @@ export const twoFactorCodeEmail = (
     };
 };
 
+/**
+ * Step-up code mail: the code an account with no password types to prove it is still the one
+ * signed in. Its own template name (the outbox name is an identifier, one per mail) with the
+ * second-factor code's layout, and copy that never claims the reader is "signing in".
+ *
+ * @param code - the delivered code, in the clear; the account stores only its HMAC
+ * @param minutes - how long the code lasts, so the copy and the server never disagree
+ */
+export const reauthCodeEmail = (
+    locale: string,
+    name: string,
+    code: string,
+    minutes: number
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'account.reauth-code',
+        subject: t('account.email.reauth-code.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.reauth-code.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('account.email.reauth-code.greeting', { name }),
+            intro: t('account.email.reauth-code.intro'),
+            code,
+            expiry: t('account.email.reauth-code.expiry', { minutes }),
+            ignore: t('account.email.reauth-code.ignore'),
+            footer: t('email.footer')
+        }
+    };
+};
+
 /** What happened to the account's second factors, for {@link twoFactorChangedEmail}. */
 export type TwoFactorChange = 'enrolled' | 'removed' | 'disabled';
 

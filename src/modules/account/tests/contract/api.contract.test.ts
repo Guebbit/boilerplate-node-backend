@@ -237,7 +237,7 @@ describe('the "remember me" choice survives every re-mint', () => {
             .post('/account/reauth')
             .set('Authorization', bearer)
             .set('Cookie', jwtCookie)
-            .send({ password: PLAIN_PASSWORD });
+            .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
         expect(cookieMaxAge(response, 'jwt')).toBe(MEDIUM);
@@ -251,7 +251,7 @@ describe('the "remember me" choice survives every re-mint', () => {
             .post('/account/reauth')
             .set('Authorization', bearer)
             .set('Cookie', jwtCookie)
-            .send({ password: PLAIN_PASSWORD });
+            .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
         expectSessionCookies(response);
@@ -299,7 +299,7 @@ describe('the "remember me" choice survives every re-mint', () => {
             .post('/account/reauth')
             .set('Authorization', bearer)
             .set('Cookie', remembered.jwtCookie)
-            .send({ password: PLAIN_PASSWORD });
+            .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
         expectSessionCookies(response);
@@ -646,7 +646,7 @@ describe('POST /account/reauth', () => {
         const response = await api()
             .post('/account/reauth')
             .set('Authorization', bearer)
-            .send({ password: PLAIN_PASSWORD });
+            .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
         expect(typeof response.body.data.token).toBe('string');
@@ -661,7 +661,7 @@ describe('POST /account/reauth', () => {
         const response = await api()
             .post('/account/reauth')
             .set('Authorization', bearer)
-            .send({ password: 'wrong-guess' });
+            .send({ method: 'password', password: 'wrong-guess' });
 
         expect(response.status).toBe(422);
     });
@@ -672,7 +672,7 @@ describe('POST /account/reauth', () => {
         const response = await api()
             .post('/account/reauth')
             .set('Authorization', bearer)
-            .send({ password: PLAIN_PASSWORD });
+            .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(setCookie(response, 'jwt')).toBeDefined();
     });
@@ -690,7 +690,7 @@ describe('POST /account/reauth', () => {
         const response = await api()
             .post('/account/reauth')
             .set('Authorization', bearer)
-            .send({ password: PLAIN_PASSWORD });
+            .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(500);
         expect(setCookie(response, 'jwt')).toBeUndefined();

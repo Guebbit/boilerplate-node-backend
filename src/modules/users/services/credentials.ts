@@ -78,3 +78,13 @@ export const persistTwoFactorMethods = (user: UserDocument): Promise<UserDocumen
     user.markModified('twoFactorMethods');
     return userRepository.save(user);
 };
+
+/**
+ * Persist the step-up code `account/services/reauth.ts` armed, spent or burned on the loaded
+ * document. The mutation stays `account`'s; this only writes it — same split as
+ * {@link persistTwoFactorMethods}.
+ */
+export const persistReauthCode = (user: UserDocument): Promise<UserDocument> => {
+    user.markModified('reauthCode');
+    return userRepository.save(user);
+};
