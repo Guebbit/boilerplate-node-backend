@@ -171,6 +171,20 @@ const NAMED_PRODUCT_COPY: Record<keyof typeof SEED_PRODUCT_IDS, ProductCopy> = {
                 'Una ciotola in ceramica dipinta con il nome dell’animale. Realizzata su ordinazione, ' +
                 'quindi non può essere restituita né annullata con recesso.'
         }
+    },
+    catTreeHeavy: {
+        en: {
+            title: 'Extra-Large Cat Tree, 12kg',
+            description:
+                'A floor-to-ceiling cat tree with platforms, hideouts and sisal posts. Too heavy ' +
+                'for express delivery.'
+        },
+        it: {
+            title: 'Albero per Gatti Extra Large, 12kg',
+            description:
+                'Un albero per gatti da pavimento a soffitto con piattaforme, tane e tiragraffi in ' +
+                'sisal. Troppo pesante per la spedizione express.'
+        }
     }
 };
 
@@ -308,6 +322,20 @@ const namedProducts = [
         tags: ['bowl', 'personalised'],
         weight: 900,
         noWithdrawal: true
+    }),
+    /*
+     * The heavy one — 12 kg, past express's 5 kg ceiling (`SHIPPING_METHODS`) and inside standard's
+     * 30 kg, so a cart holding it makes the express refusal reachable. Priced under standard's
+     * free-shipping line, so a cart of one still pays for delivery.
+     */
+    makeUnstockedProduct({
+        id: SEED_PRODUCT_IDS.catTreeHeavy,
+        title: NAMED_PRODUCT_COPY.catTreeHeavy.en.title,
+        description: NAMED_PRODUCT_COPY.catTreeHeavy.en.description,
+        price: 40,
+        categories: ['cats'],
+        tags: ['cat-tree', 'heavy'],
+        weight: 12_000
     })
 ];
 
@@ -350,6 +378,7 @@ const OPENING_STOCK: ReadonlyMap<string, number> = new Map([
     [SEED_PRODUCT_IDS.puppyCourseDigital, 50],
     [SEED_PRODUCT_IDS.bowlLowStock, 1],
     [SEED_PRODUCT_IDS.bowlNoWithdrawal, 20],
+    [SEED_PRODUCT_IDS.catTreeHeavy, 10],
     ...FILLER_PRODUCTS.map(
         (product, index) => [fillerProductId(index), product.openingStock] as const
     )

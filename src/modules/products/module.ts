@@ -64,6 +64,8 @@ export default {
      * race, where one checkout's hold leaves nothing for the next shopper.
      * `noWithdrawal` is a physical, made-to-order row (EU Art. 16(c)): every order line freezes the
      * flag, and `returns` refuses those lines.
+     * `heavy` is 12 kg: past express's 5 kg ceiling, inside standard's — the subject of the
+     * shipping-weight refusal.
      * `scenarios/subjects.ts` pins the row behind each, and
      * `tests/integration/scenarios/shop.test.ts` checks each really has the property.
      */
@@ -77,7 +79,8 @@ export default {
             'product.rich',
             'product.digital',
             'product.lowStock',
-            'product.noWithdrawal'
+            'product.noWithdrawal',
+            'product.heavy'
         ]
     },
     // The catalogue — nothing here is scoped to a person. An order's line embeds its own frozen

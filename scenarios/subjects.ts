@@ -40,7 +40,8 @@ export const SEED_PRODUCT_IDS = {
     barebones: '67f0a1c2d3e4b5a6c7d8e9f0',
     puppyCourseDigital: '70f0a1c2d3e4b5a6c7d8e9f1',
     bowlLowStock: '70f0a1c2d3e4b5a6c7d8e9f3',
-    bowlNoWithdrawal: '70f0a1c2d3e4b5a6c7d8e9f4'
+    bowlNoWithdrawal: '70f0a1c2d3e4b5a6c7d8e9f4',
+    catTreeHeavy: '70f0a1c2d3e4b5a6c7d8e9f2'
 } as const;
 
 /**
@@ -63,7 +64,8 @@ export const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
     'product.rich': SEED_PRODUCT_IDS.dogFoodStandard,
     'product.digital': SEED_PRODUCT_IDS.puppyCourseDigital,
     'product.lowStock': SEED_PRODUCT_IDS.bowlLowStock,
-    'product.noWithdrawal': SEED_PRODUCT_IDS.bowlNoWithdrawal
+    'product.noWithdrawal': SEED_PRODUCT_IDS.bowlNoWithdrawal,
+    'product.heavy': SEED_PRODUCT_IDS.catTreeHeavy
 };
 
 /**
