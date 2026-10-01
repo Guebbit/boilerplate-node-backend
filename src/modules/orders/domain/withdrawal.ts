@@ -43,10 +43,12 @@ export const isBeforeDispatch = (status: OrderStatus): boolean =>
  * - the day the event happens is not counted;
  * - the period ends with the last hour of its last day, not `days × 24 h` after the event.
  *
- * Days are UTC days. Weekend and public-holiday roll-over (Art. 3(4)) is not applied.
+ * Days are UTC days. Weekend and public-holiday roll-over (Art. 3(4)) is not computed: the
+ * period's minimum (`orders/config.ts`) always outlasts it.
+ * See docs/modules/orders.md#the-withdrawal-window
  *
  * @param start - delivery for goods, or the conclusion of the contract for digital content
- * @param days - the withdrawal period (14 by law; a deployment may offer longer)
+ * @param days - the withdrawal period (14 by law, 21 at least here, 30 by default)
  * @returns the last instant a withdrawal is still valid
  */
 export const withdrawUntilFrom = (start: Date, days: number): Date => {

@@ -123,6 +123,11 @@ export default {
             'order.paid',
             'order.shipped',
             'order.delivered',
+            // One delivered order per withdrawal state, aged from the period: open (1 day back),
+            // last day (exactly `period` days back, closes at the end of today UTC), closed.
+            'order.withdrawal-open',
+            'order.withdrawal-last-day',
+            'order.withdrawal-closed',
             'order.cancelled',
             'order.softDeleted',
             'order.paidOffline',

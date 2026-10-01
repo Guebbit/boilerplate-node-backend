@@ -96,6 +96,7 @@ export {
     orderCurrency,
     shopCountry,
     shopIdentity,
+    withdrawalPeriodDays,
     shipToCountries,
     returnAddress,
     returnPostagePayer,

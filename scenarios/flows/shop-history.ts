@@ -23,6 +23,7 @@ import { SEED_PRODUCT_IDS } from '../subjects';
 import { fillerProductId, openingStockFor, productFixtures } from '../products';
 import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from '../users';
 import { historyEdits } from '../shop-modules';
+import { withdrawalPeriodDays } from '@modules/orders/services';
 import { PLAIN_PASSWORD } from '@modules/users/factories';
 import { signIn, type Caller } from './client';
 import {
@@ -498,6 +499,25 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     await hardDeleteProduct(owner, fillerProductId(123));
 
     /*
+     * One delivered order per withdrawal-window state, aged from the period rather than a literal.
+     * Backdating moves `withdrawUntil` by the same days as the delivery, so each keeps its state
+     * whatever the period is. Kept out of `placed`: the even spread below would land them anywhere.
+     */
+    const period = withdrawalPeriodDays();
+    const windowAges: Record<string, number> = {};
+    const deliveredForWindow = async (subject: string, daysBack: number): Promise<void> => {
+        const orderId = await checkoutAndPay(customer, DOG_FOOD(1));
+        await startProcessing(owner, orderId);
+        await shipOrder(owner, orderId);
+        await deliverOrder(owner, orderId);
+        subjects[subject] = orderId;
+        windowAges[orderId] = daysBack;
+    };
+    await deliveredForWindow('order.withdrawal-open', 1);
+    await deliveredForWindow('order.withdrawal-last-day', period);
+    await deliveredForWindow('order.withdrawal-closed', period + 1);
+
+    /*
      * The two rows that stay dated TODAY, because both are still holding stock against a
      * deadline: backdating either would leave a hold that expired before the shop opened.
      */
@@ -531,5 +551,5 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
         ])
     );
 
-    return { subjects, ages };
+    return { subjects, ages: { ...ages, ...windowAges } };
 };

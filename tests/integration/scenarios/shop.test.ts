@@ -32,6 +32,7 @@ import { productModel } from '@modules/products/model';
 import { presentProduct } from '@modules/products/presenter';
 import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
+import { asCustomer } from '@tests/callers';
 import { paymentModel } from '@modules/payments/model';
 import { userModel } from '@modules/users/model';
 import { auditLogModel } from '@modules/audit-logs/model';
@@ -302,12 +303,23 @@ describe('the history reads as a history', () => {
         expect(order?.withdrawUntil).toBeDefined();
 
         // Delivery follows the checkout within seconds, so the deadline sits one withdrawal period
-        // (14 days by default) after `createdAt`, rounded up to the end of that UTC day (the
+        // (30 days by default) after `createdAt`, rounded up to the end of that UTC day (the
         // window ends with the last hour of its last day). Left at boot time it would be weeks later.
         const gapMs = order!.withdrawUntil!.getTime() - order!.createdAt!.getTime();
-        const periodMs = 14 * 86_400_000;
+        const periodMs = 30 * 86_400_000;
         expect(gapMs).toBeGreaterThanOrEqual(periodMs);
         expect(gapMs - periodMs).toBeLessThan(2 * 86_400_000);
+    });
+
+    it.each([
+        ['order.withdrawal-open', true],
+        ['order.withdrawal-last-day', true],
+        ['order.withdrawal-closed', false]
+    ] as const)('%s offers its buyer the withdraw button: %s', async (subject, offered) => {
+        const order = await orderModel.findById(subjects[subject]).exec();
+        const wire = await orderService.withActions(order!, asCustomer(SEED_USER_ID));
+
+        expect(wire.actions?.withdraw).toBe(offered);
     });
 
     it('accounts for every unit of stock with a movement the app wrote', async () => {

@@ -91,7 +91,7 @@ answers.
 `scenarios/run-server.ts` before the app loads. Timers, the Mongo driver's heartbeats and
 `performance` stay real, so nothing freezes. The `src/` side only knows the `DemoClock` interface
 (`src/infrastructure/runtime/demo-clock.ts`); the package is a dev dependency and a production image
-never loads it. Why not short env windows: they cannot reach the 14-day withdrawal minimum or the
+never loads it. Why not short env windows: they cannot reach the 21-day withdrawal minimum or the
 constants that are hard-coded, and they are process-wide.
 
 ```mermaid

@@ -113,10 +113,10 @@ describe('withdrawalNotice: every placeholder is filled', () => {
     });
 
     it('uses the configured period, and keeps the statutory 14 days for refund and return', () => {
-        return withEnvironmentOverrides({ NODE_WITHDRAWAL_PERIOD_DAYS: '30' }, () => {
+        return withEnvironmentOverrides({ NODE_WITHDRAWAL_PERIOD_DAYS: '21' }, () => {
             const notice = withdrawalNotice('en', GOODS, ORDER_ID);
 
-            expect(notice.terms[0]).toContain('within 30 days');
+            expect(notice.terms[0]).toContain('within 21 days');
             expect(notice.effects[0]).toContain('not later than 14 days');
             return Promise.resolve();
         });
