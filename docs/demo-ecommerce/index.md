@@ -122,7 +122,7 @@ what a route guard and a listing actually answer.
 | `unverified` | r        | —    | r      | r        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             |
 | `customer`   | r        | x    | r      | r        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             |
 | `manager`    | RCUD     | x    | RCUD   | r        | R         | RSTART   | RURECEIVE | R        | RCUD    | RU   | R     | —       | R          | RCUD     | —        | —             |
-| `warehouse`  | r        | x    | R      | —        | RC        | RUSTART  | RRECEIVE  | —        | r       | —    | —     | —       | —          | —        | —        | —             |
+| `warehouse`  | R        | x    | R      | —        | RC        | RUSTART  | RRECEIVE  | —        | r       | —    | —     | —       | —          | —        | —        | —             |
 | `support`    | r        | x    | R      | R        | —         | R        | RU        | RUD      | r       | —    | RU    | —       | R          | —        | —        | —             |
 | `editor`     | RCUD     | x    | —      | —        | —         | R        | —         | —        | RCUD    | RU   | —     | —       | —          | —        | —        | —             |
 | `moderator`  | r        | x    | RCUD   | RCU      | —         | R        | RU        | —        | r       | —    | RCUD  | —       | R          | —        | —        | —             |

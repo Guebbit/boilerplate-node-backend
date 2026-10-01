@@ -283,13 +283,20 @@ cases:
       resource: { tenantId: shop_1 }
       expect: allow
 
+    - name: the warehouse may read a draft product, so the stock form can list it
+      caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [products.any.read, inventory.any.read] }
+      action: read
+      subject: Product
+      resource: { tenantId: shop_1, active: false }
+      expect: allow
+
     - name: the warehouse may not delete a product
       caller:
           {
               id: usr_5,
               scope: tenant,
               tenantId: shop_1,
-              permissions: [products.self.read, inventory.any.read, inventory.any.create, delivery.any.read, delivery.any.update]
+              permissions: [products.any.read, inventory.any.read, inventory.any.create, delivery.any.read, delivery.any.update]
           }
       action: delete
       subject: Product
@@ -302,7 +309,7 @@ cases:
               id: usr_5,
               scope: tenant,
               tenantId: shop_1,
-              permissions: [products.self.read, inventory.any.read, inventory.any.create, delivery.any.read, delivery.any.update]
+              permissions: [products.any.read, inventory.any.read, inventory.any.create, delivery.any.read, delivery.any.update]
           }
       action: update
       subject: Product

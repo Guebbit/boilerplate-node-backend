@@ -8,13 +8,8 @@ asyncapi: 3.0.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
 info:
     title: Boilerplate Node Backend Async Contracts
-    # Bumped alongside `openapi.root.yaml`'s own 2.0.0: the Standard Webhooks envelope
-    # (`webhooks/asyncapi.yaml`, `{ type, timestamp, data }` plus the signed headers) is a
-    # deliberate, reviewed break for a subscriber on the old raw-event-body shape. Note:
-    # `check:asyncapi-breaking`'s major-version skip compares the `asyncapi:` SPEC version
-    # (currently 3.0.0 everywhere), not this field — this bump documents the break for a human
-    # reader, it does not silence that gate, which is expected to report real breaking changes
-    # against `origin/main` until this work is actually pushed and becomes the new baseline.
+    # Alpha like `openapi.root.yaml` (0.1.0), but not reset with it: `check:asyncapi-breaking`
+    # reports any edit to this field as a breaking change, so it moves only with a deliberate break.
     version: 2.0.0
     contact:
         name: Boilerplate maintainers

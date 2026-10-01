@@ -60,6 +60,10 @@ than a sale.
 
 Both are entries in a book, not edits to a number. That distinction is the whole design.
 
+Goods usually arrive before a product is published, so the stock form lists drafts too. That is
+all the warehouse reads beyond the storefront: changing a price or deleting a product stays with
+the manager.
+
 ## Clearing expired holds
 
 When a customer checks out but never pays, their goods sit "set aside" for 30 minutes and then need
