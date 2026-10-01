@@ -1196,6 +1196,48 @@ The weekly `mutation.yml` run. Same `stryker.json`, same ruler as `npm run mutat
 fit GitHub's free runners instead of a desktop. It is built to **finish**, not to be fast: a sweep
 from scratch takes days.
 
+#### Why GitHub needs different settings {#why-github-needs-different-settings}
+
+The ruler is the same; the machine is not. Every setting below is a property of the machine, which
+is why none of them lives in `stryker.json`:
+
+|                    | Your desktop (`npm run mutation:full`)           | A GitHub runner (`mutation.yml`)                       |
+| ------------------ | ------------------------------------------------ | ------------------------------------------------------ |
+| Hardware           | 32 cores, ~30 GB                                 | 4 vCPU, 16 GB                                          |
+| Time limit         | none                                             | 6 hours a job, then killed                             |
+| Interrupted?       | resume tomorrow — each finished shard is on disk | a killed job leaves nothing; Stryker writes at the end |
+| Workers × heap     | 2 × 8 GB (`.env`)                                | 1 × 12 GB, plus swap                                   |
+| Shard size         | ~600 lines (`sharding.ts`)                       | ≤200 lines, big files sliced (`ci/waves.ts`)           |
+| Remembers last run | yes — incremental file per shard                 | no — a fresh machine every job                         |
+| How many at once   | one shard after another                          | up to 12 jobs, capped by the account's 20              |
+
+#### Worked example: the sweep that went red (2026-09-27) {#worked-example-the-sweep-that-went-red}
+
+The old workflow ran the desktop's shape on GitHub's hardware: 600-line shards, two workers at
+Node's default ~4 GB heap. Of 80 shards, 39 finished, 30 crashed, 11 were killed. Each failure
+traces back to one row of the table above:
+
+| What happened                                                                 | The desktop assumption that broke                                                                                                                                    | What the sweep does now                                                                |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 30 shards: "ran out of memory" in 10–20 minutes, before any mutant ran        | Memory. The initial test run of a widely imported file (`users/model.ts`) loads most of the suite into one process; 4 GB is not enough, the desktop's 8 GB is.       | 12 GB heap, one worker so it fits, swap; `preflight` proves it before the sweep starts |
+| 11 shards killed at 350 minutes — `queue.ts` alone at 264 of 272 mutants      | Time. 600 lines is an evening on the desktop, where a shard can take as long as it needs; on a runner it overran the 6-hour cap, and the work was lost with the job. | 200-line shards, big files sliced, a shard out of time split in four and run again     |
+| The 39 that finished took 129–338 minutes — several within minutes of the cap | Same: the size was never measured on a runner.                                                                                                                       | Sized from that run: 0.43 min per line at two workers, so ~0.9 at one                  |
+| The baseline was not saved                                                    | Not a machine issue: the commit step ran only when no file regressed, and 8 had.                                                                                     | The commit runs whatever the verdict                                                   |
+
+The lesson generalises to any heavy job moved to CI: **measure it on the runner, and design for the
+job being killed**. A desktop run fails slowly and visibly; a runner kills the job and keeps nothing.
+
+#### Which run to use when {#which-run-to-use-when}
+
+- **Before or after changing a file** — `npm run mutation`. Minutes. Open
+  `tmp/reports/mutation/index.html`: every surviving mutant is a change your tests would not notice.
+- **On a pull request** — the `mutation-diff` job does the same automatically and fails only if a
+  file you touched scored below its baseline.
+- **To refresh every score** — the weekly GitHub sweep, or `npm run mutation:full` on the desktop
+  over a few evenings. Either one folds into the same `mutation-baseline.json`.
+- **To check the GitHub setup still fits** — _Run workflow_ with **check-only**: the 20-minute
+  preflight alone.
+
 | GitHub's limit              | What the sweep does about it                                                                                                                                                      |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 6 hours a job               | Shards of at most 200 non-blank lines; a bigger file is sliced. Stryker is stopped at 330 minutes, so the job itself records that it ran out of time.                             |
