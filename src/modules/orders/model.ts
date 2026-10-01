@@ -376,8 +376,9 @@ export const orderSchema = new Schema<OrderDocument>(
         },
         /*
          * The customer's checkout choice — a preference, not a lock: a card payment still
-         * settles normally regardless of this value. Absent on orders placed before this
-         * existed, and on order creation that isn't a checkout.
+         * settles normally regardless of this value, and then rewrites it to `card`, so the
+         * field ends up saying how the order was actually paid. Absent on orders placed before
+         * this existed, and on order creation that isn't a checkout.
          */
         paymentMethod: {
             type: String,

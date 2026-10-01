@@ -57,11 +57,17 @@ const markSystemMove = (orderId: string, to: OrderStatus): Promise<OrderDocument
  * `ORDER_STATUS_CHANGED` event emitted below to issue the order's invoice — see
  * `docs/modules/invoicing.md`.
  * @param orderId - the order the payment was for
+ * @param paymentMethod - `card` when the provider took the money: the order then says so, even if
+ *   checkout chose bank transfer (a customer who changed their mind). Offline money leaves the
+ *   checkout choice alone — the payment row carries the recorded method
  * @returns the order as it now stands, or `null` if it could no longer be paid
  */
-export const markPaid = (orderId: string): Promise<OrderDocument | null> => {
+export const markPaid = (
+    orderId: string,
+    paymentMethod?: 'card'
+): Promise<OrderDocument | null> => {
     const [from] = statusesLeadingTo(OrderStatus.paid, 'system');
-    return orderRepository.markPaid(orderId, from).then((updated) => {
+    return orderRepository.markPaid(orderId, from, paymentMethod).then((updated) => {
         if (updated)
             void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from, to: OrderStatus.paid });
         return updated;

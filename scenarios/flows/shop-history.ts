@@ -31,6 +31,7 @@ import {
     shipOrder,
     deliverOrder,
     cancelOrder,
+    requestReturn,
     CARD,
     checkout,
     checkoutAndPay,
@@ -415,6 +416,39 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
 
     // Every parcel shipped above arrives. Everything shipped after this line stays in transit.
     for (const orderId of shippedBeforeDelivery) await deliverOrder(owner, orderId);
+
+    /*
+     * Delivered TODAY, never backdated: the withdrawal window (and a return's) runs from the
+     * delivery, so these are the rows where it is still open — `order.delivered` above is weeks
+     * past it. Standard shipping, so the refund has a delivery charge to give back or keep.
+     * Paid through a real card, which is why they are seeded and not built by a journey.
+     */
+    const deliveredToday = async (): Promise<string> => {
+        const orderId = await checkoutAndPay(customer, DOG_FOOD(1), {
+            shippingMethodId: 'standard'
+        });
+        await startProcessing(owner, orderId);
+        await shipOrder(owner, orderId);
+        await deliverOrder(owner, orderId);
+        return orderId;
+    };
+    subjects['order.deliveredRecent'] = await deliveredToday();
+
+    // Two defective-goods requests nobody has answered — the queue support works through.
+    const firstDefective = await deliveredToday();
+    subjects['return.requested'] = await requestReturn(
+        customer,
+        firstDefective,
+        'defective',
+        'The bag arrived torn open.'
+    );
+    const secondDefective = await deliveredToday();
+    subjects['return.requestedSecond'] = await requestReturn(
+        customer,
+        secondDefective,
+        'defective',
+        'Not the food I ordered.'
+    );
 
     // ── The named rows, each a branch the storefront or the admin actually has a screen for ────
     subjects['order.paid'] = dated(await checkoutAndPay(customer, DOG_FOOD(2)));
