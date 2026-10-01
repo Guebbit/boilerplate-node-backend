@@ -22,6 +22,7 @@
 import type { Response } from 'supertest';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
@@ -63,6 +64,7 @@ const loggedInCustomer = async (): Promise<string> => {
         },
         'customer'
     );
+    await giveAddress(user.id);
     const login = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });

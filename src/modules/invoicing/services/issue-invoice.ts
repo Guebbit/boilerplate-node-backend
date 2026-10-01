@@ -43,9 +43,9 @@ const frozenLines = (order: OrderDocument): InvoiceLine[] =>
 
 /**
  * Freezes and numbers one order's invoice — the whole job `module.ts`'s `ORDER_STATUS_CHANGED`
- * listener delegates here. Reads the order's OWN frozen `shippingAddress` as the Art. 226 billing
- * address: this shop collects no separate billing address, and the ship-to address is the only
- * customer address a checkout ever records. The render locale is the order's own frozen locale
+ * listener delegates here. Reads the order's OWN frozen `billingAddress` as the Art. 226 buyer
+ * address — the one the checkout asked for, never the ship-to address by assumption: a
+ * digital-only order has no ship-to at all. The render locale is the order's own frozen locale
  * (`items[0].locale`) — the language its product titles were resolved into at checkout — same
  * reasoning the old receipt render followed.
  *
@@ -71,7 +71,7 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
             currency,
             locale: order.items[0].locale,
             ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
-            ...(order.shippingAddress ? { billingAddress: order.shippingAddress } : {}),
+            ...(order.billingAddress ? { billingAddress: order.billingAddress } : {}),
             seller: frozenSeller(),
             lines: frozenLines(order),
             ...(order.shippingCost === undefined ? {} : { shippingCost: order.shippingCost }),

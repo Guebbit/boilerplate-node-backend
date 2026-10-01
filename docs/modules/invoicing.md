@@ -89,9 +89,9 @@ flowchart LR
 
 `issueInvoice` (`services/issue-invoice.ts`) freezes: the order's own lines (title, quantity,
 frozen unit price, frozen VAT rate, frozen rate type), the VAT breakdown `orderTaxBreakdown`
-computes from them, the order's own `shippingAddress` as the Art. 226 billing address (this shop
-collects no separate billing address — the ship-to address is the only customer address a checkout
-ever records), the seller's own identity (`config.ts`), and the order's own frozen
+computes from them, the order's own `billingAddress` as the Art. 226 buyer address (every checkout
+order carries one, chosen at checkout — "same as shipping" by default, so a digital-only order,
+which has no ship-to address at all, is still invoiced to someone), the seller's own identity (`config.ts`), and the order's own frozen
 `currency`/`orderNumber`/`locale`.
 `issueCreditNote` (`services/issue-credit-note.ts`) freezes one credit note per REFUND
 (`PAYMENT_REFUNDED` carries `refundId`, this refund's `amount` and `full`). A full refund mirrors the

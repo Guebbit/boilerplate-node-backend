@@ -9,6 +9,7 @@
 import '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/callers';
+import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
@@ -88,6 +89,7 @@ describe("cartService.orderConfirm freezes the snapshot in the buyer's stored lo
     it('embeds the Italian title and records the frozen locale, from `user.locale`', async () => {
         await givenLocale('it');
         const user = await createUser({ locale: 'it' });
+        await giveAddress(user.id);
         const product = await createProduct({ title: 'Dog Bed' });
         await givenTranslation(String(product._id), 'it', { title: 'Cuccia' });
 

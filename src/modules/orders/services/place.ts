@@ -41,6 +41,16 @@ export interface PlaceOrderLine {
     product: ProductSnapshot | null | undefined;
 }
 
+/** A frozen copy of a book entry, as an order embeds it — shipping or billing alike. */
+export interface PlaceOrderAddress {
+    fullName: string;
+    street: string;
+    city: string;
+    zip: string;
+    country: string;
+    phone?: string;
+}
+
 /**
  * The shipping half of an order, already resolved by the caller — `placeOrder` asks no questions
  * about which method was offered or whether it applies to this basket, only how to price it.
@@ -51,14 +61,7 @@ export interface PlaceOrderLine {
  * shape between the caller's own read and this function's write.
  */
 export interface PlaceOrderShipping {
-    address?: {
-        fullName: string;
-        street: string;
-        city: string;
-        zip: string;
-        country: string;
-        phone?: string;
-    };
+    address?: PlaceOrderAddress;
     method?: { id: string; priceFor: (frozenLines: readonly OrderDocumentItem[]) => number };
     /** Stock hold length in minutes; `undefined` defers to `reserveForOrder`'s own default. */
     holdMinutes?: number;
@@ -73,6 +76,8 @@ export interface PlaceOrderInput {
     /** `undefined` behaves exactly like `'card'` — no reference is minted, no hold-length override. */
     paymentMethod?: string;
     shipping?: PlaceOrderShipping;
+    /** Who the order is invoiced to; `undefined` writes no `billingAddress` (the admin's own `POST /orders`). */
+    billingAddress?: PlaceOrderAddress;
     /** Free-text notes the buyer left at checkout — `undefined` writes no `notes` field at all. */
     notes?: string;
 }
@@ -157,6 +162,7 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
             ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
             ...(transferReference ? { transferReference } : {}),
             ...(input.shipping?.address ? { shippingAddress: input.shipping.address } : {}),
+            ...(input.billingAddress ? { billingAddress: input.billingAddress } : {}),
             // Priced off THESE frozen lines' total — the free-above rule prices the basket being
             // bought, not a later edit of it. See `PlaceOrderShipping.priceFor`'s own docblock.
             ...(input.shipping?.method

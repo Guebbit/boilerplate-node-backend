@@ -50,14 +50,38 @@ export const receiveStock = (owner: Caller, productId: string, quantity: number)
         .then(() => undefined);
 
 /**
+ * Give a shopper with an empty address book one entry — every order carries a billing address
+ * for its invoice, so a checkout by an account that keeps none is refused.
+ *
+ * @param caller - the shopper
+ */
+const ensureAddress = (caller: Caller): Promise<void> =>
+    caller
+        .call<{ addresses: unknown[] }>('GET', '/account/addresses')
+        .then(({ addresses }) =>
+            addresses.length > 0
+                ? undefined
+                : caller.call('POST', '/account/addresses', {
+                      label: 'home',
+                      fullName: caller.email,
+                      street: 'Via Roma 1',
+                      city: 'Modena',
+                      zip: '41121',
+                      country: 'IT'
+                  })
+        )
+        .then(() => undefined);
+
+/**
  * Fill the caller's cart and check it out — the whole customer half of an order.
  *
  * The cart is filled line by line because that is what `POST /cart` takes; the lines land in one
  * order either way, since a cart belongs to one account and this awaits each add.
  *
  * Defaults to `pickup`: every demo product is physical, so checkout refuses a basket with no
- * method at all, and `pickup` is the one method that needs no address — not every seeded shopper
- * has one. A flow demonstrating a real shipment (`standard`) overrides it.
+ * method at all, and `pickup` is the one method that needs no shipping address. A shopper with an
+ * empty address book is given one first: billing needs an address whatever the method. A flow
+ * demonstrating a real shipment (`standard`) overrides the method.
  *
  * The shipping method is the cart's own choice now (`PUT /cart/shipping-method`), set here before
  * checkout rather than sent in its body — see `docs/modules/cart-checkout.md`.
@@ -72,6 +96,7 @@ export const checkout = async (
     lines: Line[],
     options: { shippingMethodId?: string; paymentMethod?: string } = {}
 ): Promise<string> => {
+    await ensureAddress(caller);
     for (const line of lines) await caller.call('POST', '/cart', line);
 
     const { shippingMethodId = 'pickup', ...rest } = options;

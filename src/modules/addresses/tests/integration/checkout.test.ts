@@ -49,7 +49,9 @@ describe('checkout and the address', () => {
         const office = view.addresses.find(({ label }) => label === 'office');
 
         await cartService.cartShippingMethodSet(user.id, 'standard');
-        const result = await cartService.orderConfirm(user.id, testCallerContext, office!.id);
+        const result = await cartService.orderConfirm(user.id, testCallerContext, {
+            addressId: office!.id
+        });
 
         expect(result.success).toBe(true);
         expect(result.success && result.data?.shippingAddress?.street).toBe('Via Milano 2');
@@ -59,12 +61,11 @@ describe('checkout and the address', () => {
         const user = await createUser();
         await addressService.addressAdd(user.id, HOME);
         const product = await cartWith(user.id);
+        await cartService.cartShippingMethodSet(user.id, 'standard');
 
-        const result = await cartService.orderConfirm(
-            user.id,
-            testCallerContext,
-            '65dc8a99604c307b702b5ccc'
-        );
+        const result = await cartService.orderConfirm(user.id, testCallerContext, {
+            addressId: '65dc8a99604c307b702b5ccc'
+        });
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -89,12 +90,11 @@ describe('checkout and the address', () => {
 
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
         const product = await cartWith(stranger.id);
+        await cartService.cartShippingMethodSet(stranger.id, 'standard');
 
-        const result = await cartService.orderConfirm(
-            stranger.id,
-            testCallerContext,
-            ownersEntryId
-        );
+        const result = await cartService.orderConfirm(stranger.id, testCallerContext, {
+            addressId: ownersEntryId
+        });
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -105,15 +105,158 @@ describe('checkout and the address', () => {
         expect(stored?.reserved).toBe(0);
     });
 
-    it('an empty book is not an obstacle — the order simply carries no address', async () => {
+    it('a pickup order ships to no address but is still invoiced to the default', async () => {
         const user = await createUser();
+        await addressService.addressAdd(user.id, HOME);
         await cartWith(user.id);
 
-        // `pickup` needs no address, so an empty book still checks out.
+        // `pickup` needs no address, so nothing is frozen as a shipping address.
         await cartService.cartShippingMethodSet(user.id, 'pickup');
-        const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(true);
         expect(result.success && result.data?.shippingAddress).toBeUndefined();
+        expect(result.success && result.data?.billingAddress).toMatchObject({
+            street: 'Via Roma 1'
+        });
+    });
+
+    it('an empty book cannot check out: every order needs a billing address', async () => {
+        const user = await createUser();
+        const product = await cartWith(user.id);
+
+        await cartService.cartShippingMethodSet(user.id, 'pickup');
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(422);
+        expect(!result.success && result.errors[0]?.code).toBe('CART_BILLING_ADDRESS_REQUIRED');
+        // Refused before the hold: nothing moved.
+        const stored = await readProduct(String(product._id));
+        expect(stored?.reserved).toBe(0);
+    });
+});
+
+describe('checkout and the billing address', () => {
+    it('is the shipping address when none is named — "same as shipping"', async () => {
+        const user = await createUser();
+        await addressService.addressAdd(user.id, HOME);
+        await cartWith(user.id);
+        await cartService.cartShippingMethodSet(user.id, 'standard');
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
+
+        expect(result.success && result.data?.billingAddress).toMatchObject({
+            fullName: 'Ada Lovelace',
+            street: 'Via Roma 1'
+        });
+        expect(result.success && result.data?.shippingAddress).toMatchObject({
+            street: 'Via Roma 1'
+        });
+    });
+
+    it('is the NAMED entry, leaving the shipping address on its own', async () => {
+        const user = await createUser();
+        await addressService.addressAdd(user.id, HOME);
+        await addressService.addressAdd(user.id, OFFICE);
+        await cartWith(user.id);
+        const { addresses } = await addressService.addressesGet(user.id);
+        const office = addresses.find(({ label }) => label === 'office');
+        await cartService.cartShippingMethodSet(user.id, 'standard');
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext, {
+            billingAddressId: office!.id
+        });
+
+        expect(result.success && result.data?.shippingAddress?.street).toBe('Via Roma 1');
+        expect(result.success && result.data?.billingAddress?.street).toBe('Via Milano 2');
+    });
+
+    it('is asked alone for a digital-only basket: no shipping address is frozen', async () => {
+        const user = await createUser();
+        await addressService.addressAdd(user.id, HOME);
+        const digital = await createProduct({ requiresShipping: false });
+        await cartService.cartItemAddById(user.id, String(digital._id), 1);
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
+
+        expect(result.success).toBe(true);
+        expect(result.success && result.data?.shippingAddress).toBeUndefined();
+        expect(result.success && result.data?.billingAddress).toMatchObject({
+            street: 'Via Roma 1'
+        });
+    });
+
+    it('takes the named entry for a digital-only basket', async () => {
+        const user = await createUser();
+        await addressService.addressAdd(user.id, HOME);
+        await addressService.addressAdd(user.id, OFFICE);
+        const digital = await createProduct({ requiresShipping: false });
+        await cartService.cartItemAddById(user.id, String(digital._id), 1);
+        const { addresses } = await addressService.addressesGet(user.id);
+        const office = addresses.find(({ label }) => label === 'office');
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext, {
+            billingAddressId: office!.id
+        });
+
+        expect(result.success && result.data?.billingAddress?.street).toBe('Via Milano 2');
+    });
+
+    it('refuses a digital-only checkout with no address on file', async () => {
+        const user = await createUser();
+        const digital = await createProduct({ requiresShipping: false });
+        await cartService.cartItemAddById(user.id, String(digital._id), 1);
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
+
+        expect(result.status).toBe(422);
+        expect(!result.success && result.errors[0]?.code).toBe('CART_BILLING_ADDRESS_REQUIRED');
+    });
+
+    it('refuses a shipping addressId on a digital-only basket instead of freezing it', async () => {
+        const user = await createUser();
+        await addressService.addressAdd(user.id, HOME);
+        const { addresses } = await addressService.addressesGet(user.id);
+        const digital = await createProduct({ requiresShipping: false });
+        await cartService.cartItemAddById(user.id, String(digital._id), 1);
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext, {
+            addressId: addresses[0].id
+        });
+
+        expect(result.status).toBe(409);
+        expect(!result.success && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_APPLICABLE');
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+    });
+
+    it("refuses another user's entry as billing, as it does for shipping", async () => {
+        const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
+        await addressService.addressAdd(owner.id, HOME);
+        const ownersView = await addressService.addressesGet(owner.id);
+        const ownersEntryId = ownersView.addresses[0].id;
+        const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
+        await addressService.addressAdd(stranger.id, OFFICE);
+        await cartWith(stranger.id);
+        await cartService.cartShippingMethodSet(stranger.id, 'standard');
+
+        const result = await cartService.orderConfirm(stranger.id, testCallerContext, {
+            billingAddressId: ownersEntryId
+        });
+
+        expect(result.status).toBe(404);
+        expect(!result.success && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_FOUND');
+        await expect(countOrders({ userId: stranger._id })).resolves.toBe(0);
+    });
+
+    it('is not held to the ship-to countries, unlike the shipping address', async () => {
+        const user = await createUser();
+        await addressService.addressAdd(user.id, { ...HOME, country: 'JP' });
+        const digital = await createProduct({ requiresShipping: false });
+        await cartService.cartItemAddById(user.id, String(digital._id), 1);
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
+
+        expect(result.success && result.data?.billingAddress?.country).toBe('JP');
     });
 });
