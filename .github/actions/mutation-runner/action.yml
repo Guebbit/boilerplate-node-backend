@@ -1,0 +1,39 @@
+name: Mutation runner
+description: Set up a GitHub runner to run Stryker over this repo — Node, mongod, swap and the CI config.
+
+# The part of a mutation job that is not the job's own work, shared by the sweep's shards
+# (`mutation-wave.yml`) and its pre-check (`mutation.yml`). The checkout stays in the caller.
+#
+# Swap: the heap cap Stryker runs under is 12 of the runner's 16 GB, and `bson`'s buffers sit
+# outside any heap cap (docs/tools/mutation-testing.md#the-bson-warning-sign). Swap turns a spike
+# into a slow minute instead of a killed worker. Best effort: no room, no swap.
+
+inputs:
+    node-version:
+        description: Node major version to install.
+        required: false
+        default: '24'
+
+runs:
+    using: composite
+    steps:
+        - name: Setup
+          uses: ./.github/actions/setup
+          with:
+              node-version: ${{ inputs.node-version }}
+              setup-mongod: 'true'
+
+        - name: Add swap
+          shell: bash
+          run: |
+              for directory in /mnt /; do
+                if sudo fallocate -l 16G "$directory/mutation.swap" 2>/dev/null; then
+                  sudo chmod 600 "$directory/mutation.swap"
+                  sudo mkswap "$directory/mutation.swap" >/dev/null && sudo swapon "$directory/mutation.swap" && break
+                fi
+              done
+              free -h
+
+        - name: Write the CI Stryker config
+          shell: bash
+          run: npx tsx scripts/mutation/ci/cli.ts config

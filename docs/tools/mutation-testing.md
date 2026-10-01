@@ -79,7 +79,7 @@ Read this first. The rest of the page uses these words precisely, and several of
 | **Concurrency**        | How many mutants Stryker tests **in parallel**. Each one is a separate OS process running a full test runner _and its own in-memory mongod_, so the limit is memory, not CPU cores.                                                                                                      |
 | **`coverageAnalysis`** | Set to `perTest`: Stryker first records which tests touch which code, then runs **only the covering tests** for each mutant instead of the whole suite. This is the main reason a run is minutes and not days — except for static mutants, below.                                        |
 | **Static mutant**      | A mutant in code that runs when the file is **imported**, not when a test calls it — a `new Schema({...})`, a repository built at module scope, a config object. See [Why a run is slow](#why-a-run-is-slow-static-mutants); it is the single biggest cost in this repo.                 |
-| **Incremental**        | Stryker remembers per-mutant results in a gitignored, CI-cached file, so the next run only re-mutates what changed. **Enabled**, with `workflow_dispatch`'s `force` input rebuilding from scratch on demand. See [Incremental mode](#incremental-mode-what-it-is).                       |
+| **Incremental**        | Stryker remembers per-mutant results in a gitignored file, so the next run only re-mutates what changed. **Enabled** locally, `--force` rebuilding from scratch; the GitHub sweep starts from scratch every time. See [Incremental mode](#incremental-mode-what-it-is).                  |
 
 ## What a mutant actually is
 
@@ -855,7 +855,7 @@ What moved was the project, not the machine: the module count went from nine to 
 
 **That ~2.9 GB figure predates the ruler merge** — it was measured under the old unit-only config, whose worker never opened a database. `stryker.json` now runs `tests/integration/` in every worker, which starts a real in-memory `mongod` per file, so the true working set per worker today is almost certainly higher. `STRYKER_WORKER_PEAK_MB` in `scripts/mutation/stryker-run.ts` (the constant `resolveConcurrency()` divides free RAM by) still reads `2900` — **it has not been re-measured against the merged ruler.** Until it is, `resolveConcurrency()` on an unconfigured machine may pick a concurrency a little more aggressive than the box can actually sustain; the OOM-loop guard below still catches the consequence (a run that will not converge) rather than letting it burn silently, but it costs restarts to find that out. Re-measure the same way as before — `npx stryker run --mutate <one file> --concurrency 1`, watching RSS — and update both this paragraph and the constant together.
 
-4 is kept as the shared default because this value is committed and the safe number is a property of the machine, not the project — a contributor's laptop is not a 30 GB desktop. Raise it per machine via `STRYKER_CONCURRENCY` in `.env` (see [the worker-pool multiplication](#the-worker-pool-multiplication)). CI overrides it independently — `mutation.yml` passes `--concurrency 2` for the sharded weekly matrix, because a standard GitHub runner is 4 vCPU / 16 GB, not 32/30.
+4 is kept as the shared default because this value is committed and the safe number is a property of the machine, not the project — a contributor's laptop is not a 30 GB desktop. Raise it per machine via `STRYKER_CONCURRENCY` in `.env` (see [the worker-pool multiplication](#the-worker-pool-multiplication)). CI overrides it independently — the GitHub sweep passes `--concurrency 1` with a 12 GB heap, because a standard runner is 4 vCPU / 16 GB, not 32/30 ([The GitHub sweep](#the-github-sweep)).
 
 **`maxTestRunnerReuse: 1`** restarts the test runner after every mutant. It was set because memory
 climbed from mutant to mutant — measured at reuse 5: **23 OOM restarts on one file**; at 1: **0**,
@@ -994,8 +994,8 @@ a config change to answer; re-derive the ratio from a report instead of re-openi
 **The problem.** Every run starts from scratch. Change one line in one service, and Stryker still re-mutates every mutant across the whole codebase — including all the ones in files you did not touch, whose results will be identical to last time.
 
 **The mechanism.** With `incremental: true`, Stryker writes every mutant's result to
-`tmp/reports/stryker-incremental.json` — gitignored, and kept between runs by CI's own cache
-instead (see below). On the next run it compares the new source against what the file remembers:
+`tmp/reports/stryker-incremental.json` — gitignored, so it lives only on the machine that wrote it
+(see below). On the next run it compares the new source against what the file remembers:
 
 - file unchanged → reuse the stored result, run nothing
 - file changed → re-mutate it properly
@@ -1026,12 +1026,13 @@ flowchart TB
 
 **The catch, and why the full sweep still runs in full.** The incremental file is a cache, and caches go stale — a refactor that moves code between files, a dependency upgrade, or a merge conflict resolved badly can leave it describing a codebase that no longer exists. So the intended shape is two runs with different jobs:
 
-| Run        | Trigger                  | Setting                                           | Purpose                                            |
-| ---------- | ------------------------ | ------------------------------------------------- | -------------------------------------------------- |
-| PR (diff)  | push                     | `--force`                                         | Always a clean measurement of the changed files    |
-| Full sweep | cron (weekly) / dispatch | `incremental` by default, `force` input on demand | Fast by default; refreshed from scratch on request |
+| Run               | Trigger                  | Setting                                      | Purpose                                            |
+| ----------------- | ------------------------ | -------------------------------------------- | -------------------------------------------------- |
+| PR (diff)         | push                     | `--force`                                    | Always a clean measurement of the changed files    |
+| Local full sweep  | `npm run mutation:full`  | `incremental` per shard, `--force` on demand | Fast by default; refreshed from scratch on request |
+| GitHub full sweep | cron (weekly) / dispatch | nothing restored — from scratch every time   | Slow, and never stale                              |
 
-`force: true` tells Stryker to ignore the stored results entirely, which is what stops staleness accumulating.
+`--force` tells Stryker to ignore the stored results entirely, which is what stops staleness accumulating.
 
 ## Scope — what is mutated
 
@@ -1172,26 +1173,99 @@ shards run in parallel.
 
 So sharding is the default, not a fallback:
 
-- **Sharded by line count**, not module name. `mutation-matrix` (a job in `mutation.yml`) runs
-  `scripts/mutation/shard-plan.ts`, which walks the SAME roots `stryker.json` declares and
-  bin-packs every file into shards of ~1,300 lines each (`scripts/mutation/sharding.ts`) — about 32
-  shards over the current scope. This is what closes the gap the previous hand-written matrix had:
-  a module added to `src/modules/` is in a shard the next time this runs, with nothing here to edit.
+- **Sharded by line count**, not module name. Both sweeps walk the SAME roots `stryker.json`
+  declares (`scripts/mutation/mutate-scope.ts`), which closes the gap the old hand-written matrix
+  had: a module added to `src/modules/` is in a shard the next time either runs, with nothing to
+  edit. Locally `scripts/mutation/sharding.ts` packs ~600 lines a shard; on GitHub,
+  `scripts/mutation/ci/waves.ts` plans much smaller ones — [The GitHub sweep](#the-github-sweep).
 - **Weekly, not nightly.** One full sharded sweep a week (Sundays) covers the whole scope; the old
-  three-night rotation existed only because the full scope did not fit in one night, and sharded
-  across runners it does fit in one weekly pass — every shard is capped at 210 minutes and they run
-  in parallel, so the wall clock is one or two waves depending on the account's concurrent-job limit.
+  three-night rotation existed only because the full scope did not fit in one night.
   On-demand-only was tried and rejected too: it means never, and a baseline nobody refreshes gates
   nothing — a file that arrives after the last sweep has no recorded score, so the checker treats
   an unknown file as nothing to compare against, and new code ends up the code least covered by
   the ratchet. Nightly was tried too, and this repo already lived that failure: 24 failures and
   12 cancellations over 35 nights, unnoticed, until `mutation-notify` was added.
 
-`mutation-merge` then downloads every shard's report and folds it into `mutation-baseline.json` with
-`--merge` — see [`mergeIntoBaseline`](#the-per-file-ratchet): files a shard didn't touch are left
-exactly as they were, not treated as having left the mutate scope. `tmp/*` is gitignored
-(nothing commits a run's raw output), so `actions/cache` keyed per shard is what makes the week's
-incremental cache worth anything across runs.
+`mutation-merge` then folds every finished shard into `mutation-baseline.json` with `--merge` —
+see [`mergeIntoBaseline`](#the-per-file-ratchet): files the sweep could not measure are left
+exactly as they were, not treated as having left the mutate scope.
+
+### The GitHub sweep {#the-github-sweep}
+
+The weekly `mutation.yml` run. Same `stryker.json`, same ruler as `npm run mutation:full` — cut to
+fit GitHub's free runners instead of a desktop. It is built to **finish**, not to be fast: a sweep
+from scratch takes days.
+
+| GitHub's limit              | What the sweep does about it                                                                                                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6 hours a job               | Shards of at most 200 non-blank lines; a bigger file is sliced. Stryker is stopped at 330 minutes, so the job itself records that it ran out of time.                             |
+| 16 GB a runner              | One Stryker worker, a 12 GB heap, 16 GB of extra swap. On 2026-09-27, two workers at 4 GB lost 30 of 80 shards to "ran out of memory" before a single mutant ran.                 |
+| 256 jobs a matrix           | **Waves.** Each wave is one matrix; what does not fit waits for the next.                                                                                                         |
+| 20 jobs at once (free plan) | `max-parallel: 12`, leaving eight for `ci.yml` and everything else — a sweep lasts days and must not starve them.                                                                 |
+| The plan is a guess         | A shard out of time comes back in the next wave in four pieces; one that crashed comes back once, as it was. After eight waves, whatever is left is reported as **not measured**. |
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
+flowchart TB
+    Plan1["wave 1 plan\nwhole scope · ≤200-line shards\nbig files sliced"] --> Matrix["matrix · ≤256 shards\none worker · 330 min each"]
+    Matrix --> Ended{"each shard"}
+    Ended -->|report| Report["shard report\n(artifact)"]
+    Ended -->|out of time| Split["4 smaller pieces"]
+    Ended -->|crashed| Again["the same, once more"]
+    Split --> PlanN["wave 2…8 plan\nretries first, then the backlog"]
+    Again --> PlanN
+    PlanN --> Matrix
+    Report --> Merge["mutation-merge\none report · run summary · baseline commit"]
+
+    classDef proc fill:#ddd6fe,stroke:#7c3aed,color:#111827;
+    classDef good fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
+    classDef out fill:#fef3c7,stroke:#d97706,color:#111827;
+    class Plan1,Matrix,Ended,PlanN proc;
+    class Report good;
+    class Split,Again bad;
+    class Merge out;
+```
+
+**Preflight.** Before wave 1, `preflight` runs Stryker's initial test run (`--dryRunOnly`, no
+mutant tested) for `src/modules/users/model.ts` — imported by nearly every test file, so the
+widest initial run any shard makes, and the one that ran out of memory in 30 shards on 2026-09-27.
+It uses the wave shards' exact runner setup (`.github/actions/mutation-runner`). If it fails, no
+wave starts. Tick **check-only** in _Run workflow_ to run just this, in about 20 minutes, before
+committing to a multi-day sweep.
+
+**Slicing a file without changing the measurement.** Stryker's own line ranges
+(`--mutate 'file.ts:10-40'`) mutate only nodes wholly inside the range, so a node crossing a slice
+edge — a function body, a schema object — would be mutated by no slice at all. The sweep instead
+runs the whole file in every slice and loads a small ignorer plugin
+(`scripts/mutation/ci/slice-ignorer.ts`, via a config written fresh from `stryker.json` each job)
+that skips only subtrees which do not touch the slice. A node crossing an edge touches both
+neighbours, so both test it and the merge keeps one result. Checked 2026-09-30 on
+`src/infrastructure/runtime/cluster-policy.ts`, cut through the middle of a function: the merged
+slices matched the whole-file run mutant for mutant, 26 of 26, and the function body that crossed
+the cut ran in both halves.
+
+**Reading the result.**
+
+- **Run page:** the summary — score, mutants by status, the weakest files, anything not measured.
+- **`mutation-report` artifact:** one `index.html` for the whole sweep (Stryker's own viewer, the
+  shards merged into it) and the merged JSON report. Kept 90 days.
+- **Red run:** exactly one of two things — a file could not be measured in any wave, or a file
+  scored below its baseline. A red _shard_ inside a wave is not a failure: it is a retry being
+  scheduled. The baseline is committed either way.
+- **On demand:** Actions tab → Mutation → Run workflow. A new run queues behind one in progress
+  instead of cancelling it.
+
+**Cost.** 340 shards for the scope as of 2026-09-30, so wave 1 is full and the rest spills into
+wave 2. Measured on the 2026-09-27 sweep: a median 0.43 runner-minutes per line at two workers
+(a floor — the 11 shards that timed out are heavier). One worker is _assumed_ to double that, which
+makes about 850 runner-hours plus roughly 15 minutes of setup per shard: **three to five days** at
+12 in parallel, retries included. Every sweep starts from scratch; nothing is carried between runs.
+Re-measure the per-line figure from the first finished sweep and update both this paragraph and
+`SHARD_LINES` in `scripts/mutation/ci/waves.ts`.
+
+Nothing here touches the local sweep: `npm run mutation:full` keeps its own shard size
+(`sharding.ts`) and its machine-sized settings (`stryker-run.ts`).
 
 ### The diff run, and why it can fail when the full sweep cannot
 
@@ -1356,23 +1430,24 @@ covered file's real score, never as a grade.
 
 ## File map
 
-| Path                                 | Contents                                                                                                     |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `stryker.json`                       | Scope (`mutate`), the narrowed Jest config (integration included), thresholds, concurrency, reporters        |
-| `jest.config.mutation.js`            | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication)               |
-| `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory — see [pending reseed](#baseline-status-pending-a-reseed).  |
-| `scripts/mutation/stryker-run.ts`    | One Stryker invocation, sized for this machine — concurrency, the heap cap, the scratch sweep, the OOM abort |
-| `scripts/mutation/run-diff.ts`       | `npm run mutation` — the files a branch changed, graded against the ratchet                                  |
-| `scripts/mutation/run-shards.ts`     | `npm run mutation:full` — the whole scope, one shard at a time, resumable, merges once closed                |
-| `scripts/mutation/local-policy.ts`   | Which shards a local sweep runs next, given what previous evenings already recorded                          |
-| `scripts/mutation/mutate-scope.ts`   | The real mutate scope, read off the tree — every `.ts` file `stryker.json` declares mutable                  |
-| `scripts/mutation/sharding.ts`       | Bin-packing by line count for the weekly CI matrix and a local sweep alike                                   |
-| `scripts/mutation/shard-plan.ts`     | CLI wrapper: walks the real `mutate` scope, prints the weekly matrix as GitHub Actions job outputs           |
-| `scripts/mutation/baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule, and the merge variant of both                   |
-| `scripts/mutation/check-baseline.ts` | CLI for the commands below                                                                                   |
-| `.github/workflows/mutation.yml`     | Weekly schedule + dispatch, the sharded matrix and its merge job, the PR diff job, the failure issue         |
-| `tmp/reports/mutation/index.html`    | Human-readable report (generated per run)                                                                    |
-| `tmp/reports/mutation/mutation.json` | Machine-readable report the ratchet reads                                                                    |
+| Path                                  | Contents                                                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `stryker.json`                        | Scope (`mutate`), the narrowed Jest config (integration included), thresholds, concurrency, reporters        |
+| `jest.config.mutation.js`             | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication)               |
+| `mutation-baseline.json`              | Per-file scores. Committed. The ratchet's memory — see [pending reseed](#baseline-status-pending-a-reseed).  |
+| `scripts/mutation/stryker-run.ts`     | One Stryker invocation, sized for this machine — concurrency, the heap cap, the scratch sweep, the OOM abort |
+| `scripts/mutation/run-diff.ts`        | `npm run mutation` — the files a branch changed, graded against the ratchet                                  |
+| `scripts/mutation/run-shards.ts`      | `npm run mutation:full` — the whole scope, one shard at a time, resumable, merges once closed                |
+| `scripts/mutation/local-policy.ts`    | Which shards a local sweep runs next, given what previous evenings already recorded                          |
+| `scripts/mutation/mutate-scope.ts`    | The real mutate scope, read off the tree — every `.ts` file `stryker.json` declares mutable                  |
+| `scripts/mutation/sharding.ts`        | Bin-packing by line count for a local sweep                                                                  |
+| `scripts/mutation/ci/`                | The GitHub sweep only — wave planner, slice ignorer, report merge, and the CLI the workflows call            |
+| `scripts/mutation/baseline.ts`        | Ratchet logic — scoring, comparison, the "never lower" rule, and the merge variant of both                   |
+| `scripts/mutation/check-baseline.ts`  | CLI for the commands below                                                                                   |
+| `.github/workflows/mutation.yml`      | Weekly schedule + dispatch, eight waves and the merge job, the PR diff job, the failure issue                |
+| `.github/workflows/mutation-wave.yml` | One wave: plan it, then run its shards as a matrix                                                           |
+| `tmp/reports/mutation/index.html`     | Human-readable report (generated per run)                                                                    |
+| `tmp/reports/mutation/mutation.json`  | Machine-readable report the ratchet reads                                                                    |
 
 ## Commands
 
