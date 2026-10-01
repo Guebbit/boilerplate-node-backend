@@ -126,9 +126,17 @@ export const syncPayment = (caller: Caller, paymentId: string): Promise<string> 
         .call<PaymentData>('POST', `/payments/${paymentId}/sync`)
         .then((payment) => payment.status);
 
-/** Checkout, then pay it off with a card that settles first time. */
-export const checkoutAndPay = async (caller: Caller, lines: Line[]): Promise<string> => {
-    const orderId = await checkout(caller, lines);
+/**
+ * Checkout, then pay it off with a card that settles first time.
+ *
+ * @param options - shipping and payment choices, as {@link checkout} takes them
+ */
+export const checkoutAndPay = async (
+    caller: Caller,
+    lines: Line[],
+    options: Parameters<typeof checkout>[2] = {}
+): Promise<string> => {
+    const orderId = await checkout(caller, lines, options);
     await submitCard(caller, await openPayment(caller, orderId), CARD.visa);
     return orderId;
 };

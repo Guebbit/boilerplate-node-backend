@@ -419,6 +419,12 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     // ── The named rows, each a branch the storefront or the admin actually has a screen for ────
     subjects['order.paid'] = dated(await checkoutAndPay(customer, DOG_FOOD(2)));
 
+    // Paid and waiting for the warehouse, by EXPRESS: a tracked method, so shipping it needs a
+    // tracking code — the one thing the pickup `order.paid` above can never ask for.
+    subjects['order.paidExpress'] = dated(
+        await checkoutAndPay(customer, DOG_FOOD(1), { shippingMethodId: 'express' })
+    );
+
     // A card refused, then the same order paid with another — the retry the payment form offers.
     const retried = dated(await checkout(customer, DOG_FOOD(1)));
     const retriedPayment = await openPayment(customer, retried);

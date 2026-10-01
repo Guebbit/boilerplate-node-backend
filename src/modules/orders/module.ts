@@ -121,6 +121,7 @@ export default {
         shop: [
             'order.ownerPending',
             'order.paid',
+            'order.paidExpress',
             'order.shipped',
             'order.delivered',
             // One delivered order per withdrawal state, aged from the period: open (1 day back),
