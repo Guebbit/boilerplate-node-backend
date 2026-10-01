@@ -15,8 +15,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { orderService } from '@modules/orders';
-import { returnAddress } from '@modules/delivery';
+import { orderService, returnAddress } from '@modules/orders';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository, type ReturnStamp } from '../repository';
@@ -61,9 +60,7 @@ const notifyDecision = (
             at: decided.decidedAt ?? new Date(),
             declineReason: decided.declineReason,
             // Told where to send the goods only when they are being asked for.
-            ...(kind === 'return-approved' && returnAddress()
-                ? { returnAddress: returnAddress() }
-                : {})
+            ...(kind === 'return-approved' ? { returnAddress: returnAddress() } : {})
         });
     });
 

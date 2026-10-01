@@ -73,6 +73,12 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // longer exempts this profile, so it satisfies the gate the ordinary way, with the same
     // values `.env-example` ships for a plain developer checkout.
     NODE_SHOP_COUNTRY: 'IT',
+    NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
+    NODE_SHOP_STREET: 'Via Roma 1',
+    NODE_SHOP_CITY: 'Milano',
+    NODE_SHOP_ZIP: '20100',
+    NODE_SHOP_EMAIL: 'shop@example.com',
+    NODE_SHOP_PHONE: '+39 02 1234567',
     NODE_VAT_RATE_DEFAULT: '0.22',
     NODE_VAT_RATE_REDUCED: '0.10',
     // `.env`'s own value when it sets one — a lane pointed at non-default frontend ports (to

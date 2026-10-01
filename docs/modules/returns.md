@@ -6,7 +6,7 @@ stands. A withdrawal is one of these.
 **Depends on** — [`orders`](./orders.md) (the order a return is about, its owner, and the cancel a
 withdrawal before dispatch becomes), [`inventory`](./inventory.md) (received goods back on sale),
 [`payments`](./payments.md) (the refund, and `payment.refunded` closing the return) and
-[`delivery`](./delivery.md) (the return address, and the delivery a withdrawal refunds).
+[`delivery`](./delivery.md) (the delivery a withdrawal refunds).
 **Breaks if you change** — `orders`' `OrderActions.withdraw`/`withdrawUntil` (the button reads them)
 and `cancelById`'s `withdrawal` option; `payments`' `refundForReturn` and the `returnId` on a refund.
 :::
@@ -229,12 +229,12 @@ decision of whether the return was owed.
 
 ## Configuration
 
-| Variable                      | Default    | Meaning                                                                                         |
-| ----------------------------- | ---------- | ----------------------------------------------------------------------------------------------- |
-| `NODE_RETURN_POSTAGE_PAYER`   | `consumer` | Who pays to send the goods back: `consumer` or `shop`. Frozen on each return; drives the notice |
-| `NODE_RETURNS_RATE_LIMIT_MAX` | `20`       | Returns opened per window, per account                                                          |
+| Variable                      | Default | Meaning                                |
+| ----------------------------- | ------- | -------------------------------------- |
+| `NODE_RETURNS_RATE_LIMIT_MAX` | `20`    | Returns opened per window, per account |
 
-The return address is [`delivery`'s](./delivery.md#the-return-address) (`NODE_RETURN_ADDRESS_*`).
+The return address (`NODE_RETURN_ADDRESS_*`) and who pays postage (`NODE_RETURN_POSTAGE_PAYER`) are
+[`orders`'s](./orders.md#shop-identity). The postage payer is frozen on each return when it opens.
 
 ## Related pages
 

@@ -134,18 +134,14 @@ first one.
 
 ## Configuration
 
-| Variable                        | Default | Meaning                                                                                                                                           |
-| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_SHOP_VAT_NUMBER`          | —       | The seller's VAT id, printed on the invoice. Optional — a deployment below the registration threshold prints no VAT number rather than a fake one |
-| `NODE_SHOP_LEGAL_NAME`          | —       | The seller's legal name, printed on the invoice — distinct from any storefront brand name                                                         |
-| `NODE_SHOP_STREET`              | —       | The seller's own street address — Art. 226(f) needs the full postal address, not just `orders`' own `NODE_SHOP_COUNTRY`                           |
-| `NODE_SHOP_CITY`                | —       | The seller's own city                                                                                                                             |
-| `NODE_SHOP_ZIP`                 | —       | The seller's own postal code                                                                                                                      |
-| `NODE_EINVOICING_PROVIDER`      | `pdf`   | Which e-invoicing provider issues a document — see above                                                                                          |
-| `NODE_INVOICING_RATE_LIMIT_MAX` | `20`    | Invoice/credit-note renders allowed per window, per ACCOUNT — every hit spawns a Chromium launch                                                  |
+| Variable                        | Default | Meaning                                                                                          |
+| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `NODE_EINVOICING_PROVIDER`      | `pdf`   | Which e-invoicing provider issues a document — see above                                         |
+| `NODE_INVOICING_RATE_LIMIT_MAX` | `20`    | Invoice/credit-note renders allowed per window, per ACCOUNT — every hit spawns a Chromium launch |
 
-Every getter is read fresh per call (`config.ts`), so a correction needs no restart; an empty
-string reads as unset, never as a blank row on the invoice.
+The seller's identity (legal name, VAT number, address) is [`orders`'s](./orders.md#shop-identity):
+the withdrawal notice prints it too, and `orders` cannot import this module. Every getter is read
+fresh per call, so a correction needs no restart.
 
 ## VAT rounding and the net unit price
 

@@ -13,10 +13,9 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { RETURN_POSTAGE_PAYERS } from '@modules/orders';
+import type { ReturnPostagePayer } from '@modules/orders';
 import type { ReturnReason, ReturnStatus } from './domain';
-
-/** Who pays to send the goods back — frozen when the return is opened, from the shop's config. */
-export type ReturnPostagePayer = 'consumer' | 'shop';
 
 /** One line of a return — a snapshot of what is coming back, so it reads the same later. */
 export interface ReturnLine {
@@ -42,7 +41,7 @@ export interface ReturnDocument extends Document {
     /** What the customer wrote. Free text — never trusted, never rendered as HTML. */
     note?: string;
     lines: ReturnLine[];
-    /** Frozen from `NODE_RETURN_POSTAGE_PAYER` at creation: what the customer was told beforehand. */
+    /** Who pays to send the goods back. Frozen from `NODE_RETURN_POSTAGE_PAYER` at creation: what the customer was told beforehand. */
     returnPostage: ReturnPostagePayer;
     /** Why staff declined. Present only on a `declined` return. */
     declineReason?: string;
@@ -95,7 +94,7 @@ export const returnSchema = new Schema<ReturnDocument>(
         },
         note: { type: String, maxlength: 1000 },
         lines: { type: [returnLineSchema], required: true },
-        returnPostage: { type: String, enum: ['consumer', 'shop'], required: true },
+        returnPostage: { type: String, enum: [...RETURN_POSTAGE_PAYERS], required: true },
         declineReason: { type: String, maxlength: 500 },
         decidedAt: { type: Date },
         receivedAt: { type: Date },

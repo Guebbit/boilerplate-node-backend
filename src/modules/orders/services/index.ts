@@ -83,7 +83,7 @@ export { freezeOrderLines } from './snapshot';
 export { allocateOrderNumber } from './order-numbering';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.
-// `shopCountry` is here for `invoicing`'s own seller-address block — see `docs/modules/invoicing.md`.
+// The shop's identity and return address are read by `invoicing`, `delivery` and `returns` from here.
 export {
     bankTransferBeneficiary,
     bankTransferBic,
@@ -95,8 +95,13 @@ export {
     shopCurrency,
     orderCurrency,
     shopCountry,
-    shipToCountries
+    shopIdentity,
+    shipToCountries,
+    returnAddress,
+    returnPostagePayer,
+    RETURN_POSTAGE_PAYERS
 } from '../config';
+export type { ShopIdentity, ReturnAddress, ReturnPostagePayer } from '../config';
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const orderService = {

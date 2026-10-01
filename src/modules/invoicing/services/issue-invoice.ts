@@ -9,27 +9,20 @@
  * See: docs/modules/invoicing.md
  */
 
-import { orderTaxBreakdown, orderTotal, orderCurrency, shopCountry } from '@modules/orders';
+import { orderTaxBreakdown, orderTotal, orderCurrency, shopIdentity } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { shopLegalName, shopVatNumber, shopStreet, shopCity, shopZip } from '../config';
 import { invoicingRepository } from '../repository';
 import { allocateInvoiceNumber } from './numbering';
 import type { InvoiceDocument, InvoiceLine, InvoiceSeller } from '../model';
 
 /**
  * The seller's own identity, frozen fresh at every issue — never re-read once an invoice exists.
- * Whichever of legal name/VAT number/street/city/zip/country a deployment has configured is
- * printed; an unconfigured one is simply absent, the same "print what is there" rule
- * `orders/emails.ts` used to apply to the old receipt's own supplier block.
+ * Everything but the VAT number is required at boot, so only that one can be absent.
  */
-const frozenSeller = (): InvoiceSeller => ({
-    ...(shopLegalName() ? { legalName: shopLegalName() } : {}),
-    ...(shopVatNumber() ? { vatNumber: shopVatNumber() } : {}),
-    ...(shopStreet() ? { street: shopStreet() } : {}),
-    ...(shopCity() ? { city: shopCity() } : {}),
-    ...(shopZip() ? { zip: shopZip() } : {}),
-    ...(shopCountry() ? { country: shopCountry() } : {})
-});
+const frozenSeller = (): InvoiceSeller => {
+    const { legalName, vatNumber, street, city, zip, country } = shopIdentity();
+    return { legalName, ...(vatNumber ? { vatNumber } : {}), street, city, zip, country };
+};
 
 /**
  * One order line, frozen onto the invoice — title, quantity, the frozen unit price, VAT rate and

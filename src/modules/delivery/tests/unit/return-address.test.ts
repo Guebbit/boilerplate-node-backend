@@ -1,41 +1,9 @@
 /**
  * @module
- * The return address — where goods are posted back. All-or-nothing: a customer told to send a
- * parcel to half an address is worse off than one told nothing yet.
+ * The cheapest standard shipping rate. (The return address moved to `orders`; its tests are in
+ * `orders/tests/unit/config.test.ts`.)
  */
-import { withEnvironment } from '@tests/environment';
-import { returnAddress } from '../../config';
 import { cheapestStandardShipping } from '../../domain';
-
-describe('returnAddress', () => {
-    it('is absent until configured', () => {
-        expect(returnAddress()).toBeUndefined();
-    });
-
-    it('is the configured address, country upper-cased', async () => {
-        await withEnvironment('NODE_RETURN_ADDRESS_STREET', 'Via Roma 1', () =>
-            withEnvironment('NODE_RETURN_ADDRESS_CITY', 'Milano', () =>
-                withEnvironment('NODE_RETURN_ADDRESS_ZIP', '20100', () =>
-                    withEnvironment('NODE_RETURN_ADDRESS_COUNTRY', 'it', () => {
-                        expect(returnAddress()).toEqual({
-                            street: 'Via Roma 1',
-                            city: 'Milano',
-                            zip: '20100',
-                            country: 'IT'
-                        });
-                        return Promise.resolve();
-                    })
-                )
-            )
-        );
-    });
-
-    it('is absent when only part of it is set', () =>
-        withEnvironment('NODE_RETURN_ADDRESS_STREET', 'Via Roma 1', () => {
-            expect(returnAddress()).toBeUndefined();
-            return Promise.resolve();
-        }));
-});
 
 describe('cheapestStandardShipping', () => {
     it('is the flat standard rate on a small order — pickup is collection, not delivery', () => {

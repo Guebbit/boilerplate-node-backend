@@ -115,11 +115,11 @@ No `forced` variant: there is no ordinary gate here for an override to skip past
 
 ## The return address
 
-`delivery` owns where returned goods are sent, the same way it owns every other carrier-facing fact.
-`NODE_RETURN_ADDRESS_STREET`, `_CITY`, `_ZIP` and `_COUNTRY` (and optionally `_NAME`) must ALL be set —
-partial config counts as none, since a customer told to post a parcel to half an address is worse off
-than one told nothing yet. `GET /delivery/methods` serves it as `returnAddress` once configured, and
-[`returns`](./returns.md) names it in the approval notice.
+The return address is [`orders`'s](./orders.md#shop-identity), not this module's: the placed-order
+email must name where goods go, and `orders` cannot import `delivery`. `returnAddress()` is the
+configured `NODE_RETURN_ADDRESS_*`, or the shop's legal address when none is fully set, so it is
+never absent. `GET /delivery/methods` serves it as `returnAddress`, and [`returns`](./returns.md)
+names it in the approval notice.
 
 The same module answers "what would standard delivery have cost?" (`cheapestStandardShipping`,
 `domain/rates.ts`): a withdrawal refunds delivery only up to that, and `pickup` — collection, not

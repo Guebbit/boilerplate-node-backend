@@ -400,16 +400,6 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | -------------------------- | ----------------- | ------- | ----- | ------------------------------------------------------------ |
 | `NODE_CART_RETENTION_DAYS` | whole number >= 1 | `365`   | —     | Days an untouched cart is kept. Changing it needs `db:sync`. |
 
-### delivery
-
-| Variable                      | Type | Default | Rules | What it does                              |
-| ----------------------------- | ---- | ------- | ----- | ----------------------------------------- |
-| `NODE_RETURN_ADDRESS_NAME`    | text | —       | —     | Who the return parcel is addressed to.    |
-| `NODE_RETURN_ADDRESS_STREET`  | text | —       | —     | Return address street.                    |
-| `NODE_RETURN_ADDRESS_CITY`    | text | —       | —     | Return address city.                      |
-| `NODE_RETURN_ADDRESS_ZIP`     | text | —       | —     | Return address postal code.               |
-| `NODE_RETURN_ADDRESS_COUNTRY` | text | —       | —     | Return address country, ISO-3166 alpha-2. |
-
 ### feedback
 
 | Variable                       | Type              | Default | Rules | What it does                                                          |
@@ -427,14 +417,9 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### invoicing
 
-| Variable                   | Type | Default | Rules | What it does                                                         |
-| -------------------------- | ---- | ------- | ----- | -------------------------------------------------------------------- |
-| `NODE_SHOP_LEGAL_NAME`     | text | —       | —     | The shop’s legal name, printed on the invoice.                       |
-| `NODE_SHOP_VAT_NUMBER`     | text | —       | —     | VAT identification number. Unset prints none rather than a fake one. |
-| `NODE_SHOP_STREET`         | text | —       | —     | The shop’s street address (Art. 226(f)).                             |
-| `NODE_SHOP_CITY`           | text | —       | —     | The shop’s city.                                                     |
-| `NODE_SHOP_ZIP`            | text | —       | —     | The shop’s postal code.                                              |
-| `NODE_EINVOICING_PROVIDER` | text | `pdf`   | —     | The e-invoicing implementation. Only `pdf` ships.                    |
+| Variable                   | Type | Default | Rules | What it does                                      |
+| -------------------------- | ---- | ------- | ----- | ------------------------------------------------- |
+| `NODE_EINVOICING_PROVIDER` | text | `pdf`   | —     | The e-invoicing implementation. Only `pdf` ships. |
 
 ### locales-tenants
 
@@ -454,20 +439,33 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### orders
 
-| Variable                                  | Type                 | Default       | Rules                   | What it does                                                                              |
-| ----------------------------------------- | -------------------- | ------------- | ----------------------- | ----------------------------------------------------------------------------------------- |
-| `NODE_SHOP_COUNTRY`                       | text                 | —             | required, 1+ characters | The shop’s own country, ISO-3166: the only jurisdiction VAT is charged at.                |
-| `NODE_SHIP_TO_COUNTRIES`                  | comma-separated list | `empty`       | —                       | Countries a physical order may ship to, ISO-3166, comma-separated. Unset: the shop’s own. |
-| `NODE_DEFAULT_CURRENCY`                   | text                 | `EUR`         | —                       | The one ISO-4217 currency this shop trades in.                                            |
-| `NODE_BANK_TRANSFER_BENEFICIARY`          | text                 | —             | —                       | Account name a transfer is made out to. Unset with the IBAN: transfer is not offered.     |
-| `NODE_BANK_TRANSFER_IBAN`                 | text                 | —             | —                       | Account IBAN, validated at boot.                                                          |
-| `NODE_BANK_TRANSFER_BIC`                  | text                 | —             | —                       | Account BIC/SWIFT. Optional.                                                              |
-| `NODE_BANK_TRANSFER_HOLD_HOURS`           | whole number >= 1    | `168`         | —                       | Hours stock is held for an unpaid transfer order.                                         |
-| `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT` | whole number >= 0    | `2`           | —                       | Pending transfer orders one account may hold at once.                                     |
-| `NODE_ORDER_EFFECT_RETRY_MINUTES`         | whole number >= 0    | `5`           | —                       | Grace before the sweep retries a cancelled order’s refund.                                |
-| `NODE_WITHDRAWAL_PERIOD_DAYS`             | whole number >= 14   | `14`          | —                       | Days a consumer may withdraw. 14 is the legal floor (CRD Art. 9).                         |
-| `NODE_ORDER_PII_RETENTION_DAYS`           | whole number >= 1    | `3650`        | —                       | Days before a terminal order’s personal data is erased.                                   |
-| `NODE_FRONTEND_LINK_ORDER`                | text                 | `orders/{id}` | —                       | Template of the link to an order page.                                                    |
+| Variable                                  | Type                  | Default       | Rules                   | What it does                                                                              |
+| ----------------------------------------- | --------------------- | ------------- | ----------------------- | ----------------------------------------------------------------------------------------- |
+| `NODE_SHOP_COUNTRY`                       | text                  | —             | required, 1+ characters | The shop’s own country, ISO-3166: the only jurisdiction VAT is charged at.                |
+| `NODE_SHOP_LEGAL_NAME`                    | text                  | —             | required, 1+ characters | The shop’s legal name, printed on invoices and the withdrawal notice.                     |
+| `NODE_SHOP_VAT_NUMBER`                    | text                  | —             | —                       | VAT identification number. Unset prints none rather than a fake one.                      |
+| `NODE_SHOP_STREET`                        | text                  | —             | required, 1+ characters | The shop’s street address (invoice Art. 226(f); CRD Art. 6(1)(c)).                        |
+| `NODE_SHOP_CITY`                          | text                  | —             | required, 1+ characters | The shop’s city.                                                                          |
+| `NODE_SHOP_ZIP`                           | text                  | —             | required, 1+ characters | The shop’s postal code.                                                                   |
+| `NODE_SHOP_EMAIL`                         | email address         | —             | required, 1+ characters | The address a customer writes to (CRD Art. 6(1)(c)). Not the no-reply sender.             |
+| `NODE_SHOP_PHONE`                         | text                  | —             | required, 1+ characters | The shop’s telephone number (CRD Art. 6(1)(c), since the Omnibus Directive).              |
+| `NODE_RETURN_ADDRESS_NAME`                | text                  | —             | —                       | Who the return parcel is addressed to.                                                    |
+| `NODE_RETURN_ADDRESS_STREET`              | text                  | —             | —                       | Return address street.                                                                    |
+| `NODE_RETURN_ADDRESS_CITY`                | text                  | —             | —                       | Return address city.                                                                      |
+| `NODE_RETURN_ADDRESS_ZIP`                 | text                  | —             | —                       | Return address postal code.                                                               |
+| `NODE_RETURN_ADDRESS_COUNTRY`             | text                  | —             | —                       | Return address country, ISO-3166 alpha-2.                                                 |
+| `NODE_RETURN_POSTAGE_PAYER`               | one of consumer, shop | `consumer`    | —                       | Who bears the direct cost of returning goods. Drives the withdrawal wording.              |
+| `NODE_SHIP_TO_COUNTRIES`                  | comma-separated list  | `empty`       | —                       | Countries a physical order may ship to, ISO-3166, comma-separated. Unset: the shop’s own. |
+| `NODE_DEFAULT_CURRENCY`                   | text                  | `EUR`         | —                       | The one ISO-4217 currency this shop trades in.                                            |
+| `NODE_BANK_TRANSFER_BENEFICIARY`          | text                  | —             | —                       | Account name a transfer is made out to. Unset with the IBAN: transfer is not offered.     |
+| `NODE_BANK_TRANSFER_IBAN`                 | text                  | —             | —                       | Account IBAN, validated at boot.                                                          |
+| `NODE_BANK_TRANSFER_BIC`                  | text                  | —             | —                       | Account BIC/SWIFT. Optional.                                                              |
+| `NODE_BANK_TRANSFER_HOLD_HOURS`           | whole number >= 1     | `168`         | —                       | Hours stock is held for an unpaid transfer order.                                         |
+| `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT` | whole number >= 0     | `2`           | —                       | Pending transfer orders one account may hold at once.                                     |
+| `NODE_ORDER_EFFECT_RETRY_MINUTES`         | whole number >= 0     | `5`           | —                       | Grace before the sweep retries a cancelled order’s refund.                                |
+| `NODE_WITHDRAWAL_PERIOD_DAYS`             | whole number >= 14    | `14`          | —                       | Days a consumer may withdraw. 14 is the legal floor (CRD Art. 9).                         |
+| `NODE_ORDER_PII_RETENTION_DAYS`           | whole number >= 1     | `3650`        | —                       | Days before a terminal order’s personal data is erased.                                   |
+| `NODE_FRONTEND_LINK_ORDER`                | text                  | `orders/{id}` | —                       | Template of the link to an order page.                                                    |
 
 ### payments
 
@@ -485,12 +483,6 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | ----------------------- | ------------- | ------- | ----------------------- | ---------------------------------------------------------- |
 | `NODE_VAT_RATE_DEFAULT` | decimal 0..<1 | `0.22`  | required, 1+ characters | The VAT rate of a product with no tax class (0.22 is 22%). |
 | `NODE_VAT_RATE_REDUCED` | decimal 0..<1 | `0.1`   | required, 1+ characters | The VAT rate of a product whose tax class is `reduced`.    |
-
-### returns
-
-| Variable                    | Type                  | Default    | Rules | What it does                                                                 |
-| --------------------------- | --------------------- | ---------- | ----- | ---------------------------------------------------------------------------- |
-| `NODE_RETURN_POSTAGE_PAYER` | one of consumer, shop | `consumer` | —     | Who bears the direct cost of returning goods. Drives the withdrawal wording. |
 
 ### webhooks
 

@@ -21,15 +21,15 @@ import {
     orderService,
     orderCurrency,
     isBeforeDispatch,
-    isExcludedFromWithdrawal
+    isExcludedFromWithdrawal,
+    returnAddress,
+    returnPostagePayer
 } from '@modules/orders';
-import { returnAddress } from '@modules/delivery';
 import type { OrderDocument } from '@modules/orders';
 import type { AuthContext, CallerContext, Order } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
-import { returnPostagePayer } from '../config';
 import { returnsAuditActions } from '../audit';
 import { RETURN_REQUESTED } from '../events';
 import {
@@ -222,9 +222,7 @@ const announceOpened = (
                     at: created.createdAt ?? new Date(),
                     // A withdrawal is approved from the start, so the customer is told where to send the
                     // goods in the same mail; any other reason hears it once staff approve.
-                    ...(created.reason === 'withdrawal' && returnAddress()
-                        ? { returnAddress: returnAddress() }
-                        : {})
+                    ...(created.reason === 'withdrawal' ? { returnAddress: returnAddress() } : {})
                 }
             )
         )
