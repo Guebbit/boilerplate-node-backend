@@ -14,7 +14,12 @@ import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { CartItem, CartShipping } from '@types';
-import { SHIPPING_METHODS, methodFitsWeight, priceShipping } from '@modules/delivery';
+import {
+    SHIPPING_METHODS,
+    methodFitsWeight,
+    priceShipping,
+    type StaticShippingMethod
+} from '@modules/delivery';
 import type { CartDocument } from '../model';
 import { basketWeight, needsShipping } from '../domain';
 
@@ -83,32 +88,62 @@ export const readCartLines = (cart: CartDocument | null): Promise<CartLine[]> =>
 };
 
 /**
+ * What a shipping method costs this basket: the flat rate, or nothing once the basket's whole
+ * items total reaches the method's `freeAbove`. Every line counts, digital ones included (the
+ * Shopify and WooCommerce rule), and the cart's quote and checkout's charge both come from here so
+ * they cannot disagree.
+ *
+ * @param method - the method being priced
+ * @param lines - the basket's lines, cart lines or an order's frozen ones
+ * @param currency - the ISO-4217 code the lines are priced in
+ */
+export const shippingPriceFor = (
+    method: StaticShippingMethod,
+    lines: Parameters<typeof sumLineItems>[0],
+    currency: string
+): number => priceShipping(method, sumLineItems(lines, currency).price);
+
+/**
  * What this basket needs from shipping, and every method that currently fits it, each priced
- * against `itemsTotal` through delivery's own {@link priceShipping} — so this list and what
- * checkout would charge can never disagree. Empty options for a basket that needs no shipping at
- * all: `CART_SHIPPING_NOT_APPLICABLE` is what `cartShippingMethodSet` refuses a choice with in
- * that case, so nothing here would ever be a legal pick.
+ * through {@link shippingPriceFor} — so this list and what checkout would charge can never
+ * disagree. Empty options for a basket that needs no shipping at all: `CART_SHIPPING_NOT_APPLICABLE`
+ * is what `cartShippingMethodSet` refuses a choice with in that case, so nothing here would ever be
+ * a legal pick.
  * @param joined - the basket's lines, already narrowed to ones whose product resolved
- * @param itemsTotal - the basket's lines total, compared against each method's `freeAbove`
  * @returns the fitting, priced options, and whether choosing one is required at all
  */
-const shippingOptionsFor = (
-    joined: JoinedCartLine[],
-    itemsTotal: number
+export const shippingOptionsFor = (
+    joined: JoinedCartLine[]
 ): Pick<CartShipping, 'required' | 'options'> => {
     if (!needsShipping(joined)) return { required: false, options: [] };
 
     const weight = basketWeight(joined);
+    const currency = shopCurrency();
     const options = SHIPPING_METHODS.filter((method) => methodFitsWeight(method, weight)).map(
         (method) => ({
             id: method.id,
-            price: priceShipping(method, itemsTotal),
+            price: shippingPriceFor(method, joined, currency),
             requiresAddress: method.requiresAddress,
             tracked: method.tracked
         })
     );
     return { required: true, options };
 };
+
+/**
+ * The method a cart's stored choice actually stands for. A choice that is not among the basket's
+ * fitting options counts as none: the basket may have gone digital-only, lost its last physical
+ * line or outgrown the method since it was set. The one rule the cart's view and checkout share.
+ *
+ * @param stored - the id stored on the cart, if any
+ * @param options - the basket's fitting options, from {@link shippingOptionsFor}
+ * @returns the stored id when it still fits, otherwise `null`
+ */
+export const effectiveShippingChoice = (
+    stored: string | undefined,
+    options: CartShipping['options']
+): string | null =>
+    stored !== undefined && options.some((option) => option.id === stored) ? stored : null;
 
 /**
  * Turn a cart document into the response the contract declares.
@@ -123,14 +158,8 @@ export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
         const currency = shopCurrency();
         const { count, quantity, price } = sumLineItems(lines, currency);
         const joined = lines.filter((line) => isJoined(line));
-        const { required, options } = shippingOptionsFor(joined, price);
-        // The stored choice reads back as `null` once it no longer names one of the fitting
-        // options — the basket may have changed weight or gone digital-only since it was set.
-        const selected =
-            cart?.shippingMethodId !== undefined &&
-            options.some((option) => option.id === cart.shippingMethodId)
-                ? cart.shippingMethodId
-                : null;
+        const { required, options } = shippingOptionsFor(joined);
+        const selected = effectiveShippingChoice(cart?.shippingMethodId, options);
         const shippingCost = options.find((option) => option.id === selected)?.price ?? 0;
         return {
             items: lines.map(({ productId, quantity: lineQuantity }) => ({

@@ -27,10 +27,10 @@ and no order exists yet.
 flowchart TD
     A["1 · load the account<br/><i>users</i>"] --> P["2 · validate the payment method<br/><i>payments — listPaymentMethods</i>"]
     P --> Q["3 · the open-transfer cap<br/><i>orders — countOpenBankTransfers</i>"]
-    Q --> B["4 · resolve the shipping method<br/><i>delivery — pure function</i>"]
+    Q --> B["4 · resolve the shipping method<br/>a stored choice the basket no longer fits counts as none<br/><i>cart — effectiveShippingChoice</i>"]
     B --> C["5 · resolve the address,<br/>only when the method needs one<br/><i>account — addressForCheckout</i>"]
     C --> D["6 · join the lines against the catalogue<br/><i>products</i>"]
-    D --> E["7 · evaluate the rules,<br/>the method/address requirement,<br/>and the method's weight range<br/><i>cart/domain — evaluateShippingRequirement, basketWeight</i>"]
+    D --> E["7 · evaluate the rules<br/>and the method/address requirement<br/><i>cart/domain — evaluateShippingRequirement</i>"]
     E --> F["8 · placeOrder<br/><i>orders — freeze lines, hold stock,<br/>invoice number, mint transfer reference, write</i>"]
     F --> H["9 · empty the cart, conditionally<br/><i>cart — on the __v it was read at</i>"]
     H --> I["10 · queue the email<br/><i>orders picks confirmation vs. transfer<br/>instructions off the order's paymentMethod</i>"]
@@ -39,10 +39,9 @@ flowchart TD
     A -.->|"no account"| R
     P -.->|"method not offered"| R
     Q -.->|"cap reached"| R
-    B -.->|"unknown method"| R
-    C -.->|"not the caller's address;<br/>or an addressId sent for a<br/>method that needs none"| R
+        C -.->|"not the caller's address;<br/>or an addressId sent for a<br/>method that needs none"| R
     D -.->|"product gone"| R
-    E -.->|"rule says no; a physical basket<br/>with no method, or an address-requiring<br/>method with none; or the basket<br/>doesn't fit the chosen method's<br/>weight range"| R
+    E -.->|"rule says no; a physical basket<br/>with no method, or an address-requiring<br/>method with none"| R
     F -.->|"stock gone"| R
 
     L["lost the race — retract"]
@@ -65,12 +64,14 @@ that needs none is refused (`CART_ADDRESS_NOT_APPLICABLE`) rather than silently 
 order never freezes an address that means nothing. Step 7 also carries the shipping
 requirement: any `requiresShipping: true` line needs a method (`CART_SHIPPING_METHOD_REQUIRED`
 otherwise), and once a method is chosen, `ShippingMethod.requiresAddress` says whether it also needs
-an address (`CART_ADDRESS_REQUIRED` otherwise) — a digital-only basket needs neither. The weight
-check is the authoritative one: `GET /delivery/methods?weight=` (used to build the selector) is
-advisory only, computed client-side from whatever the caller last summed — this step re-sums the
-joined lines' real `weight` server-side and refuses a chosen method the basket doesn't actually fit
-(`CART_SHIPPING_METHOD_WEIGHT`), so a stale or omitted query value on the list can never buy a
-method that list would have hidden. **Step 8 is not checkout's write —
+an address (`CART_ADDRESS_REQUIRED` otherwise) — a digital-only basket needs neither. Step 4 reads the
+cart's stored choice through the same rule `GET /cart` uses (`effectiveShippingChoice`): a choice
+that is not among the basket's fitting options (gone digital-only, lost its last physical line,
+outgrown the method's weight range) counts as none, so a leftover choice never refuses a basket it
+no longer describes; a physical basket left with none is refused at step 7. Checkout also forgets
+the stored choice once the order stands. The free-shipping line is priced on the whole basket,
+digital lines included, by the one function (`shippingPriceFor`) the cart's quote and the order's
+charge both call. **Step 8 is not checkout's write —
 it's checkout handing everything it resolved to [`orders`'](./orders.md) `placeOrder`**, the one
 function every order (this checkout, the admin's own `POST /orders`) is written through. Checkout
 never freezes a line, allocates an invoice number, or mints a `bank_transfer` reference itself; it

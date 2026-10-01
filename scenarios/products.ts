@@ -145,6 +145,32 @@ const NAMED_PRODUCT_COPY: Record<keyof typeof SEED_PRODUCT_IDS, ProductCopy> = {
                 'Un corso video a ritmo libero sulle prime dodici settimane di addestramento del cucciolo. ' +
                 'Consegna esclusivamente digitale — non viene spedito nulla.'
         }
+    },
+    bowlLowStock: {
+        en: {
+            title: 'Limited-Edition Brass Pet Bowl',
+            description:
+                'A hand-finished brass bowl from a single small batch. One left on the shelf.'
+        },
+        it: {
+            title: 'Ciotola in Ottone Edizione Limitata',
+            description:
+                'Una ciotola in ottone rifinita a mano, da un unico piccolo lotto. Ne resta una sola.'
+        }
+    },
+    bowlNoWithdrawal: {
+        en: {
+            title: 'Hand-Painted Personalised Pet Bowl',
+            description:
+                'A ceramic bowl painted with the pet’s name. Made to order, so it cannot be ' +
+                'returned or withdrawn from.'
+        },
+        it: {
+            title: 'Ciotola Personalizzata Dipinta a Mano',
+            description:
+                'Una ciotola in ceramica dipinta con il nome dell’animale. Realizzata su ordinazione, ' +
+                'quindi non può essere restituita né annullata con recesso.'
+        }
     }
 };
 
@@ -255,6 +281,33 @@ const namedProducts = [
         categories: ['dogs', 'training'],
         tags: ['digital', 'training'],
         requiresShipping: false
+    }),
+    /*
+     * The last-unit one — opens with a single unit on the shelf (see {@link OPENING_STOCK}) and
+     * belongs to no seeded order, so one checkout holds it and a second shopper is refused.
+     */
+    makeUnstockedProduct({
+        id: SEED_PRODUCT_IDS.bowlLowStock,
+        title: NAMED_PRODUCT_COPY.bowlLowStock.en.title,
+        description: NAMED_PRODUCT_COPY.bowlLowStock.en.description,
+        price: 24,
+        categories: ['dogs', 'limited-edition'],
+        tags: ['bowl', 'limited'],
+        weight: 400
+    }),
+    /*
+     * The made-to-order one — `noWithdrawal` (EU Art. 16(c), personalised goods), physical and
+     * under standard's free-shipping line, so a cart of it still pays for delivery.
+     */
+    makeUnstockedProduct({
+        id: SEED_PRODUCT_IDS.bowlNoWithdrawal,
+        title: NAMED_PRODUCT_COPY.bowlNoWithdrawal.en.title,
+        description: NAMED_PRODUCT_COPY.bowlNoWithdrawal.en.description,
+        price: 80,
+        categories: ['dogs', 'personalised'],
+        tags: ['bowl', 'personalised'],
+        weight: 900,
+        noWithdrawal: true
     })
 ];
 
@@ -295,6 +348,8 @@ const OPENING_STOCK: ReadonlyMap<string, number> = new Map([
     [SEED_PRODUCT_IDS.bundleInactive, 18],
     [SEED_PRODUCT_IDS.barebones, 9],
     [SEED_PRODUCT_IDS.puppyCourseDigital, 50],
+    [SEED_PRODUCT_IDS.bowlLowStock, 1],
+    [SEED_PRODUCT_IDS.bowlNoWithdrawal, 20],
     ...FILLER_PRODUCTS.map(
         (product, index) => [fillerProductId(index), product.openingStock] as const
     )

@@ -257,7 +257,13 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
             .findOneAndUpdate(
                 /* `__v` below is Mongoose's version key; the name belongs to the driver. */
                 { userId: toObjectId(userId), __v: version },
-                { $set: { items: [] }, $inc: { __v: 1 } },
+                {
+                    $set: { items: [] },
+                    // The choice was for the basket just bought; a stale one would otherwise
+                    // outlive it and meet the next, different basket.
+                    $unset: { shippingMethodId: '' },
+                    $inc: { __v: 1 }
+                },
                 /*
                  * `timestamps: false`, unlike `clearLines` above: this clear is checkout's own
                  * side effect, not something the shopper did to their cart, so it should not make

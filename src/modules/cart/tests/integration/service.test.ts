@@ -798,28 +798,29 @@ describe('orderConfirm', () => {
     });
 
     /*
-     * E16(1): the free-above threshold prices only what ships — a digital line's price must not
-     * count toward "spend enough for free shipping" when it never needed shipping at all.
+     * The free-above rule counts the whole basket, digital lines included (Shopify, WooCommerce):
+     * the cart's quote and the order's charge read one function, so they cannot disagree.
      */
-    it('never counts a digital line toward the free-above-a-threshold rule', async () => {
+    it('counts every line, digital ones too, toward the free-above-a-threshold rule', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `standard` requires one
-        // The digital line alone (150) would clear `standard`'s 100 threshold; the physical
-        // line alone (10) does not. Only the physical line may count.
         const digital = await createProduct({ price: 150, requiresShipping: false });
         const physical = await createProduct({ price: 10 });
         await cartItemSetById(user.id, String(digital._id), 1);
         await cartItemSetById(user.id, String(physical._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'standard');
+        const quoted = await cartGetForBadge(user.id);
         const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
         const order = await findOrder({ userId: user._id });
-        expect(order!.shippingCost).toBe(5);
+        expect(order!.shippingCost).toBe(0);
+        // The cart quoted what the order charged.
+        expect(quoted.summary.shippingCost).toBe(order!.shippingCost);
     });
 
-    it('refuses an unknown shipping method before anything is written', async () => {
+    it('reads a stored method nobody offers as none, refusing a physical basket before anything is written', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5 });
         await cartItemSetById(user.id, String(product._id), 2);
@@ -827,8 +828,8 @@ describe('orderConfirm', () => {
         await cartRepository.setShippingMethod(user.id, 'teleport');
         const result = await orderConfirm(user.id, testCallerContext, undefined);
 
-        expect(asReject(result).status).toBe(404);
-        expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_NOT_FOUND');
+        expect(asReject(result).status).toBe(422);
+        expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_REQUIRED');
         // Nothing moved: no order, full shelf, full cart.
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
         const stored = await productService.findByIdRaw(String(product._id));
@@ -868,7 +869,7 @@ describe('orderConfirm', () => {
         expect(order!.shippingCost).toBe(0);
     });
 
-    it('refuses a shipping method for a cart made entirely of digital products', async () => {
+    it('buys a cart made entirely of digital products even with a method still stored, and orders no shipping', async () => {
         const user = await createUser();
         const ebook = await createProduct({ requiresShipping: false });
         await cartItemSetById(user.id, String(ebook._id), 1);
@@ -876,9 +877,42 @@ describe('orderConfirm', () => {
         await cartRepository.setShippingMethod(user.id, 'standard');
         const result = await orderConfirm(user.id, testCallerContext, undefined);
 
-        expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_NOT_APPLICABLE');
-        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+        expect(result.success).toBe(true);
+        const order = await findOrder({ userId: user._id });
+        expect(order!.shippingMethod).toBeUndefined();
+        expect(order!.shippingCost).toBeUndefined();
+    });
+
+    it('forgets the chosen method once the order is placed, so the next basket starts with none', async () => {
+        const user = await createUser();
+        await giveUserAnAddress(user.id);
+        const physical = await createProduct();
+        await cartItemSetById(user.id, String(physical._id), 1);
+        await cartRepository.setShippingMethod(user.id, 'standard');
+        await orderConfirm(user.id, testCallerContext, undefined);
+
+        const cart = await cartRepository.findByUserId(user.id);
+        expect(cart!.shippingMethodId).toBeUndefined();
+
+        const ebook = await createProduct({ requiresShipping: false });
+        await cartItemSetById(user.id, String(ebook._id), 1);
+        const second = await orderConfirm(user.id, testCallerContext, undefined);
+        expect(second.success).toBe(true);
+    });
+
+    it('buys the digital line that is left after the last physical one is removed', async () => {
+        const user = await createUser();
+        await giveUserAnAddress(user.id);
+        const physical = await createProduct();
+        const ebook = await createProduct({ requiresShipping: false });
+        await cartItemSetById(user.id, String(physical._id), 1);
+        await cartItemSetById(user.id, String(ebook._id), 1);
+        await cartRepository.setShippingMethod(user.id, 'standard');
+        await cartItemRemoveById(user.id, String(physical._id), testCallerContext);
+
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
+
+        expect(result.success).toBe(true);
     });
 
     it('refuses a physical basket with no shipping method at all', async () => {
@@ -960,7 +994,7 @@ describe('orderConfirm', () => {
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 
-    it('refuses a shipping method the basket is too heavy for', async () => {
+    it('reads a stored method the basket is too heavy for as none, and asks for another', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `express` requires one
         // Express's ceiling is 5000g; two of these clear it.
@@ -970,8 +1004,8 @@ describe('orderConfirm', () => {
         await cartRepository.setShippingMethod(user.id, 'express');
         const result = await orderConfirm(user.id, testCallerContext, undefined);
 
-        expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_WEIGHT');
+        expect(asReject(result).status).toBe(422);
+        expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_REQUIRED');
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 

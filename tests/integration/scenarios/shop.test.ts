@@ -159,6 +159,22 @@ describe('each subject names a row that really has the property', () => {
         expect(product?.active).toBe(true);
     });
 
+    it('product.lowStock has exactly one unit free and nothing held against it', async () => {
+        const product = await productModel.findById(subjects['product.lowStock']).exec();
+        expect(presentProduct(product!).available).toBe(1);
+        // No seeded order holds it: the one unit is the test's to take.
+        expect(product?.reserved).toBe(0);
+        expect(product?.active).toBe(true);
+    });
+
+    it('product.noWithdrawal is physical, in stock and flagged as carrying no right of withdrawal', async () => {
+        const product = await productModel.findById(subjects['product.noWithdrawal']).exec();
+        expect(product?.noWithdrawal).toBe(true);
+        expect(product?.requiresShipping).not.toBe(false);
+        expect(presentProduct(product!).available).toBeGreaterThan(0);
+        expect(product?.active).toBe(true);
+    });
+
     it('the catalogue carries the VAT and shipping data the journeys need', async () => {
         const reduced = await productModel.countDocuments({ taxClass: 'reduced' }).exec();
         const zeroRated = await productModel

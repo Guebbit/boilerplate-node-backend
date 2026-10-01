@@ -106,6 +106,12 @@ next transition on that product to correct, the same tolerance
 [`commitForOrder`](#the-pipeline) already applies to a refused counter write elsewhere in this file
 — never a reason to fail the transition that already committed.
 
+The same sync also clears the `products` response-cache tag, because the product page and the
+lists carry `available`: every stock write (receipt, adjustment, hold, release, both sweeps, a
+return's restock) ends in `syncStockCache`, so one call covers routes, jobs and webhooks alike.
+`GET /products/:id` is also `browserRevalidate`, so a browser checks first instead of keeping the
+page for an hour — see [Redis cache](../tools/redis-cache.md).
+
 One consequence worth naming: this module keeps importing `products` (for a shortfall's title, and
 now for the cache sync) exactly as it does today. Nothing about this decision reverses that edge —
 only `products → inventory` would be a cycle, and nothing here creates it.
