@@ -476,6 +476,9 @@ describe('replay', () => {
         expect(exhausted?.status).toBe('exhausted');
         if (!exhausted) throw new Error('unreachable — asserted above');
         const attemptBeforeReplay = exhausted.attempt;
+        // The failure the replay is about to put right: its error and response code are on the row.
+        expect(exhausted.error).toBeDefined();
+        expect(exhausted.responseCode).toBe(500);
 
         const liveServer = await startHttpsTestServer((response) =>
             response.writeHead(200).end('ok')
@@ -496,6 +499,24 @@ describe('replay', () => {
         const stored = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(stored?.status).toBe('succeeded');
         expect(stored?.responseCode).toBe(200);
+        // A succeeded delivery carries no error: the failure it replaced is not left on the row.
+        expect(stored?.error).toBeUndefined();
+    });
+
+    it('a replay that cannot connect leaves no response code from the attempt before it', async () => {
+        const server = await startHttpsTestServer((response) => response.writeHead(500).end());
+        const subscription = await createSubscription(`${server.url}/hook`);
+        const job = await createPendingDelivery(subscription);
+        await processDeliveryJob({ deliveryId: job.deliveryId });
+        const afterServerError = await webhookDeliveryRepository.findById(job.deliveryId);
+        expect(afterServerError?.responseCode).toBe(500);
+
+        await server.close();
+        await replayDelivery(job.deliveryId, context);
+
+        const stored = await webhookDeliveryRepository.findById(job.deliveryId);
+        expect(stored?.error).toBeDefined();
+        expect(stored?.responseCode).toBeUndefined();
     });
 
     it('a replayed attempt that fails advances `attempt` by exactly one, matching a non-replayed failure at the same starting attempt', async () => {
