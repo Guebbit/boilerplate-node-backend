@@ -70,6 +70,14 @@ Object.assign(process.env, SCRIPTED_RATE_LIMITS);
 process.env.NODE_MAIL_TRANSPORT = 'log';
 
 /*
+ * The broker off for this process, so an email job runs INLINE through the `log` transport above.
+ * With a broker reachable the job is published instead, and whichever consumer is listening —
+ * a live backend, with its real SMTP transport — sends the seed's several dozen mails to the
+ * fictional recipients, which also fills a live e2e run's mailbox after it was emptied.
+ */
+process.env.NODE_RABBITMQ_ENABLED = '0';
+
+/*
  * Applied only where nothing is set, unlike the budgets above: a deployment that names its own
  * beneficiary keeps it, and one that names none still gets a shop whose `order.awaitingTransfer`
  * guarantee can hold.
