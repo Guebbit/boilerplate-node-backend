@@ -119,7 +119,9 @@ roles:
           Stock, and getting parcels out of the door. Records movements and advances consignments;
           may not change what a thing costs or delete it from the catalogue.
       permissions:
-          - products.self.read
+          # The wide read, drafts included: the stock form's product picker must list a product
+          # that is not published yet. Read only — price and delete stay the manager's.
+          - products.any.read
           # The fix this plan exists for: packing an order that is never the warehouse operator's
           # own needs the WIDE read, not the narrow one `orders.self.read` would give.
           - orders.any.read
