@@ -20,7 +20,8 @@ const CATALOGUE: CatalogueEntry[] = [
         name: 'account',
         pages: [{ stem: 'account-sessions', title: 'Sessions' }]
     }),
-    entry({ name: 'cart', group: 'shop' })
+    entry({ name: 'cart', group: 'shop' }),
+    entry({ name: 'example', group: 'example' })
 ];
 
 describe('renderModuleList', () => {
@@ -39,6 +40,14 @@ describe('renderModuleList', () => {
         );
     });
 
+    it('lists the example module last, linked to the section that explains it rather than to a page', () => {
+        expect(list.indexOf('### Example')).toBeGreaterThan(list.indexOf('### Demo shop'));
+        expect(list).toContain(
+            '- [`example`](../theory/modules.md#the-module-template) — example summary.'
+        );
+        expect(list).not.toContain('./example.md');
+    });
+
     it('omits a group with no modules, so a stripped shop leaves no empty heading', () => {
         expect(
             renderModuleList(CATALOGUE.filter(({ group }) => group === 'foundation'))
@@ -50,7 +59,12 @@ describe('moduleSidebar', () => {
     const sidebar = moduleSidebar(CATALOGUE);
 
     it('opens with the overview, then one section per group', () => {
-        expect(sidebar.map(({ text }) => text)).toEqual(['Overview', 'Foundation', 'Demo shop']);
+        expect(sidebar.map(({ text }) => text)).toEqual([
+            'Overview',
+            'Foundation',
+            'Demo shop',
+            'Example'
+        ]);
     });
 
     it('nests a module’s deeper pages under it', () => {
@@ -68,5 +82,15 @@ describe('moduleSidebar', () => {
             text: 'cart',
             link: '/modules/cart'
         });
+    });
+});
+
+describe('moduleSidebar for the example module', () => {
+    it('points at the theory section, since the example has no page of its own', () => {
+        const sidebar = moduleSidebar(CATALOGUE);
+
+        expect(sidebar[3].items).toEqual([
+            { text: 'example', link: '/theory/modules#the-module-template' }
+        ]);
     });
 });

@@ -103,7 +103,7 @@ const moduleCouplingRules = MODULE_NAMES.map((name) => {
 });
 
 /**
- * `{ moduleName: 'foundation' | 'shop' }`, read from each module's own `module.yaml#group` —
+ * `{ moduleName: 'foundation' | 'shop' | 'example' }`, read from each module's own `module.yaml#group` —
  * DDD-D1. Fails closed the same way `MODULE_EDGES` does: a module folder with no descriptor, or
  * whose `group` is missing or spelled wrong, throws naming the offending file rather than quietly
  * leaving the line unenforced for it.
@@ -115,8 +115,8 @@ const MODULE_GROUP = Object.fromEntries(
             throw new Error(`${descriptorPath}: missing — every module needs a group`);
 
         const group = parseYaml(fs.readFileSync(descriptorPath, 'utf8'))?.group;
-        if (group !== 'foundation' && group !== 'shop')
-            throw new Error(`${descriptorPath}: "group" must be "foundation" or "shop"`);
+        if (group !== 'foundation' && group !== 'shop' && group !== 'example')
+            throw new Error(`${descriptorPath}: "group" must be "foundation", "shop" or "example"`);
 
         return [name, group];
     })
@@ -125,6 +125,7 @@ const MODULE_GROUP = Object.fromEntries(
 /** Every module in each group, read off `MODULE_GROUP` rather than hand-listed, so relabelling a module in its own `module.yaml` is the only edit this rule ever needs. */
 const FOUNDATION_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'foundation');
 const SHOP_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'shop');
+const EXAMPLE_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'example');
 
 /** Every module that carries a `domain/` folder — read from disk, so a new one needs no edit here. */
 const DOMAIN_MODULES = MODULE_NAMES.filter((name) =>
@@ -244,6 +245,30 @@ module.exports = {
                 // reasoning), which reaches every module including the shop's. That is the test
                 // suite exercising the app, not a foundation module coupling itself to the shop.
                 pathNot: `^src/modules/(${FOUNDATION_MODULES.join('|')})/tests/`
+            },
+            to: { path: `^src/modules/(${SHOP_MODULES.join('|')})/`, reachable: true }
+        },
+
+        {
+            name: 'nothing-reaches-example',
+            comment:
+                'The `example` module exists only to be copied and deleted. If any other module could reach it, deleting it would break that module, and the lesson would turn into a dependency. A module that wants what `example` shows copies it; it does not import it. A co-located spec boots the whole app and is exempt for the same reason as in `foundation-cannot-reach-shop`.',
+            severity: 'error',
+            from: {
+                path: `^src/modules/(${[...FOUNDATION_MODULES, ...SHOP_MODULES].join('|')})/`,
+                pathNot: `^src/modules/(${[...FOUNDATION_MODULES, ...SHOP_MODULES].join('|')})/tests/`
+            },
+            to: { path: `^src/modules/(${EXAMPLE_MODULES.join('|')})/`, reachable: true }
+        },
+
+        {
+            name: 'example-cannot-reach-shop',
+            comment:
+                'The `example` module may use the foundation (it reads the owner from `users`) and nothing of the demo shop, so it survives `demo:remove` and stays a lesson in the module shape rather than in the shop.',
+            severity: 'error',
+            from: {
+                path: `^src/modules/(${EXAMPLE_MODULES.join('|')})/`,
+                pathNot: `^src/modules/(${EXAMPLE_MODULES.join('|')})/tests/`
             },
             to: { path: `^src/modules/(${SHOP_MODULES.join('|')})/`, reachable: true }
         },

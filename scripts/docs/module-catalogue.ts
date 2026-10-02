@@ -44,14 +44,33 @@ export const GROUPS: readonly {
     {
         group: 'foundation',
         heading: 'Foundation',
-        blurb: 'Ships with every deployment, whatever the project becomes. Copy `feedback` to start a new module.'
+        blurb: 'Ships with every deployment, whatever the project becomes.'
     },
     {
         group: 'shop',
         heading: 'Demo shop',
         blurb: 'The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in the foundation may depend on it, and `npm run demo:remove` deletes it.'
+    },
+    {
+        group: 'example',
+        heading: 'Example',
+        blurb: 'The module to copy when you start a new domain. Nothing depends on it, and it is deleted once you have your own.'
     }
 ];
+
+/**
+ * The section of the theory page that explains the `example` module, which has no page of its own.
+ * Relative to `docs/`.
+ */
+const TEMPLATE_SECTION = 'theory/modules.md#the-module-template';
+
+/**
+ * The docs link of one module, relative to `docs/modules/`: its own page, or for the `example`
+ * group the section that explains it.
+ * @param entry - the module
+ */
+const pageLinkOf = (entry: CatalogueEntry): string =>
+    entry.group === 'example' ? `../${TEMPLATE_SECTION}` : `./${entry.name}.md`;
 
 /** First `# ` heading of a Markdown file, falling back to the file stem. */
 const titleOf = (file: string, fallback: string): string =>
@@ -103,7 +122,7 @@ const bullet = (entry: CatalogueEntry): string => {
         entry.pages.length > 0
             ? ` Deeper: ${entry.pages.map((page) => `[${page.title}](./${page.stem}.md)`).join(', ')}.`
             : '';
-    return `- [\`${entry.name}\`](./${entry.name}.md) — ${entry.summary}${deeper}`;
+    return `- [\`${entry.name}\`](${pageLinkOf(entry)}) — ${entry.summary}${deeper}`;
 };
 
 /**
@@ -151,7 +170,10 @@ export const moduleSidebar = (entries: readonly CatalogueEntry[]): SidebarSectio
                 collapsed: false,
                 items: members.map((entry) => ({
                     text: entry.name,
-                    link: `/modules/${entry.name}`,
+                    link:
+                        entry.group === 'example'
+                            ? `/${TEMPLATE_SECTION.replace('.md', '')}`
+                            : `/modules/${entry.name}`,
                     ...(entry.pages.length > 0
                         ? {
                               items: entry.pages.map((page) => ({
