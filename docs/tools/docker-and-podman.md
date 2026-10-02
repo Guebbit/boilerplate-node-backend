@@ -102,6 +102,8 @@ on the host clearly shows, raised from inside `/app`.
 
 ### Observability stack
 
+Behind the `observability` profile: start it with `--profile observability` or `npm run compose:up:full`.
+
 | Container        | Image                                          | Port(s)                      | Role                                                                                                                       | Read next                                  |
 | ---------------- | ---------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | `otel-collector` | `otel/opentelemetry-collector-contrib:0.114.0` | `4317` (gRPC), `4318` (HTTP) | Single ingestion point for all OTLP telemetry from the app. Fans out traces to Tempo.                                      | [OpenTelemetry](./opentelemetry.md)        |
@@ -114,7 +116,9 @@ on the host clearly shows, raised from inside `/app`.
 
 ### Integrations (opt-in)
 
-The only group behind a compose **profile**. A plain `up` does not start it:
+One of four groups behind a compose **profile** in `docker-compose.yml`: `observability`, `analytics`,
+`docs` and `integrations`. A plain `up` starts none of them, and `npm run compose:up:full` starts the
+first three. This one is started on its own:
 
 ```bash
 npm run compose -- --profile integrations up -d

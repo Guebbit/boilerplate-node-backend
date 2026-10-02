@@ -9,7 +9,7 @@ each row go deeper.
 npm run test:module -- src/modules/products   # one module, every layer it owns, seconds
 npm run test:unit                             # every unit test
 npm run test:report                           # WHERE the time and the failures are, per module
-npm run complete                              # the whole gate, exactly as CI runs it (~90s)
+npm run complete                              # the whole gate, exactly as CI runs it (about 10 minutes)
 ```
 
 If you change one module, the first line is the loop you want. If a build went red and you want to
@@ -30,7 +30,7 @@ know _which domain_, the third line is the one.
 | `mutation`                                 | Do the tests **notice** when the source is wrong?                 | minutes   | ❌ every PR (diff)   |
 | `bench`, `bench:orders`, `bench:inventory` | How fast is one endpoint?                                         | 30s each  | ❌ by hand           |
 | `bench:k6`, `bench:k6:checkout`            | Does it hold up under ramping load, with a verdict?               | ~70s each | ❌ by hand           |
-| `complete`                                 | All of the gate, in CI's order                                    | ~90s      | —                    |
+| `complete`                                 | All of the gate, in CI's order                                    | ~10 min   | —                    |
 
 ## Running one thing
 

@@ -1,7 +1,8 @@
 name: CI
 
 # The merge gate. Everything here runs on every PR and on every push to main, and the aggregate
-# `ci` job at the bottom is the single check branch protection requires.
+# `ci` job at the bottom is the single check to require in branch protection. That rule is a GitHub
+# setting, not a file: nothing here enforces it until the repository owner creates it.
 #
 # Deliberately many small jobs rather than one `npm run complete`: they run in parallel, and
 # a red square names the thing that broke (formatting? contract? integration?) without anyone

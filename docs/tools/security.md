@@ -319,12 +319,12 @@ delivered method armed, because a mailed code has an SMTP queue and an app switc
   the `/users` admin surface, deliberately: a mailbox-based reset would make 2FA only as strong as
   the inbox it defends against.
 
-### What is NOT covered
+### OAuth and the second factor
 
-`GET /account/oauth/{provider}/callback` mints a session without consulting `twoFactorEnabledAt`.
-An account with a linked provider therefore has an unchallenged way in, and 2FA on this deployment
-is a control on the password path only — see [OAuth](../modules/account-oauth.md) for that path's
-own defences.
+`GET /account/oauth/{provider}/callback` checks `twoFactorEnabledAt` the way `postLogin` does: an
+account with an armed factor gets the login challenge instead of a session, so 2FA guards every
+way in, not the password path alone. See [OAuth](../modules/account-oauth.md) for that path's own
+defences.
 
 ## The rate-limit budgets
 
