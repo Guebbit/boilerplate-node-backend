@@ -450,6 +450,18 @@ describe('DELETE /examples/{id}', () => {
     });
 });
 
+describe('an id no ObjectId can be built from', () => {
+    it.each([
+        ['GET', (id: string) => api().get(`/examples/${id}`)],
+        ['DELETE', (id: string) => api().delete(`/examples/${id}`)],
+        ['PUT cover', (id: string) => api().put(`/examples/${id}/cover`)]
+    ] as const)('answers 422 on %s, a different answer from 404', async (_name, send) => {
+        const { bearer } = await authenticateAs('user');
+
+        expect(await statusOf(send(MALFORMED_ID).set('Authorization', bearer))).toBe(422);
+    });
+});
+
 describe('PUT /examples/{id}/cover', () => {
     it('stores an uploaded image as the cover', async () => {
         const { bearer } = await authenticateAs('user');
