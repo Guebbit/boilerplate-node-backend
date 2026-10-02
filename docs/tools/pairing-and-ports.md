@@ -62,7 +62,7 @@ The paired frontend owns **`8080–8099`**.
 | ---------------------------- | ----------------- | ------------------------------------------------- |
 | API                          | `3000`            | `NODE_PORT`                                       |
 | Grafana                      | `3001`            | `GRAFANA_PORT`                                    |
-| webhook-tester (sink UI)     | `3070`            | `WEBHOOK_TESTER_PORT`                             |
+| webhook-tester (https proxy) | `3070`            | `WEBHOOK_TESTER_PORT`                             |
 | Mailpit (SMTP / inbox UI)    | `1025` / `8025`   | `MAILPIT_SMTP_PORT` / `MAILPIT_UI_PORT`           |
 | Umami dashboard / tracker    | `3080`            | `UMAMI_PORT`                                      |
 | Docs (VitePress + Nginx)     | `3090`            | `DOCS_PORT`                                       |
@@ -165,17 +165,18 @@ favicons to `.prettierrc` — but **"does a fork cause a silent bug?"** Everythi
 quietly: both sides keep building, keep passing their own suites, and disagree only in production
 or in a live-API run.
 
-Three files are on it, and the rule is one line: **produced here, copied there.** Each one is an
+Six files are on it, and the rule is one line: **produced here, copied there.** Each one is an
 _output_ on the frontend's side, which is what makes a fork answerable — there is one correct
 resolution, and `npm run sync:frontend` applies it without asking. Editing the copy is the failure
 this list is worst at describing and best at catching: the next regeneration reverts it, and the
 diff looks like the backend broke something.
 
-| Produced here                    | Lands over there as                                                                                                                |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `openapi.yaml`                   | `openapi.yaml`                                                                                                                     |
-| `asyncapi.public.yaml`           | `asyncapi.yaml` — the shared subset is the whole of the async contract as far as that repo is concerned                            |
-| `shared/authorization-keys.yaml` | `<frontend>/contracts/authorization-keys.yaml` — read there only for `actions:`, see [Permission Actions](./permission-actions.md) |
+| Produced here                                          | Lands over there as                                                                                                                                                                                               |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openapi.yaml`                                         | `openapi.yaml`                                                                                                                                                                                                    |
+| `asyncapi.public.yaml`                                 | `asyncapi.yaml` — the shared subset is the whole of the async contract as far as that repo is concerned                                                                                                           |
+| `shared/authorization-keys.yaml`                       | `<frontend>/contracts/authorization-keys.yaml` — read there only for `actions:`, see [Permission Actions](./permission-actions.md)                                                                                |
+| `scenarios/support/tls/webhook-sink-{ca,cert,key}.pem` | `<frontend>/scripts/e2e/tls/` — the demo webhook sink's test CA and leaf: this side trusts the CA, the frontend's Cypress sink serves the leaf. See [HTTPS in the demo](../modules/webhooks.md#https-in-the-demo) |
 
 A third entry used to sit here: the analytics event names the frontend emitted. It emits none any
 more — pageviews are automatic and everything with a request behind it is reported from the handler

@@ -1,6 +1,6 @@
 /**
  * `deliverWebhook`'s (`@modules/webhooks/transport/webhook-delivery`) own SSRF-adjacent behaviour
- * — the timeout budget, the redirect refusal, and the plain-HTTP exemption path — on top of the
+ * — the timeout budget, the redirect refusal, and the demo host's address exemption — on top of the
  * generic guard `tests/fuzz/ssrf-guard.fuzz.test.ts` covers on its own. The guard's hostile-URL
  * table lives there rather than here because the guard is infrastructure, reached through this
  * module's delivery path but not owned by it — deleting `webhooks` must not delete the guard's
@@ -9,7 +9,6 @@
 
 import { EventEmitter } from 'node:events';
 import { request as httpsRequest } from 'node:https';
-import { request as httpRequest } from 'node:http';
 import { deliverWebhook } from '@modules/webhooks/transport/webhook-delivery';
 
 // `resolve4`/`resolve6` are mocked so DNS resolution inside `deliverWebhook`'s own SSRF check is
@@ -22,11 +21,6 @@ jest.mock('node:dns/promises', () => ({
 // The redirect-chain case below drives `deliverWebhook` end to end EXCEPT the actual socket —
 // `node:https` itself is mocked so a simulated 3xx never needs a real server to answer it.
 jest.mock('node:https', () => ({ request: jest.fn() }));
-
-// Only reached by the exempted-demo-host case below — `webhook-delivery.ts` picks this over
-// `node:https` for a plain `http:` target, which the guard only ever lets through for one
-// exact, caller-named hostname.
-jest.mock('node:http', () => ({ request: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- mocked module, requiring the mock's own jest.fn()s to configure per-test resolved addresses
 const dns = require('node:dns/promises') as {
@@ -113,11 +107,10 @@ describe('deliverWebhook — a redirect is a failed delivery, never followed', (
     });
 });
 
-describe('deliverWebhook — speaks plain HTTP only to an exempted http: target', () => {
-    it('uses node:http, never node:https, once the guard exempts the target', async () => {
-        const mockedHttpRequest = httpRequest as jest.Mock;
+describe('deliverWebhook — the exempted demo host is still https-only', () => {
+    it('delivers over node:https to a private address the guard exempts', async () => {
         const mockedHttpsRequest = httpsRequest as jest.Mock;
-        mockedHttpRequest.mockImplementation(
+        mockedHttpsRequest.mockImplementation(
             (_options: unknown, callback: (response: unknown) => void) => {
                 // eslint-disable-next-line unicorn/prefer-event-target -- mocking Node's own EventEmitter-based HTTP API, not writing new code
                 const response = new EventEmitter() as EventEmitter & {
@@ -136,15 +129,31 @@ describe('deliverWebhook — speaks plain HTTP only to an exempted http: target'
         );
 
         const result = await deliverWebhook({
-            url: 'http://127.0.0.1:8080/hook',
+            url: 'https://127.0.0.1:8443/hook',
             secrets: ['whsec_test-secret'],
             eventId: 'evt_demo_1',
             payload: { a: 1 },
-            allowedInsecureHost: '127.0.0.1'
+            allowedPrivateHost: '127.0.0.1'
         });
 
-        expect(mockedHttpRequest).toHaveBeenCalledTimes(1);
-        expect(mockedHttpsRequest).not.toHaveBeenCalled();
+        expect(mockedHttpsRequest).toHaveBeenCalledTimes(1);
         expect(result.success).toBe(true);
+    });
+
+    it('refuses an http: URL for that same host, and opens no connection', async () => {
+        const mockedHttpsRequest = httpsRequest as jest.Mock;
+        mockedHttpsRequest.mockClear();
+
+        const result = await deliverWebhook({
+            url: 'http://127.0.0.1:8080/hook',
+            secrets: ['whsec_test-secret'],
+            eventId: 'evt_demo_2',
+            payload: { a: 1 },
+            allowedPrivateHost: '127.0.0.1'
+        });
+
+        expect(mockedHttpsRequest).not.toHaveBeenCalled();
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/https/);
     });
 });

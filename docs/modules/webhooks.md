@@ -245,33 +245,72 @@ and delivery code) — deleting the folder deletes all of that too, with nothing
 `kernel/` to also touch. What still sits outside the module and **nothing flags** — delete these by
 hand:
 
-| Piece                         | Where                                                                                           | Left behind, it…                 |
-| ----------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------- |
-| the retry-sweep script entry  | `sweep:webhook-retries` in `package.json`                                                       | points at a deleted file         |
-| the cron line and its comment | `docker/crontab`                                                                                | fails every minute               |
-| the SSRF guard                | `src/infrastructure/adapters/ssrf-guard.ts` — generic, but this module is its only caller today | compiles, and nothing calls it   |
-| the environment               | the `NODE_WEBHOOK_*` lines in `.env-example`                                                    | documents settings nothing reads |
-| the local test sink           | the `webhook-tester` service in `docker-compose.yml`, `WEBHOOK_TESTER_PORT`                     | runs for nothing                 |
+| Piece                         | Where                                                                                                                                                                                                                                                                         | Left behind, it…                    |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| the retry-sweep script entry  | `sweep:webhook-retries` in `package.json`                                                                                                                                                                                                                                     | points at a deleted file            |
+| the cron line and its comment | `docker/crontab`                                                                                                                                                                                                                                                              | fails every minute                  |
+| the SSRF guard                | `src/infrastructure/adapters/ssrf-guard.ts` — generic, but this module is its only caller today                                                                                                                                                                               | compiles, and nothing calls it      |
+| the environment               | the `NODE_WEBHOOK_*` lines in `.env-example`                                                                                                                                                                                                                                  | documents settings nothing reads    |
+| the local test sink           | the `webhook-tester` service in `docker-compose.yml`, `WEBHOOK_TESTER_PORT`                                                                                                                                                                                                   | runs for nothing                    |
+| the sink's TLS                | `webhook-tester-tls` in `docker-compose.yml`, `docker/webhook-tester-tls.Caddyfile`, `scenarios/support/tls/`, `scenarios/tools/generate-webhook-sink-tls.ts` (`scenario:tls`), the `NODE_EXTRA_CA_CERTS` in the `dev`, `demo` and `e2e:serve` scripts and in compose's `app` | trusts a certificate nothing serves |
 
 ## Seeing it work
 
 `npm run demo` seeds no subscription by default — nothing to deliver to. Start
-`docker compose --profile integrations up webhook-tester`, set `NODE_WEBHOOK_DEMO_SINK_URL` to its
-base url (`.env-example` has the exact line), then reseed. `scenarios/webhooks.ts` points a
-subscription at it and captures deliveries at `http://localhost:${WEBHOOK_TESTER_PORT:-3070}`.
+`docker compose --profile integrations up webhook-tester webhook-tester-tls`, set
+`NODE_WEBHOOK_DEMO_SINK_URL` to the proxy's base url (`.env-example` has the exact line), then
+reseed. `scenarios/webhooks.ts` points a subscription at it and captures deliveries at
+`https://127.0.0.1:${WEBHOOK_TESTER_PORT:-3070}` (your browser will not trust the certificate; the
+captured requests are also at `GET /api/session/<id>/requests`).
 
 Two things make this reachable at all, both narrowed on purpose:
 
-- `webhook-tester` is plain HTTP on a private compose-network address — exactly what
-  `ssrf-guard.ts` exists to refuse. It gets a one-hostname exemption
-  (`@modules/webhooks/config`'s `getWebhookDemoAllowedHost`) from the `https:` and
-  private-address checks only, and only in development/test; set `NODE_WEBHOOK_DEMO_SINK_URL`
-  under production and the app refuses to boot.
+- The sink is on loopback, which `ssrf-guard.ts` exists to refuse. It gets a one-hostname exemption
+  (`@modules/webhooks/config`'s `getWebhookDemoAllowedHost`) from the private-address check only,
+  and only in development/test; set `NODE_WEBHOOK_DEMO_SINK_URL` under production and the app
+  refuses to boot. The `https:` rule has no exemption, so the demo's URL is `https://` like every
+  other and the edit form saves it.
 - The seeded subscription's ring secret is a FIXED plaintext
   (`scenarios/webhooks.ts`'s `WEBHOOK_DEMO_SECRET`), not one a real `POST /webhooks/subscriptions`
   would mint — a minted secret is returned once and never stored in the clear, so nothing here
   could ever hand it to `webhook-tester` to verify against. Paste it into the tester's UI to check
   a captured delivery's `webhook-signature` header by hand.
+
+## HTTPS in the demo
+
+Every webhook URL is `https://` (the contract's `^https://`), the demo's included. A sink on
+loopback therefore needs a certificate the backend trusts, and the demo supplies one without
+touching production code:
+
+```mermaid
+flowchart LR
+    B["backend<br/>NODE_EXTRA_CA_CERTS = test CA"] -->|"https://127.0.0.1:3070"| P["webhook-tester-tls<br/>(Caddy, demo leaf)"]
+    P -->|"http, compose network"| T["webhook-tester"]
+    B -.->|"https://127.0.0.1:3200 (demo profile)"| C["Cypress sink<br/>(node:https, same leaf)"]
+```
+
+| Piece                      | Where                                                                               | Notes                                                                                                                                                                                |
+| -------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| test CA, leaf and leaf key | `scenarios/support/tls/webhook-sink-{ca,cert,key}.pem`                              | committed; the leaf covers `127.0.0.1`, `localhost` and `webhook-tester-tls`; valid ten years                                                                                        |
+| trust                      | `NODE_EXTRA_CA_CERTS=scenarios/support/tls/webhook-sink-ca.pem`                     | set by the `dev`, `demo` and `e2e:serve` npm scripts and by compose's `app` service. Node reads it **once, at process start**, so it cannot live in `.env`. Production never sets it |
+| TLS proxy                  | `webhook-tester-tls` in `docker-compose.yml`, `docker/webhook-tester-tls.Caddyfile` | `--profile integrations`, loopback only; the tester itself publishes no port                                                                                                         |
+| frontend copies            | `<frontend>/scripts/e2e/tls/`                                                       | `sync:frontend` copies the same three files; its Cypress sink serves the leaf                                                                                                        |
+
+The private key is public on purpose: it is a fixture, valid only for loopback and one compose
+name. The CA's own key is thrown away when the fixtures are made, and the CA is
+**name-constrained** to those names, so trusting it on a developer machine lets nobody vouch for a
+real host. GitHub secret scanning flags a committed private key once; the alert is closed as
+`used_in_tests` (a user-only action in the repository's security settings).
+
+**Remake** (before the ten years run out; a unit test fails a month ahead):
+
+```sh
+npm run scenario:tls      # needs the openssl CLI; rewrites the three files
+npm run sync:frontend     # hands the same three to the paired frontend
+```
+
+**A twin trusts the same CA** the way its runtime does: PHP's cURL reads `CURLOPT_CAINFO` or
+`SSL_CERT_FILE`, pointing at `webhook-sink-ca.pem`.
 
 See: [Events & Logging](../tools/events-and-logging.md), [RabbitMQ](../tools/rabbitmq.md), and
 [the AsyncAPI workflow](../api/asyncapi-workflow.md).

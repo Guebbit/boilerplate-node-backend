@@ -251,7 +251,7 @@ export const attemptDelivery = (
         },
         // `undefined` outside development/test, or with no sink configured — see the SSRF
         // guard's own docblock for what this one exemption does and does not relax.
-        allowedInsecureHost: getWebhookDemoAllowedHost()
+        allowedPrivateHost: getWebhookDemoAllowedHost()
     }).then((result) =>
         result.success
             ? recordSuccess(delivery, result.statusCode, result.durationMs)

@@ -65,7 +65,7 @@ describe('the secret-ring encryption key', () => {
 describe('the demo-sink exemption', () => {
     it('accepts it set outside production', () => {
         configure();
-        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'http://webhook-tester:8080';
+        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'https://webhook-tester-tls:8443';
 
         expect(() => assertModuleConfig([webhooksModule], [])).not.toThrow();
     });
@@ -74,7 +74,7 @@ describe('the demo-sink exemption', () => {
         configure();
         process.env.NODE_ENV = 'production';
         process.env.NODE_CORS_ORIGIN = 'https://example.com';
-        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'http://webhook-tester:8080';
+        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'https://webhook-tester-tls:8443';
 
         expect(() => assertModuleConfig([webhooksModule], [])).toThrow(
             /NODE_WEBHOOK_DEMO_SINK_URL/
@@ -85,7 +85,7 @@ describe('the demo-sink exemption', () => {
         configure();
         delete process.env.NODE_ENV;
         process.env.NODE_CORS_ORIGIN = 'https://example.com';
-        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'http://webhook-tester:8080';
+        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'https://webhook-tester-tls:8443';
 
         expect(() => assertModuleConfig([webhooksModule], [])).toThrow(
             /NODE_WEBHOOK_DEMO_SINK_URL/
