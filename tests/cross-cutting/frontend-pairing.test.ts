@@ -40,9 +40,7 @@ import { resolveFrontendPath } from '../../scripts/pairing/paired-frontend-path'
 const DESCRIPTORS = readAllModuleDescriptors(MODULES_ROOT);
 
 /** Frontend modules with no backend module at all, and what they pair with instead. */
-const FRONTEND_ONLY: Readonly<Record<string, string>> = {
-    demo: 'A client-side showcase of the shared UI kit. It pairs with the demo profile and the seeded dataset rather than with any single domain.'
-};
+const FRONTEND_ONLY: Readonly<Record<string, string>> = {};
 
 describe('the two repositories, module by module', () => {
     it('finds the modules it means to check', () => {
