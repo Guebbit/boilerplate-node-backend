@@ -10,6 +10,36 @@ the foundation is a later, bigger piece of work (tracked as FRAMEWORK in this re
 today, forking and stripping is the whole story.
 :::
 
+## Right after you clone: the GitHub settings
+
+A clone or a template copy takes the files and **none of the repository settings**. The protections
+below live in GitHub, outside git, so a fresh copy starts with all of them off. Switch them on once,
+in the new repository's Settings:
+
+```mermaid
+flowchart LR
+    Clone["clone or<br/>use as template"] --> Files["files arrive:<br/>workflows, dependabot.yml,<br/>SECURITY.md"]
+    Clone --> Settings["settings do NOT arrive:<br/>every toggle below is off"]
+    Settings --> Tick["tick the checklist<br/>once per repository"]
+    Files --> Tick
+
+    classDef ok fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef off fill:#fee2e2,stroke:#dc2626,color:#111827;
+    class Files,Tick ok;
+    class Settings off;
+```
+
+| Setting                                                  | What it gives you                                                                                               | Why the files cannot do it for you                                                                                     |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Secret scanning **and push protection**                  | A pushed key or token is flagged, and a push carrying one is refused before it lands                            | A toggle, not a file. Push protection is the half that stops the leak rather than reporting it                         |
+| Dependabot alerts and **security updates**               | A vulnerable dependency raises an alert and a fix PR. `.github/dependabot.yml` only schedules _version_ updates | Alerts and security updates are separate switches from the version-update file                                         |
+| Private vulnerability reporting                          | The "Report a vulnerability" button that `SECURITY.md` tells finders to use                                     | Without it the policy points at a form that does not exist ([Security](./tools/security.md#reporting-a-vulnerability)) |
+| Require actions to be pinned to a full-length commit SHA | A workflow that names an action by tag or branch fails. Every `uses:` here is already pinned to a SHA           | A setting, so it only protects the workflows you add later; the ones shipped already comply                            |
+| A branch rule on `main` requiring the `ci` check         | The single `ci` job in `.github/workflows/ci.yml` becomes a real merge gate                                     | `ci.yml` only _defines_ the check; nothing makes a merge wait for it until the rule exists                             |
+
+None of this needs a line of code, and nothing here calls GitHub for you: a boilerplate that flipped
+settings on your behalf would need a token with admin rights on your repository.
+
 ## What "the demo" actually is
 
 Every module under `src/modules/` carries a `group` in its own `module.yaml` —
@@ -38,7 +68,7 @@ flowchart TD
     Names["read every module.yaml,\ncollect group: shop"] --> Folders["rm -rf each\nsrc/modules/&lt;shop module&gt;"]
     Folders --> Registry["edit src/modules.ts"]
     Registry --> Ops["delete the reap/sweep scripts\na shop module owns, their\npackage.json + docker/crontab lines"]
-    Ops --> Shared["edit the shared files: the contract's paths census,\nthe roles' and conformance cases' permission keys,\nthe scenario fixtures"]
+    Ops --> Shared["edit the shared files: the roles' and conformance\ncases' permission keys, the scenario fixtures"]
     Shared --> Scenario["delete the demo catalogue's\nown scenario data; drop the shop's\nhistory-drive step; default scenario\nbecomes blank"]
     Scenario --> Contract["edit AccountExportResponse\nin shared/contracts/openapi.root.yaml"]
     Contract --> Report["delete every test that imports\na deleted module, then print\nwhat changed"]
@@ -92,6 +122,18 @@ own, so the foundation cases stay. The exceptions are the **system** tests that 
 throughout (the mailer-template sweep, the analytics port's suite, the write-methods and
 request-contract suites) — they go entirely;
 rewrite them around your own domain if you want that coverage back.
+
+**The published contract still speaks shop.** `shared/contracts/openapi.root.yaml` belongs to no
+module, and `demo:remove` edits only its account-export schema. The root contract's path index
+follows the modules that are left, but three things stay until you change them:
+
+- `info.title` is still `Ecommerce Demo API`.
+- The tag list (`Orders`, `Cart`, `Wishlist`, ...) keeps the shop's tags, because an existing entry is
+  never dropped (`scripts/contracts/root-assembly.ts`).
+- The shared schemas the shop used (`Product`, `Order`, `OrderItem`, `CartItem`, `TaxClass`, ...) are
+  still declared and published, since they are not owned by any one module.
+
+Edit them in that file, then `npm run regenerate`.
 
 `docs/theory/module-lifecycle.md`'s "residue" is what is left over: a test that names a removed
 module in a string or a table rather than an import. `ts-check` and the suites name each one.
