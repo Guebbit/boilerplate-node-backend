@@ -88,6 +88,7 @@ export const accountService = {
     sendVerificationEmail: verification.sendVerificationEmail,
     requestEmailVerification: verification.requestEmailVerification,
     requestEmailVerificationFor: verification.requestEmailVerificationFor,
+    resendPendingEmailVerificationFor: verification.resendPendingEmailVerificationFor,
     completeEmailVerification: verification.completeEmailVerification,
     completeEmailChange: verification.completeEmailChange,
     findLiveToken: tokens.findLiveToken,

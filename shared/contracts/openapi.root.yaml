@@ -1886,6 +1886,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account'
     /account/pending-email:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1pending-email'
+    /account/pending-email/resend:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1pending-email~1resend'
     /account/abilities:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1abilities'
     /account/password:

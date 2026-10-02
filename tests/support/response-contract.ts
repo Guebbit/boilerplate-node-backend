@@ -84,6 +84,18 @@ const schemaFor = (operationId: string, status: number): zod.ZodType | undefined
 };
 
 /**
+ * The body to judge: the text of a `text/*` response, nothing for a 204, `.body` otherwise.
+ *
+ * supertest/superagent only fill `.body` for a JSON (or urlencoded) response; a `text/plain` one —
+ * the Prometheus exposition text — lands in `.text` instead, and `.body` stays `{}`. A 204 carries
+ * no content (RFC 9110 §15.3.5), which orval models as `zod.void()`, yet `.body` is still `{}`.
+ */
+const readBody = (response: Response): unknown => {
+    if (response.status === 204) return undefined;
+    return response.type.startsWith('text/') ? response.text : response.body;
+};
+
+/**
  * Checks one captured response against `openapi.yaml`, throwing a plain `Error` on a mismatch.
  *
  * An undeclared path is not this function's job — that's the 404-envelope contract test's own
@@ -117,9 +129,7 @@ export const assertResponseMatchesContract = (response: Response): void => {
             `${method.toUpperCase()} ${pathname} (${String(response.status)}) is missing the \`${missingHeader}\` header ${operationId} documents as required`
         );
 
-    // supertest/superagent only fill `.body` for a JSON (or urlencoded) response; a `text/plain`
-    // one — the Prometheus exposition text — lands in `.text` instead, and `.body` stays `{}`.
-    const body = response.type.startsWith('text/') ? response.text : response.body;
+    const body = readBody(response);
     const result = schema.safeParse(body);
     if (!result.success)
         throw new Error(
