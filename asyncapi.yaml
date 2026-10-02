@@ -159,6 +159,14 @@ channels:
         messages:
             ReturnClosedEvent:
                 $ref: '#/components/messages/ReturnClosedEvent'
+    example.published:
+        address: example.published
+        description: An example was published. The `example` module's one webhook, there to be copied.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ExamplePublishedEvent:
+                $ref: '#/components/messages/ExamplePublishedEvent'
     worker.webhook.deliver:
         address: worker.webhook.deliver
         description: >-
@@ -297,6 +305,15 @@ operations:
             One-to-one with the `return.closed` domain event — see `returns/services/close.ts`. Fired when the refund settles: straight after the goods were received, or later when the payment sweep completed a refund the provider first refused. A withdrawal before dispatch fires it at birth, right after `return.requested`.
         messages:
             - $ref: '#/channels/return.closed/messages/ReturnClosedEvent'
+    webhookExamplePublished:
+        action: send
+        channel:
+            $ref: '#/channels/example.published'
+        summary: An example was published.
+        description: >-
+            One-to-one with the `example.published` domain event — see `example/service.ts`. Fired each time an example moves to `published`, including after being archived and brought back.
+        messages:
+            - $ref: '#/channels/example.published/messages/ExamplePublishedEvent'
     workerWebhookDeliverPublish:
         action: receive
         channel:
@@ -431,6 +448,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/ReturnClosedEnvelope'
+        ExamplePublishedEvent:
+            name: ExamplePublishedEvent
+            title: Example published
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ExamplePublishedEnvelope'
         ReturnRequestedEvent:
             name: ReturnRequestedEvent
             title: Return requested
@@ -638,6 +662,18 @@ components:
                     type: string
                     description: ISO-4217, e.g. `EUR`.
             additionalProperties: false
+        ExamplePublishedPayload:
+            type: object
+            required:
+                - exampleId
+                - title
+            properties:
+                exampleId:
+                    type: string
+                title:
+                    type: string
+                    description: The fallback-language title.
+            additionalProperties: false
         OrderCreatedEnvelope:
             type: object
             required:
@@ -819,6 +855,24 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/ReturnClosedPayload'
+            additionalProperties: false
+        ExamplePublishedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ExamplePublishedEventType
+                    type: string
+                    enum:
+                        - example.published
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ExamplePublishedPayload'
             additionalProperties: false
         WebhookDeliverJobPayload:
             type: object

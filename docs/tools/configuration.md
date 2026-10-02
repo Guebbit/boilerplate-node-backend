@@ -400,6 +400,12 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | -------------------------- | ----------------- | ------- | ----- | ------------------------------------------------------------ |
 | `NODE_CART_RETENTION_DAYS` | whole number >= 1 | `365`   | —     | Days an untouched cart is kept. Changing it needs `db:sync`. |
 
+### example
+
+| Variable                       | Type                  | Default | Rules | What it does                                                                 |
+| ------------------------------ | --------------------- | ------- | ----- | ---------------------------------------------------------------------------- |
+| `NODE_EXAMPLE_BODY_MAX_LENGTH` | whole number 1..20000 | `5000`  | —     | Longest body, in characters, an example may have. The contract allows 20000. |
+
 ### feedback
 
 | Variable                       | Type              | Default | Rules | What it does                                                          |

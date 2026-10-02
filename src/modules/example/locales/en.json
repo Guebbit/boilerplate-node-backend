@@ -1,0 +1,18 @@
+{
+    "example": {
+        "created": "Example created.",
+        "updated": "Example updated.",
+        "deleted": "Example deleted.",
+        "cover-changed": "Cover image updated.",
+        "not-found": "The example was not found.",
+        "owner-unknown": "Unknown owner",
+        "cover-missing": "Send the image as the imageUpload field.",
+        "error-transition": "An example cannot go from {{from}} to {{to}}.",
+        "error-body-too-long": "The body may have at most {{maximum}} characters.",
+        "email-published": {
+            "subject": "Your example is published: {{title}}",
+            "greeting": "Hello, {{name}}!",
+            "body": "\"{{title}}\" is now public. Anyone can read it."
+        }
+    }
+}

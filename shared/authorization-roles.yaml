@@ -54,6 +54,11 @@ roles:
           - delivery.any.read
           - orders.self.read
           - payments.self.read
+          # The example module: one's own examples. Held by every role that is a signed-in account.
+          - examples.self.read
+          - examples.self.create
+          - examples.self.update
+          - examples.self.delete
 
     - name: customer
       scope: tenant
@@ -69,6 +74,10 @@ roles:
           - orders.self.read
           - payments.self.read
           - cart.self.checkout
+          - examples.self.read
+          - examples.self.create
+          - examples.self.update
+          - examples.self.delete
 
     - name: manager
       scope: tenant
@@ -111,6 +120,10 @@ roles:
           - webhooks.any.delete
           # Shopping on a staff account is not a security event — see "no unverified manager" above.
           - cart.self.checkout
+          - examples.self.read
+          - examples.self.create
+          - examples.self.update
+          - examples.self.delete
 
     - name: warehouse
       scope: tenant
@@ -136,6 +149,10 @@ roles:
           - returns.any.read
           - returns.any.receive
           - cart.self.checkout
+          - examples.self.read
+          - examples.self.create
+          - examples.self.update
+          - examples.self.delete
 
     - name: support
       scope: tenant
@@ -159,6 +176,10 @@ roles:
           - returns.any.update
           - audit.any.read
           - cart.self.checkout
+          - examples.self.read
+          - examples.self.create
+          - examples.self.update
+          - examples.self.delete
 
     - name: editor
       scope: tenant
@@ -184,6 +205,10 @@ roles:
           - translations.any.read
           - translations.any.update
           - cart.self.checkout
+          - examples.self.read
+          - examples.self.create
+          - examples.self.update
+          - examples.self.delete
 
     - name: moderator
       scope: tenant
@@ -211,6 +236,10 @@ roles:
           - returns.any.update
           - audit.any.read
           - cart.self.checkout
+          - examples.self.read
+          - examples.self.create
+          - examples.self.update
+          - examples.self.delete
 
     - name: admin
       scope: tenant
@@ -269,6 +298,13 @@ roles:
           - apikeys.any.read
           - apikeys.any.create
           - apikeys.any.delete
+          - examples.self.read
+          - examples.self.create
+          - examples.self.update
+          - examples.self.delete
+          - examples.any.read
+          - examples.any.update
+          - examples.any.delete
 
     # DDD-D5 part B (bug B21): the principal background/scheduled work runs as — a reservation
     # sweep, a reaper — never `admin` itself, so an audit row can say "a sweep did this" and never

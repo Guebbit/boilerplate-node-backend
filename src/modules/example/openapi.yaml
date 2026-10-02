@@ -1,0 +1,419 @@
+openapi: 3.0.3
+info:
+    title: example — module contract
+    version: '0.1.0'
+
+paths:
+    # The one PUBLIC route: it sits above the auth gate in `routes.ts`, so `security: []` here
+    # is what keeps the contract and the router telling the same story.
+    /examples/published/{id}:
+        get:
+            tags: [Examples]
+            summary: Read a published example
+            description: Returns one example, to anyone, but only while its status is `published`. A draft or an archived example answers `404`, the same as an id that does not exist.
+            operationId: getPublishedExample
+            security: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The published example
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ExampleEnvelope'
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /examples:
+        get:
+            tags: [Examples]
+            summary: List examples
+            description: Returns the caller's own examples, newest first by default. A caller holding `examples.any.read` sees everyone's.
+            operationId: listExamples
+            security:
+                - bearerAuth: []
+            # Query only; the DTO form of the same filters is `POST /examples/search`.
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: sort
+                  in: query
+                  required: false
+                  # JSON:API grammar: `?sort=-createdAt,title` — comma-separated, `-` for descending.
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/ExampleSort'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/ExampleStatus'
+            responses:
+                '200':
+                    description: Example list
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ExamplesResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [Examples]
+            summary: Create an example
+            description: Creates a draft example owned by the caller.
+            operationId: createExample
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateExampleRequest'
+            responses:
+                '201':
+                    description: Created example
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ExampleEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `createExampleLimiter` sits in front of this route — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /examples/search:
+        post:
+            tags: [Examples]
+            summary: Search examples (DTO-friendly)
+            description: Searches and filters examples via a JSON request body. Functionally equivalent to `GET /examples` with query parameters.
+            operationId: searchExamples
+            x-alias-of: listExamples
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchExamplesRequest'
+            responses:
+                '200':
+                    description: Example search results
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ExamplesResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /examples/{id}:
+        # Bundler: adds the `If-Match` parameter and 412 to the writes listed, and `ETag` to the 200s.
+        x-versioned: [get, put, patch, delete]
+        get:
+            tags: [Examples]
+            summary: Read an example
+            description: Returns one example the caller may read — their own, or any when they hold `examples.any.read`. Another person's example answers `404`, never `403`, so an id reveals nothing about who owns it.
+            operationId: getExampleById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The example
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ExampleEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        put:
+            tags: [Examples]
+            summary: Replace an example
+            description: Replaces the example's writable fields (RFC 9110 §9.3.4). `title`, `body` and `status` are required, since a PUT names the whole representation.
+            operationId: replaceExampleById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceExampleRequest'
+            responses:
+                '200':
+                    description: Replaced example
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ExampleEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # An illegal status move — see `ExampleStatus`.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        patch:
+            tags: [Examples]
+            summary: Update an example
+            description: Merges a change into the example (RFC 7396, an omitted field is left unchanged).
+            operationId: updateExampleById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateExampleRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateExampleRequest'
+            responses:
+                '200':
+                    description: Updated example
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ExampleEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Examples]
+            summary: Delete an example
+            description: Permanently removes the example identified by `{id}`, and its cover image with it.
+            operationId: deleteExampleById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # Its own route rather than a field on create and update: an upload travels as multipart, and
+    # keeping it apart leaves the JSON writes above plain. Delete `controllers/put-example-cover.ts`,
+    # `cover.ts` and this path to drop the capability.
+    /examples/{id}/cover:
+        put:
+            tags: [Examples]
+            summary: Set an example's cover image
+            description: Replaces the cover image of the example identified by `{id}`. The image is digested in the background; until it is, `imageUrl` is a placeholder.
+            operationId: replaceExampleCover
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceExampleCoverRequestMultipart'
+            responses:
+                '200':
+                    description: The example, with its new cover
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ExampleEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `uploadLimiter` sits in front of this route — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # descending; earlier entries rank first; ties end on the id.
+        ExampleSort:
+            type: array
+            minItems: 1
+            maxItems: 3
+            uniqueItems: true
+            items:
+                type: string
+                enum: [createdAt, -createdAt, title, -title, status, -status]
+
+        # draft -> published -> archived, and archived -> draft to bring one back. Nothing else:
+        # a published example is withdrawn by archiving it, never by turning it back into a draft.
+        ExampleStatus:
+            type: string
+            enum: [draft, published, archived]
+
+        ExampleEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Example'
+
+        ExamplesResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ExamplesResponse'
+
+        Example:
+            type: object
+            additionalProperties: false
+            required: [id, title, body, status, userId, ownerName, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                    description: The fallback-language title. Other languages are written through `/locales/translations/example/{id}`.
+                body:
+                    type: string
+                status:
+                    $ref: '#/components/schemas/ExampleStatus'
+                userId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                # Read from `users` when the example is presented, never stored here.
+                ownerName:
+                    type: string
+                    description: The owner's display name.
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ThumbnailUrl'
+                publishedAt:
+                    type: string
+                    format: date-time
+                    description: Stamped the first time the example is published, never moved again.
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        CreateExampleRequest:
+            type: object
+            additionalProperties: false
+            required: [title, body]
+            properties:
+                title:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                # The hard ceiling. A deployment may set a lower one with `NODE_EXAMPLE_BODY_MAX_LENGTH`.
+                body:
+                    type: string
+                    minLength: 1
+                    maxLength: 20000
+
+        SearchExamplesRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'
+                pageSize:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PageSize'
+                sort:
+                    $ref: '#/components/schemas/ExampleSort'
+                text:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text'
+                status:
+                    $ref: '#/components/schemas/ExampleStatus'
+
+        # PUT /examples/{id} — the body IS the new representation, so every writable field is required.
+        ReplaceExampleRequest:
+            type: object
+            additionalProperties: false
+            required: [title, body, status]
+            properties:
+                title:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                body:
+                    type: string
+                    minLength: 1
+                    maxLength: 20000
+                status:
+                    $ref: '#/components/schemas/ExampleStatus'
+
+        # PATCH /examples/{id} — RFC 7396: every field optional, omitted means unchanged.
+        UpdateExampleRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                title:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                body:
+                    type: string
+                    minLength: 1
+                    maxLength: 20000
+                status:
+                    $ref: '#/components/schemas/ExampleStatus'
+
+        ReplaceExampleCoverRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [imageUpload]
+            properties:
+                imageUpload:
+                    type: string
+                    format: binary
+
+        ExamplesResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Example'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'

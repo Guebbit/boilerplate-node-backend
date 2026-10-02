@@ -21,6 +21,7 @@ flowchart LR
     account["account"]
     api_keys["api-keys"]
     cart["cart"]
+    example["example"]
     orders["orders"]
     payments["payments"]
     webhooks["webhooks"]
@@ -28,6 +29,7 @@ flowchart LR
     account --> users
     api_keys --> users
     cart --> users
+    example --> users
     orders --> users
     payments --> users
     webhooks --> users
@@ -40,7 +42,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
     class payments,webhooks supporting;
-    class access,account,api_keys generic;
+    class access,account,api_keys,example generic;
     class users centre;
 ```
 
