@@ -170,6 +170,27 @@ describe('withdrawalNotice: every placeholder is filled', () => {
         );
     });
 
+    it('offers the withdrawal function with the acknowledgement of Annex I(A) note 3 (Directive 2023/2673)', () => {
+        const text = textOf(withdrawalNotice('en', GOODS, ORDER_ID));
+
+        expect(text).toContain('You can also exercise your right of withdrawal online at ');
+        expect(text).toContain(
+            'we will send you an acknowledgement of receipt of the withdrawal on a durable medium (e.g. by email), including its content and the date and time of its submission, without undue delay.'
+        );
+        // The old note 3, which describes a form filled in on the website instead of a function.
+        expect(text).not.toContain('electronically fill in');
+    });
+
+    it('carries the Italian Official Journal wording of that note', () => {
+        const text = textOf(withdrawalNotice('it', GOODS, ORDER_ID));
+
+        expect(text).toContain('È inoltre possibile esercitare il diritto di recesso online su ');
+        expect(text).toContain(
+            'trasmetteremo senza indebito ritardo un avviso di ricevimento del recesso su un supporto durevole (ad esempio tramite posta elettronica), compresi il suo contenuto e la data e l’ora della sua trasmissione.'
+        );
+        expect(text).not.toContain('compilare e inviare elettronicamente');
+    });
+
     it('leaves no placeholder or untranslated key behind, in either language', () => {
         for (const locale of ['en', 'it']) {
             for (const order of [GOODS, DIGITAL]) {

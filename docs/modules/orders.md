@@ -299,6 +299,10 @@ not behind a link: a web page is not a durable medium (CJEU C-49/11). `withdrawa
 | digital | every withdrawable line is digital   | Annex I(A), period from the contract; no return paragraphs        |
 | none    | every line is excluded under Art. 16 | only the Art. 6(1)(k) sentence: no instructions, no form          |
 
+The "online" sentence is Annex I(A) note 3 as Directive 2023/2673 rewrote it, because the shop has a
+withdrawal function (Art. 11a): it points at the order page and promises the acknowledgement on a
+durable medium. The Italian is the Official Journal's text, copied, not translated.
+
 Lines excluded under Art. 16 are named when others are not. The model form (Annex I(B)) has its "To"
 row filled with the shop. The refund and return legs always say 14 days, the statutory figure, even
 when the shop offers a longer withdrawal period.
