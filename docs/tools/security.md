@@ -181,6 +181,13 @@ credential guard fails the suite rather than production.
 `tests/cross-cutting/api-key-authentication.test.ts` covers the other mount rule instead — that no
 module mounts BOTH identity guards — driving a real credential over the real chain.
 
+**A key's read permissions count.** `products` reads narrow through `callerScope(request.caller)`,
+which a session and a key both set, so a key holding `products.any.read` sees drafts and soft-deleted
+rows exactly as a session with it does, and the response cache bypass follows from the same filter
+(`hasAnonymousReadScope`). A resolved credential never holds fewer keys than a stranger: the public
+baseline is unioned in (`api-keys/services/resolver.ts`), so a key minted for something else still
+reads the published catalogue instead of an empty one.
+
 Two exclusions are decisions, not consequences, and each says so at its mount:
 
 - **`api-keys` itself.** It reads no `authContext` and would qualify mechanically. A credential

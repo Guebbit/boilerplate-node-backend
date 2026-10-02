@@ -72,9 +72,15 @@ export const fromBearerToken = (token: string): Promise<ResolvedCredential | und
                 });
             });
 
-            const permissions = currentCaller
+            const held = currentCaller
                 ? apiKey.permissions.filter((key) => holdsKey(currentCaller, key))
                 : [];
+
+            // Never fewer than a stranger holds: a read scope compiled from `request.caller` (the
+            // catalogue's, since `callerScope` takes it) would otherwise hide the public storefront
+            // from a key that was minted for something else. `keysInScope(null, ...)` is that
+            // baseline, the same one a signed-in session is unioned with.
+            const permissions = [...new Set([...held, ...keysInScope(null, 'tenant')])];
 
             return {
                 caller: assembleCaller(

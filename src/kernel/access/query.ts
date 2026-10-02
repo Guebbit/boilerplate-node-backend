@@ -17,7 +17,7 @@
 
 import { accessibleBy } from '@casl/mongoose';
 import { Types } from 'mongoose';
-import type { AuthContext } from '@types';
+import type { AuthContext, Caller } from '@types';
 import { buildAbility } from '@kernel/ability';
 import { anonymousCaller, callerForSubject } from '@kernel/permissions';
 
@@ -113,7 +113,7 @@ const collapse = (filter: Record<string, unknown>): Record<string, unknown> => {
 };
 
 /**
- * Whether `context` reads exactly what an anonymous caller reads — compared by the compiled
+ * Whether `who` reads exactly what an anonymous caller reads — compared by the compiled
  * FILTER, not by probing a row, since only filter equality guarantees the same result set for
  * every row that could ever exist. `scopeOf` is the module's own `callerScope` (or equivalent),
  * so this never hardcodes a subject name of its own and stays correct if the module's rules
@@ -124,13 +124,38 @@ const collapse = (filter: Record<string, unknown>): Record<string, unknown> => {
  * BY CONSTRUCTION — a role change that widens visibility makes the two filters unequal on its
  * own, rather than needing anyone to remember to touch the cache key too.
  *
- * @param scopeOf - a module's own `callerScope`-shaped function
- * @param context - the caller to compare against anonymous, or `undefined` for anonymous itself
+ * @param scopeOf - a module's own `callerScope`-shaped function; what it takes (a session or an
+ *   already-resolved `Caller`) is the module's choice, this only passes `who` through
+ * @param who - the caller to compare against anonymous, or `undefined` for anonymous itself
  */
-export const hasAnonymousReadScope = (
-    scopeOf: (context?: AuthContext) => Record<string, unknown>,
-    context: AuthContext | undefined
-): boolean => JSON.stringify(scopeOf(context)) === JSON.stringify(scopeOf(undefined));
+export const hasAnonymousReadScope = <TWho>(
+    scopeOf: (who?: TWho) => Record<string, unknown>,
+    who: TWho | undefined
+): boolean => JSON.stringify(scopeOf(who)) === JSON.stringify(scopeOf(undefined));
+
+/**
+ * The filter that returns exactly the rows an already-resolved `Caller` may take this action on.
+ *
+ * The door for a route a session AND an API key both reach: `request.caller` is set for either,
+ * so a key holding the permission reads what a session holding it reads. {@link accessibleFilter}
+ * is the same thing for a module that only ever sees a session.
+ *
+ * @param caller - `request.caller`, or `undefined` for an anonymous request
+ * @param subject - the CASL subject the collection holds, e.g. `Product`; the caller must already
+ *   be in that subject's scope (a tenant caller for a tenant subject)
+ * @param action - the action being taken; `read` unless stated
+ */
+export const accessibleFilterFor = (
+    caller: Caller | undefined,
+    subject: string,
+    action = 'read'
+): Record<string, unknown> => {
+    const compiled = accessibleBy(buildAbility(caller ?? anonymousCaller()), action).ofType(
+        subject
+    );
+
+    return collapse(toStorage(compiled) as Record<string, unknown>);
+};
 
 /**
  * The filter that returns exactly the rows this caller may take this action on.
@@ -147,9 +172,5 @@ export const accessibleFilter = (
     context: AuthContext | undefined,
     subject: string,
     action = 'read'
-): Record<string, unknown> => {
-    const caller = context ? callerForSubject(context, subject) : anonymousCaller();
-    const compiled = accessibleBy(buildAbility(caller), action).ofType(subject);
-
-    return collapse(toStorage(compiled) as Record<string, unknown>);
-};
+): Record<string, unknown> =>
+    accessibleFilterFor(context ? callerForSubject(context, subject) : undefined, subject, action);

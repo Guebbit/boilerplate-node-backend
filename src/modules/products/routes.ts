@@ -43,7 +43,7 @@ router.use(getAuth);
  * makes this safe BY CONSTRUCTION — see its own docblock.
  */
 const cacheScopeKey = (request: Request): boolean =>
-    hasAnonymousReadScope(callerScope, request.authContext);
+    hasAnonymousReadScope(callerScope, request.caller);
 
 /**
  * Shared cache middleware for both search entry points, keyed on the query parameters that

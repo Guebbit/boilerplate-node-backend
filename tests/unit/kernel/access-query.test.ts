@@ -9,9 +9,9 @@
  * missing.
  */
 
-import { accessibleFilter, hasAnonymousReadScope } from '@kernel/access/query';
+import { accessibleFilter, accessibleFilterFor, hasAnonymousReadScope } from '@kernel/access/query';
 import { Types } from 'mongoose';
-import { asCustomer, asManager, asAdmin, asOperator } from '../../support/callers';
+import { asCustomer, asManager, asAdmin, asOperator, callerAs } from '../../support/callers';
 
 describe('accessibleFilter', () => {
     it('narrows nothing for a role that reads everything', () => {
@@ -68,6 +68,28 @@ describe('accessibleFilter', () => {
         expect(accessibleFilter(asCustomer(), 'Product', 'update')).toEqual({
             $expr: { $eq: [0, 1] }
         });
+    });
+});
+
+/**
+ * `accessibleFilterFor` — the same compile, from an already-resolved `Caller`, which is what a
+ * session and an API key both leave on `request.caller`.
+ */
+describe('accessibleFilterFor', () => {
+    it('compiles a caller holding a bare read key to no restriction', () => {
+        expect(accessibleFilterFor(callerAs('admin'), 'Product')).toEqual({});
+    });
+
+    it('answers a caller exactly as the session it came from', () => {
+        expect(accessibleFilterFor(callerAs('customer'), 'Product')).toEqual(
+            accessibleFilter(asCustomer(), 'Product')
+        );
+    });
+
+    it('reads as a guest when there is no caller', () => {
+        expect(accessibleFilterFor(undefined, 'Product')).toEqual(
+            accessibleFilter(undefined, 'Product')
+        );
     });
 });
 
