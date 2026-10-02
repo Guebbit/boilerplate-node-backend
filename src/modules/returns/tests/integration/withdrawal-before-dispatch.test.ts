@@ -117,4 +117,27 @@ describe('a withdrawal before dispatch on a paid order', () => {
         // No goods are expected, so no postage line and no address to send them to.
         expect(notices[0][2]).toMatchObject({ postage: undefined, address: undefined });
     });
+
+    it('tells the buyer the money is back exactly once, and never mails a cancel notice', async () => {
+        const { user, orderId } = await paidOrder();
+        mockEnqueueEmail.mockClear();
+
+        await createReturn(
+            { orderId, reason: 'withdrawal' },
+            asCustomer(user.id),
+            testCallerContext
+        );
+
+        // The refund mail is fire-and-forget behind `PAYMENT_REFUNDED`'s own write.
+        const named = (template: string) =>
+            mockEnqueueEmail.mock.calls.filter(([, name]) => name === template);
+        await waitFor(() => Promise.resolve(named('orders.order-refunded').length > 0));
+        // Let any second, wrongly sent copy surface before counting.
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        expect(named('orders.order-refunded')).toHaveLength(1);
+        expect(named('returns.notice')).toHaveLength(1);
+        // A withdrawal is acknowledged by `returns`; the person-cancel mail is not for it.
+        expect(named('orders.order-cancelled')).toHaveLength(0);
+    });
 });
