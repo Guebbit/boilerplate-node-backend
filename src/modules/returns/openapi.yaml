@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
     title: returns — module contract
-    version: '1.0.0'
+    version: '0.1.0'
 
 x-error-codes:
     RETURN_DEDUCTION_INVALID: { status: 422, description: 'The handling deduction is more than the refund is worth.' }

@@ -50,6 +50,9 @@ A junk value **refuses to boot**. It never falls back to the default:
 3. A module lists the slice on its manifest (`config: [mySlice.slice]`). Infrastructure and app
    slices are listed in `src/app/config.ts`.
 4. `npm run regenerate` rewrites the reference below.
+5. Add its line to [`.env-example`](#env-example), in the section it belongs to.
+   `npm run check:env-example` fails until you do. A variable something else sets (npm, a script)
+   takes `setBy: '<who>'` instead, and needs no line.
 
 ```ts
 // src/modules/products/config.ts
@@ -75,6 +78,22 @@ export const vatRateDefault = (): number => productsConfig().NODE_VAT_RATE_DEFAU
 | `text` / `secret`              | Trimmed text; `secret` is never echoed and can carry a presence rule |
 | `csv`                          | A comma-separated list, blank members dropped                        |
 | `keyRing` / `versionedKeyRing` | A rotation ring, newest first; `version:key` for the second          |
+
+## `.env-example`
+
+The reference below is generated; `.env-example` is **not**, and `npm run check:env-example` (part
+of `complete`) keeps it from drifting. A slice carries a name, a type, a default and one line. The
+file carries what an operator needs: sections, `MUST SET` warnings, invented values, who else reads
+a variable. Generating it from the slices would lose all of that.
+
+| Drift                                                         | Caught                                                      |
+| ------------------------------------------------------------- | ----------------------------------------------------------- |
+| A slice declares a variable the file never shows              | Yes: named in the failure                                   |
+| The file shows a variable no slice declares and no file reads | Yes: docker-compose, scripts and libraries count as readers |
+| A value in the file differs from the slice's default          | No: values are invented or development-flavoured on purpose |
+
+A placeholder a slice refuses at boot is checked elsewhere: `tests/unit/scripts/setup/first-run.test.ts`
+fills every one from the file.
 
 ## Two kinds of rule
 

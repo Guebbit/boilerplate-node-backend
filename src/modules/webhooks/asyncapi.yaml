@@ -36,7 +36,7 @@
 asyncapi: 3.0.0
 info:
     title: Webhooks async contract
-    version: 1.0.0
+    version: 0.1.0
     description: The events a webhook subscription may receive.
 servers:
     subscriberEndpoint:

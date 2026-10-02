@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
     title: locales — module contract
-    version: '3.0.0'
+    version: '0.1.0'
 
 # ── Two tiers, and they never merge ──────────────────────────────────────────────────────────
 #

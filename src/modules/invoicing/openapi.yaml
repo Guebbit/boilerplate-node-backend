@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
     title: invoicing — module contract
-    version: '1.0.0'
+    version: '0.1.0'
 
 x-error-codes:
     ORDER_CREDIT_NOTE_NOT_ISSUED: { status: 404, description: 'The order exists but has no such credit note.' }

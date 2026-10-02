@@ -39,6 +39,8 @@ export interface FieldDocument {
     default?: string;
     /** One line on what the variable does. */
     describe?: string;
+    /** Who sets it when it is not the operator (`npm`, `e2e:serve`); `.env-example` omits it. */
+    setBy?: string;
 }
 
 /**
@@ -62,6 +64,8 @@ export interface Field<T> {
 export interface CommonOptions {
     /** One line for the generated page. */
     describe?: string;
+    /** Who sets it when it is not the operator: the variable then has no line in `.env-example`. */
+    setBy?: string;
     /** Boot-time presence rule. */
     required?: Presence;
     /** Never echo the value into an error. */
@@ -133,7 +137,8 @@ function build<T>(
         doc: {
             type,
             ...(fallback !== undefined && { default: render(fallback) }),
-            ...(options.describe && { describe: options.describe })
+            ...(options.describe && { describe: options.describe }),
+            ...(options.setBy && { setBy: options.setBy })
         },
         ...(options.required && { presence: options.required }),
         sensitive: options.sensitive ?? false,

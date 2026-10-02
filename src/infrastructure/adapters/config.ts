@@ -51,6 +51,7 @@ export const mailConfig = defineConfig({
         }),
         NODE_E2E_RUN: flag({
             default: false,
+            setBy: 'e2e:serve',
             describe:
                 'Set by `e2e:serve`. Refuses a non-local SMTP host so a live suite cannot mail real people.'
         })

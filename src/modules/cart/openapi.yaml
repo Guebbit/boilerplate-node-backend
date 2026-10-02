@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
     title: cart — module contract
-    version: '2.0.0'
+    version: '0.1.0'
 
 x-error-codes:
     CART_ADDRESS_NOT_APPLICABLE: { status: 409, description: 'Nothing in this checkout ships to an address (all-digital, or a method that ships to none), so a shipping `addressId` cannot apply.' }

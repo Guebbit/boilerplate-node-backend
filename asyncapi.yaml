@@ -8,9 +8,9 @@ asyncapi: 3.0.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
 info:
     title: Boilerplate Node Backend Async Contracts
-    # Alpha like `openapi.root.yaml` (0.1.0), but not reset with it: `check:asyncapi-breaking`
-    # reports any edit to this field as a breaking change, so it moves only with a deliberate break.
-    version: 2.0.0
+    # Alpha, the same `0.1.0` as `openapi.root.yaml` and every module fragment (SemVer §4:
+    # `0.y.z` is initial development). `check:asyncapi-breaking` ignores this field.
+    version: 0.1.0
     contact:
         name: Boilerplate maintainers
         url: https://github.com/Guebbit/boilerplate-node-backend
