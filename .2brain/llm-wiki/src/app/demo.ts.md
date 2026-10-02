@@ -1,7 +1,7 @@
 ---
 source: src/app/demo.ts
-sha256: 7197486046429ad68529f34e4fd4cb57302cafcff83c707059e8a5fdcc6ef46c
-generated_at: 2026-09-23T17:35:09.196426+00:00
+sha256: 30c79d68d2e4ff6f4e7a60dcf49207e1092cece5c794b102bdfaa6ee7816bdad
+generated_at: 2026-10-01T12:44:28.980618+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Control surface for the demo profile, mounted only when `enableDemoProfile()` has been called (via `npm run demo`). Exposes three unauthenticated routes under `/__test/*` that let the paired frontend's e2e suite reset the database to a named scenario, inspect what was restored, and read the email outbox. It lives at the app tier so that `eslint-plugin-boundaries` permits reaching `scenarios/` without pulling scenario factories into every process.
+Control surface for the demo profile, mounted only when `enableDemoProfile()` has been called (i.e. under `npm run demo`). Exposes six unauthenticated routes under `/__test/*` that a paired e2e frontend uses to restore named database scenarios, inspect the current seed, read captured "sent" emails, manipulate the demo clock, and trigger background jobs on demand.
 
 ## Key elements
 
-- **`installDemo(app: Express)`** (exported) — registers the three routes and stores `app` so the flow runner can drive real HTTP during a build.
-- **`restoreScenario(scenario?: string)`** (exported) — public entry point that queues a restore behind any in-flight one. Returns a per-caller promise; the internal queue never rejects so a failure doesn't wedge subsequent restores.
-- **`UnknownScenarioError`** (exported) — thrown for a name absent from the `SCENARIOS` registry or a non-string `scenario` body field.
-- **`buildOnce(name)`** (module-private) — dynamically imports `@scenarios/index`, builds the scenario into an empty database _once per process_, captures a `DatabaseCopy`, and caches it in the `copies` map. Subsequent calls for the same name are replays.
-- **`runRestore(scenario)`** (module-private) — orchestrates a single restore: build-or-replay → `restoreDatabaseCopy` → `clearDemoOutbox` → `refreshLocaleOverrides` → `clearCache`.
-- **`describeScenario()`** (module-private) — dynamically imports `@scenarios/accounts` to return `seedCredentials` plus the pinned `subjects` map for the current scenario.
-- **`copies`** / **`currentScenario`** / **`restoreQueue`** (module-private state) — cache of built copies, the name last restored, and the tail promise of the serialisation queue.
+- **`installDemo(app: Express)`** — Mounts all six `/__test/*` routes on the given Express instance; also stashes the app reference so the flow runner can open its own loopback listener. Only called in demo mode.
+- **`restoreScenario(scenario?: string)`** — Public API for `POST /__test/restore`. Builds (or replays) the named scenario, writes it over the emptied database, clears the outbox, resets the demo clock, refreshes locale overrides, and clears the cache. Serialised through an internal promise queue so concurrent restores never interleave.
+- **`UnknownScenarioError`** — Thrown when a requested scenario name is absent from the `SCENARIOS` registry or the `scenario` body field is not a string.
+- **`buildOnce`** (internal) — Dynamically imports `@scenarios/index`, resolves the default name, validates via `isScenarioName`, then either returns a cached `ScenarioCopy` or runs `emptyDatabase → buildScenario → captureDatabase` to create one. The dynamic import keeps scenario factories out of every non-demo process.
+- **`runRestore`** (internal) — Orchestrates the per-restore side-effects (outbox clear, clock reset, i18n refresh, cache clear) after `buildOnce` + `restoreDatabaseCopy`.
+- **`describeScenario`** (internal) — Powers `GET /__test/scenario`; dynamically imports `@scenarios/accounts` for `seedCredentials` and returns the pinned subject ids alongside the loaded scenario name.
+- **`copies`** — Process-lifetime `Map<string, ScenarioCopy>` that implements the build-once / replay-thereafter cache.
 
 ## Relationships
 
-- **`scenarios/index.ts`** — dynamically imported inside `buildOnce`; supplies `DEFAULT_SCENARIO`, `isScenarioName`, and `buildScenario`.
-- **`scenarios/accounts.ts`** — dynamically imported inside `describeScenario`; supplies `seedCredentials`.
-- **`src/infrastructure/runtime/database-snapshot.ts`** — `emptyDatabase`, `captureDatabase`, `restoreDatabaseCopy`, and the `DatabaseCopy` type are the snapshot primitives used by build/restore.
-- **`src/infrastructure/adapters/demo-outbox.ts`** — `clearDemoOutbox` (after each restore) and `readDemoOutbox` (served by `GET /__test/emails`).
-- **`src/infrastructure/adapters/cache.ts`** — `clearCache` is called as the final step of every restore.
-- **`src/infrastructure/i18n/index.ts`** — `refreshLocaleOverrides` is called after the outbox is cleared.
-- **`src/infrastructure/adapters/logger.ts`** — `logger.error` in both route error handlers.
-- **`src/app.ts`** — imports `installDemo` unconditionally; the dynamic-import split in this file exists to keep `scenarios/*` out of the static dependency tree of `app.ts`.
-- **`tests/integration/app/demo-restore.test.ts`** / **`tests/integration/app/demo-routes.test.ts`** — integration tests exercising the restore flow and the three routes respectively.
-- **`package.json`** — the `demo` script (`npm run demo`) is the only path that calls `enableDemoProfile()` and thus ever mounts these routes.
+- **`src/app.ts`** — Calls `installDemo(app)` conditionally after `enableDemoProfile()`; provides the Express instance.
+- **`scenarios/index.ts`** — Dynamically imported by `buildOnce` for `DEFAULT_SCENARIO`, `isScenarioName`, `buildScenario`.
+- **`scenarios/accounts.ts`** — Dynamically imported by `describeScenario` for `seedCredentials` (the canonical login/password pairs).
+- **`scenarios/jobs.ts`** — Dynamically imported by the `POST /__test/jobs/:name` handler for the `DEMO_JOBS` registry.
+- **`src/infrastructure/runtime/database-snapshot.ts`** — Provides `emptyDatabase`, `captureDatabase`, `restoreDatabaseCopy` (the core of the build-and-replay mechanism).
+- **`src/infrastructure/runtime/demo-clock.ts`** — `getDemoClock()` is used by the clock GET/POST routes and reset on every restore.
+- **`src/infrastructure/adapters/demo-outbox.ts`** — `clearDemoOutbox()` is called after each restore; the `/__test/emails` route reads from the same outbox.
+- **`src/infrastructure/adapters/cache.ts`** — `clearCache()` runs at the tail of every restore so stale responses don't survive a reseed.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.error` in the catch paths of each route handler.
+- **`src/infrastructure/i18n/index.ts`** — `refreshLocaleOverrides()` re-reads locale data after a restore.
+- **`tests/integration/app/demo-restore.test.ts`** / **`tests/integration/app/demo-routes.test.ts`** — Integration tests that exercise the restore and route behaviour end-to-end.
+- **`src/modules/returns/tests/contract/api.contract.test.ts`** — Contract test that relies on the demo profile's seeded data.
+- **`package.json`** — Defines the `npm run demo` script that boots the app with the demo profile enabled.
 
 ## Notes
 
-- Scenario factories are **dynamically imported**, never statically, so a production process that never enables the demo profile pays zero cost for `scenarios/*`.
-- `buildOnce` empties the database _before_ building; `restoreDatabaseCopy` empties _before_ writing a replay. The two paths never double-empty.
-- The restore queue serialises via a promise chain (`restoreQueue`); it never rejects, so a failed restore cannot block the next one.
-- `emptyDatabase` is used instead of `dropDatabase` to preserve index state and avoid a race where a write lands on an unbuilt unique index.
-- The `demoApp` handle is stored for the scenario flow runner (`scenarios/flows/loopback.ts`) to drive real HTTP against a throwaway listener during a one-time build.
+- **Unauthenticated by design.** The demo profile binds beside a throwaway database created by `npm run demo`; no auth middleware is applied to `/__test/*` routes.
+- **Dynamic imports are intentional.** `@scenarios/*` is always loaded via `import()` rather than top-level `import` so that scenario factories (bcrypt hashing, HTTP-driven flows) never enter a non-demo process's module graph.
+- **Build-once is per-process, not per-request.** The `copies` map is module-scoped; a process restart resets the cache and forces a full rebuild.
+- **Restore queue never rejects.** `restoreQueue` swallows both success and failure (`().then(→undefined, →undefined)`) so a failed restore doesn't wedge subsequent ones; the caller still receives the real error via the promise returned by `restoreScenario`.
+- **Clock only moves forward.** `POST /__test/clock` rejects negative `advanceMs`; to "go back" you restore (which resets the clock to real time).
+- **`Stryker disable` comments** mark lines that mutation testing would flag but are pure error-logging / fallback paths not worth mutating.

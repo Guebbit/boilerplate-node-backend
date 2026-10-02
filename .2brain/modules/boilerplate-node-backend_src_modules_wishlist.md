@@ -5,59 +5,56 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/wishlist/
-files: 22
-updated: 2026-09-27T16:23:23.917273+00:00
+files: 23
+updated: 2026-10-01T14:30:34.452829+00:00
 ---
 
 # src/modules/wishlist/
 
 ## Purpose
 
-The wishlist module tracks **which** products a user has bookmarked, with no quantity or order semantics. It is a per-user document (`userId → items: [{ productId }]`) whose sole job is to remember intent; the moment an amount matters, the item is promoted into the cart. It exposes four HTTP operations (list, save, remove, move-to-cart) and keeps its persistence, service, and transport layers strictly separated.
+The wishlist module is a supporting subdomain that lets an authenticated user save a flat list of product IDs they intend to buy later. It carries no quantity and no line identity — the moment an amount matters the item moves to the cart. The module exposes four HTTP operations (list, save, remove, move-to-cart), enforces per-user isolation via a unique `userId` index, and reacts to domain events (product deletion, user/account erasure) to keep wishlists clean.
 
 ## Key parts
 
-- **Data & persistence** — `model.ts` defines the Mongoose schema and the "one document per user, no per-line identity" invariant. `repository.ts` extends the shared `createRepository` factory with the four writes and one targeted read the wishlist actually needs. `factories.ts` builds test/seed fixtures from minimal input.
-- **Service & HTTP surface** — `service.ts` translates high-level operations into repository calls and cross-module interactions, shaping every result into the `WishlistView` envelope. `routes.ts` wires verbs to controllers with auth on every route. `controllers/` (four thin adapters) extract identity and IDs from the request and delegate to the service; none contain business logic.
-- **Module wiring** — `module.ts` registers routes, a `personalData` erasure hook, and a domain-event subscription (product deletion → purge from all wishlists). `module.yaml` declares runtime dependencies. `index.ts` is the barrel that enforces the single-surface import rule. `analytics.ts` registers the module's funnel event names into the app-wide `AnalyticsEventMap` for type-safe tracking.
-- **Specification & probes** — `openapi.yaml` is the machine-readable API contract (v2.0.0). `probes.ts` holds edge-case HTTP requests the contract structurally cannot express (e.g., saving a product that 404s on read).
-- **Tests** — `tests/unit/` pins schema shape, route table, factory output, and analytics strings. `tests/integration/` exercises the full service→repository→DB path and concurrent-write races (line duplication, upsert collisions). `tests/contract/` verifies every documented response is reachable over the wire.
+- **Domain model & persistence** — `model.ts` defines the Mongoose schema (one document per user, items are a `$addToSet` of product IDs, no quantity). `repository.ts` wraps the generic `createRepository` factory with the four writes and one read the domain actually needs. `factories.ts` builds test fixtures keyed by `userId`.
+- **Service & presentation** — `service.ts` translates operations into repository calls and cross-module work (e.g. writing to cart before dropping the wishlist line), returning a `WishlistView` envelope. `presenter.ts` shapes that view for the response.
+- **HTTP surface** — `routes.ts` declares the Express route table and auth guards. The four thin controllers under `controllers/` each map one endpoint to a service call. `openapi.yaml` is the v2.0.0 contract; `probes.ts` supplies edge-case requests the contract can't express.
+- **Module wiring & public API** — `module.ts` registers routes, the account-erasure `personalData` hook, and the product-deletion event subscription. `module.yaml` declares runtime dependencies. `index.ts` is the barrel so sibling modules import from a single path. `analytics.ts` freezes the wishlist's funnel event names into the app-wide `AnalyticsEventMap`.
+- **Tests** — Unit suites pin the schema shape, factory output, route table, and analytics strings. Integration suites cover the full service → repository → DB path and concurrent-write races. A contract suite verifies every documented response is reachable over the wire.
 
 ## How it connects
 
-- **cart** — the `move-to-cart` operation delegates to the cart module to create the line item *before* removing it from the wishlist, guaranteeing no product is lost if the cart write fails.
-- **products** — the module subscribes to a "product deleted" domain event so that every wishlist referencing that product is cleaned up without a manual sweep.
-- **users / account** — a `personalData` hook registered in `module.ts` ensures the wishlist document is destroyed when a user's account is erased, satisfying data-erasure obligations.
-- **src/kernel** — `module.ts` plugs into the kernel's module lifecycle (initialisation order, route mounting, event-bus subscription).
-- **src/infrastructure/http** — Express-specific concerns (routing, middleware, response formatting) live here; the wishlist module consumes it through `routes.ts` and the controllers.
-- **src/infrastructure** — `repository.ts` builds on the generic `createRepository` factory provided by the infrastructure layer.
+- **`src/modules/cart/`** — `move-to-cart` delegates to the cart service; the integration tests assert the cart write lands before the wishlist line is dropped.
+- **`src/modules/products/`** — Product documents are referenced by ID in wishlist items; a product-deletion domain event triggers `repository.removeProductFromAll` to purge stale references.
+- **`src/modules/users/`** — Every route requires an authenticated user; the document is keyed by `userId`. Hard-deletion of a user fires the bulk-erase path.
+- **`src/modules/account/`** — The `personalData` hook registered in `module.ts` lets the account-erasure flow destroy a user's wishlist document.
+- **`src/infrastructure/http/`** — Controllers and `routes.ts` use the shared Express helpers (auth middleware, response formatting) provided by this layer.
+- **`src/` (shared kernel)** — `analytics.ts` augments the root `AnalyticsEventMap`; `repository.ts` builds on the shared `createRepository` factory.
+- **`module.yaml` / build system** — Declares which sibling modules (cart, products, users) must be initialised before wishlist code runs.
 
 ## Where to start
 
-1. **`model.ts`** — reading the schema first makes the "per-user document, no quantity, no per-line identity" design obvious, and every other file in the module is shaped around it.
-2. **`service.ts`** — once you know the data shape, the service file shows the four real operations, the `move-to-cart` ordering guarantee, and the one cross-module call (cart), giving you the module's full behavioural surface in a single read.
+1. **`model.ts`** — In ~40 lines you'll see the entire data shape (one document per user, items are bare product IDs, unique index on `userId`). Everything else in the module exists to serve that shape.
+2. **`service.ts`** — The four public operations and their ordering guarantees (especially the cart-before-wishlist-drop in `moveToCart`) are laid out here, making the cross-module interaction with `cart` immediately visible.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_wishlist["src/modules/wishlist/"]
-    m_scenarios["scenarios/<br/>26 files"]
-    m_scripts["scripts/<br/>67 files"]
-    m_src["src/<br/>19 files"]
-    m_src_infrastructure["src/infrastructure/<br/>44 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>19 files"]
-    m_src_kernel["src/kernel/<br/>11 files"]
-    m_src_modules_account["src/modules/account/<br/>68 files"]
-    m_src_modules_cart["src/modules/cart/<br/>38 files"]
-    m_src_modules_orders["src/modules/orders/<br/>65 files"]
-    m_src_modules_products["src/modules/products/<br/>39 files"]
-    m_src_modules_users["src/modules/users/<br/>33 files"]
+    m_scenarios["scenarios/<br/>30 files"]
+    m_src["src/<br/>48 files"]
+    m_src_infrastructure["src/infrastructure/<br/>58 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
+    m_src_modules_account["src/modules/account/<br/>81 files"]
+    m_src_modules_cart["src/modules/cart/<br/>39 files"]
+    m_src_modules_orders["src/modules/orders/<br/>68 files"]
+    m_src_modules_products["src/modules/products/<br/>51 files"]
+    m_src_modules_users["src/modules/users/<br/>48 files"]
     m_src_modules_wishlist --- m_scenarios
-    m_src_modules_wishlist --- m_scripts
     m_src_modules_wishlist --- m_src
     m_src_modules_wishlist --- m_src_infrastructure
     m_src_modules_wishlist --- m_src_infrastructure_http
-    m_src_modules_wishlist --- m_src_kernel
     m_src_modules_wishlist --- m_src_modules_account
     m_src_modules_wishlist --- m_src_modules_cart
     m_src_modules_wishlist --- m_src_modules_orders
@@ -66,20 +63,21 @@ flowchart LR
     style m_src_modules_wishlist stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_kernel|src/kernel/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
 
 ## Files
 - `src/modules/wishlist/analytics.ts` — Defines the wishlist module's analytics event names and registers them into the app-wide `AnalyticsEventMap` via TypeScript module augmentation. This gives the wishlist a type-safe set of funnel events (save → exit-to-purchase) without the consuming code needing to know the literal strings.
 - `src/modules/wishlist/controllers/delete-wishlist-item.ts` — Thin HTTP adapter for the `DELETE /wishlist/:productId` endpoint. Validates the product ID, extracts the authenticated user, delegates to `wishlistService.wishlistRemove`, and maps the service result (or rejection) onto the HTTP response. Exists to keep route wiring in `routes.ts` declarative and to isolate Express-specific concerns from the service layer.
 - `src/modules/wishlist/controllers/get-wishlist.ts` — Thin HTTP adapter for the `GET /wishlist` endpoint. It extracts the authenticated user's ID from the request, delegates to `wishlistService.wishlistGet`, and formats the result as a standard success/error response. Contains no business logic.
 - `src/modules/wishlist/controllers/post-move-to-cart.ts` — Thin HTTP adapter for the `POST /wishlist/:productId/move-to-cart` endpoint. Extracts the caller's identity and product ID from the request, validates the ID, delegates to `wishlistService.wishlistMoveToCart`, and formats the HTTP response. It contains no business logic.
-- `src/modules/wishlist/controllers/post-wishlist.ts` — Thin HTTP adapter for the `POST /wishlist` endpoint. It validates the incoming request body, extracts the authenticated user and product identifiers, delegates to `wishlistService.wishlistAdd`, and maps the result to an HTTP response. Exists so the service layer stays transport-agnostic.
+- `src/modules/wishlist/controllers/put-wishlist-item.ts`
 - `src/modules/wishlist/factories.ts` — Builds wishlist fixtures (ready for `wishlistRepository.create`) from minimal caller input. Follows the same owner-addressed pattern as cart factories: the document is keyed by `userId` and no wishlist `_id` is generated or transmitted, so no `_id` override is accepted.
 - `src/modules/wishlist/index.ts` — Barrel (public entry point) for the `wishlist` module. It re-exports the module's API so that sibling modules import from this single file rather than reaching into internal paths. Enforces the "single surface" rule described in `docs/theory/strategic-ddd.md` §5.
 - `src/modules/wishlist/model.ts` — Defines the Mongoose schema, document interfaces, and model for the wishlist collection. A wishlist is a per-user document (`userId` → `{ items: [{ productId }] }`) with no quantity — it exists solely to track "which products does this user want?" so that the moment an amount matters the item moves to the cart. All persistence shape (indexes, serialization, uniqueness guarantees) is established here.
 - `src/modules/wishlist/module.ts` — Module manifest and wiring for the wishlist feature. Registers routes, a `personalData` hook for account erasure, and a domain-event subscription so that deleted products are cleaned out of every wishlist. It is deliberately thin — no domain logic lives here, only the glue that connects the wishlist service to the kernel lifecycle.
 - `src/modules/wishlist/module.yaml` — Module manifest for the **wishlist** subdomain (`supporting`). Declares the module's runtime dependencies so the build system and runtime resolver know which other modules must be initialised before wishlist code executes.
 - `src/modules/wishlist/openapi.yaml` — OpenAPI 3.0.3 contract (v2.0.0) that defines the wishlist module's HTTP API surface: four operations over `/wishlist` for listing, saving, removing, and moving-to-cart a user's saved product ids. It serves as the machine-readable and human-readable specification that both the implementation and any client SDK generator consume.
+- `src/modules/wishlist/presenter.ts`
 - `src/modules/wishlist/probes.ts` — Exports a fixed set of wishlist HTTP probes — requests that exercise edge cases the OpenAPI contract structurally cannot describe (e.g. "save a product that will 404 on read"). The probes exist so automated collections can hit those gaps; they are intentionally kept separate from the contract bundle.
 - `src/modules/wishlist/repository.ts` — Domain-specific persistence layer for the Wishlist module. It extends the generic `createRepository` factory with the four writes a wishlist actually takes (add line, remove line, delete-by-user, remove-product-from-all) and a targeted read (`findByUserId`). Every document is addressed by `userId` (the unique index key), so no caller ever reads before writing.
 - `src/modules/wishlist/routes.ts` — Defines the Express route table for the wishlist module. It wires HTTP verbs and paths to the wishlist controllers, enforces authentication on every route, and handles the one ordering constraint that would otherwise cause silent mis-routing.

@@ -5,77 +5,75 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/account/
-files: 68
-updated: 2026-09-27T16:17:58.226360+00:00
+files: 81
+updated: 2026-10-01T14:26:00.272386+00:00
 ---
 
 # src/modules/account/
 
 ## Purpose
 
-The account module owns the full authentication and account lifecycle: signup, login, token refresh, password management, email verification, two-step deletion, two-factor authentication, OAuth sign-in, and session management. It is mounted at `/account` and acts as the second service over the User record (which remains in the `users` module). It deliberately holds no collection of its own; its job is to authenticate, authorise, and manage the lifecycle of the identity that other modules rely on.
+The account module owns the complete authentication and account lifecycle: signup, login, refresh, password management, email verification, two-factor authentication, OAuth, session issuance, and the two-step account-deletion flow. It deliberately holds no collection of its own — the User record lives in the `users` module — and acts as a second service over that shared record, mounted at `/account`.
 
 ## Key parts
 
-- **Module contract & wiring** — `module.ts` (mount point, no-collection declaration), `module.yaml` (machine-readable dependency manifest), `openapi.yaml` (full HTTP contract), `routes.ts` (single Express router ordering every controller, rate-limiter, and auth guard), `index.ts` (public barrel; the only surface sibling modules may import).
-- **Session & tokens** — `session/` sub-directory: `jwt.ts` (mint/verify/rotate access & refresh tokens), `key-ring.ts` (kid derivation and lookup), `config.ts` (all token env-var accessors in one place), `cookies.ts` (httpOnly `jwt` cookie + `isAuth` flag), `session.ts` (shared `issueSession` tail), `resolver.ts` (implements the kernel's `AuthResolver` port), `login-observability.ts` (metrics/audit/analytics on login completion).
-- **OAuth** — `oauth/` sub-directory: `providers/port.ts` (interface contract), `providers/` (GitHub, Google, fake), `providers/index.ts` (registry of active providers), `state.ts` (CSRF/PKCE/continue cookies), `mfa-redirect.ts` (challenge cookie bridging OAuth → 2FA), `config.ts` (OAuth env vars).
-- **Emails & events** — `emails.ts` (build-time-locale-bound copy for every account email), `analytics.ts` (typed event-name catalogue), `audit.ts` (typed audit-action vocabulary), `metrics.ts` (Prometheus counter declarations).
-- **Security & policy** — `rate-limits.ts` (all credential-guessing/signup/reset/MFA budgets), `cooldown.ts` (shared 429 countdown for 2FA and verification-link flows), `roles.ts` (admin-role check for audit records), `probes.ts` (hand-written API requests the OpenAPI contract cannot express).
-- **Tests** — `tests/contract/` (schema-drift and cross-path invariant suites driven by the OpenAPI spec), `tests/integration/` (real-database and real-Express tests for JWT lifecycle, OAuth link, rate limiting, deletion, and auth hardening).
+- **Service layer (`services/`)** — The domain logic split by concern: `authentication.ts` (token issuance/revocation), `profile.ts` (self-service mutations), `tokens.ts` (token semantics: find, spend, redeem), `verification.ts` (email-verification dispatch), `two-factor.ts` (2FA lifecycle and login-challenge), `oauth.ts` (identity resolution to a UserDocument), `export.ts` (GDPR data assembly), `token-cleanup.ts` (expiry sweeps), and `mail.ts` (single enqueueEmail wrapper). `services/index.ts` re-exports them as two namespaces (`accountService`, `twoFactorService`).
+- **Session & JWT (`session/`)** — `jwt.ts` mints/verifies access and refresh tokens with `kid`-indexed key rings; `key-ring.ts` resolves identifiers; `cookies.ts` sets the `jwt` and `isAuth` cookies; `config.ts` centralises all token env-var reads; `session.ts` provides the shared `issueSession` tail; `resolver.ts` implements the kernel's `AuthResolver` port; `login-observability.ts` fires the post-login metrics/audit/analytics signal.
+- **OAuth (`oauth/`)** — `state.ts` (CSRF + PKCE cookies), `mfa-redirect.ts` (challenge cookie bridging to 2FA), `config.ts` (env-var access), and `providers/` containing the `OAuthProvider` port, Google, GitHub, and a fake provider, plus `index.ts` which maps active provider names to implementations.
+- **HTTP surface** — `routes.ts` (single Express router wiring all controllers, rate limiters, and auth guards), `openapi.yaml` (full API contract), `probes.ts` (hand-written test probes for error paths), and the `controllers/` directory.
+- **Cross-cutting config & contracts** — `config.ts` (token-bearing link kinds → frontend URLs), `cooldown.ts` (shared 429 countdown), `rate-limits.ts` (all budget definitions), `analytics.ts` / `audit.ts` (typed event-name vocabularies), `metrics.ts` (Prometheus counter declarations), `roles.ts` (admin-role helper), `emails.ts` (locale-bound email copy), `module.ts` / `module.yaml` (manifests), `index.ts` (public barrel — the only import surface permitted to sibling modules).
 
 ## How it connects
 
-- **`src/modules/users/`** — Account is the second service over the User record. It reads and writes user documents (password hashes, token rows, verification flags) but does not own the collection; `users` owns the aggregate.
-- **`src/kernel/`** — `session/resolver.ts` implements the kernel's `AuthResolver` port, so the rest of the application obtains a verified `AuthContext` without knowing about JWTs or cookie shapes.
-- **`src/infrastructure/`** — Consumes infrastructure adapters for mail delivery, the shared `metricsRegistry`, and `infrastructure/http/frontend-link.ts` (which `config.ts` feeds with account-specific link kinds and route templates).
-- **`src/modules/locales/`** — `emails.ts` resolves translated subject lines and body strings at build time using locale identifiers, binding the recipient's language independent of any request context.
-- **`src/modules/observability/`** — `metrics.ts` registers counters on the shared registry so all auth signals appear in the same `/metrics` scrape as generic HTTP metrics.
-- **`src/modules/payments/`, `src/modules/orders/`, `src/modules/wishlist/`, `src/modules/addresses/`, `src/modules/products/`** — Downstream consumers that rely on the `AuthContext` produced by the account module's resolver to authorise their own endpoints; they never authenticate directly.
-- **`scenarios/` and `scripts/`** — End-to-end scenario suites and build tooling read `module.yaml` to wire the account module at runtime and enforce dependency boundaries.
+- **`src/modules/users/`** — The User document lives in the `users` collection; account is a second service over that record, mounted separately at `/account`.
+- **`src/infrastructure/`** — Account emits analytics and audit events through the shared ports (augmented by `analytics.ts`/`audit.ts`), formats frontend links via `infrastructure/http/frontend-link.ts`, registers counters on the shared `metricsRegistry`, and calls the mailer adapter.
+- **`src/modules/account/controllers/`** — The HTTP controller layer that sits between `routes.ts` and the service layer, handling request parsing, response shaping, and the post-login 2FA step.
+- **`src/modules/observability/`** — Provides the underlying metrics, audit, and analytics infrastructure that account's declarations feed into.
+- **Sibling modules (`orders`, `payments`, `products`, `addresses`, `wishlist`, `webhooks`)** — Register `PersonalDataSection` entries with account's `personal-data-registry` so that `POST /account/export` can assemble a complete GDPR data envelope without account importing them directly.
 
 ## Where to start
 
-Read **`routes.ts`** first — it lists every HTTP endpoint, the middleware order (rate limiter → auth guard → controller), and gives you the complete user-facing surface in one file. Then read **`index.ts`** to see exactly what the module exposes to the rest of the codebase versus what stays internal behind `accountService` and `twoFactorService`. Together they frame the boundary before you dive into session, OAuth, or service internals.
+1. **`module.ts`** — the module manifest: it states what account owns, what it delegates, and where it mounts. One file tells you the boundary.
+2. **`services/index.ts`** — the two-namespace barrel (`accountService` / `twoFactorService`) is the cleanest map of "what can you actually call here," and it reveals the deliberate split between authentication concerns and 2FA concerns before you dive into individual service files.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_account["src/modules/account/"]
-    m_scenarios["scenarios/<br/>26 files"]
-    m_scripts["scripts/<br/>67 files"]
-    m_src["src/<br/>19 files"]
-    m_src_infrastructure["src/infrastructure/<br/>44 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>23 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>19 files"]
-    m_src_kernel["src/kernel/<br/>11 files"]
-    m_src_modules["src/modules/<br/>15 files"]
+    m_scenarios["scenarios/<br/>30 files"]
+    m_scripts_ops["scripts/ops/<br/>19 files"]
+    m_src["src/<br/>48 files"]
+    m_src_infrastructure["src/infrastructure/<br/>58 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
     m_src_modules_account_controllers["src/modules/account/controllers/<br/>34 files"]
-    m_src_modules_account_services["src/modules/account/services/<br/>11 files"]
-    m_src_modules_addresses["src/modules/addresses/<br/>17 files"]
-    m_src_modules_locales["src/modules/locales/<br/>40 files"]
-    m_src_modules_observability["src/modules/observability/<br/>30 files"]
-    m_src_modules_orders["src/modules/orders/<br/>65 files"]
-    m_src_modules_orders_services["src/modules/orders/services/<br/>15 files"]
+    m_src_modules_addresses["src/modules/addresses/<br/>21 files"]
+    m_src_modules_observability["src/modules/observability/<br/>33 files"]
+    m_src_modules_orders["src/modules/orders/<br/>68 files"]
+    m_src_modules_orders_services["src/modules/orders/services/<br/>14 files"]
+    m_src_modules_payments["src/modules/payments/<br/>56 files"]
+    m_src_modules_products["src/modules/products/<br/>51 files"]
+    m_src_modules_users["src/modules/users/<br/>48 files"]
+    m_src_modules_webhooks["src/modules/webhooks/<br/>49 files"]
     m_src_modules_account --- m_scenarios
-    m_src_modules_account --- m_scripts
+    m_src_modules_account --- m_scripts_ops
     m_src_modules_account --- m_src
     m_src_modules_account --- m_src_infrastructure
     m_src_modules_account --- m_src_infrastructure_adapters
     m_src_modules_account --- m_src_infrastructure_http
-    m_src_modules_account --- m_src_kernel
-    m_src_modules_account --- m_src_modules
     m_src_modules_account --- m_src_modules_account_controllers
-    m_src_modules_account --- m_src_modules_account_services
     m_src_modules_account --- m_src_modules_addresses
-    m_src_modules_account --- m_src_modules_locales
     m_src_modules_account --- m_src_modules_observability
     m_src_modules_account --- m_src_modules_orders
     m_src_modules_account --- m_src_modules_orders_services
+    m_src_modules_account --- m_src_modules_payments
+    m_src_modules_account --- m_src_modules_products
+    m_src_modules_account --- m_src_modules_users
+    m_src_modules_account --- m_src_modules_webhooks
     style m_src_modules_account stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_kernel|src/kernel/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account_controllers|src/modules/account/controllers/]] · [[boilerplate-node-backend_src_modules_account_services|src/modules/account/services/]] · [[boilerplate-node-backend_src_modules_addresses|src/modules/addresses/]] · [[boilerplate-node-backend_src_modules_locales|src/modules/locales/]] · [[boilerplate-node-backend_src_modules_observability|src/modules/observability/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · … and 7 more
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account_controllers|src/modules/account/controllers/]] · [[boilerplate-node-backend_src_modules_addresses|src/modules/addresses/]] · [[boilerplate-node-backend_src_modules_observability|src/modules/observability/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_orders_services|src/modules/orders/services/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]] · … and 2 more
 
 ## Files
 - `src/modules/account/analytics.ts` — Declares the canonical set of analytics event names emitted by the account module and augments the shared analytics port's event-name map so TypeScript enforces type-safety at every emit site. It exists to keep the "one name → one emitter" invariant and to let each module grow the catalogue independently (same pattern as `./audit.ts` for audit actions).
@@ -100,6 +98,17 @@ flowchart LR
 - `src/modules/account/rate-limits.ts` — Defines and exports all rate-limit middleware for the account module's credential-guessing, signup, password-reset, password-check, and MFA-challenge endpoints. Each budget is a `RateLimitBudget` data object turned into an Express `RequestHandler` via the shared `buildRateLimiter` factory, so the account module's security posture lives in one place rather than scattered across route handlers.
 - `src/modules/account/roles.ts` — Provides a single helper that determines whether a caller holds an unrestricted (admin) role on the deployment's tenant. It exists so that every login emit and audit record in the account module can record an accurate `actor_role` by reading the current membership state rather than relying on a stale or absent value on the account document.
 - `src/modules/account/routes.ts` — Express router for the account module's entire HTTP surface: auth (login, signup, refresh, logout), password management, email verification, 2FA, sessions, account deletion/export, and OAuth. Mounted under the `/account` prefix (see `./module.ts` for the mount point). It exists as the single wiring file where every controller handler, rate-limiter, auth guard, and HTTP-infrastructure middleware is ordered per route.
+- `src/modules/account/services/authentication.ts` — Handles the full "proving who you are" flow: signup, login, password-reset token issuance, account-deletion token issuance, session revocation, logout, and refresh-token rotation. It is the write-path for everything that issues or revokes a token on a user document. Deliberately excluded: credential hashing (model pre-save hook), JWT signing (`../session/jwt`), and password *changes* (`./profile`).
+- `src/modules/account/services/export.ts` — Implements the `POST /account/export` service (GDPR Art. 15/20): assembles the caller's personal data from every registered `PersonalDataSection` into a single JSON envelope. It deliberately has no data reads of its own—each section's shape is produced by the owning module's `collect`, keeping this file decoupled from sibling modules.
+- `src/modules/account/services/index.ts` — Service-layer barrel for the account module. It re-exports functions from the sub-module files (`authentication`, `profile`, `verification`, `tokens`, `token-cleanup`, `oauth`, `two-factor`) into two named-namespace objects—`accountService` and `twoFactorService`—and also re-exports a curated set of individual functions for callers that need only one or two names. The split into two objects is deliberate: 2FA is kept separate so that a caller of, say, `accountService.login` has no TypeScript-level coupling to two-factor.
+- `src/modules/account/services/mail.ts` — A single-function service-layer wrapper around `enqueueEmail`. It exists purely to satisfy the layering rule that all `enqueueEmail` calls originate from the service layer (enforced by `tests/cross-cutting/side-effects-have-one-layer.test.ts`). It is deliberately kept as its own one-function file — not folded into a larger service — so that `two-factor/methods/email.ts`, which is not itself a service, can import a mail-sending capability without pulling in an unrelated service's full surface.
+- `src/modules/account/services/oauth.ts` — Resolves an `OAuthIdentity` (provider + providerId) to a `UserDocument` via one of three mutually exclusive outcomes: **login** (identity already linked), **link** (email matches an existing verified account, new provider attached), or **signup** (fresh password-less account created). Sits one layer above the provider mechanics in `../oauth/` and handles the account-level decisions: security checks, role assignment, audit, and analytics. It does **not** mint sessions or issue 2FA challenges — that is the callback controller's job.
+- `src/modules/account/services/personal-data-registry.ts` — A module-scoped, in-memory store for the list of `PersonalDataSection` entries. It exists because the `account` module cannot import sibling modules to collect their manifest entries (the same isolation wall that constrains `@modules/locales/services/translatables.ts`), so the sections must be supplied from outside once the full set of enabled modules is known.
+- `src/modules/account/services/profile.ts` — Service layer for the "maintain my own account" side of the account module: reading the caller's profile, changing the password (via reset link or with current-password verification), and self-deleting the account. It is deliberately split from `./authentication` on the proving-vs-maintaining boundary—authentication answers "who is this," this file answers "change something about the account I'm already in."
+- `src/modules/account/services/token-cleanup.ts` — Sweeps expired (and rotated-away) entries from the `tokens` array across all user documents. Exposes two entry points: a fire-and-forget pre-flight step run on every login/refresh request, and an admin-triggered action behind `DELETE /account/tokens/expired` that returns an HTTP outcome and writes an audit record.
+- `src/modules/account/services/tokens.ts` — Single owner of every non-password token flow on a user account (reset, verification, delete-confirmation, refresh sessions). Defines what "live" means in one place and exposes find / spend / redeem primitives plus the `GET /account/sessions` listing. Keeping the semantics here means `two-factor.ts` and the four confirm controllers all agree on expiry, hashing, and race-handling without duplicating the rules.
+- `src/modules/account/services/two-factor.ts` — Implements the account-level 2FA lifecycle: enrolling a method, removing it, regenerating backup codes, and verifying a code (from any armed method or the backup list) against a live account. Method-specific logic lives in handlers registered under `../two-factor/registry`; this file owns the cross-cutting concerns—entry loading order, verification sequence, the `twoFactorEnabledAt` flag, and when backup codes are minted or discarded. It also builds the login challenge (`buildLoginChallenge`) and verifies it, stopping short of minting a session (that belongs to `../controllers/post-login-2fa.ts`).
+- `src/modules/account/services/verification.ts` — Centralises email-verification token issuance and mail dispatch for two distinct flows that must not drift: proving the address an account already has (signup, explicit re-send) and proving the address a `PUT/PATCH /account` change has requested (`pendingEmail`). Every flow that starts either kind calls this module and nothing else.
 - `src/modules/account/session/config.ts` — Centralises all token-related environment-variable reads into named, typed accessors. It holds no token and issues none; it simply resolves how long each expiry tier lives, which key rings are active, and what the rotation/reuse detection windows are. Every other session file imports from here rather than touching `process.env` directly, so there is exactly one place to look for a token setting.
 - `src/modules/account/session/cookies.ts` — Encapsulates HTTP cookie creation and destruction for the two session cookies the app uses: `jwt` (the refresh-token credential, httpOnly) and `isAuth` (a non-secret flag the client shell reads to render auth chrome before its first API response). Deliberately decoupled from JWT parsing/validation so any layer that needs to set or clear cookies does so through one place.
 - `src/modules/account/session/jwt.ts` — Mints and verifies the application's access and refresh JWTs (HS256, `kid`-indexed key rings). It owns the token lifecycle: creating refresh tokens at login, exchanging refresh tokens for short-lived access tokens, rotating refresh tokens, detecting reuse, and verifying either token type. Policy (secrets, TTLs, grace windows) is delegated to `./config`; key lookup is delegated to `./key-ring`.
@@ -112,6 +121,8 @@ flowchart LR
 - `src/modules/account/tests/contract/lifecycle.contract.test.ts` — Contract tests for account-lifecycle endpoints that the broader `api.contract.test.ts` does not cover: two-step account deletion, password-reset request, logout-all, the in-flight breach check, and the expired-token sweep. Each success path is driven end-to-end — the one-time token is read back out of the mocked mail queue rather than injected — so the request body asserted against the OpenAPI spec is the one a real client would send.
 - `src/modules/account/tests/contract/login-paths.contract.test.ts` — Contract test enforcing two shared invariants across every session-entry point (password login, OAuth login, token refresh): (1) none may issue a session for a deactivated or soft-deleted account, and (2) password and OAuth login must both audit the caller's real role and increment the shared `auth_login_total` metric exactly once. It exists so that a regression in any single path (B4, B24) is caught by one table-driven suite rather than per-bug patches.
 - `src/modules/account/tests/contract/oauth.contract.test.ts` — Contract tests for the OAuth account surface: the `GET /account/oauth/providers` listing and the full start → callback round trip through the `fake` provider. Exercises the real routes, CSRF cookie, PKCE verifier, and a real database in-process (no browser), mirroring what a Cypress spec would assert against a live server.
+- `src/modules/account/tests/contract/shop.contract.test.ts`
+- `src/modules/account/tests/contract/support.ts`
 - `src/modules/account/tests/contract/two-factor.contract.test.ts` — Contract tests for the five two-factor authentication endpoints (status read, disable all, remove a single method, regenerate backup codes, and mail a login code). Each test asserts only that the HTTP response—success or error—conforms to the shape published in `openapi.yaml`. Business-logic assertions live in the companion integration suite; this file exists to catch schema drift between the API and its published spec.
 - `src/modules/account/tests/integration/auth-hardening.test.ts` — Integration tests for the two hardening layers that protect the account login endpoint from credential-stuffing: the per-identity / per-address rate limiter (`credentialLimiters`) and the antibot challenge gate (`loginChallengeGate`). The suite verifies that these mechanisms behave correctly in isolation (via a minimal Express app) and that they are actually mounted on the real `/account/login` route.
 - `src/modules/account/tests/integration/delete-account.test.ts` — Integration test for the two-step account-deletion HTTP flow: `DELETE /account` (request) and `DELETE /account/delete-confirm` (spend). Drives the real Express app to verify the status codes a caller actually receives and that the enumeration-prevention invariant holds — a missing account and a successful mail-send return the identical `200`.

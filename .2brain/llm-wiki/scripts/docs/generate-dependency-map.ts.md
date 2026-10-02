@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/generate-dependency-map.ts
-sha256: 24c94d18f670183d659a4436bdb3eb69919ad9e527715e5798b9d162be34a561
-generated_at: 2026-09-27T13:55:19.975487+00:00
+sha256: f3abc61f623d7a8b193838f46249ea948414ccbf83d874bab595a17a25be3fe8
+generated_at: 2026-10-01T12:29:48.781631+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A CLI script (`tsx`) that regenerates the two dependency tables (Runtime / Dev) in `docs/tools/package-dependencies.md`. It derives the package list from `package.json`, scans production source files to determine which module (if any) imports each package, and merges that with hand-kept group definitions. Running with `--check` (the default in `complete`) reports drift instead of rewriting, so the page stays accurate without a human re-copying a list.
+Generates the two dependency tables (Runtime and Dev) in `docs/tools/package-dependencies.md` by reading `package.json`, scanning production source files for import specifiers, and cross-referencing hand-kept group assignments. It runs in write mode (default) or `--check` mode (CI / `complete`), where it reports drift without modifying the page. The script exists to keep the published package list and ownership mapping accurate automatically—eliminating the stale hand-written tables that previously missed 32 of 99 packages.
 
 ## Key elements
 
-- **`checkOnly`** – flags `--check` mode; when set, the script reports differences rather than writing.
-- **`SCAN_DIRECTORIES` / `SCAN_FILES`** – the three top-level dirs (`src`, `scenarios`, `scripts`) and five root config files whose imports are inspected; `tests/` folders and `*.test.*` / `*.spec.*` files are excluded.
-- **`ALIAS_PREFIXES`** – tsconfig path aliases (`@api/`, `@modules/`, `@infrastructure/`, …) filtered out so they are never mistaken for npm packages.
-- **`walk(directory)`** – recursively collects `.ts`/`.js`/`.mjs`/`.cjs` files, pruning `tests/` subdirectories and test files.
-- **`ownerOf(file)`** – maps a file path to a coarse ownership label (`module:<name>`, `kernel`, `infrastructure`, `scenarios`, `scripts`, `app`).
-- **`importSpecifiers(source)`** – regex-extracts `from "…"` / `require("…")` targets, filtering builtins and aliases.
-- **`packageFor(specifier, packages)`** – resolves a specifier (possibly a subpath) to its top-level package name.
-- **`readOwnership(packages)`** – the main scan loop: builds a `Map<packageName, Set<owner>>`; **throws** if a specifier resolves in `node_modules` but is absent from `package.json` (the "undeclared import" guard).
-- **`soleModuleOwner(owners)`** – returns the module name only when exactly one `module:*` owner exists.
-- **`groupRows` / `moduleOwnedRow` / `ungroupedTable`** – render the three tiers of the output table: hand-kept groups, single-module-owned packages, and the catch-all "Ungrouped" section.
-- **`apply()`** – reads the manifest, computes both tables, and calls `applyMarkerBlocks` to splice them between the HTML-comment markers in the page (or diffs in `--check` mode).
+- **`apply()`** — Entry point. Reads `package.json`, builds the ownership map, renders both tables, and either writes them into the page via marker blocks or reports drift (`--check`).
+- **`readOwnership(packages)`** — Walks `SCAN_DIRECTORIES` (`src`, `scenarios`, `scripts`) and `SCAN_FILES` (root tool configs), extracts external import specifiers, and builds a `Map<packageName, Set<ownerArea>>`. Throws an `undeclaredImportError` for any package resolved in `node_modules` but missing from `package.json`.
+- **`ownerOf(file)`** — Coarsens a file path to its ownership tier: `module:<name>` (for `src/modules/<name>/`), `kernel`, `infrastructure`, `scenarios`, `scripts`, or `app`.
+- **`importSpecifiers(source)`** — Regex-extracts `from "…"` / `require("…")` targets, filtering out relative paths and tsconfig path aliases (`@modules/`, `@kernel/`, etc.).
+- **`groupRows()` / `moduleOwnedRow()` / `ungroupedTable()`** — Build the three table sections: hand-kept groups, single-module-owned packages, and the "Ungrouped" catch-all.
+- **`ALIAS_PREFIXES`** — Lists tsconfig path aliases that must never be mistaken for npm packages.
+- **`checkOnly`** — Set when `--check` is in `process.argv`; flips `apply()` into report-only mode.
 
 ## Relationships
 
-- **`scripts/docs/dependency-groups.ts`** – imported for `RUNTIME_GROUPS`, `DEV_GROUPS`, `matchesGroup`, and the `DependencyGroup` type. These are the hand-kept group names, purpose strings, read-more links, and regex/prefix matchers the script uses to bucket packages.
-- **`scripts/docs/marker-block.ts`** – imported for `applyMarkerBlocks`, which performs the actual read-modify-write of the markdown page between the four `<!-- dependency-map:{runtime|dev}:{start|end} -->` comment pairs, leaving surrounding prose untouched.
+- **`scripts/docs/dependency-groups.ts`** — Imported for `RUNTIME_GROUPS`, `DEV_GROUPS`, `matchesGroup`, and the `DependencyGroup` type. This file is the single source of hand-kept group names, match patterns, purposes, and "read more" links.
+- **`scripts/docs/marker-block.ts`** — Imported for `applyMarkerBlocks`, which inserts the rendered table text between the `dependency-map:runtime|dev:start/end` HTML-comment markers in the target page without touching surrounding prose.
+- **`src/infrastructure/adapters/cache.ts`** — A scanned source file (lives under `src/infrastructure/`). Its import specifiers are read by `readOwnership` to attribute packages to the `infrastructure` owner tier.
+- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — Exercises the CI-wave behaviour of the `--check` path (drift reporting rather than rewriting). The script itself excludes `tests/` from its ownership scan, so this file is a consumer, not a data source.
 
 ## Notes
 
-- **Ownership granularity is intentionally coarse.** Only `src/modules/<name>/` can claim a package as "sole owner." Anything in `src/kernel/`, `src/infrastructure/`, etc., is grouped into a shared-area bucket and *cannot* produce a single-owner row — a package imported from both `kernel` and `module:auth` will land in "Ungrouped."
-- **The undeclared-import guard throws at scan time**, not at render time. A package that exists in `node_modules` (pulled transitively) but is missing from `package.json` will crash the script with a diagnostic naming the offending file.
-- **`--check` is non-destructive** and is what `complete` invokes; it exits non-zero on drift so CI catches a stale page.
-- The script reads `package.json` but **ignores version strings** entirely — only the key names matter.
-- New groups must be added to `dependency-groups.ts`, not inline here; the script has no CLI flag for adding a group.
+- `tests/` directories and `*.test.*` / `*.spec.*` files are **excluded** from the ownership scan everywhere. Ownership is decided only on production code.
+- A package is "module-owned" only when exactly **one** `src/modules/<name>/` directory imports it and no other area does. Shared imports (two+ owners, or any non-module owner) fall through to Ungrouped.
+- The `--check` flag is the mode used by `complete`; it must exit non-zero on drift.
+- `package.json` versions are irrelevant here—only the **names** in `dependencies` and `devDependencies` are read.
+- The script hard-fails (throws) on any import that resolves in `node_modules` but is absent from `package.json`, surfacing the "transitive dependency leak" defect immediately rather than silently listing it.

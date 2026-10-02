@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/sweep-payment-effects.ts
-sha256: 8dad9d60e7c2ffc1240484125342a4e85ffa7984b2677b2a1fac11401be2ae17
-generated_at: 2026-09-27T13:58:34.060865+00:00
+sha256: c59e9712c339bda4379dcd1379ed6ac8481a79d32698f20412a737d4ae0591c9
+generated_at: 2026-10-01T12:37:03.417045+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Scheduled recovery script that retries payment settlement effects (stock commit or refund marking) left incomplete by a crash between `settlePayment`'s two-step write. It exists because, unlike webhook-driven retries, nothing else redelivers a settlement that already answered its caller. Runs every 5 minutes via `npm run sweep:payment-effects`.
+Scheduled sweep (run every 5 minutes via `npm run sweep:payment-effects`) that retries two kinds of incomplete payment work left behind by a crash: (1) settlement effects where `pendingEffects: ['commit']` was written but the stock commit or refund-owed marker was never applied, and (2) provider-side refunds stuck in `failed` or `pending` status. It exists because, unlike webhooks, a settlement that already answered its caller has no other retry path.
 
 ## Key elements
 
-- **`main`** (module-local) — Connects the database, calls `paymentService.retryPendingEffects()`, resolves `void`. No arguments, no return value; it is the entire logic of the script.
-- **Top-level invocation** — `void runScript('sweep:payment-effects', main, stopDatabase)` wires `main` into the standard script runner with `stopDatabase` as the teardown callback.
+- **`main`** – Annotated as the entry point. Connects the database via `start()`, then sequentially calls `paymentService.retryPendingEffects()` and `paymentService.retryOpenRefunds()`. Resolves `void`.
+- **`runScript('sweep:payment-effects', main, stopDatabase)`** – Wraps `main` with the project's standard script lifecycle (top-level await, error handling, and `stopDatabase` as the cleanup callback on exit).
+- **No module exports** – The file is a side-effect-only script (barrel `@module` doc); it is never imported, only executed by `tsx`.
 
 ## Relationships
 
-- **`scripts/run-script.ts`** — Provides `runScript`, the shared wrapper that manages the script lifecycle (DB start → `main` → DB stop → process exit). This file delegates all process plumbing to it.
-- **`src/infrastructure/runtime/database.ts`** — Supplies `start` (used inside `main`'s promise chain) and `stopDatabase` (passed to `runScript` as the shutdown hook).
-- **`src/modules/payments/index.ts`** — Exports `paymentService`, the sole business-logic dependency. The script calls `retryPendingEffects()` on it and imports nothing else from the module.
-- **`src/modules/payments/services/index.ts`** — The service layer barrel from which `paymentService` is ultimately composed; this script is the caller at the top of that chain.
+- **`scripts/run-script.ts`** – Provides `runScript`, the shared lifecycle wrapper (process exit codes, error surfacing, cleanup hook) that every ops script delegates to.
+- **`src/infrastructure/runtime/database.ts`** – Supplies `start()` (connect) and `stopDatabase` (disconnect/cleanup) used for the script's DB lifecycle.
+- **`src/modules/payments/index.ts`** – Source of `paymentService`, whose `retryPendingEffects()` and `retryOpenRefunds()` methods perform the actual retry logic.
+- **`src/modules/payments/services/index.ts`** – The service layer behind `paymentService`; this sweep calls `inventoryService.commitForOrder` and `orderService.markRefundOwed` *through* that layer rather than via emitted events, so no event-listener registration is required.
 
 ## Notes
 
-- **No module registration / event listeners required.** Unlike its sibling `sweep-order-effects.ts`, this script calls `inventoryService.commitForOrder` and `orderService.markRefundOwed` *inside* `retryPendingEffects()` rather than emitting a domain event, so it has no listener registration dependency.
-- **Timing constraint.** Must complete well within the 30-minute stock-reservation hold; the 5-minute cadence leaves a 6× safety margin.
-- **Removal coupling.** This file, the `sweep:payment-effects` npm script, and its `docker/crontab` line are all owned by the payments module and should be deleted together when that module is removed.
+- **Cadence constraint:** Must complete well within the 30-minute stock-reservation hold window; the 5-minute schedule is intentional (see `docs/reference/ops.md#scheduled-jobs`).
+- **No event listeners:** Unlike `sweep-order-effects.ts`, this script invokes inventory/order services directly. Adding or removing a listener will not affect it.
+- **Idempotency:** Refund retries reuse the original idempotency key, so re-firing is safe against the payment provider.
+- **Removal coupling:** This file, the `sweep:payment-effects` npm script entry, and the `docker/crontab` line are all owned by the payments module and must be deleted together.

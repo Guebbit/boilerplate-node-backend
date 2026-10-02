@@ -5,59 +5,57 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/api-keys/
-files: 18
-updated: 2026-09-27T16:19:02.746622+00:00
+files: 19
+updated: 2026-10-01T14:26:26.931812+00:00
 ---
 
 # src/modules/api-keys/
 
 ## Purpose
 
-This module owns the full lifecycle of machine-to-machine (M2M) API-key credentials: minting, listing, and revoking them for human-admin operations, and resolving a presented `sk_…` bearer token into a request-scoped `Caller` at authentication time. It enforces the invariant that a credential's permissions are always a subset of the minter's *current* ability set, re-evaluated on every use.
+The `api-keys` module owns the full lifecycle of machine-to-machine credentials: minting a high-entropy `sk_…` token, listing and revoking existing keys, and resolving a presented bearer token back into a fully-floored caller identity. It enforces a strict module boundary (consumers import only from the barrel) and guarantees that the secret itself is never persisted—only its SHA-256 digest.
 
 ## Key parts
 
-- **Credential mechanics** — `credentials.ts` (mint / parse / SHA-256-verify), `model.ts` (Mongoose schema; only the hash is stored), `repository.ts` (CRUD plus active-key lookup by prefix, `lastUsedAt` stamp, bulk delete by owner).
-- **Service layer** — `services/api-keys.ts` (tenant-scoped list/mint/revoke with permission checks and audit logging), `services/resolver.ts` (parses a presented token, verifies it, re-floors the minter's permissions into a `Caller`), `services/index.ts` (stable barrel export).
-- **HTTP surface** — `routes.ts` (Express router for `GET/POST /api-keys` and `DELETE /api-keys/:id`), `controllers/` (three thin handlers: `list-api-keys.ts`, `mint-api-key.ts`, `revoke-api-key.ts`), `openapi.yaml` (3.0.3 contract).
-- **Module wiring** — `module.ts` (manifest: routes, permission keys, personal-data hooks, and the deferred registration of the credential resolver into the kernel), `index.ts` (public barrel enforcing the module boundary), `audit.ts` (type-only augmentation of the app-wide `AuditActionMap`).
-- **Tests** — `tests/unit/` (credential hashing, schema shape), `tests/contract/` (response conformance to `openapi.yaml`), `tests/integration/` (real-DB enforcement of mint-time subset and use-time re-flooring, revocation, expiry, cascading delete).
+- **Credential core** — `credentials.ts` handles minting, prefix parsing, and one-way verification; `model.ts` defines the Mongoose schema and the invariant that no plaintext secret is stored; `repository.ts` adds domain-specific queries (active-key lookup by prefix, `lastUsedAt` stamping, bulk delete-by-owner) on top of the shared CRUD factory.
+- **Service layer** — `services/api-keys.ts` performs tenant-scoped list/mint/revoke with permission checks and audit logging; `services/resolver.ts` is the single runtime path that turns a presented `sk_…` token into a request-scoped `Caller` with re-floored permissions; `services/index.ts` is the stable import surface for both.
+- **HTTP surface** — `routes.ts` mounts the `/api-keys` admin routes; `controllers/` contains the three thin handlers (list, mint, revoke) that validate input and delegate to the service.
+- **Module wiring** — `module.ts` is the manifest: it declares routes, permission keys, personal-data hooks, and registers the credential resolver into the kernel at registration time. `index.ts` is the public barrel that sibling modules must import from.
+- **Audit & contract** — `audit.ts` contributes the strongly-typed `mint`/`revoke` action identifiers to the app-wide `AuditActionMap`; `openapi.yaml` is the OpenAPI 3.0.3 contract that contract tests assert against.
+- **Tests** — split into unit (credential hashing, schema shape), integration (enforcement halves, revocation, expiry, cascading), and contract (status/body + `toSatisfyApiSpec()` conformance).
 
 ## How it connects
 
-- **`src/kernel/`** — `module.ts` registers the `sk_…` credential resolver into `kernel/authentication.ts` at registration time (not import time), making the resolver part of the kernel's authentication pipeline without side effects on import.
-- **`src/infrastructure/`** — `repository.ts` delegates to the shared `createRepository` CRUD factory; the HTTP controllers and router rely on the infrastructure HTTP layer for middleware, response shaping, and session/permission middleware.
-- **`src/modules/users/`** — the resolver re-derives the minter's *current* permission set from the users module's ability data on every token verification; admin-route permission checks (`apikeys.any.*`) are also evaluated against that ability set.
-- **`src/modules/`** (sibling boundary) — `index.ts` is the only file other modules may import from, per the strategic-DDD boundary rule; sibling modules like `cart` interact with the api-keys module solely through this barrel.
+- **`src/infrastructure/` & `src/infrastructure/adapters/`** — `repository.ts` wraps the shared `createRepository` CRUD factory, and the audit actions declared in `audit.ts` are consumed by the infrastructure-level audit logger.
+- **`src/infrastructure/http/`** — `routes.ts` builds on the shared Express router and response-envelope utilities; controllers rely on the infrastructure's error-serialization and pagination conventions.
+- **`src/modules/users/`** — `services/resolver.ts` re-derives the minter's *current* permission set from the users module at resolution time, so a revoked user or changed role is reflected immediately in every subsequent M2M request.
+- **Repository root** — `index.ts` enforces the module-boundary rule defined in `docs/theory/strategic-ddd.md` §5; `audit.ts` augments a root-level `AuditActionMap` type via TypeScript module augmentation.
 
 ## Where to start
 
-Read **`credentials.ts`** first to understand the token format, the one-way hashing, and why bcrypt/argon2 are intentionally omitted. Then read **`services/resolver.ts`** to see how a presented token becomes a request-scoped `Caller` with re-floored permissions — that single file captures the security model the rest of the module exists to protect.
+1. **`services/api-keys.ts`** — reading the three CRUD functions first gives you the domain invariants (tenant scoping, permission subset check, audit events) before you look at any HTTP plumbing.
+2. **`services/resolver.ts`** — understanding how a presented token becomes a `Caller` clarifies the security model (one-way hash, re-flooring, idempotent revocation) that the rest of the module is designed around.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_api_keys["src/modules/api-keys/"]
-    m_src["src/<br/>19 files"]
-    m_src_infrastructure["src/infrastructure/<br/>44 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>23 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>19 files"]
-    m_src_kernel["src/kernel/<br/>11 files"]
-    m_src_modules["src/modules/<br/>15 files"]
-    m_src_modules_cart["src/modules/cart/<br/>38 files"]
-    m_src_modules_users["src/modules/users/<br/>33 files"]
+    m_src["src/<br/>48 files"]
+    m_src_infrastructure["src/infrastructure/<br/>58 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
+    m_src_modules_cart["src/modules/cart/<br/>39 files"]
+    m_src_modules_users["src/modules/users/<br/>48 files"]
     m_src_modules_api_keys --- m_src
     m_src_modules_api_keys --- m_src_infrastructure
     m_src_modules_api_keys --- m_src_infrastructure_adapters
     m_src_modules_api_keys --- m_src_infrastructure_http
-    m_src_modules_api_keys --- m_src_kernel
-    m_src_modules_api_keys --- m_src_modules
     m_src_modules_api_keys --- m_src_modules_cart
     m_src_modules_api_keys --- m_src_modules_users
     style m_src_modules_api_keys stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_kernel|src/kernel/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
 
 ## Files
 - `src/modules/api-keys/audit.ts` — Declares the audit-action vocabulary for the API-keys module (mint and revoke) and registers it into the app-wide `AuditActionMap` type via TypeScript module augmentation. The file contains no runtime logic — it exists so that the two credential-lifecycle events carry a strongly-typed, discoverable action identifier wherever the audit logger is invoked.
@@ -69,6 +67,7 @@ flowchart LR
 - `src/modules/api-keys/model.ts` — Defines the Mongoose schema and model for the `apikeys` collection — one document per minted machine-to-machine credential. The file is the single source of truth for the credential's shape, indexes, and wire serialization, and enforces the invariant that the secret itself is never persisted (only its sha256 hash).
 - `src/modules/api-keys/module.ts` — The module manifest (entry point) for the **api-keys** module. It declares the module's routes, permission keys, and personal-data lifecycle hooks, and—crucially—wires the `sk_…` bearer-token credential resolver into the kernel at registration time (not import time) so that merely importing the file does not silently enable M2M authentication app-wide.
 - `src/modules/api-keys/openapi.yaml` — OpenAPI 3.0.3 contract for the api-keys module. Defines the three machine-to-machine credential endpoints (list, mint, revoke), their request/response schemas, and the envelope wrappers that the module's runtime must produce.
+- `src/modules/api-keys/presenter.ts`
 - `src/modules/api-keys/repository.ts` — Data-access layer for the `apikeys` collection. It wraps the shared `createRepository` CRUD factory and adds three domain-specific queries that the generic factory cannot express: active-key resolution by prefix, a fire-and-forget `lastUsedAt` stamp, and bulk deletion by owner.
 - `src/modules/api-keys/routes.ts` — Defines the Express router for the `/api-keys` admin surface. It wires three CRUD-adjacent routes (list, mint, revoke) to their respective controllers and enforces that every request is session-authenticated by a human with the appropriate `apikeys.any.*` permission.
 - `src/modules/api-keys/services/api-keys.ts` — Implements the credential CRUD operations (list, mint, revoke) for the API-keys module. Every function is tenant-scoped through `context.caller.tenantId`, validates permissions against the caller's current ability set, and records audit events on state-changing actions. This file is the service layer that the module's route handlers call into.

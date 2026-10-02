@@ -1,7 +1,7 @@
 ---
 source: asyncapi.public.yaml
-sha256: 6d527215c72c0ae4ef661bdc83a9f0a13ba26fc2f60805ec838fb21782bc1b98
-generated_at: 2026-09-23T17:11:13.385984+00:00
+sha256: 310e38ef5ab66752be55f5bf5b8f574b7655391d1dbfaf247b699beec5cbbb4f
+generated_at: 2026-10-01T12:17:05.313011+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A **generated, read-only** AsyncAPI 3.0.0 contract document that describes all real-time/event-driven channels (SSE observability streams and outbound webhook deliveries) exposed by this backend. It is produced by `npm run contracts:bundle` from the three source YAML files listed in its header. It exists so external consumers, Spectral rules, and CI breaking-change gates have a single canonical artifact to validate against, without needing to resolve cross-file `$ref`s themselves.
+A **code-generated** AsyncAPI 3.0.0 contract that bundles all event-driven channel definitions (SSE observability + webhook events) into a single public artifact. It is produced by `npm run contracts:bundle` and must never be hand-edited. It exists so that external subscribers, Spectral rules, and the type generator (`generate-asyncapi-types.ts`) have one authoritative source describing every channel, message shape, and delivery semantics the backend exposes.
 
 ## Key elements
 
-- **`asyncapi: 3.0.0` / `info.version: 2.0.0`** — Spec version is 3.0.0; the _info_ version (2.0.0) marks a deliberate breaking change to the Standard Webhooks envelope shape. The `check:asyncapi-breaking` gate compares the _spec_ version, not this field.
-- **`servers`** — Two entries: `sseLocal` (the app's own HTTP server for the SSE endpoint) and `subscriberEndpoint` (a variable placeholder for the _subscriber's_ HTTPS URL; this is an outbound connection, not one the app listens on).
-- **`channels`** — Nine channel addresses: three observability SSE channels (`observability.metrics.snapshot`, `.updated`, `.heartbeat`) and six webhook channels (`order.created|paid|shipped|cancelled`, `payment.succeeded|failed`). Webhook channels bind to `subscriberEndpoint`; SSE channels bind to `sseLocal`.
-- **`operations`** — One `send` operation per channel, each carrying a description of when and why the event fires (e.g., `webhookOrderPaid` is derived from `order.status_changed` filtered on `to: 'paid'`, not a standalone domain event).
-- **`components.messages`** — One message per channel. Webhook messages carry `headers: WebhookHeaders` (signed headers) plus a typed payload envelope; SSE messages carry only a payload.
-- **`components.schemas`** — Reusable schemas including `ObservabilityMetricsPayload`, `WebhookHeaders`, and per-event envelope schemas (e.g., `OrderCreatedEnvelope`).
+- **Servers**
+  - `sseLocal` – local HTTP host for the SSE endpoint at `/observability/events`.
+  - `subscriberEndpoint` – a *variable* HTTPS server (`{subscriberHost}`/`{subscriberPath}`) representing the arbitrary outbound URL each subscription configures. Not a server this app runs.
+
+- **Channels**
+  - `observability.metrics.snapshot` / `observability.metrics.updated` / `observability.heartbeat` – SSE channels (tagged `x-transport: sse`). The `x-transport` key is what the type generator uses to pick SSE channels, not the name prefix.
+  - `order.created`, `order.paid`, `order.shipped`, `order.cancelled` – webhook channels bound to `subscriberEndpoint`.
+  - `payment.succeeded`, `payment.failed`, `payment.refunded` – webhook channels for payment lifecycle.
+  - `return.requested`, `return.received`, `return.closed` – webhook channels for the returns flow.
+
+- **Operations** – one `send` operation per channel, each carrying a `summary`, a human-readable `description` (with cross-references to the implementing code), and a `$ref` to the message definition.
+
+- **`info.version: 2.0.0`** – bumped to document the Standard Webhooks envelope break (`{ type, timestamp, data }` + signed headers). This is a human-readable annotation; it does not affect the `check:asyncapi-breaking` gate, which compares the `asyncapi:` spec version (3.0.0).
+
+- **`defaultContentType: application/json`** – all messages are JSON.
 
 ## Relationships
 
-- **`shared/contracts/asyncapi.root.yaml`**, **`src/modules/observability/asyncapi.yaml`**, **`src/modules/webhooks/asyncapi.yaml`** — These three files are the _sources_ that `npm run contracts:bundle` merges into this file. Edit them, not this file.
-- **`src/modules/orders/events.ts`** — Emits the domain events (`order.status_changed`, `order.cancelled`) that the `order.*` webhook operations describe. The `paid`/`shipped` webhooks are filtered views of `order.status_changed`, not independent events.
-- **`src/modules/orders/services/crud.ts`** — `recordCreated` is the call-site that fires `order.created`, as noted in the `webhookOrderCreated` operation description.
-- **`src/modules/payments/events.ts`** — Emits `payment.succeeded` / `payment.failed`, the one-to-one domain events behind the `payment.*` webhook operations.
-- **`src/transport/webhook-signing.ts`** — Implements the signed-headers scheme described by the `WebhookHeaders` schema attached to every webhook message.
-- **`CLAUDE.md` / `README.md`** — Reference this file as the canonical AsyncAPI contract for the project.
+| Neighbor | Interaction |
+|---|---|
+| `shared/contracts/asyncapi.root.yaml` | Bundle source. Provides the root `asyncapi` version, `id`, and `info` block that this file inherits. |
+| `src/modules/observability/asyncapi.yaml` | Bundle source. Supplies the three `observability.*` SSE channels, their messages, and the `sseLocal` server. |
+| `src/modules/webhooks/asyncapi.yaml` | Bundle source. Supplies the Standard Webhooks envelope (signed headers, `type`/`timestamp`/`data` shape) and the `subscriberEndpoint` variable server used by all webhook channels. |
+| `src/modules/orders/events.ts` | Implements the domain events (`order.status_changed`, `order.cancelled`) that feed the `order.*` webhook channels. `order.paid` and `order.shipped` are *derived* from `order.status_changed` by filtering on `to`. |
+| `src/modules/orders/services/crud.ts` | Fires `order.created` via `recordCreated`; the `webhookOrderCreated` operation description points here. |
+| `src/modules/payments/events.ts` | Implements the domain events behind `payment.succeeded`, `payment.failed`, and `payment.refunded` webhook channels. |
 
 ## Notes
 
-- **Do not edit.** The header comment is explicit; changes must go through the three source YAMLs and then be re-bundled.
-- **`info.version` vs `asyncapi` spec version.** The 2.0.0 in `info.version` documents a human-readable breaking change (new envelope shape). It does _not_ suppress or satisfy the `check:asyncapi-breaking` CI gate, which compares the `asyncapi:` spec field (3.0.0) against `origin/main`. Expect that gate to flag real changes until this branch is merged.
-- **`subscriberEndpoint` is not a server the app runs.** It is an outbound destination. Spectral's `asyncapi-servers` / `asyncapi-channel-servers` rules still pass because each webhook channel explicitly `$ref`s this server entry.
-- **`order.paid` and `order.shipped` are derived, not emitted directly.** They filter `order.status_changed` on the `to` field. There is no separate `paid`/`shipped` domain event in `orders/events.ts`.
-- **`payment.failed` can fire more than once per order** if the subscriber retries with a different method; it is not idempotent by order ID alone.
+- **Generated file** – the first two lines are an explicit "DO NOT EDIT" guard. Any change must go through one of the three source files and be re-bundled.
+- **`x-transport` vs. name prefix** – tooling (specifically `generate-asyncapi-types.ts`) selects SSE channels by the `x-transport: sse` annotation, not by the `observability.` prefix. A channel outside that namespace could carry the same prefix without being SSE.
+- **Version-bump is cosmetic** – the `info.version: 2.0.0` bump documents a contract break for humans; it does *not* silence the `check:asyncapi-breaking` gate, which still reports real breaking changes against `origin/main` until the work is merged.
+- **`subscriberEndpoint` is not a host** – it is a template resolved per subscription. Spectral's `asyncapi-servers` and `asyncapi-channel-servers` rules still pass because every webhook channel explicitly binds to this declared server.
+- **`order.paid` / `order.shipped` are not 1:1 domain events** – they are projections of `order.status_changed` filtered by `to`. Only `order.created` and `order.cancelled` map one-to-one to their own domain events.

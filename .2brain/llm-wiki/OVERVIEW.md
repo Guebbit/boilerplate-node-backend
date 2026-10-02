@@ -1,36 +1,36 @@
 ---
-generated_at: 2026-09-27T16:14:59.955194+00:00
+generated_at: 2026-10-01T14:23:06.096301+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # Repository Overview
 
-A Node.js / TypeScript backend for a **multi-tenant shop and account platform**. It exposes a REST API (`openapi.yaml`) and an event-driven interface (`asyncapi.yaml`), persists state in MongoDB (replica-set), and ships with a full observability stack (Prometheus, Grafana, Loki, Tempo, Alertmanager).
+## What this repository is
 
-## Main Areas & How They Relate
+A TypeScript (Node.js) backend platform with a modular, domain-driven architecture. It exposes both a REST API (`openapi.yaml`, client generated via Orval) and an event/webhook surface (`asyncapi.yaml` / `asyncapi.public.yaml`). Evidence points to a multi-tenant shop/e-commerce management system: domain modules include users, shop modules, products, accounts, addresses, webhooks, rate limiting, and scheduled jobs (supercronic). Persistence is MongoDB. The project follows **Strategic Domain-Driven Design** (see `docs/theory/strategic-ddd.md`).
 
-| Area | Path | Role |
+## Main areas and how they relate
+
+| Area | Path / Files | Role |
 |---|---|---|
-| **Domain modules** | `src/modules/` (e.g. `users/`) | Business logic per bounded context; each module has a `service.ts`, tests, and factories. Organized with Strategic DDD (see `docs/theory/strategic-ddd.md`). |
-| **Infrastructure** | `src/infrastructure/` | Cross-cutting plumbing: HTTP controller/request/response, i18n, logger adapter. Consumed by every module. |
-| **Core types** | `src/types/` | Shared type definitions (`index.ts` is imported by ~248 files — the vocabulary backbone). |
-| **Scenarios / E2E** | `scenarios/` | Seed data, product/account/shop fixtures, and flow scripts (backdate, loopback, shop-history, rate-limits). Backed by ephemeral MongoDB instances. |
-| **API contracts** | `openapi.yaml`, `asyncapi.yaml` (+ `.public.yaml` variants) | Single source of truth for the external surface. TypeScript clients are generated via **Orval** (`orval.config.ts`). |
-| **Testing** | `tests/`, `jest.config.*.js` | Unit, integration (`setup-test-db.ts`), cluster, and mutation suites. |
-| **DevOps / Observability** | `docker/`, `docker-compose.*.yml` | Local, test, proxy, and production compose stacks; MongoDB init scripts; supercronic for cron; full monitoring dashboards & alert rules. |
-| **Documentation** | `docs/` (VitePress) | DDD strategy, webhooks module guide, contract-fragmentation policy, mutation-testing tooling, test reference. |
-| **Tooling** | `eslint.config.ts`, `orval.config.ts`, `package.json` | Linting, codegen, dependency management. |
+| **Domain modules** | `src/modules/**` (e.g. `users`, webhooks, shop-modules, …) | Bounded contexts. Each owns its entities, services, and controllers. |
+| **Infrastructure** | `src/infrastructure/{http, i18n, adapters, …}` | Cross-cutting concerns: HTTP controller/request/response pipeline, i18n context, logger, and adapters. Widely imported (100+ dependents each). |
+| **Shared types** | `src/types/index.ts`, `src/types/auth-context.ts` | Central type contracts; `types/index.ts` connects to ~307 files and is the single most-connected source file. |
+| **Scenarios & flows** | `scenarios/` | Local dev server, DB seeding, product/account data fillers, business-flow scripts (actions, backdate, shop-history, loopback), and rate-limit helpers. |
+| **Testing** | `tests/`, `jest.config.*.js`, `docs/reference/tests.md` | Jest unit/integration suites, a cluster config, and a mutation-testing setup (`jest.config.mutation.js`, `docs/tools/mutation-testing.md`). |
+| **API contracts** | `openapi.yaml`, `asyncapi.yaml`, `orval.config.ts`, `docs/api/` | Source-of-truth specs; Orval generates the typed client. |
+| **Deployment & observability** | `docker-compose*.yml`, `docker/`, `docker/observability/` | Multi-service Docker stacks (app, Mongo replica-set, proxy). Full observability: OpenTelemetry Collector → Prometheus + Alertmanager (metrics), Loki + Promtail (logs), Tempo (traces), Grafana dashboards, Umami (product analytics). |
+| **Docs & AI guidance** | `docs/` (VitePress site), `CLAUDE.md`, `README.md`, `SECURITY.md` | Project documentation, AI-assistant instructions, and security policy. |
 
-**Relationship in one sentence:** Scenarios drive HTTP requests through the infrastructure layer; modules implement domain rules against MongoDB; contracts in YAML describe the resulting public surface; Docker + observability configs run and monitor the whole thing.
+**Relationship:** Domain modules depend on shared types and infrastructure layers; they never import each other directly. Scenarios orchestrate multiple modules for local runs and seeding. Contract files (`openapi`/`asyncapi`) are the external interface; Orval and the scenario scripts are the internal consumers.
 
-## Where to Start Reading
+## Where to start reading
 
-1. **`README.md` / `CLAUDE.md`** – project intent, quick-start, and contributor notes.
-2. **`openapi.yaml` → `asyncapi.yaml`** – understand what the service actually exposes.
-3. **`src/types/index.ts`** – the shared vocabulary everything depends on.
-4. **`src/infrastructure/http/controller.ts`** – how a request enters the system.
-5. **`src/modules/users/service.ts`** – a concrete example of module structure (service → tests → factories).
-6. **`docs/theory/strategic-ddd.md`** – the architectural rationale behind the layout.
-7. **`scenarios/seed.ts` → `scenarios/index.ts`** – how to bootstrap and drive an end-to-end flow locally.
+1. **`README.md`** and **`CLAUDE.md`** – project purpose, commands, conventions.
+2. **`docs/theory/strategic-ddd.md`** – the architectural model the codebase follows.
+3. **`src/types/index.ts`** – the central type hub; understanding it unlocks most modules.
+4. **`src/infrastructure/http/controller.ts`** → `request.ts` → `response.ts` – the HTTP request/response pipeline every module plugs into.
+5. **`openapi.yaml`** (REST) and **`asyncapi.yaml`** (events/webhooks) – the external API surface.
+6. **`scenarios/config.ts`** and **`scenarios/run-server.ts`** – how the local/dev environment is wired together.
 
-> **Tip for AI readers:** the dependency-graph "hub" files (`src/types/index.ts`, `src/infrastructure/http/response.ts`, `src/infrastructure/i18n/index.ts`) are the safest anchors when tracing cross-cutting changes.
+> All claims above are inferred from the file inventory and dependency-graph summary provided; no source code was inspected.

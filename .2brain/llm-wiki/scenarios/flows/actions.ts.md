@@ -1,7 +1,7 @@
 ---
 source: scenarios/flows/actions.ts
-sha256: 2fff69e10b855ca02e07beb46e3cde4007f576dbcc49f9761f6e01f024ad5adc
-generated_at: 2026-09-27T13:49:33.077937+00:00
+sha256: 16b06640e415352b6c7a2bcb69c7091911537eea660250ea025e3b2492b60640
+generated_at: 2026-10-01T12:20:51.208359+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A set of thin HTTP-wrapper functions that simulate the discrete actions a person takes in the shop (stocking, buying, paying, shipping, cancelling, deleting). Each function hits the same endpoint a browser would, so the full middleware stack—authentication, actor scope, audit entries, domain events, rate limiters—runs for real. The file exists so scenario flows can compose realistic order histories without bypassing the request pipeline.
+Thin HTTP wrappers for every action a person takes in a shop-history scenario. Each function hits the same endpoint a browser would call so that audit entries, actor scope, and domain events are produced through the real middleware stack (authentication, caller context, rate limiters). A direct service call would create the order but none of its trail.
 
 ## Key elements
 
-- **`Line`** (interface) — shape of a single cart/order line (`productId`, `quantity`).
-- **`CARD`** (const) — the three fake payment-provider method handles: `visa` (settles), `declined` (409, retryable), `challenge` (3-D Secure, requires sync).
-- **`receiveStock`** — `POST /inventory/receipts` to seed opening stock for a product.
-- **`checkout`** — fills the cart line-by-line, sets the shipping method (default `'pickup'`), then `POST /cart/checkout`; returns the order id.
-- **`openPayment`** — `POST /payments/intent`; returns the payment id.
-- **`submitCard`** — `POST /payments/{id}/confirm` via `caller.attempt`; maps a 409 to the string `'declined'`, throws on any other non-200; otherwise returns the payment's `status` string.
-- **`syncPayment`** — `POST /payments/{id}/sync`; returns the payment's `status`.
-- **`checkoutAndPay`** — composite: `checkout` → `openPayment` → `submitCard(CARD.visa)`; returns the order id.
-- **`recordOfflinePayment`** — `POST /payments/order/{id}/offline` for admin-entered cash/bank/other payments.
-- **`startProcessing`** — `POST /orders/{id}/status-override` to move an order `paid → processing`.
-- **`shipOrder`** — `POST /delivery/order/{id}/ship`; optional `trackingCode`.
-- **`deliverOrder`** — `POST /delivery/order/{id}/deliver`.
-- **`cancelOrder`** — `POST /orders/{id}/cancel`; optional `refund` flag (operator's choice; customer self-cancel always refunds).
-- **`softDeleteOrder`** — `DELETE /orders/{id}` (sets `deletedAt`).
-- **`replaceProductImage`** — `PATCH /products/{id}` with a new `imageUrl` string.
-- **`hardDeleteProduct`** — `DELETE /products/{id}/hard` (row removed).
+- **`Line`** — `{ productId, quantity }`, the shape both the cart and callers use.
+- **`CARD`** — three fake-provider method refs (`visa` settles, `declined` → 409, `challenge` → `requires_action`).
+- **`receiveStock(owner, productId, quantity)`** — `POST /inventory/receipts` to seed opening stock.
+- **`checkout(caller, lines, options?)`** — fills the cart line-by-line, sets shipping method (defaults to `pickup`), then `POST /cart/checkout`; returns the new order id.
+- **`openPayment(caller, orderId)`** — `POST /payments/intent`; returns payment id.
+- **`submitCard(caller, paymentId, ref)`** — `POST /payments/:id/confirm` via `attempt()`; normalises 409 to the string `'declined'`, passes through other statuses, throws on anything else.
+- **`syncPayment(caller, paymentId)`** — `POST /payments/:id/sync`; resolves a `requires_action` (3-D Secure) payment.
+- **`checkoutAndPay(caller, lines)`** — convenience: checkout + `CARD.visa` in one call.
+- **`recordOfflinePayment(owner, orderId, method)`** — admin records cash/bank/other.
+- **`startProcessing` / `shipOrder` / `deliverOrder`** — move an order through `processing → shipped → delivered` via the delivery endpoints.
+- **`cancelOrder(caller, orderId, refund?)`** — cancels; `refund` is the operator's choice (customer self-cancels always refund).
+- **`softDeleteOrder(owner, orderId)`** — `DELETE /orders/:id` (sets `deletedAt`).
+- **`replaceProductImage(owner, productId)`** — `PATCH /products/:id` with a 1×1 PNG via multipart; the only way to change `imageUrl`.
+- **`hardDeleteProduct(owner, productId)`** — `DELETE /products/:id/hard`; row is gone, not hidden.
 
 ## Relationships
 
-- **`scenarios/flows/client.ts`** — provides the `Caller` type imported here as the first parameter of every function. All HTTP verbs (`call`, `attempt`) and auth context flow through that interface.
-- **`scenarios/flows/shop-history.ts`** — the consumer that composes these action functions into multi-step historical scenarios; the module docblock explicitly calls these "the verbs the shop's history is written in."
+- **`scenarios/flows/client.ts`** — source of the `Caller` type that every function takes as its first argument. `Caller.call()` performs the request; `Caller.attempt()` (used only by `submitCard`) tolerates non-2xx outcomes without throwing.
+- **`scenarios/flows/shop-history.ts`** — the consuming flow file; it calls these wrappers in sequence to build the order → payment → delivery history it then asserts against.
 
 ## Notes
 
-- `submitCard` is the only function that uses `caller.attempt` instead of `caller.call`, because two of the three intended outcomes (409 decline, 3-D Secure) are non-2xx and must not throw.
-- `startProcessing` deliberately uses the `status-override` endpoint rather than `PUT /orders/{id}`; the normal transition is `system`-scoped in `orders/domain/lifecycle.ts`, making the override the only reachable path for a non-system caller.
-- `checkout` defaults the shipping method to `'pickup'` because not every seeded shopper has an address; flows that need a real shipment must pass `shippingMethodId: 'standard'` explicitly.
-- `cancelOrder`'s `refund` parameter is optional and only meaningful for operator-initiated cancels; a customer cancelling their own paid order is always refunded regardless of this value.
-- `replaceProductImage` uses a plain JSON `PATCH` (not multipart) because the contract accepts `imageUrl` as a string; the intent is to exercise the "order resolves the live image" path, not file handling.
+- `submitCard` is the only function that uses `caller.attempt()` rather than `caller.call()`, because a 409 (declined) is a *valid* outcome two of the three payment rows expect, not an error.
+- `checkout` defaults `shippingMethodId` to `'pickup'` because not every seeded shopper has a delivery address; flows needing real shipment pass `'standard'`.
+- `TINY_PNG` is a genuine 1×1 PNG (base64-decoded) because the server digests every upload and rejects undecodable bytes.
+- `hardDeleteProduct` removes the row entirely (order lines resolve `current: null` afterwards), in contrast to `softDeleteOrder` which only stamps `deletedAt`.
+- All functions are fire-and-forget with respect to side effects they do *not* check (e.g. `startProcessing` does not verify the order actually transitioned); assertions live in the calling flow.

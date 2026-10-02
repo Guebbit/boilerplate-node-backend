@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/generate-module-graph.ts
-sha256: 02f93a04cd2b4b7b0cec293244f5f74ce85f3cbe2e51948252811e24384b89eb
-generated_at: 2026-09-27T13:55:36.232635+00:00
+sha256: 270e472df4138f2bd41c1d577e49e099e5ce4c1389ad056ccad51438cbadccf2
+generated_at: 2026-10-01T12:30:11.260672+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates Mermaid flowchart diagrams showing inter-module import edges and domain-event subscriptions, inserting them into `docs/modules/index.md` (whole-repo graph) and each module's own page (local neighbourhood). The graphs are derived from `dependency-cruiser` output and a static scan of `onDomainEvent` calls rather than hand-drawn, so they stay correct as the import surface changes. Running with `--check` fails if the generated blocks have diverged from the live graph; that is what the `complete` script invokes.
+Generates two pieces of documentation from the live dependency graph: a whole-repo import graph (mermaid) and a grouped module list in `docs/modules/index.md`, plus one per-module neighbourhood diagram on each module page. It reads the real graph via `dependency-cruiser` and supplements it with domain-event edges (the return path an import graph cannot see), so the diagrams stay correct after any import or subscription change without hand-maintenance.
 
 ## Key elements
 
-- **`SUBDOMAIN`** — `Readonly<Record<string, 'core' | 'supporting' | 'generic'>>` built at module-load time by reading each folder under `src/modules/*/module.yaml` via `readModuleDescriptor`. Modules lacking a descriptor are omitted, not guessed.
-- **`readEdges()`** — Shells out to `npx depcruise` with `--collapse`, `--exclude /tests/`, and a `--include-only ^src/modules/` filter; parses the Mermaid output into `[from, to][]` pairs, dropping any edge touching `modules.ts` (the registry).
-- **`nodeId(name)`** — Replaces `-` with `_` so module names are valid Mermaid identifiers.
-- **`eventName(owner, constant)`** — Reads `src/modules/<owner>/events.ts` and extracts the string literal assigned to the exported constant, returning the wire name.
-- **`moduleSourceFiles(moduleName)`** — Lists every tracked `.ts` file in a module (via `git ls-files`), excluding `/tests/`, with `module.ts` guaranteed first.
-- **`readEventEdgesInFile(source, subscriber)`** — Regex-scans one file's `import { … } from '@modules/…'` statements and `onDomainEvent(CONST, …)` calls to produce `EventEdge[]` entries; skips self-subscriptions.
-- **`readEventEdges()`** — Iterates every module in `SUBDOMAIN` × its source files, calling `readEventEdgesInFile`, and returns a sorted `EventEdge[]`.
-- **`renderNeighbourhood(name, edges, events)`** — Produces the per-module Mermaid block: solid arrows for imports, dotted arrows for events, colour-coded by subdomain, with the centre node highlighted. Emits a plain-English sentence instead of a diagram when the module has zero neighbours.
-- **`render(edges)`** — Produces the whole-repo Mermaid block (top-down layout) for the index page, colouring connected nodes by subdomain and isolating unconnected ones with a dashed style.
-- **`applyMarkerBlocks`** (imported) — Writes each `Target` block between its `<!-- module-graph:start -->` / `<!-- module-graph:end -->` markers in the target file.
-- **`checkOnly`** — When `--check` is present, the script validates instead of writing.
+- **`SUBDOMAIN`** — `Record<moduleName, 'core' | 'supporting' | 'generic'>` built at load time by reading each module's `module.yaml#subdomain`. Modules lacking a descriptor are omitted entirely.
+- **`readEdges()`** — Spawns `depcruise` (via `execFileSync`), parses its collapsed mermaid output into a sorted `[from, to][]` list. Excludes `/tests/` and drops all edges touching `modules.ts` (the registry).
+- **`readEventEdges()` / `readEventEdgesInFile()`** — Scans every tracked `.ts` file per module for `onDomainEvent(CONST, …)` calls, resolves the constant's import origin to name the event owner, and returns sorted `EventEdge[]` (owner → subscriber + event name).
+- **`moduleSourceFiles()`** — Returns all tracked `.ts` files in a module (via `git ls-files`), `module.ts` first, tests excluded.
+- **`eventName()`** — Reads the owner's `events.ts` to resolve a constant to its wire-name string.
+- **`renderNeighbourhood()`** — Emits a single-module mermaid flowchart (solid arrows = imports, dotted arrows = events, colour-coded by subdomain). Returns a plain-text "no neighbours" sentence if the module is isolated.
+- **`render()`** — Emits the whole-repo mermaid flowchart with all modules, edges, and subdomain colour classes.
+- **`nodeId()`** — Replaces hyphens with underscores so module names become valid mermaid identifiers.
+- **`--check` flag** — When present, the script fails if the generated blocks in the markdown pages have diverged from what it would now produce (run in the `complete` CI job).
+- **Marker constants** (`START`/`END`, `LIST_START`/`LIST_END`) — HTML comment delimiters that bound the replaceable regions in `index.md` and each module page.
 
 ## Relationships
 
-- **`scripts/docs/marker-block.ts`** — Provides `applyMarkerBlocks`, which performs the actual file I/O: locating the start/end markers in a Markdown file and replacing the content between them. This script builds the `Target` objects (file path, marker strings, body) and hands them off.
-- **`scripts/docs/module-descriptor.ts`** — Provides `readModuleDescriptor`, used once at load time to read `module.yaml` and extract the `subdomain` field that drives node colouring in both diagrams.
+- **`scripts/docs/marker-block.ts`** — Provides `applyMarkerBlocks`, which writes the rendered graph/list bodies into the bounded marker regions in the target markdown files. This script is the sole caller in the docs pipeline.
+- **`scripts/docs/module-catalogue.ts`** — Provides `readCatalogue` and `renderModuleList`; this script uses them to produce the grouped module list block that sits between `LIST_START`/`LIST_END` on `index.md`.
+- **`scripts/docs/module-descriptor.ts`** — Provides `readModuleDescriptor`; this script calls it for every module folder to obtain the `subdomain` value that drives colour-casing and grouping.
+- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — Unit test that exercises this script's CI wave/mutation behaviour (listed as a graph neighbour; exercises the script's check/edge-reading logic).
 
 ## Notes
 
-- Event edges are the *reverse* of the import direction: a subscriber imports the owner's constant, so the import graph shows subscriber → owner, but the event flows owner → subscriber. The script reconciles this by tracking `owner` and `subscriber` explicitly.
-- `modules.ts` (the registry) is excluded from the graph because it imports every manifest by construction; including it would draw a star that obscures the real topology.
-- Test files are excluded from both import-edge detection and event-edge scanning; a spec importing a sibling's event constant to fire a fixture is not a real subscription.
-- The script must be run from the repo root context (it resolves `ROOT` as two levels up from `scripts/docs/`) and requires `npx depcruise` to be available.
-- Per-module pages are located by module name (not a fixed path), while the index page is always `docs/modules/index.md`.
-- Modules missing `module.yaml` are silently absent from the graph rather than assigned a default colour.
+- Three deliberate narrowings are baked in and documented in the header: `--exclude /tests/`, `--collapse` to one node per module, and dropping `modules.ts`. Changing any of them silently alters the edge count and the meaning of the diagram.
+- The per-module neighbourhood diagrams include event edges; the whole-repo index map does not. This asymmetry is intentional — the index prose argues about imports only.
+- `SUBDOMAIN` silently skips modules with no `module.yaml`. A new module added without a descriptor will be absent from every generated diagram rather than mislabelled.
+- Event edge detection relies on a fixed call shape (`onDomainEvent(CONST, …)`) and a fixed import pattern (`import { CONST } from '@modules/<owner>'`). A module that subscribes via a re-exported alias or a different helper will be invisible to the scanner.
+- The script reads `events.ts` per owner to resolve wire names; if that file is missing or the constant is not a simple `export const X = 'string'`, the constant name itself is used as the label.

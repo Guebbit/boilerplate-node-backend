@@ -5,63 +5,64 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/audit-logs/
-files: 14
-updated: 2026-09-27T16:19:18.670952+00:00
+files: 15
+updated: 2026-10-01T14:26:39.747368+00:00
 ---
 
 # src/modules/audit-logs/
 
 ## Purpose
 
-The audit-logs module is the durable, queryable half of the platform's audit pipeline. It defines the schema and TTL for persisted action-history entries, provides an append-only repository, and exposes a single tenant-facing `GET /audit` endpoint. It also acts as the persistence sink that the infrastructure audit-logger writes into whenever an actor event is emitted. By design it is write-once, read-many: no update or delete operations exist at the type level.
+The audit-logs module owns the **read-only, append-only trail of tenant actions**. It is the persistence sink that receives audit events emitted by the platform (via the observability audit logger) and the read path behind the tenant-facing `GET /audit` endpoint. It enforces immutability (no update/delete), configurable retention via a Mongo TTL index, and a deliberate fail-open policy on writes so that a database outage never blocks business operations.
 
 ## Key parts
 
-- **Domain core** — `model.ts` (Mongoose schema, indexes, TTL, serialization), `repository.ts` (append-and-read only; `create`, `search`, `since` helper), `service.ts` (persistence sink with fail-open `record` and fail-closed `search`; applies scope, sort, and pagination policies shared by both read surfaces).
-- **HTTP surface** — `routes.ts` (Express router, credential-type validation, `audit.any.read` permission gate), `controllers/get-audit.ts` (the single handler behind `GET /audit`), `openapi.yaml` (module-local OpenAPI contract for code-gen and consumer tooling).
-- **Module wiring** — `module.ts` (manifest: identity, routes, locales, permissions, personal-data hook; `onRegistered` hook that connects `emitAuditEvent` to this module's collection), `index.ts` (barrel export enforcing DDD encapsulation).
-- **Operational signal** — `metrics.ts` (Prometheus counter tracking entries that reached the compliance log but failed to persist into the queryable trail).
-- **Tests** — grouped into `tests/unit/` (retention TTL, schema contract, service failure-mode contracts), `tests/integration/` (repository against in-memory Mongo), and `tests/contract/` (wire-level shape of `GET /audit`).
+- **Data layer** — `model.ts` (Mongoose schema, indexes, TTL, serialization) and `repository.ts` (append-and-read only; `create` + `search` with a `since` helper; no mutation methods).
+- **Business logic** — `service.ts`: the single persistence sink called by the observability module's `emitAuditEvent`. Exposes `record` (fail-open, swallows write errors into a log line) and `search` (fail-closed, propagates errors). Applies scope, sort, and pagination policies.
+- **HTTP surface** — `routes.ts` (Express router, tenant-key auth, `audit.any.read` permission gate) and `controllers/get-audit.ts` (the single `GET /audit` handler).
+- **Module wiring** — `module.ts` (manifest: name, base path, routes, permissions, personal-data hook; `onRegistered` hook wires the persistence sink so `emitAuditEvent` calls land in this collection) and `index.ts` (barrel export; sibling modules must import through this file only).
+- **Config & observability** — `config.ts` (module-level settings, e.g. retention days) and `metrics.ts` (Prometheus counter for entries that reached the compliance log but failed to persist — the signal for the fail-open path).
+- **API contract** — `openapi.yaml` (OpenAPI 3.0.3 spec for `GET /audit` and shared component schemas).
+- **Tests** — `tests/contract/` (wire-contract lock on the endpoint), `tests/integration/` (repository against in-memory Mongo), `tests/unit/` (retention config, schema shape, service failure contracts).
 
 ## How it connects
 
-- **`src/modules/observability/`** — The strongest coupling. The observability module's audit logger (in `@infrastructure/observability/audit`) decides *what* to record and calls into this module's `service.record`. Conversely, `getObservabilityAuditLogs` in the observability module queries the same collection through the same `auditLogService`, differing only in that it authenticates with a platform key rather than a tenant key.
-- **`src/infrastructure/`** — Hosts the audit-logger that emits events into this module's sink; the module's `onRegistered` hook in `module.ts` is the join point.
-- **`src/kernel/`** — Provides the module-registration lifecycle and the DDD encapsulation rules that `index.ts` enforces (sibling modules must import through the barrel, not reach into `service.ts` or `model.ts`).
-- **`src/modules/users/`** — Supplies the tenant/user context that scopes `GET /audit` to "the tenant's own entries" and underpins the `audit.any.read` permission check.
-- **`src/infrastructure/http/`** — Express-level plumbing (middleware chain, router mounting) that `routes.ts` plugs into.
-- **Repository root / `scenarios/`** — The root defines `NODE_AUDIT_RETENTION_DAYS` (consumed by the TTL index in `model.ts`); `scenarios/` provides end-to-end fixtures exercised by the contract and integration tests.
+- **`src/modules/observability/`** — The primary producer. The observability audit logger decides *what* to record and calls into this module's `service.record`. The observability module also exposes a platform-wide `GET /observability/audit` endpoint that reads through the same `auditLogService.search`, differing only in authentication scope (platform key vs. tenant key).
+- **`src/modules/users/`** — Provides the tenant-identity and role-permission primitives that `routes.ts` uses to authenticate the caller and enforce the `audit.any.read` gate.
+- **`src/infrastructure/http/`** — Supplies the Express router utilities and middleware pipeline that `routes.ts` builds on.
+- **`src/infrastructure/`** (adapters, etc.) — Underlying MongoDB connection and observability/logging facilities consumed by the model and service.
+- **`scenarios/`** — End-to-end test scenarios that exercise the audit-log endpoints as part of broader platform flows.
 
 ## Where to start
 
-Read `module.ts` first — in one file you see the module's name, base path, routes, permission, the personal-data hook, and the `onRegistered` wiring that connects the event stream to the collection. Then read `service.ts` to understand the two asymmetric contracts (fail-open write, fail-closed read) and how the single service backs both the tenant endpoint and the observability endpoint. Together those two files explain roughly 80 % of what the module does.
+1. **`service.ts`** — Reading this first makes the module's two asymmetric contracts (fail-open `record`, fail-closed `search`) and its position between the repository and controllers immediately clear.
+2. **`module.ts`** — Shows how the module declares its identity, registers its routes, and wires the persistence sink, giving a newcomer the "how it all plugs together" picture before diving into any single file.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_audit_logs["src/modules/audit-logs/"]
-    m_scenarios["scenarios/<br/>26 files"]
-    m_src["src/<br/>19 files"]
-    m_src_infrastructure["src/infrastructure/<br/>44 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>23 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>19 files"]
-    m_src_kernel["src/kernel/<br/>11 files"]
-    m_src_modules_observability["src/modules/observability/<br/>30 files"]
-    m_src_modules_users["src/modules/users/<br/>33 files"]
+    m_scenarios["scenarios/<br/>30 files"]
+    m_src["src/<br/>48 files"]
+    m_src_infrastructure["src/infrastructure/<br/>58 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
+    m_src_modules_observability["src/modules/observability/<br/>33 files"]
+    m_src_modules_users["src/modules/users/<br/>48 files"]
     m_src_modules_audit_logs --- m_scenarios
     m_src_modules_audit_logs --- m_src
     m_src_modules_audit_logs --- m_src_infrastructure
     m_src_modules_audit_logs --- m_src_infrastructure_adapters
     m_src_modules_audit_logs --- m_src_infrastructure_http
-    m_src_modules_audit_logs --- m_src_kernel
     m_src_modules_audit_logs --- m_src_modules_observability
     m_src_modules_audit_logs --- m_src_modules_users
     style m_src_modules_audit_logs stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_kernel|src/kernel/]] · [[boilerplate-node-backend_src_modules_observability|src/modules/observability/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_observability|src/modules/observability/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
 
 ## Files
+- `src/modules/audit-logs/config.ts`
 - `src/modules/audit-logs/controllers/get-audit.ts` — Single-export controller that handles `GET /audit`, returning a filtered, paginated list of the tenant's own action-history entries. It mirrors the read path used by the `observability` module's `getObservabilityAuditLogs`, differing only in authentication scope (tenant key vs. platform key) — both ultimately query the same collection via `auditLogService`.
 - `src/modules/audit-logs/index.ts` — Public barrel (single import surface) for the audit-logs module. Sibling modules must import only through this file rather than reaching into `service.ts` or `model.ts` directly, enforcing the strategic DDD encapsulation rule.
 - `src/modules/audit-logs/metrics.ts` — Defines the domain-owned Prometheus counter for the audit-logs module. The counter tracks audit entries that made it into the compliance log but failed to persist into the queryable trail, giving operators a signal for the deliberate fail-open path in `record()`.
