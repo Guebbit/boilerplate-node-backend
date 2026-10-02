@@ -110,6 +110,12 @@ and emails, plus `export type *` from its model. See `docs/theory/strategic-ddd.
   paths, dual-write transitions) unless the user explicitly asks for it. Replace, don't shim.
 - MUST NOT leave deprecated code in place — no `@deprecated` tag kept "for later." When a change
   supersedes something, remove it in the same change.
+- MUST NOT build guardrails for administrators against their own choices: no repair commands, no
+  boot warnings, no refusals for a lock-out or a misconfiguration (removing the last
+  administrator, an odd role set-up).
+  - The repair is the technician editing the database by hand.
+  - Guard only what would break the app's consistency: a dangling reference, a broken invariant,
+    money or stock that no longer adds up.
 
 ## Async and error handling
 
