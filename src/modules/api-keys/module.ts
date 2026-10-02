@@ -34,11 +34,6 @@ export default {
     routes: router,
     onRegistered,
     locales: path.join(__dirname, 'locales'),
-    /**
-     * The permission keys this module introduces. Deleting the module deletes them:
-     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
-     * whose module is gone.
-     */
     personalData: [
         {
             section: 'apiKeys',

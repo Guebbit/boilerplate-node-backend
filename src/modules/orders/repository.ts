@@ -392,24 +392,6 @@ const countOpenBankTransfers = (userId: string): Promise<number> =>
     });
 
 /**
- * Which of `ids` still name a real order — `scripts/ops/reap-invoices.ts`'s existence check for a stored
- * invoice PDF found on disk with nothing left to serve it: `remove()`'s hard-delete path cleans up
- * its own order's file, but a row removed outside it (a scenario reset's `emptyDatabase()`, a
- * manual drop) leaves the file behind with nothing to name it an orphan except this lookup.
- *
- * A malformed id (not what `toObjectId` accepts) is filtered out before this runs — see the
- * reaper's own caller — so every entry here is a well-formed candidate.
- *
- * @param ids - candidate order ids, one per `.pdf` filename on disk
- * @returns the subset of `ids` a document still exists for
- */
-const existingIds = (ids: readonly string[]): Promise<Set<string>> =>
-    orderModel
-        .find({ _id: { $in: ids.map((id) => toObjectId(id)) } }, { _id: 1 })
-        .lean()
-        .then((documents) => new Set(documents.map((document) => String(document._id))));
-
-/**
  * Unset `userId` on every order this account placed, and mark each for
  * `scripts/ops/reap-orders.ts` to scrub later — `users`' `personalData.erase` hook. The order row
  * is never touched otherwise: it is the invoice, kept whole until its own `anonymizeAfter`.
@@ -620,7 +602,6 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
     addPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<void>;
     countOpenBankTransfers: (userId: string) => Promise<number>;
-    existingIds: (ids: readonly string[]) => Promise<Set<string>>;
     detachUserId: (
         userId: string,
         retentionDays: number,
@@ -644,7 +625,6 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     clearPendingEffect,
     addPendingEffect,
     countOpenBankTransfers,
-    existingIds,
     detachUserId,
     scrubDueForAnonymization,
     incrementOrderNumberCounter

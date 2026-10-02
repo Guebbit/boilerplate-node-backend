@@ -63,8 +63,7 @@ export const resolveSpooled = (key: string): string | undefined =>
     SPOOL_KEY_PATTERN.test(key) ? path.join(spoolRoot(), key) : undefined;
 
 /**
- * Deletes a spooled attachment. Never rejects, matching `services/invoice.ts#deleteCachedInvoice`:
- * called only once a caller knows a job is finished with it — `mailer.ts#sendInline` and
+ * Deletes a spooled attachment. Never rejects: called only once a caller knows a job is finished with it — `mailer.ts#sendInline` and
  * `email.worker.ts#discardJobAttachments`, never `sendTemplatedEmail()` itself — and a failed
  * cleanup must not become a second, different failure on top of whatever the send already was.
  *

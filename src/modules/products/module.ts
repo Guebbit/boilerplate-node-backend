@@ -25,11 +25,6 @@ import './events';
 export default {
     name: 'products',
     basePath: '/products',
-    /**
-     * The permission keys this module introduces. Deleting the module deletes them:
-     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
-     * whose module is gone, and a module claiming one the file does not attribute to it.
-     */
     routes: router,
     // The catalogue resolves a product's tax class into a rate, so the rates are this module's
     // config — `orders` only freezes the number `resolveTaxRate` hands it.

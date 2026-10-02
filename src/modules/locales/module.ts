@@ -63,15 +63,6 @@ const onRegistered = (modules: readonly AppModule[]): void => {
 export default {
     name: 'locales',
     basePath: '/locales',
-    /**
-     * The permission keys this module introduces. Deleting the module deletes them:
-     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
-     * whose module is gone, and a module claiming one the file does not attribute to it.
-     *
-     * `translations.any.*` is NOT here — `shared/authorization-keys.yaml` attributes those to
-     * `core` (LOCALES_OPTIONAL_0925 D-LO2): the port they guard survives this module's deletion,
-     * so the keys do too.
-     */
     routes: router,
     config: [localesConfig.slice],
     onRegistered,

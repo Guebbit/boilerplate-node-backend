@@ -23,12 +23,6 @@ import { cartConfig } from './config';
 export default {
     name: 'cart',
     basePath: '/cart',
-    /**
-     * The one permission key this module introduces — see `shared/authorization-keys.yaml`'s own
-     * comment on `cart.self.checkout` for why the basket's contents stay keyless while spending it
-     * doesn't. `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
-     * whose module is gone, and a module claiming one the file does not attribute to it.
-     */
     routes: router,
     config: [cartConfig.slice],
     personalData: [

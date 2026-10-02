@@ -67,11 +67,6 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
 export default {
     name: 'orders',
     basePath: '/orders',
-    /**
-     * The permission keys this module introduces. Deleting the module deletes them:
-     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
-     * whose module is gone, and a module claiming one the file does not attribute to it.
-     */
     routes: router,
     publicEvents,
     // Jurisdiction, currency, bank transfer and the order link: see `./config`.

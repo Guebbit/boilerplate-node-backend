@@ -54,11 +54,6 @@ const onRegistered = (modules: readonly AppModule[]): void => {
 export default {
     name: 'account',
     basePath: '/account',
-    /**
-     * The permission keys this module introduces. Deleting the module deletes them:
-     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
-     * whose module is gone, and a module claiming one the file does not attribute to it.
-     */
     routes: router,
     /** The credential/signup/reset/MFA/password-check budgets — see `./rate-limits.ts`. */
     rateLimits: accountRateLimits,
