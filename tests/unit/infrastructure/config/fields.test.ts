@@ -155,6 +155,14 @@ describe('text and secret', () => {
     });
 });
 
+describe('setBy', () => {
+    it('reaches the field document, and is absent when not given', () => {
+        expect(text({ setBy: 'npm' }).doc.setBy).toBe('npm');
+        expect(flag({ default: false, setBy: 'e2e:serve' }).doc.setBy).toBe('e2e:serve');
+        expect(text().doc).not.toHaveProperty('setBy');
+    });
+});
+
 describe('csv and key rings', () => {
     it('splits, trims and drops blank members', () => {
         expect(csv().schema.parse(' a, b ,, c,')).toEqual(['a', 'b', 'c']);

@@ -139,6 +139,7 @@ export const tracingConfig = defineConfig({
             describe: 'OTLP collector for traces only; wins over the endpoint above.'
         }),
         npm_package_version: text({
+            setBy: 'npm',
             describe: 'Set by npm when started through a script; stamped on spans.'
         })
     }
