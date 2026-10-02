@@ -254,7 +254,7 @@ operations:
             $ref: '#/channels/example.published'
         summary: An example was published.
         description: >-
-            One-to-one with the `example.published` domain event — see `example/service.ts`. Fired
+            One-to-one with the `example.published` domain event — see `example/services/crud.ts`. Fired
             each time an example moves to `published`, including after being archived and brought back.
         messages:
             - $ref: '#/channels/example.published/messages/ExamplePublishedEvent'
