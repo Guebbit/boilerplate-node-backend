@@ -42,7 +42,7 @@ export const webhooksConfig = defineConfig({
         NODE_WEBHOOK_DEMO_SINK_URL: text({
             forbiddenOutsideRelaxed: true,
             describe:
-                'The demo webhook tester; its host is exempt from the SSRF guard. Development/test only.'
+                'The demo webhook sink (https); its host is exempt from the SSRF private-address check. Development/test only.'
         })
     }
 });
@@ -72,12 +72,13 @@ export const getWebhookDeliveryRetentionDays = (): number =>
     webhooksConfig().NODE_WEBHOOK_DELIVERY_RETENTION_DAYS;
 
 /**
- * The one hostname the SSRF guard (`@infrastructure/adapters/ssrf-guard`) may deliver to without
- * `https:` or a publicly-routable address — `NODE_WEBHOOK_DEMO_SINK_URL`'s host, so
- * `docker compose --profile integrations`'s `webhook-tester` (plain HTTP, a private compose-network
- * address) is reachable at all. `undefined` outside development/test even when the variable is
- * set: `infrastructure/config/define.ts` refuses to boot with it set there too, and this is the
- * second gate.
+ * The one hostname the SSRF guard (`@infrastructure/adapters/ssrf-guard`) may deliver to without a
+ * publicly-routable address — `NODE_WEBHOOK_DEMO_SINK_URL`'s host, so the sink behind
+ * `docker compose --profile integrations`'s `webhook-tester-tls` (loopback, or a private
+ * compose-network address) is reachable at all. The `https:` rule is NOT relaxed: the sink speaks
+ * TLS too. `undefined` outside development/test even when the variable is set:
+ * `infrastructure/config/define.ts` refuses to boot with it set there too, and this is the second
+ * gate.
  *
  * @returns the hostname to exempt, or `undefined` when there is nothing to exempt
  */

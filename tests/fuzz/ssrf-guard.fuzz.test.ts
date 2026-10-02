@@ -205,20 +205,26 @@ describe('resolveSafeOutboundTarget — the pinned lookup it hands back', () => 
  * literal straight back without calling `resolve4`/`resolve6`, so these cases need no `mockDns`.
  */
 describe('resolveSafeOutboundTarget — the exemptHostname parameter', () => {
-    it('allows a private, http: address for the exact exempted hostname', async () => {
-        const target = await resolveSafeOutboundTarget('http://127.0.0.1:8080/hook', '127.0.0.1');
+    it('allows a private address for the exact exempted hostname', async () => {
+        const target = await resolveSafeOutboundTarget('https://127.0.0.1:8443/hook', '127.0.0.1');
         expect(target.resolvedAddress).toBe('127.0.0.1');
     });
 
     it('still refuses a hostname other than the one exempted', async () => {
         await expect(
-            resolveSafeOutboundTarget('http://127.0.0.1/hook', 'webhook-tester')
+            resolveSafeOutboundTarget('https://127.0.0.1/hook', 'webhook-tester')
+        ).rejects.toMatchObject({ reason: 'unsafe-address' });
+    });
+
+    it('still refuses http:, even for the exempted hostname', async () => {
+        await expect(
+            resolveSafeOutboundTarget('http://127.0.0.1:8080/hook', '127.0.0.1')
         ).rejects.toMatchObject({ reason: 'insecure-scheme' });
     });
 
     it('still refuses credentials in the URL, even for the exempted hostname', async () => {
         await expect(
-            resolveSafeOutboundTarget('http://user:pass@127.0.0.1/hook', '127.0.0.1')
+            resolveSafeOutboundTarget('https://user:pass@127.0.0.1/hook', '127.0.0.1')
         ).rejects.toMatchObject({ reason: 'credentials-in-url' });
     });
 });
