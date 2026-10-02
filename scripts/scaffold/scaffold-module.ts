@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
- * `npm run scaffold:module -- <name> [options]`: a working module from the feedback-shaped
- * template. Writes the folder, the docs page and the registry lines, then runs
+ * `npm run scaffold:module -- <name> [options]`: a working module from the template cut from the
+ * example module's core. Writes the folder, the docs page and the registry lines, then runs
  * `regenerate --no-sync` so the generated types exist for the first compile.
  *
  * What it will not decide, and prints instead: personal data, frontend pairing, rate limits, which

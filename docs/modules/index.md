@@ -185,7 +185,7 @@ Ships with every deployment, whatever the project becomes.
 - [`antibot`](./antibot.md) — The human-challenge port, and the endpoint that tells a frontend which provider is active.
 - [`api-keys`](./api-keys.md) — Long-lived programmatic credentials, scoped to the same permission model a session uses.
 - [`audit-logs`](./audit-logs.md) — Owns the audit trail; the read endpoint is its own, the platform operator's view lives in observability.
-- [`feedback`](./feedback.md) — Contact submissions and what an admin does with them. The reference module to copy for a new domain.
+- [`feedback`](./feedback.md) — Contact submissions and what an admin does with them.
 - [`locales`](./locales.md) — Language discovery and the API's own message dictionary.
 - [`observability`](./observability.md) — Health, metrics, the platform operator's audit read and the SSE stream.
 - [`users`](./users.md) — Admin-side user management; the self-service half is account.

@@ -77,8 +77,10 @@ Rules of thumb:
 - **Write it down in the same change.** A new dependency gets its group and purpose in
   `scripts/docs/dependency-groups.ts`; `npm run regenerate` rebuilds the page. A library only one
   module imports is that module's: its page under `docs/modules/` says why it was chosen. A new
-  module gets its page, plus a `## Libraries` section if it brings one. Removing a module removes
-  what it owned.
+  module gets its page, plus a `## Libraries` section if it brings one. The one exception is
+  `example` (`group: example`): it has no page by design, because it exists only to be copied and
+  its files carry their own headers. `docs/theory/modules.md#the-module-template` is where it is
+  explained, so do not "fix" the missing page. Removing a module removes what it owned.
 
 ## Module barrels
 

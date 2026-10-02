@@ -1,9 +1,10 @@
 /**
  * @module
  * The runtime files of a scaffolded module, as plain template literals. The shape is the
- * `feedback` module's, cut to its admin half: a collection with a name and optional notes, keyed
- * list / create / replace / patch / delete behind one gate. Prettier reformats the output, so the
- * templates are written for readability, not for final layout.
+ * `example` module's core, cut to an admin collection: a name and optional notes, keyed
+ * list / create / replace / patch / delete behind one gate. Each file opens with the header
+ * `example` gives its twin: its role in ANY module, then what it does here. Prettier reformats the
+ * output, so the templates are written for readability, not for final layout.
  *
  * Generated comments avoid backticks: they would need escaping inside these template literals.
  */
@@ -30,10 +31,13 @@ export const moduleYaml = (options: ScaffoldOptions): string =>
 export const moduleManifest = (names: ModuleNames): string => `/**
  * @module
  * ${names.words}: a keyed collection an admin lists, creates, edits and deletes. Scaffolded from the
- * feedback module's admin half; replace this paragraph with what the domain is and what it
- * deliberately does not reach.
+ * example module's core; replace this paragraph with what the domain is and what it deliberately
+ * does not reach.
  *
- * See: docs/modules/${names.kebab}.md
+ * In any module: the manifest below is everything this module asks the application to do for it.
+ * Each optional capability is one entry here plus its own files, and each can be deleted alone.
+ *
+ * See: docs/theory/modules.md#the-module-template, docs/modules/${names.kebab}.md
  */
 
 import type { AppModule } from '@kernel/registry';
@@ -53,10 +57,12 @@ export default {
 /** The convenience barrel. */
 export const barrel = (names: ModuleNames): string => `/**
  * @module
- * ${names.words} - public barrel; the only surface a sibling may import (see
- * docs/theory/strategic-ddd.md section 5).
+ * ${names.words} - public barrel; the only surface a sibling may import.
  *
- * See: docs/modules/${names.kebab}.md
+ * In any module: the barrel exports services, domain rules, events and emails, and the model's
+ * TYPES. Never a repository, the model's runtime value, a wiring file or factories.ts.
+ *
+ * See: docs/theory/strategic-ddd.md section 5, docs/modules/${names.kebab}.md
  */
 
 export * from './service';
@@ -67,10 +73,11 @@ export type * from './model';
 /** The audit vocabulary, present unless the module opted out. */
 export const auditFile = (names: ModuleNames): string => `/**
  * @module
- * Audit actions this module emits, declared by augmentation - see modules/account/audit.ts for
- * why. Reads are audited too: who looked at the records is a question the log should answer.
+ * In any module: the audit actions it emits, declared by augmentation so the app-wide union grows
+ * with the modules that are enabled - see modules/account/audit.ts for why. Here, reads are
+ * audited too: who looked at the records is a question the log should answer.
  *
- * See: docs/modules/${names.kebab}.md
+ * See: docs/tools/winston.md, docs/modules/${names.kebab}.md
  */
 
 /** The audit action vocabulary this module owns. */
@@ -116,7 +123,8 @@ const describeAction = (action: string): string =>
 /** The Mongoose schema and model. */
 export const modelFile = (names: ModuleNames): string => `/**
  * @module
- * ${names.entity} schema - one collection, a leaf in both directions (see ./module).
+ * In any module: the Mongoose schema, one collection, and the wire-shape transform the repository
+ * and presenter share. Here: ${names.entity} schema, a leaf in both directions (see ./module).
  *
  * createdAt and updatedAt are overridden from the generated ${names.entity} type (string to Date):
  * Mongoose holds native dates, and serialization narrows them back to the wire's ISO strings.
@@ -174,9 +182,10 @@ export const ${names.entityCamel}Model = model<${names.entity}Document, ${names.
 /** The repository, built on the shared factory. */
 export const repositoryFile = (names: ModuleNames): string => `/**
  * @module
- * ${names.entity} repository - standard CRUD via the shared repository factory.
+ * In any module: the only door to the collection. Nothing outside the module imports it - the
+ * service is the door. Here: ${names.entity} repository, standard CRUD via the shared factory.
  *
- * See: docs/modules/${names.kebab}.md
+ * See: docs/theory/layers.md, docs/modules/${names.kebab}.md
  */
 
 import { ${names.entityCamel}Model, apply${names.entity}Transform } from './model';
@@ -263,10 +272,12 @@ const contextDocument = (options: ScaffoldOptions, description: string): string 
 /** The service: the write path around the repository. */
 export const serviceFile = (names: ModuleNames, options: ScaffoldOptions): string => `/**
  * @module
- * ${names.entity} service - list, create, replace/patch and delete. Every write records an audit
- * row (when the module audits) so the controllers stay thin.
+ * In any module: the service is the one door. Controllers and sibling modules call it; it applies
+ * the domain rules, talks to the repository and announces what happened. Here: ${names.entity}
+ * list, create, replace/patch and delete. Every write records an audit row (when the module
+ * audits) so the controllers stay thin.
  *
- * See: docs/modules/${names.kebab}.md
+ * See: docs/theory/layers.md, docs/modules/${names.kebab}.md
  */
 
 import type {
@@ -398,7 +409,8 @@ export const ${names.entityCamel}Service = { create, search, update, updateById,
 /** The one place a document becomes the wire shape. */
 export const presenterFile = (names: ModuleNames): string => `/**
  * @module
- * The one place a ${names.entityCamel} document becomes the wire shape openapi.yaml declares.
+ * In any module: the one place a stored row becomes the wire shape openapi.yaml declares, so every
+ * read and write answers with the same thing. Here: a ${names.entityCamel} document.
  */
 
 import type { ${names.entity} } from '@types';
@@ -417,11 +429,12 @@ export const present${names.entity} = (document: ${names.entity}Document): ${nam
 /** The route table. */
 export const routesFile = (names: ModuleNames): string => `/**
  * @module
- * Route table for ${names.kebab}. Everything sits below one router.use(getAuth, isAuthOrCredential)
- * gate, each mount stating the one key its own action needs. The gate is positional: a route
- * appended above it is public purely by where it was typed.
+ * In any module: the route table. Public routes sit above one router.use(getAuth, ...) gate and
+ * everything below it is signed-in, so which half a route is in is decided by where it is typed.
+ * Here: everything sits below one router.use(getAuth, isAuthOrCredential) gate, each mount stating
+ * the one key its own action needs.
  *
- * See: docs/modules/${names.kebab}.md
+ * See: docs/theory/request-flow.md, docs/modules/${names.kebab}.md
  */
 
 import { Router } from 'express';
@@ -470,10 +483,11 @@ const contextArgument = (options: ScaffoldOptions): string =>
 /** The list controller. */
 export const getController = (names: ModuleNames, options: ScaffoldOptions): string => `/**
  * @module
- * Controller for GET ${names.basePath}: one page of ${names.words}, built on the shared
+ * In any module: a controller is thin wiring - decode the request, call the service, shape the
+ * answer. Here: GET ${names.basePath}, one page of ${names.words}, built on the shared
  * list-controller factory.
  *
- * See: docs/modules/${names.kebab}.md
+ * See: docs/theory/request-flow.md, docs/modules/${names.kebab}.md
  */
 
 import { List${names.plural}QueryParams } from '@api/schemas.zod';
@@ -498,9 +512,10 @@ export const get${names.plural} = createListController({
 /** The create controller. */
 export const postController = (names: ModuleNames, options: ScaffoldOptions): string => `/**
  * @module
- * Controller for POST ${names.basePath}: create one ${names.entityCamel}.
+ * In any module: a create controller validates the body against the generated schema, calls the
+ * service and answers 201. Here: POST ${names.basePath}, create one ${names.entityCamel}.
  *
- * See: docs/modules/${names.kebab}.md
+ * See: docs/theory/request-flow.md, docs/modules/${names.kebab}.md
  */
 
 import type { Request, Response } from 'express';
@@ -532,10 +547,10 @@ export const post${names.entity} = (request: Request, response: Response) => {
 /** The PUT/PATCH controller pair. */
 export const updateController = (names: ModuleNames, options: ScaffoldOptions): string => `/**
  * @module
- * Controllers for PUT (replace) and PATCH (merge) ${names.basePath}/:id, built on the shared
- * createUpdateController factory.
+ * In any module: PUT (replace) and PATCH (merge) share one pipeline, built by the shared update
+ * factory, which also owns the id check, If-Match and the ETag. Here: ${names.basePath}/:id.
  *
- * See: docs/modules/${names.kebab}.md
+ * See: docs/api/write-methods.md, docs/modules/${names.kebab}.md
  */
 
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
@@ -558,11 +573,11 @@ export const { replace: replace${names.entity}, update: update${names.entity} } 
 /** The delete controller. */
 export const deleteController = (names: ModuleNames, options: ScaffoldOptions): string => `/**
  * @module
- * Controller for DELETE ${names.basePath}/:id - permanent. Hand-written rather than built on
- * createDeleteController: that factory serves the soft/hard delete triplet, and this module has
- * no soft-delete tier.
+ * In any module: a delete controller. Here: DELETE ${names.basePath}/:id - permanent. Hand-written
+ * rather than built on createDeleteController: that factory serves the soft/hard delete triplet,
+ * and this module has no soft-delete tier.
  *
- * See: docs/modules/${names.kebab}.md
+ * See: docs/theory/request-flow.md, docs/modules/${names.kebab}.md
  */
 
 import type { Request, Response } from 'express';
@@ -587,8 +602,10 @@ export const delete${names.entity} = (request: Request<{ id: string }>, response
 /** The fixture builder. */
 export const factoriesFile = (names: ModuleNames): string => `/**
  * @module
- * How a ${names.entityCamel} row is built for tests and demo data. Goes through the model's own
- * shape, so a fixture cannot carry a field the schema would drop.
+ * In any module: how a row is built for a test or a seed. Reachable at @modules/<name>/factories
+ * and never from the barrel - it writes past the rules a service enforces. Here: a
+ * ${names.entityCamel} row, through the model's own shape, so a fixture cannot carry a field the
+ * schema would drop.
  */
 
 import type { ${names.entity}Document } from './model';

@@ -73,25 +73,27 @@ it declares.
 `scenarios/check.ts`'s guarantee comparison. A field nothing reads is a comment with extra syntax,
 which is why several used to be here and are not.
 
-### 4 · `src/modules/feedback/module.ts` — one module, declared
+### 4 · `src/modules/example/module.ts` — one module, declared
 
-**`feedback` is the reference module** — when you add a domain, copy this one. It is a foundation
-module (it outlives `npm run demo:remove`) and depends on nothing, so it shows the shape without
-the complications. Start the tour here rather than in a shop module for the same reason.
+**`example` is the module to copy** — when you add a domain, start from this one. It has its own
+group (it outlives `npm run demo:remove`) and depends only on `users`, so it shows the shape without
+the complications. Start the tour here rather than in a shop module for the same reason. It has no
+docs page on purpose: the header of each of its files says its role in any module, and
+[the module template](./modules.md#the-module-template) lists what each optional capability costs.
 
 **Take away:** compare it with `src/modules/orders/module.ts`, which declares `subscribe` and whose
 docblock explains what it reaches for. That is the whole difference between a leaf domain and a
 connected one.
 
-### 5 · `src/modules/feedback/routes.ts` — the URL surface
+### 5 · `src/modules/example/routes.ts` — the URL surface
 
 **Take away:** two things that are easy to miss. The gate is **positional**: the one public route
-(`POST /contact`) sits above `router.use(getAuth, …)` and everything below it is admin-only, purely
-by where it was typed. And static segments (`/search`) are declared **before** `/:id` or Express
-matches them as ids. Several routes also point at the same controller on purpose — `GET /feedback`
-and `POST /feedback/search` are one handler.
+(`GET /published/:id`) sits above `router.use(getAuth, …)` and everything below it is signed-in,
+purely by where it was typed. And static segments (`/search`) are declared **before** `/:id` or
+Express matches them as ids. Several routes also point at the same controller on purpose — `GET
+/examples` and `POST /examples/search` are one handler.
 
-### 6 · `src/modules/feedback/controllers/post-feedback-contact.ts` — one request, end to end
+### 6 · `src/modules/example/controllers/post-example.ts` — one request, end to end
 
 The most important single file on this list. Every controller in every module has this shape:
 
@@ -106,13 +108,14 @@ service.doTheThing(...)                     ← the actual work
 **Take away:** once you have read one controller, you have read all 60. The variation between them
 is the schema and the service call.
 
-### 7 · `src/modules/feedback/service.ts` — the domain decision
+### 7 · `src/modules/example/services/crud.ts` — the domain decision
 
-Where "a submission with the honeypot filled is filed as spam and nobody's inbox hears about it"
-lives. Services take decisions; they do not touch Express (no `request`, no `response`) and do not
-write Mongo queries.
+Where "a published example cannot go back to a draft, and publishing it tells its owner" lives (the
+rule itself is pure, in `domain/lifecycle.ts`). Services take decisions; they do not touch Express
+(no `request`, no `response`) and do not write Mongo queries. Who may see which row is not decided
+by hand either: `accessibleFilterFor` compiles the caller's keys into the query.
 
-### 8 · `src/modules/feedback/repository.ts` — the database
+### 8 · `src/modules/example/repository.ts` — the database
 
 Built on `createRepository`. Note the `searchable` spec: filters are declared as **data** — filter
 key → Mongo path — so `$regex`, `$elemMatch` and `ObjectId` never leak up into a service.
@@ -149,7 +152,7 @@ all of it is easier to read once you have one.
 | `src/infrastructure/adapters/*` (cache, queue, storage, mailer, pdf) | You need that specific capability. Each is self-contained.                                                                 |
 | `src/infrastructure/observability/*`                                 | You are debugging a trace or adding a metric.                                                                              |
 | `src/modules/*/openapi/*`                                            | The contract, one module at a time. Authored — see [Contract Ownership & Fragmentation](../api/contract-fragmentation.md). |
-| `src/modules/account/*`                                              | It is the biggest and least typical module (21 routes, JWT, cookies, sessions, tokens). Read `feedback` first.             |
+| `src/modules/account/*`                                              | It is the biggest and least typical module (21 routes, JWT, cookies, sessions, tokens). Read `example` first.              |
 | `src/cluster.ts`                                                     | You are changing process management. See [Clustering & Shutdown](./clustering.md).                                         |
 | `eslint.config.ts`, `stryker.json`, `jest.config.js`                 | You are changing the gate itself.                                                                                          |
 

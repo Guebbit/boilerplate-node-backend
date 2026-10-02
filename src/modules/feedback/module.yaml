@@ -1,4 +1,4 @@
-summary: 'Contact submissions and what an admin does with them. The reference module to copy for a new domain.'
+summary: 'Contact submissions and what an admin does with them.'
 subdomain: generic
 group: foundation
 dependsOn: []

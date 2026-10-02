@@ -96,16 +96,17 @@ Four ideas carry the whole repository:
 
 ## Where things live
 
-|                      |                                                                |
-| -------------------- | -------------------------------------------------------------- |
-| `src/modules/*`      | the domains — each one deletable                               |
-| `src/kernel`         | registry, domain events, auth primitives                       |
-| `src/infrastructure` | http, persistence, adapters, observability, runtime            |
-| `src/app`            | assembly: routes, security, error handling, telemetry, workers |
-| `api/`               | generated types and Zod schemas — never edited by hand         |
-| `shared/`            | contract fragments and EJS email templates                     |
-| `scripts/db/`        | index sync and one-off data scripts                            |
-| `scenarios/`         | the demo records and the flow runner, outside `src/` entirely  |
+|                       |                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------- |
+| `src/modules/*`       | the domains — each one deletable                                                            |
+| `src/modules/example` | only an example: the module to copy for a new domain, then delete it once you have your own |
+| `src/kernel`          | registry, domain events, auth primitives                                                    |
+| `src/infrastructure`  | http, persistence, adapters, observability, runtime                                         |
+| `src/app`             | assembly: routes, security, error handling, telemetry, workers                              |
+| `api/`                | generated types and Zod schemas — never edited by hand                                      |
+| `shared/`             | contract fragments and EJS email templates                                                  |
+| `scripts/db/`         | index sync and one-off data scripts                                                         |
+| `scenarios/`          | the demo records and the flow runner, outside `src/` entirely                               |
 
 ---
 

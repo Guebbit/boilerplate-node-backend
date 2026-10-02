@@ -1,8 +1,9 @@
 # Module scaffolder
 
-`npm run scaffold:module -- <name>` writes a working module from the [`feedback`](../modules/feedback.md)
-shape, so a new domain starts from something that compiles, lints and passes the gate instead of
-from a copy-and-rename.
+`npm run scaffold:module -- <name>` writes a working module from the core of the `example` module
+([the module template](../theory/modules.md#the-module-template)), so a new domain starts from
+something that compiles, lints and passes the gate instead of from a copy-and-rename. A scaffolded
+module is a real module, so it gets its own page; the `example` module it was cut from has none.
 
 ```sh
 npm run scaffold:module -- field-notes
@@ -21,9 +22,14 @@ npm run scaffold:module -- audits-lite --no-audit
 
 ## What it generates
 
-The template is the admin half of `feedback`: a collection with a required `name` and optional
+The template is the core of `example`, cut to an admin collection: a required `name` and optional
 `notes`, listed, created, replaced (PUT), merged (PATCH) and deleted behind one gate and four
-permission keys. It is deliberately not a shop module, so it depends on nothing.
+permission keys. It is deliberately not a shop module, so it depends on nothing. Every file opens
+with the header `example` gives its twin: the file's role in any module, then what it does here,
+then the docs to read. The optional capabilities `example` shows (events, mail, a webhook, a cover
+image, translations) are left out, and
+[the capability table](../theory/modules.md#optional-capabilities-and-the-files-that-carry-them)
+says which files to add for each.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
@@ -97,5 +103,5 @@ template variants compile. It is report-only and not part of the commit gate.
 ## Related pages
 
 - [Adding & removing a module](../theory/module-lifecycle.md) — the procedure this automates
-- [The `feedback` module](../modules/feedback.md) — what the template was cut from
+- [The module template](../theory/modules.md#the-module-template) — the `example` module the template was cut from
 - [Contract ownership & fragmentation](../api/contract-fragmentation.md) — what reads the generated `openapi.yaml`
