@@ -122,13 +122,14 @@ flowchart TB
     V --> F["POST /account/email-change-confirm"]
     F --> S["pendingEmail → email<br/>verified = true<br/>refresh tokens revoked"]
     D["DELETE /account/pending-email"] --> X["pendingEmail cleared<br/><i>no mail, no token</i>"]
+    Q["POST /account/pending-email/resend"] --> V2["fresh link → NEW address only<br/><i>the old link dies · 60 s cooldown</i>"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef warn fill:#fee2e2,stroke:#dc2626,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
-    class P,F,D entry;
+    class P,F,D,Q entry;
     class R,N warn;
-    class O,W,V,S,X done;
+    class O,W,V,V2,S,X done;
 ```
 
 Three things in that diagram are decisions rather than mechanics:
@@ -142,6 +143,12 @@ Three things in that diagram are decisions rather than mechanics:
   treating "same address" as "cancel" meant a routine save could silently drop a pending change
   the caller never asked to drop. `DELETE /account/pending-email` is the only thing that cancels
   one now.
+- **Resending is its own action too, and it mails the new address only.** Sending the pending
+  address again through `PUT`/`PATCH /account` is a no-op (a double-submitted save must not mail
+  twice), so `POST /account/pending-email/resend` is the explicit way to ask for the link again.
+  The old address was told once, when the change was requested; telling it on every resend would
+  read like a takeover alert. It uses `POST /account/verify-request`'s cooldown and budget, answers
+  204, and does nothing when nothing is pending.
 - **Confirming revokes every refresh token.** An email change is the stronger takeover primitive
   of the two, and this is the same treatment a changed password already gets.
 

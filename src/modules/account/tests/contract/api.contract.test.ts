@@ -501,6 +501,96 @@ describe('DELETE /account/pending-email', () => {
     });
 });
 
+/** Parks a change and steps past the cooldown its own mail started. */
+const requestChangeAndWait = async (address: string) => {
+    freezeDate();
+    const session = await loginWithCookie({ verifiedAt: new Date() });
+    await api().patch('/account').set('Authorization', session.bearer).send({ email: address });
+    advanceDate(61_000);
+    return session;
+};
+
+/*
+ * The resend is the only way to ask for the pending address's link again: restating it on `PATCH
+ * /account` is a no-op. The cooldown is stepped over with a frozen clock rather than a wait.
+ */
+describe('POST /account/pending-email/resend', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('mails the NEW address a fresh link and nobody else, answering 204', async () => {
+        const { user, bearer } = await requestChangeAndWait('new-address@example.com');
+        const enqueueEmail = mailerPort.enqueueEmail as jest.MockedFunction<
+            typeof mailerPort.enqueueEmail
+        >;
+        enqueueEmail.mockClear();
+
+        const response = await api()
+            .post('/account/pending-email/resend')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(204);
+        expect(response.body).toEqual({});
+        expect(enqueueEmail).toHaveBeenCalledTimes(1);
+        expect(mailTo('new-address@example.com')?.[1]).toBe('account.verify-request');
+        // The old address was told once, when the change was requested — not again.
+        expect(mailTo(user.email)).toBeUndefined();
+    });
+
+    it('kills the first link and confirms with the second', async () => {
+        const { user, bearer } = await requestChangeAndWait('new-address@example.com');
+        const firstToken = verifyTokenFromMail();
+
+        await api().post('/account/pending-email/resend').set('Authorization', bearer);
+        const secondToken = verifyTokenFromMail();
+
+        expect(secondToken).not.toBe(firstToken);
+        const stale = await api().post('/account/email-change-confirm').send({ token: firstToken });
+        expect(stale.status).toBe(422);
+        const confirm = await api()
+            .post('/account/email-change-confirm')
+            .send({ token: secondToken });
+        expect(confirm.status).toBe(200);
+        const stored = await userRepository.findById(user.id);
+        expect(stored?.email).toBe('new-address@example.com');
+    });
+
+    it('answers 429 with the seconds to wait inside the cooldown', async () => {
+        const { bearer } = await requestChangeAndWait('new-address@example.com');
+        await api().post('/account/pending-email/resend').set('Authorization', bearer);
+
+        const response = await api()
+            .post('/account/pending-email/resend')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(429);
+        expect(response.body.errors[0]).toMatchObject({
+            code: 'EMAIL_VERIFY_RESEND_TOO_SOON',
+            details: { retryAfter: expect.any(Number) as number }
+        });
+    });
+
+    it('is a no-op, still 204, when nothing is pending', async () => {
+        const { bearer } = await authenticateAs('user');
+        const enqueueEmail = mailerPort.enqueueEmail as jest.MockedFunction<
+            typeof mailerPort.enqueueEmail
+        >;
+        enqueueEmail.mockClear();
+
+        const response = await api()
+            .post('/account/pending-email/resend')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(204);
+        expect(enqueueEmail).not.toHaveBeenCalled();
+    });
+
+    it('demands a session', async () => {
+        const response = await api().post('/account/pending-email/resend');
+
+        expect(response.status).toBe(401);
+    });
+});
+
 /**
  * `POST /account/reset-confirm` shares `postPasswordChange`'s shape-only parse, and for the same
  * reason. Its own describe because the flow needs a live one-time token rather than a session.

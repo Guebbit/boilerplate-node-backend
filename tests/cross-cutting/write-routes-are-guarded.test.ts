@@ -80,6 +80,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "cancelling a pending change to the caller's own profile"
     },
+    'account POST /pending-email/resend': {
+        requiresAuth: true,
+        reason: "re-sending the link for a pending change to the caller's own profile"
+    },
     'account DELETE /': {
         requiresAuth: true,
         reason: "requesting deletion of the caller's own account"

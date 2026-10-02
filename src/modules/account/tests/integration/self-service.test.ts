@@ -32,6 +32,7 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { accountAuditActions } from '../../audit';
 import { accountAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
+import { MISSING_ID } from '@tests/ids';
 import { rolesOf } from '@modules/access';
 import * as accessPort from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -687,6 +688,131 @@ describe('requestEmailVerificationFor', () => {
         );
 
         expect(response.status).toBe(409);
+    });
+});
+
+/**
+ * Moves the live `email-change` token's send time into the past, so the cooldown has run out.
+ * Ageing the recorded send, rather than a fake clock — `sentAt` is what the cooldown reads.
+ */
+const ageEmailChangeSend = async (userId: string): Promise<void> => {
+    const aged = await userRepository.findByIdWithCredentials(userId);
+    const live = aged!.tokens.find(({ type }) => type === EMAIL_CHANGE_TOKEN_TYPE)!;
+    live.sentAt = new Date(live.sentAt!.getTime() - (VERIFY_RESEND_SECONDS + 1) * 1000);
+    await userRepository.save(aged!);
+};
+
+/*
+ * The pending address cannot be re-asked for through `PUT/PATCH /account` (a restated pending
+ * address is a no-op), so this is the only way a lost link is mailed again. Same cooldown and
+ * same send-spends-no-limiter-budget reasoning as `requestEmailVerificationFor` above.
+ */
+describe('resendPendingEmailVerificationFor', () => {
+    it('answers 204 and replaces the live link with a fresh one', async () => {
+        const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
+        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        const emailChangeToken = () =>
+            readTokens(user.id).then(
+                (tokens) => tokens.find((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)?.token
+            );
+        const mailed = await emailChangeToken();
+        await ageEmailChangeSend(user.id);
+
+        const response = asSuccess(
+            await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext)
+        );
+
+        expect(response.status).toBe(204);
+        const fresh = await emailChangeToken();
+        expect(fresh).toBeDefined();
+        expect(fresh).not.toBe(mailed);
+        // Exactly one live link: the previous one was revoked, not kept beside it.
+        const stored = await readTokens(user.id);
+        const live = stored.filter((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE);
+        expect(live).toHaveLength(1);
+    });
+
+    it('leaves the pending address and the current one as they were', async () => {
+        const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
+        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await ageEmailChangeSend(user.id);
+
+        await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext);
+
+        const stored = await userRepository.findByIdWithCredentials(user.id);
+        expect(stored?.email).toBe('before@example.com');
+        expect(stored?.pendingEmail).toBe('after@example.com');
+    });
+
+    it('is a no-op when nothing is pending: 204, no token minted, nothing audited', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
+
+        const response = asSuccess(
+            await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext)
+        );
+
+        expect(response.status).toBe(204);
+        expect(await readTokens(user.id)).toEqual([]);
+        expect(auditSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT })
+        );
+    });
+
+    it('refuses a second send inside the cooldown, with the seconds to wait', async () => {
+        const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
+        // The request itself mailed the first link, so the cooldown is already running.
+        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+
+        const response = asReject(
+            await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext)
+        );
+
+        expect(response.status).toBe(429);
+        const [error] = response.errors;
+        expect(error).toMatchObject({
+            code: 'EMAIL_VERIFY_RESEND_TOO_SOON',
+            details: { retryAfter: expect.any(Number) as number }
+        });
+    });
+
+    it('is not slowed by a verification link the account asked for separately', async () => {
+        // The cooldown reads the `email-change` token, not the signup-kind one — the two buttons
+        // do not share a clock.
+        const user = await createUser({ email: 'before@example.com' }, 'unverified');
+        await accountService.requestEmailVerificationFor(user.id, testCallerContext);
+        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await ageEmailChangeSend(user.id);
+
+        const response = asSuccess(
+            await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext)
+        );
+
+        expect(response.status).toBe(204);
+    });
+
+    it('audits AUTH_EMAIL_CHANGE_RESENT when a link was actually sent', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
+        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await ageEmailChangeSend(user.id);
+
+        await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT,
+                outcome: 'success'
+            })
+        );
+    });
+
+    it('answers 401 for an account that no longer exists', async () => {
+        const response = asReject(
+            await accountService.resendPendingEmailVerificationFor(MISSING_ID, testCallerContext)
+        );
+
+        expect(response.status).toBe(401);
     });
 });
 

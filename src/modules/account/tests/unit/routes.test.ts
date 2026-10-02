@@ -42,6 +42,7 @@ const RATE_LIMITED = [
     'POST /password',
     'POST /reauth',
     'POST /verify-request',
+    'POST /pending-email/resend',
     'POST /verify-confirm',
     'POST /email-change-confirm',
     'POST /login/2fa',
@@ -64,6 +65,7 @@ const AUTHENTICATED = [
     'GET /sessions',
     'DELETE /sessions/:sessionId',
     'POST /verify-request',
+    'POST /pending-email/resend',
     'DELETE /tokens/expired',
     'POST /export',
     'GET /2fa',
@@ -82,6 +84,7 @@ describe('account routes — what is mounted', () => {
             'PUT /',
             'PATCH /',
             'DELETE /pending-email',
+            'POST /pending-email/resend',
             'DELETE /',
             'DELETE /delete-confirm',
             'POST /login',
@@ -184,9 +187,14 @@ describe('account routes — credential rate limiting', () => {
     });
 
     it('authenticates before rate-limiting, so the identity budget is keyed on the account', () => {
-        // On `POST /password`, `/reauth` and `/verify-request` the body names no account, so the
+        // On `POST /password`, `/reauth`, `/verify-request` and `/pending-email/resend` the body names no account, so the
         // identity limiter reads the session's. Reversed, it would fall back to the address block.
-        for (const signature of ['POST /password', 'POST /reauth', 'POST /verify-request']) {
+        for (const signature of [
+            'POST /password',
+            'POST /reauth',
+            'POST /verify-request',
+            'POST /pending-email/resend'
+        ]) {
             const chain = chainOf(router, signature);
 
             expect(chain.indexOf('isAuth')).toBeLessThan(chain.indexOf('credentials-identity'));

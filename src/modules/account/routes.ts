@@ -37,6 +37,7 @@ import { upload } from '@infrastructure/http/middlewares/upload';
 import { getAccount } from './controllers/get-account';
 import { replaceAccount, updateAccount } from './controllers/update-account';
 import { cancelPendingEmail } from './controllers/cancel-pending-email';
+import { postPendingEmailResend } from './controllers/post-pending-email-resend';
 import { postLogin } from './controllers/post-login';
 import { postSignup } from './controllers/post-signup';
 import { postResetRequest } from './controllers/post-reset-request';
@@ -139,6 +140,12 @@ router.patch(
 // DELETE /account/pending-email — cancel a pending email change (requires auth). No fresh-auth
 // gate: it only discards a change, the same trust level as reading the profile that shows it.
 router.delete('/pending-email', isAuth, cancelPendingEmail);
+
+// POST /account/pending-email/resend — mail the pending address a fresh link (requires auth). No
+// fresh-auth gate: the address was already asked for under one, and nothing about the account
+// changes. `credentialLimiters` and the service's cooldown are `/verify-request`'s, for the same
+// reason: each success publishes mail. `isAuth` runs first so the identity budget is per account.
+router.post('/pending-email/resend', isAuth, credentialLimiters, postPendingEmailResend);
 
 // DELETE /account — request account deletion (requires auth). Critical: destruction.
 router.delete('/', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), deleteAccountRequest);
