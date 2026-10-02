@@ -102,7 +102,9 @@ export const trackedTargets = (root: string): { targets: Set<string>; roots: Set
         env: gitEnvironment()
     })
         .split('\n')
-        .filter(Boolean);
+        // `.2brain/` mirrors every source file as `<path>.md`, and the `.md` spelling below would
+        // let a stale mirror page vouch for a source file that no longer exists.
+        .filter((file) => file !== '' && !file.startsWith('.2brain/'));
     const targets = new Set<string>();
     // What actually sits at the root, taken from the file list rather than from `targets` — that
     // set holds every TAIL, so `orders/model.ts` would make `orders` look top-level.
