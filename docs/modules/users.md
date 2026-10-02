@@ -102,6 +102,11 @@ so explicitly: a soft delete emits `admin.user.soft_deleted`, a hard one `admin.
 actions rather than one `admin.user.deleted`, so "was this request actually closed out" is
 answerable from the log alone, not from remembering which flag an admin clicked.
 
+A module's erase hook may hand back work to run once the transaction has committed (`AfterErase`):
+anything that is not a database write, so a rollback could not undo it. `orders` uses it to cancel
+the account's never-paid orders, see [When the account is erased](./orders.md#when-the-account-is-erased).
+A failing step is logged and never turns a committed erasure into an error.
+
 ## Libraries
 
 `bcrypt` is shared with [`account`](./account.md) — the only package on the generated

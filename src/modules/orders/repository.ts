@@ -392,6 +392,28 @@ const countOpenBankTransfers = (userId: string): Promise<number> =>
     });
 
 /**
+ * The ids of this account's never-paid orders still open — `pending`, with no `paidAt`. What an
+ * erasure has to cancel, read BEFORE {@link detachUserId} unsets the `userId` that finds them.
+ *
+ * @param userId - the account being erased
+ * @param session - the erasure's transaction, so the read sees what the detach will update
+ * @returns the order ids
+ */
+const findOpenUnpaidIdsOf = (userId: string, session?: ClientSession): Promise<string[]> =>
+    orderModel
+        .find(
+            {
+                userId: toObjectId(userId),
+                status: OrderStatus.pending,
+                paidAt: { $exists: false }
+            },
+            { _id: 1 },
+            session ? { session } : {}
+        )
+        .exec()
+        .then((orders) => orders.map((order) => String(order._id)));
+
+/**
  * Unset `userId` on every order this account placed, and mark each for
  * `scripts/ops/reap-orders.ts` to scrub later — `users`' `personalData.erase` hook. The order row
  * is never touched otherwise: it is the invoice, kept whole until its own `anonymizeAfter`.
@@ -602,6 +624,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
     addPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<void>;
     countOpenBankTransfers: (userId: string) => Promise<number>;
+    findOpenUnpaidIdsOf: (userId: string, session?: ClientSession) => Promise<string[]>;
     detachUserId: (
         userId: string,
         retentionDays: number,
@@ -625,6 +648,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     clearPendingEffect,
     addPendingEffect,
     countOpenBankTransfers,
+    findOpenUnpaidIdsOf,
     detachUserId,
     scrubDueForAnonymization,
     incrementOrderNumberCounter

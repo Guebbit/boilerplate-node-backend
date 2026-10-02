@@ -7,10 +7,7 @@
  * `resolvePersonalDataErasers(modules)`, once every enabled module is known, and hands it in here.
  */
 
-import type { ClientSession } from 'mongoose';
-
-/** One module's erase hook, resolved and ready to call. */
-type PersonalDataEraser = (userId: string, session: ClientSession) => Promise<void>;
+import type { PersonalDataEraser } from '@kernel/registry';
 
 /** The registered erasers, empty until the app tier supplies them. */
 let erasers: readonly PersonalDataEraser[] = [];

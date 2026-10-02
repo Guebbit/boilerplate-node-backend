@@ -15,6 +15,8 @@ import { imageStore } from '@infrastructure/adapters/image-store';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext } from '@types';
+import { logger } from '@infrastructure/adapters/logger';
+import type { AfterErase } from '@kernel/registry';
 import { revokeAllOf } from '@modules/access';
 import { TokenType } from '../model';
 import type { UserDocument } from '../model';
@@ -30,11 +32,42 @@ import { usersAuditActions } from '../audit';
  * Sequential, not `Promise.all`: a `ClientSession` runs ONE operation at a time, and two erasers
  * racing on it fails with a confusing "sharded cluster" error that has nothing to do with
  * sharding.
+ *
+ * @returns the work the erasers asked to run once this commits
  */
-const runErasureCascade = async (user: UserDocument, session: ClientSession): Promise<void> => {
-    for (const erase of personalDataErasers()) await erase(user.id, session);
+const runErasureCascade = async (
+    user: UserDocument,
+    session: ClientSession
+): Promise<AfterErase[]> => {
+    const deferred: AfterErase[] = [];
+    for (const erase of personalDataErasers()) {
+        const afterErase = await erase(user.id, session);
+        if (afterErase) deferred.push(afterErase);
+    }
     await userRepository.deleteOne(user, session);
+    return deferred;
 };
+
+/**
+ * Runs the work the erasers deferred, once the transaction has committed.
+ *
+ * Never rejects: the account is already gone, so a failure here cannot become a failed erasure.
+ * Each one is caught alone, so a failing step does not skip the ones after it; the log is the only
+ * signal a human gets.
+ *
+ * @param userId - the erased account, for the log line
+ * @param deferred - what the erasers returned
+ */
+const runAfterErase = (userId: string, deferred: readonly AfterErase[]): Promise<void> =>
+    Promise.all(
+        deferred.map((afterErase) =>
+            afterErase().catch((error: unknown) => {
+                // Stryker disable all
+                logger.error({ message: 'Post-erasure step failed.', userId, error });
+                // Stryker restore all
+            })
+        )
+    ).then(() => undefined);
 
 /**
  * Remove a user document (soft or hard delete). Soft delete stamps `deletedAt` once;
@@ -60,6 +93,7 @@ export const remove = (
     if (hardDelete)
         return revokeAllOf(user.id)
             .then(() => withTransaction((session) => runErasureCascade(user, session)))
+            .then((deferred) => runAfterErase(user.id, deferred))
             .then(() => imageStore.remove(user.imageUrl))
             .then(() => {
                 if (context)

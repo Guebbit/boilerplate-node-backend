@@ -108,6 +108,37 @@ sweep:order-effects` re-announces `order.refund_owed` for a refund the event bus
 attempt did not carry through. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the
 full mechanism.
 
+## When the account is erased
+
+A hard delete of an account runs `orders`' `personalData.erase` hook inside the erasure
+transaction. Two things happen to the account's orders, by whether the buyer ever paid:
+
+| Order                                           | What erasure does                                                                      |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Paid (`paidAt` set), in any status              | Detached (`userId` unset) and scheduled for scrubbing, nothing else: it is the invoice |
+| Never paid (`paidAt` unset) and still `pending` | Detached, due for scrubbing at once, **and cancelled**                                 |
+
+```mermaid
+sequenceDiagram
+    participant U as users (hard delete)
+    participant O as orders (erase hook)
+    participant S as cancelById (the sweep's path)
+    U->>O: erase(userId, session)
+    O->>O: read the never-paid pending ids, then detach
+    O-->>U: a cancel to run after the commit
+    U->>U: commit the transaction
+    U->>S: cancel each order as the system
+    S->>S: release the stock hold
+    S->>S: order.cancelled, so payments cancels the open intent
+```
+
+The cancel is the one the reservation sweep takes when a hold times out, so it releases the hold
+and, through `order.cancelled`, cancels the payment intent. It runs after the commit because it
+moves stock and talks to a provider, neither of which a rolled-back erasure could undo. It sends
+no mail: the address belongs to an account that no longer exists. A failed cancel is logged and
+never undoes the erasure; the sweep still cancels it when the hold times out (up to 168 hours for
+a bank transfer), which is the late case that already existed.
+
 ## Creating an order
 
 Every order, whoever makes it, is written through exactly one function — `placeOrder`

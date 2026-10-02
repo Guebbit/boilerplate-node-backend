@@ -26,7 +26,7 @@ import {
 } from './crud';
 import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
-import { detachUserId, anonymizeDueOrders } from './retention';
+import { detachUserId, eraseUserOrders, anonymizeDueOrders } from './retention';
 import { callerScope, ownerScope, withActions } from './scope';
 import { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
 import {
@@ -76,7 +76,7 @@ export {
     markReturnStatus
 } from './status';
 export { overrideStatus, forceMove, isForceMoveRefusal } from './override';
-export { detachUserId, anonymizeDueOrders } from './retention';
+export { detachUserId, eraseUserOrders, anonymizeDueOrders } from './retention';
 export { callerScope, actorOf, ownerScope, withActions } from './scope';
 export { unavailableLines, cancelPendingOrdersHolding, type UnavailableLine } from './availability';
 export { freezeOrderLines } from './snapshot';
@@ -132,6 +132,7 @@ export const orderService = {
     overrideStatus,
     forceMove,
     detachUserId,
+    eraseUserOrders,
     anonymizeDueOrders,
     cancelById,
     retryPendingEffects,
