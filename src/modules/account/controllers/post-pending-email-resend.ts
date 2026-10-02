@@ -5,13 +5,15 @@
  */
 
 import type { Request, Response } from 'express';
+import { successResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/pending-email/resend — mails the pending address a fresh link. Answers 204 with no
- * body, also when nothing was pending: the call has nothing to report beyond "done".
+ * POST /account/pending-email/resend — mails the pending address a fresh link and answers the
+ * seconds to count down before the next one, as `POST /account/verify-request` does. Nothing
+ * pending is not an error: it answers `resendAfter` 0.
  */
 export const postPendingEmailResend = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
@@ -21,8 +23,7 @@ export const postPendingEmailResend = (request: Request, response: Response) => 
         .resendPendingEmailVerificationFor(id, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            // Express: 204 carries no body, so no envelope is written.
-            response.status(204).end();
+            successResponse(response, result.data, result.status, result.message);
         })
         .catch(catchAs(response, 'postPendingEmailResend'));
 };

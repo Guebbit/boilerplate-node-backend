@@ -147,8 +147,9 @@ Three things in that diagram are decisions rather than mechanics:
   address again through `PUT`/`PATCH /account` is a no-op (a double-submitted save must not mail
   twice), so `POST /account/pending-email/resend` is the explicit way to ask for the link again.
   The old address was told once, when the change was requested; telling it on every resend would
-  read like a takeover alert. It uses `POST /account/verify-request`'s cooldown and budget, answers
-  204, and does nothing when nothing is pending.
+  read like a takeover alert. It uses `POST /account/verify-request`'s cooldown and budget and
+  answers `200 { resendAfter }` like it, so the button counts down from the server's number; when
+  nothing is pending it mails nothing and answers `resendAfter` 0.
 - **Confirming revokes every refresh token.** An email change is the stronger takeover primitive
   of the two, and this is the same treatment a changed password already gets.
 

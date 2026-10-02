@@ -517,7 +517,7 @@ const requestChangeAndWait = async (address: string) => {
 describe('POST /account/pending-email/resend', () => {
     afterEach(() => jest.useRealTimers());
 
-    it('mails the NEW address a fresh link and nobody else, answering 204', async () => {
+    it('mails the NEW address a fresh link and nobody else, answering resendAfter', async () => {
         const { user, bearer } = await requestChangeAndWait('new-address@example.com');
         const enqueueEmail = mailerPort.enqueueEmail as jest.MockedFunction<
             typeof mailerPort.enqueueEmail
@@ -528,8 +528,8 @@ describe('POST /account/pending-email/resend', () => {
             .post('/account/pending-email/resend')
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(204);
-        expect(response.body).toEqual({});
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual({ resendAfter: 60 });
         expect(enqueueEmail).toHaveBeenCalledTimes(1);
         expect(mailTo('new-address@example.com')?.[1]).toBe('account.verify-request');
         // The old address was told once, when the change was requested — not again.
@@ -569,7 +569,7 @@ describe('POST /account/pending-email/resend', () => {
         });
     });
 
-    it('is a no-op, still 204, when nothing is pending', async () => {
+    it('is a no-op, answering resendAfter 0, when nothing is pending', async () => {
         const { bearer } = await authenticateAs('user');
         const enqueueEmail = mailerPort.enqueueEmail as jest.MockedFunction<
             typeof mailerPort.enqueueEmail
@@ -580,7 +580,8 @@ describe('POST /account/pending-email/resend', () => {
             .post('/account/pending-email/resend')
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(204);
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual({ resendAfter: 0 });
         expect(enqueueEmail).not.toHaveBeenCalled();
     });
 

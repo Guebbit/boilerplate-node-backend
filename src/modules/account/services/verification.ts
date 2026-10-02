@@ -201,8 +201,8 @@ export const requestEmailVerificationFor = (
 /**
  * `POST /account/pending-email/resend` end to end: mails the NEW (pending) address a fresh link and
  * nothing else — the old address was told once, when the change was requested, and hearing it
- * again reads like a takeover alert. A no-op (204, nothing sent, nothing audited) when no change
- * is pending, so a client need not read the profile first.
+ * again reads like a takeover alert. A no-op (`resendAfter` 0, nothing sent, nothing audited) when
+ * no change is pending, so a client need not read the profile first.
  *
  * Same cooldown and the same per-account budget as {@link requestEmailVerificationFor}, anchored on
  * the `email-change` token, since that is the one the last send minted. `sendVerificationEmail`
@@ -214,12 +214,17 @@ export const requestEmailVerificationFor = (
 export const resendPendingEmailVerificationFor = (
     userId: string,
     context: CallerContext
-): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+): Promise<ResponseSuccess<EmailVerificationRequested> | ResponseReject> =>
     // Credentials included: issuing the token pushes onto this document's `tokens`.
     userService.findByIdWithCredentials(userId).then((user) => {
         // A valid token for a since-deleted account is unauthenticated, as on `PUT /account`.
         if (!user) return generateReject(401, []);
-        if (!user.pendingEmail) return generateSuccess<undefined>(undefined, 204);
+        if (!user.pendingEmail)
+            return generateSuccess<EmailVerificationRequested>(
+                { resendAfter: 0 },
+                200,
+                t('account.email-change.nothing-pending')
+            );
 
         const wait = resendCooldownRemaining(user, EMAIL_CHANGE_TOKEN_TYPE);
         if (wait > 0)
@@ -234,7 +239,11 @@ export const resendPendingEmailVerificationFor = (
                 action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT,
                 outcome: 'success'
             });
-            return generateSuccess<undefined>(undefined, 204);
+            return generateSuccess<EmailVerificationRequested>(
+                { resendAfter: VERIFY_RESEND_SECONDS },
+                200,
+                t('account.email-change.resent')
+            );
         });
     });
 
