@@ -126,21 +126,6 @@ days after a stuck payment or a reservation nobody is expiring. No Pushgateway n
 lives in Mongo, and the long-running app exports it at scrape time.
 See `docs/tools/observability-layer.md`.
 
-## Locked out of the back office
-
-The last administrator may demote, revoke or delete itself: no guard, on purpose, because the repair
-is a command. The boot log says when it happened — `access: this shop has no administrator` — and the
-repair is:
-
-```bash
-npm run ops:grant-admin -- you@example.com
-docker compose ... exec app npm run ops:grant-admin -- you@example.com   # in a deployed stack
-```
-
-The account must already exist: sign up first if it does not. The grant goes through the access
-service, so it is audited (`access.role.assigned`, actor `system`). `npm run access:grant -- <email>
-<role> [--scope platform]` is the general form, for any other role or an installation-wide one.
-
 ## Data retention
 
 Four collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled

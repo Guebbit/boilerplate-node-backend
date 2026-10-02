@@ -13,12 +13,11 @@
  */
 
 import type { AppModule } from '@kernel/registry';
-import { membershipsOf, warnWhenNoAdministrator } from './service';
+import { membershipsOf } from './service';
 
-/** This module's manifest entry: no routes, a boot check, one personal-data section. */
+/** This module's manifest entry: no routes, one personal-data section. */
 export default {
     name: 'access',
-    onBoot: warnWhenNoAdministrator,
     personalData: [
         {
             section: 'roles',

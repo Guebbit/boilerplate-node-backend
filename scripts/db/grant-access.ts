@@ -23,7 +23,6 @@ import { parseArgs } from 'node:util';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AuthorizationScope } from '@types';
-import { systemCallerContext } from '@kernel/permissions';
 import { grantAccess } from './access-grant';
 import { runScript } from '../run-script';
 
@@ -53,7 +52,7 @@ const main = (): Promise<void> => {
     const scope: AuthorizationScope = rawScope;
 
     return start()
-        .then(() => grantAccess(email, roleName, scope, systemCallerContext('User')))
+        .then(() => grantAccess(email, roleName, scope))
         .then(() => {
             logger.info(`Granted "${roleName}" (${scope} scope) to ${email}.`);
         });

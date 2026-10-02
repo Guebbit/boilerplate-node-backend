@@ -13,14 +13,10 @@
 import type { AuthorizationScope, CallerContext } from '@types';
 import {
     findRole,
-    isUnrestrictedRole,
-    PRESET_ROLES,
-    SYSTEM_ACTOR,
     SIGNUP_DEFAULT_ROLE_NAME,
     VERIFIED_CUSTOMER_ROLE_NAME
 } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import { ConflictError } from '@infrastructure/http/errors';
@@ -275,7 +271,7 @@ export const promoteVerifiedCustomer = (userId: string, tenantId: string): Promi
  * Take somebody's role in a place away.
  *
  * Allowed even when it removes a place's last administrator, on purpose: an operator who does that
- * knows what they are doing, and `npm run ops:grant-admin` makes a new administrator.
+ * knows what they are doing, and a new administrator is one database write away.
  *
  * @param context - the caller to audit this revoke against, or `undefined` for a system caller
  *   with no request to attribute it to (e.g. the account-deletion cascade in `users/services/remove.ts`'s
@@ -408,42 +404,3 @@ export const DEPLOYMENT_TENANT_SLUG = 'shop';
  */
 export const bootstrapAccessModel = (name: string): Promise<TenantDocument> =>
     ensureTenant(DEPLOYMENT_TENANT_SLUG, name, DEPLOYMENT_TENANT_ID);
-
-/**
- * The tenant roles a person can be given that hold every key the shop declares, read off the
- * presets — what the audit trail calls "admin". Roles are data, so this asks the presets rather
- * than naming one. The system actor's own role is left out: it is unrestricted too, but nothing
- * assigns it to an account.
- */
-export const administratorRoles = (): string[] =>
-    PRESET_ROLES.filter(
-        (role) =>
-            role.scope === 'tenant' &&
-            role.name !== SYSTEM_ACTOR.roles.tenant &&
-            isUnrestrictedRole(role.name)
-    ).map(({ name }) => name);
-
-/**
- * Whether anybody holds an administrator role in the shop.
- *
- * Counts memberships, not accounts: the other half of an account's life (soft delete, a ban) is
- * `users`' to say, and this module does not read it.
- */
-export const hasAdministrator = (): Promise<boolean> =>
-    membershipRepository.existsWithRole(administratorRoles(), DEPLOYMENT_TENANT_ID, 'tenant');
-
-/**
- * Boot warning for a shop nobody can administer, with the repair in the message.
- *
- * Not a refusal: the last administrator may remove itself on purpose (see {@link revokeRole}),
- * and a fresh deployment starts this way. The warning is the part that makes the lock-out visible.
- */
-export const warnWhenNoAdministrator = (): Promise<void> =>
-    hasAdministrator().then((found) => {
-        if (found) return;
-        logger.warn({
-            message:
-                'access: this shop has no administrator, so its back office is locked. ' +
-                'Sign up if needed, then run `npm run ops:grant-admin -- <email>`.'
-        });
-    });

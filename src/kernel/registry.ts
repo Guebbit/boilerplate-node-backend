@@ -15,7 +15,6 @@ import type { ClientSession } from 'mongoose';
 import { assertModuleConfig } from '@kernel/module-config';
 import type { ConfigSlice } from '@infrastructure/config/define';
 import { markDomainEventsWired } from '@kernel/events';
-import { logger } from '@infrastructure/adapters/logger';
 import type { RateLimitBudget } from '@types';
 
 /**
@@ -301,14 +300,6 @@ export interface AppModule {
     onRegistered?: (modules: readonly AppModule[]) => void;
 
     /**
-     * A check or warm-up that needs the database, run once at boot after the connections are up
-     * and before the server listens. A rejection is logged as a warning and never stops the boot,
-     * so a hook is for something an operator should hear about, not for a gate (`config` is the
-     * gate). `onRegistered` cannot do this: it runs at app construction, before any connection.
-     */
-    onBoot?: () => Promise<void>;
-
-    /**
      * Absolute path to this module's `locales/` directory, holding one `<locale>.json` per language
      * it contributes.
      *
@@ -587,25 +578,3 @@ export const registerModules = (
     for (const appModule of appModules) appModule.onRegistered?.(appModules);
     markDomainEventsWired();
 };
-
-/**
- * Run every module's {@link AppModule.onBoot} hook, once the database is up.
- *
- * Settled one by one rather than rejected together: a failing hook is logged and the rest still
- * run, because none of them may stop the boot.
- *
- * @param appModules - the enabled module list
- */
-export const runBootHooks = (appModules: readonly AppModule[]): Promise<void> =>
-    Promise.allSettled(
-        appModules.map((appModule) =>
-            Promise.resolve()
-                .then(() => appModule.onBoot?.())
-                .catch((error: unknown) => {
-                    logger.warn({
-                        message: `module "${appModule.name}": its boot check failed.`,
-                        error
-                    });
-                })
-        )
-    ).then(() => undefined);

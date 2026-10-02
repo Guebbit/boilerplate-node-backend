@@ -108,9 +108,8 @@ docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml \
     exec app npm run access:grant -- you@example.com admin
 ```
 
-If every admin is ever locked out, `npm run ops:grant-admin -- you@example.com` is the repair (see
-[Locked out of the back office](reference/ops.md#locked-out-of-the-back-office)); `access:grant`
-`--scope platform` grants an installation-wide role (an operator) instead of a shop role.
+The same command is the recovery path if every admin is ever locked out — `--scope platform` grants
+an installation-wide role (an operator) instead of a shop role.
 
 ## Publish a disclosure contact
 

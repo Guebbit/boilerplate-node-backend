@@ -77,7 +77,6 @@
         "db:bootstrap": "npm run db:sync && npm run scenario:apply",
         "access:bootstrap": "tsx scripts/db/bootstrap-access.ts",
         "access:grant": "tsx scripts/db/grant-access.ts",
-        "ops:grant-admin": "tsx scripts/ops/grant-admin.ts",
         "deploy:setup": "npm run db:sync && npm run access:bootstrap",
         "reap:quarantine": "tsx scripts/ops/reap-quarantine.ts",
         "reap:mail-spool": "tsx scripts/ops/reap-mail-spool.ts",

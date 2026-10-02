@@ -15,12 +15,8 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { logger } from '@infrastructure/adapters/logger';
 import {
     AccessInvariantError,
-    administratorRoles,
-    hasAdministrator,
-    warnWhenNoAdministrator,
     assertCanGrant,
     assignRole,
     assignDefaultRole,
@@ -320,58 +316,6 @@ describe('revokeAllOf', () => {
         await revokeAllOf('person-1');
 
         expect(await membershipsOf('person-1')).toEqual([]);
-    });
-});
-
-describe('the shop with no administrator', () => {
-    it('counts only a role that holds every key, read off the presets', () => {
-        expect(administratorRoles()).toEqual(['admin']);
-    });
-
-    it('has none on a fresh shop', async () => {
-        expect(await hasAdministrator()).toBe(false);
-    });
-
-    it('has one once an administrator membership exists', async () => {
-        await assignRole('person-1', DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
-
-        expect(await hasAdministrator()).toBe(true);
-    });
-
-    it('does not count a staff role short of administrator, nor a platform one', async () => {
-        await assignRole('person-1', DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
-        await assignRole('person-2', null, 'platform', 'operator');
-
-        expect(await hasAdministrator()).toBe(false);
-    });
-
-    it('has none again once the last administrator is revoked', async () => {
-        await assignRole('person-1', DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
-
-        await revokeRole('person-1', DEPLOYMENT_TENANT_ID, 'tenant');
-
-        expect(await hasAdministrator()).toBe(false);
-    });
-
-    it('warns at boot, naming the repair, when there is none', async () => {
-        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
-
-        await warnWhenNoAdministrator();
-
-        expect(warn).toHaveBeenCalledWith(
-            expect.objectContaining({
-                message: expect.stringContaining('npm run ops:grant-admin') as string
-            })
-        );
-    });
-
-    it('says nothing when somebody administers the shop', async () => {
-        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
-        await assignRole('person-1', DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
-
-        await warnWhenNoAdministrator();
-
-        expect(warn).not.toHaveBeenCalled();
     });
 });
 

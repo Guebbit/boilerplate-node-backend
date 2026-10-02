@@ -76,16 +76,5 @@ export const membershipRepository = {
         tenantId: string | null,
         scope: AuthorizationScope
     ): Promise<MembershipDocument[]> =>
-        membershipModel.find({ userId: { $in: userIds }, tenantId, scope }).exec(),
-
-    /** Whether anybody at all holds one of these roles in one place. */
-    existsWithRole: (
-        roles: readonly string[],
-        tenantId: string | null,
-        scope: AuthorizationScope
-    ): Promise<boolean> =>
-        membershipModel
-            .exists({ role: { $in: roles }, tenantId, scope })
-            .exec()
-            .then(Boolean)
+        membershipModel.find({ userId: { $in: userIds }, tenantId, scope }).exec()
 };
