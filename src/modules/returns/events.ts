@@ -9,9 +9,8 @@
 declare module '@kernel/events' {
     interface DomainEventMap {
         /**
-         * A return was opened for dispatched goods — a withdrawal (born approved) or a request
-         * awaiting staff. Never fired for a withdrawal before dispatch: that has no return row, it
-         * is `order.cancelled`.
+         * A return was opened — a withdrawal (born approved, or born closed when it reached the
+         * order before dispatch) or a request awaiting staff.
          */
         'return.requested': { returnId: string; orderId: string; reason: string };
 
@@ -23,7 +22,9 @@ declare module '@kernel/events' {
 
         /**
          * The return is finished: the money went back (or there was none to return). Fires when
-         * the refund settles — straight away, or later when the payment sweep completes it.
+         * the refund settles — straight away, or later when the payment sweep completes it. A
+         * withdrawal before dispatch fires it at birth, right after `return.requested`: the order's
+         * own cancel carries the refund.
          */
         'return.closed': {
             returnId: string;

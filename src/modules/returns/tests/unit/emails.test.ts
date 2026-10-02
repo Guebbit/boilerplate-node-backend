@@ -37,6 +37,14 @@ describe('returnNoticeEmail — withdrawal-acknowledged', () => {
         expect(shop.data.postage).toContain('We cover the cost');
     });
 
+    it('names no postage when no goods are expected back', () => {
+        const { returnPostage: _unused, ...withoutPostage } = INPUT;
+        const none = returnNoticeEmail('withdrawal-acknowledged', 'en', 'Ada', withoutPostage);
+
+        expect(none.data.postage).toBeUndefined();
+        expect(none.data.body).toContain('2026-000041');
+    });
+
     it('speaks the customer’s language', () => {
         const italian = returnNoticeEmail('withdrawal-acknowledged', 'it', 'Ada', INPUT);
 
