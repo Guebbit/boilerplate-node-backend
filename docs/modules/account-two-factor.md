@@ -135,6 +135,11 @@ backup code is the route for someone who lost their phone. Without the rule a st
 session could disarm the factor it would otherwise have to pass (OWASP MFA Cheat Sheet, "Changing
 MFA Factors"; NIST SP 800-63B).
 
+Every call that takes such a code — `setup`, removing one method, disabling 2FA, regenerating backup
+codes — shares one per-account budget of **wrong** codes (`NODE_MFA_ACCOUNT_GUESS_MAX`, 5 an hour). A
+right code spends nothing. Without it, six digits behind a stolen session sit only behind the global
+brake; login's own guesses are capped per challenge instead (`NODE_MFA_CHALLENGE_MAX`).
+
 An account whose only factor is **delivered** has nothing to read a code from, so
 `POST /account/2fa/methods/:method/send` mails one to the signed-in caller — armed delivered methods
 only, paced by the same 30 s per-code cooldown and by its own per-account hourly budget

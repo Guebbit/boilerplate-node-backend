@@ -19,6 +19,7 @@ import {
     mfaChallengeLimiter,
     mfaSendLimiter,
     accountCodeSendLimiter,
+    accountCodeGuessLimiter,
     loginChallengeGate
 } from './rate-limits';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
@@ -258,7 +259,14 @@ router.get('/2fa', isAuth, get2fa);
 
 // DELETE /account/2fa — drop every factor. Critical fresh auth AND a valid code in the body:
 // disabling from a stolen-but-fresh session is otherwise the cheapest way around the feature.
-router.delete('/2fa', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), delete2fa);
+// `accountCodeGuessLimiter` on this and the three other code-taking calls below caps the guessing.
+router.delete(
+    '/2fa',
+    isAuth,
+    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    accountCodeGuessLimiter,
+    delete2fa
+);
 
 // POST /account/2fa/methods/:method/setup — start (or restart) one method's enrollment. Critical
 // tier: a restart disarms a factor that was already working.
@@ -266,6 +274,7 @@ router.post(
     '/2fa/methods/:method/setup',
     isAuth,
     requireFreshAuth(REAUTH_TIME_CRITICAL),
+    accountCodeGuessLimiter,
     post2faSetup
 );
 
@@ -294,6 +303,7 @@ router.delete(
     '/2fa/methods/:method',
     isAuth,
     requireFreshAuth(REAUTH_TIME_CRITICAL),
+    accountCodeGuessLimiter,
     delete2faMethod
 );
 
@@ -304,6 +314,7 @@ router.post(
     '/2fa/backup-codes',
     isAuth,
     requireFreshAuth(REAUTH_TIME_CRITICAL),
+    accountCodeGuessLimiter,
     post2faBackupCodes
 );
 

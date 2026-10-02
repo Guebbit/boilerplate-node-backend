@@ -233,6 +233,40 @@ describe('mfaChallengeLimiter', () => {
     });
 });
 
+describe('accountCodeGuessLimiter', () => {
+    afterEach(() => jest.resetModules());
+
+    it('refuses the 6th wrong code from one account, wherever it comes from', async () => {
+        const accountCodeGuessLimiter = await withAccountRateLimits(
+            { NODE_MFA_ACCOUNT_GUESS_MAX: '5' },
+            (module) => module.accountCodeGuessLimiter
+        );
+
+        // 422: a wrong code, which the budget spends; a right one answers 2xx and spends nothing.
+        const app = appAnswering(422, true, asAccount, accountCodeGuessLimiter);
+        const guess = (account: string, ip: string) =>
+            supertest(app).post('/route').set('X-Forwarded-For', ip).set('x-test-account', account);
+
+        for (let attempt = 0; attempt < 5; attempt++)
+            expect(await statusOf(guess('account-a', `203.0.113.${String(attempt)}`))).toBe(422);
+        expect(await statusOf(guess('account-a', '198.51.100.5'))).toBe(429);
+        expect(await statusOf(guess('account-b', '198.51.100.5'))).toBe(422);
+    });
+
+    it('spends nothing on a right code', async () => {
+        const accountCodeGuessLimiter = await withAccountRateLimits(
+            { NODE_MFA_ACCOUNT_GUESS_MAX: '1' },
+            (module) => module.accountCodeGuessLimiter
+        );
+
+        const app = appAnswering(200, true, asAccount, accountCodeGuessLimiter);
+        const change = () => supertest(app).post('/route').set('x-test-account', 'account-a');
+
+        expect(await statusOf(change())).toBe(200);
+        expect(await statusOf(change())).toBe(200);
+    });
+});
+
 describe('mounted on the real routes', () => {
     setupTestDb();
 

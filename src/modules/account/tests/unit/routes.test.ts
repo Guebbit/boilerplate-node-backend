@@ -206,6 +206,35 @@ describe('account routes — credential rate limiting', () => {
     });
 });
 
+describe('account routes — two-factor code guessing', () => {
+    /** Every signed-in call that verifies a code to change the caller's own factors. */
+    const CODE_TAKING = [
+        'DELETE /2fa',
+        'POST /2fa/methods/:method/setup',
+        'DELETE /2fa/methods/:method',
+        'POST /2fa/backup-codes'
+    ];
+
+    it.each(CODE_TAKING)(
+        '%s carries the per-account guess budget, after the session',
+        (signature) => {
+            const chain = chainOf(router, signature);
+
+            expect(chain).toContain('mfa-account-guess');
+            // Keyed on the account, so the session must be read first.
+            expect(chain.indexOf('isAuth')).toBeLessThan(chain.indexOf('mfa-account-guess'));
+        }
+    );
+
+    it('puts it on no other route', () => {
+        const carrying = routeSignatures(router).filter((signature) =>
+            chainOf(router, signature).includes('mfa-account-guess')
+        );
+
+        expect(carrying).toEqual(CODE_TAKING);
+    });
+});
+
 describe('account routes — signup and reset rate limiting', () => {
     /**
      * `credentialLimiters`' `skipSuccessfulRequests` spends nothing on the 201/200 these two
