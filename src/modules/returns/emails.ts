@@ -25,8 +25,11 @@ export type ReturnNoticeKind =
 export interface ReturnNoticeInput {
     /** The order's human number, or its id when it has none. */
     orderRef: string;
-    /** Who pays to send the goods back — the notice says so, since Art. 14(1) requires telling them. */
-    returnPostage: ReturnPostagePayer;
+    /**
+     * Who pays to send the goods back — the notice says so, since Art. 14(1) requires telling them.
+     * Absent when no goods are expected back (a withdrawal before dispatch), so no postage line.
+     */
+    returnPostage?: ReturnPostagePayer;
     /** When the customer acted — printed with date AND time, as Art. 11a's acknowledgement requires. */
     at: Date;
     /** Staff's reason, on a decline. */
@@ -80,7 +83,7 @@ export const returnNoticeEmail = (
     };
     // Neither a decline nor a closing says anything about postage — there is nothing left to post.
     const postage =
-        kind === 'return-declined' || kind === 'return-closed'
+        kind === 'return-declined' || kind === 'return-closed' || !input.returnPostage
             ? undefined
             : t(`returns.email.postage-${input.returnPostage}`);
     const { returnAddress } = input;

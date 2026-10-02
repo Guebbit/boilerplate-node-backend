@@ -131,7 +131,7 @@ channels:
                 $ref: '#/components/messages/PaymentRefundedEvent'
     return.requested:
         address: return.requested
-        description: A return was opened for goods that had shipped — a withdrawal or a request.
+        description: A return was opened — a withdrawal or a request.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
         messages:
@@ -242,9 +242,9 @@ operations:
         action: send
         channel:
             $ref: '#/channels/return.requested'
-        summary: A return was opened for goods that had shipped.
+        summary: A return was opened — a withdrawal or a request.
         description: >-
-            One-to-one with the `return.requested` domain event — see `returns/services/create.ts`. Never fired for a withdrawal before dispatch: that has no return row, it is a cancel and `order.cancelled` says so.
+            One-to-one with the `return.requested` domain event — see `returns/services/create.ts`. A withdrawal before dispatch fires it too, followed at once by `return.closed`: the return is born closed, and `order.cancelled` says the order was cancelled.
         messages:
             - $ref: '#/channels/return.requested/messages/ReturnRequestedEvent'
     webhookReturnReceived:
@@ -262,7 +262,7 @@ operations:
             $ref: '#/channels/return.closed'
         summary: A return finished — the money went back.
         description: >-
-            One-to-one with the `return.closed` domain event — see `returns/services/close.ts`. Fired when the refund settles: straight after the goods were received, or later when the payment sweep completed a refund the provider first refused.
+            One-to-one with the `return.closed` domain event — see `returns/services/close.ts`. Fired when the refund settles: straight after the goods were received, or later when the payment sweep completed a refund the provider first refused. A withdrawal before dispatch fires it at birth, right after `return.requested`.
         messages:
             - $ref: '#/channels/return.closed/messages/ReturnClosedEvent'
 components:

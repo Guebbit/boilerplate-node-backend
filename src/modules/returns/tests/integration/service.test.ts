@@ -14,7 +14,8 @@ import {
     readOrder,
     setWithdrawUntil,
     toOrderItem,
-    forceOrderStatus
+    forceOrderStatus,
+    markOrderPaidAt
 } from '@modules/orders/tests/factories';
 import { resetDomainEvents, onDomainEvent } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -33,7 +34,7 @@ import {
     withActions
 } from '../../services';
 import { collectPersonalData } from '../../services/personal-data';
-import { RETURN_REQUESTED } from '../../events';
+import { RETURN_CLOSED, RETURN_REQUESTED } from '../../events';
 import { returnRepository } from '../../repository';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -76,7 +77,7 @@ const deliveredOrder = async () => {
 
 describe('a withdrawal before dispatch', () => {
     it.each([OrderStatus.pending, OrderStatus.paid, OrderStatus.processing])(
-        'cancels a %s order instead of writing a return, and acknowledges it',
+        'cancels a %s order and writes a return closed at birth, acknowledged once',
         async (status) => {
             const { user, orderId } = await orderIn(status);
 
@@ -86,14 +87,79 @@ describe('a withdrawal before dispatch', () => {
                 testCallerContext
             );
 
-            expect(outcome.kind).toBe('cancelled');
+            expect(outcome.kind).toBe('created');
             const stored = await readOrder(orderId);
             expect(stored?.status).toBe(OrderStatus.cancelled);
-            expect(await returnRepository.findByOrderId(orderId)).toHaveLength(0);
+            const [written, ...others] = await returnRepository.findByOrderId(orderId);
+            expect(others).toHaveLength(0);
+            expect(written).toMatchObject({ status: 'closed', reason: 'withdrawal', lines: [] });
+            expect(written?.decidedAt).toBeInstanceOf(Date);
+            expect(written?.closedAt).toBeInstanceOf(Date);
             expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
             expect(mockEnqueueEmail.mock.calls[0][1]).toBe('returns.notice');
         }
     );
+
+    it('owes nothing on an order nobody paid for, and the whole order on one that was paid', async () => {
+        const unpaid = await orderIn(OrderStatus.pending);
+        const paid = await orderIn(OrderStatus.paid);
+        await markOrderPaidAt(paid.orderId, new Date());
+
+        await createReturn(
+            { orderId: unpaid.orderId, reason: 'withdrawal' },
+            buyer(unpaid.user),
+            testCallerContext
+        );
+        await createReturn(
+            { orderId: paid.orderId, reason: 'withdrawal' },
+            buyer(paid.user),
+            testCallerContext
+        );
+
+        const [onUnpaid] = await returnRepository.findByOrderId(unpaid.orderId);
+        const [onPaid] = await returnRepository.findByOrderId(paid.orderId);
+        expect(onUnpaid?.refundAmount).toBe(0);
+        // Two shirts at 30 and a mug at 10.
+        expect(onPaid?.refundAmount).toBe(70);
+    });
+
+    it('announces the return opened and finished, once each', async () => {
+        const { user, orderId } = await orderIn(OrderStatus.paid);
+        const heard: string[] = [];
+        onDomainEvent(RETURN_REQUESTED, ({ orderId: id }) => void heard.push(`requested ${id}`));
+        onDomainEvent(RETURN_CLOSED, ({ orderId: id }) => void heard.push(`closed ${id}`));
+
+        await createReturn({ orderId, reason: 'withdrawal' }, buyer(user), testCallerContext);
+
+        // The events are announced fire-and-forget: let their listeners run.
+        await new Promise((resolve) => setImmediate(resolve));
+        expect(heard).toEqual([`requested ${orderId}`, `closed ${orderId}`]);
+    });
+
+    it('leaves the order showing no return: nothing comes back', async () => {
+        const { user, orderId } = await orderIn(OrderStatus.paid);
+
+        await createReturn({ orderId, reason: 'withdrawal' }, buyer(user), testCallerContext);
+
+        const stored = await readOrder(orderId);
+        expect(stored?.toJSON().returnStatus).toBe('none');
+    });
+
+    it('cannot be made twice: the cancelled order is not returnable', async () => {
+        const { user, orderId } = await orderIn(OrderStatus.paid);
+        await createReturn({ orderId, reason: 'withdrawal' }, buyer(user), testCallerContext);
+
+        const again = await createReturn(
+            { orderId, reason: 'withdrawal' },
+            buyer(user),
+            testCallerContext
+        );
+
+        expect(again.kind === 'refused' && again.reject.errors[0]).toMatchObject({
+            code: 'RETURN_ORDER_NOT_RETURNABLE'
+        });
+        expect(await returnRepository.findByOrderId(orderId)).toHaveLength(1);
+    });
 
     it('is not offered to another customer, whose order is a 404', async () => {
         const { orderId } = await orderIn(OrderStatus.paid);

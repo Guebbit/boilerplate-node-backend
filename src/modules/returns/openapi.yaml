@@ -56,13 +56,15 @@ paths:
                 contract here" button (Consumer Rights Directive Art. 11a): a withdrawal is a
                 return with `reason: withdrawal`, not a separate endpoint.
 
-                What follows depends on where the goods are. Once they have shipped, a return is
-                written (201, with `Location`) — a withdrawal is born `approved`, any other reason
-                waits for staff — and the customer gets an acknowledgement email carrying the exact
-                date and time. Before dispatch there is nothing to send back, so a withdrawal
-                cancels the order instead: refunded in full, stock released, acknowledgement mailed,
-                and the answer is the cancelled `Order` (200), not a `Return`. `Order.actions.withdraw`
-                says whether the button is offered; the client never counts the days.
+                Always answers a `Return` (201, with `Location`); where the goods are decides what
+                it is. Once they have shipped, a withdrawal is born `approved` and any other reason
+                waits for staff. Before dispatch there is nothing to send back, so a withdrawal
+                cancels the order — refunded in full, stock released — and the `Return` is born
+                `closed`: `reason: withdrawal`, no `lines`, `refundAmount` what the order cost (zero
+                when nothing was paid). Either way the customer gets an acknowledgement email
+                carrying the exact date and time, and `Return.orderId` is where the client reloads
+                the order from. `Order.actions.withdraw` says whether the button is offered; the
+                client never counts the days.
 
                 Only the order's own buyer may do this, an operator included. Sending `Idempotency-Key`
                 makes a retry safe.
@@ -79,19 +81,13 @@ paths:
                             $ref: '#/components/schemas/CreateReturnRequest'
             responses:
                 '201':
-                    description: The return, opened
+                    description: The return, opened — or, for a withdrawal before dispatch, closed at birth with the order cancelled and refunded
                     headers:
                         Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ReturnEnvelope'
-                '200':
-                    description: A withdrawal before dispatch — the order is cancelled and refunded in full; no return exists
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '../orders/openapi.yaml#/components/schemas/OrderEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # Not the caller's order, or no such order.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -242,7 +238,8 @@ components:
             enum: [requested, approved, declined, received, closed]
             description: >-
                 Where a return stands: `requested → approved → received → closed`, or `requested →
-                declined`. A withdrawal is born `approved`. Which move may follow which is the
+                declined`. A withdrawal is born `approved` — or `closed`, when it reached the order
+                before dispatch. Which move may follow which is the
                 server's rule, answered per caller by `Return.actions`.
 
         ReturnReason:
@@ -315,6 +312,7 @@ components:
                     description: What the customer wrote. Free text.
                 lines:
                     type: array
+                    description: What is coming back. Empty on a withdrawal before dispatch — no goods are expected.
                     items:
                         $ref: '#/components/schemas/ReturnLine'
                 returnPostage:
