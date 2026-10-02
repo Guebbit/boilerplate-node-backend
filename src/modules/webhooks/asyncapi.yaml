@@ -23,7 +23,7 @@
 # section is also required to be a complete, standalone-valid document — a channel `$ref`-ing a
 # server or schema it does not itself declare fails `lint:asyncapi:modules` on that section alone.
 # Splitting the channel catalogue by owning module is therefore its own follow-up decision, not
-# assumed here. The SEVEN names below are the shop's worked example; a deployment with no orders
+# assumed here. The shop's names below are its worked example (`example.published` is the `example` module's, there to be copied); a deployment with no orders
 # removes `orders`/`payments` and their `publicEvents` declarations, and deletes the now-unreachable
 # channels here by hand — this file is authored, not generated from those modules.
 #

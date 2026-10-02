@@ -439,7 +439,7 @@ describe('POST /webhooks/deliveries/:id/replay', () => {
 });
 
 describe('GET /webhooks/events', () => {
-    it('serves the ten-event public catalogue', async () => {
+    it('serves the eleven-event public catalogue', async () => {
         const { bearer } = await authenticateAsRole('manager');
 
         const response = await api().get('/webhooks/events').set('Authorization', bearer);
@@ -449,6 +449,7 @@ describe('GET /webhooks/events', () => {
             (response.body.data as { name: string }[]).map((event) => event.name).toSorted()
         ).toEqual(
             [
+                'example.published',
                 'order.cancelled',
                 'order.created',
                 'order.paid',
