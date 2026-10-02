@@ -332,6 +332,10 @@ export const SUPPORTED_KEYWORDS = new Set([
     'anyOf',
     'allOf',
     '$ref',
+    // A lookup hint over `oneOf`, not a constraint: each branch already pins its tag with a
+    // one-value `enum`, so a value built from any branch satisfies the mapping.
+    // https://spec.openapis.org/oas/v3.0.3#discriminator-object
+    'discriminator',
     // Documentation-only; they do not change what a valid value is.
     'description',
     'example',
