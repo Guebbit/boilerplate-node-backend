@@ -1,7 +1,7 @@
 ---
 source: jest.config.js
-sha256: bb0c3629e342cfbffa68f50a55c11d10a8db3a2033cf4adb6c858689a37e2822
-generated_at: 2026-09-23T17:15:20.501014+00:00
+sha256: 097721024fe2ec7961f2bda416a10243f5026472f51d36ee0d4c0cdefc3a6d03
+generated_at: 2026-10-01T12:18:56.222347+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Jest configuration for the unit test run and the base config that other Jest configs extend. Written as `.js` (not `.json`) so the per-file coverage floors can carry inline explanations. The floors act as a ratchet and a fast proxy for the mutation run (the real instrument).
+Base Jest configuration for the unit-test run. It defines worker sizing, the custom test environment, coverage collection, and per-file coverage floors. It exists as the shared foundation that `jest.config.cluster.js` and `jest.config.mutation.js` extend, and as a `.js` file (not `.json`) so the coverage floors can carry explanatory comments.
 
 ## Key elements
 
-- **`readEnvFile()`** — Reads `.env` via `parseEnv` without merging into `process.env`, preventing real rate-limit values from leaking into Jest workers before `tests/support/setup.ts` can raise them.
-- **`envFileValues`** — Memoised result of `readEnvFile()`; consulted by every knob below.
-- **`DEPTH_KNOBS`** — Allowlist of test-depth variables (`TEST_FUZZ_RUNS`, `TEST_PROPERTY_RUNS`, etc.) promoted from `.env` into `process.env` so they cross into Jest workers.
-- **`fromEnvironment(name, fallback)`** — Resolves a positive integer from a real env var (wins), then `.env`, then a hardcoded fallback.
-- **`floor(statements, branches, functions, lines?)`** — Builds one `coverageThreshold` entry; `lines` defaults to `statements` because `coverageProvider: 'v8'` derives both from the same range data.
-- **`STANDARD` / `PARTIAL` / `UNTESTED`** — Shared threshold presets (70/70/70, 25/70/0, 0/0/0).
-- **`module.exports`** — The Jest config object: `ts-jest` preset, V8 coverage, custom `test-environment.ts`, `maxWorkers`/`workerIdleMemoryLimit` fallbacks, `testMatch` for `tests/**/*.test.ts`, path ignores, `collectCoverageFrom`, and the per-file `coverageThreshold` map.
+- **`readEnvFile`** — Reads `.env` via `node:util`'s `parseEnv` without merging into `process.env`, returning `{}` when the file is absent (the CI normal case).
+- **`DEPTH_KNOBS`** — An allowlist of four `TEST_*` variables promoted from `.env` into `process.env` so jest workers can see them. Promoted here (not in `globalSetup`) because `process.env` is the only channel that crosses into a worker, and `jest.config.cluster.js` runs no `globalSetup`.
+- **`fromEnvironment`** — Resolves a value from `process.env` first, then `.env`, falling back to a supplied default. Used for `JEST_WORKERS` and `JEST_WORKER_MEMORY_MB`.
+- **`floor(statements, branches, functions, lines?)`** — Builds a single `coverageThreshold` entry. `lines` defaults to `statements` because `coverageProvider: 'v8'` derives both from the same range data.
+- **`moduleFloor(moduleName, file, thresholds)`** — Conditionally emits a keyed threshold only if the module directory exists on disk; returns `{}` otherwise so deleted modules don't leave stale keys.
+- **`STANDARD` / `PARTIAL` / `UNTESTED`** — Reusable threshold presets: `(70,70,70)`, `(25,70,0)`, and `(0,0,0)` respectively.
+- **`module.exports`** — The Jest config object: `ts-jest` preset, `v8` coverage, custom test environment at `tests/support/test-environment.ts`, `testMatch` of `**/tests/**/*.test.ts`, ignore patterns for `tests/cluster/` and worktrees, and the full `coverageThreshold` map keyed by glob paths.
 
 ## Relationships
 
-- **`jest.config.cluster.js`** — Extends this file (so it inherits `DEPTH_KNOBS` promotion and shared settings) but runs no `globalSetup` of its own. The `tests/cluster/` directory is explicitly excluded from this config's `testPathIgnorePatterns` so cluster tests are never picked up by a bare `npx jest`.
-- **`jest.config.mutation.js`** — Also extends this file. The coverage floors here are described as "a fast proxy for the mutation run"; the mutation config uses the same floors while Stryker performs its actual mutation testing.
+- **`jest.config.cluster.js`** — Extends this file (inherits all settings above) but overrides test matching to target `tests/cluster/`. Cluster tests spawn `src/cluster.ts` as a child process with their own Mongo/Redis, so this file's setup does not apply to them.
+- **`jest.config.mutation.js`** — Extends this file for Stryker mutation runs. The coverage floors here act as a fast proxy for the mutation run, which is the "real instrument" per `docs/tools/coverage-and-confidence.md`.
 
 ## Notes
 
-- **Coverage-threshold glob shape matters:** a key that names a directory pools all files beneath it into one aggregate total; a glob (`*`) applies the floor to each matched file individually. A key matching no file is silently ignored by Jest.
-- **Exemptions require two halves:** an extglob negation in one key _plus_ the file's own dedicated key. Omit either and the strict check still runs.
-- **`tests/cross-cutting/coverage-thresholds.test.ts`** is the safety net that turns red if a file falls out of the threshold map entirely (Jest would silently skip it).
-- **`maxWorkers` / `workerIdleMemoryLimit` here are fallbacks only.** The real sizing lives in `scripts/testing/machine-budget.ts` (ESM), which this CommonJS file cannot import. That script passes `--maxWorkers`, `--workerIdleMemoryLimit`, and `--max-old-space-size` on the command line for every npm-run suite, beating these values.
-- **`JEST_WORKERS` in `.env` still wins** over the hardcoded `DEFAULT_MAX_WORKERS = 2` via `fromEnvironment`.
-- **Controllers are deliberately unfloored** (no entry in `coverageThreshold`).
-- **Co-located specs are excluded** from `collectCoverageFrom` (`!src/**/tests/**`) so a module's own tests do not count toward its coverage.
+- `parseEnv` is used deliberately instead of `process.loadEnvFile()` because the latter merges into `process.env`, which would hand real rate-limit values to every worker before `tests/support/setup.ts` can raise them, causing 429s against test fixtures.
+- `DEFAULT_MAX_WORKERS` is intentionally low (2). The production sizing logic lives in `scripts/testing/machine-budget.ts` (ESM), which this CommonJS file cannot import; the npm scripts pass `--maxWorkers` on the command line where it overrides this value.
+- Coverage-threshold keys are glob patterns applied per-file; a key naming a directory would pool all files beneath it into one total. An exemption requires both an extglob negation **and** the file's own explicit key.
+- A threshold key matching no file is silently ignored by Jest but **fails** `tests/cross-cutting/coverage-thresholds.test.ts`, so a removed module must also have its floor removed.
+- `collectCoverageFrom` excludes co-located specs (`src/**/tests/**`) so a module's own tests cannot inflate its coverage percentage.
+- `testEnvironment` uses a custom file that clears timers left running by a test, preventing the entire module graph from staying alive (matters for single-process runs like Stryker's dry run).

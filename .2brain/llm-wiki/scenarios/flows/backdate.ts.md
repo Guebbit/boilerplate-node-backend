@@ -1,7 +1,7 @@
 ---
 source: scenarios/flows/backdate.ts
-sha256: 9d96ab865f9f2377ff63ee7acbb9256ed78c06137c569d8d4fe3060f2dda7369
-generated_at: 2026-09-23T17:17:39.052999+00:00
+sha256: 6cef1da8b74248eb5a18d7a75cdde3488b16978c9f0839498d3d2de124c31ea6
+generated_at: 2026-10-01T12:21:05.083389+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Backdates every order produced by the boot-time demo flows (and all records the application wrote in response) so the shop has realistic date spread for analytics charts, "last 30 days" filters, and period-sensitive dashboards. Operates strictly per order—never a blanket shift—so the order, its payment, shipment, reservation, stock movements, and audit rows remain mutually consistent about _when_ events occurred.
+Backdates a flow-produced order and every document the application wrote on its behalf (payment, shipment, reservation, stock movement, audit rows) into the past, so the demo shop has realistic date spread for analytics, filtering, and dashboards. Without this, every order shares the container's boot timestamp.
 
 ## Key elements
 
-- **`mover`** – Factory that closes over a Mongoose model, a `find` predicate, and a list of date columns, returning a `(orderId, days) => Promise` that runs an aggregation-pipeline `updateMany` to shift those columns.
-- **`TRAILS`** – Array of six `mover` instances, one per collection: orders, payments, shipments, reservations, stock movements, audit logs.
-- **`shiftStage`** – Builds the `$set` stage: each named field gets `$ifNull: [$dateSubtract(...), '$$REMOVE']`, so absent fields (e.g. `deletedAt` on a live order) stay absent rather than being written as `null`.
-- **`backdateOrder(orderId, days)`** – Applies all six trail movers for one order concurrently; short-circuits to a resolved promise when `days <= 0`.
-- **`settleAuditTrail()`** – Polls `auditLogModel.countDocuments()` at 50 ms intervals until two consecutive reads match (max 20 rounds), waiting for fire-and-forget audit writes to land before backdating.
-- **`backdateHistory(ages)`** _(exported)_ – Public entry point: awaits `settleAuditTrail`, then runs `backdateOrder` for every order in the `Record<string, number>` map concurrently.
+- **`backdateHistory(ages: Record<string, number>)`** — the sole export. Waits for the audit trail to settle, then backdates every order (and its trail) by the specified number of days, concurrently across orders.
+- **`backdateOrder(orderId, days)`** — runs all six collection movers for one order in parallel; short-circuits (resolves immediately) when `days <= 0`.
+- **`settleAuditTrail()`** — polls `auditLogModel.countDocuments()` every 50 ms (up to 20 rounds) until two consecutive counts match, ensuring fire-and-forget audit events have landed before dates are rewritten.
+- **`mover(model, find, dates)`** — a generic factory that closes over a single Mongoose model, a per-schema query filter, and a list of date columns, returning an `(orderId, days) => Promise` that issues one `updateMany`.
+- **`shiftStage(dates, days)`** — builds the `$set` aggregation stage; each date field becomes `$ifNull: [$dateSubtract(...), '$$REMOVE']` so absent columns stay absent rather than being written as `null`.
+- **`TRAILS`** — the six wired-up movers, one per collection.
 
 ## Relationships
 
-- **`src/modules/orders/model.ts`** – `orderModel` is the primary target; matched by `_id`.
-- **`src/modules/payments/model.ts`** – `paymentModel` matched by `orderId`; shifts `createdAt`, `updatedAt`, `receivedAt`.
-- **`src/modules/delivery/model.ts`** – `shipmentModel` matched by `orderId`; shifts `createdAt`, `updatedAt`, `deliveredAt`.
-- **`src/modules/inventory/model.ts`** – `reservationModel` (matched by `orderId`) and `stockMovementModel` (matched by string `reference`) both shift their date columns.
-- **`src/modules/audit-logs/model.ts`** – `auditLogModel` matched by string `target_id`; shifts `timestamp`. Also polled in `settleAuditTrail`.
-- **`scenarios/index.ts`** – Upstream orchestrator that invokes `backdateHistory` as part of the boot sequence (the file references its sibling `shop-history.ts` as the step that originally assigns dates).
+- **`src/modules/orders/model.ts`** — `orderModel` is the primary target; filtered by `_id`.
+- **`src/modules/payments/model.ts`** — `paymentModel` filtered by `orderId`; `receivedAt` is shifted alongside `createdAt`/`updatedAt`.
+- **`src/modules/delivery/model.ts`** — `shipmentModel` filtered by `orderId`; `deliveredAt` is shifted.
+- **`src/modules/inventory/model.ts`** — both `reservationModel` (filtered by `orderId`, `expiresAt` shifted) and `stockMovementModel` (filtered by `reference` string, only `createdAt`/`updatedAt` shifted).
+- **`src/modules/audit-logs/model.ts`** — `auditLogModel` filtered by `target_id` string; only the `timestamp` column is shifted. Also polled by `settleAuditTrail`.
+- **`scenarios/index.ts`** — imports and orchestrates `backdateHistory` as part of the scenario bootstrap.
 
 ## Notes
 
-- **`timestamps: false` is load-bearing.** Mongoose stamps `updatedAt` with the current time on every update by default; without this flag the write would undo the very shift it is performing.
-- **`updatePipeline: true`** is required in Mongoose 9 to pass an array as an update operator; a bare array is otherwise rejected as a likely mistake.
-- **`updatedAt` is deliberately shifted** alongside `createdAt`—a row "last touched now" describing a March event is the incoherence this pass eliminates.
-- **`reservations.expiresAt` shifts too.** Backdated holds are already committed or released; leaving the expiry at boot time would be the only disagreeing date in the row.
-- **String vs ObjectId matching:** `stockmovements.reference` and `auditlogs.target_id` store the order id as a plain string, unlike the four collections that use a real `ObjectId` reference. The per-collection `find` closure exists to keep each predicate type-correct.
-- **`$$REMOVE`** in `shiftStage` ensures optional columns (`deletedAt`) are not materialised as `null` on rows that never had them.
-- **`settleAuditTrail` uses adaptive polling** (two equal counts 50 ms apart) rather than a fixed sleep, so fast machines skip the wait entirely and slow machines get up to 1 s of grace.
+- **Mongoose 9 pipeline flag**: every update uses `updatePipeline: true`; omitting it makes Mongoose 9 reject the array update.
+- **`timestamps: false` is required**: without it Mongoose stamps `updatedAt` with *now*, undoing the backdate on the very row being rewritten.
+- **String vs ObjectId references**: `stockmovements.reference` and `auditlogs.target_id` store the order id as a plain string; the other four collections use a real `ObjectId` ref. The `find` callback in each `mover` call accounts for this.
+- **`$$REMOVE` semantics**: a date column that is absent on a given row (e.g. `deletedAt` on a non-deleted order) is left absent, not set to `null`.
+- **Concurrency model**: orders are processed in parallel (`Promise.all` over `ages`), but the six collection writes within a single order are independent `updateMany` calls that run concurrently. There is no transaction or serial dependency between them.
+- **`settleAuditTrail` cap**: 20 rounds × 50 ms = 1 s maximum wait. On a healthy machine it settles in 1–2 rounds.

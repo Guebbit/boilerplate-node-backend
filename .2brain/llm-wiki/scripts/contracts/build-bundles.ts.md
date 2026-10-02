@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/build-bundles.ts
-sha256: a6b6ae2a52358653aaf6c179cd84fe61e6843b5973022972d8065952fb3c01a6
-generated_at: 2026-09-27T13:52:19.283824+00:00
+sha256: 35d4af72063f771ebbde6ed99feec6849caf883ccd6c0ec7132c27d7259e05c3
+generated_at: 2026-10-01T12:25:34.217258+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI entry point for `npm run contracts:bundle`. It rebuilds the committed contract bundles (OpenAPI, AsyncAPI, etc.) from their source fragments, writing only files that have actually drifted. In `--check` mode it verifies staleness without writing, serving as a CI gate. It also handles opt-in regeneration of client collections (generated from the committed contract rather than the fragments).
+CLI entry point (`npm run contracts:bundle`) that rebuilds the repo's published API contract bundles from their source fragments. Fragments are the source of truth; the resulting `openapi.yaml`, `asyncapi.yaml`, and `asyncapi.public.yaml` are what downstream tools (spectral, orval, Prism, `check:spec-identity`) consume. Supports a `--check` mode that asserts freshness without writing, and name-based selection to narrow the run.
 
 ## Key elements
 
-- **`bundle(bundles)`** (local const) — Assembles each bundle via `assembleBundle`, compares the result to the committed file with `readCommittedBundle`, and writes only the stale ones (unless `--check`). Returns the stale subset.
-- **`fail(message)`** — Prints an error and calls `process.exit(1)`.
-- **`relative(file)`** — Converts an absolute path to repo-relative for user-facing messages.
-- **Argument parsing** (top-level) — Reads `process.argv.slice(2)` for a `--check` flag and zero or more bundle names; validates names against `CONTRACT_BUNDLES` and exits `2` on unknown names.
-- **Named-selection path** — Regenerates exactly the bundles asked for. Explicitly refuses `--check` on generated (client-collection) bundles because they are `.gitignore'd` and have no committed copy to compare against.
-- **Full-run path** (no names given) — Rebuilds only *authored* bundles (`!isGenerated(item)`); generated collections are excluded to avoid writing files nobody requested.
+- **`bundle(bundles)`** — Assembles each bundle via `assembleBundle`, diffs against the committed copy with `readCommittedBundle`, and (unless `--check`) writes only the files that drifted. Returns the list of stale bundles.
+- **`run()`** — Top-level orchestration. Two paths:
+  - *Narrowed* (one or more bundle names passed): builds exactly those, including generated collections if explicitly named.
+  - *Full* (no names): builds only **authored** bundles (excludes `isGenerated` entries) to avoid writing unrequested client-collection files.
+- **`fail(message)`** — Prints an error and `process.exit(1)`.
+- **`relative(file)`** — Resolves a path relative to `REPO_ROOT` for user-friendly log output.
+- **Argument parsing** (top-level): extracts `--check` flag and positional bundle names; validates names against `CONTRACT_BUNDLES` and exits with code 2 on unknowns.
 
 ## Relationships
 
-- **`scripts/contracts/bundle-registry.ts`** — Sole module import. Provides `assembleBundle`, `CONTRACT_BUNDLES`, `findBundle`, `isGenerated`, `readCommittedBundle`, `REPO_ROOT`, and the `ContractBundle` type. All bundle identity, assembly, and I/O logic lives there; this file is purely the orchestration/CLI layer.
-- **`scripts/contracts/bundle-kinds.ts`** — Indirect dependency: the `CONTRACT_BUNDLES` entries (defined in `bundle-registry.ts`) reference kind discriminants originating here.
-- **`tests/cross-cutting/mail-copy.test.ts`** — Consumes the bundle outputs this script produces; exercises the end-to-end contract-to-artifact pipeline.
+- **`scripts/contracts/bundle-registry.ts`** — Sole import. Provides the bundle catalog (`CONTRACT_BUNDLES`, `findBundle`), the assembly engine (`assembleBundle`), the committed-file reader (`readCommittedBundle`), the `isGenerated` predicate, `REPO_ROOT`, and the `ContractBundle` type. All read/write logic for individual bundles lives there; this file is purely selection, diffing, and I/O policy.
 
 ## Notes
 
-- **Exit codes:** `0` success / up-to-date, `1` stale or `--check` on a generated bundle, `2` unknown bundle name.
-- **`--check` on generated bundles is a hard error, not a pass.** The comment explains the rationale: a "stale" verdict on a file that is absent by design would create a permanently red CI gate that teams learn to ignore.
-- **Selection lives here, not in `package.json`.** npm appends `--` args only to the *last* command in a `&&` chain, so putting the flag in the script avoids silently dropped arguments.
-- **Paired-repo obligation:** when a bundle is rebuilt, the result must be byte-identical with a paired repo; the `--check` failure message reminds the operator to copy it over.
-- The script is invoked via `tsx` (shebang `#!/usr/bin/env tsx`); it has no named exports and is never imported as a module.
-- `arguments_` (trailing underscore) is used to avoid shadowing the global `arguments` object.
+- **`--check` + generated bundles is an explicit error**, not a stale verdict. Generated collections (e.g. Bruno) are `.gitignore`d by design, so "stale" is meaningless; the script refuses rather than letting CI show a permanently red gate.
+- **Named selection builds from the committed contract, not from a freshly-assembled one.** If you name a generated collection, it regenerates from the committed `openapi.yaml` on disk, not from a fragment-assembled version that this same run might produce.
+- **Selection lives here rather than in `package.json`** because npm appends `--` args to the last command in a `&&` chain, which would silently drop the flag.
+- **Full-run output is intentionally limited to authored bundles.** The four generated client-collection files are opt-in (`-- bruno`, etc.) to avoid writing files no check reads.
+- **`openapi.yaml` is `.gitignore`d and rebuilt on every install; `asyncapi.yaml` and `asyncapi.public.yaml` are committed.** The `--check` mode and the stale-diff logic account for this asymmetry.
+- Exit codes: `0` success/up-to-date, `1` stale or runtime error, `2` unknown bundle name.

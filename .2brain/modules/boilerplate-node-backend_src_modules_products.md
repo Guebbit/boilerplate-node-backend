@@ -5,81 +5,79 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/products/
-files: 39
-updated: 2026-09-27T16:22:31.879307+00:00
+files: 51
+updated: 2026-10-01T14:29:27.958252+00:00
 ---
 
 # src/modules/products/
 
 ## Purpose
 
-The products module owns the product catalogue: the entity's shape, its CRUD and search API, tax-rate resolution, stock-availability derivation, and the admin/storefront HTTP surface. It is a leaf domain context — it emits domain events and exposes read/write ports rather than importing sibling business logic, so that other modules (orders, cart, inventory) conform to it rather than the reverse.
+The products module owns the shop's product catalogue: its shape, validation, persistence, tax-rate resolution, stock-availability derivation, and the public/admin HTTP surface for browsing and managing products. It is a **leaf (reference) module** in the domain — it emits typed events and exposes a frozen contract that sibling modules (orders, cart, inventory, invoicing) conform to, rather than importing their internals.
 
 ## Key parts
 
-- **Domain logic & invariants** — `tax.ts` (tax-class → VAT-rate resolution), `domain/stock.ts` (available-to-buy derivation from inventory counters), `events.ts` (domain-event vocabulary), `audit.ts` (write-action audit vocabulary), `analytics.ts` (typed discovery-event names).
-- **Data & persistence** — `model.ts` (Mongoose schema, Zod API schemas, `ProductRecord`/`ProductSnapshot` type split), `repository.ts` (CRUD, caller-scoped reads, facet aggregate, derived-write ports for stock/image/translations).
-- **Business logic** — `service.ts` — single entry point for all product operations; adds validation, locale-aware translation resolution, access scoping, and event/audit emission on top of the repository.
-- **HTTP layer** — `routes.ts` (router, auth, caching, rate-limiting, uploads), `controllers/` (thin handlers per endpoint, each delegating to shared factories in `src/infrastructure/http`).
-- **Module registration & public API** — `module.ts` (kernel manifest: routes, permissions, config gates, translatable fields), `index.ts` (the only import surface for sibling modules), `domain/index.ts` (pure-domain barrel).
-- **Configuration** — `config.ts` (VAT rates and currency, read per-call from env vars).
-- **API contract & tooling** — `openapi.yaml` (full OpenAPI 3.0 spec), `probes.ts` (hand-written contract probes for edge cases), `factories.ts` (test/demo row fixtures).
-- **Tests** — `tests/unit/` (pure functions, schema contracts, route structure, i18n), `tests/integration/` (repository, service, facets, translation fallback, serialization), `tests/contract/` (wire-shape conformance to `openapi.yaml`).
+- **Module manifest & public API** — `module.ts` declares the module's routes, permissions, config gates, and translatable fields to the kernel. `index.ts` is the sole import surface for sibling modules. `events.ts`, `audit.ts`, and `analytics.ts` register the module's event names, audit actions, and analytics types into shared kernel maps via declaration merging.
+- **HTTP layer** — `routes.ts` wires all endpoints and cross-cutting middleware (auth, caching, rate-limiting, image uploads). The `controllers/` directory holds thin, single-responsibility handlers built on shared factories (`createItemController`, `createSearchController`, `createUpdateController`, etc.). `openapi.yaml` is the single source of truth for the wire contract.
+- **Service layer** — `services/` splits product operations into focused files (read, search, validation, translated-write, image, remove, lookups) that controllers delegate to.
+- **Domain logic** — `domain/stock.ts` derives the customer-facing "available to buy" count from inventory counters; `tax.ts` resolves a product's `taxClass` to a concrete VAT rate. Both are pure, catalogue-level invariants.
+- **Persistence & shape** — `model.ts` defines the Mongoose schema, Zod validation schemas, and the `ProductRecord` / `ProductSnapshot` type split. `repository.ts` composes generic CRUD with product-specific concerns (visibility filtering, facet aggregation, derived-write ports for stock cache, translated fields, image digest).
+- **Configuration** — `config.ts` reads the two VAT rates and currency code from environment variables per call.
+- **Tests** — `tests/contract/` asserts every response conforms to `openapi.yaml`; `tests/integration/` covers visibility, facets, model serialization, image clearing, and delete/restore/audit flows.
 
 ## How it connects
 
-- **`src/kernel/`** — `module.ts` registers the module's identity (routes, permissions, config gates) with the kernel; `events.ts` and `audit.ts` augment the kernel's `DomainEventMap` and `AuditActionMap` via declaration merging; `analytics.ts` registers event names into the shared analytics port's type map.
-- **`src/infrastructure/http/`** — controllers delegate to shared factories (`createItemController`, `createSearchController`, `createUpdateController`, `createDeleteController`, `createRestoreController`) and to `createRepository`, keeping per-module files thin.
-- **`src/modules/inventory/`** — inventory writes `onHand`/`reserved` counters onto product documents; products derives the customer-facing `available` value from those counters at serialization time.
-- **`src/modules/orders/`** — orders freeze the tax rate that `tax.ts` resolves; the module is the source of truth for "what rate does this product carry."
-- **`src/modules/cart/`** — a hard-delete of a product cascades into carts that hold it (exercised in `tests/integration/service.test.ts`).
-- **`src/modules/locales/`** — provides the translation port the product service calls to resolve language rows; the service degrades gracefully when the port is absent.
-- **`scenarios/`** — seeds the `shop` demo catalogue using the module's `factories.ts`.
-- **`scripts/`** — the generated contract client bundle is complemented by `probes.ts` for cases a generator cannot express.
+- **`src/modules/inventory/`** writes the `onHand` / `reserved` counters onto product documents; products' `domain/stock.ts` reads them back to derive availability. Products never mutates stock itself.
+- **`src/modules/locales/`** provides the translation infrastructure that `services/translated-write.ts` and the repository's translated-field port use to persist and read language rows.
+- **`src/modules/orders/`** and **`src/modules/cart/`** consume the tax rate (via `tax.ts`) and the product snapshot at order-line time; they do not import products' internals but rely on the contract exposed through `index.ts`.
+- **`src/modules/account/`** and **`src/modules/users/`** supply the authentication and permission checks that `routes.ts` applies before any admin write reaches a controller.
+- **`src/infrastructure/http/`** provides the shared controller factories, response shapes, and middleware that every controller in this module builds on.
+- **`src/infrastructure/adapters/`** and **`src/infrastructure/`** host the persistence and I/O primitives the repository layer depends on.
+- **`scenarios/`** seeds the `shop` scenario catalogue that `factories.ts` populates for integration and contract tests.
 
 ## Where to start
 
-1. **`model.ts`** — defines the product's field set, the `ProductRecord`/`ProductSnapshot` split, and the Zod schemas that shape every API operation. Reading this first tells you what a product *is* before you see how it's served.
-2. **`service.ts`** — the single choke-point for all create/read/search/update/delete flows. Tracing one method (e.g. `writeCreate`) from validation → repository → event emission gives you the full vertical slice of the module's behavior.
+1. **`module.ts`** — the manifest reads like a table of contents: it lists every route, permission, config key, translatable field, and test scenario the module exposes, giving you the full scope in ~50 lines.
+2. **`model.ts`** — once you know what the module *does*, this tells you what a product *is*: the Mongoose schema, the Zod create/update/replace schemas, and the `ProductRecord` vs `ProductSnapshot` split that governs everything downstream.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_products["src/modules/products/"]
-    m_scenarios["scenarios/<br/>26 files"]
-    m_scripts["scripts/<br/>67 files"]
-    m_src["src/<br/>19 files"]
-    m_src_infrastructure["src/infrastructure/<br/>44 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>23 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>19 files"]
-    m_src_kernel["src/kernel/<br/>11 files"]
-    m_src_modules_account["src/modules/account/<br/>68 files"]
-    m_src_modules_account_services["src/modules/account/services/<br/>11 files"]
-    m_src_modules_addresses["src/modules/addresses/<br/>17 files"]
-    m_src_modules_cart["src/modules/cart/<br/>38 files"]
-    m_src_modules_delivery["src/modules/delivery/<br/>24 files"]
-    m_src_modules_inventory["src/modules/inventory/<br/>25 files"]
-    m_src_modules_locales["src/modules/locales/<br/>40 files"]
-    m_src_modules_orders["src/modules/orders/<br/>65 files"]
+    m_scenarios["scenarios/<br/>30 files"]
+    m_src["src/<br/>48 files"]
+    m_src_infrastructure["src/infrastructure/<br/>58 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
+    m_src_modules_account["src/modules/account/<br/>81 files"]
+    m_src_modules_addresses["src/modules/addresses/<br/>21 files"]
+    m_src_modules_cart["src/modules/cart/<br/>39 files"]
+    m_src_modules_delivery["src/modules/delivery/<br/>27 files"]
+    m_src_modules_inventory["src/modules/inventory/<br/>33 files"]
+    m_src_modules_invoicing["src/modules/invoicing/<br/>27 files"]
+    m_src_modules_locales["src/modules/locales/<br/>43 files"]
+    m_src_modules_orders["src/modules/orders/<br/>68 files"]
+    m_src_modules_orders_services["src/modules/orders/services/<br/>14 files"]
+    m_src_modules_payments["src/modules/payments/<br/>56 files"]
     m_src_modules_products --- m_scenarios
-    m_src_modules_products --- m_scripts
     m_src_modules_products --- m_src
     m_src_modules_products --- m_src_infrastructure
     m_src_modules_products --- m_src_infrastructure_adapters
     m_src_modules_products --- m_src_infrastructure_http
-    m_src_modules_products --- m_src_kernel
     m_src_modules_products --- m_src_modules_account
-    m_src_modules_products --- m_src_modules_account_services
     m_src_modules_products --- m_src_modules_addresses
     m_src_modules_products --- m_src_modules_cart
     m_src_modules_products --- m_src_modules_delivery
     m_src_modules_products --- m_src_modules_inventory
+    m_src_modules_products --- m_src_modules_invoicing
     m_src_modules_products --- m_src_modules_locales
     m_src_modules_products --- m_src_modules_orders
+    m_src_modules_products --- m_src_modules_orders_services
+    m_src_modules_products --- m_src_modules_payments
     style m_src_modules_products stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_kernel|src/kernel/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_services|src/modules/account/services/]] · [[boilerplate-node-backend_src_modules_addresses|src/modules/addresses/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_locales|src/modules/locales/]] · … and 5 more
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_addresses|src/modules/addresses/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_invoicing|src/modules/invoicing/]] · [[boilerplate-node-backend_src_modules_locales|src/modules/locales/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_orders_services|src/modules/orders/services/]] · … and 4 more
 
 ## Files
 - `src/modules/products/analytics.ts` — Declares the analytics event names emitted by the products module and registers them into the shared analytics port's type map. It is a type-level extension (plus a small const object) that lets the products module fire typed discovery events—product search and product view—without modifying the observability layer directly.
@@ -90,6 +88,7 @@ flowchart LR
 - `src/modules/products/controllers/get-catalogue-facets.ts` — Thin Express controller that exposes the catalogue's category and tag facet counts (storefront filter chips) as a public `GET /products/categories` endpoint. It adds no business logic — it simply calls the service and maps the result into the project's standard response shapes.
 - `src/modules/products/controllers/get-product-admin.ts` — Admin-only read controller that returns a product together with every language row it has, used by the editor's form to populate its language tabs. It is a thin wrapper around the `createItemController` factory, differing from the public `get-product-item` controller only in its fetch method and handler name.
 - `src/modules/products/controllers/get-product-item.ts` — Thin controller for `GET /products/:id`. It delegates all real work to the shared `createItemController` factory and the product service, wiring together the caller's auth scope so that row visibility (active vs. inactive/deleted) is enforced per role.
+- `src/modules/products/controllers/get-product-settings.ts`
 - `src/modules/products/controllers/get-products.ts` — Defines the list/search controller for the products catalogue. It builds a Zod query-validation schema (shared by `GET /products` and `POST /products/search`), derives the cache-key parameter list from that schema, and wires both routes onto the shared `createSearchController` factory.
 - `src/modules/products/controllers/restore-products.ts` — Thin wiring module that exposes the admin **restore** endpoint (`POST /products/:id/restore`) for the catalogue. It delegates all HTTP-handling logic to the shared `createRestoreController` factory and simply supplies product-specific collaborators (service, audit action, i18n key). The file exists to keep the module boundary clean so `routes.ts` can import a single named export without re-implementing restore semantics.
 - `src/modules/products/controllers/update-product.ts` — Handler pair for `PUT /products/:id` (full replace) and `PATCH /products/:id` (partial merge), built on the shared `createUpdateController` factory. All actual writing delegates to `productService.writeUpdate`; the controller's job is body validation (via product-specific Zod schemas), multipart input decoding, and image-upload handling before the service call.
@@ -101,14 +100,25 @@ flowchart LR
 - `src/modules/products/model.ts` — Defines the Mongoose schema and document types for the `products` collection, the Zod validation schemas for the create/replace/update API operations, and the `ProductRecord` / `ProductSnapshot` type split that separates "what the shop stores" from "what an order line remembers." It owns the collection's shape but delegates stock mutations to `@modules/inventory` and derives `available` at serialization time so it can never drift.
 - `src/modules/products/module.ts` — The manifest (registration) file for the **products** domain module. It declares the module's identity to the kernel — routes, permissions, config gates, translatable fields, image targets, and test scenarios — so the rest of the application can discover and branch on the product catalogue without importing its internals. Products is a leaf module: it emits events rather than importing sibling domains (cart, orders, inventory), making it the one reference point other contexts conform to.
 - `src/modules/products/openapi.yaml` — OpenAPI 3.0.3 specification (v2.0.0) defining the full HTTP contract for the Products module: routes, parameters, request/response schemas, and error semantics. It exists as the single source of truth for what the products API exposes, enabling codegen, client typing, and documentation without reading the controllers.
+- `src/modules/products/presenter.ts`
 - `src/modules/products/probes.ts` — Holds hand-written API requests for the products module that a generated contract cannot express — validation-failure payloads, headers the generator omits, optional-parameter combinations, and visibility-rule edge cases. It complements the generated collection owned by `scripts/contracts/client-collections-bundle.ts`.
 - `src/modules/products/repository.ts` — Defines and exports `productRepository`, the product catalogue's persistence layer. It composes the generic CRUD provided by `createRepository` with product-specific concerns: caller-scoped reads, public-visibility filtering, a single-snapshot facet aggregate, and three "derived write" ports (stock cache, translated fields, image digest) that other modules call to mirror already-decided state onto a product document without performing an admin edit.
 - `src/modules/products/routes.ts` — Express router that wires every HTTP endpoint for the product catalogue: public storefront reads (search, list, single item, category facets) and admin/supplier writes (create, replace, update, delete, restore, hard-delete). It centralizes the cross-cutting concerns—authentication, permission checks, caching, rate-limiting, and image uploads—so controllers stay focused on business logic.
-- `src/modules/products/service.ts` — Business-logic layer for the Product catalogue entity. It is the single entry point controllers call for all product operations (create, read, search, update, delete). Raw database access is delegated to `productRepository`; this module adds validation, locale-aware translation resolution, access scoping, analytics/audit emission, and domain-event dispatch.
+- `src/modules/products/services/crud.ts`
+- `src/modules/products/services/image.ts`
+- `src/modules/products/services/index.ts`
+- `src/modules/products/services/lookups.ts`
+- `src/modules/products/services/read.ts`
+- `src/modules/products/services/remove.ts`
+- `src/modules/products/services/search.ts`
+- `src/modules/products/services/translated-write.ts`
+- `src/modules/products/services/validation.ts`
 - `src/modules/products/tax.ts` — Resolves a product's `taxClass` into the concrete decimal VAT rate it is charged. It lives in the products module (not orders) because "every product resolves to a rate" is a catalogue invariant; orders merely freeze whatever this function returns.
 - `src/modules/products/tests/contract/api.contract.test.ts` — Contract tests for the `/products` API. They assert that every wire response (and error shape) conforms to the schema declared in `openapi.yaml`, including `additionalProperties: false` guards that catch accidental field leaks. Behavioural logic (visibility by role, pagination math) is deferred to unit/service suites; this file only ensures each contract branch is actually exercised and the response *shape* is correct.
 - `src/modules/products/tests/factories.ts` — Test-database-persisting helpers for the `products` module. It re-exports the pure in-memory builder from `../factories` and adds thin wrappers around `productRepository` so integration and contract tests across many modules can create, read, mutate, and delete product fixtures without importing the repository directly.
+- `src/modules/products/tests/integration/delete-restore-audit.test.ts`
 - `src/modules/products/tests/integration/facets.test.ts` — Integration tests for `productRepository.facets`, the storefront's filter-chip data. The tests pin the contract that facet counts reflect **only public, active, non-deleted products**, that results are deterministically sorted, and that an empty catalogue yields empty arrays rather than an error. They exist to catch visibility-drift that a passing listing query would not surface (a chip pointing at zero results).
+- `src/modules/products/tests/integration/image-clear.test.ts`
 - `src/modules/products/tests/integration/model.test.ts` — Integration test suite that guarantees the Products API never leaks MongoDB internals (`_id`, `__v`) in any response path. It covers the two distinct serialization mechanisms: hydrated Mongoose documents (which rely on the `toJSON` virtual) and `.lean()` query results (which bypass `toJSON` and must be mapped manually).
 - `src/modules/products/tests/integration/no-translation-provider.test.ts` — Integration test suite that verifies the `products` service degrades gracefully when no translation port is registered (i.e. the `locales` module is absent). It proves that the fallback locale still reads and writes successfully, and that any other locale produces a field-specific 422 rather than the 500 that the missing port used to throw before the kernel-level fallback was added.
 - `src/modules/products/tests/integration/repository.test.ts` — Integration tests for `productRepository` CRUD operations and aggregate reads (`facets`) executed against a real MongoDB instance. The file also pins the empty-catalogue behavior of aggregate pipelines (which return *no* row rather than a zeroed one) and the idempotency/staleness semantics of `writebackImage`.

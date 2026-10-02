@@ -1,7 +1,7 @@
 ---
 source: docs/.vitepress/config.mts
-sha256: e15e9ecf49261ecebf1ebedb8491054bb9bc4954ec91addec36be81a78d845fe
-generated_at: 2026-09-27T13:48:02.658930+00:00
+sha256: 3132b87127563f538c7c9e59015884b59575171de5c520330e836ade1cc0a42e
+generated_at: 2026-10-01T12:18:27.948274+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-VitePress site configuration that defines the title, navigation, section-specific sidebars, local search, and enables Mermaid diagram rendering for the project documentation site. It exists so that `vitepress dev` / `vitepress build` produce a navigable, searchable doc site for the Express + MongoDB + Mongoose REST boilerplate.
+VitePress site configuration that defines the title, navigation bar, per-section sidebars, and local search for the project's documentation site. It wraps the config with `withMermaid` so Mermaid diagrams render, and dynamically generates the Modules sidebar from source data rather than hard-coding it.
 
 ## Key elements
 
-- **`withMermaid(…)`** — wraps the entire VitePress config (from `vitepress-plugin-mermaid`) to add Mermaid diagram support to Markdown pages.
-- **`defineConfig(…)`** — standard VitePress config factory; the object returned becomes the default export.
-- **`title` / `description`** — site metadata ("Boilerplate Node Backend"; "ADHD-friendly docs…").
-- **`themeConfig.search`** — enables the built-in local (client-side) search index.
-- **`themeConfig.nav`** — top navigation bar with 9 links: Home, Start, Start (Production), Demo Shop, Theory, Modules, Tools, API, Files.
-- **`themeConfig.sidebar`** — path-keyed sidebar definitions for four sections:
-  - `/demo-ecommerce/` — flat list of 8 pages (overview, roles, scope).
-  - `/theory/` — 16 top-level entries including a nested, collapsed **Web Attacks & Defences** group with 20 sub-pages.
-  - `/modules/` — three tiers (*core*, *supporting*, *generic*) covering ~22 modules, some with child pages (e.g. cart → Checkout, account → Sessions / 2FA / OAuth).
-  - `/tools/` — overview, setup steps, and (truncated) additional entries.
+- **`withMermaid(defineConfig({...}))`** — wraps the entire VitePress config to enable Mermaid diagram support site-wide.
+- **`title` / `description`** — site metadata ("Boilerplate Node Backend" / ADHD-friendly docs tagline).
+- **`themeConfig.search.provider: 'local'`** — enables VitePress built-in local search (no external service).
+- **`themeConfig.nav`** — top-level navigation bar with 10 sections (Home, Start, Demo Shop, Theory, Modules, Tools, API, Files, etc.).
+- **`themeConfig.sidebar`** — per-path sidebar definitions:
+  - `/demo-ecommerce/` — static list of 7 demo-role pages.
+  - `/theory/` — static list of ~20 pages including a nested "Web Attacks & Defences" group with ~20 sub-pages.
+  - `/modules/` — **dynamically generated** via `moduleSidebar(readCatalogue(...))`; reads `module.yaml` files from `src/modules/` and the corresponding doc pages from `docs/modules/`.
+  - `/tools/` — static list organised into Setup, Database, Messaging, and Observability groups.
+- **`fileURLToPath(new URL(..., import.meta.url))`** — resolves the two filesystem paths passed to `readCatalogue` (source modules dir and docs modules dir) relative to this config file's location.
 
 ## Relationships
 
-No dependency-graph neighbors are recorded for this file.
+- **`scripts/docs/module-catalogue.ts`** — provides `readCatalogue` (reads each module's `module.yaml` and its doc pages) and `moduleSidebar` (converts that catalogue into a VitePress sidebar structure). The `/modules/` sidebar section is entirely driven by this module; adding a new module requires no edit to this config file.
 
 ## Notes
 
-- The sidebar is **path-scoped**: only the four listed prefixes get a custom sidebar. Other top-level sections (e.g. `/api/`, `/reference/`) either rely on VitePress's auto-generated sidebar or define their own elsewhere.
-- The "Web Attacks & Defences" group ships with `collapsed: true`, hiding its 20 children until expanded.
-- `withMermaid` must wrap the final config object; placing it *inside* the config would not activate the plugin.
-- The file content was truncated in the source snapshot; the `/tools/` sidebar and any entries after it are not fully visible.
+- The `/modules/` sidebar is the only section that is **not** hand-maintained here. A new module only needs its `module.yaml` and a doc page under `docs/modules/`—the sidebar picks it up automatically at build time.
+- The two `fileURLToPath` calls use `import.meta.url` (ESM) rather than `__dirname`. If the project ever reverts to CommonJS for this file, those lines break.
+- The file is truncated in the repo view; the `/tools/` sidebar likely continues with additional groups (Observability sub-items are cut off). Treat the static lists here as the source of truth for what the site renders.

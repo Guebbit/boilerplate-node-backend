@@ -1,7 +1,7 @@
 ---
 source: shared/contracts/asyncapi.workers.yaml
-sha256: ef3744429c28db3d56c755477b1a79207e5e35b71a3729d175f8706f98d9c05b
-generated_at: 2026-09-23T17:33:47.753950+00:00
+sha256: 7593ba68eafcbd4a505fc40ab624bcf50bddde09baf02f6cd50046d90c23f6a4
+generated_at: 2026-10-01T12:42:57.952315+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the AsyncAPI 3.0 contract for the two **domainless** worker queues (`worker.email.send`, `worker.image.digest`) whose ownership sits with the application as a whole rather than any single domain. It exists as a standalone AsyncAPI document (it carries its own `info` block) so the Spectral lint pipeline can validate it identically to a module's contract.
+Standalone AsyncAPI 3.0 document declaring the application-level worker queues (`worker.email.send`, `worker.image.digest`) that do not belong to any domain module. It lives beside `asyncapi.root.yaml` rather than inside a domain because its producers and consumers cut across domains. Exists so the queue contracts are lintable and model-generatable in the same pass as domain-specific AsyncAPI files.
 
 ## Key elements
 
-- **`servers.rabbitmqLocal`** — the only server declared in this file; binding it here (and nowhere in the shared/public sections) keeps the broker out of the API-client bundle.
-- **`channels.worker.email.send`** — the email-job queue; one message (`EmailJobMessage`) referenced by two operations.
-- **`channels.worker.image.digest`** — the image-digest queue; one message (`ImageDigestJobMessage`) referenced by two operations.
-- **`operations.workerEmailPublish` / `workerEmailConsume`** — `receive` / `send` pair for the email queue. The publish note documents the inline-SMTP fallback when the broker is down; the consume note documents at-least-once ack semantics and the decision _not_ to requeue rendering failures.
-- **`operations.workerImageDigestPublish` / `workerImageDigestConsume`** — `receive` / `send` pair for the image-digest queue. Publish is gated on the referencing document being persisted; consume performs decode → resize → thumbnail → promote → conditional writeback.
-- **`components.schemas.EmailJobPayload`** — Nodemailer-style `request`, `templateName`, `data`. Attachments carry spool `key` values (never raw paths). `data` is fully pre-translated by the producer.
-- **`components.schemas.ImageDigestJobPayload`** — `collection` (registry key, not Mongo name), `documentId`, `key` (opaque quarantine handle). Writeback is conditional on `pendingImageKey` still matching.
+- **`worker.email.send` channel** — email job queue bound to `rabbitmqLocal`.
+- **`worker.image.digest` channel** — image digest/thumbnail job queue bound to `rabbitmqLocal`.
+- **`workerEmailPublish` / `workerEmailConsume`** — the two operations on the email channel. `Publish` uses `action: receive` (this app enqueues); `Consume` uses `action: send` (this app hands the job to the worker). Both reference the same single message declaration.
+- **`workerImageDigestPublish` / `workerImageDigestConsume`** — same publish/consume pair for the image digest channel.
+- **`EmailJobPayload` schema** — Nodemailer `SendMailOptions` subset plus `templateName` and pre-translated `data`. Attachments carry opaque spool `key`s (Claim Check), never filesystem paths.
+- **`ImageDigestJobPayload` schema** — `collection` (registry key), `documentId`, `key` (opaque quarantine-store reference).
+- **`rabbitmqLocal` server** — the only server this document declares; keeps the broker out of the merged public bundle.
 
 ## Relationships
 
-- **`shared/contracts/asyncapi.root.yaml`** — This file is the async counterpart to the root's `system` section; unlike the root it _is_ a standalone AsyncAPI document (the root is not).
-- **`shared/contracts/spectral.asyncapi.modules.yaml`** — The Spectral ruleset that `npm run lint:asyncapi:modules` applies; because this file ships an `info` block it is validated through the same module-oriented rules.
-- **`src/infrastructure/adapters/email.worker.ts`** — The runtime consumer of `worker.email.send`; it acks only after the SMTP transport accepts the message.
-- **`src/modules/webhooks/asyncapi.internal.yaml`** — Structural contrast: webhook delivery lives _inside_ the webhooks domain, whereas the queues in this file are deliberately domainless. They follow the same "one message, two operations" pattern but sit at different ownership levels.
+- **`shared/contracts/asyncapi.root.yaml`** — sibling contract. The public bundle merges only the shared sections of both files; because `rabbitmqLocal` appears here (not in the root), it is excluded from `asyncapi.public.yaml` that API clients consume.
+- **`shared/contracts/spectral.asyncapi.modules.yaml`** — the Spectral ruleset that `npm run lint:asyncapi:modules` applies. This file is a standalone AsyncAPI document (`info` block present) specifically so that same ruleset can validate it identically to a module's internal contract.
+- **`src/infrastructure/adapters/email.worker.ts`** — the consumer side of `worker.email.send`. It acknowledges only after the SMTP transport accepts, and does not retry on rendering failure (poison-message guard).
+- **`src/modules/webhooks/asyncapi.internal.yaml`** — contrast, not dependency. Webhook delivery is webhooks' own domain queue; this file is the domainless equivalent. The header comment explicitly draws this distinction.
 
 ## Notes
 
-- **One message, two operations.** Each channel declares its payload once; direction is encoded in the operation's `action` field (`receive` = this app enqueues, `send` = this app dequeues). Do not add a second message declaration with the same shape.
-- **`rabbitmqLocal` is scoped to this file only.** No shared/public section references it, so it never leaks into the client-facing AsyncAPI bundle.
-- **Attachments are claim-check tickets, not bytes or paths.** `EmailJobPayload.request.attachments[].key` is an opaque spool handle resolved inside the mail-spool root by the consumer — a deliberate boundary against arbitrary file reads.
-- **`templateName` is engine-agnostic.** It names the mail, not a file, so the twin backend can resolve it to a different template engine.
-- **Image-digest writeback is idempotent by design.** The consumer compares `pendingImageKey` against its own `key` before writing URLs back; a stale or superseded job is a no-op.
+- **One message, two operations.** Each queue declares its message once under `channels.<addr>.messages`; the Publish and Consume operations both `$ref` it. Direction is encoded in `action: receive|send`, not by duplicating the payload.
+- **Attachments are Claim Check.** `attachments[].key` is an opaque spool token from `mail-spool.ts`; the consumer resolves it inside the spool root. Producers never supply filesystem paths.
+- **Email queue is an optimisation, not the system of record.** If the broker is unavailable the adapter falls back to inline SMTP send rather than dropping the message.
+- **No locale in the payload.** `data` arrives pre-translated (including `<html lang>` and footer). The consumer interpolates and resolves nothing.
+- **`templateName` is engine-agnostic.** Shared with a twin backend that renders via a different template engine; the name identifies the mail, not the file.
+- **`collection` is a registry key** (see `kernel/registry.ts`), not a raw Mongo collection name — the consumer uses it to look up the correct writeback target.
+- **`title` on inline object schemas** (e.g. `EmailRequest`, `EmailAttachment`) exists solely to give Modelina a stable generated-model name and prevent `AnonymousSchemaN` renumbering.

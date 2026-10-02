@@ -43,6 +43,8 @@ src/modules/*/__factories-import-probe.ts
 # there today (the `audit` symlink, below) is excluded on purpose.
 /.claude/*
 !/.claude/commands/
+!/.claude/agents/
+!/.claude/skills/
 
 # The optional symlink that exposes tests/audit/*.md as Claude Code slash commands — see
 # docs/tools/ai-auditing.md. The prompts themselves are versioned; this is one developer's

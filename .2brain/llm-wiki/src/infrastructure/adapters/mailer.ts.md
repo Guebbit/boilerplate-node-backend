@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/mailer.ts
-sha256: f7d8dc889e9e1ffe6c9ec86a8ea85010331341c08f72eab08b05094a1cab912b
-generated_at: 2026-09-27T14:07:07.827907+00:00
+sha256: 0e544f706acc187d8297c121347c8752240941925888e55f3f4723221ccac03f
+generated_at: 2026-10-01T12:49:49.437961+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Email delivery adapter that renders EJS templates and sends mail via SMTP (nodemailer), with optional queue-based delivery to decouple slow mail servers from request paths. It also supports two non-SMTP transports (`log`, `outbox`) for tests and the demo profile, so no caller needs to branch on deployment mode.
+Email delivery adapter that renders EJS templates into HTML and sends the result via SMTP (or a non-SMTP transport for testing/demo). It is the single module every caller goes through to render a template and hand the finished message to a transport, optionally via the queue to keep HTTP responses fast.
 
 ## Key elements
 
-- **`emailTemplatesDirectory()`** – Resolves the absolute path to EJS templates (`NODE_EMAIL_TEMPLATES_DIR` or `shared/templates/emails`).
-- **`templateFile(name)`** – Maps a template identifier to its `.ejs` file path; the single place the extension is appended.
-- **`MailTransport`** (`'smtp' | 'log' | 'outbox'`) – The three delivery modes this adapter supports.
-- **`resolveMailTransport()`** – Determines the active transport per send. Forces `outbox` in demo mode, `log` in test; otherwise reads `NODE_MAIL_TRANSPORT` (default `smtp`). Throws if `outbox` is selected in production.
-- **`missingSmtpCompanions()`** – Returns unset `NODE_SMTP_USER`/`PASS`/`SENDER` vars when a host is configured; called by the boot gate.
-- **`resetTransporter()`** – Clears the memoised nodemailer transport (test seam for varying SMTP config without re-importing the module).
-- **`getTransporter()`** (internal) – Lazily builds and caches a nodemailer `Transporter` with TLS/port logic (`secure` on 465, `requireTLS` on 587).
-- **`resolveAttachments()`** (internal) – Resolves spooled `{filename, key}` pairs into nodemailer `{filename, path}` via `resolveSpooled`.
-- **`send(message)`** (internal) – The single `sendMail` call site; hands a fully-built envelope to the transporter.
-- **`sendTemplatedEmail(request)`** – Renders an EJS template, fills in `from`/`html`/attachments, and sends synchronously.
-- **`enqueueEmail(...)`** – Publishes an `EmailJobPayload` to the `EMAIL_QUEUE` RabbitMQ queue for async delivery (see `email.worker.ts` as consumer).
+- **`MailTransport`** (`'smtp' | 'log' | 'outbox'`) — the three ways a deployment can handle an email; there is deliberately no `'none'` because rendering is where template bugs surface.
+- **`resolveMailTransport()`** — returns the active transport. Hard-forces `'log'` in test environments; rejects `'outbox'` outside relaxed (dev/test) environments.
+- **`resetTransporter()`** — test seam that clears the memoised `Transporter` so a suite can vary SMTP env vars and get a fresh one without re-importing the module.
+- **`getTransporter()`** (private) — lazily builds and caches the nodemailer transport. Derives `secure`/`requireTLS` from the port number (465 → implicit TLS; 587 → STARTTLS required; 25 → relay).
+- **`resolveAttachments()`** (private) — maps `EmailJobPayload` attachment `{filename, key}` pairs to nodemailer `{filename, path}` by resolving each key through the mail spool; unresolvable keys are logged and skipped.
+- **`send()`** (private) — the single `sendMail` call site; all outbound messages route through here.
+- **`sendTemplatedEmail(request, templateName, data)`** — public entry point. Short-circuits to `recordDemoEmail` when transport is `'outbox'`. Otherwise renders the EJS template, resolves spooled attachments, fills `from`/`html` defaults, and sends. Wraps the whole operation in an OTel `email.send` span with `messaging.system` and `email.template` attributes (never the recipient).
+- **Re-exports from `template-registry`** — `registerTemplateDirectories`, `templateFile`, `registeredTemplateNames` are re-exported so every other caller keeps importing from this one file (the mail adapter's public surface).
+- **`ResolvedAttachment`** — local interface matching nodemailer's `{filename, path}` shape.
 
 ## Relationships
 
-- **`src/app/required-config.ts`** – Calls `missingSmtpCompanions()` as a boot-time gate; the adapter does not call back into the app.
-- **`src/infrastructure/adapters/queue.ts`** – Imports `publishToQueue`, `EMAIL_QUEUE`, and `JobPriority` to enqueue mail for async delivery.
-- **`src/infrastructure/adapters/email.worker.ts`** – Consumes jobs published to `EMAIL_QUEUE`; owns attachment discard (`discardSpooled`) after a job's retry chain is exhausted.
-- **`src/infrastructure/adapters/mail-spool.ts`** – Provides `resolveSpooled` / `discardSpooled` for attachment file paths.
-- **`src/infrastructure/adapters/demo-outbox.ts`** – `recordDemoEmail` is called when transport is `outbox`, storing the rendered message for `GET /__test/emails`.
-- **`src/infrastructure/adapters/logger.ts`** – Emits warnings (e.g., unresolvable spool keys).
-- **`src/infrastructure/observability/tracer.ts`** – `withSpan` wraps send operations with OTel messaging attributes.
-- **`src/infrastructure/runtime/environment.ts`** – `environmentNumber` / `environmentChoice` read `NODE_SMTP_PORT`, `NODE_MAIL_TRANSPORT`.
-- **`src/infrastructure/runtime/demo-profile.ts`** – `isDemoMode()` forces `outbox` transport unconditionally.
-- **`src/modules/account/services/mail.ts`** – Application-layer service that calls `sendTemplatedEmail` / `enqueueEmail`.
-- **`src/modules/account/two-factor/registry.ts`** – Gates the email second factor on `NODE_SMTP_HOST` being set.
-- **`src/modules/account/emails.ts`** – Defines email content/template names that flow through this adapter.
-- **`scripts/ops/reap-inactive-accounts.ts`** – Ops script that triggers account-related emails through the same path.
+- **`template-registry.ts`** — provides the EJS template lookup (`templateFile`) and registration functions; re-exported here to keep a single public import path.
+- **`config.ts`** (`mailConfig`) — supplies all SMTP connection parameters (`NODE_SMTP_HOST`, `PORT`, `USER`, `PASS`, `NAME`) and the `NODE_MAIL_TRANSPORT` setting.
+- **`runtime/config.ts`** — `isTestEnvironment` and `isRelaxedEnvironment` gate transport resolution.
+- **`demo-outbox.ts`** — `recordDemoEmail` is called when the transport is `'outbox'`; the outbox is the demo profile's read-only control surface.
+- **`mail-spool.ts`** — `resolveSpooled` turns spool keys into filesystem paths for attachments; `discardSpooled` is called by the worker (not here) when a job's retry chain is exhausted.
+- **`tracer.ts`** — `withSpan` wraps the send operation for OpenTelemetry.
+- **`queue.ts`** — `publishToQueue` and `EMAIL_QUEUE` are used by `enqueueEmail` (further down in the file) to defer delivery off the request path.
+- **`logger.ts`** — emits the warning when a spool key fails to resolve.
+- **`email.worker.ts`** — the consumer that drains the email queue; it owns attachment disposal (`discardJobAttachments`) after the final retry, which is why `sendTemplatedEmail` never discards spooled files itself.
+- **`modules/account/services/mail.ts`** / **`modules/account/emails.ts`** — application-level callers that build `EmailJobPayload` and invoke `sendTemplatedEmail` or `enqueueEmail`.
+- **`scripts/ops/reap-inactive-accounts.ts`** — operational script that sends lifecycle emails through the same adapter.
 
 ## Notes
 
-- The transporter is **lazily memoised** at module scope (not at import time), so tests can call `resetTransporter()` after mutating env vars without a full module re-import.
-- `secure` is derived from **numeric** port comparison (`port === 465`), not string equality, to avoid a zero-padded `"0465"` accidentally disabling TLS.
-- `requireTLS` is set on port 587 to prevent credential-leak via STARTTLS-advertisement stripping.
-- The adapter **never discards** spooled attachments itself; only `email.worker.ts` (after final retry) and the inline `enqueueEmail` path own that lifecycle, because a queued job may be retried and still need the file.
-- Template names travel over RabbitMQ as bare filenames (no absolute path), keeping the producer and consumer decoupled from each other's filesystem layout.
-- The `createTransport` call is split into two branches rather than a ternary argument because nodemailer's overloads are per-transport-kind and a union argument matches neither.
+- **`secure` is compared as a number** (`port === 465`), not a string, so a zero-padded env value like `0465` still resolves correctly.
+- **`requireTLS: true` on port 587** is intentional: without it an attacker who strips the STARTTLS advertisement would receive AUTH credentials in cleartext.
+- **No `'none'` transport exists by design.** Skipping render to "disable" email would hide template bugs; use `'log'` instead.
+- **`sendTemplatedEmail` is synchronous** (the promise settles only after the server accepts). Callers on HTTP paths should prefer `enqueueEmail` to avoid stretching the response with a slow SMTP server.
+- **Attachments are never deleted inside this module.** Only the worker (after final retry) or the inline path in `enqueueEmail` calls `discardSpooled`, because a queued job may still have retries that need the file.
+- **OTel span attributes deliberately omit the recipient** — tracing backends do not apply the logger's personal-field redaction.
+- The `template-registry` re-export exists because `tests/support/setup.ts` must not transitively pull `ejs`/`nodemailer` through the registry module; keeping the re-export here preserves that boundary.

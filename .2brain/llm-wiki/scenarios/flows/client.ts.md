@@ -1,7 +1,7 @@
 ---
 source: scenarios/flows/client.ts
-sha256: 06ad54a0aa783404aa54d62e5debfe55c183438c185657a4e568a01b166f1ed7
-generated_at: 2026-09-23T17:17:51.343580+00:00
+sha256: 211877eb7f60df87a003d15686ed9b08785d8c7e5a73e2dcb7cd6f90061c01c8
+generated_at: 2026-10-01T12:21:26.239930+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A minimal HTTP client that the scenario-flow runner uses to drive the application over real endpoints during container bootstrap. It exists to keep every flow's request/response handling (base-URL joining, bearer auth, envelope unwrapping, error classification) in one place, and to avoid a supertest dependency because the flows run at a stage where devDependencies may be absent.
+Thin HTTP client that scenario flows use to drive the application over a live server during container bootstrap. It wraps `fetch` with bearer-token auth, unwraps the API's `{ data, errors }` envelope once, and distinguishes "expected to succeed" calls (`call`) from "expected to possibly fail" calls (`attempt`). It exists so that every flow in `scenarios/flows/` shares one auth path, one error shape, and one `fetch` call site.
 
 ## Key elements
 
-- **`Envelope`** (internal) — the two-field shape (`data`, `errors[]`) every API response is expected to carry.
-- **`Method`** — union of `GET | POST | PUT | PATCH | DELETE`.
-- **`Attempt`** _(exported)_ — a parsed HTTP outcome: `status`, `data`, `errorCode` (first `errors[].code`), and `errorMessages` (all `errors[].message`).
-- **`ScenarioFlowError`** _(exported)_ — the single error type the runner throws when a call expected to succeed does not. Message includes actor, method, path, status, error code, and the error messages (or raw data) for context.
-- **`Caller`** _(exported)_ — a signed-in actor object exposing `email`, `call` (throws on non-2xx, returns typed `data`), and `attempt` (always resolves to `Attempt`, no throw).
-- **`signIn`** _(exported)_ — logs in via `POST /account/login`, validates the token, and returns a `Caller` with the bearer header pre-attached.
-- **`readAttempt`** (internal) — converts a `Response` into an `Attempt`; handles 204 and non-JSON bodies gracefully.
-- **`send`** (internal) — the single `fetch` call site; joins `baseUrl` + `path`, serialises the body, delegates parsing to `readAttempt`.
+- **`Attempt`** (exported interface) — Parsed response: `status`, `data`, `errorCode` (first `errors[].code`), `errorMessages` (all `errors[].message`).
+- **`ScenarioFlowError`** (exported class) — Extends `Error`; message names the actor, method, path, status, error code, and the full error messages. Thrown by `Caller.call` on any non-2xx.
+- **`Caller`** (exported interface) — A signed-in actor. `call<T>()` resolves to `data` or throws; `attempt()` always resolves to an `Attempt`. Both accept `method`, `path`, and optional JSON `body`.
+- **`signIn(baseUrl, email, password)`** (exported) — POSTs to `/account/login`, extracts the token, and returns a `Caller` bound to that token.
+- **`send`** (module-private) — The single `fetch` call site. Serialises non-FormData bodies as JSON; drops the `content-type` header when the body is `FormData` so `fetch` can set its own multipart boundary.
+- **`readAttempt`** (module-private) — Parses a `Response` into an `Attempt`; handles 204 / non-JSON bodies by returning `data: undefined`.
+- **`Envelope` / `Method`** (module-private) — The API's response shape and the set of HTTP verbs flows use.
 
 ## Relationships
 
-- **`scenarios/flows/actions.ts`** — imports `signIn`, `Caller`, `ScenarioFlowError`, and `Attempt` to execute individual flow steps (product CRUD, cart, checkout, etc.) and to assert expected failures.
-- **`scenarios/flows/shop-history.ts`** — uses `Caller.call` / `Caller.attempt` to exercise the shop-history endpoints within a seeded scenario run.
-- **`scripts/docs/generate-role-matrix.ts`** — calls `signIn` for each seeded account and `Caller.attempt` to probe which roles receive 2xx vs. 4xx on protected routes, then records the matrix for `docs/tools/demo-profile.md`.
+- **scenarios/flows/actions.ts** — The flow runner that imports `Caller`, `Attempt`, and `ScenarioFlowError` to execute and assert individual flow steps.
+- **scenarios/flows/shop-history.ts** — A concrete flow that calls `signIn` and then uses the returned `Caller` to exercise shop-history endpoints.
+- **scenarios/locales.ts** — Provides locale data that flows (driven through this client) reference when constructing request bodies for locale-sensitive endpoints.
+- **scenarios/shop-modules.ts** — Defines the shop module routes/shapes that flows hit through `Caller.call` / `Caller.attempt`.
+- **scripts/docs/generate-role-matrix.ts** — Reads the flow/scenario structure to produce the role-by-permission documentation; the `Caller`/`Attempt` contract is what it documents.
 
 ## Notes
 
-- Deliberately uses global `fetch`, **not** supertest. The file runs during `npm run db:bootstrap → scenario:apply`, a stage where devDependencies are not guaranteed to be installed.
-- `signIn` is the _only_ way a `Caller` is created; tokens are never hand-issued. This guarantees the session is fresh, which `requireFreshAuth(REAUTH_TIME_CRITICAL)` on checkout/payment routes requires.
-- `call` returns `outcome.data as T` — the caller is responsible for typing; there is no runtime shape validation beyond the two-field envelope.
-- `Attempt.data` is `undefined` for 204 responses and for any body that is not valid JSON (the `readAttempt` catch path).
-- `errorMessages` collects **all** error messages, not just the first, but `errorCode` is always the first code only.
+- **Why not supertest?** The repo has supertest as a devDependency, but this file runs during `npm run db:bootstrap → scenario:apply` where devDeps may be absent. `fetch` is always available at runtime.
+- **`call` vs `attempt`** — `call` throws on non-2xx; `attempt` never throws. Flows that *expect* a refusal (e.g. permission-denied checks) must use `attempt` so they can inspect `errorCode` / `errorMessages`.
+- **Login is through the real endpoint.** A hand-crafted token is deliberately avoided so the session is fresh enough to satisfy `requireFreshAuth(REAUTH_TIME_CRITICAL)` on checkout and payment routes.
+- **FormData bodies** skip JSON stringification and the `content-type` header is stripped from the header map before `fetch` runs, letting the runtime set the correct `multipart/form-data` boundary.

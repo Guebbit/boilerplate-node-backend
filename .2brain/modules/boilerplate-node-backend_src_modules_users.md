@@ -5,94 +5,82 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/users/
-files: 33
-updated: 2026-09-27T16:22:51.816361+00:00
+files: 48
+updated: 2026-10-01T14:29:59.562210+00:00
 ---
 
 # src/modules/users/
 
 ## Purpose
 
-The `users` module owns the **User** document and all admin-facing operations against it: listing, searching, creating, updating, soft-deleting, restoring, and stripping second-factor credentials. It is the data-and-policy half of the authentication boundary; the *flow* half (login, registration, 2FA verification, sessions, rate-limiting, anti-automation) lives in the sibling `account` module. External code interacts with this module exclusively through its barrel export (`index.ts`), and its public surface is governed by `openapi.yaml`.
+The `users` module owns the full user-identity lifecycle: creating, reading, updating, restoring, and deleting accounts, plus the sensitive material attached to each one (credentials, refresh tokens, two-factor methods, OAuth links). It exposes the admin-facing `/users` REST surface and provides the typed service, repository, and event vocabulary that the `account` module and other siblings rely on for session management, sign-up, and personal-data compliance.
 
 ## Key parts
 
-- **Domain data** — `model.ts` defines the Mongoose schema (user fields, token sub-documents, 2FA records, OAuth links), the pre-save bcrypt hook, `select: false` guards on every credential field, and the `hashToken` / `isLiveRefreshSession` helpers other modules call. `repository.ts` wraps the shared `createRepository` factory and adds the token, credential, and inactivity-sweep queries; it is the only sanctioned place to re-select hidden fields.
-
-- **Business logic** — `service.ts` implements admin CRUD, search, validation, audit/event emission, and the read paths that `account` calls (auth lookup, token consumption, OAuth-identity resolution). It enforces only what the user document itself requires; HTTP concerns stay in the controllers.
-
-- **HTTP layer** — `routes.ts` mounts the admin-only `/users` router with per-endpoint auth, cache, rate-limit, and upload middleware. The `controllers/` directory contains one thin adapter per action (create, get, list/search, update, delete, restore, 2FA-removal); each maps the request to a service call and shapes the response.
-
-- **Cross-cutting declarations** — `events.ts`, `audit.ts`, and `analytics.ts` register this module's vocabulary into the kernel's shared `DomainEventMap`, `AuditActionMap`, and `AnalyticsEventMap` via TypeScript declaration merging, giving every emitter a single typed source. `erasure-registry.ts` receives its personal-data erase hook at boot (supplied by `module.ts`) so that GDPR erasure cascades into the user record.
-
-- **Module manifest** — `module.ts` is the single `AppModule` object the kernel reads to wire routes, permissions, locales, image writeback targets, personal-data export sections, and required configuration.
-
-- **API contract** — `openapi.yaml` (3.0.3) is the source of truth for request/response shapes and is consumed by codegen, SDKs, and docs tooling.
-
-- **Fixtures & tests** — `factories.ts` builds schema-accurate seed documents. `tests/` is organised into unit (schema contract, validation thunks, routes, token methods, factories), integration (model, repository, service, OAuth lookup, tokens, schema), and contract (API-level, verifying no `additionalProperties: false` field ever leaks) suites.
+- **Model & persistence** — `model.ts` (Mongoose schema, password pre-save hash, `select: false` casters, token/OAuth subdocuments) and `repository.ts` (CRUD plus credential, token, and OAuth-link operations; the only sanctioned place to re-select hidden fields).
+- **Services (business logic)** — `services/` split by concern: `create`, `update`, `remove`, `signup`, `tokens`, `credentials`, `image`, `lookups`, `reaper`, `validation`, `admin-two-factor`, re-exported through `services/index.ts`.
+- **HTTP layer** — `controllers/` (one thin file per action) and `routes.ts` (Express `Router` wiring middleware, auth, and rate-limiting to those controllers).
+- **Module wiring & contracts** — `module.ts` (the `AppModule` manifest: routes, permissions, locales, erasure hooks, config), `openapi.yaml` (OpenAPI 3.0.3 spec consumed by codegen and client SDKs), `index.ts` (public barrel; the only surface sibling modules may import).
+- **Cross-cutting registries** — `analytics.ts` (typed event names), `audit.ts` (typed audit action constants), `events.ts` (domain-event map augmentation), `erasure-registry.ts` (personal-data erase manifest, supplied at boot to avoid circular imports).
+- **Testing** — `tests/contract/` (OpenAPI-driven API contract tests, especially the "no undeclared field leaks" invariant), `tests/integration/` (schema, repository, model, and service-oauth tests against in-memory MongoDB), `tests/factories.ts` (persistence-aware fixture builder).
+- **Misc** — `factories.ts` (seed/test document builder), `config.ts`, `presenter.ts`.
 
 ## How it connects
 
-- **`src/modules/account/`** — the shared-kernel counterpart. `account` services call `userService` for `findForLogin`, `findByOAuthIdentity`, `consumeToken`, and inactivity sweeps; in return, `account` handles sessions, email delivery, rate-limiting, and anti-automation. The two modules share the user document but never import each other's internals—only the kernel-mediated barrel.
-
-- **`src/kernel/`** — provides `DomainEventMap`, `AuditActionMap`, `AppModule` types, the `createRepository` factory, and the event bus that `service.ts` publishes into. Declaration merging in `events.ts` / `audit.ts` / `analytics.ts` grows those maps without a central enumeration.
-
-- **`src/modules/audit-logs/`** — consumes the audit action constants this module registers; the audit-logs module is responsible for persisting and querying the events that `service.ts` emits.
-
-- **`src/infrastructure/http/`** — supplies the routing, middleware (auth, caching, rate-limit, upload), and response-shaping utilities that `routes.ts` and the controllers rely on.
-
-- **`src/infrastructure/adapters/`** — provides the MongoDB/Mongoose connection and query utilities that `repository.ts` builds on.
-
-- **Other sibling modules** (`orders`, `payments`, `products`, `wishlist`, `addresses`, `cart`, `delivery`, `api-keys`, `webhooks`, `observability`) — appear in the dependency graph as consumers of the user document (e.g., order ownership) or as participants in the personal-data erasure registry that `erasure-registry.ts` fulfils at boot.
+- **`src/modules/account/`** — the primary consumer. The account module calls `userService.findByOAuthIdentity` on every OAuth callback, relies on the repository's credential/token operations across the shared-kernel edge, and participates in the personal-data erasure registry that `erasure-registry.ts` exposes.
+- **`src/modules/audit-logs/`** — consumes the `AuditActionMap` entries declared in `audit.ts` to filter, query, and export audit trails by the exact action names this module emits.
+- **`src/modules/observability/`** — consumes the `AnalyticsEventMap` entries from `analytics.ts` to build dashboards that split operator-initiated actions from self-signup.
+- **`src/infrastructure/http/`** — `routes.ts` builds on the shared Express router and middleware utilities provided by the HTTP infrastructure layer.
+- **All sibling modules** (`orders`, `payments`, `products`, etc.) — import the users module exclusively through `index.ts` (enforced by the strategic-DDD barrel rule); they never reach into `model.ts`, `repository.ts`, or `services/` directly.
 
 ## Where to start
 
-1. **`model.ts`** — Read this first to understand the shape of the User document, which fields are hidden by default, how password hashing is wired, and what `tokenAdd` / `tokenRemoveAll` do. Every other file in the module is built around these invariants.
-
-2. **`service.ts`** — Next, trace `create`, `updateById`, `search`, and `findByOAuthIdentity` to see the validation rules, audit/event emission, and the exact contract that `account` depends on. Together these two files give you the full data-and-policy picture before you touch any HTTP or test code.
+1. **`model.ts`** — reading the Mongoose schema first gives you the shape of a user, the `select: false` invariants, and the password-hash hook; everything else (repository, services, contract tests) builds on those guarantees.
+2. **`module.ts`** — the manifest shows how routes, permissions, erasure hooks, and config are assembled into a single `AppModule`, giving you the "wiring diagram" before diving into individual services or controllers.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_users["src/modules/users/"]
-    m_scenarios["scenarios/<br/>26 files"]
+    m_scenarios["scenarios/<br/>30 files"]
     m_scripts["scripts/<br/>67 files"]
-    m_src["src/<br/>19 files"]
-    m_src_infrastructure["src/infrastructure/<br/>44 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>23 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>19 files"]
-    m_src_kernel["src/kernel/<br/>11 files"]
-    m_src_modules["src/modules/<br/>15 files"]
-    m_src_modules_account["src/modules/account/<br/>68 files"]
+    m_scripts_ops["scripts/ops/<br/>19 files"]
+    m_src["src/<br/>48 files"]
+    m_src_infrastructure["src/infrastructure/<br/>58 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
+    m_src_modules_account["src/modules/account/<br/>81 files"]
     m_src_modules_account_controllers["src/modules/account/controllers/<br/>34 files"]
-    m_src_modules_account_services["src/modules/account/services/<br/>11 files"]
-    m_src_modules_addresses["src/modules/addresses/<br/>17 files"]
-    m_src_modules_api_keys["src/modules/api-keys/<br/>18 files"]
-    m_src_modules_audit_logs["src/modules/audit-logs/<br/>14 files"]
-    m_src_modules_cart["src/modules/cart/<br/>38 files"]
+    m_src_modules_addresses["src/modules/addresses/<br/>21 files"]
+    m_src_modules_api_keys["src/modules/api-keys/<br/>19 files"]
+    m_src_modules_audit_logs["src/modules/audit-logs/<br/>15 files"]
+    m_src_modules_cart["src/modules/cart/<br/>39 files"]
+    m_src_modules_delivery["src/modules/delivery/<br/>27 files"]
+    m_src_modules_invoicing["src/modules/invoicing/<br/>27 files"]
     m_src_modules_users --- m_scenarios
     m_src_modules_users --- m_scripts
+    m_src_modules_users --- m_scripts_ops
     m_src_modules_users --- m_src
     m_src_modules_users --- m_src_infrastructure
     m_src_modules_users --- m_src_infrastructure_adapters
     m_src_modules_users --- m_src_infrastructure_http
-    m_src_modules_users --- m_src_kernel
-    m_src_modules_users --- m_src_modules
     m_src_modules_users --- m_src_modules_account
     m_src_modules_users --- m_src_modules_account_controllers
-    m_src_modules_users --- m_src_modules_account_services
     m_src_modules_users --- m_src_modules_addresses
     m_src_modules_users --- m_src_modules_api_keys
     m_src_modules_users --- m_src_modules_audit_logs
     m_src_modules_users --- m_src_modules_cart
+    m_src_modules_users --- m_src_modules_delivery
+    m_src_modules_users --- m_src_modules_invoicing
     style m_src_modules_users stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_kernel|src/kernel/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_controllers|src/modules/account/controllers/]] · [[boilerplate-node-backend_src_modules_account_services|src/modules/account/services/]] · [[boilerplate-node-backend_src_modules_addresses|src/modules/addresses/]] · [[boilerplate-node-backend_src_modules_api-keys|src/modules/api-keys/]] · [[boilerplate-node-backend_src_modules_audit-logs|src/modules/audit-logs/]] · … and 10 more
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_controllers|src/modules/account/controllers/]] · [[boilerplate-node-backend_src_modules_addresses|src/modules/addresses/]] · [[boilerplate-node-backend_src_modules_api-keys|src/modules/api-keys/]] · [[boilerplate-node-backend_src_modules_audit-logs|src/modules/audit-logs/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · … and 9 more
 
 ## Files
 - `src/modules/users/analytics.ts` — Declares the analytics event names for the user module's administrative actions and registers them into the app-wide `AnalyticsEventMap` type so that emitters (e.g. `service.ts`) can reference them in a type-safe, stringly-typed-free way. The events distinguish operator-initiated account actions from the self-signup path (`USER_SIGNED_UP`) so that dashboards can sum or split them independently.
 - `src/modules/users/audit.ts` — Declares the audit action string constants owned by the users module and registers them into the app-wide `AuditActionMap` type via TypeScript declaration merging. It exists so that every audit event the users module emits uses a single, typed vocabulary, and so downstream consumers (query UIs, compliance exports) can filter by these exact action names.
+- `src/modules/users/config.ts`
 - `src/modules/users/controllers/create-user.ts` — Handles the `POST /users` endpoint (staff-initiated user creation). It parses the incoming request (JSON or multipart), validates the payload via the users service, delegates persistence to `userService.create`, and shapes the HTTP response. The update half of this controller pair lives in `update-user.ts`.
 - `src/modules/users/controllers/delete-user-two-factor.ts` — Thin HTTP adapter for `DELETE /users/:id/2fa` — the admin-assisted path that strips a user's second factor without requiring a verification code. All business logic lives in the service; this file only maps the request to a service call and the result to an HTTP response.
 - `src/modules/users/controllers/delete-users.ts` — Thin controller that maps the two admin delete endpoints (`DELETE /users` and `DELETE /users/:id`) to the user service, delegating the actual deletion and selecting the correct audit action name. It exists so route registration stays decoupled from the deletion logic and the audit trail records *which* kind of delete (soft vs. hard) occurred.
@@ -107,11 +95,25 @@ flowchart LR
 - `src/modules/users/model.ts` — Defines the Mongoose schema and TypeScript interfaces for the user record, its token subdocuments, two-factor method records, and OAuth account links. Deliberately kept as a single file so the password pre-save hash hook stays colocated with the `select: false` casters that keep the hash off every read. Also re-exports `normalizeEmail` and provides the `hashToken` / `isLiveRefreshSession` helpers that other modules depend on for token comparison and session listing.
 - `src/modules/users/module.ts` — The module manifest for the `users` module. It declares everything the kernel needs to wire up the module—routes, permissions, locales, image writeback targets, personal-data export sections, and required configuration—into a single `AppModule` object. It also resolves cross-module personal-data erasure hooks at registration time.
 - `src/modules/users/openapi.yaml` — OpenAPI 3.0.3 contract (v2.0.0) that defines the full REST surface for the **users** module: list, create, delete, get-by-id, full-replace, and partial-update operations. It serves as the single source of truth for the module's request/response shapes, parameter semantics, and error responses, and is the document other tooling (codegen, client SDKs, docs) consumes.
+- `src/modules/users/presenter.ts`
 - `src/modules/users/repository.ts` — Persistence layer for the user collection. Wraps the shared `createRepository` factory with standard CRUD, then layers on the credential, token, OAuth-link, and inactivity-sweep operations that the `account` module needs across the shared-kernel edge. All sensitive fields (`password`, `tokens`, 2FA material, `oauthAccounts`, `pendingEmail`) are `select: false` on the schema; this file is the single sanctioned place to re-select them.
 - `src/modules/users/routes.ts` — Defines the Express `Router` for the admin-only `/users` API surface (search, list, read, create, update, delete, restore, 2FA removal). It wires each endpoint to the appropriate authorization key, caching policy, rate-limit, upload, and route-flag middleware, then delegates to the per-action controllers.
-- `src/modules/users/service.ts` — Admin-facing CRUD and search for the User document, plus the named identity operations (`account` calls for authenticate, register, verify, 2FA) and the inactivity reaper's read paths. This file enforces only what the user document itself requires; HTTP flows, sessions, emails, rate limits, and anti-automation live in `account`. It is the "users" end of the repo's shared-kernel relationship (`docs/theory/strategic-ddd.md` §5).
+- `src/modules/users/services/admin-two-factor.ts`
+- `src/modules/users/services/create.ts`
+- `src/modules/users/services/credentials.ts`
+- `src/modules/users/services/image.ts`
+- `src/modules/users/services/index.ts`
+- `src/modules/users/services/lookups.ts`
+- `src/modules/users/services/read.ts`
+- `src/modules/users/services/reaper.ts`
+- `src/modules/users/services/remove.ts`
+- `src/modules/users/services/signup.ts`
+- `src/modules/users/services/tokens.ts`
+- `src/modules/users/services/update.ts`
+- `src/modules/users/services/validation.ts`
 - `src/modules/users/tests/contract/api.contract.test.ts` — Contract tests for the `/users` and `/account` endpoints. Because `openapi.yaml` declares `additionalProperties: false` on the `User` schema, these tests verify that **no** undeclared field (password, tokens, a bcrypt hash) can leak into any user response — not just the ones a developer thought to name. They also pin endpoint-specific behavior: cache headers, HTTP status codes for error cases, PUT replace-vs-PATCH merge semantics, and password-provisioning rules on admin create.
 - `src/modules/users/tests/factories.ts` — Test-only database factory for the `users` module. It wraps the plain-payload builder in `../factories` with a persistence step (`userRepository.create`) and role assignment, giving integration and contract tests a single `createUser` / `createAdminUser` entry point that returns a live Mongoose document. It also centralises the full password vocabulary (minimal, legacy, weak, replacement) so policy tests and flow tests share the same fixtures.
+- `src/modules/users/tests/integration/image-clear.test.ts`
 - `src/modules/users/tests/integration/model.test.ts` — Integration test that verifies two invariants of the user model: (1) email addresses are stored and looked up case-insensitively via a unique index, and (2) credential fields (`password`, `tokens`) can never leak into a serialised response. The second invariant is checked at two independent layers — Mongoose `select: false` at the query level and the `toJSON` allowlist at the serialisation boundary — including `.lean()` results that bypass `toJSON` entirely.
 - `src/modules/users/tests/integration/repository.test.ts` — Integration test suite for `userRepository`, exercising the full CRUD surface and the token-facing methods (`tokenRemoveAll`, `tokenRemoveExpired`) against an in-memory MongoDB instance. It verifies repository behavior end-to-end (including Mongoose pre-save hooks, lean queries, and pagination options) without requiring a real database.
 - `src/modules/users/tests/integration/schema-contract.test.ts` — Integration tests that verify Mongoose schema-level guarantees (field visibility via `select: false`, password hashing, JSON serialization shape, and the unique email index) by running against a real MongoDB instance. These test Mongoose's own built-in behaviours rather than application-level transforms, so a mocked model would be meaningless.

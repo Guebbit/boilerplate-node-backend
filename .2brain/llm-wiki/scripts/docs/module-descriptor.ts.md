@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/module-descriptor.ts
-sha256: 6c10d9ec8817ebc678fd59b6120fa49b1bf2c78b4d2027c8db23b40967b65597
-generated_at: 2026-09-23T17:26:08.142431+00:00
+sha256: b400d2ab8cf7d2787aca097deccfc7dc815cfeae97c0f1690cacaa45dbf22d0f
+generated_at: 2026-10-01T12:31:08.420694+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a single, shared typed reader for a module's `module.yaml` file. It exists so that the docs generator (which colours the module graph) and the cross-cutting validation test both go through one parse-and-validate path, preventing drift that would occur if each maintained its own hand-rolled parsing.
+Single typed reader and validator for each module's `module.yaml`. It exists so that every consumer (the docs generator, the cross-cutting descriptor test, the shop-name list) shares one Zod schema and one parse function, preventing the drift that arises when a second hand-rolled reader misses a newly added field.
 
 ## Key elements
 
-- **`moduleDescriptorSchema`** — A Zod `.strict()` object schema accepting exactly two keys: `subdomain` (enum: `"core" | "supporting" | "generic"`) and `dependsOn` (array of strings). Any additional key causes validation to fail.
-- **`ModuleDescriptor`** — The TypeScript type inferred from the schema (`z.infer`); represents a validated descriptor.
-- **`readModuleDescriptor(descriptorPath: string)`** — Reads the file at `descriptorPath` with `readFileSync`, parses it as YAML (via the `yaml` package), and validates against `moduleDescriptorSchema`. Throws a Zod error if the content doesn't conform.
+- **`frontendPairingSchema`** — Zod strict object for the optional `frontend` block: `counterparts: string[]` plus an optional `why` sentence.
+- **`moduleDescriptorSchema`** — Zod strict object for the full descriptor: `summary`, `subdomain` (core/supporting/generic), `group` (foundation/shop), `dependsOn: string[]`, optional `noAudit` (reason string), optional `frontend`.
+- **`ModuleDescriptor`** — `z.infer`-derived TypeScript type of a parsed descriptor.
+- **`readModuleDescriptor(descriptorPath)`** — Reads one `module.yaml` off disk, YAML-parses it, validates against the schema; throws on mismatch.
+- **`readAllModuleDescriptors(modulesRoot)`** — Scans a directory for sub-folders containing a `module.yaml`, returns a `Record<folderName, ModuleDescriptor>` in alphabetical order.
+- **`frontendCounterparts(name, descriptor)`** — Returns the explicit `frontend.counterparts` list, or falls back to `[name]` when the module declares no pairing.
 
 ## Relationships
 
-- **`scripts/docs/generate-module-graph.ts`** — Consumes `readModuleDescriptor` / `ModuleDescriptor` to obtain each module's `subdomain` and `dependsOn` for colouring and edge-building in the module graph.
-- **`tests/cross-cutting/module-descriptors.test.ts`** — Calls `readModuleDescriptor` across all modules to assert every `module.yaml` is well-formed, using the same schema as the docs pipeline.
+- **`scripts/docs/generate-module-graph.ts`** — Consumes descriptors to colour/navigate the module graph (the file's stated "docs generator that colours the module graph").
+- **`scripts/docs/module-catalogue.ts`** — Reads `summary` (and likely `subdomain`/`group`) for the docs index and sidebar.
+- **`scripts/testing/shop-module-names.ts`** — Uses `group: 'shop'` from descriptors to enumerate demo-shop modules.
+- **`tests/cross-cutting/module-descriptors.test.ts`** — The "cross-cutting test that proves every descriptor is well-formed," directly exercising `readAllModuleDescriptors`.
+- **`tests/cross-cutting/audit-actions.test.ts`** — Previously kept its own exemption list; now reads the `noAudit` field from descriptors.
+- **`tests/cross-cutting/frontend-pairing.test.ts`** — Validates pairing rules, likely via `frontendCounterparts` / `frontendPairingSchema`.
+- **`tests/unit/scripts/docs/module-descriptor.test.ts`** — Unit tests for the schemas and read helpers in this file.
+- **`tests/unit/scripts/modules/new-module-needs-nothing.test.ts`** — Verifies that a new module needing only a descriptor (plus `src/modules.ts`) is sufficient.
+- **`tests/unit/scripts/scaffold/plan.test.ts`** — Scaffold planning that references descriptor fields when generating a new module's boilerplate.
 
 ## Notes
 
-- The schema is **strict**: adding any new key to a `module.yaml` will throw at read time. If you need a new field, update `moduleDescriptorSchema` here first — it is the single source of truth for the shape.
-- `readModuleDescriptor` is synchronous (`readFileSync`); call sites should account for that when choosing where to invoke it.
+- Both schemas are `.strict()`: an unrecognized key in `module.yaml` is a hard parse error, not silently ignored. Adding a field requires updating `moduleDescriptorSchema` first.
+- `noAudit` is a non-empty *string* (the reason), not a boolean. A module that ships an `audit.ts` must not carry this key.
+- `frontendCounterparts` silently falls back to the module's own folder name when `frontend` is absent — callers can rely on always getting a non-empty array.
+- `readAllModuleDescriptors` uses `.toSorted()` (non-mutating, ES 2023) rather than `.sort()`.
+- The file is a pure named-export module; there is no default export.

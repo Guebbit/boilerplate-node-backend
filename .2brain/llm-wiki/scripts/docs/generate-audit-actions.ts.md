@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/generate-audit-actions.ts
-sha256: 9f63ab35809a58ad18d63067e4cc5d3d74430ba4ba94ad28f6c7ae5de9a66523
-generated_at: 2026-09-27T13:55:02.286971+00:00
+sha256: fd996af7863f5d2f0ed35c5aa3a3eb5602963a8aeea31a60572c1b16ea17d136
+generated_at: 2026-10-01T12:29:16.203183+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates the audit-action reference table inside `docs/tools/winston.md` (between `<!-- audit-actions:start/end -->` markers). It imports every module's action map and infrastructure's `coreAuditActions`, scans source for literal target types at call sites, and writes a sorted Markdown table. The committed page *is* the regression guard: a renamed or added action surfaces as a doc diff instead of being pinned by hand in per-module test files.
+Generates (or checks) the audit-action reference table embedded in `docs/tools/winston.md`. It collects every declared audit action from infrastructure and all modules, discovers each action's `target_type` by scanning call-site source text, and renders a Markdown table between marker comments. Running with `--check` reports drift without writing, making the committed doc itself the regression guard for the audit vocabulary.
 
 ## Key elements
 
-- **`main()`** — orchestrates collection, target-type discovery, and page write via `applyMarkerBlocks`.
-- **`collectDeclaredActions()`** — gathers `DeclaredAction[]` from `coreAuditActions` (owner: `infrastructure`) plus every `src/modules/*/audit.ts`.
-- **`readModuleActions(file)`** — dynamically imports a module's `audit.ts`; finds the action map by shape (object whose values are all strings) because the export name varies per module.
-- **`targetTypesOf(identifier, sources)`** — regex-searches all `.ts` sources for references to `owner.KEY` and, within a ±300-char window, extracts the literal value of `target_type:` or `entity:`.
-- **`targetTypeCell(types)`** — formats the column: `—` (none found), a single backticked value, or `(varies: …)`.
-- **`actionTable(rows)`** — builds the 4-column Markdown table, sorted by owner then key so a rename is the only diff it produces.
-- **`walk(directory)`** — recursive `.ts` file listing that skips `tests/` directories.
-- **`checkOnly`** — when `--check` is in `process.argv`, reports drift without rewriting (the mode `complete` uses).
+- **`main()`** — Orchestrates: collects declared actions, reads all `src/` sources, resolves target types, writes (or checks) the table via `applyMarkerBlocks`.
+- **`collectDeclaredActions()`** — Returns `DeclaredAction[]` from two sources: `coreAuditActions` (infrastructure) and each module's own `audit.ts` export.
+- **`readModuleActions(file)`** — Dynamically imports a module's `audit.ts` and locates the action map by shape (object of string values), so a broken import fails loudly.
+- **`targetTypesOf(identifier, sources)`** — Finds every literal `target_type:` or `entity:` value within a ±300-char window of `owner.KEY` references across all sources.
+- **`targetTypeCell(types)`** — Formats the table cell: `—` for undiscoverable, a single backtick-quoted value, or `(varies: …)` for multiple.
+- **`actionTable(rows)`** — Builds the sorted Markdown table (owner → key order) so a rename is the minimal diff.
+- **`checkOnly`** — Set when `--check` is in `process.argv`; passed through to `applyMarkerBlocks` to report instead of write.
+- **`TARGET_WINDOW` (300)** — Half-width of the source-text window searched for a target literal near an action reference.
+- **`TARGET_FIELD`** — Regex matching `target_type:` or `entity:` with a quoted string value.
 
 ## Relationships
 
-- **`scripts/docs/marker-block.ts`** — provides `applyMarkerBlocks`, which writes or checks the marker-delimited block in the target page and sets `process.exitCode`.
-- **`src/infrastructure/observability/audit.ts`** — source of `coreAuditActions` (the three `security.*` actions). These are the only actions whose owner is `infrastructure`.
+- **`scripts/docs/marker-block.ts`** — Provides `applyMarkerBlocks`, which handles the start/end comment delimiters, in-place replacement, and the `--check` drift-reporting contract.
+- **`src/infrastructure/observability/audit.ts`** — Source of `coreAuditActions`; the three app-level `security.*` actions (no module owner, no object target) are imported directly here.
+- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — CI wave test that exercises this script as part of the mutation/drift-detection pipeline; ensures `--check` mode is wired into the correct wave.
 
 ## Notes
 
-- `target_type` is **not declared** adjacent to an action; it is a free string at each `recordAudit`/`emitAuditEvent` call site. The 300-char window heuristic (same trade-off as `generate-module-graph.ts`'s `readEventEdges`) means actions chosen by a same-file helper beyond that window show as `—` rather than risk a wrong attribution.
-- The three `security.*` actions always render `—` for target type (no object to attach to).
-- `tests/cross-cutting/audit-actions.test.ts` still validates **structure** (uniqueness, dotted convention, module coverage); this page validates **vocabulary**.
-- Run via the `docs:audit-actions` npm script; `complete` runs it with `--check`.
+- `target_type` is **not** a declared constant anywhere; it is a free string passed at each `recordAudit` / `emitAuditEvent` / `buildAuditEvent` call site. This script recovers it by scanning source text within a fixed window, the same heuristic `generate-module-graph.ts` uses for event edges. Actions fired via a helper (e.g. `auditActionForUpdate`) that places the target outside the window will show as `—`.
+- The table is sorted by owner then key so that the **only** diff a rename or addition produces is the changed row — no reordering noise.
+- Modules without an `audit.ts` are silently skipped; the cross-cutting test `tests/cross-cutting/audit-actions.test.ts` is responsible for flagging that a module is missing one.
+- The script is intended to be run via the `docs:audit-actions` npm script (referenced in the drift-report message).

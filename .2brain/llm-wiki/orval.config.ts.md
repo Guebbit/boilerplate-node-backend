@@ -1,28 +1,28 @@
 ---
 source: orval.config.ts
-sha256: 38d544f87af3f69f5e42ed87e040eeb8f2747b76f403d76c56c0fde0b9114e09
-generated_at: 2026-09-23T17:15:45.743526+00:00
+sha256: 46b9e3515a726ea070ae7899754b90da536ae50ea5e03401d9e3958c58d24d42
+generated_at: 2026-10-01T12:19:04.825250+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # orval.config.ts
 
 ## Purpose
-
-Orval configuration that generates Zod validators and TypeScript model types from `openapi.yaml`. It exists so that runtime validation and shared type imports (`@api/schemas.zod`, `@api/models`) stay in sync with the API contract without manual maintenance.
+Orval build configuration that generates typed TypeScript models and Zod validators from `openapi.yaml`. It produces only the `zod` client flavor (schema/type definitions) because the project consumes generated types and validators but has no in-repo HTTP-client caller.
 
 ## Key elements
+- **`zodSchemas` block** — the sole Orval entry; points `input` at `./openapi.yaml`.
+- **`output.mode: 'single'`** — all generated operations land in one file rather than being split by tag.
+- **`output.target: './api/schemas.zod.ts'`** — where Zod validators are emitted (aliased as `@api/schemas.zod`).
+- **`output.schemas: './api/models'`** — where raw model interfaces/types are emitted (aliased as `@api/models`).
+- **`output.client: 'zod'`** — restricts generation to schemas/types only; no `fetch`, `axios`, `react-query`, `hono`, or `mcp` code is produced.
+- **`override.zod.strict: { body: true, response: true }`** — makes every generated Zod object `strict()`, so unknown keys are *rejected* rather than silently stripped.
+- **`override.zod.generateEachHttpStatus: true`** — emits a separate schema per documented HTTP status (e.g. `Login200Response`, `Login422Response`) instead of only the success branch.
 
-- **`zodSchemas`** – The sole config block. Points to `./openapi.yaml` and emits:
-    - `./api/schemas.zod.ts` – Zod schema definitions (operation input validators).
-    - `./api/models/` – Raw TypeScript interfaces for all request/response models.
-- **`output.mode: 'single'`** – All generated schemas land in one file rather than being split by tag or operation.
-- **`output.client: 'zod'`** – Instructs Orval to emit only schema/type code; no `fetch`/`axios`/react-query call-functions are generated (nothing in this repo consumes them).
-- **`override.zod.strict: { body: true }`** – Adds `.strict()` to request-body schemas so unknown keys are _rejected_ rather than silently stripped. Response schemas are intentionally left non-strict.
+## Relationships
+No graph neighbors are recorded for this file. It is a leaf configuration consumed by the Orval CLI; its outputs (`./api/schemas.zod.ts`, `./api/models/*`) are the only coupling point to the rest of the codebase.
 
 ## Notes
-
-- The `strict` override is **body-only** on purpose: no controller reads generated response schemas at runtime, so extending strictness there would add risk with no benefit.
-- Because `client` is set to `'zod'`, the `schemas` output path still produces the model interfaces even though no HTTP-client code is generated. Removing the `schemas` key would break `@api/models` imports.
-- If the project later adds an HTTP client (e.g., `fetch` or `axios`), change `client` accordingly; the `strict` override still applies to body schemas regardless of client choice.
-- Switching `mode` to `'tags'` or `'split'` will change the import paths expected by `@api/schemas.zod` and `@api/models` aliases—update `tsconfig` paths in tandem.
+- `strict` is load-bearing: without it, generated validators are *weaker* than the OpenAPI contract (Zod silently strips unknown keys instead of rejecting them). The contract-test suite in `tests/support/contract.ts` relies on this strictness as an over-serialization guard.
+- `generateEachHttpStatus` is required by both `tests/support/contract.ts` and the fuzz suite (`tests/fuzz/endpoints.fuzz.test.ts`), which need to validate **error** responses (401, 422) against their declared shapes, not just 2xx.
+- The extensive inline comments document why each option was chosen and what the alternatives (`fetch`, `react-query`, `hono`, `mcp`, `tags-split`, etc.) would imply — they serve as a decision log for anyone considering a mode change.

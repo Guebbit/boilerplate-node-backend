@@ -6,52 +6,46 @@ tags:
 type: module
 module: docker/
 files: 15
-updated: 2026-09-27T16:15:34.640263+00:00
+updated: 2026-10-01T14:23:32.092483+00:00
 ---
 
 # docker/
 
 ## Purpose
 
-The `docker/` module holds everything needed to build and boot the local development infrastructure as containers: image build-time install scripts, MongoDB entrypoint and bootstrap wrappers, and the full single-node observability stack (OpenTelemetry → Tempo/Prometheus/Loki → Grafana/Alertmanager) configuration. It is the source of truth for how each container starts, what it ships, and how the monitoring pipeline is wired together.
+The `docker/` module contains all container-level configuration and bootstrap scripts that make the application stack runnable: it installs the cron replacement (supercronic), prepares MongoDB (entrypoint, replica-set init, user creation), configures the full local observability pipeline (Prometheus, Grafana, Loki, Tempo, OTel Collector, Alertmanager, Promtail), and seeds Umami analytics on first boot. Everything here is consumed by the Compose/Podman stack defined at the repository root.
 
 ## Key parts
 
-- **Image build & container entrypoints**
-  - `install-supercronic.mjs` – fetches and installs the supercronic cron replacement at build time (Node-based to work on both Alpine and Debian slim).
-  - `mongo-entrypoint.sh` – root-level wrapper that materialises the replica-set keyFile and TLS certs before handing off to the stock MongoDB entrypoint.
-  - `mongo-init.js` – creates the least-privilege `readWrite` app user on first start.
-  - `mongo-rs-init.sh` – one-shot service that initiates the single-node `rs0` replica set (not possible via `docker-entrypoint-initdb.d`).
-
-- **Observability stack (`observability/`)**
-  - *Trace pipeline:* `otel-collector.config.yaml` (OTLP ingest → batch → Tempo, plus metric derivation) and `tempo.config.yaml` (single-container Tempo on local disk).
-  - *Metrics & alerting:* `prometheus.config.yaml` (scrape targets + rule loading) and `prometheus.alert-rules.yaml` (SRE thresholds for availability, latency, saturation, jobs, webhooks).
-  - *Logging:* `loki.config.yaml` (filesystem-backed storage, 1-week retention), `promtail.config.yaml` (Docker `json-file` logs → Loki), and `promtail.podman.config.yaml` (Podman `k8s-file`/CRI logs → Loki; selected via `PROMTAIL_CONFIG` in `.env`).
-  - *Routing & visualisation:* `alertmanager.config.yaml` (grouping/repeat/resolve policy, deliberately silent by default), `grafana.datasources.yaml` (auto-registers Tempo, Prometheus, Loki), and `grafana.dashboard-providers.yaml` (auto-loads repo-stored dashboards).
-
-- **Analytics bootstrap**
-  - `umami-init.sh` – seeds the Umami admin account and a default website row from environment variables on first Postgres boot.
+- **Scheduler setup** — `install-supercronic.mjs` downloads and checksums the supercronic binary at image build time, replacing busybox `crond` to avoid supplementary-group issues under the unprivileged `node` user.
+- **MongoDB bootstrap** — `mongo-entrypoint.sh` (privilege/permission guard), `mongo-init.js` (least-privilege app user), and `mongo-rs-init.sh` (single-node replica-set initiation) work together so the database starts as a ready, minimally-privileged replica set.
+- **Observability stack** (`docker/observability/`) — A self-contained local monitoring suite:
+  - *Ingestion*: `otel-collector.config.yaml` (OTLP → Tempo + derived metrics) and `promtail.config.yaml` / `promtail.podman.config.yaml` (container logs → Loki).
+  - *Storage*: `tempo.config.yaml` (traces), `loki.config.yaml` (logs), `prometheus.config.yaml` (metrics scrape targets + alert routing).
+  - *Alerting*: `prometheus.alert-rules.yaml` (SRE thresholds) and `alertmanager.config.yaml` (routing/repeat policy, deliberately silent by default).
+  - *Presentation*: `grafana.datasources.yaml` and `grafana.dashboard-providers.yaml` (auto-provisioned datasources and dashboard loading).
+- **Analytics seeding** — `umami-init.sh` stamps admin credentials and a default website row into Umami's Postgres on first boot.
 
 ## How it connects
 
-- **`/` (repository root):** The root-level `docker-compose` (or podman-compose) file orchestrates the containers defined here, mounts these config files into their respective containers, and selects between the two Promtail variants via the `.env` file. The root also supplies the environment variables (MongoDB credentials, Umami admin password, etc.) that the entrypoint and init scripts in this module consume.
-- **`scripts/`:** Operational and CI scripts in `scripts/` rely on the containers started from this module being healthy—for example, health-check probes, migration runners, or deploy hooks that assume the MongoDB replica set is PRIMARY and the observability endpoints are reachable.
+- **Repository root (`/`)** — The Compose/Podman file at the root references every config and script in this directory (image entrypoints, volume mounts for `docker-entrypoint-initdb.d`, bind-mounts for `observability/` configs, and environment variables like `PROMTAIL_CONFIG` that select between the Docker and Podman Promtail files). This module supplies the contents those services consume.
+- **`scripts/ops/`** — Operational helper scripts (health checks, log collection, etc.) rely on the observability endpoints and database credentials that this module configures and exposes, so they assume the Prometheus, Grafana, Loki, and Tempo services described here are already running.
 
 ## Where to start
 
-1. **`docker/mongo-entrypoint.sh` + `docker/mongo-rs-init.sh`** – together they show the boot sequence pattern (root wrapper → init script → privilege drop → replica-set init) and explain *why* each step exists, which is the hardest part of the stack to reconstruct.
-2. **`docker/observability/otel-collector.config.yaml`** – reading this one file reveals the central topology (app → collector → Tempo/Prometheus) and makes every other config in `observability/` easy to place in context.
+1. **`docker/mongo-entrypoint.sh`** – It is the longest narrative in the directory; reading it explains the privilege model, the podman-compose workaround, and the hand-off to the official MongoDB image, which is the most non-obvious part of the stack.
+2. **`docker/observability/otel-collector.config.yaml`** – A single file that shows how the application's telemetry flows (OTLP in → Tempo + Prometheus out), giving a newcomer the end-to-end shape of the observability pipeline before diving into individual backend configs.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_docker["docker/"]
-    m_scripts["scripts/<br/>67 files"]
-    m_docker --- m_scripts
+    m_scripts_ops["scripts/ops/<br/>19 files"]
+    m_docker --- m_scripts_ops
     style m_docker stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scripts|scripts/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]]
 
 ## Files
 - `docker/install-supercronic.mjs` — Downloads the [supercronic](https://github.com/aptible/supercronic) scheduler binary from its GitHub release, verifies the SHA-256 checksum, and installs it to `/usr/local/bin/supercronic` at Docker image build time. Supercronic replaces busybox `crond` because crond resets supplementary groups before each job run (requiring `CAP_SETGID`), which causes every job to fail under the unprivileged `node` user. Node is used instead of a shell script because it is the one HTTP-capable tool present in both Alpine (has `wget`) and Debian slim (has neither `wget` nor `curl`).
@@ -63,7 +57,7 @@ flowchart LR
 - `docker/observability/grafana.datasources.yaml` — Grafana datasource provisioning file that auto-registers Tempo, Prometheus, and Loki as data sources on every container start, eliminating manual UI configuration and ensuring trace → log → metric cross-linking works out of the box.
 - `docker/observability/loki.config.yaml` — Local single-node Loki configuration for the development observability stack. It configures Loki to use filesystem-backed storage with no external dependencies, providing log ingestion (via Promtail), querying (via Grafana), and optional alert-rule evaluation with a one-week retention window.
 - `docker/observability/otel-collector.config.yaml` — Pipeline configuration for the OpenTelemetry Collector container: it receives application traces over OTLP, batches them, forwards them to Tempo, and derives inter-service request metrics from those traces for Prometheus to scrape. It exists so the app only needs to speak OTLP to one endpoint while the backend topology (trace storage, metric derivation) is handled outside the application.
-- `docker/observability/prometheus.alert-rules.yaml` — Defines the full set of Prometheus alert rules for the local API stack. While dashboards provide visual context, this file encodes the actionable SRE thresholds — availability, error rate, latency, saturation, memory, queue health, webhook delivery, and scheduled-job liveness — into alerts with explicit severity and annotations.
+- `docker/observability/prometheus.alert-rules.yaml` — Defines the full set of Prometheus alert rules for the local API stack. While dashboards provide visual context, this file encodes the actionable SRE thresholds (availability, error rate, latency, saturation, memory, queue health, webhook delivery, and scheduled-job liveness) that trigger pages and warnings.
 - `docker/observability/prometheus.config.yaml` — Prometheus server configuration that defines scrape targets, alert-rule loading, and alert routing. It exists because Prometheus requires an explicit list of metrics endpoints to pull from and a destination for firing alerts before it can do any useful work in the local observability stack.
 - `docker/observability/promtail.config.yaml` — Promtail configuration that scrapes Docker container `json-file` logs from a host bind mount, parses the nested JSON envelopes into structured fields, promotes key fields to LogQL-filterable labels, and pushes the result to a local Loki instance.
 - `docker/observability/promtail.podman.config.yaml` — Promtail scrape configuration for environments using rootless Podman with the `k8s-file` log driver. It exists because Podman stores container logs under a different path layout and writes them in CRI format (rather than Docker's JSON-line format), so a separate parse pipeline and glob pattern are required. It is the Podman counterpart to `promtail.config.yaml` (the Docker default) and is selected via `PROMTAIL_CONFIG=promtail.podman.config.yaml` in `.env`.
