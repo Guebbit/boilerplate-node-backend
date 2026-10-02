@@ -35,10 +35,10 @@ The routes are unauthenticated on purpose: the profile only ever binds beside an
 
 Two values the paired e2e suite needs from the demo backend, both set in `scenarios/run-server.ts` or by whoever boots it:
 
-| Variable                      | Demo value                                        | Why                                                                                                                                       |
-| ----------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_PAYMENT_WEBHOOK_SECRET` | `demo-payment-webhook-secret` (filled when blank) | Known, so a spec can sign a payment-provider delivery for `POST /payments/webhook`                                                        |
-| `NODE_WEBHOOK_DEMO_SINK_URL`  | unset; the frontend's runner sets it              | Seeds the demo subscription at that URL (`scenarios/webhooks.ts`). The suite hosts the receiver itself, so a replay has somewhere to land |
+| Variable                      | Demo value                                        | Why                                                                                                                                                                                                                                |
+| ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_WEBHOOK_SECRET` | `demo-payment-webhook-secret` (filled when blank) | Known, so a spec can sign a payment-provider delivery for `POST /payments/webhook`                                                                                                                                                 |
+| `NODE_WEBHOOK_DEMO_SINK_URL`  | unset; the frontend's runner sets it              | Seeds the demo subscription at that `https://` URL (`scenarios/webhooks.ts`). The suite hosts the receiver itself over TLS, so a replay has somewhere to land; `npm run demo` trusts its certificate through `NODE_EXTRA_CA_CERTS` |
 
 Not mounted at all when `enableDemoProfile()` was never called — every route 404s, same as a path
 that does not exist.

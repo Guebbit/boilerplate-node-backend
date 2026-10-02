@@ -120,10 +120,11 @@ The only group behind a compose **profile**. A plain `up` does not start it:
 npm run compose -- --profile integrations up -d
 ```
 
-| Container        | Image                                      | Port(s)                                                  | Role                                                                                                                                         | Read next                                              |
-| ---------------- | ------------------------------------------ | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `webhook-tester` | `ghcr.io/tarampampam/webhook-tester:2.3.0` | `WEBHOOK_TESTER_PORT` (default `3070`)                   | Self-hosted webhook.site. A sink for outbound webhooks in development, showing each captured request with its headers. In-memory, no volume. | [Ports](./pairing-and-ports.md#host-port-map)          |
-| `mailpit`        | `axllent/mailpit:latest`                   | `MAILPIT_SMTP_PORT` (`1025`), `MAILPIT_UI_PORT` (`8025`) | Local SMTP sink with a web inbox, for live e2e runs. Loopback only, in-memory, no volume.                                                    | [E-mail guard](./email-and-rendering.md#the-e2e-guard) |
+| Container            | Image                                      | Port(s)                                                  | Role                                                                                                                                         | Read next                                                     |
+| -------------------- | ------------------------------------------ | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `webhook-tester`     | `ghcr.io/tarampampam/webhook-tester:2.3.0` | none published; reached through the proxy below          | Self-hosted webhook.site. A sink for outbound webhooks in development, showing each captured request with its headers. In-memory, no volume. | [Ports](./pairing-and-ports.md#host-port-map)                 |
+| `webhook-tester-tls` | `caddy:2.10.2-alpine`                      | `WEBHOOK_TESTER_PORT` (default `3070`), loopback         | The TLS door in front of `webhook-tester`: a webhook URL must be `https://`. Serves the committed demo certificate.                          | [HTTPS in the demo](../modules/webhooks.md#https-in-the-demo) |
+| `mailpit`            | `axllent/mailpit:latest`                   | `MAILPIT_SMTP_PORT` (`1025`), `MAILPIT_UI_PORT` (`8025`) | Local SMTP sink with a web inbox, for live e2e runs. Loopback only, in-memory, no volume.                                                    | [E-mail guard](./email-and-rendering.md#the-e2e-guard)        |
 
 Nothing under `src/` imports either of them, names it, or fails when it is absent — it receives, and that is
 all. It is demo furniture in the same sense as the seeded catalogue, which is why it is gated
@@ -136,7 +137,7 @@ rather than always-on.
 | App runtime   | `app`                                                                                  | runs the backend with container-friendly dev commands                 |
 | Core data     | `database`, `redis`, `rabbitmq`                                                        | persistence, cache/pub-sub, and async jobs                            |
 | Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `loki`, `promtail`, `grafana` | traces, metrics, logs, and dashboards                                 |
-| Integrations  | `webhook-tester`, `mailpit`                                                            | opt-in sinks for outbound webhooks and mail; `--profile integrations` |
+| Integrations  | `webhook-tester`, `webhook-tester-tls`, `mailpit`                                      | opt-in sinks for outbound webhooks and mail; `--profile integrations` |
 
 ### The `integrations` profile is where a real consumer would go
 
