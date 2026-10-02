@@ -231,9 +231,28 @@ export interface PersonalDataSection {
      * Optional, unlike {@link collect}: a section with nothing here is folded into the erasing
      * module's own row (there is no second collection to touch), not a gap — `resolvePersonalDataErasers`
      * skips it rather than calling a no-op.
+     *
+     * May resolve to an {@link AfterErase}: work that must wait for the commit, because it is
+     * not a database write that can roll back (a hold released, a payment intent cancelled).
      */
-    erase?: (userId: string, session: ClientSession) => Promise<void>;
+    erase?: PersonalDataEraser;
 }
+
+/**
+ * Work a module's {@link PersonalDataSection.erase} defers until the erasure transaction has
+ * committed. Runs only on a commit, never on a rollback; a failure is logged by the caller and
+ * never undoes an erasure that already happened.
+ */
+export type AfterErase = () => Promise<void>;
+
+/**
+ * One module's erase hook, resolved and ready to call inside a hard delete's transaction.
+ * Resolves to its {@link AfterErase}, if it has one.
+ */
+export type PersonalDataEraser = (
+    userId: string,
+    session: ClientSession
+) => Promise<AfterErase | undefined> | Promise<void>;
 
 /**
  * Everything a module declares about itself.
@@ -515,7 +534,7 @@ export const resolvePersonalDataSections = (
  */
 export const resolvePersonalDataErasers = (
     appModules: readonly AppModule[]
-): readonly ((userId: string, session: ClientSession) => Promise<void>)[] =>
+): readonly PersonalDataEraser[] =>
     appModules.flatMap((appModule) =>
         appModule.personalData === 'none'
             ? []

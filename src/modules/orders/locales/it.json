@@ -79,6 +79,23 @@
             "greeting": "Ciao!",
             "body": "Non abbiamo ricevuto il tuo pagamento in tempo, quindi questo ordine è stato annullato e i suoi articoli sono stati rilasciati."
         },
+        "email-cancelled": {
+            "subject": "Il tuo ordine è stato annullato",
+            "meta-title": "Ordine annullato",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Il tuo ordine {{order}} è stato annullato.",
+            "refund-paid": "{{amount}} verranno restituiti al metodo di pagamento che hai usato. Quanto tempo serve perché compaiano dipende dalla tua banca o dal tuo emittente.",
+            "refund-none": "Con questo annullamento non è stato effettuato alcun rimborso. Se pensi sia un errore, contattaci.",
+            "refund-unpaid": "Non avevi pagato questo ordine, quindi non è stato addebitato nulla."
+        },
+        "email-refunded": {
+            "subject": "Il tuo rimborso è stato effettuato",
+            "meta-title": "Rimborso effettuato",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Abbiamo rimborsato {{amount}} per il tuo ordine {{order}}.",
+            "detail-full": "È tutto ciò che hai pagato per questo ordine.",
+            "detail-partial": "È una parte di ciò che hai pagato; il resto del pagamento resta sull'ordine. Quanto tempo serve perché compaia dipende dalla tua banca o dal tuo emittente."
+        },
         "email-product-unavailable": {
             "subject": "Il tuo ordine è stato annullato — un articolo non è più disponibile",
             "meta-title": "Ordine annullato",

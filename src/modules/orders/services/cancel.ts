@@ -34,7 +34,7 @@ import { ORDER_CANCELLED, ORDER_REFUND_OWED } from '../events';
 import { orderRepository } from '../repository';
 import { statusesLeadingTo } from '../domain';
 import { orderEffectRetryMinutes } from '../config';
-import { bankTransferExpiredEmail, cardHoldExpiredEmail } from '../emails';
+import { bankTransferExpiredEmail, cardHoldExpiredEmail, orderCancelledEmail } from '../emails';
 import { getById } from './crud';
 import { mailBuyer } from './notify';
 import { callerScope, actorOf } from './scope';
@@ -93,8 +93,9 @@ const moveToCancelled = (
 
 /**
  * Everything a successful cancel unlocks: announce it, discharge the refund
- * marker once every listener heard it — then the audit row, the analytics event, and — only for
- * the reservation-expiry sweep itself — the customer's own explanation by mail.
+ * marker once every listener heard it — then the audit row, the analytics event, and the
+ * customer's explanation by mail: the sweep's own expiry notice, or — when a person cancelled —
+ * the cancelled notice saying what became of their money.
  * @param context - the caller's context; absent for a system-initiated cancel (the reservation
  *   sweep, or `availability.ts`'s own product-removed cancel), still audited as a system actor and
  *   reported under its own analytics name
@@ -102,12 +103,15 @@ const moveToCancelled = (
  *   `context` alone cannot tell "the hold timed out" apart from "the product it held became
  *   unavailable" — `availability.ts` cancels with no context too, and sends its OWN explanation
  *   (`productUnavailableCancelledEmail`), never this one
+ * @param byPerson - true when the customer or staff cancelled, and nothing else mails about it:
+ *   a withdrawal has its acknowledgement, and every system cancel its own explanation or none
  */
 const afterCancel = async (
     order: OrderDocument,
     refund: boolean,
     context?: CallerContext,
-    viaReservationExpiry = false
+    viaReservationExpiry = false,
+    byPerson = false
 ): Promise<ResponseSuccess<OrderDocument>> => {
     // The fact is announced once, unconditionally — whatever a listener does with it (webhooks'
     // own delivery has its own retry story) is no longer this function's concern.
@@ -134,11 +138,10 @@ const afterCancel = async (
     };
 
     /*
-     * The customer's answer to "what happened to my order" — sent only for the reservation
-     * sweep's own expiry, never for `availability.ts`'s product-removed cancel (that one mails its
-     * own explanation) and never for a customer's own cancel, which needs no explanation of
-     * itself. Both payment methods get one: a `card` hold is thirty minutes, short but no shorter
-     * than the time it takes to abandon a checkout tab and wonder later where the order went.
+     * The customer's answer to "what happened to my order" — the reservation sweep's own expiry,
+     * never `availability.ts`'s product-removed cancel (that one mails its own explanation).
+     * Both payment methods get one: a `card` hold is thirty minutes, short but no shorter than
+     * the time it takes to abandon a checkout tab and wonder later where the order went.
      */
     if (viaReservationExpiry) {
         const build =
@@ -150,6 +153,23 @@ const afterCancel = async (
             void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
         });
     }
+
+    /*
+     * A person's cancel is mailed too, because it says what happened to money: a paid order's
+     * refund is the one thing the buyer cannot see for themselves. An unpaid cancel gets the same
+     * mail, so the answer is the same whoever pressed the button.
+     */
+    if (byPerson)
+        await mailBuyer(order, (locale, name) => {
+            const mail = orderCancelledEmail(
+                locale,
+                name,
+                order,
+                order.orderNumber ?? String(order._id),
+                refund
+            );
+            void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+        });
 
     // No override needed: `emitContext.caller` is `SYSTEM_ACTOR`'s own caller for a system expiry
     // (built above), and `buildAuditEvent`'s defaults already read `actor_user_id`/`actor_role`
@@ -225,7 +245,15 @@ export const cancelById = (
         refund ? PENDING_REFUND : undefined
     ).then((order) =>
         order
-            ? afterCancel(order, refund, context, viaReservationExpiry)
+            ? afterCancel(
+                  order,
+                  refund,
+                  context,
+                  viaReservationExpiry,
+                  // The withdrawal is acknowledged by `returns`; the sweep's expiry and every
+                  // system cancel mail their own explanation (or, for an erased account, nobody).
+                  !options.withdrawal && !viaReservationExpiry && actor !== 'system'
+              )
             : // Which refusal was it? This read only informs the message — the write above
               // already decided nothing changes.
               getById(id, callerScope(authContext)).then((existing) =>

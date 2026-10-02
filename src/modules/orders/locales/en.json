@@ -79,6 +79,23 @@
             "greeting": "Hello!",
             "body": "We didn't receive your payment in time, so this order has been cancelled and its items released."
         },
+        "email-cancelled": {
+            "subject": "Your order was cancelled",
+            "meta-title": "Order cancelled",
+            "greeting": "Hello, {{name}}!",
+            "body": "Your order {{order}} has been cancelled.",
+            "refund-paid": "{{amount}} is being returned to the payment method you used. How long it takes to show up depends on your bank or card issuer.",
+            "refund-none": "No refund was issued with this cancellation. If you think that is a mistake, please contact us.",
+            "refund-unpaid": "You had not paid for this order, so nothing was charged."
+        },
+        "email-refunded": {
+            "subject": "Your refund has been issued",
+            "meta-title": "Refund issued",
+            "greeting": "Hello, {{name}}!",
+            "body": "We have refunded {{amount}} for your order {{order}}.",
+            "detail-full": "That is everything you paid for this order.",
+            "detail-partial": "That is part of what you paid; the rest of the payment stays with the order. How long it takes to show up depends on your bank or card issuer."
+        },
         "email-product-unavailable": {
             "subject": "Your order was cancelled — an item is no longer available",
             "meta-title": "Order cancelled",

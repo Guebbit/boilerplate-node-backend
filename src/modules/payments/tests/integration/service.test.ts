@@ -18,6 +18,7 @@ import {
 } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService } from '@modules/orders';
+import { userService } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
 import {
     createIntent,
@@ -356,6 +357,22 @@ describe('refund on cancel', () => {
         const payment = await paymentRepository.findByOrderId(String(order._id));
         // The intent survives untouched — no money moved, so there is nothing to move back.
         expect(payment!.status).toBe('requires_confirmation');
+    });
+
+    it('erasing the account cancels its open intent at the provider and releases the hold', async () => {
+        const { user, order } = await orderFor(25, 2);
+        const [line] = order.items;
+        await inventoryService.reserveForOrder(String(order._id), [
+            { productId: String(line.product._id), quantity: 2 }
+        ]);
+        await createIntent(String(order._id), auth(user));
+        const { providerRef } = (await paymentRepository.findByOrderId(String(order._id)))!;
+        const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
+
+        await userService.remove(user, true);
+
+        expect(cancelSpy).toHaveBeenCalledWith(providerRef, expect.anything());
+        expect(await countersOf(line.product._id)).toMatchObject({ reserved: 0 });
     });
 
     /*

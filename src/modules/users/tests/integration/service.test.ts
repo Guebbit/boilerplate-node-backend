@@ -1049,6 +1049,53 @@ describe('userService.remove', () => {
             expect(await userRepository.findById(id)).not.toBeNull();
         });
 
+        it('runs an eraser’s deferred step only after the erasure committed', async () => {
+            const user = await createUser();
+            const id = user._id.toString();
+            let stillThereWhenDeferredRan: boolean | undefined;
+            const deferring = jest.fn(() =>
+                Promise.resolve(() =>
+                    userRepository.findById(id).then((found) => {
+                        stillThereWhenDeferredRan = found !== null;
+                    })
+                )
+            );
+            setPersonalDataErasers([deferring]);
+
+            await userService.remove(user, true);
+
+            expect(stillThereWhenDeferredRan).toBe(false);
+        });
+
+        it('never runs a deferred step when a later eraser rolls the erasure back', async () => {
+            const user = await createUser();
+            const deferred = jest.fn(() => Promise.resolve());
+            const deferring = jest.fn(() => Promise.resolve(deferred));
+            const failing = jest.fn(() => Promise.reject(new Error('rolled back')));
+            setPersonalDataErasers([deferring, failing]);
+
+            await expect(userService.remove(user, true)).rejects.toThrow('rolled back');
+
+            expect(deferred).not.toHaveBeenCalled();
+        });
+
+        it('still erases, and still runs the other deferred steps, when one of them fails', async () => {
+            const user = await createUser();
+            const id = user._id.toString();
+            const failingStep = jest.fn(() => Promise.reject(new Error('provider down')));
+            const otherStep = jest.fn(() => Promise.resolve());
+            setPersonalDataErasers([
+                () => Promise.resolve(failingStep),
+                () => Promise.resolve(otherStep)
+            ]);
+
+            const result = await userService.remove(user, true);
+
+            expect(result.success).toBe(true);
+            expect(otherStep).toHaveBeenCalledTimes(1);
+            expect(await userRepository.findById(id)).toBeNull();
+        });
+
         it('runs every eraser exactly once, in order, before deleting the document', async () => {
             const user = await createUser();
             const id = user._id.toString();

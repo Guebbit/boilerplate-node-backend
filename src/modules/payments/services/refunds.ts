@@ -19,6 +19,7 @@
 
 import { Types } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -33,6 +34,8 @@ import { emitDomainEvent } from '@kernel/events';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import {
     orderService,
+    mailBuyer,
+    refundIssuedEmail,
     toMinorUnits,
     toDecimalAmount,
     addMoney,
@@ -191,8 +194,53 @@ const reportRefundedToOrder = (payment: PaymentDocument): void => {
 };
 
 /**
- * Tell the rest of the system a refund landed: the log line, the audit row, and the fact
- * `invoicing` issues a credit note from and `webhooks` fans out.
+ * Tell the buyer their money went back, when it went back outside a return — a refund that
+ * followed a cancel, or an operator's goodwill one. A return's refund is announced by `returns`'
+ * own closing notice, so one carrying a `returnId` is skipped here, as is a refund that moved no
+ * money. Fire-and-forget, same reasoning as the `orderPaid` mail in `./settlement.ts`: a mail that
+ * cannot be sent must never undo a refund that already went back.
+ *
+ * @param payment - the payment after the refund settled
+ * @param refund - the record that settled
+ */
+const mailRefundIssued = (payment: PaymentDocument, refund: RefundRecord): void => {
+    if (refund.returnId) return;
+
+    const orderId = String(payment.orderId);
+    // Started inside a promise so a synchronous throw (a malformed id) is reported, not raised.
+    void Promise.resolve()
+        .then(() => orderService.getById(orderId))
+        .then((order) =>
+            order
+                ? mailBuyer(order, (locale, name) => {
+                      const mail = refundIssuedEmail(
+                          locale,
+                          name,
+                          order.orderNumber ?? orderId,
+                          { amount: refund.amount, currency: refund.currency },
+                          payment.status === 'refunded'
+                      );
+                      void enqueueEmail(
+                          { to: order.email, subject: mail.subject },
+                          mail.template,
+                          mail.data
+                      );
+                  })
+                : undefined
+        )
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not mail the refund notice for order ${orderId}`,
+                error
+            });
+            // Stryker restore all
+        });
+};
+
+/**
+ * Tell the rest of the system a refund landed: the log line, the audit row, the buyer's mail, and
+ * the fact `invoicing` issues a credit note from and `webhooks` fans out.
  *
  * Fire-and-forget, same reasoning as `PAYMENT_SUCCEEDED` in `./settlement.ts`: a slow or failing
  * listener must not delay this call's own caller. Emitted even for the corrupted-row case
@@ -226,6 +274,7 @@ const announceRefund = (
         metadata: { refundId: String(refund._id), amount: refund.amount }
     });
     reportRefundedToOrder(payment);
+    if (outcome === 'success') mailRefundIssued(payment, refund);
     void emitDomainEvent(PAYMENT_REFUNDED, {
         paymentId: String(payment._id),
         orderId,

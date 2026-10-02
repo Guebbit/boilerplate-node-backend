@@ -416,3 +416,99 @@ export const productUnavailableCancelledEmail = (
         }
     };
 };
+
+/**
+ * An amount in a currency, spelled the way the recipient's locale writes money.
+ * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
+ * @param locale - the recipient's language
+ * @param amount - a decimal in `currency`
+ * @param currency - an ISO-4217 code
+ */
+const money = (locale: string, amount: number, currency: string): string =>
+    new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+
+/**
+ * What a cancellation did to the buyer's money, as the copy key that says it: money taken and
+ * going back, money taken and kept (an operator cancelled without refunding), or no money taken.
+ * @param paid - whether the order was ever paid (`paidAt` set)
+ * @param refund - whether the cancel decided to give the money back
+ */
+const cancelledRefundKey = (paid: boolean, refund: boolean): string => {
+    if (!paid) return 'refund-unpaid';
+    return refund ? 'refund-paid' : 'refund-none';
+};
+
+/**
+ * The customer's answer to "what happened to my order" when a PERSON cancelled it — their own
+ * cancel, or staff's. Says what the cancel did to their money: the amount going back, no refund,
+ * or nothing charged to begin with. The other cancels each mail their own explanation (the
+ * reservation sweep, a product removed, a withdrawal), so none reaches this builder.
+ *
+ * @param locale - the recipient's language
+ * @param name - the greeting's name
+ * @param order - the cancelled order; `paidAt` says whether money was ever taken
+ * @param orderRef - the order's human number, or its id when it has none
+ * @param refund - whether the cancel returns the money
+ */
+export const orderCancelledEmail = (
+    locale: string,
+    name: string,
+    order: OrderLines & { paidAt?: Date | null },
+    orderRef: string,
+    refund: boolean
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'orders.order-cancelled',
+        subject: t('orders.email-cancelled.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('orders.email-cancelled.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('orders.email-cancelled.greeting', { name }),
+            body: t('orders.email-cancelled.body', { order: orderRef }),
+            refundNote: t(`orders.email-cancelled.${cancelledRefundKey(!!order.paidAt, refund)}`, {
+                amount: money(locale, totalOf(order), orderCurrency(order))
+            }),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * Money went back to the customer outside a return — a refund that followed a cancel, or an
+ * operator's own goodwill refund. A return's refund is announced by `returns`' own closing notice,
+ * so it never reaches this builder. Sent when the refund SETTLES, not when it is asked for, so it
+ * only ever says what already happened.
+ *
+ * @param locale - the recipient's language
+ * @param name - the greeting's name
+ * @param orderRef - the order's human number, or its id when it has none
+ * @param refund - the amount that went back, a decimal in `currency`
+ * @param full - whether this completes the refund of everything the customer paid
+ */
+export const refundIssuedEmail = (
+    locale: string,
+    name: string,
+    orderRef: string,
+    refund: { amount: number; currency: string },
+    full: boolean
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'orders.order-refunded',
+        subject: t('orders.email-refunded.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('orders.email-refunded.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('orders.email-refunded.greeting', { name }),
+            body: t('orders.email-refunded.body', {
+                order: orderRef,
+                amount: money(locale, refund.amount, refund.currency)
+            }),
+            detail: t(`orders.email-refunded.${full ? 'detail-full' : 'detail-partial'}`),
+            footer: t('email.footer')
+        }
+    };
+};
