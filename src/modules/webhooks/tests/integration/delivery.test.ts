@@ -278,6 +278,38 @@ describe('a 500 response', () => {
         expect(reloadedSubscription?.consecutiveFailures).toBe(0);
     });
 
+    it('a retry that succeeds leaves no next attempt, and no error, from the failure before it', async () => {
+        const subscription = await createSubscription(`${server.url}/hook`);
+        const job = await createPendingDelivery(subscription);
+        await processDeliveryJob({ deliveryId: job.deliveryId });
+
+        await server.close();
+        server = await startHttpsTestServer((response) => response.writeHead(200).end('ok'));
+        await repointSubscription(String(subscription._id), `${server.url}/hook`);
+        await processDeliveryJob({ deliveryId: job.deliveryId });
+
+        const delivery = await webhookDeliveryRepository.findById(job.deliveryId);
+        expect(delivery?.status).toBe('succeeded');
+        expect(delivery?.nextAttemptAt).toBeUndefined();
+        expect(delivery?.error).toBeUndefined();
+    });
+
+    it('a retry with no subscription left to send to keeps nothing from the attempt before it', async () => {
+        const subscription = await createSubscription(`${server.url}/hook`);
+        const job = await createPendingDelivery(subscription);
+        await processDeliveryJob({ deliveryId: job.deliveryId });
+
+        await webhookSubscriptionRepository.disable(String(subscription._id));
+        await processDeliveryJob({ deliveryId: job.deliveryId });
+
+        const delivery = await webhookDeliveryRepository.findById(job.deliveryId);
+        expect(delivery?.status).toBe('exhausted');
+        expect(delivery?.error).toBe('Subscription is disabled');
+        expect(delivery?.responseCode).toBeUndefined();
+        expect(delivery?.durationMs).toBeUndefined();
+        expect(delivery?.nextAttemptAt).toBeUndefined();
+    });
+
     it('exhausts the chain after every retry tier is spent, without touching the subscription yet', async () => {
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
@@ -287,6 +319,8 @@ describe('a 500 response', () => {
         const delivery = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(delivery?.status).toBe('exhausted');
         expect(delivery?.attempt).toBe(WEBHOOK_MAX_ATTEMPTS);
+        // Nothing is left to schedule: the last retry's `nextAttemptAt` is not left on the row.
+        expect(delivery?.nextAttemptAt).toBeUndefined();
 
         const reloadedSubscription = await webhookSubscriptionRepository.findById(
             String(subscription._id)
