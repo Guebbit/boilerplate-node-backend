@@ -142,7 +142,7 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 #   scripts/run-script.ts   the entry-point wrapper every script in scripts/db/ and scripts/ops/
 #                 imports as a sibling — has to ship alongside them or their `tsx` run fails to
 #                 resolve it
-#   scripts/db/   the deploy-time scripts — `db:sync`, `access:bootstrap`, `access:grant`.
+#   scripts/db/   the deploy-time scripts — `db:sync`, `access:bootstrap`.
 #                 Named file by file, not as a directory, so the image carries only what it runs
 #   scripts/ops/  the scheduled `reap:*` jobs, run by a cron container against this image
 #   public/   express.static root — CSS, favicon, and the committed seed images
@@ -152,8 +152,7 @@ COPY --from=build --chown=node:node /app/shared ./shared
 COPY --from=build --chown=node:node /app/scripts/run-script.ts ./scripts/
 COPY --from=build --chown=node:node /app/scripts/db/index-sync.ts \
     /app/scripts/db/sync-indexes.ts /app/scripts/db/cache-clear.ts \
-    /app/scripts/db/bootstrap-access.ts /app/scripts/db/grant-access.ts \
-    /app/scripts/db/access-grant.ts ./scripts/db/
+    /app/scripts/db/bootstrap-access.ts ./scripts/db/
 COPY --from=build --chown=node:node /app/scripts/ops ./scripts/ops
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/tsconfig.json ./
