@@ -303,6 +303,37 @@ flowchart LR
 - An admin override into `delivered` starts the clock at the override, since no delivery timestamp
   exists for it.
 
+## Cancel and refund mails
+
+Every cancel and every refund leaves one written trace, and each has exactly one mail:
+
+| What happened                                      | The mail                                                                      | Template                                                     |
+| -------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| The customer, or staff, cancelled                  | what the cancel did to their money: going back, no refund, or nothing charged | `orders.order-cancelled`                                     |
+| The reservation sweep cancelled (a hold timed out) | the expiry notice for the payment method                                      | `orders.order-transfer-expired`, `orders.order-card-expired` |
+| A product on the order was removed                 | the product-unavailable notice                                                | `orders.order-product-unavailable`                           |
+| The customer withdrew before dispatch              | `returns`' withdrawal acknowledgement                                         | `returns.notice`                                             |
+| The account was erased                             | none: the address belongs to an account that no longer exists                 |                                                              |
+| Money went back outside a return                   | the amount, and whether it was everything                                     | `orders.order-refunded`                                      |
+| Money went back for a return                       | `returns`' closing notice                                                     | `returns.notice`                                             |
+
+```mermaid
+flowchart TD
+    cancel["cancelById succeeds"] --> person{"a person cancelled,<br/>not a withdrawal?"}
+    person -- yes --> cancelled["orders.order-cancelled"]
+    person -- no --> own["its own mail, or none"]
+    cancel --> owed{"refund owed?"}
+    owed -- yes --> refund["payments settles the refund"]
+    refund --> ret{"for a return?"}
+    ret -- no --> refunded["orders.order-refunded"]
+    ret -- yes --> closed["returns' closing notice"]
+```
+
+The cancelled mail is sent when the cancel happens, so it says what is being returned. The refunded
+mail is sent when `payments` settles the refund, so it only ever says what already went back. A paid
+cancel therefore sends both, a few moments apart. A refund the provider refused sends nothing: no
+money moved.
+
 ## Shop identity
 
 `orders` owns who the shop is, because `invoicing`, `delivery` and `returns` all import `orders` and

@@ -36,7 +36,9 @@ import {
     bankTransferInstructionsEmail,
     bankTransferExpiredEmail,
     cardHoldExpiredEmail,
-    productUnavailableCancelledEmail
+    productUnavailableCancelledEmail,
+    orderCancelledEmail,
+    refundIssuedEmail
 } from '@modules/orders/emails';
 import { buildDocumentView } from '@modules/invoicing/emails';
 import { shipmentShippedEmail } from '@modules/delivery/emails';
@@ -125,6 +127,23 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'orders.order-product-unavailable': productUnavailableCancelledEmail(locale, [
         { title: 'Boiled sweets' }
     ]),
+    'orders.order-cancelled': orderCancelledEmail(
+        locale,
+        'Ada',
+        {
+            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+            paidAt: new Date('2026-09-19T12:00:00.000Z')
+        },
+        '2026-000041',
+        true
+    ),
+    'orders.order-refunded': refundIssuedEmail(
+        locale,
+        'Ada',
+        '2026-000041',
+        { amount: 7, currency: 'EUR' },
+        true
+    ),
     'delivery.shipment-shipped': shipmentShippedEmail(locale, 'Ada', 'TRK-0000TEST'),
     'returns.notice': returnNoticeEmail('withdrawal-acknowledged', locale, 'Ada', {
         orderRef: '2026-000041',

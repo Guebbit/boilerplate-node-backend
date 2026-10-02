@@ -156,8 +156,10 @@ it('publishes the set the pair agreed on', () => {
      * `orders.order-card-expired` (E5: a `card` hold's own expiry notice, the twin of
      * `orders.order-transfer-expired` for the other payment method) — both new here. So is
      * `account.two-factor-changed`, the notice that a second factor was added, replaced or removed. So is
-     * `account.reauth-code`, the step-up code an account with no password passes with. The other
-     * eight are the agreed, mirrored set.
+     * `account.reauth-code`, the step-up code an account with no password passes with. So are
+     * `orders.order-cancelled` (a person's cancel, saying what became of the money) and
+     * `orders.order-refunded` (money back outside a return) — new here, appended to the message
+     * for the twin's session. The other eight are the agreed, mirrored set.
      */
     const agreedByPair = [
         'account.delete-confirm',
@@ -173,10 +175,12 @@ it('publishes the set the pair agreed on', () => {
         'account.verify-request',
         'delivery.shipment-shipped',
         'feedback.contact',
+        'orders.order-cancelled',
         'orders.order-card-expired',
         'orders.order-confirm',
         'orders.order-paid',
         'orders.order-product-unavailable',
+        'orders.order-refunded',
         'orders.order-transfer-expired',
         'orders.order-transfer-instructions',
         'returns.notice',
