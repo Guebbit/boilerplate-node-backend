@@ -240,4 +240,6 @@ CI runs `lint:asyncapi` against `asyncapi.yaml` and `asyncapi.public.yaml`. Ther
 
 `GET /webhooks/events` serves `asyncapi.public.yaml`, and a subscriber builds against its event names and payload shapes — so a change that drops or narrows one breaks them silently, not loudly. `npm run check:asyncapi-breaking` (`scripts/contracts/check-asyncapi-breaking.ts`) diffs the working tree's bundle against `origin/main`'s, at their merge-base, through `@asyncapi/diff`, and fails on any change it classifies as breaking.
 
+`/info/version` is the one pointer it ignores (an `override` entry in `scripts/contracts/asyncapi-breaking.ts`): a version number is metadata, not a shape a subscriber reads, and `@asyncapi/diff`'s own standard would otherwise fail every bump. Alpha means `0.y.z` everywhere — both roots and every module fragment carry `0.1.0`; the field stays in a fragment because its own Spectral lint requires it, and nothing checks the numbers agree.
+
 It is PR-only in CI (`asyncapi-breaking` in `ci.yml`) — on a push to main the code is already merged, and there is nothing left to diff against. Locally it is part of `complete`, comparing against whatever `origin/main` your machine last fetched.

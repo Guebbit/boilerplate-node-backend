@@ -7,6 +7,8 @@
  * would this change actually ship" comparison `scripts/mutation/run-diff.ts` uses, not the tip of
  * a possibly-stale local `main`.
  *
+ * `/info/version` is ignored (see `scripts/contracts/asyncapi-breaking.ts`).
+ *
  * @asyncapi/diff refuses anything that is not already dereferenced, so both documents go through
  * @asyncapi/parser first. https://github.com/asyncapi/diff#readme
  *
@@ -18,9 +20,10 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { diff, type DiffOutputItem } from '@asyncapi/diff';
+import type { DiffOutputItem } from '@asyncapi/diff';
 import { Parser } from '@asyncapi/parser';
 import { REPO_ROOT, mergeBase } from '../git-base';
+import { breakingChanges } from './asyncapi-breaking';
 
 /** The only bundle this gate cares about: the one a webhook subscriber actually reads. */
 const BUNDLE = 'asyncapi.public.yaml';
@@ -94,8 +97,7 @@ Promise.all([
             return;
         }
 
-        const breaking = diff(beforeResult.document.json(), afterResult.document.json()).breaking();
-        const changes = Array.isArray(breaking) ? breaking : [];
+        const changes = breakingChanges(beforeResult.document.json(), afterResult.document.json());
 
         if (changes.length === 0) {
             console.log(`[asyncapi-breaking] no breaking changes to ${BUNDLE} since ${base}.`);

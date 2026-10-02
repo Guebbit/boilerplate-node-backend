@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
     title: delivery — module contract
-    version: '2.0.0'
+    version: '0.1.0'
 
 x-error-codes:
     DELIVERY_OVERRIDE_REASON_REQUIRED: { status: 422, description: 'An admin status override requires a reason and none was supplied.' }

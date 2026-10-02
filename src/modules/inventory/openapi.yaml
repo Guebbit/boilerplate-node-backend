@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
     title: inventory — module contract
-    version: '2.0.0'
+    version: '0.1.0'
 
 x-error-codes:
     INVENTORY_BELOW_RESERVED: { status: 409, description: 'The requested on-hand count is below what is already reserved by open orders.' }

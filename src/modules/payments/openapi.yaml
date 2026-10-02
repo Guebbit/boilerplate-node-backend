@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
     title: payments — module contract
-    version: '3.0.0'
+    version: '0.1.0'
 
 x-error-codes:
     ORDER_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line on this order references a product that was deleted or deactivated since the intent was created.' }

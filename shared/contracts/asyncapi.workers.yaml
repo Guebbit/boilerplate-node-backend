@@ -22,7 +22,7 @@
 asyncapi: 3.0.0
 info:
     title: Worker job queues
-    version: 1.0.0
+    version: 0.1.0
     description: The `worker.*` queues, owned by the application rather than by any domain.
 servers:
     rabbitmqLocal:
