@@ -27,7 +27,7 @@ scripts/
 ├── docs/                     generators that write into docs/
 ├── docker/                   generators that write into docker/
 ├── db/                       deploy-time database scripts — see [Data](./data.md)
-├── ops/                      the scheduled `reap:*`/`sweep:*` jobs, documented below
+├── ops/                      the scheduled `reap:*`/`sweep:*` jobs, and `ops:grant-admin`, documented below
 └── eslint/                   the repo's own lint rules, documented below
 ```
 
@@ -183,6 +183,7 @@ path, and a readable error.
 | `scripts/ops/sweep-outbox.ts`               | Publishes every due transactional-outbox event — `npm run sweep:outbox`. Per-minute; each row is claimed by a lease first, so overlapping runs deliver once.                                                                                                                              | [Transactional Outbox](../tools/outbox.md)                      |
 | `scripts/ops/sweep-webhook-retries.ts`      | Enqueues every webhook delivery whose retry is due — `npm run sweep:webhook-retries`. Per-minute, and idempotent: each due row is claimed atomically before it is published.                                                                                                              | [Webhooks](../modules/webhooks.md)                              |
 | `scripts/ops/refresh-breached-passwords.ts` | Rebuilds the bundled breached-password list from SecLists, filtered through the contract's own password pattern — `npm run refresh:breached-passwords`. The one file here no scheduler runs: a top-N breach list changes on the order of years, and the trigger is that pattern changing. | [Authentication defences](../theory/defences/authentication.md) |
+| `scripts/ops/grant-admin.ts`                | Makes an existing account the shop's administrator — `npm run ops:grant-admin -- <email>`. The repair for a shop whose last administrator removed itself; goes through the access service, so it is audited. Run by hand, never by a scheduler.                                           | [Ops](./ops.md#locked-out-of-the-back-office)                   |
 
 ## Lint rules — `scripts/eslint/`
 

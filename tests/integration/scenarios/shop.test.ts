@@ -44,7 +44,12 @@ import { reservationModel, stockMovementModel } from '@modules/inventory/model';
 import { Types } from 'mongoose';
 import {
     SEED_ADMIN_ID,
+    SEED_EDITOR_ID,
+    SEED_MANAGER_ID,
+    SEED_MODERATOR_ID,
     SEED_PENDING_EMAIL_TARGET,
+    SEED_SUPPORT_ID,
+    SEED_WAREHOUSE_ID,
     SEED_TWO_FACTOR_BACKUP_CODES,
     SEED_USER_ID,
     seedCredentials
@@ -225,6 +230,20 @@ describe('each subject names a row that really has the property', () => {
             expect(user?.active).toBe(true);
             expect(user?.verifiedAt).toBeTruthy();
         }
+    });
+
+    it.each([
+        ['address.managerDefault', SEED_MANAGER_ID],
+        ['address.warehouseDefault', SEED_WAREHOUSE_ID],
+        ['address.supportDefault', SEED_SUPPORT_ID],
+        ['address.editorDefault', SEED_EDITOR_ID],
+        ['address.moderatorDefault', SEED_MODERATOR_ID]
+    ])("%s is its owner's one default entry, so the persona can check out", async (name, owner) => {
+        const book = await addressBookModel.findOne({ userId: owner }).exec();
+        const defaults = book?.items.filter((entry) => entry.default) ?? [];
+
+        expect(defaults).toHaveLength(1);
+        expect(String(defaults[0]._id)).toBe(subjects[name]);
     });
 
     it('the two-factor persona has email 2FA armed and backup codes that verify', async () => {

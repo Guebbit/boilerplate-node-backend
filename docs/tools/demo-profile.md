@@ -162,6 +162,11 @@ platform role only, with no shop membership, so it holds none of a shop's keys. 
 | `support`   | `support@example.com`   | shop `support`                    |
 | `operator`  | `operator@example.com`  | platform `operator`, nothing else |
 
+Every one of them that holds a shop role (and the editor and moderator, listed with the owner above) keeps
+one default address, so a journey that logs in as it can check out: every order carries a billing
+address. The operator has no cart, so no book. Each is a declared guarantee (`address.managerDefault`,
+`address.warehouseDefault`, …) that `GET /__test/scenario` serves as an entry id.
+
 ## How a scenario is built
 
 A scenario has two halves. The rows a shop starts with are SEEDED — the catalogue, the languages,

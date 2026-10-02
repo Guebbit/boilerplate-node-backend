@@ -10,10 +10,10 @@ import type {
     ProductAdmin,
     ProductTranslationFields,
     CallerContext,
-    AuthContext
+    Caller
 } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { accessibleFilter } from '@kernel/access/query';
+import { accessibleFilterFor } from '@kernel/access/query';
 import { productsAnalyticsEvents } from '../analytics';
 import { presentProduct } from '../presenter';
 import { productRepository } from '../repository';
@@ -21,11 +21,14 @@ import { productRepository } from '../repository';
 /**
  * Which products a caller is allowed to read.
  *
- * `undefined` for admins, meaning "no restriction"; the published catalogue for everyone else.
- * Why the scope rides in the read rather than being checked after it is the shared rule's to
- * explain — see `accessibleFilter`.
+ * Takes `request.caller`, not the session: a session and an API key both resolve to one, so a key
+ * holding `products.any.read` sees what a session holding it sees. `{}` for an unrestricted
+ * caller, the published catalogue for everyone else. Why the scope rides in the read rather than
+ * being checked after it is the shared rule's to explain — see `accessibleFilterFor`.
+ *
+ * @param caller - `request.caller`, or `undefined` for an anonymous request
  */
-export const callerScope = (context?: AuthContext) => accessibleFilter(context, 'Product');
+export const callerScope = (caller?: Caller) => accessibleFilterFor(caller, 'Product');
 
 /**
  * Get a single product by ID, already resolved to the caller's locale.

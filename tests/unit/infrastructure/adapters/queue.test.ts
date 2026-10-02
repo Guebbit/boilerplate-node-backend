@@ -6,10 +6,12 @@ import {
     consumeFromQueue,
     startQueue,
     stopQueue,
+    redactedBrokerTarget,
     parkedCounts,
     DEAD_LETTER_EXCHANGE,
     deadLetterQueueOf
 } from '@infrastructure/adapters/queue';
+import { logger } from '@infrastructure/adapters/logger';
 import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
 
 /**
@@ -503,6 +505,88 @@ describe('startQueue() / stopQueue()', () => {
     it('stopQueue resolves without error when not connected', async () => {
         disableRabbitMQ();
         await expect(stopQueue()).resolves.toBeUndefined();
+    });
+});
+
+/** The messages one `startQueue()` logged at `level`. */
+const messagesAt = async (level: 'info' | 'warn'): Promise<string[]> => {
+    const spy = jest.spyOn(logger, level).mockImplementation(() => logger);
+    await stopQueue();
+    await startQueue();
+    return spy.mock.calls.map(([entry]) => (entry as { message: string }).message);
+};
+
+describe('the boot announcement', () => {
+    afterEach(() => {
+        disableRabbitMQ();
+        jest.restoreAllMocks();
+    });
+
+    it('names the broker it will use, without the credentials', async () => {
+        process.env.NODE_RABBITMQ_URL = 'amqp://app:s3cret@rabbitmq:5673/shop';
+
+        const messages = await messagesAt('info');
+
+        expect(messages).toEqual([
+            'queue: connecting to amqp://rabbitmq:5673/shop (from NODE_RABBITMQ_URL)'
+        ]);
+    });
+
+    it('names a broker assembled from host and port', async () => {
+        process.env.NODE_RABBITMQ_HOST = 'broker.internal';
+        process.env.NODE_RABBITMQ_PORT = '5672';
+        process.env.NODE_RABBITMQ_PASS = 's3cret';
+
+        const messages = await messagesAt('info');
+
+        expect(messages).toEqual([
+            'queue: connecting to amqp://broker.internal:5672 (from NODE_RABBITMQ_HOST/_PORT)'
+        ]);
+    });
+
+    it('says nothing about a broker when the queue is off', async () => {
+        disableRabbitMQ();
+
+        expect(await messagesAt('info')).toEqual([]);
+    });
+
+    it('warns when the URL is set together with a port, since the URL wins', async () => {
+        process.env.NODE_RABBITMQ_URL = 'amqp://rabbitmq:5672';
+        process.env.NODE_RABBITMQ_PORT = '5673';
+
+        const messages = await messagesAt('warn');
+
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain('NODE_RABBITMQ_URL is set together with');
+    });
+
+    it('warns when the URL is set together with a host', async () => {
+        process.env.NODE_RABBITMQ_URL = 'amqp://rabbitmq:5672';
+        process.env.NODE_RABBITMQ_HOST = '127.0.0.1';
+
+        expect(await messagesAt('warn')).toHaveLength(1);
+    });
+
+    it('does not warn about a URL on its own, or host and port on their own', async () => {
+        process.env.NODE_RABBITMQ_URL = 'amqp://rabbitmq:5672';
+        expect(await messagesAt('warn')).toEqual([]);
+
+        disableRabbitMQ();
+        process.env.NODE_RABBITMQ_HOST = '127.0.0.1';
+        process.env.NODE_RABBITMQ_PORT = '5672';
+        expect(await messagesAt('warn')).toEqual([]);
+    });
+});
+
+describe('redactedBrokerTarget()', () => {
+    it('keeps scheme, host, port and vhost, and drops the userinfo', () => {
+        expect(redactedBrokerTarget('amqps://u:p%40ss@mq.example.com:5671/vh')).toBe(
+            'amqps://mq.example.com:5671/vh'
+        );
+    });
+
+    it('does not echo a string that is not a URL, since it may hold a password', () => {
+        expect(redactedBrokerTarget('not a url with s3cret')).toBe('(unparseable URL)');
     });
 });
 

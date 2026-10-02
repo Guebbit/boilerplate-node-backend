@@ -441,7 +441,8 @@ export default {
 Every field is read by something: the router is mounted at `basePath`, `locales` is handed to
 i18next, `subscribe` attaches the module's event handlers, `onRegistered` runs once every module is
 known — installing a kernel port, or resolving a cross-module lookup like `locales`'
-`translatables`. That is the bar for a field being here at all — the manifest used to also carry a
+`translatables`. `onBoot` runs once the database is up, before the server listens: a
+check that reports and never gates, like `access`' warning for a shop with no administrator. That is the bar for a field being here at all — the manifest used to also carry a
 `subdomain` string and a labelled `dependsOn` graph,
 which nothing read and three tests checked; it does not carry either any more. Both questions live
 next to the manifest instead, in the module's own `module.yaml` — one plain file, read by

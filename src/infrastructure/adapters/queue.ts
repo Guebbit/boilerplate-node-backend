@@ -40,6 +40,7 @@ import {
 } from '@infrastructure/adapters/managed-connection';
 import { WORKER_CHANNELS } from '@types';
 import { queueConfig } from '@infrastructure/adapters/config';
+import { currentEnvironment } from '@infrastructure/config/store';
 import { isTestEnvironment } from '@infrastructure/runtime/config';
 import { settleWithin } from '@infrastructure/runtime/settle';
 import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
@@ -261,10 +262,58 @@ export const queueState = (): DependencyStatus => {
 };
 
 /**
+ * A broker URL as safe to log: scheme, host, port and vhost, never the userinfo.
+ *
+ * @param url - the AMQP URL the connection will use
+ * @returns e.g. `amqp://rabbitmq:5672/shop`, or a placeholder when the URL does not parse
+ */
+export const redactedBrokerTarget = (url: string): string => {
+    // WHATWG URL: `.host` is `hostname:port` (port omitted when it is the scheme default), and
+    // userinfo lives in `.username`/`.password`, which are simply not read here.
+    // https://nodejs.org/api/url.html#class-url
+    if (!URL.canParse(url)) return '(unparseable URL)';
+    const { protocol, host, pathname } = new URL(url);
+    return `${protocol}//${host}${pathname === '/' ? '' : pathname}`;
+};
+
+/**
+ * Says at boot which broker this process will dial, and warns when `NODE_RABBITMQ_URL` is hiding
+ * host or port settings.
+ *
+ * Why it exists: the URL wins over the fragments, and a stale URL in a `.env` shadows a host and
+ * port that look correct. The queue then points at a broker nobody started, with no error.
+ */
+const announceBroker = (): void => {
+    const environment = currentEnvironment();
+    const url = getAmqpUrl();
+
+    if (
+        (environment.NODE_RABBITMQ_URL ?? '') !== '' &&
+        ((environment.NODE_RABBITMQ_HOST ?? '') !== '' ||
+            (environment.NODE_RABBITMQ_PORT ?? '') !== '')
+    ) {
+        logger.warn({
+            message:
+                'queue: NODE_RABBITMQ_URL is set together with NODE_RABBITMQ_HOST/NODE_RABBITMQ_PORT. ' +
+                'The URL wins and the host and port are ignored; unset one of them.'
+        });
+    }
+
+    if (!url || !queueConfig().NODE_RABBITMQ_ENABLED) return;
+
+    logger.info({
+        message: `queue: connecting to ${redactedBrokerTarget(url)} (from ${
+            queueConfig().NODE_RABBITMQ_URL ? 'NODE_RABBITMQ_URL' : 'NODE_RABBITMQ_HOST/_PORT'
+        })`
+    });
+};
+
+/**
  * Warm up RabbitMQ during app startup — pays the handshake cost at boot instead of on the first
  * user request. Never blocks on it: see {@link ensureConnecting}.
  */
 export const startQueue = (): Promise<void> => {
+    announceBroker();
     ensureConnecting();
     return Promise.resolve();
 };

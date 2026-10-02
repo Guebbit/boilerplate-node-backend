@@ -102,6 +102,12 @@ See [Retries and parking](#retries-and-parking) for what happens after the "nack
 
 When none of the vars are set, all queue operations silently no-op — the rest of the app works normally.
 
+At boot the log names the broker in use, with the credentials left out
+(`queue: connecting to amqp://rabbitmq:5672 (from NODE_RABBITMQ_URL)`). `NODE_RABBITMQ_URL` wins over
+host and port, so setting it together with `NODE_RABBITMQ_HOST` or `NODE_RABBITMQ_PORT` logs a warning:
+a stale URL in a `.env` otherwise shadows a host and port that look right, and the queue points at a
+broker nobody started without any error.
+
 ## Docker Compose
 
 The `docker-compose.yml` includes a `rabbitmq` service with the management plugin, `rabbitmq:4-management` —

@@ -76,7 +76,9 @@ key on that role is `.self.` — power over the new account's own data, not the 
 ::: info The last administrator CAN be removed
 Revoking, demoting or deleting a shop's last administrator is allowed, and leaves the shop with
 none. A refusal would only guard against an operator who knows what they are doing, and the repair
-is one database write: give somebody an administrator membership again.
+is a command: `npm run ops:grant-admin -- <email>` gives that account the administrator role again,
+audited. Boot logs a warning while the shop has none. See
+[Locked out of the back office](../reference/ops.md#locked-out-of-the-back-office).
 :::
 
 ## Related pages

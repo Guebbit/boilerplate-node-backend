@@ -16,11 +16,11 @@ import { createItemController } from '@infrastructure/surfaces/create-item-contr
 export const getProductItem = createItemController({
     entity: 'product',
     notFoundKey: 'products.not-found',
-    // Which rows this caller may read — `getAuth` on the route is what makes the role readable here.
+    // Which rows this caller may read — `getAuth` resolves a session or an API key to `request.caller`.
     fetch: (id, request) =>
         productService.getByIdViewed(
             id,
-            productService.callerScope(request.authContext),
+            productService.callerScope(request.caller),
             callerContextOf(request)
         )
 });
