@@ -29,7 +29,7 @@ export const siteConfig = defineConfig({
         NODE_CORS_ORIGIN: csv({
             required: { minLength: 1, productionOnly: true },
             describe:
-                'Origins allowed to call this API with credentials, comma-separated. Unset allows http://localhost:8080.'
+                'Origins allowed to call this API with credentials, comma-separated. Unset allows `http://localhost:8080`.'
         })
     }
 });
