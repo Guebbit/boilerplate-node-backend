@@ -66,7 +66,9 @@
         "email-change": {
             "token-not-found": "Token non valido o scaduto, riprova.",
             "success": "Indirizzo email modificato.",
-            "cancelled": "La modifica dell'indirizzo email in sospeso è stata annullata."
+            "cancelled": "La modifica dell'indirizzo email in sospeso è stata annullata.",
+            "resent": "Un nuovo link di conferma è stato inviato al nuovo indirizzo.",
+            "nothing-pending": "Non c'è nessuna modifica dell'indirizzo email in sospeso."
         },
         "email": {
             "verify-request": {

@@ -708,7 +708,7 @@ const ageEmailChangeSend = async (userId: string): Promise<void> => {
  * same send-spends-no-limiter-budget reasoning as `requestEmailVerificationFor` above.
  */
 describe('resendPendingEmailVerificationFor', () => {
-    it('answers 204 and replaces the live link with a fresh one', async () => {
+    it('answers 200 with the cooldown to count down and replaces the live link with a fresh one', async () => {
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
         await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
         const emailChangeToken = () =>
@@ -722,7 +722,8 @@ describe('resendPendingEmailVerificationFor', () => {
             await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext)
         );
 
-        expect(response.status).toBe(204);
+        expect(response.status).toBe(200);
+        expect(response.data).toEqual({ resendAfter: VERIFY_RESEND_SECONDS });
         const fresh = await emailChangeToken();
         expect(fresh).toBeDefined();
         expect(fresh).not.toBe(mailed);
@@ -744,7 +745,7 @@ describe('resendPendingEmailVerificationFor', () => {
         expect(stored?.pendingEmail).toBe('after@example.com');
     });
 
-    it('is a no-op when nothing is pending: 204, no token minted, nothing audited', async () => {
+    it('is a no-op when nothing is pending: 200 with nothing to wait, no token minted, nothing audited', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
 
@@ -752,7 +753,8 @@ describe('resendPendingEmailVerificationFor', () => {
             await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext)
         );
 
-        expect(response.status).toBe(204);
+        expect(response.status).toBe(200);
+        expect(response.data).toEqual({ resendAfter: 0 });
         expect(await readTokens(user.id)).toEqual([]);
         expect(auditSpy).not.toHaveBeenCalledWith(
             expect.objectContaining({ action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT })
@@ -788,7 +790,7 @@ describe('resendPendingEmailVerificationFor', () => {
             await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext)
         );
 
-        expect(response.status).toBe(204);
+        expect(response.status).toBe(200);
     });
 
     it('audits AUTH_EMAIL_CHANGE_RESENT when a link was actually sent', async () => {
