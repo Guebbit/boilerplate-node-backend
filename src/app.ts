@@ -40,7 +40,7 @@ import {
 } from '@infrastructure/i18n';
 import { isTranslationAvailable } from '@kernel/translation';
 
-import { registerModules } from '@kernel/registry';
+import { registerModules, runBootHooks } from '@kernel/registry';
 import { enabledModules, enabledModuleLocales, enabledModuleTemplateDirectories } from './modules';
 import { APP_CONFIG_SLICES, securityTxtSettings } from '@app/config';
 import { securityTxtWarning } from '@app/security-txt';
@@ -152,6 +152,9 @@ export const createApp = (): AppInstance => {
                  * flows this runs drive the app on a throwaway loopback listener of their own.
                  */
                 .then(() => (isDemoMode() ? restoreScenario() : undefined))
+                // After the demo's accounts exist, or `access` would warn about a shop that is
+                // about to have its administrator. Before `listen`, so it is the last boot line.
+                .then(() => runBootHooks(enabledModules))
                 .then(() => {
                     const { NODE_PORT: port, NODE_HOST: host } = serverConfig();
                     // Unset by default, which binds every interface — the shape every profile but

@@ -7,8 +7,10 @@
  * that question is answered by each module's own `module.yaml`, enforced by
  * `.dependency-cruiser.cjs`, not by anything `registerModules` does at boot.
  */
+import { logger } from '@infrastructure/adapters/logger';
 import {
     registerModules,
+    runBootHooks,
     resolveTranslatables,
     resolvePersonalDataSections,
     resolvePublicEvents,
@@ -219,5 +221,64 @@ describe('resolvePublicEvents', () => {
         ];
 
         expect(() => resolvePublicEvents(modules)).toThrow(/"order\.created"/);
+    });
+});
+
+/**
+ * `runBootHooks` — a module's database-backed boot check. It reports, it never gates: one that
+ * throws must not stop the boot or the checks after it.
+ */
+describe('runBootHooks', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('runs every module that declares a hook, and skips the ones that do not', async () => {
+        const first = jest.fn().mockResolvedValue(undefined);
+        const second = jest.fn().mockResolvedValue(undefined);
+
+        await runBootHooks([
+            { name: 'first', onBoot: first, personalData: 'none' },
+            { name: 'headless', personalData: 'none' },
+            { name: 'second', onBoot: second, personalData: 'none' }
+        ]);
+
+        expect(first).toHaveBeenCalledTimes(1);
+        expect(second).toHaveBeenCalledTimes(1);
+    });
+
+    it('logs a rejecting hook by module name and still runs the others', async () => {
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        const later = jest.fn().mockResolvedValue(undefined);
+
+        await expect(
+            runBootHooks([
+                {
+                    name: 'broken',
+                    onBoot: () => Promise.reject(new Error('db down')),
+                    personalData: 'none'
+                },
+                { name: 'later', onBoot: later, personalData: 'none' }
+            ])
+        ).resolves.toBeUndefined();
+
+        expect(later).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({ message: 'module "broken": its boot check failed.' })
+        );
+    });
+
+    it('logs a hook that throws synchronously, too', async () => {
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+
+        await runBootHooks([
+            {
+                name: 'sync',
+                onBoot: () => {
+                    throw new Error('boom');
+                },
+                personalData: 'none'
+            }
+        ]);
+
+        expect(warn).toHaveBeenCalledTimes(1);
     });
 });
