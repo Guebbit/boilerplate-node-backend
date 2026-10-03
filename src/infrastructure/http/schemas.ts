@@ -92,8 +92,8 @@ export const pageSizeSchema = z.preprocess(
     z.coerce.number().int().min(1).max(PAGE_SIZE_MAX).optional()
 );
 
-/** The pair, for an endpoint that validates nothing else. */
-export const paginationSchema = z.object({ page: pageSchema, pageSize: pageSizeSchema });
+/** The pair, for an endpoint that validates nothing else — strict, so a filter it does not know is a 422, not a silent no-op. */
+export const paginationSchema = z.strictObject({ page: pageSchema, pageSize: pageSizeSchema });
 
 /**
  * A boolean as any transport may carry it: a JSON body sends a real one, but a query string or a

@@ -13,7 +13,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, saveProduct, countersOf } from '@modules/products/tests/factories';
-import { countOrders } from '@modules/orders/tests/factories';
+import { countOrders, createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import {
     getById,
     create,
@@ -617,5 +617,44 @@ describe('callerScope hides soft-deleted orders', () => {
 
         const adminSearch = await search({}, callerScope(asAdmin(userId)));
         expect(adminSearch.items).toHaveLength(1);
+    });
+});
+
+/** Two buyers, one order each. */
+const twoBuyers = async () => {
+    const [first, second] = await Promise.all(
+        ['first', 'second'].map((name) =>
+            createUser({ email: `${name}@scope.test`, username: name })
+        )
+    );
+    const product = await createProduct();
+    const [firstOrder, secondOrder] = await Promise.all([
+        createOrder(first, [toOrderItem(product, 1)]),
+        createOrder(second, [toOrderItem(product, 1)])
+    ]);
+
+    return { first, second, firstOrder, secondOrder };
+};
+
+describe('a client filter never widens the caller’s scope', () => {
+    // The scope is the authorization boundary. Merged with a spread, a `userId` filter naming
+    // someone else overwrote the scope's own `userId`, and the customer read that person's orders.
+    it('answers nothing for a customer filtering on another buyer’s id', async () => {
+        const { first, second } = await twoBuyers();
+
+        const result = await search({ userId: second.id }, callerScope(asCustomer(first.id)));
+
+        expect(result.items).toHaveLength(0);
+    });
+
+    it('still answers an operator’s own userId filter', async () => {
+        const { second, secondOrder } = await twoBuyers();
+
+        const result = await search(
+            { userId: second.id },
+            callerScope(asAdmin('65dc8a99604c307b702b5cc0'))
+        );
+
+        expect(result.items.map((item) => item.id)).toEqual([String(secondOrder._id)]);
     });
 });

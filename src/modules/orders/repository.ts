@@ -14,6 +14,7 @@ import type { Order } from '@types';
 import {
     createRepository,
     toObjectId,
+    withScope,
     type Repository
 } from '@infrastructure/persistence/create-repository';
 import {
@@ -85,8 +86,10 @@ const search = async (
     scope: Record<string, unknown> = {}
 ): Promise<{ items: Order[]; meta: PaginatedMeta }> => {
     const pagination = normalizePagination(filters);
-    // Scope merged last: it is the authorization boundary, and no client filter may widen it.
-    const match = { ...base.buildWhere(withNormalizedEmailFilter(filters)), ...scope };
+    // `withScope`, not a spread: the scope is the authorization boundary, and a spread lets a
+    // client filter on the same key (`userId`) overwrite it — or the scope's `$or` overwrite the
+    // filter's. Both must match.
+    const match = withScope(base.buildWhere(withNormalizedEmailFilter(filters)), scope);
 
     // `DEFAULT_SORT`, not a bare `createdAt` — the count and the page below are two separate
     // `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips

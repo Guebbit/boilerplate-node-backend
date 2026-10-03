@@ -38,8 +38,11 @@ export default defineConfig({
                     // keys from rather than rejecting — so the generated validator would be weaker
                     // than the contract it came from. `response` strictness is what makes
                     // `tests/support/contract.ts`'s judge an over-serialization guard.
+                    // `query` is strict too: a query parameter the contract does not declare — a
+                    // typo, a stale name — answers 422 instead of being dropped, which would
+                    // return everything the caller may read as though the filter had been honoured.
                     // https://orval.dev/docs/reference/configuration/output#strict
-                    strict: { body: true, response: true },
+                    strict: { query: true, body: true, response: true },
                     // One schema per DOCUMENTED STATUS (`Login200Response`, `Login422Response`, …)
                     // instead of one per operation. Without this, only the single "success" branch
                     // gets a schema at all — `tests/support/contract.ts` and the fuzz suite
