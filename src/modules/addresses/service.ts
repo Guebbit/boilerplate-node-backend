@@ -98,7 +98,7 @@ export const addressForCheckout = (
     });
 
 /**
- * What a hard account deletion owes the book — DDD-D6's `personalData.erase` hook (see
+ * What a hard account deletion owes the book — the `personalData.erase` hook (see
  * `module.ts`'s manifest), joining the caller's own hard-delete transaction.
  */
 export const addressesDeleteByUserId = (userId: string, session: ClientSession): Promise<void> =>

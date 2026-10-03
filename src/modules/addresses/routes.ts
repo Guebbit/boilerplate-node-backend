@@ -18,6 +18,7 @@ import { putAddressDefault } from './controllers/put-address-default';
 /** Express router for the address book. */
 export const router = Router();
 
+// Resolve the session for every route below; each route then says whether it needs one (`isAuth`).
 router.use(getAuth);
 
 // Credentials and identity-adjacent data: never cacheable — same reasoning as account's own
@@ -30,8 +31,10 @@ router.get('/addresses', isAuth, getAddresses);
 // POST /account/addresses — add an entry (requires auth)
 router.post('/addresses', isAuth, postAddress);
 
-// PUT /account/addresses/:addressId (replace) and PATCH (merge) (requires auth)
+// PUT /account/addresses/:addressId — replace the entry (requires auth)
 router.put('/addresses/:addressId', isAuth, replaceAddress);
+
+// PATCH /account/addresses/:addressId — merge the fields sent (requires auth)
 router.patch('/addresses/:addressId', isAuth, updateAddress);
 
 // PUT /account/addresses/:addressId/default — make it the book's default (requires auth). The

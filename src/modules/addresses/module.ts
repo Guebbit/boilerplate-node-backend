@@ -28,7 +28,7 @@ export default {
         {
             section: 'addresses',
             collect: (subject) => addressesGet(subject.userId).then((view) => view.addresses),
-            // DDD-D6: a destroyed account takes its address book with it, inside the same
+            // A destroyed account takes its address book with it, inside the same
             // transaction — see `addressesDeleteByUserId`.
             erase: addressesDeleteByUserId
         }
