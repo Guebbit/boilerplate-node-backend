@@ -59,8 +59,11 @@ router.post('/search', requirePermission('feedback.any.read'), noStore, getFeedb
 // `privateNoCache`: the browser may keep its own copy, revalidated every time.
 router.get('/', requirePermission('feedback.any.read'), privateNoCache, getFeedback);
 
-// PUT /feedback/:id (replace) and PATCH /feedback/:id (merge)
+// PUT /feedback/:id — replace the entry's status
 router.put('/:id', requirePermission('feedback.any.update'), replaceFeedbackStatus);
+
+// PATCH /feedback/:id — merge the fields sent
 router.patch('/:id', requirePermission('feedback.any.update'), updateFeedbackStatus);
 
+// DELETE /feedback/:id — remove the entry
 router.delete('/:id', requirePermission('feedback.any.delete'), deleteFeedback);
