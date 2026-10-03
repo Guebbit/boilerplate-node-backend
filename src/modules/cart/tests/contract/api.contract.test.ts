@@ -645,7 +645,7 @@ describe('POST /cart/checkout', () => {
     });
 
     it('matches the error contract for an unoffered payment method', () =>
-        // Explicitly unset: `tests/support/setup.ts` configures transfer for the whole worker, so
+        // Explicitly unset: `tests/support/setup-environment.ts` configures transfer for the whole worker, so
         // "this deployment offers no transfer" is a state this case has to create.
         withoutEnvironment(
             ['NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],

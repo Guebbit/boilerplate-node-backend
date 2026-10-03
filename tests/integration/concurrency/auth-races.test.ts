@@ -278,7 +278,7 @@ describe('one-time tokens under contention', () => {
 
 describe('the limiter is raised for these suites, not disabled', () => {
     it('still refuses an unbounded run of failed logins', async () => {
-        // `tests/support/setup.ts` raises NODE_AUTH_RATE_LIMIT_MAX to 1000 so a race is not
+        // `tests/support/setup-environment.ts` raises NODE_AUTH_RATE_LIMIT_MAX to 1000 so a race is not
         // silently truncated into a vacuous pass. This case is what keeps that from quietly
         // becoming "the limiter is off": the budget is large, finite, and still enforced.
         //

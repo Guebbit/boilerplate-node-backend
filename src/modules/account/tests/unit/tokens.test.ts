@@ -23,7 +23,7 @@ import { setEnvironment, withoutEnvironmentInThisFile } from '@tests/environment
 
 /**
  * Every env var this module reads. Cleared before each test so a value leaking in from the
- * ambient environment (or from `tests/support/setup.ts`) can never make an assertion pass.
+ * ambient environment (or from `tests/support/setup-environment.ts`) can never make an assertion pass.
  */
 const TOKEN_ENV_KEYS = [
     'NODE_TOKEN_REFRESH_TIME_SHORT',

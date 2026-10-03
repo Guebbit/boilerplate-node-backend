@@ -67,6 +67,16 @@ describe('the accessor', () => {
         expect(slice().NODE_SAMPLE_LIMIT).toBe(25);
     });
 
+    it('does not see a later write to process.env: the environment is read once', () => {
+        slice();
+
+        process.env.NODE_SAMPLE_LIMIT = '99';
+
+        expect(slice().NODE_SAMPLE_LIMIT).toBe(10);
+
+        Reflect.deleteProperty(process.env, 'NODE_SAMPLE_LIMIT');
+    });
+
     it('returns the same object while nothing changed', () => {
         expect(slice()).toBe(slice());
     });

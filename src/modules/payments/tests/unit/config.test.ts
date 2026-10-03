@@ -21,7 +21,7 @@ const configureBankTransfer = () => {
 /**
  * Every variable these cases drive, cleared before each one and put back after the file.
  *
- * `tests/support/setup.ts` configures bank transfer for the whole worker — the `shop` scenario
+ * `tests/support/setup-environment.ts` configures bank transfer for the whole worker — the `shop` scenario
  * declares a guarantee that needs it offered — so "not configured at all" is a state this file has
  * to create rather than one it can assume.
  */

@@ -14,7 +14,7 @@
  * fresh via `jest.resetModules()` + `require()` — the same pattern `cache.test.ts` uses for the
  * same reason.
  *
- * The test suite's own `tests/support/setup.ts` sets `NODE_RATE_LIMIT_REDIS_ENABLED ??= '0'`
+ * The test suite's own `tests/support/setup-environment.ts` sets `NODE_RATE_LIMIT_REDIS_ENABLED ??= '0'`
  * globally, so every case that means to exercise the Redis path re-enables it explicitly.
  */
 // Also forces module scope for this file — otherwise its top-level `const`s collide, at the type

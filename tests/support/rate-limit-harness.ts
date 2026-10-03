@@ -19,7 +19,7 @@ import { withEnvironmentOverrides } from './environment';
  * it.
  *
  * `express-rate-limit` reads its options ONCE, at construction, so a limiter's budget is fixed
- * the moment its module is first imported — by which time `tests/support/setup.ts` has already
+ * the moment its module is first imported — by which time `tests/support/setup-environment.ts` has already
  * raised every budget to keep unrelated suites off the limiter. A case that wants a small budget
  * therefore has to discard the module registry and import again, with the variables in place.
  *

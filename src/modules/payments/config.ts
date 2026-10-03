@@ -70,7 +70,7 @@ export const validateBankTransferConfig = (): string[] => {
 /**
  * What a deployment tunes about payments, and what refuses boot.
  *
- * `NODE_PAYMENT_WEBHOOK_SECRET` is `productionOnly`: `tests/support/setup.ts` supplies a dev
+ * `NODE_PAYMENT_WEBHOOK_SECRET` is `productionOnly`: `tests/support/setup-environment.ts` supplies a dev
  * value, and the `fake` provider needs none locally — booting without it there is not the failure
  * this guards against. `NODE_PAYMENT_PROVIDER`'s own probe lives in `./module` (the resolver
  * imports this file, so it cannot be probed from here).

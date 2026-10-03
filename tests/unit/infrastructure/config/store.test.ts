@@ -1,15 +1,17 @@
 /**
- * `src/infrastructure/config/store.ts` — the process environment with an override layer.
+ * `src/infrastructure/config/store.ts` — the environment, read once, with an override layer.
  *
- * The subject is the contract slices rely on: overrides win over the process, hiding one works,
- * and the undo an override hands back restores exactly what was there.
+ * The subject is the contract slices rely on: a snapshot that never moves, overrides that win and
+ * come back out exactly, and a version that moves only when what a read returns could differ.
  */
 import {
-    markEnvironmentOverrides,
-    resetEnvironmentOverrides,
     currentEnvironment,
+    environmentVersion,
     installEnvironment,
-    overrideEnvironment
+    markEnvironmentOverrides,
+    overrideEnvironment,
+    refreshEnvironment,
+    resetEnvironmentOverrides
 } from '@infrastructure/config/store';
 
 /** A variable no real environment sets, so every case starts from "absent". */
@@ -21,15 +23,53 @@ describe('the environment store', () => {
     // is harmless here — nothing in this file depends on it.
     afterEach(() => {
         Reflect.deleteProperty(globalThis, Symbol.for('boilerplate-node-backend.config.store'));
+        Reflect.deleteProperty(process.env, NAME);
     });
 
-    it('lets an override win over the process environment', () => {
+    it('reads process.env once: a later write is not seen', () => {
+        currentEnvironment();
+
+        process.env[NAME] = 'late';
+
+        expect(currentEnvironment()[NAME]).toBeUndefined();
+    });
+
+    it('sees a write made before the first read', () => {
+        process.env[NAME] = 'early';
+
+        expect(currentEnvironment()[NAME]).toBe('early');
+    });
+
+    it('takes the snapshot again on refresh, and only then', () => {
+        currentEnvironment();
+        process.env[NAME] = 'loaded';
+
+        refreshEnvironment();
+
+        expect(currentEnvironment()[NAME]).toBe('loaded');
+    });
+
+    it('returns the same object until something changes', () => {
+        const first = currentEnvironment();
+
+        expect(currentEnvironment()).toBe(first);
+
+        overrideEnvironment({ [NAME]: 'x' });
+
+        expect(currentEnvironment()).not.toBe(first);
+    });
+
+    it('is frozen', () => {
+        expect(Object.isFrozen(currentEnvironment())).toBe(true);
+    });
+
+    it('lets an override win over the snapshot', () => {
         overrideEnvironment({ NODE_ENV: 'production' });
 
         expect(currentEnvironment().NODE_ENV).toBe('production');
     });
 
-    it('treats an undefined override as "unset", hiding the process value', () => {
+    it('treats an undefined override as "unset", hiding the snapshot value', () => {
         overrideEnvironment({ NODE_ENV: undefined });
 
         expect('NODE_ENV' in currentEnvironment()).toBe(false);
@@ -41,6 +81,22 @@ describe('the environment store', () => {
         expect(process.env[NAME]).toBeUndefined();
     });
 
+    it('moves the version on every change, and on nothing else', () => {
+        const before = environmentVersion();
+        currentEnvironment();
+
+        expect(environmentVersion()).toBe(before);
+
+        const restore = overrideEnvironment({ [NAME]: 'x' });
+        const afterOverride = environmentVersion();
+
+        expect(afterOverride).toBeGreaterThan(before);
+
+        restore();
+
+        expect(environmentVersion()).toBeGreaterThan(afterOverride);
+    });
+
     describe('the undo an override hands back', () => {
         it('removes an override that was not there before', () => {
             const restore = overrideEnvironment({ [NAME]: 'x' });
@@ -49,7 +105,7 @@ describe('the environment store', () => {
             expect(NAME in currentEnvironment()).toBe(false);
         });
 
-        it('puts back the override that was there, not the process value', () => {
+        it('puts back the override that was there, not the snapshot', () => {
             overrideEnvironment({ [NAME]: 'outer' });
             const restore = overrideEnvironment({ [NAME]: 'inner' });
             restore();
@@ -87,7 +143,7 @@ describe('the environment store', () => {
         expect(NAME in currentEnvironment()).toBe(false);
     });
 
-    it('survives a registry reset: a re-imported store sees the same overrides', () => {
+    it('survives a registry reset: a re-imported store sees the same state', () => {
         overrideEnvironment({ [NAME]: 'kept' });
         jest.resetModules();
 

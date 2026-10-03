@@ -13,3 +13,7 @@
 // dotenv: loads `.env` from the working directory into `process.env`, skipping keys already set.
 // https://github.com/motdotla/dotenv#readme
 import 'dotenv/config';
+import { refreshEnvironment } from './store';
+
+// The store may already have read `process.env` before this ran; take it again, `.env` included.
+refreshEnvironment();

@@ -2,10 +2,10 @@
  * @module
  * The one place the process environment is read, and the one place it can be overridden.
  *
- * Reads:       `process.env`, live, with the overrides laid over it.
- * Overrides:   `createApp({ env })` installs one for good; the test helpers set one for a body
- *              and put it back.
- * Lives on:    `globalThis`, so a `jest.resetModules()` re-import still sees the same overrides.
+ * Reads:       `process.env`, ONCE — the first read freezes a snapshot (parse once).
+ * Overrides:   a layer on top of the snapshot. `createApp({ env })` installs one for good; the
+ *              test helpers set one for a body and put it back.
+ * Lives on:    `globalThis`, so a `jest.resetModules()` re-import still sees the same state.
  *
  * Everything else asks a slice (`defineConfig`), and a slice asks {@link currentEnvironment}.
  * See: docs/tools/configuration.md
@@ -19,10 +19,18 @@ export type EnvironmentOverrides = Readonly<Record<string, string | undefined>>;
 
 /** What the store remembers between reads. */
 interface StoreState {
-    /** Overrides over `process.env`. A key holding `undefined` hides the process value. */
+    /** `process.env` as the first read saw it, until {@link refreshEnvironment} takes it again. */
+    snapshot: Environment | undefined;
+    /** Overrides over the snapshot. A key holding `undefined` hides the snapshot's value. */
     readonly overrides: Map<string, string | undefined>;
     /** The overrides {@link resetEnvironmentOverrides} goes back to; empty until a mark is set. */
     marked: ReadonlyMap<string, string | undefined>;
+    /** Bumped on every change, so a slice knows its parsed copy went stale. */
+    version: number;
+    /** Snapshot plus overrides, rebuilt only when `version` moved past `mergedVersion`. */
+    merged: Environment | undefined;
+    /** The `version` that `merged` was built at. */
+    mergedVersion: number;
 }
 
 /**
@@ -40,25 +48,55 @@ const holder = globalThis as typeof globalThis & { [STATE_KEY]?: StoreState };
  * @returns the one store state of this realm
  */
 const state = (): StoreState => {
-    holder[STATE_KEY] ??= { overrides: new Map(), marked: new Map() };
+    holder[STATE_KEY] ??= {
+        snapshot: undefined,
+        overrides: new Map(),
+        marked: new Map(),
+        version: 0,
+        merged: undefined,
+        mergedVersion: -1
+    };
     return holder[STATE_KEY];
 };
 
 /**
- * The environment every slice reads from right now: `process.env` with the overrides on top.
+ * The environment every slice reads from right now: the frozen snapshot with the overrides on top.
+ * The same object is returned until something changes.
  *
- * @returns the process environment itself when nothing is overridden, otherwise a merged copy
+ * @returns the effective environment
  */
 export const currentEnvironment = (): Environment => {
-    const { overrides } = state();
-    if (overrides.size === 0) return process.env;
+    const store = state();
+    if (store.merged && store.mergedVersion === store.version) return store.merged;
 
-    const merged = new Map(Object.entries(process.env));
-    for (const [name, value] of overrides) {
+    // Taken at the first read: whatever `process.env` gains later is not seen.
+    store.snapshot ??= Object.freeze({ ...process.env });
+    const merged = new Map(Object.entries(store.snapshot));
+    for (const [name, value] of store.overrides) {
         if (value === undefined) merged.delete(name);
         else merged.set(name, value);
     }
-    return Object.fromEntries(merged);
+    store.merged = Object.freeze(Object.fromEntries(merged));
+    store.mergedVersion = store.version;
+    return store.merged;
+};
+
+/**
+ * A number that changes whenever {@link currentEnvironment} would return different values. A
+ * slice keeps its parsed copy for exactly as long as this stays put.
+ *
+ * @returns the current version
+ */
+export const environmentVersion = (): number => state().version;
+
+/**
+ * Takes the snapshot again, from `process.env` as it is now. For the one code path that
+ * legitimately changes the process environment after startup: loading `.env`.
+ */
+export const refreshEnvironment = (): void => {
+    const store = state();
+    store.snapshot = undefined;
+    store.version += 1;
 };
 
 /**
@@ -68,18 +106,20 @@ export const currentEnvironment = (): Environment => {
  * @returns a function that puts every named variable's override back as it was before this call
  */
 export const overrideEnvironment = (entries: EnvironmentOverrides): (() => void) => {
-    const { overrides } = state();
+    const store = state();
     // Saved per NAME and per override entry: "no override" and "overridden to unset" differ.
     const before = Object.keys(entries).map(
-        (name) => [name, overrides.has(name), overrides.get(name)] as const
+        (name) => [name, store.overrides.has(name), store.overrides.get(name)] as const
     );
-    for (const [name, value] of Object.entries(entries)) overrides.set(name, value);
+    for (const [name, value] of Object.entries(entries)) store.overrides.set(name, value);
+    store.version += 1;
 
     return () => {
         for (const [name, had, value] of before) {
-            if (had) overrides.set(name, value);
-            else overrides.delete(name);
+            if (had) store.overrides.set(name, value);
+            else store.overrides.delete(name);
         }
+        store.version += 1;
     };
 };
 
@@ -103,12 +143,13 @@ export const markEnvironmentOverrides = (): void => {
 };
 
 /**
- * Puts the overrides back to the last mark (none: no overrides, `process.env` alone). A test's
- * way of ending its own changes.
+ * Puts the overrides back to the last mark (none: the snapshot alone). A test's way of ending its
+ * own changes.
  */
 export const resetEnvironmentOverrides = (): void => {
-    const { overrides, marked } = state();
+    const store = state();
     // Refilled in place, not replaced: an undo handed out earlier holds this very Map.
-    overrides.clear();
-    for (const [name, value] of marked) overrides.set(name, value);
+    store.overrides.clear();
+    for (const [name, value] of store.marked) store.overrides.set(name, value);
+    store.version += 1;
 };

@@ -57,7 +57,7 @@ export const withEnvironmentOverrides = async <T>(
  * {@link withEnvironment}'s opposite: run a body with these variables UNSET, then put them back.
  *
  * For the case whose subject is a deployment that configured nothing — which the worker's own
- * environment cannot express once `tests/support/setup.ts` has given the whole worker a value, as it does for
+ * environment cannot express once `tests/support/setup-environment.ts` has given the whole worker a value, as it does for
  * bank transfer so the `shop` scenario can hold its `order.awaitingTransfer` guarantee.
  *
  * @param keys - the variables to clear for the duration
@@ -82,7 +82,7 @@ export const withoutEnvironment = async (
  * For a suite whose subject IS the configuration — it drives these variables case by case, so
  * wrapping each one in a body would be noise. Unset as an override rather than deleted from
  * `process.env`: the store has already read the process environment, and the worker may have been
- * given a value by `tests/support/setup.ts`.
+ * given a value by `tests/support/setup-environment.ts`.
  *
  * @param keys - the variables this file owns for its duration
  */
