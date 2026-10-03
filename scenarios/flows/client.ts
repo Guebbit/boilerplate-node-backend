@@ -37,6 +37,12 @@ export interface Attempt {
  * boot is useless if the message only says `409`.
  */
 export class ScenarioFlowError extends Error {
+    /**
+     * @param who - the actor's email, to name them in the message
+     * @param method - the HTTP method that failed
+     * @param path - the request path that failed
+     * @param attempt - the response that came back
+     */
     constructor(who: string, method: Method, path: string, attempt: Attempt) {
         super(
             `${who}: ${method} ${path} answered ${String(attempt.status)}` +

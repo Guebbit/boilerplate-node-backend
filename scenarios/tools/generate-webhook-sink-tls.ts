@@ -166,5 +166,6 @@ const remake = (): void => {
     }
 };
 
+/** Remake the fixtures, then say where they went. */
 remake();
 console.info(`[tls] Remade the webhook sink fixtures in ${TLS_DIRECTORY}.`);

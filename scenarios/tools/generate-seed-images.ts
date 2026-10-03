@@ -173,6 +173,7 @@ const main = async (): Promise<void> => {
     );
 };
 
+/** Run the generator; a failure prints the stack and sets a non-zero exit code. */
 main().catch((error: unknown) => {
     console.error(error instanceof Error ? error.stack : error);
     process.exitCode = 1;

@@ -26,6 +26,7 @@ import type { shopModules } from './index';
  * named it at runtime, just before the build instead of after.
  */
 type ShopModulesAreMounted = keyof typeof shopModules extends ModuleName ? true : never;
+/** Never read: assigning `true` is what makes the compiler evaluate {@link ShopModulesAreMounted}. */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- exists only to force the check above; never read
 const shopModulesAreMounted: ShopModulesAreMounted = true;
 

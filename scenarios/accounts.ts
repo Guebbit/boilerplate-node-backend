@@ -29,8 +29,14 @@ export const SEED_MODERATOR_ID = '65df1a2b3c4d5e6f7a8b9c03';
  * from. Same id format as {@link SEED_ADMIN_ID}; `scenarios/users.ts` builds the rows.
  */
 export const SEED_UNVERIFIED_ID = '65df1a2b3c4d5e6f7a8b9c10';
+
+/** The persona with email two-factor armed. */
 export const SEED_TWO_FACTOR_ID = '65df1a2b3c4d5e6f7a8b9c11';
+
+/** The persona who asked to change their email and has not confirmed it yet. */
 export const SEED_PENDING_EMAIL_ID = '65df1a2b3c4d5e6f7a8b9c12';
+
+/** The persona an admin switched off (`active: false`): every login is refused. */
 export const SEED_BANNED_ID = '65df1a2b3c4d5e6f7a8b9c13';
 
 /**
@@ -38,8 +44,14 @@ export const SEED_BANNED_ID = '65df1a2b3c4d5e6f7a8b9c13';
  * operator. Each holds exactly one role, so a journey can log in as it and see what that role sees.
  */
 export const SEED_MANAGER_ID = '65df1a2b3c4d5e6f7a8b9c20';
+
+/** The warehouse staff account's id — same format as {@link SEED_MANAGER_ID}. */
 export const SEED_WAREHOUSE_ID = '65df1a2b3c4d5e6f7a8b9c21';
+
+/** The support staff account's id — same format as {@link SEED_MANAGER_ID}. */
 export const SEED_SUPPORT_ID = '65df1a2b3c4d5e6f7a8b9c22';
+
+/** The platform-only operator's id — same format as {@link SEED_MANAGER_ID}. */
 export const SEED_OPERATOR_ID = '65df1a2b3c4d5e6f7a8b9c23';
 
 /** The demo owner's login email. */
@@ -79,14 +91,26 @@ export const SEED_MODERATOR_PASSWORD = seedPasswordsConfig().NODE_SEED_MODERATOR
 
 /** Login emails of the persona accounts — see {@link SEED_UNVERIFIED_ID}. */
 export const SEED_UNVERIFIED_EMAIL = 'unverified@example.com';
+
+/** Login email of the two-factor persona. */
 export const SEED_TWO_FACTOR_EMAIL = 'two-factor@example.com';
+
+/** Login email of the pending-email persona (its pending target is below). */
 export const SEED_PENDING_EMAIL_EMAIL = 'pending-email@example.com';
+
+/** Login email of the switched-off persona. */
 export const SEED_BANNED_EMAIL = 'banned@example.com';
 
 /** Login emails of the staff accounts — see {@link SEED_MANAGER_ID}. */
 export const SEED_MANAGER_EMAIL = 'manager@example.com';
+
+/** Login email of the warehouse staff account. */
 export const SEED_WAREHOUSE_EMAIL = 'warehouse@example.com';
+
+/** Login email of the support staff account. */
 export const SEED_SUPPORT_EMAIL = 'support@example.com';
+
+/** Login email of the platform-only operator. */
 export const SEED_OPERATOR_EMAIL = 'operator@example.com';
 
 /** The address the pending-email persona asked to move to, and has not yet confirmed. */

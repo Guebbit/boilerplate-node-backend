@@ -52,6 +52,10 @@ const corsOriginFromDotenv = (): string | undefined => {
     }
 };
 
+/**
+ * Environment values this profile sets when the shell and `.env` give none: enough for a bare
+ * checkout (every CI runner) to boot. Throwaway secrets, loopback host, known demo keys.
+ */
 const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_ENV: 'development',
     // Loopback only: this profile's tokens are signed with a public, hard-coded secret, and its
@@ -144,6 +148,7 @@ const waitUntilListening = (port: string): Promise<void> => {
     return poll();
 };
 
+/** Boot sequence: an ephemeral Mongo first, then the app on top of it. */
 startEphemeralMongo({ startInProcess: startInProcessMongod })
     .then((mongo) => {
         // The consumers of this profile end it with a signal — the paired frontend's shard runner
