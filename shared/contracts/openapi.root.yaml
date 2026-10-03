@@ -1611,9 +1611,8 @@ components:
                     format: date-time
 
         # `POST /account/export`'s answer (`account/openapi.yaml`) — here, not in that module's
-        # own fragment, because a module fragment lints standalone and cannot reference a
-        # sibling's schema. This envelope is exactly that: one field per module that contributes
-        # a section, most of them owned by a module other than `account`.
+        # own fragment, because it belongs to no one module: one field per module that
+        # contributes a section, most of them owned by a module other than `account`.
         AccountExportResponse:
             type: object
             additionalProperties: false

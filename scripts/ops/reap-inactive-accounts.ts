@@ -17,7 +17,7 @@
  *   inactive N days  → email warning, `inactivityWarnedAt` stamped
  *   + GRACE_DAYS more, still no login → soft delete (`userService.remove(user, false, systemContext)`)
  *   + GRACE_DAYS more since the soft delete → hard delete (`userService.remove(user, true)`),
- *     which emits `USER_DELETED` and cascades exactly like an admin's own hard delete
+ *     which runs every module's `personalData.erase` hook, exactly like an admin's own hard delete
  *
  * `inactivityWarnedAt` is what tells stage three's candidates apart from an account an admin
  * soft-deleted for an unrelated reason — see the field's own doc comment on `UserRecord`. A

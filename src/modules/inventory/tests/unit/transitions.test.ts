@@ -24,7 +24,7 @@ describe('counterDeltaFor', () => {
             });
     });
 
-    // `openapi.yaml:162-171`'s literal signed table — the shape check above passes on any
+    // `openapi.yaml`'s literal signed table — the shape check above passes on any
     // pair of numbers, so this pins the actual value each reason produces.
     it.each([
         [StockMovementReason.reserve, { onHandDelta: 0, reservedDelta: 3 }],

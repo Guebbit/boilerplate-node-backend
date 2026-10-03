@@ -24,8 +24,8 @@ module.exports = {
             comment:
                 'Two modules importing each other, however many files and however many hops it ' +
                 'takes to close the loop. A sibling that has to reach back belongs on the domain ' +
-                'event bus instead (`kernel/events.ts`) — see any module already listening for ' +
-                'USER_DELETED for the shape.',
+                'event bus instead (`kernel/events.ts`) — see `webhooks`, which reacts to ' +
+                "`orders`' and `payments`' events without importing either.",
             severity: 'error',
             scope: 'folder',
             from: { path: '^src/modules/[^/]+$' },

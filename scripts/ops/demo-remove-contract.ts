@@ -3,7 +3,7 @@
  * The one contract fragment that still names shop modules by hand:
  * `shared/contracts/openapi.root.yaml` — "what belongs to no module" (CLAUDE.md's contract
  * workflow) — carries `POST /account/export`'s `AccountExportResponse` (one field per
- * contributing module; `account`'s own fragment cannot name a sibling's schema). The path index
+ * contributing module, so it belongs to no one module). The path index
  * is not hand-edited on removal: the bundler completes it from the fragments on disk.
  *
  * `demo-remove.ts` edits the export schema here rather than leaving it to a human reading a

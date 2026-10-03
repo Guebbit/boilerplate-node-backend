@@ -27,7 +27,7 @@ import type { Response } from 'express';
  * request was malformed. A module throws its OWN subclass (`access`'s `AccessInvariantError`
  * below) rather than this class directly, so a caller catching a specific failure still can —
  * `instanceof` on the base is only how {@link databaseErrorInterpreter} recognises the FAMILY.
- * `infrastructure` names no module (`docs/theory/layers.md:8`): it exports the shape, a module
+ * `infrastructure` names no module (`docs/theory/layers.md`): it exports the shape, a module
  * subclasses it, and the mapping below never spells out which module that was.
  */
 export class ConflictError extends Error {}
