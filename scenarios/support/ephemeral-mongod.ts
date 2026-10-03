@@ -37,7 +37,7 @@ const toEphemeralMongo = (server: MongoMemoryReplSet): EphemeralMongo => ({
 /**
  * Starts an in-process, single-member replica set rather than a standalone `mongod`.
  *
- * DDD-D2: multi-document transactions need a replica set even for a lone member — a standalone
+ * Multi-document transactions need a replica set even for a lone member — a standalone
  * `mongod` refuses `startTransaction()` outright. `count: 1` keeps the cost of that at nearly
  * nothing (no real replication, no extra network hops); `storageEngine: 'wiredTiger'` is explicit
  * because transactions require it and this library's own default only follows the mongod version.

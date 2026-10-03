@@ -436,7 +436,7 @@ const toUpsertTranslationsRequest = (copy: ProductCopy): TranslationBatch => ({
  * `insertIfAbsent` above, from the same `title`/`description` this batch also carries), this call adds
  * the `translations` rows a real editor's write would have produced alongside it.
  *
- * A no-op, writing nothing, when no translation provider is registered (D-LO1): `locales`
+ * A no-op, writing nothing, when no translation provider is registered: `locales`
  * deleted makes the shop monolingual, not the seed step a failure.
  *
  * @throws {Error} if the batch fails to validate — a bug in the fixture data, never a caller input

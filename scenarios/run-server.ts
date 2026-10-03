@@ -70,7 +70,7 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // Known, so the paired e2e suite can sign a payment-provider delivery (`POST /payments/webhook`)
     // itself; the frontend's `paymentWebhookSecret` carries the same value.
     NODE_PAYMENT_WEBHOOK_SECRET: 'demo-payment-webhook-secret',
-    // `orders`' and `products`' own boot-time requirements (SK-08) — `assertModuleConfig` no
+    // `orders`' and `products`' own boot-time requirements — `assertModuleConfig` no
     // longer exempts this profile, so it satisfies the gate the ordinary way, with the same
     // values `.env-example` ships for a plain developer checkout.
     NODE_SHOP_COUNTRY: 'IT',
@@ -116,7 +116,7 @@ const FORCED_ABSENT = [
 /**
  * Unlike {@link REQUIRED_DEFAULTS}, which only fills a key a `.env` left blank, this OVERRIDES
  * one unconditionally — the same mechanism {@link FORCED_ABSENT} uses, for a setting that is not
- * a preference this profile lets a copied `.env` express (SK-08). `GET /__test/emails` is the
+ * a preference this profile lets a copied `.env` express. `GET /__test/emails` is the
  * paired e2e suite's only way to read a reset token, so a `.env` naming `smtp` must not quietly
  * empty it — `mailer.ts#resolveMailTransport` no longer knows this profile exists at all, so the
  * guarantee has to live here instead, exactly the way it forces external services off below.
@@ -201,7 +201,7 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
         // restore puts it back. See `scenarios/support/demo-clock.ts`.
         registerDemoClock(installDemoClock());
 
-        // This profile's own OAuth identity provider (SK-08) — production's registry seeds none,
+        // This profile's own OAuth identity provider — production's registry seeds none,
         // so a Cypress spec clicking "Continue with Google" needs this profile to put one there
         // itself, the same composition `Mail::fake()` does in Laravel.
         registerOAuthProvider('fake', () => fakeOAuthProvider);
