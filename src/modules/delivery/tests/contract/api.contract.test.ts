@@ -50,7 +50,7 @@ describe('GET /delivery/methods', () => {
         expect(ids).toContain('express');
     });
 
-    // E12: the answer names which countries this deployment ships to — the frontend reads it here
+    // The answer names which countries this deployment ships to — the frontend reads it here
     // rather than guessing.
     it('lists the configured ship-to countries', async () => {
         const response = await api().get('/delivery/methods');
@@ -59,7 +59,7 @@ describe('GET /delivery/methods', () => {
         expect(response.body.data.shipToCountries).toEqual(['IT']);
     });
 
-    // FA37: every method carries the shop's own currency — the frontend reads it here rather
+    // Every method carries the shop's own currency — the frontend reads it here rather
     // than guessing a fixed default.
     it('stamps every method with the shop currency', async () => {
         const response = await api().get('/delivery/methods');
@@ -254,7 +254,7 @@ describe('POST /delivery/order/{orderId}/fulfill', () => {
     });
 
     /*
-     * E16(3): the digital-only alternative and the ordinary ship door are mutually exclusive on
+     * The digital-only alternative and the ordinary ship door are mutually exclusive on
      * the wire, not just enforced server-side — a client renders exactly one of the two controls.
      */
     it('offers fulfill instead of ship for a digital-only order, and the reverse for a physical one', async () => {
@@ -308,7 +308,7 @@ describe('POST /delivery/order/{orderId}/deliver', () => {
     });
 
     /*
-     * B20: `recordDelivery` used to move the order to `delivered` BEFORE checking a shipment
+     * `recordDelivery` used to move the order to `delivered` BEFORE checking a shipment
      * existed to stamp — a forced deliver on an order with no parcel on file still succeeded in
      * moving the order, and only then answered 409, a refusal that lied about what already
      * happened. `forced` widens which ORDER statuses are eligible; it never means the shipment
