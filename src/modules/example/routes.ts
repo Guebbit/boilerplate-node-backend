@@ -43,14 +43,23 @@ router.use(getAuth, isAuth);
  * cached (`noStore`); the GET may be kept by the browser alone, since the answer depends on who asks.
  */
 router.post('/search', requirePermission('examples.self.read'), noStore, getExamples);
+
+// GET /examples — the caller's own examples, filtered by the query string.
 router.get('/', requirePermission('examples.self.read'), privateNoCache, getExamples);
 
 // `createExampleLimiter` first: a spent budget should not cost a database write.
 router.post('/', requirePermission('examples.self.create'), createExampleLimiter, postExample);
 
+// GET /examples/:id — one example. `privateNoCache`: the browser may keep it, revalidated.
 router.get('/:id', requirePermission('examples.self.read'), privateNoCache, getExample);
+
+// PUT /examples/:id — replace the whole example.
 router.put('/:id', requirePermission('examples.self.update'), replaceExample);
+
+// PATCH /examples/:id — change the fields sent.
 router.patch('/:id', requirePermission('examples.self.update'), updateExample);
+
+// DELETE /examples/:id — remove the example.
 router.delete('/:id', requirePermission('examples.self.delete'), deleteExample);
 
 /*
