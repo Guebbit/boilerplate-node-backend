@@ -39,6 +39,10 @@ The rule, enforced by `eslint-plugin-boundaries` in `eslint.config.ts`:
 - `app` may import anything: it is the tier allowed to know which domains exist;
 - nothing outside a module imports its internals.
 
+The kernel is **Mongo-only**, on purpose: `kernel/access/query.ts` compiles a caller's rules into a
+Mongo filter (`@casl/mongoose`), and `kernel/outbox.ts` is a Mongoose model written inside a
+Mongo transaction. A different store means replacing those two files, not configuring them.
+
 Two things hold that beyond what a per-file rule can see:
 
 - **Nothing is permitted by default.** `boundaries/dependencies` runs `default: 'disallow'`, so an
