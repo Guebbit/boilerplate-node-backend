@@ -109,6 +109,7 @@ export const buildProcessors = (): SpanProcessor[] => {
     const endpoint =
         tracingConfig().OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ??
         tracingConfig().OTEL_EXPORTER_OTLP_ENDPOINT;
+    // No endpoint configured: spans are created but go nowhere, instead of failing to export.
     if (!endpoint) return [new NoopSpanProcessor()];
 
     // `@opentelemetry/sdk-trace`'s `BatchSpanProcessor` takes one options object (`{ exporter,

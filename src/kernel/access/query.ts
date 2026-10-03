@@ -151,6 +151,8 @@ export const accessibleFilterFor = (
     subject: string,
     action = 'read'
 ): Record<string, unknown> => {
+    // CASL `accessibleBy(ability, action).ofType(subject)`: the ability's rules for that action on
+    // that subject, turned into a MongoDB filter. https://casl.js.org/v6/en/package/casl-mongoose
     const compiled = accessibleBy(buildAbility(caller ?? anonymousCaller()), action).ofType(
         subject
     );

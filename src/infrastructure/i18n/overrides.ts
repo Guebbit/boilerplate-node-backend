@@ -79,6 +79,9 @@ export const applyLocaleOverrides = (
             continue;
         }
 
+        // i18next `addResourceBundle(lng, ns, resources, deep, overwrite)`: merge into the existing
+        // `translation` namespace (deep = true), the database copy winning (overwrite = true).
+        // https://www.i18next.com/overview/api#addresourcebundle
         i18next.addResourceBundle(locale, 'translation', overrides, true, true);
     }
 

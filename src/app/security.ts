@@ -243,6 +243,8 @@ export const installRequestParsing = (app: Express): void => {
         })
     );
 
+    // cookie-parser: fills `request.cookies` from the `Cookie` header (no secret: nothing is signed).
+    // https://github.com/expressjs/cookie-parser#readme
     app.use(cookieParser());
 
     // After the parsers, before any route: a body no parser understood is refused, not read as `{}`.

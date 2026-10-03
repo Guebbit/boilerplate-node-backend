@@ -37,6 +37,9 @@ export const bootI18n = (
 ): Promise<TFunction> => {
     registerLocaleDirectories(localeDirectories);
 
+    // i18next `init`: `lng` is the active language, `fallbackLng` answers a missing key,
+    // `supportedLngs` rejects any other tag, `resources` is the in-memory dictionaries (no backend).
+    // https://www.i18next.com/overview/configuration-options
     return i18next.init({
         lng,
         fallbackLng: getFallbackLocale(),
