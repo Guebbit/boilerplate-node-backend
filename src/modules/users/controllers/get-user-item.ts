@@ -19,8 +19,8 @@ import { createItemController } from '@infrastructure/surfaces/create-item-contr
 export const getUserItem = createItemController({
     entity: 'user',
     notFoundKey: 'users.not-found',
-    fetch: (id) =>
+    fetch: (id, request) =>
         userService
             .getById(id)
-            .then((user) => (user ? userService.toUserContract(user) : undefined))
+            .then((user) => (user ? userService.toUserContract(user, request.caller) : undefined))
 });

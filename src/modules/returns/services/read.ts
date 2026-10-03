@@ -37,17 +37,25 @@ const isStaff = (authContext: AuthContext): boolean =>
 
 /**
  * What this caller may do to this return, decided here so no client re-implements the lifecycle.
+ * Staff act on a customer's return only: the rank rule, asked of the buyer of its order, is part
+ * of every answer.
  * @param returned - the return
  * @param authContext - the caller
+ * @param reaches - whether the caller's rank reaches the buyer of the return's order
  */
-export const actionsFor = (returned: ReturnDocument, authContext: AuthContext): ReturnActions => {
+export const actionsFor = (
+    returned: ReturnDocument,
+    authContext: AuthContext,
+    reaches: boolean
+): ReturnActions => {
     const caller = callerForSubject(authContext, 'Return');
     const decidable = DECIDABLE_RETURN_STATUSES.includes(returned.status);
-    const canDecide = holdsKey(caller, 'returns.any.update') && decidable;
+    const canDecide = reaches && holdsKey(caller, 'returns.any.update') && decidable;
     return {
         approve: canDecide,
         decline: canDecide,
         receive:
+            reaches &&
             holdsKey(caller, 'returns.any.receive') &&
             RECEIVABLE_RETURN_STATUSES.includes(returned.status)
     };
@@ -58,10 +66,11 @@ export const actionsFor = (returned: ReturnDocument, authContext: AuthContext): 
  * @param returned - the return
  * @param authContext - the caller
  */
-export const withActions = (returned: ReturnDocument, authContext: AuthContext): Return => ({
-    ...presentReturn(returned),
-    actions: actionsFor(returned, authContext)
-});
+export const withActions = (returned: ReturnDocument, authContext: AuthContext): Promise<Return> =>
+    orderService.reachesBuyerOf(String(returned.orderId), authContext).then((reaches) => ({
+        ...presentReturn(returned),
+        actions: actionsFor(returned, authContext, reaches)
+    }));
 
 /**
  * The returns this caller may see, filtered. Staff filter freely; everyone else is held to their
@@ -97,13 +106,14 @@ export const getReturn = (
 ): Promise<ResponseSuccess<Return> | ResponseReject> =>
     returnRepository.findById(id).then((found) => {
         if (!found) return generateReject(404, [t('returns.not-found')]);
-        if (isStaff(authContext)) return generateSuccess(withActions(found, authContext));
+        if (isStaff(authContext))
+            return withActions(found, authContext).then((payload) => generateSuccess(payload));
 
         return orderService
             .getById(String(found.orderId), orderService.callerScope(authContext))
             .then((order) =>
                 order && String(order.userId) === authContext.id
-                    ? generateSuccess(withActions(found, authContext))
+                    ? withActions(found, authContext).then((payload) => generateSuccess(payload))
                     : generateReject(404, [t('returns.not-found')])
             );
     });

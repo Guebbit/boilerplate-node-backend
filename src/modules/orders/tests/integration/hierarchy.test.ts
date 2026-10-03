@@ -108,6 +108,70 @@ describe('cancelById — the write’s own scope', () => {
     );
 });
 
+/** The six action fields the rank rule and the buyer decide, for a caller reading an order. */
+const actionsFor = (orderId: string, role: string, callerId: string) =>
+    orderService
+        .getById(orderId)
+        .then((order) => orderService.withActions(order!, asRole(role, callerId)))
+        .then(({ actions }) => ({
+            cancel: actions?.cancel,
+            pay: actions?.pay,
+            transitions: actions?.transitions,
+            start: actions?.start,
+            override: actions?.override
+        }));
+
+describe('what an order offers each caller — what a client renders', () => {
+    it('offers the buyer a cancel and the payment step on a pending order', async () => {
+        const order = await orderOf('customer');
+        const buyer = String(order.userId);
+
+        expect(await actionsFor(String(order._id), 'customer', buyer)).toMatchObject({
+            cancel: true,
+            pay: true,
+            transitions: [OrderStatus.cancelled]
+        });
+    });
+
+    // A warehouse reads every order; reading is not cancelling, and it is nobody's payer either.
+    it.each(['warehouse', 'support'])(
+        'offers a %s no cancel and no payment on it',
+        async (role) => {
+            const order = await orderOf('customer');
+
+            const actions = await actionsFor(String(order._id), role, STAFF_ID);
+
+            expect(actions).toMatchObject({ cancel: false, pay: false, transitions: [] });
+        }
+    );
+
+    it('offers an operator the cancel on a customer’s order, and not on a staff member’s', async () => {
+        const customers = await orderOf('customer');
+        const staffs = await orderOf('support');
+
+        const [onCustomer, onStaff] = await Promise.all([
+            actionsFor(String(customers._id), 'moderator', STAFF_ID),
+            actionsFor(String(staffs._id), 'moderator', STAFF_ID)
+        ]);
+
+        expect([onCustomer.cancel, onStaff.cancel]).toEqual([true, false]);
+        expect(onStaff.transitions).toEqual([]);
+        expect(onStaff.override).toEqual([]);
+    });
+
+    it('offers the delivery door on a customer’s paid order and not on a staff member’s', async () => {
+        const customers = await orderOf('customer', OrderStatus.paid);
+        const staffs = await orderOf('support', OrderStatus.paid);
+
+        const [onCustomer, onStaff] = await Promise.all([
+            actionsFor(String(customers._id), 'manager', STAFF_ID),
+            actionsFor(String(staffs._id), 'manager', STAFF_ID)
+        ]);
+
+        expect([onCustomer.start, onStaff.start]).toEqual([true, false]);
+    });
+});
+
 describe('the rank rule on an order', () => {
     // [caller, buyer, expected]
     it.each([

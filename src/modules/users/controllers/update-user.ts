@@ -29,5 +29,5 @@ export const { replace: replaceUser, update: updateUser } = createUpdateControll
         writeWithUploadedImage(request, changes.imageUrl, (image) =>
             userService.updateById(id, { ...changes, ...image }, callerContextOf(request))
         ),
-    present: (user) => userService.toUserContract(user)
+    present: (user, request) => userService.toUserContract(user, request.caller)
 });

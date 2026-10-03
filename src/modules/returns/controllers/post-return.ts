@@ -31,14 +31,15 @@ export const postReturn = (request: Request, response: Response) => {
                 rejectResponse(response, outcome.reject.status, outcome.reject.errors);
                 return;
             }
-            const created = returnService.withActions(outcome.created, authContext);
-            createdResponse<Return>(
-                response,
-                created,
-                `/returns/${created.id}`,
-                // Closed at birth means the withdrawal already cancelled and refunded the order.
-                t(created.status === 'closed' ? 'returns.withdrawn' : 'returns.requested')
-            );
+            return returnService.withActions(outcome.created, authContext).then((created) => {
+                createdResponse<Return>(
+                    response,
+                    created,
+                    `/returns/${created.id}`,
+                    // Closed at birth means the withdrawal already cancelled and refunded the order.
+                    t(created.status === 'closed' ? 'returns.withdrawn' : 'returns.requested')
+                );
+            });
         })
         .catch(catchAs(response, 'postReturn'));
 };

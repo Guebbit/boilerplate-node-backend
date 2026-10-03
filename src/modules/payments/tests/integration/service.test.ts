@@ -38,6 +38,8 @@ import { FAKE_DECLINE_METHOD, fakePaymentProvider } from '@modules/payments/prov
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';
+import { assignRole } from '@modules/access';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import {
     asCustomer,
     asAdmin,
@@ -323,6 +325,21 @@ describe('getForOrder', () => {
         expect(asAdminResult.data?.actions?.refund).toBe(true);
         expect(asModResult.data?.actions?.refund).toBe(true);
         expect(asSelfResult.data?.actions?.refund).toBe(false);
+    });
+
+    // A client renders its buttons from `actions`: a refund on an equal's or a superior's money
+    // would be refused (OUTRANKED), so it must not be offered.
+    it('offers the refund on a customer’s money and not once the buyer is a staff member', async () => {
+        const { user, order } = await paidOrder();
+
+        const whileCustomer = await getForOrder(String(order._id), asModerator());
+        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
+        const whileStaff = await getForOrder(String(order._id), asModerator());
+
+        expect([whileCustomer.data?.actions?.refund, whileStaff.data?.actions?.refund]).toEqual([
+            true,
+            false
+        ]);
     });
 });
 

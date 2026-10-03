@@ -911,6 +911,42 @@ components:
                 deletedAt:
                     type: string
                     format: date-time
+                # What the CALLER may do to this account, decided by the server — present on the
+                # `/users` reads and writes, absent on `/account` (a person's own record has no
+                # one to rank). A client renders its controls from this rather than from the role
+                # names: the answer is the route's key AND the rank rule ("is this account below
+                # you?"), and a second copy of that in a separately deployed client is how the two
+                # come to disagree.
+                actions:
+                    $ref: '#/components/schemas/UserActions'
+
+        UserActions:
+            type: object
+            additionalProperties: false
+            required: [update, ban, delete]
+            description: >-
+                What the requesting caller may do to this account. Each is the route's permission
+                key AND the rank rule: an account at the caller's own level or above is
+                `false` for all three, the caller's own account is judged by the keys alone.
+            properties:
+                update:
+                    type: boolean
+                    description: >-
+                        Whether `PUT`/`PATCH /users/{id}` would be accepted for the profile fields
+                        — `users.any.update`, and the account ranks below the caller. Never covers
+                        a credential: no caller changes another person's email, password or second
+                        factor.
+                ban:
+                    type: boolean
+                    description: >-
+                        Whether the account may be deactivated or reactivated — `users.any.ban`,
+                        and the account ranks below the caller.
+                delete:
+                    type: boolean
+                    description: >-
+                        Whether `DELETE /users/{id}` (soft or hard) and `POST /users/{id}/restore`
+                        would be accepted — `users.any.delete`, and the account ranks below the
+                        caller.
 
         # Overrides the shop's default VAT rate for this product. Absent — most products — means
         # the standard rate (`NODE_VAT_RATE_DEFAULT`) applies; every product resolves to SOME
@@ -1323,7 +1359,9 @@ components:
                 What the requesting caller may do to this order, decided by the server. A client
                 renders its controls from this rather than re-implementing the lifecycle: the rules
                 depend on the caller's role, and a second copy in a separately deployed client is
-                how the two come to disagree.
+                how the two come to disagree. Cancel and pay are the BUYER's (reading an order is
+                not owning it), and every move an operator makes is withheld when the buyer ranks
+                at or above them — a staff member's order is one only an admin handles.
             properties:
                 transitions:
                     type: array

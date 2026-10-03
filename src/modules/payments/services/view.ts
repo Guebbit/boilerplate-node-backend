@@ -39,11 +39,15 @@ export const getForOrder = (
         // order's, and answering it here is what stops a client deciding it from two fields.
         return orderService
             .getById(orderId, orderService.callerScope(authContext))
-            .then((order) => generateSuccess(withActions(payment, order, authContext)));
+            .then((order) =>
+                withActions(payment, order, authContext).then((payload) => generateSuccess(payload))
+            );
     });
 
 /**
- * What this caller may do to a payment, as the contract's `PaymentActions`.
+ * What this caller may do to a payment, as the contract's `PaymentActions`. Async because the
+ * refund is also the rank rule's question: an operator returns a customer's money, never an
+ * equal's or a superior's.
  *
  * @returns the serialized payment carrying its `actions`
  */
@@ -51,23 +55,29 @@ export const withActions = (
     payment: PaymentDocument,
     order: OrderDocument | undefined,
     authContext?: AuthContext
-): Payment => ({
-    ...presentPayment(payment),
-    actions: {
-        // Confirmable, and the order can still get to `paid`. Both halves, because a retryable
-        // decline on an order that has since been cancelled is not a payment anyone may complete.
-        // An in-flight payment is deliberately NOT payable: its next step is `sync`, not a second
-        // method, and offering the form again is how a customer pays twice.
-        pay:
-            CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) &&
-            Boolean(order) &&
-            isPayable(order!.status),
-        // Only an operator returns money, and only money that actually arrived.
-        // `payments.any.update` by name — a moderator holds exactly this key, and asking for
-        // anything broader would have hidden the refund action despite the key they do hold.
-        refund:
-            authContext !== undefined &&
-            holdsKey(callerForSubject(authContext, 'Payment'), 'payments.any.update') &&
-            payment.status === REFUNDABLE_PAYMENT_STATUS
-    }
-});
+): Promise<Payment> =>
+    (order ? orderService.reachesBuyer(order, authContext) : Promise.resolve(true)).then(
+        (reaches) => ({
+            ...presentPayment(payment),
+            actions: {
+                // Confirmable, and the order can still get to `paid`. Both halves, because a
+                // retryable decline on an order that has since been cancelled is not a payment
+                // anyone may complete. An in-flight payment is deliberately NOT payable: its next
+                // step is `sync`, not a second method, and offering the form again is how a
+                // customer pays twice.
+                pay:
+                    CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) &&
+                    Boolean(order) &&
+                    isPayable(order!.status),
+                // Only an operator returns money, only money that actually arrived, and only for
+                // a buyer the operator ranks above. `payments.any.update` by name — a moderator
+                // holds exactly this key, and asking for anything broader would have hidden the
+                // refund action despite the key they do hold.
+                refund:
+                    authContext !== undefined &&
+                    reaches &&
+                    holdsKey(callerForSubject(authContext, 'Payment'), 'payments.any.update') &&
+                    payment.status === REFUNDABLE_PAYMENT_STATUS
+            }
+        })
+    );

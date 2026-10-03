@@ -6,7 +6,7 @@
  */
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
@@ -559,5 +559,92 @@ describe('GET /users — sort', () => {
             'a@sort.test'
         ]);
         expect(refused.status).toBe(422);
+    });
+});
+
+/** Creates one account per role and returns the list's `actions`, by username. */
+const actionsSeenBy = async (callerRole: string) => {
+    const { bearer, user } = await authenticateAsRole(callerRole);
+    await Promise.all(
+        ['customer', 'support', 'admin'].map((role) =>
+            createUser({ email: `${role}@row.test`, username: `row-${role}` }, role)
+        )
+    );
+
+    const response = await api().get('/users?pageSize=50').set('Authorization', bearer);
+    const { items } = (
+        response.body as {
+            data: { items: { id: string; username: string; actions?: unknown }[] };
+        }
+    ).data;
+
+    return {
+        status: response.status,
+        ...Object.fromEntries(items.map((item) => [item.username, item.actions])),
+        self: items.find((item) => item.id === user.id)?.actions
+    };
+};
+
+/**
+ * `actions` is what the caller may do to each account: the route's key AND the rank rule, so a
+ * client renders a ban button only where the ban would be accepted. One column per role, one row
+ * per account level.
+ */
+describe('GET /users — what the caller may do to each account', () => {
+    it('lets a moderator edit, ban and erase a customer, and nothing on staff or an admin', async () => {
+        const seen = await actionsSeenBy('moderator');
+
+        expect(seen).toMatchObject({
+            status: 200,
+            'row-customer': { update: true, ban: true, delete: true },
+            'row-support': { update: false, ban: false, delete: false },
+            'row-admin': { update: false, ban: false, delete: false }
+        });
+    });
+
+    it('lets an admin act on a customer and on staff, but not on another admin — and on themself', async () => {
+        const seen = await actionsSeenBy('admin');
+
+        expect(seen).toMatchObject({
+            'row-customer': { update: true, ban: true, delete: true },
+            'row-support': { update: true, ban: true, delete: true },
+            'row-admin': { update: false, ban: false, delete: false },
+            self: { update: true, ban: true, delete: true }
+        });
+    });
+
+    // `ban` is its own key: support may correct a profile and may not lock someone out.
+    it('gives support the edit but not the ban, and no erase', async () => {
+        const seen = await actionsSeenBy('support');
+
+        expect(seen).toMatchObject({
+            'row-customer': { update: true, ban: false, delete: false },
+            'row-support': { update: false, ban: false, delete: false }
+        });
+    });
+
+    it('carries the same answer on the single read and on a write’s response', async () => {
+        const { bearer } = await authenticateAsRole('moderator');
+        const customer = await createUser(
+            { email: 'single@row.test', username: 'row-single' },
+            'customer'
+        );
+
+        const read = await api().get(`/users/${customer.id}`).set('Authorization', bearer);
+        const edit = await api()
+            .patch(`/users/${customer.id}`)
+            .set('Authorization', bearer)
+            .send({ username: 'row-edited' });
+
+        expect(read.body.data.actions).toEqual({ update: true, ban: true, delete: true });
+        expect(edit.body.data.actions).toEqual({ update: true, ban: true, delete: true });
+    });
+
+    it('is absent from the account’s own record, which has no one to rank', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().get('/account').set('Authorization', bearer);
+
+        expect(response.body.data).not.toHaveProperty('actions');
     });
 });

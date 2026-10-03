@@ -275,7 +275,9 @@ components:
             required: [approve, decline, receive]
             description: >-
                 What the requesting caller may do to this return, decided by the server, so a client
-                renders its controls from this rather than re-implementing the lifecycle.
+                renders its controls from this rather than re-implementing the lifecycle. All three
+                are false when the buyer of the return's order ranks at or above the caller
+                (`OUTRANKED`).
             properties:
                 approve:
                     type: boolean

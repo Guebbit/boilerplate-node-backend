@@ -22,6 +22,8 @@ import {
     ownerScope,
     outrankedOrderRefusal,
     outrankedRefusalFor,
+    reachesBuyer,
+    reachesBuyerOf,
     withActions
 } from './scope';
 import { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
@@ -75,6 +77,8 @@ export {
     ownerScope,
     outrankedOrderRefusal,
     outrankedRefusalFor,
+    reachesBuyer,
+    reachesBuyerOf,
     withActions
 } from './scope';
 export { unavailableLines, cancelPendingOrdersHolding, type UnavailableLine } from './availability';
@@ -111,6 +115,8 @@ export const orderService = {
     ownerScope,
     outrankedOrderRefusal,
     outrankedRefusalFor,
+    reachesBuyer,
+    reachesBuyerOf,
     create,
     placeOrder,
     sendOrderPlacedEmail,

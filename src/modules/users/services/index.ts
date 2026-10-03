@@ -11,7 +11,7 @@
  * See: docs/modules/users.md
  */
 
-import { presentUser, presentUserWithCurrentRole } from '../presenter';
+import { presentUser, presentUserWithCurrentRole, userActionsFor } from '../presenter';
 import { validateData } from './validation';
 import { search, getById, findByEmail } from './read';
 import { enqueueIfPending } from './image';
@@ -121,5 +121,6 @@ export const userService = {
     // A controller may not reach `./presenter` directly (the persistence wall), so the shaping
     // helper it needs to build a response rides through the service instead.
     toUser: presentUser,
-    toUserContract: presentUserWithCurrentRole
+    toUserContract: presentUserWithCurrentRole,
+    userActionsFor
 };

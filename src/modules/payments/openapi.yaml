@@ -602,7 +602,8 @@ components:
                     description: >-
                         Whether `POST /payments/order/{orderId}/refund` would be accepted. False
                         once fully refunded, which is what greys the control out rather than letting
-                        the operator discover it by clicking.
+                        the operator discover it by clicking, and false when the order's buyer ranks
+                        at or above the caller (`OUTRANKED`).
 
         PaymentWebhookEvent:
             type: object

@@ -7,7 +7,7 @@
 
 import { callerForSubject, isSystemActor } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
-import { outrankedRefusal } from '@modules/access';
+import { canActOn, outrankedRefusal } from '@modules/access';
 import type { ResponseReject } from '@infrastructure/http/response';
 import type { AuthContext, CallerContext, Order, OrderActions } from '@types';
 import type { OrderDocument } from '../model';
@@ -193,6 +193,91 @@ const withdrawalActions = (
 };
 
 /**
+ * Does the caller's rank reach this order's buyer — the rank rule asked as a question, for a
+ * response that tells a client what to render. Yes for a path with no request, for the buyer
+ * themselves, and for an order whose buyer is gone.
+ *
+ * @param order - the order being served
+ * @param authContext - the caller, or `undefined` for no request behind this read
+ */
+export const reachesBuyer = (
+    order: Pick<OrderDocument, 'userId'>,
+    authContext: AuthContext | undefined
+): Promise<boolean> =>
+    authContext
+        ? canActOn(
+              { caller: callerForSubject(authContext, 'Order'), analyticsConsent: false },
+              order.userId ? String(order.userId) : undefined
+          )
+        : Promise.resolve(true);
+
+/**
+ * Whether the caller's rank reaches the buyer of one order, by id — {@link reachesBuyer} for a
+ * sibling module that holds an order id (a return, a payment) rather than the order. An order
+ * that does not exist reaches nobody.
+ *
+ * @param orderId - the order
+ * @param authContext - the caller, or `undefined` for no request behind this read
+ */
+export const reachesBuyerOf = (
+    orderId: string,
+    authContext: AuthContext | undefined
+): Promise<boolean> =>
+    authContext
+        ? orderRepository
+              .findById(orderId)
+              .then((order) => (order ? reachesBuyer(order, authContext) : false))
+        : Promise.resolve(true);
+
+/**
+ * What the caller may do to this order beyond what its status allows: every lifecycle move and
+ * delivery door is for the order's BUYER (cancel, pay) or for an operator whose rank reaches the
+ * buyer, and nobody else. A warehouse or support account reads every order and still gets no
+ * cancel; a moderator gets none on a staff member's order.
+ *
+ * @param order - the order being served
+ * @param authContext - the caller, or `undefined` for no request behind this read
+ * @returns whether the caller is the buyer, and whether their rank reaches the buyer
+ */
+const standingOn = (
+    order: OrderDocument,
+    authContext: AuthContext | undefined
+): Promise<{ isBuyer: boolean; reaches: boolean }> =>
+    reachesBuyer(order, authContext).then((reaches) => ({
+        isBuyer: String(order.userId) === authContext?.id,
+        reaches
+    }));
+
+/**
+ * The actions as `standing` allows them: the status-derived ones only for the buyer (a customer
+ * actor) or an operator who reaches the buyer, the delivery and override doors only when the
+ * caller's rank reaches the buyer.
+ *
+ * @param actions - everything the caller's keys and the order's status allow
+ * @param actor - which lifecycle column the caller reads
+ * @param standing - {@link standingOn}'s answer
+ */
+const withinStanding = (
+    actions: OrderActions,
+    actor: OrderActor,
+    standing: { isBuyer: boolean; reaches: boolean }
+): OrderActions => {
+    const mayMove = actor === 'customer' ? standing.isBuyer : standing.reaches;
+    const doors = standing.reaches
+        ? {}
+        : { start: false, ship: false, deliver: false, fulfill: false, override: [] };
+
+    return {
+        ...actions,
+        ...doors,
+        transitions: mayMove ? actions.transitions : [],
+        cancel: mayMove && actions.cancel,
+        // Paying is the buyer's own step; an operator reading the order is never offered it.
+        pay: standing.isBuyer && actions.pay
+    };
+};
+
+/**
  * The single-order response body: the order as it serializes, plus what this caller may do to
  * it — `actions` must ride on the wire shape or the schema's transform drops it. `async` for
  * `resolveCurrentImages`'s `$in` lookup — the one thing here that isn't a synchronous transform.
@@ -200,24 +285,33 @@ const withdrawalActions = (
  */
 export const withActions = (order: OrderDocument, authContext?: AuthContext): Promise<Order> => {
     const serialized = presentOrder(order);
+    const actor = actorOf(authContext);
 
-    return resolveCurrentImages([serialized]).then(([resolved]) => ({
-        ...resolved,
-        actions: {
-            ...orderActionsFor(order.status, actorOf(authContext)),
-            ...deliveryAndOverrideActions(
-                order.status,
-                isDigitalOnlyOrder(order.items),
-                authContext
-            ),
-            ...withdrawalActions(order, authContext),
-            // `paidAt` is stamped in the SAME write that moves an order to `paid`
-            // (`repository.ts#markPaid`), so it is a same-module, no-dependency proxy for "an
-            // invoice was issued" — `invoicing` freezes one from the very same transition, in its
-            // own event listener. `GET /orders/{id}/invoice` (owned by `invoicing`) still checks
-            // for real and 404s on the rare gap this flag cannot see — the same "gaps are
-            // acceptable" policy `orderNumber` already lives under.
-            invoice: Boolean(order.paidAt)
-        }
-    }));
+    return Promise.all([resolveCurrentImages([serialized]), standingOn(order, authContext)]).then(
+        ([[resolved], standing]) => ({
+            ...resolved,
+            actions: {
+                ...withinStanding(
+                    {
+                        ...orderActionsFor(order.status, actor),
+                        ...deliveryAndOverrideActions(
+                            order.status,
+                            isDigitalOnlyOrder(order.items),
+                            authContext
+                        ),
+                        ...withdrawalActions(order, authContext),
+                        // `paidAt` is stamped in the SAME write that moves an order to `paid`
+                        // (`repository.ts#markPaid`), so it is a same-module, no-dependency proxy for
+                        // "an invoice was issued" — `invoicing` freezes one from the very same
+                        // transition, in its own event listener. `GET /orders/{id}/invoice` (owned by
+                        // `invoicing`) still checks for real and 404s on the rare gap this flag cannot
+                        // see — the same "gaps are acceptable" policy `orderNumber` already lives under.
+                        invoice: Boolean(order.paidAt)
+                    },
+                    actor,
+                    standing
+                )
+            }
+        })
+    );
 };

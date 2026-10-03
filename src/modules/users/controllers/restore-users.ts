@@ -16,6 +16,6 @@ import { userService } from '../services';
 export const restoreUsers = createRestoreController({
     entity: 'user',
     restore: (id, request) => userService.restoreById(id, callerContextOf(request)),
-    present: (user) => userService.toUserContract(user),
+    present: (user, request) => userService.toUserContract(user, request.caller),
     notFoundKey: 'users.not-found'
 });

@@ -7,6 +7,8 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { assignRole } from '@modules/access';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import {
@@ -545,6 +547,12 @@ describe('deciding a request', () => {
     });
 });
 
+/** What a caller is offered on a stored return — `withActions`' `actions`, awaited. */
+const actionsOf = (
+    ...args: Parameters<typeof withActions>
+): Promise<Awaited<ReturnType<typeof withActions>>['actions']> =>
+    withActions(...args).then((returned) => returned.actions);
+
 describe('who sees which return', () => {
     it('shows a customer their own returns and staff all of them', async () => {
         const mine = await requestedReturn();
@@ -593,14 +601,33 @@ describe('who sees which return', () => {
         const { user, returnId } = await requestedReturn();
         const stored = await returnRepository.findById(returnId);
 
-        expect(withActions(stored!, asManager()).actions).toEqual({
+        expect(await actionsOf(stored!, asManager())).toEqual({
             approve: true,
             decline: true,
             receive: false
         });
-        expect(withActions(stored!, buyer(user)).actions).toEqual({
+        expect(await actionsOf(stored!, buyer(user))).toEqual({
             approve: false,
             decline: false,
+            receive: false
+        });
+    });
+
+    // The rank rule is part of the answer: a client renders its buttons from `actions`, so a
+    // return on an equal's or a superior's order must offer staff nothing.
+    it('offers staff nothing on a return whose buyer ranks at or above them', async () => {
+        const { user, returnId } = await requestedReturn();
+        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'moderator');
+        const stored = await returnRepository.findById(returnId);
+
+        expect(await actionsOf(stored!, asManager())).toEqual({
+            approve: false,
+            decline: false,
+            receive: false
+        });
+        expect(await actionsOf(stored!, asAdmin())).toEqual({
+            approve: true,
+            decline: true,
             receive: false
         });
     });
@@ -610,7 +637,7 @@ describe('who sees which return', () => {
         await approveReturn(returnId, callerContextAs('admin'));
         const stored = await returnRepository.findById(returnId);
 
-        expect(withActions(stored!, asRole('warehouse')).actions).toEqual({
+        expect(await actionsOf(stored!, asRole('warehouse'))).toEqual({
             approve: false,
             decline: false,
             receive: true

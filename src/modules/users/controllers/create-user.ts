@@ -100,7 +100,7 @@ export const createUser = (
             // `toUserContract` picks only the `User` contract's own fields, so the hashed
             // password and tokens on the document never reach `res.json`. The role is read
             // fresh from the membership just written — never off the document, which holds none.
-            return userService.toUserContract(result.data).then((contract) => {
+            return userService.toUserContract(result.data, request.caller).then((contract) => {
                 createdResponse<User>(response, contract, `/users/${contract.id}`);
             });
         })

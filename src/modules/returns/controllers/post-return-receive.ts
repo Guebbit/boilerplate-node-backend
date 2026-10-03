@@ -29,12 +29,9 @@ export const postReturnReceive = (request: Request<{ id?: string }>, response: R
         .receiveReturn(id, body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<Return>(
-                response,
-                returnService.withActions(result.data, authContext),
-                200,
-                result.message
-            );
+            return returnService.withActions(result.data, authContext).then((payload) => {
+                successResponse<Return>(response, payload, 200, result.message);
+            });
         })
         .catch(catchAs(response, 'postReturnReceive'));
 };
