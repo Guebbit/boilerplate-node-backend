@@ -252,6 +252,7 @@ export const createAccessToken = (refreshToken: string) =>
  * module has already revoked every refresh token on the account by the time it throws.
  */
 export class TokenReuseError extends Error {
+    /** @param userId - the account whose refresh tokens were all revoked. */
     constructor(public readonly userId: string) {
         super('Refresh token reuse detected');
         this.name = 'TokenReuseError';

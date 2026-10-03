@@ -1,9 +1,9 @@
 /**
  * @module
- * S10 `login-paths`: the invariants every way of getting a session shares, tested ONCE across
- * every entry point instead of once per bug that found a gap in one of them (B4 — OAuth login
- * audited/metriced wrong; B24 — a deactivated/soft-deleted account still completed an OAuth
- * login or a refresh). Password login was never buggy, but had no table entry either — it is the
+ * `login-paths`: the invariants every way of getting a session shares, tested ONCE across
+ * every entry point instead of once per bug that found a gap in one of them (an OAuth login
+ * audited/metriced wrong; a deactivated/soft-deleted account completing an OAuth login or a
+ * refresh). Password login was never buggy, but had no table entry either — it is the
  * baseline every other path is checked against here.
  *
  * Two rules, two tables:

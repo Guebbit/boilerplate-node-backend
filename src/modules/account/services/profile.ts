@@ -308,7 +308,7 @@ export const removeOwnAccount = (
      * document left to take an address, a name or a language from — the goodbye mail has to be
      * addressed from a copy taken while the account still existed. The role is read the same way,
      * from the membership store rather than the document, which holds none — `remove`'s own
-     * `USER_DELETED` listener may already have revoked the membership by the time this resolves.
+     * erasure cascade may already have revoked the membership by the time this resolves.
      */
     const { email, username, locale, _id } = user;
 
@@ -424,7 +424,7 @@ const applyEmailChangeRequest = (
  * {@link applyEmailChangeRequest} never performs one as a side effect. A no-op when nothing is
  * pending, so a client can call it without checking `GET /account` first — but when something WAS
  * pending, the live `email-change` link is revoked in the same call, so it cannot still swap in
- * the address this cancel just gave up on (PL-26).
+ * the address this cancel just gave up on.
  */
 export const cancelPendingEmailChange = (
     userId: string,
@@ -444,7 +444,7 @@ export const cancelPendingEmailChange = (
 
 /**
  * Revoke the now-pointless `email-change` token and audit the cancel — only when a change was
- * actually pending, so a no-op cancel doesn't claim (or log) one that never happened (PL-26).
+ * actually pending, so a no-op cancel doesn't claim (or log) one that never happened.
  */
 const revokeCancelledChange = (
     hadPending: boolean,

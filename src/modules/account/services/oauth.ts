@@ -28,6 +28,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
  * controller turns this into a `?error=email_unverified` redirect, never a generic failure.
  */
 export class OAuthEmailUnverifiedError extends Error {
+    /** @param email - the address the provider asserted, for the log line. */
     constructor(email: string) {
         super(`OAuth email not verified for account linking: ${email}`);
         this.name = 'OAuthEmailUnverifiedError';
@@ -46,6 +47,7 @@ export class OAuthEmailUnverifiedError extends Error {
  * `?error=account_unverified` redirect.
  */
 export class OAuthAccountUnverifiedError extends Error {
+    /** @param email - the address the existing account holds, for the log line. */
     constructor(email: string) {
         super(`Existing account has not proved its own address, refusing OAuth link: ${email}`);
         this.name = 'OAuthAccountUnverifiedError';

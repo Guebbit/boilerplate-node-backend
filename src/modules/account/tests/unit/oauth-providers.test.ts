@@ -1,7 +1,7 @@
 /**
  * @module
  * The OAuth provider registry (`oauth/providers/index.ts`) and the `fake` implementation only the
- * demo profile ever registers into it (SK-08). Google/GitHub each get their own file for the
+ * demo profile ever registers into it. Google/GitHub each get their own file for the
  * token-exchange parsing; this one is about "which providers show up at all", the same question
  * `payments/tests/unit/providers.test.ts` answers for the single-active-provider registry.
  */
@@ -50,7 +50,7 @@ describe('the OAuth provider registry', () => {
     });
 
     it('lists fake once something registers it, with no credentials of its own', () => {
-        // Production seeds no `fake` entry at all (SK-08) — only the demo entry
+        // Production seeds no `fake` entry at all — only the demo entry
         // (`scenarios/run-server.ts`) calls `registerOAuthProvider('fake', ...)`, which this
         // reproduces directly rather than through the demo profile flag.
         expect(enabledProviders()).not.toContain('fake');

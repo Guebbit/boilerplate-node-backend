@@ -371,7 +371,7 @@ const staleButRefreshedBearer = async (jwtCookie: string): Promise<`Bearer ${str
     return `Bearer ${refreshed.body.data.token as string}`;
 };
 
-describe("PUT /account's step-up depends on whether the email actually changes (PL-30)", () => {
+describe("PUT /account's step-up depends on whether the email actually changes", () => {
     afterEach(() => jest.useRealTimers());
 
     it('does not demand a fresh session for a re-cased resend of the current address', async () => {
@@ -703,7 +703,7 @@ describe('POST /account/password', () => {
     });
 
     /*
-     * B23: unlike reauth (B22), the password write and the session revoke have already happened
+     * Unlike reauth, the password write and the session revoke have already happened
      * by the time the re-mint runs — a 500 here would misreport a change that DID succeed. The
      * degrade to 200-without-a-token is correct; what was missing is any trail at all for it.
      */
@@ -769,7 +769,7 @@ describe('POST /account/reauth', () => {
     });
 
     /*
-     * B22: unlike `POST /account/password`, `accountService.reauth` writes nothing and revokes no
+     * Unlike `POST /account/password`, `accountService.reauth` writes nothing and revokes no
      * session — it only compares the password. A failed re-mint here means the whole point of the
      * endpoint (a fresh session, to clear a step-up challenge) did not happen, so it must answer
      * 500, not the false 200-with-no-token the code used to degrade to.
@@ -1000,7 +1000,7 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
     });
 
     /*
-     * B1: the mongoose `email` schema's own `match` — the backstop behind the Zod-validated
+     * The mongoose `email` schema's own `match` — the backstop behind the Zod-validated
      * route, see `users/model.ts` — used to reject a plus-tag and an 8+ character TLD, both real
      * shapes an inbox can hold. Signup is the first place either would ever reach it.
      */
@@ -1181,7 +1181,7 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
     });
 
     /*
-     * B17: `PATCH /account`'s own request-time check (`emailOrPendingEmailTaken`) already refuses a
+     * `PATCH /account`'s own request-time check (`emailOrPendingEmailTaken`) already refuses a
      * SECOND request naming an address already pending elsewhere — so the only way this write
      * still collides is a genuine concurrent race that check cannot see (two requests landing
      * within the same brief window), which a sequential test cannot reproduce deterministically.
@@ -1272,7 +1272,7 @@ describe('the address book: /account/addresses', () => {
         ).toEqual([true]);
     });
 
-    // The default is the book's pointer (WM-D4): an idempotent action of its own, not a field of
+    // The default is the book's pointer: an idempotent action of its own, not a field of
     // one address, so it leaves the PUT and PATCH bodies and answers the address itself.
     it('moves the default with PUT .../default, and repeating it changes nothing', async () => {
         const { bearer } = await authenticateAs('user');
@@ -1335,7 +1335,7 @@ describe('the address book: /account/addresses', () => {
         expect(response.status).toBe(422);
     });
 
-    // E12: `country` is an ISO 3166-1 alpha-2 code, not free text — a full name or a lowercase
+    // `country` is an ISO 3166-1 alpha-2 code, not free text — a full name or a lowercase
     // code both fail the contract's `CountryCode` pattern.
     it.each([
         ['a full country name', 'Italy'],

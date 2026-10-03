@@ -87,7 +87,7 @@ import { normalizeEmail } from '@modules/users';
  * concludes "no email change", and gates nothing.
  *
  * Not exported: a wiring file's own predicate is asserted through `PUT /account` itself — whether
- * a stale session is challenged or not — never by calling this directly (PL-30).
+ * a stale session is challenged or not — never by calling this directly.
  */
 const isChangingEmail = (request: Request): boolean => {
     const email = (request.body as { email?: string } | undefined)?.email;
@@ -128,6 +128,8 @@ router.put(
     requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
     replaceAccount
 );
+
+// PATCH /account — merge the fields sent; same gate and upload as the PUT above.
 router.patch(
     '/',
     uploadLimiter,

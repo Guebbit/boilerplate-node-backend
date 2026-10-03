@@ -148,7 +148,7 @@ describe('githubOAuthProvider.exchangeCode', () => {
     });
 
     /*
-     * B15: `githubApiGet<GithubUser>`'s `T` is a compile-time annotation only — nothing checked
+     * `githubApiGet<GithubUser>`'s `T` is a compile-time annotation only — nothing checked
      * that `/user` actually carried an `id`. `String(undefined)` reads as the literal providerId
      * `"undefined"`, which every account missing `id` the same way would collide onto.
      */
@@ -164,7 +164,7 @@ describe('githubOAuthProvider.exchangeCode', () => {
     });
 
     /*
-     * B15: none of the three fetch calls carried a timeout — a hung github.com held the whole
+     * None of the three fetch calls carried a timeout — a hung github.com held the whole
      * OAuth callback open indefinitely. `fetch` is stubbed to only ever settle when the request's
      * OWN `AbortSignal` fires, the way a real aborted fetch behaves, so this proves the signal
      * reaches the request rather than merely proving a timer exists somewhere.

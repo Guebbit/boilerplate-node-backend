@@ -76,12 +76,11 @@ const oauthAccountsOf = async (userId: string) => {
 
 describe('loginOrCreateFromOAuth — case 1: an already-linked identity', () => {
     /*
-     * B4: this branch used to audit + analytics-emit the login itself, hardcoding
-     * `actor_role: 'user'` and never touching `authLoginTotal` — wrong for an admin, and
-     * invisible to the metric every other login method reports through. Recording a login is
-     * only a fact once a session actually exists, which is a CONTROLLER decision
-     * (`get-oauth-callback.ts` calls `recordLoginSuccess`, reading the account's real role) —
-     * so this branch resolves the account and tags the outcome, and emits nothing at all.
+     * Recording a login is only a fact once a session actually exists, which is a CONTROLLER
+     * decision (`get-oauth-callback.ts` calls `recordLoginSuccess`, reading the account's real
+     * role). An audit or metric emitted here would hardcode `actor_role: 'user'` — wrong for an
+     * admin — and skip `authLoginTotal`. So this branch resolves the account, tags the outcome,
+     * and emits nothing at all.
      */
     it('resolves the existing account, tagged as a login, without creating anything new', async () => {
         const user = await createUser({ email: 'existing@example.com' });
@@ -116,8 +115,8 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
         const linked = await oauthAccountsOf(user.id);
         expect(linked).toHaveLength(1);
         expect(linked[0]).toMatchObject({ provider: 'google', providerId: 'subject-1' });
-        // B4: this hardcoded `actor_role: 'user'` — wrong for an account that already holds
-        // 'admin', the exact shape a first-ever OAuth link on an existing admin account takes.
+        // The link audit's role comes from the account, not a constant: an account that already
+        // holds 'admin' is the shape a first-ever OAuth link on an existing admin account takes.
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_OAUTH_LINKED,

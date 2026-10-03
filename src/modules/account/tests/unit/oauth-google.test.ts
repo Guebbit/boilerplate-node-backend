@@ -151,7 +151,7 @@ describe('googleOAuthProvider.exchangeCode', () => {
     });
 
     /*
-     * B15: `decode(idToken, { json: true })` returns `unknown`, cast to `GoogleIdTokenClaims` — a
+     * `decode(idToken, { json: true })` returns `unknown`, cast to `GoogleIdTokenClaims` — a
      * check the compiler cannot make good on. A token missing `sub` used to carry
      * `providerId: undefined` straight through, the same collision GitHub's own missing-`id` case
      * has, every such token sharing one bogus identity row.
@@ -166,7 +166,7 @@ describe('googleOAuthProvider.exchangeCode', () => {
     });
 
     /*
-     * B15: the token-exchange fetch carried no timeout — a hung oauth2.googleapis.com held the
+     * The token-exchange fetch carried no timeout — a hung oauth2.googleapis.com held the
      * whole OAuth callback open indefinitely. `fetch` is stubbed to only ever settle when the
      * request's OWN `AbortSignal` fires, the way a real aborted fetch behaves, so this proves the
      * signal reaches the request rather than merely proving a timer exists somewhere.

@@ -240,6 +240,7 @@ export const logoutCurrentSession = (
  * failures apart without the happy path having to branch on the token twice.
  */
 class MissingRefreshTokenError extends Error {
+    /** No arguments: the cookie's absence is the whole fact. */
     constructor() {
         super('Refresh token missing');
         this.name = 'MissingRefreshTokenError';

@@ -3,7 +3,7 @@
  * Contract tests for the OAuth surface: `GET /account/oauth/providers`, and the full
  * start → callback round trip through the `fake` provider — the same path a Cypress spec walks
  * against a real browser, exercised here against the real routes, the real CSRF cookie, and a
- * real database. Registers `fake` the same way `scenarios/run-server.ts` does (SK-08): production
+ * real database. Registers `fake` the same way `scenarios/run-server.ts` does: production
  * seeds no such entry, so this suite has to put it there itself.
  */
 
@@ -252,8 +252,8 @@ describe('GET /account/oauth/:provider/callback', () => {
         expect(matches).toBe(1);
     });
 
-    // B4 (an admin logging in through an already-linked identity was audited/metriced as a plain
-    // user): table-driven across every login path now, in `login-paths.contract.test.ts`.
+    // An admin logging in through an already-linked identity is audited/metriced as an admin, not
+    // a plain user: table-driven across every login path now, in `login-paths.contract.test.ts`.
 });
 
 /**

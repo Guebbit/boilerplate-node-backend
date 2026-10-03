@@ -76,7 +76,7 @@ jest.mock('@infrastructure/observability/analytics', () => ({
 /*
  * Same non-configurable-getter reason as the two ports above — `rolesOf` is wrapped in a
  * `jest.fn` that CALLS THROUGH to the real implementation by default (every other describe block
- * here needs the genuine membership lookup), so only the one B23 case that overrides it with
+ * here needs the genuine membership lookup), so only the one case that overrides it with
  * `mockRejectedValueOnce` ever sees anything else.
  */
 jest.mock('@modules/access', () => {
@@ -204,7 +204,7 @@ describe('updateProfile', () => {
         expect(response.data.pendingEmail).toBeUndefined();
     });
 
-    it('restating the current address in a different case is a no-op too (B5)', async () => {
+    it('restating the current address in a different case is a no-op too', async () => {
         const user = await createUser({ email: 'same@example.com', verifiedAt: new Date() });
 
         const response = asSuccess(
@@ -292,7 +292,7 @@ describe('cancelPendingEmailChange', () => {
         expect(response.data.pendingEmail).toBeUndefined();
     });
 
-    it('revokes the live email-change token, so the old link can no longer swap the address in (PL-26)', async () => {
+    it('revokes the live email-change token, so the old link can no longer swap the address in', async () => {
         const user = await createUser({ email: 'before@example.com' });
         await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
         const beforeCancel = await readTokens(user.id);
@@ -304,7 +304,7 @@ describe('cancelPendingEmailChange', () => {
         expect(afterCancel.some((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)).toBe(false);
     });
 
-    it('audits AUTH_EMAIL_CHANGE_CANCELLED only when a change was actually pending (PL-26)', async () => {
+    it('audits AUTH_EMAIL_CHANGE_CANCELLED only when a change was actually pending', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ email: 'before@example.com' });
 
@@ -879,8 +879,8 @@ describe('removeOwnAccount', () => {
 });
 
 describe('requestPasswordReset', () => {
-    // The audit relocated from the `postResetRequest` controller into this service function
-    // (B11) — this pins that the "audit fires either way" contract survived the move, since an
+    // The audit is written by this service function, not the `postResetRequest` controller.
+    // This pins that the "audit fires either way" contract holds there, since an
     // account-enumeration defense that only audits a REAL address would leak the same fact the
     // identical HTTP response is built to hide. See `docs/theory/module-lifecycle.md` rule 1.
     it('audits the attempt unconditionally, even for an address with no account', async () => {
@@ -1006,7 +1006,7 @@ describe('passwordResetChange', () => {
     });
 
     /*
-     * B23: the audit-role lookup after a completed reset caught its own rejection with no
+     * The audit-role lookup after a completed reset caught its own rejection with no
      * logging at all — a swallowed failure had no trail. The reset itself must still succeed:
      * the password already changed, and a missing audit row is the worst case, not a reason to
      * fail the response.

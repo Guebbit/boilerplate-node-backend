@@ -19,7 +19,7 @@ type OAuthProviderFactory = () => OAuthProvider | undefined;
 /**
  * Every implementation this PRODUCTION build knows, keyed by the name a route/`OAuthAccount`
  * uses. A live deployment adds one file and calls {@link registerOAuthProvider} — no edit here
- * required. `fake` (`./fake`) is NOT seeded here (SK-08): production code must not know a demo
+ * required. `fake` (`./fake`) is NOT seeded here: production code must not know a demo
  * profile exists, so `scenarios/run-server.ts` registers it itself, the same way it composes its
  * own mail transport.
  */

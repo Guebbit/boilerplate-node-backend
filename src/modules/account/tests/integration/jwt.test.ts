@@ -183,7 +183,7 @@ describe('createRefreshToken', () => {
         ).rejects.toThrow('User not found');
     });
 
-    // B24: a deactivated or soft-deleted account must never get a fresh session, no matter which
+    // A deactivated or soft-deleted account must never get a fresh session, no matter which
     // caller resolved it — `findForLogin` already blocks the password path; this is the mint
     // itself refusing, the backstop for a resolver that doesn't filter (an OAuth login through an
     // already-linked identity, chiefly).
@@ -337,7 +337,7 @@ describe('createAccessToken', () => {
 });
 
 describe('rotateRefreshToken', () => {
-    // B24: the same guard `createRefreshToken` applies, at rotation's own reissue step —
+    // The same guard `createRefreshToken` applies, at rotation's own reissue step —
     // deactivating an account mid-session must stop its NEXT refresh from reissuing, not just
     // block a fresh login.
     it('refuses to reissue for an account deactivated since the token was minted', async () => {
