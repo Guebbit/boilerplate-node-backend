@@ -34,7 +34,8 @@
  */
 
 import { getOnFreshConnection, tally, withCluster, type Cluster } from './support/cluster';
-import { containerEngineAvailable, startRedis, type TestRedis } from './support/redis';
+import { containerEngineAvailable } from '@tests/container-engine';
+import { startRedis, type TestRedis } from './support/redis';
 
 /** Small enough that a burst passes it quickly, large enough that an off-by-one is not the story. */
 const LIMIT = 5;
