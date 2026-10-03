@@ -27,6 +27,7 @@ import {
     postmanBundle
 } from './client-collections-bundle';
 
+/** Every contract bundle the repo knows, authored and generated alike. */
 export const CONTRACT_BUNDLES: readonly ContractBundle[] = [
     openapiBundle,
     asyncapiBundle,

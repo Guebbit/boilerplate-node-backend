@@ -28,4 +28,5 @@ const targetLines = numberArgument('--target-lines');
 /** This week's shards — the whole mutate scope, bin-packed by line count. */
 const shards = packIntoShards(scopeWithLines(), targetLines);
 
+/** One `shards=<json>` line on stdout, which the workflow appends to `$GITHUB_OUTPUT`. */
 console.log(`shards=${JSON.stringify(shards.map(({ name, mutate }) => ({ name, mutate })))}`);

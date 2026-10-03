@@ -38,14 +38,19 @@ const report = (notes: readonly RemovalNote[]): void => {
     for (const note of notes) console.info(`  ${note.file} — ${note.detail}`);
 };
 
+/** The module folders to strip: every one labelled `group: shop`. */
 const shopModuleNames = readShopModuleNames(REPO_ROOT);
+
+/** Announce the strip before touching anything. */
 console.info(
     `[demo-remove] removing ${shopModuleNames.length} group: shop module(s): ${shopModuleNames.join(', ')}`
 );
 
+/** Step one: delete the module folders and edit the central files that name them. */
 console.info('\n[demo-remove] the modules, and everything central that names them:');
 report(removeModules(REPO_ROOT, shopModuleNames));
 
+/** Step two: delete the demo catalogue's data, then edit the files that listed it. */
 console.info('\n[demo-remove] the demo catalogue and its generated collections:');
 report(removeGeneratedProductImages(REPO_ROOT));
 report(removeShopOnlyScenarioFiles(REPO_ROOT));
@@ -58,9 +63,11 @@ report([
     stripSeedImageGenerator(REPO_ROOT)
 ]);
 
+/** Step three: drop the removed modules' fields from the one shared contract schema. */
 console.info('\n[demo-remove] the shared contract fragment (shared/contracts/openapi.root.yaml):');
 report([stripAccountExportSchema(REPO_ROOT)]);
 
+/** What the person running this must do next, since the edits above are not yet verified. */
 console.info('\n[demo-remove] done. Next:');
 console.info(
     '  1. npm run regenerate   — rebuild the contract bundles and every generated doc page'

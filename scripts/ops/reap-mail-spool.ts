@@ -37,4 +37,6 @@ const main = (): Promise<void> =>
         })
         .then(() => start());
 
+// Entry point: run `main`, record the outcome under `reap:mail-spool` for `/observability/health`, and close
+// the connections on both paths. See `scripts/run-script.ts`.
 void runScript('reap:mail-spool', main, stopDatabase);

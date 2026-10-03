@@ -45,4 +45,6 @@ const main = (): Promise<void> =>
         .then(() => orderService.retryPendingEffects())
         .then(() => undefined);
 
+// Entry point: run `main`, record the outcome under `sweep:order-effects` for `/observability/health`, and close
+// the connections on both paths. See `scripts/run-script.ts`.
 void runScript('sweep:order-effects', main, stopDatabase);

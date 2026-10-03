@@ -62,6 +62,7 @@ const main = async (argv: readonly string[]): Promise<number> => {
     return 0;
 };
 
+/** Run with the CLI arguments; `main`'s return value becomes the exit code, a throw exits 1. */
 main(process.argv.slice(2)).then(
     (code) => {
         process.exitCode = code;

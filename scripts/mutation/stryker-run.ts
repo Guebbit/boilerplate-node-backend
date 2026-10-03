@@ -49,6 +49,8 @@ const TEST_TMP_BASE = path.join(REPO_ROOT, 'tmp', 'test');
  * ten minutes is not a heavy suite, it is a run that will not converge.
  */
 const OOM_LIMIT = 6;
+
+/** The window {@link OOM_LIMIT} is counted in: ten minutes, in milliseconds. */
 const OOM_WINDOW_MS = 10 * 60 * 1000;
 
 /**

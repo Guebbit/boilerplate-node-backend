@@ -13,6 +13,8 @@ import type { TSESTree } from '@typescript-eslint/utils';
 
 /** `RuleCreator`'s two type parameters: this rule takes no options and reports one message. */
 type Options = [];
+
+/** The one message this rule reports: a controller chain with no terminal `.catch`. */
 type MessageIds = 'missing';
 
 /** Looks up a node's parent — TSESTree does not type a bare `.parent` link, so this is built once

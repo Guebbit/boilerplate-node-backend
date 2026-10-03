@@ -32,6 +32,7 @@ import { controllerChainMustCatch } from './controller-chain-must-catch';
 import { noHardcodedUserText } from './no-hardcoded-user-text';
 import { noPersistenceImports } from './no-persistence-imports';
 
+/** The plugin's rule table: rule name (as used in `eslint.config.ts`) to implementation. */
 export default {
     'barrel-allowed-sources': barrelAllowedSources,
     'comment-links': commentLinks,

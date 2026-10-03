@@ -29,4 +29,6 @@ import { runScript } from '../run-script';
 /** Connect, publish or send every due retry, and resolve nothing. */
 const main = (): Promise<void> => start().then(() => sweepDueWebhookDeliveries());
 
+// Entry point: run `main`, record the outcome under `sweep:webhook-retries` for `/observability/health`, and close
+// the connections on both paths. See `scripts/run-script.ts`.
 void runScript('sweep:webhook-retries', main, stopDatabase);

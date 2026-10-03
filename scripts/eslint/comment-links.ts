@@ -78,6 +78,8 @@ export const resolvesTsReference = (reference: string, filename: string): boolea
 
 /** `RuleCreator`'s two type parameters: this rule takes no options and reports one message. */
 type Options = [];
+
+/** The one message this rule reports: a comment names a file that is not tracked. */
 type MessageIds = 'stale';
 
 /** Flags a `.ts`/`.tsx` reference inside a comment that does not resolve to a tracked file. */

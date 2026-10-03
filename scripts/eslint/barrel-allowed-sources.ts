@@ -24,6 +24,8 @@ import type { TSESTree } from '@typescript-eslint/utils';
 
 /** `RuleCreator`'s two type parameters: this rule takes no options and reports five messages. */
 type Options = [];
+
+/** The ids of the five messages this rule can report (texts live in `messages`). */
 type MessageIds =
     | 'notAllowed'
     | 'modelAsValue'

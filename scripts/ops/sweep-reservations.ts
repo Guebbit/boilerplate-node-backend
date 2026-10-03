@@ -34,4 +34,6 @@ const main = (): Promise<void> =>
         .then(() => inventoryService.runReservationSweep())
         .then(() => undefined);
 
+// Entry point: run `main`, record the outcome under `sweep:reservations` for `/observability/health`, and close
+// the connections on both paths. See `scripts/run-script.ts`.
 void runScript('sweep:reservations', main, () => Promise.all([stopDatabase(), stopQueue()]));

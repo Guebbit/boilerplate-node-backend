@@ -91,4 +91,6 @@ const main = (): Promise<void> =>
         });
     });
 
+// Entry point: run `main` and close the database on both paths. Records no job outcome (`undefined`):
+// a manual tool, not a scheduled job. See `scripts/run-script.ts`.
 void runScript(undefined, main, stopDatabase);

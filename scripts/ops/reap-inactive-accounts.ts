@@ -59,6 +59,8 @@ import { runScript } from '../run-script';
 const GRACE_DAYS = 30;
 
 /**
+ * How long this job holds its lease before another runner may take it over.
+ *
  * Reference implementation for `withLease` — see `docs/reference/ops.md#scheduled-jobs`. Picked
  * for this because a double-run here is the most expensive of the nightly jobs: it hard-
  * deletes accounts, not just files or already-settled rows.
@@ -69,6 +71,7 @@ const GRACE_DAYS = 30;
  */
 const LEASE_TTL_MS = 15 * 60 * 1000;
 
+/** The moment `days` days before now. */
 const daysAgo = (days: number): Date => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
 /**
@@ -90,6 +93,7 @@ const warn = (user: UserDocument): Promise<void> => {
     );
 };
 
+/** The three stages in order (warn, soft delete, hard delete), under the job's lease. */
 const main = async (): Promise<void> => {
     const inactiveDays = accountConfig().NODE_INACTIVE_ACCOUNT_DAYS;
     if (inactiveDays <= 0) {
@@ -135,4 +139,6 @@ const main = async (): Promise<void> => {
     }
 };
 
+// Entry point: run `main` and close the connections on both paths. Records no outcome here
+// (`undefined`): this job records through its own lease document. See `scripts/run-script.ts`.
 void runScript(undefined, main, () => Promise.all([stopDatabase(), stopQueue()]));

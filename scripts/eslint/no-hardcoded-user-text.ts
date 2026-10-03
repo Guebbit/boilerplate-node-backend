@@ -14,6 +14,8 @@ import type { TSESTree } from '@typescript-eslint/utils';
 
 /** `RuleCreator`'s two type parameters: this rule takes no options and reports one message. */
 type Options = [];
+
+/** The one message this rule reports: a string literal where translated copy belongs. */
 type MessageIds = 'literal';
 
 /** The two functions whose `errors` argument carries user-facing copy. */

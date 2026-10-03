@@ -37,4 +37,6 @@ const main = (): Promise<void> =>
             logger.info({ message: 'outbox: sweep finished', ...result });
         });
 
+// Entry point: run `main`, record the outcome under `sweep:outbox` for `/observability/health`, and close
+// the connections on both paths. See `scripts/run-script.ts`.
 void runScript('sweep:outbox', main, stopDatabase);

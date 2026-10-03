@@ -29,4 +29,6 @@ const main = (): Promise<void> =>
         .then(() => paymentService.reapAbandonedPayments())
         .then(() => undefined);
 
+// Entry point: run `main`, record the outcome under `reap:payments` for `/observability/health`, and close
+// the connections on both paths. See `scripts/run-script.ts`.
 void runScript('reap:payments', main, stopDatabase);

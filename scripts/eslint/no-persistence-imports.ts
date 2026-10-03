@@ -44,6 +44,8 @@ export interface RuleOptions {
 
 /** `RuleCreator`'s two type parameters: one optional {@link RuleOptions} block, two messages. */
 type Options = [RuleOptions?];
+
+/** The two messages this rule reports: a forbidden imported name, and a forbidden module path. */
 type MessageIds = 'binding' | 'path';
 
 /** The strict reading, used when a config block turns the rule on without saying more. */

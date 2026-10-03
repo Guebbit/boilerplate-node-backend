@@ -44,4 +44,6 @@ const main = (): Promise<void> => {
         .then(() => start());
 };
 
+// Entry point: run `main`, record the outcome under `reap:quarantine` for `/observability/health`, and close
+// the connections on both paths. See `scripts/run-script.ts`.
 void runScript('reap:quarantine', main, stopDatabase);
