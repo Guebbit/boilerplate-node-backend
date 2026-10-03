@@ -26,11 +26,11 @@ import { accessAuditActions } from './audit';
 
 /** The one role self-service signup (or an OAuth signup a provider already vouches for) may ever
  * grant — never a caller-supplied name. Read off `shared/authorization-roles.yaml`'s
- * `signupDefault` flag (DDD-D5), not hand-typed. See {@link assignDefaultRole}. */
+ * `signupDefault` flag, not hand-typed. See {@link assignDefaultRole}. */
 export const SIGNUP_DEFAULT_ROLE = SIGNUP_DEFAULT_ROLE_NAME;
 
 /** What `SIGNUP_DEFAULT_ROLE` promotes to once the address is proven, read off that role's
- * `promotesTo` flag (DDD-D5). See {@link promoteVerifiedCustomer}. */
+ * `promotesTo` flag. See {@link promoteVerifiedCustomer}. */
 export const VERIFIED_CUSTOMER_ROLE = VERIFIED_CUSTOMER_ROLE_NAME;
 
 /**
