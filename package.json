@@ -251,7 +251,7 @@
         "@hyperjump/pact@0.2.5": true,
         "@scarf/scarf@1.4.0": true,
         "@swc/core@1.15.47": true,
-        "esbuild@0.27.3": true,
+        "esbuild@0.27.7": true,
         "esbuild@0.21.5": true,
         "esbuild@0.28.2": true
     }
