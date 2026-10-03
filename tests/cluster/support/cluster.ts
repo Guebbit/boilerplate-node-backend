@@ -177,6 +177,20 @@ const startCluster = ({
                         'cluster-suite-webhook-secret-encryption-key',
                     NODE_PII_ENCRYPTION_KEY: 'cluster-suite-pii-encryption-key',
                     /*
+                     * The shop's identity and VAT rates are required at boot too
+                     * (`orders/config.ts`) — the invoice and the withdrawal notice print them. Same
+                     * values `.env-example` ships, so the child boots the way a fresh checkout does.
+                     */
+                    NODE_SHOP_COUNTRY: 'IT',
+                    NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
+                    NODE_SHOP_STREET: 'Via Roma 1',
+                    NODE_SHOP_CITY: 'Milano',
+                    NODE_SHOP_ZIP: '20100',
+                    NODE_SHOP_EMAIL: 'shop@example.com',
+                    NODE_SHOP_PHONE: '+39 02 1234567',
+                    NODE_VAT_RATE_DEFAULT: '0.22',
+                    NODE_VAT_RATE_REDUCED: '0.10',
+                    /*
                      * Clustering is OFF by default — `NODE_ENABLE_CLUSTERING` gates the fork, and
                      * `NODE_CLUSTER_WORKERS` alone does nothing. Without this the child is a single
                      * process, and every assertion about crossing workers passes for the wrong reason.
