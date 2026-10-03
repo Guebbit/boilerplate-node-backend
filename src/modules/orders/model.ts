@@ -167,7 +167,7 @@ export interface OrderDocument
      * recomputed afterwards. Internal only: never on the wire (see `applyOrderTransform`'s `omit`).
      *
      * The proxy every cross-module read uses instead of asking `invoicing` whether an invoice
-     * exists — `services/scope.ts#withActions`' `actions.invoice`, and `services/crud.ts#remove`'s
+     * exists — `services/scope.ts#withActions`' `actions.invoice`, and `services/remove.ts#remove`'s
      * no-hard-delete-once-invoiced guard both read this rather than importing that module, keeping
      * `orders` free of a dependency on the module that depends on it. An invoice is issued at this
      * same instant (`invoicing`'s own `ORDER_STATUS_CHANGED` listener), so the two normally agree;

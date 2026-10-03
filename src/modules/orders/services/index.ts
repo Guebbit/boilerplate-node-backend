@@ -3,27 +3,17 @@
  * Order service — all business logic for the Order entity, and the one place a controller may call
  * into. A folder rather than one file because it passed ~300 lines; see `docs/theory/layers.md`.
  *
- * `place.ts` is the one function that writes a new order; `crud.ts` reads and amends one, and
- * `retract.ts` undoes a write `place.ts` or checkout could not keep; `notify.ts` sends the
+ * `place.ts` is the one function that writes a new order; `read.ts`, `crud.ts` and `remove.ts`
+ * read, amend and delete one, and `retract.ts` undoes a write `place.ts` or checkout could not keep; `notify.ts` sends the
  * placed-order email. `cancel.ts` runs the cancellation and the sweep behind its marker,
  * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
  * `availability.ts` answers whether a line is still sellable and cancels an order that no longer
  * is.
  */
 
-import {
-    search,
-    getById,
-    create,
-    countOpenBankTransfers,
-    getByTransferReference,
-    recordCreated,
-    update,
-    updateById,
-    remove,
-    removeById,
-    restoreById
-} from './crud';
+import { search, getById, countOpenBankTransfers, getByTransferReference } from './read';
+import { create, recordCreated, update, updateById } from './crud';
+import { remove, removeById, restoreById } from './remove';
 import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { detachUserId, eraseUserOrders, anonymizeDueOrders } from './retention';
@@ -50,18 +40,13 @@ import { unavailableLines } from './availability';
 export {
     search,
     getById,
-    create,
     countOpenBankTransfers,
     getByTransferReference,
-    recordCreated,
-    update,
-    updateById,
-    remove,
-    removeById,
-    restoreById,
     ownOrderIds,
     findOwnOrders
-} from './crud';
+} from './read';
+export { create, recordCreated, update, updateById } from './crud';
+export { remove, removeById, restoreById } from './remove';
 export { retractOrder } from './retract';
 export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
 export { sendOrderPlacedEmail, mailBuyer } from './notify';

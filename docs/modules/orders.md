@@ -100,7 +100,7 @@ Three scheduled jobs, all nightly via `docker/crontab`: `npm run reap:orders` re
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
 `NODE_ORDER_PII_RETENTION_DAYS` has passed from the order's OWN `createdAt`, counted from account
 erasure or that date, whichever is later — amounts, line items and dates survive, only the person
-is gone. An admin can still hard-delete an UNPAID order outright (`services/crud.ts`'s `remove`) —
+is gone. An admin can still hard-delete an UNPAID order outright (`services/remove.ts`'s `remove`) —
 this reap is what protects the far more common case, the order nobody ever deletes. A paid order
 refuses a hard delete instead, once and for as long as `paidAt` is stamped: `invoicing` freezes a
 legal document from that same transition, and it must survive the order it was issued for. `npm run
@@ -254,7 +254,7 @@ and `GET /orders/{id}/credit-notes` by sharing this module's `/orders` basePath 
 
 The only trace of that relationship here is `paidAt` (`model.ts`), stamped by `services/status.ts`'s
 `markPaid` in the same write that moves an order to `paid` — the proxy `services/scope.ts`'s
-`actions.invoice` flag and `services/crud.ts`'s hard-delete refusal both read, so neither has to ask
+`actions.invoice` flag and `services/remove.ts`'s hard-delete refusal both read, so neither has to ask
 `invoicing` whether the freeze actually landed.
 
 The placed-order email carries no invoice: nothing is invoiced yet at that point, whatever the

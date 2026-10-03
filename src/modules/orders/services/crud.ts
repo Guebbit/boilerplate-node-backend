@@ -1,14 +1,14 @@
 /**
  * @module
- * Reading and writing an order: search, fetch, create, amend, delete. `create` composes around
- * `placeOrder` (`./place`), which owns its own rollback on a refused write — see `./retract`.
- * Cancellation is not here either; it is a sequence with consequences of its own and lives in
+ * Writing an order through the admin door: create, amend. `create` composes around `placeOrder`
+ * (`./place`), which owns its own rollback on a refused write — see `./retract`. Reads are in
+ * `./read`, deletes in `./remove`, and cancellation is a sequence with consequences of its own in
  * `./cancel`.
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest, Order } from '@types';
+import type { CartItem, UpdateOrderByIdRequest, CallerContext } from '@types';
 import type { OrderDocument } from '../model';
 import {
     generateReject,
@@ -17,97 +17,15 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { productService } from '@modules/products';
-import { inventoryService } from '@modules/inventory';
 import { userService } from '@modules/users';
-import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
-import { resolveCurrentImages } from './current';
 import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
-import {
-    readAll,
-    MAX_CONFIGURED_PAGE_SIZE,
-    type PaginatedMeta
-} from '@infrastructure/persistence/search';
-import { ownerScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
-
-/**
- * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI. `productId` filters
- * `items.product._id`, since product data is embedded rather than referenced.
- * @param scope - extra filters merged into the $match stage
- * @param context - for the `orders_viewed` emit; omit outside a `GET /orders` request
- */
-export const search = (
-    search: SearchOrdersRequest = {},
-    scope?: Record<string, unknown>,
-    context?: CallerContext
-): Promise<{
-    items: Order[];
-    meta: PaginatedMeta;
-}> =>
-    orderRepository.search(search, scope).then((result) =>
-        // One batched `$in` for the whole page, however many orders it holds — see `./current`.
-        resolveCurrentImages(result.items).then((items) => {
-            if (context)
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(context),
-                    event: ordersAnalyticsEvents.ORDERS_VIEWED
-                });
-            return { items, meta: result.meta };
-        })
-    );
-
-/**
- * Every order id belonging to `userId` — the narrow read a sibling module needing only ids (not
- * full order documents, and none of `search`'s image resolution or analytics emit) asks for,
- * paged internally with `readAll` so an account with more orders than one page still gets every
- * id. `.search()`'s items are the wire shape (`Order`, carrying `id`), not `OrderDocument`.
- * @param userId - the account whose own orders these are
- */
-export const ownOrderIds = (userId: string): Promise<string[]> =>
-    readAll(
-        (page) =>
-            orderRepository
-                .search({ page, pageSize: MAX_CONFIGURED_PAGE_SIZE }, ownerScope(userId))
-                .then((result) => result.items),
-        MAX_CONFIGURED_PAGE_SIZE
-    ).then((orders) => orders.map((order) => order.id));
-
-/**
- * Every order this account placed, in wire shape — for the account's own data export. Goes
- * through {@link search} (not `orderRepository.search` directly, unlike {@link ownOrderIds}), so
- * each order's current-image resolution runs the same way a listing's would. No `context`, so the
- * `orders_viewed` analytics emit stays off — an export is not a view.
- *
- * @param userId - the caller's own id
- */
-export const findOwnOrders = (userId: string): Promise<Order[]> =>
-    readAll(
-        (page) =>
-            search({ page, pageSize: MAX_CONFIGURED_PAGE_SIZE }, ownerScope(userId)).then(
-                (result) => result.items
-            ),
-        MAX_CONFIGURED_PAGE_SIZE
-    );
-
-/**
- * Get a single order by ID, restricted to a caller's own rows when `scope` narrows it — always
- * the hydrated `OrderDocument`, whether or not `scope` is passed. Returns undefined if `id` is
- * falsy or if not found.
- * @param scope - optional extra filter (e.g. restrict to a specific userId)
- */
-export const getById = (
-    id: string | undefined,
-    scope?: Record<string, unknown>
-): Promise<OrderDocument | undefined> => {
-    if (!id) return Promise.resolve(undefined);
-    return orderRepository.findByIdScoped(id, scope);
-};
 
 /**
  * Report that an order was created — from the admin route or a customer's checkout
@@ -132,26 +50,6 @@ export const recordCreated = (order: OrderDocument, context: CallerContext): voi
         properties: { order_id: String(order._id) }
     });
 };
-
-/**
- * How many `bank_transfer` orders this account has open right now — the cap checkout enforces
- * before letting a caller take a free week-long hold on more stock than they can be trusted with.
- *
- * @param userId - the caller
- */
-export const countOpenBankTransfers = (userId: string): Promise<number> =>
-    orderRepository.countOpenBankTransfers(userId);
-
-/**
- * The order a `bank_transfer` checkout stamped with this RF reference — `payments`' admin lookup,
- * which reads it back off a bank statement. Exact match only: normalizing what an admin pasted is
- * `orders/domain/transfer-reference.ts`'s job, before it gets here.
- *
- * @param reference - an already-normalized RF reference
- * @returns the order, or `null` when no order carries it
- */
-export const getByTransferReference = (reference: string): Promise<OrderDocument | null> =>
-    orderRepository.findOne({ transferReference: reference });
 
 /**
  * Looks up each line's product by id — the read `create` needs before it can freeze a snapshot.
@@ -284,121 +182,3 @@ export const updateById = (
             return result;
         });
     });
-
-/**
- * Remove an order document (soft or hard delete). Soft stamps `deletedAt` once — an order is a
- * financial record, so hiding it isn't destroying it; `restoreById` undoes it. Hard gives
- * the units back first: an order holds stock, and destroying the row without releasing it
- * leaves the shelf holding units for nothing, until the TTL sweep records the deletion as an
- * expiry.
- *
- * Refused outright once `paidAt` is stamped: `invoicing` freezes an invoice from that exact
- * transition, and a legal invoice document must survive the order it was issued for — the same
- * reason `docs/modules/invoicing.md` gives for the module never hard-deleting one of its own.
- * `paidAt` alone answers this, with no need to ask `invoicing` whether the freeze actually landed
- * (see `services/scope.ts`'s `invoice` flag): a paid order is worth keeping either way.
- * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
- * @param context - records `ORDER_DELETED`; omit for a caller with no request behind it
- */
-export const remove = (
-    order: OrderDocument,
-    hardDelete = false,
-    context?: CallerContext
-): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> => {
-    const id = String(order._id);
-
-    if (hardDelete && order.paidAt)
-        return Promise.resolve(
-            generateReject(409, [
-                { code: ERROR_CODES.ORDER_INVOICED, message: t('orders.invoiced') }
-            ])
-        );
-
-    // HARD delete
-    if (hardDelete)
-        return (
-            inventoryService
-                // Released BEFORE the row goes, so the release can still name the order it
-                // belongs to. Whether it released is not checked, for the same reason
-                // `cancelById` does not check: a hold that already expired is an ordinary
-                // sequence with nothing left to do about it.
-                .releaseForOrder(id)
-                .then(() => orderRepository.deleteOne(order))
-                .then(() => {
-                    if (context)
-                        recordAudit(context, {
-                            action: ordersAuditActions.ORDER_DELETED,
-                            outcome: 'success',
-                            target_type: 'order',
-                            target_id: id,
-                            metadata: { hardDelete: true }
-                        });
-                })
-                .then(() => generateSuccess(undefined, 200, t('orders.hard-deleted')))
-        );
-
-    // SOFT delete — the default path for an order, which is a financial record. Already
-    // deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.
-    if (order.deletedAt)
-        return Promise.resolve(generateSuccess(order, 200, t('orders.soft-deleted')));
-
-    order.deletedAt = new Date();
-    return orderRepository.save(order).then((saved) => {
-        if (context)
-            recordAudit(context, {
-                action: ordersAuditActions.ORDER_DELETED,
-                outcome: 'success',
-                target_type: 'order',
-                target_id: id,
-                metadata: { hardDelete: false }
-            });
-        return generateSuccess(saved, 200, t('orders.soft-deleted'));
-    });
-};
-
-/**
- * Undo a soft delete.
- *
- * @param id - the order to restore
- * @param context - records `ORDER_RESTORED`; omit for a caller with no request behind it
- * @returns the restored order; 404 when there is none, 409 when it is not soft-deleted
- */
-export const restoreById = (
-    id: string,
-    context?: CallerContext
-): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
-    orderRepository.findById(id).then((order) => {
-        if (!order) return generateReject(404, [t('orders.not-found')]);
-        if (!order.deletedAt) return generateReject(409, [t('orders.not-deleted')]);
-        order.deletedAt = undefined;
-        return orderRepository.save(order).then((saved) => {
-            if (context)
-                recordAudit(context, {
-                    action: ordersAuditActions.ORDER_RESTORED,
-                    outcome: 'success',
-                    target_type: 'order',
-                    target_id: id
-                });
-            return generateSuccess(saved, 200, t('orders.restored'));
-        });
-    });
-
-/**
- * Remove an order by ID (soft or hard delete).
- * Fetches the document then delegates to remove().
- *
- * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
- * @param context - forwarded to {@link remove} for the audit row
- */
-export const removeById = (
-    id: string,
-    hardDelete = false,
-    context?: CallerContext
-): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> =>
-    orderRepository
-        .findById(id)
-        .then((order) =>
-            order
-                ? remove(order, hardDelete, context)
-                : generateReject(404, [t('orders.not-found')])
-        );

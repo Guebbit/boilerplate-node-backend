@@ -35,7 +35,7 @@ import { orderRepository } from '../repository';
 import { statusesLeadingTo } from '../domain';
 import { orderEffectRetryMinutes } from '../config';
 import { bankTransferExpiredEmail, cardHoldExpiredEmail, orderCancelledEmail } from '../emails';
-import { getById } from './crud';
+import { getById } from './read';
 import { mailBuyer } from './notify';
 import { callerScope, actorOf } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
