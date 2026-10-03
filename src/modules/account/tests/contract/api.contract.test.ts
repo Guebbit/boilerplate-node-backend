@@ -951,7 +951,7 @@ describe('DELETE /account/sessions/{sessionId}', () => {
             .delete('/account/sessions/not-an-id')
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(404);
     });
 });
 

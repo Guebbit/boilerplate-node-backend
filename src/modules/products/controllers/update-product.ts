@@ -22,6 +22,7 @@ import { productService } from '../services';
  */
 export const { replace: replaceProduct, update: updateProduct } = createUpdateController({
     entity: 'productById',
+    notFoundKey: 'products.not-found',
     replaceSchema: productService.zodProductReplaceSchema,
     patchSchema: productService.zodProductUpdateSchema,
     // A multipart body carries these as strings; `readInput` decodes them before validation runs,

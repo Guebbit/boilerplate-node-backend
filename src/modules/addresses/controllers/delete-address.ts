@@ -6,6 +6,7 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import type { AddressesResponse } from '@types';
+import { requireId } from '@infrastructure/http/ids';
 import { addressRemove } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
@@ -17,7 +18,11 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 export const deleteAddress = (request: Request<{ addressId: string }>, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = request.authContext!;
-    const { addressId } = request.params;
+    const addressId = requireId(request, response, {
+        notFound: 'addresses.not-found',
+        name: 'addressId'
+    });
+    if (!addressId) return;
 
     return addressRemove(id, addressId)
         .then((result) => {

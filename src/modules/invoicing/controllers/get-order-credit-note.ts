@@ -10,7 +10,7 @@ import { t } from '@infrastructure/i18n';
 import { orderService } from '@modules/orders';
 import { invoicingService } from '../services';
 import { rejectResponse } from '@infrastructure/http/response';
-import { isValidObjectId } from '@infrastructure/http/request';
+import { isValidObjectId, requireId } from '@infrastructure/http/ids';
 import { catchAs } from '@infrastructure/http/controller';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -29,11 +29,12 @@ export const getOrderCreditNote = (
     request: Request<{ id?: string; creditNoteId?: string }>,
     response: Response
 ) => {
-    const { id, creditNoteId } = request.params;
-    if (!isValidObjectId(id)) {
-        rejectResponse(response, 404, [t('orders.not-found')]);
-        return;
-    }
+    const id = requireId(request, response, { notFound: 'orders.not-found' });
+    if (!id) return;
+
+    // Not checked up front like the order: an unknown credit note answers "not issued" only to a
+    // caller who may see the order at all, and a malformed one must answer exactly that.
+    const { creditNoteId } = request.params;
 
     return orderService
         .getById(id, orderService.callerScope(request.authContext))

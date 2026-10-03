@@ -8,6 +8,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { cartService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import type { CartResponse } from '@types';
 
 /**
@@ -17,7 +18,11 @@ import type { CartResponse } from '@types';
  * an order with nothing left to add answers 409 rather than a hollow 200.
  */
 export const postReorder = (request: Request<{ orderId: string }>, response: Response) => {
-    const { orderId } = request.params;
+    const orderId = requireId(request, response, {
+        notFound: 'cart.reorder.order-not-found',
+        name: 'orderId'
+    });
+    if (!orderId) return;
 
     return cartService
         .reorderIntoCart(request.authContext!, orderId, callerContextOf(request))

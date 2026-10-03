@@ -9,7 +9,7 @@ import { AddCartItemBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { createdResponse, successResponse } from '@infrastructure/http/response';
 import type { CartResponse, AddCartItemRequest } from '@types';
-import { requireObjectId, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -28,10 +28,8 @@ export const postCart = (
     const body = parseBody(AddCartItemBody, request.body, response);
     if (!body) return;
 
+    // `parseBody` has already refused a `productId` that is not this backend's id (422).
     const { productId, quantity } = body;
-
-    // OpenAPI models Id as a plain string; Mongo-specific ObjectId format still needs its own check.
-    if (!requireObjectId(response, productId)) return;
 
     return cartService
         .cartItemAdd(userId, productId, quantity, callerContextOf(request))

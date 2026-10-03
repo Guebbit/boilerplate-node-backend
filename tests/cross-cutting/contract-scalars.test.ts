@@ -17,6 +17,7 @@
 
 import * as generated from '@api/schemas.zod';
 import { pageSchema, pageSizeSchema, hardDeleteSchema } from '@infrastructure/http/schemas';
+import { CONTRACT_ID_PATTERN } from '@infrastructure/http/ids';
 
 /** Every generated constant whose name ends in the given suffix. */
 const constantsEndingIn = (suffix: string): [name: string, value: unknown][] =>
@@ -74,5 +75,18 @@ describe('contract scalars', () => {
             .map(([name, value]) => `${name} = ${String(value)}`);
 
         expect(disagreeing).toEqual([]);
+    });
+
+    // `ids.ts` recognises a request schema's id fields by the shared `Id` pattern, so a changed
+    // pattern in the contract must fail here rather than quietly stop every body and query id
+    // from being checked.
+    it('still emits the Id pattern, which is how ids.ts finds a schema’s id fields', () => {
+        const ids = constantsEndingIn('RegExp').filter(
+            ([, value]) => (value as RegExp).source === CONTRACT_ID_PATTERN
+        );
+
+        // Hundreds of fields carry the shared `Id`; a pattern that moved in the contract leaves
+        // none carrying this one.
+        expect(ids.length).toBeGreaterThan(100);
     });
 });

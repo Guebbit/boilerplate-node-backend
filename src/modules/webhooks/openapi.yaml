@@ -224,7 +224,8 @@ paths:
                 - name: subscriptionId
                   in: query
                   required: false
-                  schema: { type: string }
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 - name: status
                   in: query
                   required: false

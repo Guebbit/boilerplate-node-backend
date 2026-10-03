@@ -9,14 +9,10 @@
  * See: docs/theory/request-input.md
  */
 
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 import type { Caller, CallerContext, TenantCallerContext } from '@types';
-// i18next translation function — messages are resolved against the request's locale, which the
-// i18next middleware has already set up by the time a controller runs.
-import { t } from '@infrastructure/i18n';
 import { coerceStringArray, getJson } from '@guebbit/js-toolkit';
 import { parseBooleanWord } from '@infrastructure/runtime/environment';
-import { rejectResponse } from '@infrastructure/http/response';
 import { stripUndefined } from '@infrastructure/persistence/factories';
 import { isPlainObject } from '@infrastructure/object-guards';
 
@@ -367,61 +363,6 @@ export const tenantCallerContextOf = (
     }
 
     return { ...context, caller: context.caller };
-};
-
-/**
- * The one spelling of an id this API issues: 24 hex characters.
- * Mongoose's own `isValid` also accepts any 12-character string (a 12-byte binary form), which no
- * route ever hands out, so it is not the check here.
- */
-const OBJECT_ID_PATTERN = /^[\da-f]{24}$/i;
-
-/**
- * Check if a value is a well-formed MongoDB ObjectId string: exactly 24 hex characters.
- *
- * The `id is string` return type makes this a type guard: `if (isValidObjectId(x))` narrows `x`
- * from `string | undefined` to `string`, removing the need for a non-null assertion downstream.
- */
-export const isValidObjectId = (id: string | undefined): id is string =>
-    id !== undefined && OBJECT_ID_PATTERN.test(id);
-
-/**
- * A type guard that also answers 422 when `value` is not a well-formed ObjectId — the check every
- * write route with a body- or param-carried id (`cart`, `wishlist`) repeats before touching its
- * service, bundled with the one answer it always gives: the request is syntactically fine and its
- * value is unusable, which is what tells a caller the id was malformed rather than merely absent.
- * `orders`' own equivalent checks answer 404 instead — a deliberate difference, not one to route
- * through this.
- *
- * @param response - the express response, used only on failure
- * @param value - the candidate id
- * @returns whether `value` is a valid ObjectId, narrowing it to `string` when true
- */
-export const requireObjectId = (response: Response, value: string | undefined): value is string => {
-    if (isValidObjectId(value)) return true;
-    rejectResponse(response, 422, [t('generic.error-missing-data')]);
-    return false;
-};
-
-/**
- * Validate a MongoDB ObjectId from request params/body, answering 422 and returning `undefined`
- * when it doesn't validate.
- *
- * `surface` is a parameter, not a constant: a route reads ONE surface, and a delete controller
- * reading its id under `write` but `hardDelete` under `delete` would be reading one request two
- * ways — the property the closed `RequestSurface` set exists to guarantee.
- *
- * @param surface - the route's precedence rule, the same one its `readInput` call declares
- * @returns the validated id, or `undefined` when 422 has already been sent
- */
-export const extractAndValidateId = (
-    request: Request,
-    response: Response,
-    surface: RequestSurface = 'write'
-): string | undefined => {
-    // Route param first (`/products/:id`), then body — a param is the more explicit intent.
-    const { id } = readInput(request, { surface, ids: ['id'] });
-    return requireObjectId(response, id) ? id : undefined;
 };
 
 /**

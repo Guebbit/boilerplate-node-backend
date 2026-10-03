@@ -9,6 +9,7 @@ import { t } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';
 import { refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { userService } from '../services';
 
 /**
@@ -18,7 +19,8 @@ import { userService } from '../services';
  * "prove the factor to remove it".
  */
 export const deleteUserTwoFactor = (request: Request<{ id: string }>, response: Response) => {
-    const { id } = request.params;
+    const id = requireId(request, response, { notFound: 'users.not-found' });
+    if (!id) return Promise.resolve();
 
     return userService
         .adminDisableTwoFactor(id, callerContextOf(request))

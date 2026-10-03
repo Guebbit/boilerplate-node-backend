@@ -29,6 +29,7 @@ const adminNotesWithCap = z.string().min(1).max(5000).nullish();
 export const { replace: replaceFeedbackStatus, update: updateFeedbackStatus } =
     createUpdateController({
         entity: 'feedbackStatus',
+        notFoundKey: 'generic.error-not-found',
         replaceSchema: ReplaceFeedbackRequestStatusBody.extend({ adminNotes: adminNotesWithCap }),
         patchSchema: UpdateFeedbackRequestStatusBody.extend({ adminNotes: adminNotesWithCap }),
         update: (id, changes, request) =>

@@ -15,19 +15,21 @@ import { presentPayment } from '../presenter';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { RefundPaymentByOrderBody } from '@api/schemas.zod';
 import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 
 /** Handles `POST /payments/order/:orderId/refund`. */
 export const postPaymentRefund = (request: Request<{ orderId?: string }>, response: Response) => {
+    const orderId = requireId(request, response, {
+        notFound: 'payments.not-found',
+        name: 'orderId'
+    });
+    if (!orderId) return;
+
     const body = parseBody(RefundPaymentByOrderBody, request.body ?? {}, response);
     if (!body) return;
 
     return paymentService
-        .refundByOrder(
-            String(request.params.orderId),
-            request.authContext,
-            callerContextOf(request),
-            body
-        )
+        .refundByOrder(orderId, request.authContext, callerContextOf(request), body)
         .then((result) => {
             if (refused(response, result)) return;
             successResponse<Payment>(response, presentPayment(result.data), 200, result.message);

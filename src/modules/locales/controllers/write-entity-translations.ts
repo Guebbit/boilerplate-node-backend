@@ -16,6 +16,8 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
+import { t } from '@infrastructure/i18n';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { localeService } from '../services';
 import type { EntityTranslationsResult } from '../services/translations';
@@ -47,10 +49,16 @@ const writeEntityTranslations =
         >,
         response: Response
     ) => {
+        const { entityType, id: entityId } = request.params;
+        const id = requireId(request, response, {
+            notFound: () => t('locales.error-entity-not-found', { entityType, entityId })
+        });
+        if (!id) return;
+
         const body = parseBody(schema, request.body, response);
         if (!body) return;
 
-        return write(request.params.entityType, request.params.id, body, callerContextOf(request))
+        return write(entityType, id, body, callerContextOf(request))
             .then((result) => {
                 if (refused(response, result)) return;
 

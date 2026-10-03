@@ -7,6 +7,7 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import type { Address } from '@types';
+import { requireId } from '@infrastructure/http/ids';
 import { addressSetDefault } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
@@ -19,7 +20,13 @@ export const putAddressDefault = (request: Request<{ addressId: string }>, respo
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = request.authContext!;
 
-    return addressSetDefault(id, request.params.addressId)
+    const addressId = requireId(request, response, {
+        notFound: 'addresses.not-found',
+        name: 'addressId'
+    });
+    if (!addressId) return;
+
+    return addressSetDefault(id, addressId)
         .then((result) => {
             if (refused(response, result)) return;
 

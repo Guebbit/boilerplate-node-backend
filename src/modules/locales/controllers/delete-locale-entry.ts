@@ -7,6 +7,7 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { localeService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
@@ -19,12 +20,19 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 export const deleteLocaleEntry = (
     request: Request<{ locale: string; entryId: string }>,
     response: Response
-) =>
-    localeService
-        .deleteEntry(request.params.locale, request.params.entryId, callerContextOf(request))
+) => {
+    const entryId = requireId(request, response, {
+        notFound: 'locales.error-entry-not-found',
+        name: 'entryId'
+    });
+    if (!entryId) return Promise.resolve();
+
+    return localeService
+        .deleteEntry(request.params.locale, entryId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 
             return successResponse(response, undefined);
         })
         .catch(catchAs(response, 'deleteLocaleEntry'));
+};

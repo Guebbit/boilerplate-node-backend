@@ -210,9 +210,9 @@ const SHARED_DECLARATION_FILES: Record<string, string> = {
  * controller without reading a single declaration. Hence the tripwire test below, which asserts
  * the scanner still finds declarations at all.
  *
- * `extractAndValidateId` is folded in because it is `readInput` with the same surface parameter
- * that happens to also respond — a controller calling it reads those sources just as surely as if
- * it had written them out. Its surface is the optional third argument, defaulting to `'write'`.
+ * `requireId` is folded in because it is `readInput` with the same surface option that happens to
+ * also respond — a controller calling it reads those sources just as surely as if it had written
+ * them out. An explicit `surface:` is already matched above; one left out defaults to `'path'`.
  */
 const readDeclaredSources = (
     controllerFile: string,
@@ -231,12 +231,9 @@ const readDeclaredSources = (
 
     for (const [, surface] of source.matchAll(/surface:\s*'(\w+)'/g)) add(surface);
 
-    for (const [, argumentList] of source.matchAll(/extractAndValidateId\(([^)]*)\)/g)) {
-        // The surface is the last argument when it is given at all. A call without a trailing
-        // surface name is the two-argument form, whose default the signature spells `'write'`.
-        const trailing = /'(\w+)'\s*$/.exec(argumentList.trim())?.[1];
-        add(trailing !== undefined && trailing in SURFACE_SOURCES ? trailing : 'write');
-    }
+    // The call's whole argument list, which can span lines and hold a nested call.
+    for (const [, argumentList] of source.matchAll(/requireId\(([\s\S]*?)\);/g))
+        if (!argumentList.includes('surface:')) add('path');
 
     for (const [marker, file] of Object.entries(SHARED_DECLARATION_FILES))
         if (source.includes(marker))

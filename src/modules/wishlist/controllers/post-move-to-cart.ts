@@ -5,7 +5,8 @@
  */
 
 import type { Request, Response } from 'express';
-import { callerContextOf, requireObjectId } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { successResponse } from '@infrastructure/http/response';
 import { wishlistService } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -19,9 +20,11 @@ import type { WishlistResponse } from '@types';
  */
 export const postMoveToCart = (request: Request<{ productId: string }>, response: Response) => {
     const userId = request.authContext!.id;
-    const { productId } = request.params;
-
-    if (!requireObjectId(response, productId)) return;
+    const productId = requireId(request, response, {
+        notFound: 'wishlist.not-found',
+        name: 'productId'
+    });
+    if (!productId) return;
 
     return wishlistService
         .wishlistMoveToCart(userId, productId, callerContextOf(request))

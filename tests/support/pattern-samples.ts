@@ -18,6 +18,9 @@ const PATTERN_SAMPLES: Record<string, string> = {
     '^[a-z]{2}(-[A-Za-z0-9]+)*$': 'it',
     // CountryCode — ISO 3166-1 alpha-2.
     '^[A-Z]{2}$': 'IT',
+    // Id — the shared resource identifier. An ObjectId-shaped sample, so a payload built from the
+    // contract also names an id this backend would accept, not only one the contract does.
+    '^[0-9A-Za-z_-]+$': '65dc8a99604c307b702b5ccc',
     // Identifier-shaped strings (a tenant id, a two-letter tag, a token-ish key). The `\w` form is
     // how the generated zod schema spells `[A-Za-z0-9_]`.
     '^[a-z0-9][a-z0-9-]*$': 'abc',

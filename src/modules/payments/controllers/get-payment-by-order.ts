@@ -8,15 +8,23 @@
 import type { Request, Response } from 'express';
 import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
+import { requireId } from '@infrastructure/http/ids';
 import { paymentService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /** Handles `GET /payments/order/:orderId`. */
-export const getPaymentByOrder = (request: Request<{ orderId?: string }>, response: Response) =>
-    paymentService
-        .getForOrder(String(request.params.orderId), request.authContext)
+export const getPaymentByOrder = (request: Request<{ orderId?: string }>, response: Response) => {
+    const orderId = requireId(request, response, {
+        notFound: 'payments.not-found',
+        name: 'orderId'
+    });
+    if (!orderId) return Promise.resolve();
+
+    return paymentService
+        .getForOrder(orderId, request.authContext)
         .then((result) => {
             if (refused(response, result)) return;
             successResponse<Payment>(response, result.data);
         })
         .catch(catchAs(response, 'getPaymentByOrder'));
+};

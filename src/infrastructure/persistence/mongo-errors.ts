@@ -5,8 +5,6 @@
  * driver fact, not an HTTP one.
  */
 
-import mongoose from 'mongoose';
-
 /**
  * Mongo's duplicate-key error (E11000): a write a unique index refused.
  *
@@ -18,17 +16,6 @@ import mongoose from 'mongoose';
  */
 export const isDuplicateKey = (error: unknown): boolean =>
     (error as { code?: number } | undefined)?.code === 11_000;
-
-/**
- * A malformed id reaching Mongoose as a `CastError` on the `_id`/ObjectId path, rather than a
- * miss — the honest answer for one is the same 404 a well-formed unknown id gets. One definition
- * because every `.catch()` on a `findById`-style read narrows the same fact by hand today: a
- * `.catch()` callback's argument is `unknown`, never provably a `CastError`, so this is the only
- * safe way to ask.
- * @param error - whatever the caught rejection actually was
- */
-export const isBadObjectId = (error: unknown): boolean =>
-    error instanceof mongoose.Error.CastError && error.kind === 'ObjectId';
 
 /**
  * Driver/Mongoose error NAMES that mean "no server was reachable", never a request-shape problem

@@ -17,10 +17,11 @@ import {
     clearableFields,
     createUpdateController,
     fillOmittedWithNull,
-    type UpdateControllerSpec
+    type UpdateControllerSpec,
+    type UpdateIdSource
 } from '@infrastructure/surfaces/create-update-controller';
 
-/** A believable ObjectId — `extractAndValidateId` refuses anything else with a 422. */
+/** A believable ObjectId — `requireId` refuses anything else with a 404. */
 const VALID_ID = '507f1f77bcf86cd799439011';
 
 /** A PUT schema with one required field, one clearable one, and one that cannot be `null`. */
@@ -36,15 +37,25 @@ const patchSchema = replaceSchema.partial();
 /** The spec every case starts from; each case overrides only what it is about. */
 type WidgetSpec = UpdateControllerSpec<typeof replaceSchema, typeof patchSchema, unknown>;
 
-/** A controller over {@link replaceSchema}, with a `update()` that succeeds unless overridden. */
-const makeController = (overrides: Partial<WidgetSpec> = {}) =>
+/** What a case may override, apart from where the id comes from. */
+type WidgetOverrides = Partial<Omit<WidgetSpec, keyof UpdateIdSource>>;
+
+/** The copy a malformed or unknown path id answers with in these cases. */
+const NOT_FOUND_KEY = 'widgets.not-found';
+
+/**
+ * A controller over {@link replaceSchema}, with a `update()` that succeeds unless overridden and
+ * a path `:id` that answers {@link NOT_FOUND_KEY} unless `idSource` says otherwise.
+ */
+const makeController = (overrides: WidgetOverrides = {}, idSource?: UpdateIdSource) =>
     createUpdateController({
         entity: 'widget',
         replaceSchema,
         patchSchema,
         update: jest.fn().mockResolvedValue(generateSuccess({ title: 'x' })),
         present: (row) => row,
-        ...overrides
+        ...overrides,
+        ...(idSource ?? { notFoundKey: NOT_FOUND_KEY })
     });
 
 /**
@@ -155,15 +166,24 @@ describe('createUpdateController', () => {
         expect(update).toHaveBeenCalledWith(VALID_ID, { featured: false }, expect.anything());
     });
 
-    it('answers 422 for a malformed id, never reaching update', async () => {
+    it('answers 404 for a malformed id, never reaching update', async () => {
         const update = jest.fn();
         const { update: patch } = makeController({ update });
         const response = makeResponseStub();
 
         await patch(makeRequest({ title: 'x' }, 'not-an-id'), response);
 
-        expect(response.status).toHaveBeenCalledWith(422);
+        expect(response.status).toHaveBeenCalledWith(404);
         expect(update).not.toHaveBeenCalled();
+    });
+
+    it('answers a malformed id before it reads the body, so a bad body cannot mask the 404', async () => {
+        const { update: patch } = makeController();
+        const response = makeResponseStub();
+
+        await patch(makeRequest({ title: '' }, 'not-an-id'), response);
+
+        expect(response.status).toHaveBeenCalledWith(404);
     });
 
     it('answers 422 for a schema violation, never reaching update', async () => {
@@ -204,7 +224,10 @@ describe('createUpdateController', () => {
 
     it('reads the id from idFrom instead of the path, for a self-service resource like /account', async () => {
         const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
-        const { update: patch } = makeController({ update, idFrom: () => 'the-callers-own-id' });
+        const { update: patch } = makeController(
+            { update },
+            { idFrom: () => 'the-callers-own-id' }
+        );
 
         // No `:id` at all — `idFrom` is the only source, exactly like `/account`'s own route.
         await patch(makeRequest({ title: 'x' }, undefined), makeResponseStub());

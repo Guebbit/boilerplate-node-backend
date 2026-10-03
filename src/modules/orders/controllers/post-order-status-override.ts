@@ -6,12 +6,11 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { orderService } from '../services';
 import type { StatusOverrideRequest } from '@types';
 import { OverrideOrderStatusBody } from '@api/schemas.zod';
-import { rejectResponse } from '@infrastructure/http/response';
-import { callerContextOf, isValidObjectId } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { respondWithOrder } from './respond';
 
@@ -22,16 +21,14 @@ export const postOrderStatusOverride = (
     request: Request<{ id?: string }, unknown, StatusOverrideRequest>,
     response: Response
 ): Promise<void> => {
-    if (!isValidObjectId(request.params.id)) {
-        rejectResponse(response, 404, [t('orders.not-found')]);
-        return Promise.resolve();
-    }
+    const id = requireId(request, response, { notFound: 'orders.not-found' });
+    if (!id) return Promise.resolve();
 
     const body = parseBody(OverrideOrderStatusBody, request.body, response);
     if (!body) return Promise.resolve();
 
     return orderService
-        .overrideStatus(request.params.id, body.to, body.reason, callerContextOf(request))
+        .overrideStatus(id, body.to, body.reason, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

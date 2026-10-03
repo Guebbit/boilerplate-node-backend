@@ -13,11 +13,14 @@ import { successResponse } from '@infrastructure/http/response';
 import { paymentService } from '../services';
 import { presentPayment } from '../presenter';
 import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /** Handles `POST /payments/:id/sync`. */
 export const postPaymentSync = (request: Request<{ id?: string }>, response: Response) => {
-    const paymentId = String(request.params.id);
+    const paymentId = requireId(request, response, { notFound: 'payments.not-found' });
+    if (!paymentId) return;
+
     return paymentService
         .syncPayment(paymentId, request.authContext, callerContextOf(request))
         .then((result) => {

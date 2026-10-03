@@ -239,6 +239,49 @@ flowchart LR
     R -->|"stale, or lost the race"| E["PreconditionFailedError → 412"]
 ```
 
+## A malformed id has one answer per position
+
+Where an id sits decides the answer. "Malformed" means not this backend's own id: 24 hex
+characters. The contract's shared `Id` is deliberately looser (see below), so a value can satisfy
+the contract and still be refused here.
+
+| The id is in…      | Malformed (`abc`)                                                     | Well-formed but unknown |
+| ------------------ | --------------------------------------------------------------------- | ----------------------- |
+| the **URL path**   | **404**, the same code and copy the module answers an unknown id with | 404                     |
+| a **body field**   | **422** `VALIDATION_ERROR`, `details.field` names the field           | 404 from the service    |
+| a **query filter** | **422** `VALIDATION_ERROR`, `details.field` names the field           | an empty list           |
+
+```mermaid
+flowchart TD
+    A["id arrives"] --> B{"where?"}
+    B -->|"URL path"| C["requireId"]
+    B -->|"body or query"| D["parseBody"]
+    C -->|"24 hex"| S["service: found, or the module's 404"]
+    C -->|"anything else"| N["404, as an unknown id"]
+    D -->|"24 hex"| S
+    D -->|"anything else"| V["422 VALIDATION_ERROR + details.field"]
+```
+
+- **Path → 404.** The URL _is_ the resource asked for, so a broken one points at nothing, and the
+  answer cannot tell a caller which ids this API issues. `requireId`
+  (`src/infrastructure/http/ids.ts`) is the one check, called by every shared controller factory and
+  by every hand-written controller with an id in its path, before the database is asked. It takes
+  the module's own not-found copy, which is what makes the two answers byte-identical.
+- **Field → 422 naming the field.** A body or query value is an argument, and a bad argument is a
+  validation error that says which one. `parseBody` walks the request schema for the contract's `Id`
+  fields (found by the shared pattern) and refuses each that is not an ObjectId, in the same list
+  as every other bad field — so a body with a bad `quantity` and a bad `items.1.productId` reports
+  both.
+- **The contract's `Id`** is `minLength: 1`, `maxLength: 64`, `pattern: '^[0-9A-Za-z_-]+$'`: a
+  storage-neutral bound (OWASP API4:2023, bound every string input) that fits an ObjectId, a ULID
+  and a UUID, so the paired twin and the frontend's response validation keep working. The ObjectId
+  rule is this backend's alone and never reaches the contract.
+- **Why not 404 everywhere.** A 404 on `POST /cart` reads like a mistyped path, it cannot name the
+  field (one body can carry several ids), and `quantity: -1` is already a 422 naming its field.
+
+`tests/integration/malformed-ids.test.ts` walks every id site `openapi.yaml` declares and holds it
+to the table, so a route added later is covered on its first run.
+
 ## The database error interpreter
 
 `databaseErrorInterpreter` in `src/infrastructure/http/errors.ts` is the single place that decides
@@ -246,15 +289,15 @@ which driver failures describe the **request** rather than the server. One funct
 is the same on every model — a call-site `try`/`catch` is invisible to every endpoint that
 did not think to write one.
 
-| Raised by                    | Status | Why it is the caller's problem                                                                                                                |
-| ---------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CastError` (Mongoose)       | 422    | A value failed a schema path's cast — nearly always an ObjectId in a URL or a filter.                                                         |
-| `BSONError` (driver)         | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters.                                             |
-| `E11000` duplicate key       | 409    | A unique index refused the write: something with that value already exists.                                                                   |
-| `ValidationError` (Mongoose) | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`.                                     |
-| any module's `ConflictError` | 409    | The write was refused for what it would make true — `access`'s `AccessInvariantError` today.                                                  |
-| `PreconditionFailedError`    | 412    | The caller's `If-Match` no longer describes the row — see [Conditional writes](../api/write-methods.md#conditional-writes-etag-and-if-match). |
-| anything else                | 500    | Genuinely unrecognised.                                                                                                                       |
+| Raised by                    | Status | Why it is the caller's problem                                                                                                                               |
+| ---------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CastError` (Mongoose)       | 422    | A value failed a schema path's cast. A safety net: a malformed id is answered before the database, see [below](#a-malformed-id-has-one-answer-per-position). |
+| `BSONError` (driver)         | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters. The same safety net.                                       |
+| `E11000` duplicate key       | 409    | A unique index refused the write: something with that value already exists.                                                                                  |
+| `ValidationError` (Mongoose) | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`.                                                    |
+| any module's `ConflictError` | 409    | The write was refused for what it would make true — `access`'s `AccessInvariantError` today.                                                                 |
+| `PreconditionFailedError`    | 412    | The caller's `If-Match` no longer describes the row — see [Conditional writes](../api/write-methods.md#conditional-writes-etag-and-if-match).                |
+| anything else                | 500    | Genuinely unrecognised.                                                                                                                                      |
 
 Every branch above exists because something describing the CALLER was reaching the 500 and being
 reported as a server fault. `POST /products/search` is public and takes an `id` filter, so
@@ -306,8 +349,9 @@ answers `rejectResponse` directly instead of throwing something for this handler
 
 Every controller ends its chain with a `.catch()` that calls `rejectDatabaseError`, so nothing
 routinely relies on this branch. But a controller added later may forget one, and forgetting is
-silent — a malformed `ObjectId` reported as a server fault rather than a bad request.
-`tests/fuzz/endpoints.fuzz.test.ts` walks every spec operation and is what catches the next one.
+silent. `tests/fuzz/endpoints.fuzz.test.ts` walks every spec operation and is what catches the next
+one. A malformed id is not that case: it is answered before the database by `requireId` and
+`parseBody`, and a `CastError` reaching this branch means a route skipped them.
 
 ### The 500 branch says nothing
 

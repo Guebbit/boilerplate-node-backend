@@ -7,7 +7,8 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/http/request';
+import { tenantCallerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { apiKeysService } from '../services';
 
@@ -17,9 +18,8 @@ import { apiKeysService } from '../services';
  * answers 200.
  */
 export const revokeApiKey = (request: Request<{ id: string }>, response: Response) => {
-    // Already validated as a well-formed ObjectId here, so `revokeApiKey` below can never raise
-    // the CastError a malformed one would — no not-found mapping needed on its catch.
-    const id = extractAndValidateId(request, response, 'path');
+    // A malformed id answers as an unknown one, before the database is asked.
+    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
     if (!id) return;
 
     return apiKeysService

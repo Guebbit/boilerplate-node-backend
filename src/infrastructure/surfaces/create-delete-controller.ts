@@ -11,10 +11,11 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { withIfMatch } from '@infrastructure/http/preconditions';
-import { extractAndValidateId, readInput } from '@infrastructure/http/request';
+import { readInput } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { hardDeleteSchema } from '@infrastructure/http/schemas';
 import {
-    catchAsNotFound,
+    catchAs,
     namedHandler,
     operationName,
     refused,
@@ -36,7 +37,7 @@ export interface DeleteControllerSpec {
      * way `createUpdateController`'s `update` does.
      */
     remove: (id: string, hardDelete: boolean, request: Request) => Promise<ServiceResult<unknown>>;
-    /** The i18n key answered when the id is well-formed but matches nothing. */
+    /** The i18n key answered when the id matches nothing, or is not an id at all. */
     notFoundKey: string;
 }
 
@@ -51,8 +52,9 @@ export const createDeleteController = ({ entity, remove, notFoundKey }: DeleteCo
     const operation = operationName('delete', entity);
 
     return namedHandler(operation, (request: Request, response: Response) => {
-        // Reads `:id` off the route, 422s and returns undefined if it's missing or malformed.
-        const id = extractAndValidateId(request, response, 'delete');
+        // Reads `id` off the route, query or body. A malformed one is the same 404 an unknown id
+        // gets when it came in the path, and a 422 naming `id` when it came any other way.
+        const id = requireId(request, response, { notFound: notFoundKey, surface: 'delete' });
         if (!id) return Promise.resolve();
 
         // `hardDelete` arrives three ways (path segment via `routeFlag`, query, or body) and
@@ -76,6 +78,6 @@ export const createDeleteController = ({ entity, remove, notFoundKey }: DeleteCo
 
                 successResponse(response, undefined, 200, result.message);
             })
-            .catch(catchAsNotFound(response, operation, notFoundKey));
+            .catch(catchAs(response, operation));
     });
 };

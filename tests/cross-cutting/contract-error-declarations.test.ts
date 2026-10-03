@@ -1,17 +1,10 @@
 /**
- * Every status the error interpreter can answer is a status the contract describes.
+ * Every status the id rule can answer is a status the contract describes.
  *
- * `databaseErrorInterpreter` answers **422 `Invalid identifier`** for a Mongoose `CastError` and
- * again for a `BSONError` — which is what a malformed id produces, on any operation that takes
- * one. Mongo has no such failure to report: a malformed ObjectId is a perfectly valid string that
- * matches no row, so the rejection happens before the query and belongs to the id, not to the
- * collection.
- *
- * That makes 422 a property of the PARAMETER rather than of the endpoint, and the contract has to
- * say so on all of them or on none. Four operations said nothing — `GET /products/{id}`,
- * `GET /orders/{id}`, `GET /orders/{id}/invoice`, `GET /users/{id}` — while the twenty-five beside
- * them did, so the same request shape was documented two different ways depending on which route
- * received it.
+ * A malformed id in a URL path is the same 404 an unknown id gets (`requireId`,
+ * `docs/theory/request-flow.md#a-malformed-id-has-one-answer-per-position`), so 404 is a property
+ * of the PARAMETER rather than of the endpoint, and the contract has to say so on every operation
+ * that takes an id in its path, not only on the ones whose service happens to answer a miss.
  *
  * ── Why this is worth a test rather than a fix ────────────────────────────────────────────────
  * The contract is a SHARED file: `openapi.yaml` is bundled from these fragments and must stay
@@ -25,12 +18,12 @@
  * The bundle is generated. A failure there names a line nobody edits, and the fix is in a fragment
  * the message would not mention.
  *
- * ── Scope: 422 only ───────────────────────────────────────────────────────────────────────────
- * The same sweep over 500 reports three operations — `GET /account`,
- * `GET /observability/events`, `GET /observability/metrics` — and they are NOT asserted here.
- * Whether each is an omission or a deliberate shape is a question about those endpoints, and
- * answering it means editing a file that must move in three repositories at once. Recorded rather
- * than enforced, so this file states one rule it can defend instead of two it cannot.
+ * ── Scope: 404 on a path id only ──────────────────────────────────────────────────────────────
+ * The 422 an id in a body or a query answers is held by `tests/integration/malformed-ids.test.ts`,
+ * which finds those sites from the schema itself. The sweep over 500 reports three operations —
+ * `GET /account`, `GET /observability/events`, `GET /observability/metrics` — and they are NOT
+ * asserted here: whether each is an omission or a deliberate shape is a question about those
+ * endpoints, and answering it means editing a file that must move in three repositories at once.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -45,8 +38,7 @@ const METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
  * A path templated on an id — `{id}`, `{orderId}`, `{userId}`.
  *
  * Matched on the parameter NAME rather than on a list of routes, because that is the actual
- * trigger: the interpreter answers 422 for whatever it failed to cast, and every one of these
- * carries a value it will try to.
+ * trigger: every one of these carries a value `requireId` may refuse.
  */
 const TAKES_AN_ID = /{[^}]*[Ii]d}/;
 
@@ -89,16 +81,16 @@ describe('declared error responses', () => {
         expect(takingAnId().length).toBeGreaterThanOrEqual(20);
     });
 
-    it('declares 422 on every operation that takes an id', () => {
+    it('declares 404 on every operation that takes an id in its path', () => {
         /*
-         * The one the four were missing. `databaseErrorInterpreter` can answer it on any of these,
-         * so an operation that omits it describes an API that cannot fail the way this one does.
+         * A malformed id answers as an unknown one, so an operation that omits the 404 describes an
+         * API that cannot fail the way this one does.
          */
         const undeclared = takingAnId()
-            .filter(({ codes }) => !codes.includes('422'))
+            .filter(({ codes }) => !codes.includes('404'))
             .map(
                 ({ module, method, route }) =>
-                    `${module}: ${method.toUpperCase()} ${route} — a malformed id answers 422, and this says it cannot`
+                    `${module}: ${method.toUpperCase()} ${route} — a malformed id answers 404, and this says it cannot`
             );
 
         expect(undeclared).toEqual([]);

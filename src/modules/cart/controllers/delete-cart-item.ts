@@ -11,7 +11,8 @@ import { t } from '@infrastructure/i18n';
 import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
 import type { CartResponse, RemoveCartItemRequest } from '@types';
-import { requireObjectId, readInput, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
@@ -26,11 +27,15 @@ export const deleteCartItem = (
 ) => {
     const userId = request.authContext!.id;
     // `write` reads params before body, no query — neither route declares one. The path segment
-    // wins on the canonical route; the alias has no path segment, so the body is the only source
-    // that can ever supply one.
-    const { productId } = readInput(request, { surface: 'write', ids: ['productId'] });
-
-    if (!requireObjectId(response, productId)) return;
+    // wins on the canonical route (a malformed one is the bare 404 a line not in the cart gets);
+    // the alias has no path segment, so the body is the only source that can ever supply one (a
+    // malformed one is a 422 naming `productId`).
+    const productId = requireId(request, response, {
+        notFound: null,
+        name: 'productId',
+        surface: 'write'
+    });
+    if (!productId) return;
 
     return cartService
         .cartItemRemoveById(userId, productId, callerContextOf(request))

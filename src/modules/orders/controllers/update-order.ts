@@ -17,6 +17,7 @@ import { callerContextOf } from '@infrastructure/http/request';
  */
 export const { replace: replaceOrderById, update: updateOrderById } = createUpdateController({
     entity: 'orderById',
+    notFoundKey: 'orders.not-found',
     replaceSchema: ReplaceOrderByIdBody,
     patchSchema: UpdateOrderByIdBody,
     update: (id, changes, request) =>

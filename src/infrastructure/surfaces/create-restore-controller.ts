@@ -9,9 +9,9 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { extractAndValidateId } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import {
-    catchAsNotFound,
+    catchAs,
     namedHandler,
     operationName,
     refused,
@@ -34,7 +34,7 @@ export interface RestoreControllerSpec<TRow> {
      * answer with, so a restore never hands out fields a read would not.
      */
     present: (row: TRow, request: Request) => unknown;
-    /** The i18n key answered when the id is well-formed but matches nothing. */
+    /** The i18n key answered when the id matches nothing, or is not an id at all. */
     notFoundKey: string;
 }
 
@@ -53,8 +53,8 @@ export const createRestoreController = <TRow>({
     const operation = operationName('restore', entity);
 
     return namedHandler(operation, (request: Request, response: Response) => {
-        // Reads `:id` off the route, 422s and returns undefined if it's missing or malformed.
-        const id = extractAndValidateId(request, response, 'path');
+        // Reads `:id` off the route; a malformed one answers as an unknown one.
+        const id = requireId(request, response, { notFound: notFoundKey });
         if (!id) return Promise.resolve();
 
         return restore(id, request)
@@ -66,6 +66,6 @@ export const createRestoreController = <TRow>({
                     successResponse(response, shaped, 200, result.message);
                 });
             })
-            .catch(catchAsNotFound(response, operation, notFoundKey));
+            .catch(catchAs(response, operation));
     });
 };
