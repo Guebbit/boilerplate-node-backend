@@ -4,4 +4,4 @@ group: shop
 dependsOn:
     - inventory # confirm commits an order's held stock into a sale
     - orders # a payment freezes an order's total; refunds answer ORDER_REFUND_OWED
-    - users # resolve the payer, detach on USER_DELETED
+    - users # resolve the payer; its hard delete runs the erase hook

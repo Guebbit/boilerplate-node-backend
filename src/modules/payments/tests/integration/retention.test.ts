@@ -1,7 +1,7 @@
 /**
  * @module
  * Erasure detaches a payment from its account rather than deleting it — the
- * payment survives, same as the order it paid for. The cascade half (`USER_DELETED` →
+ * payment survives, same as the order it paid for. The cascade half (`personalData.erase` →
  * `detachUserId`) is proved through real module wiring, same as `cart`'s own cascade suite; the
  * `createIntent` case below is the one live path that can still reach a detached order (an admin
  * intent against it), and pins that it records no garbage payer rather than the string

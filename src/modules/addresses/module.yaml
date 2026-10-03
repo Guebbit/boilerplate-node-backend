@@ -2,7 +2,7 @@ summary: "The address book, its own module so the cart's checkout can reach it w
 subdomain: supporting
 group: foundation
 dependsOn:
-    - users # USER_DELETED, to clear an erased account's book — never a service call
+    - users # its hard delete runs this module's `personalData.erase` hook — never a service call
 noAudit: "Edits the caller's own address book: your own data, no money, no stock, no identity beyond the caller."
 frontend:
     counterparts: [account]

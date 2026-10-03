@@ -1356,8 +1356,9 @@ describe('productRemoveFromCartsById', () => {
 /**
  * Registers the real modules rather than reaching into the users service directly — the
  * `subscribe` hook reaches siblings for real, so a partial list boots handlers against modules
- * that aren't there. Also proves the subscription exists: the cart no longer hears from a direct
- * call, only from `user.deleted`, so skipping registration would pass for the wrong reason.
+ * that aren't there. Also proves the erase hook is declared: the cart hears about a hard delete only through
+ * the `personalData.erase` hook `users` collects from the registry, so skipping registration would
+ * pass for the wrong reason.
  */
 describe('cartDeleteByUserId', () => {
     beforeEach(() => {

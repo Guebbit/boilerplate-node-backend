@@ -27,7 +27,7 @@ import { usersAuditActions } from '../audit';
 /**
  * Runs every registered `personalData.erase` hook and then deletes the user document
  * itself, all inside `session`'s transaction — cart cleanup, address-book erasure and the rest
- * either all happen or none do, and a crash mid-cascade no longer leaves a half-erased account.
+ * either all happen or none do, and a crash mid-cascade leaves no half-erased account.
  *
  * Sequential, not `Promise.all`: a `ClientSession` runs ONE operation at a time, and two erasers
  * racing on it fails with a confusing "sharded cluster" error that has nothing to do with

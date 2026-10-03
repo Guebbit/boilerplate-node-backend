@@ -323,7 +323,7 @@ describe('getForOrder', () => {
 /*
  * The refund rides the ORDER_REFUND_OWED event, and the subscription only exists once the
  * registry has run — a test that skipped `registerCheckoutModules` would assert the refund never
- * happens and pass for the wrong reason (same shape as the cart's USER_DELETED suite).
+ * happens and pass for the wrong reason (same shape as the cart's erasure suite).
  */
 describe('refund on cancel', () => {
     beforeEach(() => {

@@ -2,9 +2,9 @@
  * @module
  * Erasure detaches an order from its account rather than deleting it, and
  * `scripts/ops/reap-orders.ts`'s sweep scrubs the remaining PII once the retention window elapses.
- * The cascade half (`USER_DELETED` → `detachUserId`) is proved through real module wiring, same
- * as `cart`'s own cascade suite — a direct call to the service function would pass even if
- * `orders/module.ts` stopped subscribing.
+ * The cascade half (`personalData.erase` → `detachUserId`) is proved through real module wiring,
+ * same as `cart`'s own cascade suite — a direct call to the service function would pass even if
+ * `orders/module.ts` stopped declaring the hook.
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';

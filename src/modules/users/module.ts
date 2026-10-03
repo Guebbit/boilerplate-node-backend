@@ -1,8 +1,9 @@
 /**
  * @module
  * The user record: admin-facing search, read, write and soft delete. Reads roles through
- * `@modules/access`'s barrel, never writes there directly. Deleting an account empties that
- * user's cart via `user.deleted`, keeping cart → users a one-way arrow. Authentication lives in
+ * `@modules/access`'s barrel, never writes there directly. Hard-deleting an account runs every
+ * module's `personalData.erase` hook (cart, addresses, ...) inside one transaction, keeping
+ * those modules' arrows to `users` one-way. Authentication lives in
  * `account`, which reaches this module's barrel for the record it authenticates.
  *
  * Not in the import graph: `account` writes this same document — the shared kernel.
