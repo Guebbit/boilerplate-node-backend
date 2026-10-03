@@ -25,7 +25,8 @@ import {
     stripScenarioIndex,
     stripSeedImageGenerator,
     stripShopModulesTable,
-    stripSubjects
+    stripSubjects,
+    stripDemoJobs
 } from './demo-remove-scenarios';
 import { stripAccountExportSchema } from './demo-remove-contract';
 
@@ -52,6 +53,7 @@ report([
     stripShopModulesTable(REPO_ROOT),
     stripScenarioIndex(REPO_ROOT),
     stripSubjects(REPO_ROOT),
+    stripDemoJobs(REPO_ROOT),
     stripClientCollections(REPO_ROOT),
     stripSeedImageGenerator(REPO_ROOT)
 ]);
