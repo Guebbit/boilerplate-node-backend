@@ -123,7 +123,7 @@ const wishlistMoveToCart = (
     });
 
 /**
- * What a hard user deletion owes the wishlists — DDD-D6's `personalData.erase` hook (see
+ * What a hard user deletion owes the wishlists — the `personalData.erase` hook (see
  * `module.ts`'s manifest), joining the caller's own hard-delete transaction.
  */
 export const wishlistDeleteByUserId = (userId: string, session: ClientSession): Promise<void> =>

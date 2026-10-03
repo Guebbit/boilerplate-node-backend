@@ -27,7 +27,7 @@ export default {
             section: 'wishlist',
             collect: (subject) =>
                 wishlistService.wishlistGet(subject.userId).then((view) => view.items),
-            // DDD-D6: joins the caller's own hard-delete transaction — see `wishlistDeleteByUserId`.
+            // Joins the caller's own hard-delete transaction — see `wishlistDeleteByUserId`.
             erase: wishlistDeleteByUserId
         }
     ],
