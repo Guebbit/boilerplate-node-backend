@@ -252,6 +252,7 @@ export default withMermaid(
                             { text: 'Load Testing', link: '/tools/load-testing' },
                             { text: 'Dependency Graph', link: '/tools/dependency-graph' },
                             { text: 'Cluster Testing', link: '/tools/cluster-testing' },
+                            { text: 'Broker Testing', link: '/tools/broker-testing' },
                             { text: 'Weak Machines', link: '/tools/weak-machines' }
                         ]
                     }

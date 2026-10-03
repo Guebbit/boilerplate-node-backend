@@ -1376,6 +1376,7 @@ export default tseslint.config(
             '.dependency-cruiser.cjs',
             '.dependency-cruiser.modules.cjs',
             'jest.config.cluster.js',
+            'jest.config.broker.js',
             'docs/.vitepress/**/*.{ts,mts}'
         ],
         extends: [tseslint.configs.disableTypeChecked],

@@ -228,7 +228,8 @@ boot, and a one-line change in one module would drag in the whole contract suite
 non-deterministic by construction: a mutant killed by a random input on one run and not the next
 produces a score that moves on its own, which is the one thing a ratchet cannot tolerate.
 
-`tests/cluster/` forks real workers against a Redis and is not part of `npm test` either. `tmp/` and
+`tests/cluster/` forks real workers against a Redis and is not part of `npm test` either; neither is
+`tests/broker/`, which needs a real RabbitMQ. `tmp/` and
 `.claude/worktrees/` are not suites at all: they hold Stryker's own sandboxes and other checkouts'
 copies of the tests, which jest would otherwise discover and run as if they were this tree's.
 

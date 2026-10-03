@@ -162,12 +162,14 @@ module.exports = {
     /*
      * `tests/cluster` runs under `jest.config.cluster.js` instead: those tests spawn `src/cluster.ts`
      * as a child process and boot their own Mongo and Redis, so none of this file's setup applies.
+     * `tests/broker` runs under `jest.config.broker.js`: it needs a real RabbitMQ and no database.
      */
     testPathIgnorePatterns: [
         '/node_modules/',
         '<rootDir>/tmp/',
         '<rootDir>/.claude/worktrees/',
-        '<rootDir>/tests/cluster/'
+        '<rootDir>/tests/cluster/',
+        '<rootDir>/tests/broker/'
     ],
     modulePathIgnorePatterns: ['<rootDir>/tmp/', '<rootDir>/.claude/worktrees/'],
     collectCoverageFrom: [

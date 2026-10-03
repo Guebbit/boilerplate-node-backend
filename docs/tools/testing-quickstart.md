@@ -100,15 +100,16 @@ Each answers something the others structurally cannot:
 | **contract**      | a Zod-walked request fuzzer + orval's strict response Zod | the API drifting from `openapi.yaml`, in either direction      |
 | **fuzz**          | fast-check                                                | a rule that holds for your examples and not in general         |
 
-## Pointing the suite at a real Mongo or Redis
+## Pointing the suite at a real Mongo, Redis or RabbitMQ
 
-Two variables, both optional, both honoured the same way — an external address wins when set,
+Three variables, all optional, all honoured the same way — an external address wins when set,
 otherwise the suite starts its own:
 
-| Variable              | Unset (default)                                          | Set                                                                             |
-| --------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `NODE_TEST_MONGO_URI` | an in-process `mongod` per run (`mongodb-memory-server`) | that Mongo — CI's own service container, or `docker-compose.test.yml`'s `mongo` |
-| `NODE_TEST_REDIS_URL` | `test:cluster` starts and stops its own Redis container  | that Redis                                                                      |
+| Variable                 | Unset (default)                                           | Set                                                                                   |
+| ------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `NODE_TEST_MONGO_URI`    | an in-process `mongod` per run (`mongodb-memory-server`)  | that Mongo — CI's own service container, or `docker-compose.test.yml`'s `mongo`       |
+| `NODE_TEST_REDIS_URL`    | `test:cluster` starts and stops its own Redis container   | that Redis                                                                            |
+| `NODE_TEST_RABBITMQ_URL` | `test:broker` starts and stops its own RabbitMQ container | that broker (needs the management plugin) — see [Broker Testing](./broker-testing.md) |
 
 See `scenarios/support/ephemeral-mongo.ts` and `tests/cluster/support/redis.ts` for the
 resolvers — Mongo's fallback shape differs from Redis's because it has an in-process option

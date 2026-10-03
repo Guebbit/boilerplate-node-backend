@@ -15,6 +15,7 @@
                 "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
                 "<rootDir>/tests/cross-cutting/outbox-names.test.ts",
                 "<rootDir>/tests/cluster/",
+                "<rootDir>/tests/broker/",
                 "<rootDir>/tmp/",
                 "<rootDir>/.claude/worktrees/"
             ]
