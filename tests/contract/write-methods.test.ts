@@ -9,6 +9,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
+import { roleReaching } from '@tests/shopper-routes';
 import { MISSING_ID } from '@tests/ids';
 import { createProduct } from '@modules/products/tests/factories';
 import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
@@ -51,7 +52,7 @@ const EMPTY_STRING_CASES: readonly WriteCase[] = [
 
 describe('an empty string is never a stored value', () => {
     it.each(EMPTY_STRING_CASES)('%s %s answers 422', async (method, url, body) => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs(roleReaching({ path: url }));
 
         const response = await api()[method](url).set('Authorization', bearer).send(body);
 
@@ -138,8 +139,7 @@ describe('a 201 names the new resource in Location', () => {
 
         const response = await api().post('/users').set('Authorization', bearer).send({
             email: 'located@example.com',
-            username: 'located',
-            password: PLAIN_PASSWORD
+            username: 'located'
         });
 
         expect(response.status).toBe(201);

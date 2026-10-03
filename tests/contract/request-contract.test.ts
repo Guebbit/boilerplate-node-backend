@@ -40,6 +40,7 @@ import '@tests/contract';
 import type { Response } from 'supertest';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { roleReaching } from '@tests/shopper-routes';
 import { createProduct } from '@modules/products/tests/factories';
 import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { ZodType } from 'zod';
@@ -572,7 +573,8 @@ const contentTypesOf = (operation: Operation): string[] => [
 ];
 
 /**
- * Sends `body` to `operation` as an admin, against a world where its path names real rows.
+ * Sends `body` to `operation` as an admin (a customer on the shopping routes, which an
+ * administrator holds no key for), against a world where its path names real rows.
  *
  * @param operation - what to call
  * @param body - the payload under test
@@ -585,7 +587,7 @@ const sendWrite = async (
     contentType = 'application/json',
     skipField?: string
 ): Promise<Response> => {
-    const { user, bearer } = await authenticateAs('admin');
+    const { user, bearer } = await authenticateAs(roleReaching(operation));
     const world = await seedWorld(user);
     const payload = { ...body };
     for (const [field, override] of Object.entries(

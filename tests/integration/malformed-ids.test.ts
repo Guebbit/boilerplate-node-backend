@@ -11,7 +11,8 @@
  * schema (`tests/support/spec-ids.ts`), so a route added tomorrow is held to the rule on its first
  * run — and a route whose controller forgot the check answers 422 or 500 here instead of 404.
  *
- * Callers are admin, so a refusal is the controller's own and never a permission gate.
+ * Callers are admin, so a refusal is the controller's own and never a permission gate; the shopping
+ * routes are the one exception, since an administrator holds no basket key and a customer does.
  */
 import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';
@@ -19,6 +20,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { listOperations, readSpec, type Operation, type SchemaNode } from '@tests/spec-walk';
 import { bodyArbitraryFor } from '@tests/spec-arbitraries';
 import { seedWorld, buildUrl, OBJECT_ID, type World } from '@tests/spec-world';
+import { roleReaching } from '@tests/shopper-routes';
 import {
     fieldName,
     idBodyFields,
@@ -152,7 +154,7 @@ describe('the id sites the spec declares', () => {
     it('are found, so the sweeps below cannot pass by sweeping nothing', () => {
         // Counts, not a floor of one: a walk that quietly stopped recognising `Id` would still
         // find a few, and every sweep below would shrink to a rounding error.
-        expect(PATH_SITES.length).toBeGreaterThanOrEqual(72);
+        expect(PATH_SITES.length).toBeGreaterThanOrEqual(71);
         expect(BODY_SITES.length).toBeGreaterThanOrEqual(19);
         expect(QUERY_SITES.length).toBeGreaterThanOrEqual(8);
     });
@@ -175,7 +177,7 @@ describe('an id in the URL path', () => {
         });
 
         it('answers 404 for a malformed value, as it does for an unknown one', async () => {
-            const { user, bearer } = await authenticateAs('admin');
+            const { user, bearer } = await authenticateAs(roleReaching(operation));
             const world = await seedWorld(user);
             const body = validBodyFor(operation.bodySchema);
 
@@ -211,7 +213,7 @@ describe('an id in a request body', () => {
         });
 
         it('answers 422 VALIDATION_ERROR naming the field', async () => {
-            const { user, bearer } = await authenticateAs('admin');
+            const { user, bearer } = await authenticateAs(roleReaching(operation));
             const world = await seedWorld(user);
             const body = validBodyFor(operation.bodySchema) ?? {};
             setPath(body, segments, BAD_ID);
@@ -238,7 +240,7 @@ describe('an id in a query string', () => {
         });
 
         it('answers 422 VALIDATION_ERROR naming the field', async () => {
-            const { user, bearer } = await authenticateAs('admin');
+            const { user, bearer } = await authenticateAs(roleReaching(operation));
             const world = await seedWorld(user);
             const [name] = segments;
 

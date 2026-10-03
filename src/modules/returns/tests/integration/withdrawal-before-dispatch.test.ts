@@ -88,8 +88,12 @@ describe('a withdrawal before dispatch on a paid order', () => {
         const [written] = await returnRepository.findByOrderId(orderId);
         expect(written).toMatchObject({ status: 'closed', refundAmount: 40, lines: [] });
 
+        // Both listeners of the one event: the credit note is written by the module's own, this
+        // test's runs after it, so seeing the note alone is not seeing the event captured.
         await waitFor(() =>
-            invoicingService.findCreditNotesForOrder(orderId).then((notes) => notes.length > 0)
+            invoicingService
+                .findCreditNotesForOrder(orderId)
+                .then((notes) => notes.length > 0 && refunds.length > 0)
         );
         // The refund is the order's own, not the return's: it carries no `returnId`, and the
         // return — closed already — is not closed a second time by it.

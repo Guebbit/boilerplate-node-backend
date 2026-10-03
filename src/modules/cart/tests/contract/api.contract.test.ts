@@ -446,7 +446,11 @@ describe('POST /cart/checkout', () => {
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
 
-        const before = await api().get(`/products/${String(product._id)}`);
+        // The count is a stock reader's to see: the shopper gets only the in-stock flags.
+        const { bearer: stockReader } = await authenticateAs('admin');
+        const before = await api()
+            .get(`/products/${String(product._id)}`)
+            .set('Authorization', stockReader);
         const requestBody = {};
 
         const first = await api()
@@ -473,7 +477,9 @@ describe('POST /cart/checkout', () => {
         expect(orders.body.data.items).toHaveLength(1);
 
         // The basket's stock was reserved once, not twice, by the replay.
-        const after = await api().get(`/products/${String(product._id)}`);
+        const after = await api()
+            .get(`/products/${String(product._id)}`)
+            .set('Authorization', stockReader);
         expect(after.body.data.available).toBe(before.body.data.available - 2);
     });
 
