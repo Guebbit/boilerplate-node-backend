@@ -58,7 +58,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   # Need full history to walk the commit range.
                   fetch-depth: 0
@@ -85,7 +85,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -104,7 +104,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -123,7 +123,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -141,7 +141,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -186,12 +186,12 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Checkout paired frontend
               id: sibling
               continue-on-error: true
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   # Override with a repository variable when the pair lives elsewhere.
                   repository: ${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}
@@ -227,7 +227,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -245,7 +245,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -272,7 +272,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -301,7 +301,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   # `merge-base` needs both sides; a shallow clone has neither.
                   fetch-depth: 0
@@ -335,7 +335,7 @@ jobs:
                     --health-retries 10
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -372,7 +372,7 @@ jobs:
                     --health-retries 20
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -396,7 +396,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -434,7 +434,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -465,7 +465,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -488,7 +488,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -512,7 +512,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -565,7 +565,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -594,7 +594,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -623,7 +623,7 @@ jobs:
             FRONTEND_PATH: .frontend
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             # Installs this backend's dependencies and a system `mongod` for the demo profile's
             # in-memory database — the same preamble the test jobs use.
@@ -634,7 +634,7 @@ jobs:
                   setup-mongod: 'true'
 
             - name: Checkout paired frontend
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   # Override with a repository variable when the pair lives elsewhere.
                   repository: ${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}
@@ -703,7 +703,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Build the dev/test image
               run: docker build -f docker/Dockerfile -t boilerplate-api-gate:${{ github.sha }} .
@@ -730,7 +730,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -761,7 +761,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Setup
               uses: ./.github/actions/setup
