@@ -116,18 +116,18 @@ Reads published products, the dictionary the shop is rendered in, and the delive
 The roles above after the evaluator has had them, the `guest` baseline folded in. This is
 what a route guard and a listing actually answer.
 
-| Role         | products | cart | orders | payments | inventory | delivery | returns   | feedback | locales | core | users | account | audit-logs | webhooks | api-keys | observability |
-| ------------ | -------- | ---- | ------ | -------- | --------- | -------- | --------- | -------- | ------- | ---- | ----- | ------- | ---------- | -------- | -------- | ------------- |
-| `guest`      | r        | —    | —      | —        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             |
-| `unverified` | r        | —    | r      | r        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             |
-| `customer`   | r        | x    | r      | r        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             |
-| `manager`    | RCUD     | x    | RCUD   | r        | R         | RSTART   | RURECEIVE | R        | RCUD    | RU   | R     | —       | R          | RCUD     | —        | —             |
-| `warehouse`  | R        | x    | R      | —        | RC        | RUSTART  | RRECEIVE  | —        | r       | —    | —     | —       | —          | —        | —        | —             |
-| `support`    | r        | x    | R      | R        | —         | R        | RU        | RUD      | r       | —    | RU    | —       | R          | —        | —        | —             |
-| `editor`     | RCUD     | x    | —      | —        | —         | R        | —         | —        | RCUD    | RU   | —     | —       | —          | —        | —        | —             |
-| `moderator`  | r        | x    | RCUD   | RCU      | —         | R        | RU        | —        | r       | —    | RCUD  | —       | R          | —        | —        | —             |
-| `admin`      | RCUD     | x    | RCUDO  | RCU      | RCS       | RUSTART  | RURECEIVE | RUD      | RCUD    | RU   | RCUD  | D       | R          | RCUD     | RCD      | —             |
-| `operator`   | —        | —    | —      | —        | —         | —        | —         | —        | —       | —    | —     | —       | —          | —        | —        | R             |
+| Role         | products | cart | orders | payments | inventory | delivery | returns   | feedback | locales | core | users | account | audit-logs | webhooks | api-keys | observability | example |
+| ------------ | -------- | ---- | ------ | -------- | --------- | -------- | --------- | -------- | ------- | ---- | ----- | ------- | ---------- | -------- | -------- | ------------- | ------- |
+| `guest`      | r        | —    | —      | —        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             | —       |
+| `unverified` | r        | —    | r      | r        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             | rcud    |
+| `customer`   | r        | x    | r      | r        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             | rcud    |
+| `manager`    | RCUD     | x    | RCUD   | r        | R         | RSTART   | RURECEIVE | R        | RCUD    | RU   | R     | —       | R          | RCUD     | —        | —             | rcud    |
+| `warehouse`  | R        | x    | R      | —        | RC        | RUSTART  | RRECEIVE  | —        | r       | —    | —     | —       | —          | —        | —        | —             | rcud    |
+| `support`    | r        | x    | R      | R        | —         | R        | RU        | RUD      | r       | —    | RU    | —       | R          | —        | —        | —             | rcud    |
+| `editor`     | RCUD     | x    | —      | —        | —         | R        | —         | —        | RCUD    | RU   | —     | —       | —          | —        | —        | —             | rcud    |
+| `moderator`  | r        | x    | RCUD   | RCU      | —         | R        | RU        | —        | r       | —    | RCUD  | —       | R          | —        | —        | —             | rcud    |
+| `admin`      | RCUD     | x    | RCUDO  | RCU      | RCS       | RUSTART  | RURECEIVE | RUD      | RCUD    | RU   | RCUD  | D       | R          | RCUD     | RCD      | —             | RcUD    |
+| `operator`   | —        | —    | —      | —        | —         | —        | —         | —        | —       | —    | —     | —       | —          | —        | —        | R             | —       |
 
 UPPERCASE — the `any`-breadth key, every row · lowercase — `self`, the caller’s own · `r` read · `c` create · `u` update · `d` delete · `x` checkout · `s` sweep · `o` override · — nothing
 

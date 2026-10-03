@@ -85,11 +85,11 @@ subscribes to each one generically on the kernel's domain-event bus, the same sh
 the email a disable notice is sent to — never a call back into either module's business logic.
 
 **The public event catalogue is a contract, not an accident.** This module's own `asyncapi.yaml`
-fragment declares the ten events this shop's clone is willing to promise, and both
+fragment declares the eleven events this shop's clone is willing to promise (ten from the shop, plus the `example` module's one), and both
 `GET /webhooks/events` and `tests/cross-cutting/webhook-event-producers.test.ts`'s producer-coverage
 check read that fragment directly — `asyncapi.public.yaml` is a derived sibling output, not the
 source either reads. A module reaching for the internal domain-event bus and calling it "public"
-would publish internal coupling as an external promise; declaring the ten here instead is what
+would publish internal coupling as an external promise; declaring them here instead is what
 keeps that from happening. The mapping (which domain event becomes which public name) now lives on
 `orders`'/`payments`'/`returns`' own manifests; this file still owns the channel CATALOGUE itself, because
 every channel shares one server and one header schema declared once here — see this file's own

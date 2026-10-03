@@ -144,12 +144,13 @@ Once `demo:remove` leaves you with a green `npm run complete`,
 the remaining `foundation` modules are what every deployment of this boilerplate keeps, whatever it
 becomes next.
 
-**The module to copy is `feedback`.** It is `foundation`, so it is still there after the strip and
-depends on nothing shop-shaped, and it carries most of what a new module needs. Do not start from a
-shop module: the strip deletes it, and its dependencies with it.
+**The module to copy is `example`.** It is written for exactly that: it has its own group, so the
+strip leaves it, it depends only on `users`, and it carries every common capability, each in its own
+files. It is only an example, so delete it once you have your own domain. Do not start from a shop
+module: the strip deletes it, and its dependencies with it.
 
 **Or let the scaffolder start it for you.** `npm run scaffold:module -- <name>` writes a working
-`feedback`-shaped module, its docs page and its registry line, then regenerates —
+`example`-shaped module, its docs page and its registry line, then regenerates —
 [Module scaffolder](./tools/module-scaffolder.md) says what it writes and what it leaves to you.
 `docs/theory/modules.md#the-module-template` is the shape a new module follows; `docs/theory/module-lifecycle.md#adding-a-module` walks through adding one from
 nothing, the same way this page walks through removing one.

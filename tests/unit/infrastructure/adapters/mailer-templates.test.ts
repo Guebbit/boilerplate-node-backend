@@ -30,6 +30,7 @@ import {
     twoFactorChangedEmail
 } from '@modules/account/emails';
 import { contactRequestEmail } from '@modules/feedback/emails';
+import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
     paymentSucceededEmail,
@@ -151,6 +152,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         at: new Date('2026-08-06T10:30:00Z')
     }),
     'webhooks.subscription-disabled': subscriptionDisabledEmail(locale, 'https://example.com/hook'),
+    'example.published': examplePublishedEmail(locale, 'Ada', 'A title'),
     'feedback.contact': contactRequestEmail(locale, {
         name: 'Ada',
         email: 'ada@example.com',

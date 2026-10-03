@@ -337,6 +337,12 @@ at all, and the templates interpolate rather than translate.
 
 ## The module template
 
+`src/modules/example` is this template in code: the module to copy when you start a new domain, and
+to delete once you have your own. It is only an example, which is why it has no page under
+`docs/modules/`: a page would restate files that are better read. It has its own group
+(`module.yaml#group: example`), so `npm run demo:remove` leaves it, nothing may import it, and it
+imports only the foundation (it reads the owner's name through the `users` barrel).
+
 The table above lists what a module MAY have; this is the same shape as one block, with the
 question that decides each optional row attached to it directly, and the house rule each row is
 downstream of:
@@ -364,6 +370,29 @@ differences from the shape instead of re-deriving it. `service.ts` REPLACES itse
 past a size the module itself measures, not a line this page enforces twice —
 [Layers](./layers.md#when-service-ts-becomes-services) has the actual thresholds and the split this
 repo has used every time.
+
+### Optional capabilities, and the files that carry them
+
+The core is what every module has. Each capability below is one manifest entry plus its own files,
+so it can be added or dropped alone. `example` shows each one; delete the files in the middle
+column, and the manifest entry, to drop it.
+
+| Capability                 | Files (all in `src/modules/example/` unless said)                           | Manifest entry                         | What `example` does with it                         |
+| -------------------------- | --------------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------- |
+| Events and a subscriber    | `events.ts`, `services/notify.ts`                                           | `subscribe`                            | publishes `example.published`; its own mail listens |
+| Mail                       | `emails.ts`, `templates/`                                                   | the manifest's `templates`             | mails the owner when an example is published        |
+| Rate limits                | `rate-limits.ts`                                                            | `rateLimits`                           | a budget on creating examples                       |
+| A public webhook           | `events.ts`, the catalogue in `src/modules/webhooks/asyncapi.yaml`          | `publicEvents`                         | an `example.published` webhook                      |
+| Translatable fields        | the `locales` port's methods on `repository.ts`                             | `translatables`                        | the title, per language                             |
+| An uploaded image          | `services/cover.ts`, `controllers/put-example-cover.ts`, the route and path | `imageTargets`                         | a cover image                                       |
+| A typed setting            | `config.ts`                                                                 | `config`                               | the longest body an example may have                |
+| Demo records               | `scenarios/examples.ts`, one line in `scenarios/shop-modules.ts`            | (the scenario table)                   | a few seeded examples for the demo profile          |
+| Metrics, probes, analytics | `metrics.ts`, `probes.ts`, `analytics.ts`                                   | (found by name, not declared)          | one counter, one probe, one event                   |
+| Personal data              | `services/personal-data.ts`                                                 | `personalData` (`collect` and `erase`) | exports and erases the person's examples            |
+
+Left out on purpose, with the module that really needs each: `rawBodyPaths` (`payments`: a signed
+body), `consumers` (`webhooks`: a queue), `forbiddenInProduction` (`webhooks`), a custom boot check
+(`account`, `payments`, `products`) and `onRegistered` (`locales`, `account`).
 
 Four rules the table above cannot show, because each is about how a file BEHAVES rather than
 whether it exists:

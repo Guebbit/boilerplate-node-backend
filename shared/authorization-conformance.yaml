@@ -79,6 +79,13 @@ admin-permissions: &admin_permissions
     - apikeys.any.read
     - apikeys.any.create
     - apikeys.any.delete
+    - examples.self.read
+    - examples.self.create
+    - examples.self.update
+    - examples.self.delete
+    - examples.any.read
+    - examples.any.update
+    - examples.any.delete
 
 cases:
     # =============================================================================================
@@ -209,6 +216,36 @@ cases:
       caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [orders.any.read] }
       action: delete
       subject: Order
+      resource: { tenantId: shop_1, userId: usr_2 }
+      expect: deny
+
+    # The example module's two breadths, the smallest worked case of `self` against `any`: the same
+    # action on the same subject, narrowed by an owner condition for one and not for the other.
+    - name: a caller can edit their own example
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [examples.self.update] }
+      action: update
+      subject: Example
+      resource: { tenantId: shop_1, userId: usr_1 }
+      expect: allow
+
+    - name: a caller holding only examples.self.update cannot edit someone else's example
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [examples.self.update] }
+      action: update
+      subject: Example
+      resource: { tenantId: shop_1, userId: usr_2 }
+      expect: deny
+
+    - name: a caller holding examples.any.update edits an example that is not their own
+      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [examples.any.update] }
+      action: update
+      subject: Example
+      resource: { tenantId: shop_1, userId: usr_2 }
+      expect: allow
+
+    - name: examples.any.update alone does not let that caller delete the example
+      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [examples.any.update] }
+      action: delete
+      subject: Example
       resource: { tenantId: shop_1, userId: usr_2 }
       expect: deny
 

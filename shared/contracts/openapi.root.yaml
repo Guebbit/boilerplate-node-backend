@@ -178,6 +178,8 @@ tags:
       description: Sending goods back — including the EU withdrawal button, which is a return with `reason` `withdrawal`.
     - name: Inventory
     - name: Feedback
+    - name: Examples
+      description: The example module - the small, complete domain to copy when starting a new one. Safe to delete.
     - name: System
       description: Public system endpoints (ping, liveness).
     - name: Observability
@@ -1623,7 +1625,8 @@ components:
                     auditLog,
                     apiKeys,
                     invoicing,
-                    returns
+                    returns,
+                    examples
                 ]
             properties:
                 exportedAt:
@@ -1719,6 +1722,11 @@ components:
                     type: array
                     items:
                         $ref: '../../src/modules/returns/openapi.yaml#/components/schemas/ExportReturn'
+                # Every example this account owns, drafts and archived included. Empty, never absent.
+                examples:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/example/openapi.yaml#/components/schemas/Example'
 
         AccountExportEnvelope:
             type: object

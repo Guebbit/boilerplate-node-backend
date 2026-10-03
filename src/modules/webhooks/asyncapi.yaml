@@ -23,7 +23,7 @@
 # section is also required to be a complete, standalone-valid document — a channel `$ref`-ing a
 # server or schema it does not itself declare fails `lint:asyncapi:modules` on that section alone.
 # Splitting the channel catalogue by owning module is therefore its own follow-up decision, not
-# assumed here. The SEVEN names below are the shop's worked example; a deployment with no orders
+# assumed here. The shop's names below are its worked example (`example.published` is the `example` module's, there to be copied); a deployment with no orders
 # removes `orders`/`payments` and their `publicEvents` declarations, and deletes the now-unreachable
 # channels here by hand — this file is authored, not generated from those modules.
 #
@@ -139,6 +139,14 @@ channels:
         messages:
             ReturnClosedEvent:
                 $ref: '#/components/messages/ReturnClosedEvent'
+    example.published:
+        address: example.published
+        description: An example was published. The `example` module's one webhook, there to be copied.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ExamplePublishedEvent:
+                $ref: '#/components/messages/ExamplePublishedEvent'
 operations:
     webhookOrderCreated:
         action: send
@@ -240,6 +248,16 @@ operations:
             dispatch fires it at birth, right after `return.requested`.
         messages:
             - $ref: '#/channels/return.closed/messages/ReturnClosedEvent'
+    webhookExamplePublished:
+        action: send
+        channel:
+            $ref: '#/channels/example.published'
+        summary: An example was published.
+        description: >-
+            One-to-one with the `example.published` domain event — see `example/services/crud.ts`. Fired
+            each time an example moves to `published`, including after being archived and brought back.
+        messages:
+            - $ref: '#/channels/example.published/messages/ExamplePublishedEvent'
 components:
     messages:
         OrderCreatedEvent:
@@ -305,6 +323,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/ReturnClosedEnvelope'
+        ExamplePublishedEvent:
+            name: ExamplePublishedEvent
+            title: Example published
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ExamplePublishedEnvelope'
         ReturnRequestedEvent:
             name: ReturnRequestedEvent
             title: Return requested
@@ -437,6 +462,18 @@ components:
                 currency:
                     type: string
                     description: ISO-4217, e.g. `EUR`.
+            additionalProperties: false
+        ExamplePublishedPayload:
+            type: object
+            required:
+                - exampleId
+                - title
+            properties:
+                exampleId:
+                    type: string
+                title:
+                    type: string
+                    description: The fallback-language title.
             additionalProperties: false
         OrderCreatedEnvelope:
             type: object
@@ -619,4 +656,22 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/ReturnClosedPayload'
+            additionalProperties: false
+        ExamplePublishedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ExamplePublishedEventType
+                    type: string
+                    enum:
+                        - example.published
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ExamplePublishedPayload'
             additionalProperties: false

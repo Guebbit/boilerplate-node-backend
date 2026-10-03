@@ -120,6 +120,12 @@ process.env.NODE_INVOICING_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_RETURNS_RATE_LIMIT_MAX ??= '1000';
 
 /**
+ * `createExampleLimiter` needs the same treatment: keyed on the ACCOUNT, and a contract suite
+ * creates many examples as the one seeded customer.
+ */
+process.env.NODE_EXAMPLE_RATE_LIMIT_MAX ??= '1000';
+
+/**
  * The shared window every limiter above measures against
  * (`DEFAULT_RATE_LIMIT_WINDOW_MS`, one minute) — raised tenfold for the same reason as the
  * budgets themselves: a suite spends a window's worth of requests in milliseconds, so a

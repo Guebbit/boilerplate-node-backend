@@ -161,14 +161,15 @@ is a folder named for it. That is the rule, and it is what decides where a new f
 list above has no row for it. `openapi.yaml` and `probes.ts` are the contract slice this module
 owns; [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) is what reads them.
 
-::: tip The module to copy is `feedback`
-Start from [`feedback`](../modules/feedback.md), not from a shop module. It is `group: foundation`,
-so it survives `npm run demo:remove` and depends on nothing; it also carries most of what a new
-module reaches for — a public route above an admin gate, keyed writes, a rate-limit budget,
-locales, a template, a personal-data section, an audit vocabulary and a contract slice.
-`wishlist` was the first module added after the registry existed and is the smallest shop domain,
-but a copy of a shop module starts life with a dependency on the shop that the foundation may
-not have.
+::: tip The module to copy is `example`
+Start from `src/modules/example` ([the module template](./modules.md#the-module-template)), not from
+a shop module. It is `group: example`, so it survives `npm run demo:remove`, and it depends only on
+`users`. It carries a public route above a gate, keyed writes with a `self` and an `any` breadth, a
+status lifecycle, a rate-limit budget, locales, a mail template, a personal-data section with an
+export and an erasure, an audit vocabulary and a contract slice, and it shows each optional
+capability in its own files. It has no page of its own on purpose, so there is nothing to keep in
+step with the code. A copy of a shop module starts life with a dependency on the shop that the
+foundation may not have.
 :::
 
 A new `package.json` dependency this module alone needs is this module's, the moment nothing else

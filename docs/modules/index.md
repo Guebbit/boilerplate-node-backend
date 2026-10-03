@@ -48,6 +48,7 @@ flowchart TD
     audit_logs["audit-logs"]
     cart
     delivery
+    example
     feedback
     inventory
     invoicing
@@ -72,6 +73,7 @@ flowchart TD
     cart --> products
     cart --> users
     delivery --> orders
+    example --> users
     inventory --> products
     invoicing --> orders
     invoicing --> payments
@@ -97,32 +99,33 @@ flowchart TD
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
     class addresses,delivery,inventory,invoicing,payments,returns,webhooks,wishlist supporting;
-    class access,account,api_keys,audit_logs,observability,users generic;
+    class access,account,api_keys,audit_logs,example,observability,users generic;
     class antibot,feedback,locales isolated;
 ```
 
-|                 | Reaches                                                | Reached by                                          |
-| --------------- | ------------------------------------------------------ | --------------------------------------------------- |
-| `orders`        | inventory, products, users                             | cart, delivery, invoicing, payments, returns        |
-| `cart`          | addresses, delivery, orders, payments, products, users | wishlist                                            |
-| `users`         | access                                                 | account, api-keys, cart, orders, payments, webhooks |
-| `payments`      | inventory, orders, users                               | cart, invoicing, returns                            |
-| `inventory`     | products                                               | orders, payments, returns                           |
-| `products`      | —                                                      | cart, inventory, orders, wishlist                   |
-| `returns`       | delivery, inventory, orders, payments                  | —                                                   |
-| `access`        | —                                                      | account, api-keys, users                            |
-| `delivery`      | orders                                                 | cart, returns                                       |
-| `account`       | access, users                                          | —                                                   |
-| `api-keys`      | access, users                                          | —                                                   |
-| `invoicing`     | orders, payments                                       | —                                                   |
-| `wishlist`      | cart, products                                         | —                                                   |
-| `addresses`     | —                                                      | cart                                                |
-| `audit-logs`    | —                                                      | observability                                       |
-| `observability` | audit-logs                                             | —                                                   |
-| `webhooks`      | users                                                  | —                                                   |
-| `antibot`       | —                                                      | —                                                   |
-| `feedback`      | —                                                      | —                                                   |
-| `locales`       | —                                                      | —                                                   |
+|                 | Reaches                                                | Reached by                                                   |
+| --------------- | ------------------------------------------------------ | ------------------------------------------------------------ |
+| `orders`        | inventory, products, users                             | cart, delivery, invoicing, payments, returns                 |
+| `users`         | access                                                 | account, api-keys, cart, example, orders, payments, webhooks |
+| `cart`          | addresses, delivery, orders, payments, products, users | wishlist                                                     |
+| `payments`      | inventory, orders, users                               | cart, invoicing, returns                                     |
+| `inventory`     | products                                               | orders, payments, returns                                    |
+| `products`      | —                                                      | cart, inventory, orders, wishlist                            |
+| `returns`       | delivery, inventory, orders, payments                  | —                                                            |
+| `access`        | —                                                      | account, api-keys, users                                     |
+| `delivery`      | orders                                                 | cart, returns                                                |
+| `account`       | access, users                                          | —                                                            |
+| `api-keys`      | access, users                                          | —                                                            |
+| `invoicing`     | orders, payments                                       | —                                                            |
+| `wishlist`      | cart, products                                         | —                                                            |
+| `addresses`     | —                                                      | cart                                                         |
+| `audit-logs`    | —                                                      | observability                                                |
+| `example`       | users                                                  | —                                                            |
+| `observability` | audit-logs                                             | —                                                            |
+| `webhooks`      | users                                                  | —                                                            |
+| `antibot`       | —                                                      | —                                                            |
+| `feedback`      | —                                                      | —                                                            |
+| `locales`       | —                                                      | —                                                            |
 
 <!-- module-graph:end -->
 
@@ -174,7 +177,7 @@ appears here by declaring them.
 
 ### Foundation
 
-Ships with every deployment, whatever the project becomes. Copy `feedback` to start a new module.
+Ships with every deployment, whatever the project becomes.
 
 - [`access`](./access.md) — Headless. The tenant and membership model every role check reads, owned apart from account and users so neither has to.
 - [`account`](./account.md) — Who is making this request: signup, login, sessions, two-factor, OAuth and the account lifecycle. Deeper: [OAuth](./account-oauth.md), [Sessions](./account-sessions.md), [Two-factor authentication](./account-two-factor.md).
@@ -182,7 +185,7 @@ Ships with every deployment, whatever the project becomes. Copy `feedback` to st
 - [`antibot`](./antibot.md) — The human-challenge port, and the endpoint that tells a frontend which provider is active.
 - [`api-keys`](./api-keys.md) — Long-lived programmatic credentials, scoped to the same permission model a session uses.
 - [`audit-logs`](./audit-logs.md) — Owns the audit trail; the read endpoint is its own, the platform operator's view lives in observability.
-- [`feedback`](./feedback.md) — Contact submissions and what an admin does with them. The reference module to copy for a new domain.
+- [`feedback`](./feedback.md) — Contact submissions and what an admin does with them.
 - [`locales`](./locales.md) — Language discovery and the API's own message dictionary.
 - [`observability`](./observability.md) — Health, metrics, the platform operator's audit read and the SSE stream.
 - [`users`](./users.md) — Admin-side user management; the self-service half is account.
@@ -201,6 +204,12 @@ The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in 
 - [`products`](./products.md) — The catalogue, its search surface and its cache.
 - [`returns`](./returns.md) — Sending goods back, including the EU withdrawal button.
 - [`wishlist`](./wishlist.md) — Saved products, one list per user. The smallest shop domain.
+
+### Example
+
+The module to copy when you start a new domain. Nothing depends on it, and it is deleted once you have your own.
+
+- [`example`](../theory/modules.md#the-module-template) — The example to copy when starting a new domain: a small note with a draft, published, archived life. Delete it once you have your own.
 
 <!-- module-list:end -->
 

@@ -1,0 +1,5 @@
+summary: 'The example to copy when starting a new domain: a small note with a draft, published, archived life. Delete it once you have your own.'
+subdomain: generic
+group: example
+dependsOn:
+    - users # the owner's display name, and the address a publish mail goes to
