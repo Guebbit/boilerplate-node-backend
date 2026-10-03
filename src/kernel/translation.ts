@@ -205,7 +205,7 @@ export const isTranslationAvailable = (): boolean => translationPort !== undefin
  * The validate half of a write, for a caller with its own entity to write alongside the
  * translations — see {@link TranslationPort.plan}.
  *
- * Unregistered falls back to fallback-language-only content (D-LO1): a batch naming only the
+ * Unregistered falls back to fallback-language-only content: a batch naming only the
  * fallback locale plans a single upsert; naming anything else, or leaving the fallback slot empty
  * or deleted, is a 422 — `locales` being absent makes the shop monolingual, it does not make
  * writing content impossible.

@@ -177,7 +177,7 @@ export interface PublicEventProjection {
  * integration event.
  *
  * `webhooks/services/publish.ts` may not import `@modules/orders`/`@modules/payments` (the
- * foundation/shop boundary DDD-D1 draws) — the same wall {@link ImageTarget} and
+ * foundation/shop boundary the module groups draw) — the same wall {@link ImageTarget} and
  * {@link TranslatableTarget} are built around — so it cannot know which domain events exist to
  * listen for. A module registers this instead, keyed under `publicEvents` on its manifest by the
  * DOMAIN event name, and `webhooks` subscribes to every one it collects generically, through
@@ -224,7 +224,7 @@ export interface PersonalDataSection {
     collect: (subject: PersonalDataSubject) => Promise<unknown>;
 
     /**
-     * DDD-D6: erase this section's rows for one user, given the session a hard delete's
+     * Erase this section's rows for one user, given the session a hard delete's
      * transaction is running in — every write inside must take `{ session }`, or it commits
      * outside the transaction and survives a rollback the rest of the erasure didn't.
      *
@@ -311,11 +311,10 @@ export interface AppModule {
 
     /**
      * Absolute path to this module's `templates/` directory, holding the EJS email/PDF templates
-     * it owns — `orders`' order-confirm email, `invoicing`'s PDF, and so on (SK-15). Deleting the
-     * module now deletes its templates with it; before this field they lived in `shared/templates`
-     * regardless of which module rendered them, so `rm -rf` on a module left them behind with no
-     * owner. `app.ts` passes these to `registerTemplateDirectories` before the first request that
-     * could render one. `shared/templates/layouts` holds only include PARTIALS no template is
+     * it owns — `orders`' order-confirm email, `invoicing`'s PDF, and so on. Deleting the
+     * module deletes its templates with it: they live beside the module that renders them, not in
+     * a shared folder, so `rm -rf` on a module leaves nothing behind with no owner. `app.ts`
+     * passes these to `registerTemplateDirectories` before the first request that could render one. `shared/templates/layouts` holds only include PARTIALS no template is
      * ever resolved BY NAME, so it is not collected here — every template reaches it directly, by
      * its own fixed path, the same way `shared/contracts` is reached by the bundler.
      */
@@ -523,7 +522,7 @@ export const resolvePersonalDataSections = (
     );
 
 /**
- * DDD-D6: every registered module's {@link PersonalDataSection.erase}, flattened — a section with
+ * Every registered module's {@link PersonalDataSection.erase}, flattened — a section with
  * none contributes nothing, the same way `'none'` does for {@link resolvePersonalDataSections}.
  *
  * `users/module.ts`'s own `onRegistered` hook builds this once every module is known and hands it

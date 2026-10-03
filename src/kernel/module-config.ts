@@ -36,7 +36,7 @@ export const configSlicesOf = (appModule: AppModule): readonly ConfigSlice[] => 
  *
  * Presence, forbidden and cross-field rules are skipped under `NODE_ENV=test` (jest builds its own
  * environment per suite, never this one); shape rules are not. The demo profile carries no
- * exemption (SK-08): it satisfies this gate the ordinary way, by setting every variable a slice
+ * exemption: it satisfies this gate the ordinary way, by setting every variable a slice
  * asks for (`scenarios/run-server.ts`'s `REQUIRED_DEFAULTS`), the same as any other deployment.
  *
  * @param appModules - the enabled module list, each contributing its own slices

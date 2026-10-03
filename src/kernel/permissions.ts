@@ -61,6 +61,7 @@ const AUTHORIZATION_SCOPES = [
 /** How recently a caller must have proved themselves to use a key that demands it. */
 export type StepUpTier = 'critical' | 'sensitive';
 
+/** Runtime validator for {@link StepUpTier}, applied to the shared YAML's `stepUp` fields. */
 const stepUpTierSchema = z.enum(['critical', 'sensitive']);
 
 /**
@@ -130,7 +131,7 @@ export interface PresetRole {
     /**
      * Whether self-service signup (or an OAuth signup a provider already vouches for) may assign
      * this role automatically. Exactly one declared role may carry it — see
-     * {@link SIGNUP_DEFAULT_ROLE_NAME}, DDD-D5.
+     * {@link SIGNUP_DEFAULT_ROLE_NAME}.
      */
     signupDefault?: boolean;
     /**
@@ -248,7 +249,7 @@ export const ANONYMOUS_ROLE = rolesDocument.anonymous;
 
 /**
  * The one role `PRESET_ROLES` marks `signupDefault: true` — read here instead of hand-typed at
- * every call site (DDD-D5), so a deployment renaming its signup role only ever edits the YAML.
+ * every call site, so a deployment renaming its signup role only ever edits the YAML.
  * @throws Error unless exactly one declared role carries the flag
  */
 const signupDefaultRole = ((): PresetRole => {
@@ -555,10 +556,10 @@ export const isUnrestricted = (caller: Pick<Caller, 'scope' | 'permissions'>): b
  * make the sweep find nothing and report success. Its id is `system` rather than a user's, which
  * is the same word the audit trail already uses for the actor on these paths.
  *
- * B21: its role is its own, `system`, not `admin`. The two used to be the same value, which meant
- * a background job's audit row read as an admin's — `system` in `authorization-roles.yaml` aliases
- * `admin`'s permission list through a YAML anchor, unrestricted for the same reason and kept from
- * drifting by construction, while staying an identity `isSystemActor` can name apart from a real one.
+ * Its role is its own, `system`, not `admin`, so a background job's audit row never reads as an
+ * admin's. `system` in `authorization-roles.yaml` aliases `admin`'s permission list through a YAML
+ * anchor, unrestricted for the same reason and kept from drifting by construction, while staying an
+ * identity `isSystemActor` can name apart from a real one.
  *
  * It is a value here rather than a caller assembled at each site because that is exactly the kind
  * of thing that gets assembled slightly differently the third time.
@@ -590,7 +591,7 @@ export const isSystemActor = (caller: AuthContext | undefined): boolean =>
     caller?.id === SYSTEM_ACTOR_ID;
 
 /**
- * T6: the {@link CallerContext} a cron job hands `recordAudit` for a write nobody at the keyboard
+ * The {@link CallerContext} a cron job hands `recordAudit` for a write nobody at the keyboard
  * asked for — a reaper's own hard delete, not an admin's. `caller` is {@link SYSTEM_ACTOR}'s, so
  * the resulting row's `actor_role` reads the same "unrestricted" way an admin's would; nothing
  * else on `CallerContext` is filled in, since a cron job has no IP, user agent or request id.
