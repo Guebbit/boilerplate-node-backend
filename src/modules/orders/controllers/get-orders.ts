@@ -5,7 +5,7 @@
  */
 
 import { callerForSubject } from '@kernel/permissions';
-import { holdsKey } from '@kernel/ability';
+import { heldKeys } from '@kernel/ability';
 import { SearchOrdersBody } from '@api/schemas.zod';
 import { orderService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -33,12 +33,12 @@ export const getOrders = createSearchController({
     entity: 'orders',
     schema: searchOrdersQuerySchema,
     // Non-admin callers cannot filter by arbitrary userId; orderService.callerScope enforces their
-    // own. `orders.any.read` by name — a moderator or manager holds exactly this key, and asking
-    // for anything broader would have missed them and silently dropped their filter.
+    // own. `orders.any.read` by name, asked of the held KEYS rather than of CASL: `holdsKey`
+    // answers true for `orders.self.read` too, since both are `read` on `Order`.
     extendInput: (input, request) => ({
         userId:
             request.authContext &&
-            holdsKey(callerForSubject(request.authContext, 'Order'), 'orders.any.read')
+            heldKeys(callerForSubject(request.authContext, 'Order')).has('orders.any.read')
                 ? (input.userId as string | undefined)
                 : undefined
     }),

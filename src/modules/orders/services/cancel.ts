@@ -37,7 +37,7 @@ import { orderEffectRetryMinutes } from '../config';
 import { bankTransferExpiredEmail, cardHoldExpiredEmail, orderCancelledEmail } from '../emails';
 import { getById } from './read';
 import { mailBuyer } from './notify';
-import { callerScope, actorOf } from './scope';
+import { cancelScope, actorOf, outrankedOrderRefusal } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
 
 /** The effect set a refunding cancel writes down. Frozen, since it rides into a `$set`. */
@@ -226,45 +226,62 @@ export const cancelById = (
     const actor = options.withdrawal ? 'admin' : actorOf(authContext);
     const refund = actor === 'admin' && !options.withdrawal ? (options.refund ?? true) : true;
 
+    // The write's OWN scope: an operator's update scope, or the caller's own live orders — never
+    // the read scope, which a warehouse or support account holds over every order.
+    const scope = cancelScope(authContext, options.withdrawal);
+
+    // The rank rule applies when an operator cancels, not when a buyer withdraws or a system
+    // sweep expires an order: only the former is a person acting on somebody else's order.
+    const rank =
+        actor === 'admin' && !options.withdrawal
+            ? outrankedOrderRefusal(id, context)
+            : Promise.resolve(undefined);
+
     /*
      * The statuses a cancel may move from are read off the lifecycle table, not declared, and the
      * table answers per actor: a customer may cancel from `pending` and `paid`, an operator also
      * from `processing`.
      */
-    return moveToCancelled(
-        id,
-        statusesLeadingTo(OrderStatus.cancelled, actor),
-        callerScope(authContext),
-        /*
-         * The intent to refund is written WITH the cancel, in one document write, because the
-         * announcement below is not durable — `@kernel/events` has no retry, so a refund that
-         * throws is logged and lost. The marker is what `retryPendingEffects` finds afterwards.
-         */
-        refund ? PENDING_REFUND : undefined,
-        refund
-    ).then((order) =>
-        order
-            ? afterCancel(
-                  order,
-                  refund,
-                  context,
-                  viaReservationExpiry,
-                  // The withdrawal is acknowledged by `returns`; the sweep's expiry and every
-                  // system cancel mail their own explanation (or, for an erased account, nobody).
-                  !options.withdrawal && !viaReservationExpiry && actor !== 'system'
-              )
-            : // Which refusal was it? This read only informs the message — the write above
-              // already decided nothing changes.
-              getById(id, callerScope(authContext)).then((existing) =>
-                  existing
-                      ? generateReject(409, [
-                            {
-                                code: ERROR_CODES.ORDER_NOT_CANCELLABLE,
-                                message: t('orders.cancel.not-cancellable')
-                            }
-                        ])
-                      : generateReject(404, [t('orders.not-found')])
-              )
+    return rank.then(
+        (refusal) =>
+            refusal ??
+            moveToCancelled(
+                id,
+                statusesLeadingTo(OrderStatus.cancelled, actor),
+                scope,
+                /*
+                 * The intent to refund is written WITH the cancel, in one document write, because
+                 * the announcement below is not durable — `@kernel/events` has no retry, so a
+                 * refund that throws is logged and lost. The marker is what `retryPendingEffects`
+                 * finds afterwards.
+                 */
+                refund ? PENDING_REFUND : undefined,
+                refund
+            ).then((order) =>
+                order
+                    ? afterCancel(
+                          order,
+                          refund,
+                          context,
+                          viaReservationExpiry,
+                          // The withdrawal is acknowledged by `returns`; the sweep's expiry and
+                          // every system cancel mail their own explanation (or, for an erased
+                          // account, nobody).
+                          !options.withdrawal && !viaReservationExpiry && actor !== 'system'
+                      )
+                    : // Which refusal was it? This read only informs the message — the write
+                      // above already decided nothing changes.
+                      getById(id, scope).then((existing) =>
+                          existing
+                              ? generateReject(409, [
+                                    {
+                                        code: ERROR_CODES.ORDER_NOT_CANCELLABLE,
+                                        message: t('orders.cancel.not-cancellable')
+                                    }
+                                ])
+                              : generateReject(404, [t('orders.not-found')])
+                      )
+            )
     );
 };
 

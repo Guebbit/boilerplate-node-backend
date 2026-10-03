@@ -29,7 +29,14 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { ordersAuditActions } from '../../audit';
 import { ordersAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
-import { asCustomer, asAdmin, asModerator, asWarehouse, testCallerContext } from '@tests/callers';
+import {
+    asCustomer,
+    asAdmin,
+    asModerator,
+    asWarehouse,
+    callerContextAs,
+    testCallerContext
+} from '@tests/callers';
 import { SYSTEM_ACTOR } from '@kernel/permissions';
 
 // The queue, not the copy: `mail-copy.test.ts` pins what the email says.
@@ -508,7 +515,7 @@ describe('cancelById — the cancelled notice', () => {
             String(order._id),
             asAdmin(),
             { refund: false },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);

@@ -24,6 +24,7 @@ import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
 import { placeOrder } from './place';
+import { outrankedOrderRefusal } from './scope';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -159,7 +160,8 @@ export const update = (
 
 /**
  * Update an existing order by ID (admin).
- * Fetches the document then delegates to update().
+ * Fetches the document, refuses an order whose buyer ranks at or above the caller, then
+ * delegates to update().
  */
 export const updateById = (
     id: string,
@@ -171,14 +173,18 @@ export const updateById = (
         // at the `.catch()` that has to tell them apart.
         if (!order) return generateReject(404, [t('orders.not-found')]);
 
-        return update(order, data).then((result) => {
-            if (result.success)
-                recordAudit(context, {
-                    action: ordersAuditActions.ORDER_UPDATED,
-                    outcome: 'success',
-                    target_type: 'order',
-                    target_id: id
-                });
-            return result;
-        });
+        return outrankedOrderRefusal(id, context).then(
+            (refusal) =>
+                refusal ??
+                update(order, data).then((result) => {
+                    if (result.success)
+                        recordAudit(context, {
+                            action: ordersAuditActions.ORDER_UPDATED,
+                            outcome: 'success',
+                            target_type: 'order',
+                            target_id: id
+                        });
+                    return result;
+                })
+        );
     });

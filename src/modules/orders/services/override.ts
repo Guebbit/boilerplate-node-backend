@@ -28,6 +28,7 @@ import { holdsKey } from '@kernel/ability';
 import type { OrderDocument, OrderStatusOverride } from '../model';
 import { orderRepository } from '../repository';
 import { statusChangedEvent } from './announce';
+import { outrankedOrderRefusal } from './scope';
 import { ordersAuditActions } from '../audit';
 import { canOverrideTo, statusesOverridableInto, withdrawUntilFrom } from '../domain';
 import { withdrawalPeriodDays } from '../config';
@@ -181,13 +182,17 @@ export const overrideStatus = (
     orderRepository.findByIdScoped(orderId).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
 
-        if (!canOverrideTo(order.status, to)) return notAllowed(order.status, to);
+        return outrankedOrderRefusal(orderId, context).then((refusal) => {
+            if (refusal) return refusal;
+            if (!canOverrideTo(order.status, to)) return notAllowed(order.status, to);
 
-        return applyOverride(orderId, order.status, to, 'status', reason, context).then((updated) =>
-            // Lost a race against another write since the read above — same shape as the
-            // ordinary `update`'s 409, not a 404: the order still exists.
-            updated ? generateSuccess(updated) : notAllowed(order.status, to)
-        );
+            return applyOverride(orderId, order.status, to, 'status', reason, context).then(
+                (updated) =>
+                    // Lost a race against another write since the read above — same shape as the
+                    // ordinary `update`'s 409, not a 404: the order still exists.
+                    updated ? generateSuccess(updated) : notAllowed(order.status, to)
+            );
+        });
     });
 
 /**

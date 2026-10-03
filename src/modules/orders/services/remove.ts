@@ -17,6 +17,7 @@ import { inventoryService } from '@modules/inventory';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
+import { outrankedOrderRefusal } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
@@ -94,8 +95,10 @@ export const remove = (
  * Undo a soft delete.
  *
  * @param id - the order to restore
- * @param context - records `ORDER_RESTORED`; omit for a caller with no request behind it
- * @returns the restored order; 404 when there is none, 409 when it is not soft-deleted
+ * @param context - records `ORDER_RESTORED` and ranks the caller against the buyer; omit for a
+ *   caller with no request behind it
+ * @returns the restored order; 404 when there is none, 403 `OUTRANKED` when the buyer ranks at or
+ *   above the caller, 409 when it is not soft-deleted
  */
 export const restoreById = (
     id: string,
@@ -103,23 +106,28 @@ export const restoreById = (
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
     orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
-        if (!order.deletedAt) return generateReject(409, [t('orders.not-deleted')]);
-        order.deletedAt = undefined;
-        return orderRepository.save(order).then((saved) => {
-            if (context)
-                recordAudit(context, {
-                    action: ordersAuditActions.ORDER_RESTORED,
-                    outcome: 'success',
-                    target_type: 'order',
-                    target_id: id
-                });
-            return generateSuccess(saved, 200, t('orders.restored'));
+
+        return outrankedOrderRefusal(id, context).then((refusal) => {
+            if (refusal) return refusal;
+            if (!order.deletedAt) return generateReject(409, [t('orders.not-deleted')]);
+            order.deletedAt = undefined;
+            return orderRepository.save(order).then((saved) => {
+                if (context)
+                    recordAudit(context, {
+                        action: ordersAuditActions.ORDER_RESTORED,
+                        outcome: 'success',
+                        target_type: 'order',
+                        target_id: id
+                    });
+                return generateSuccess(saved, 200, t('orders.restored'));
+            });
         });
     });
 
 /**
  * Remove an order by ID (soft or hard delete).
- * Fetches the document then delegates to remove().
+ * Fetches the document, refuses an order whose buyer ranks at or above the caller, then
+ * delegates to remove().
  *
  * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
  * @param context - forwarded to {@link remove} for the audit row
@@ -129,10 +137,10 @@ export const removeById = (
     hardDelete = false,
     context?: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> =>
-    orderRepository
-        .findById(id)
-        .then((order) =>
-            order
-                ? remove(order, hardDelete, context)
-                : generateReject(404, [t('orders.not-found')])
+    orderRepository.findById(id).then((order) => {
+        if (!order) return generateReject(404, [t('orders.not-found')]);
+
+        return outrankedOrderRefusal(id, context).then(
+            (refusal) => refusal ?? remove(order, hardDelete, context)
         );
+    });

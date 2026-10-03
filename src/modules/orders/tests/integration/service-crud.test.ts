@@ -28,7 +28,7 @@ import {
 import { orderRepository } from '../../repository';
 import { inventoryService } from '@modules/inventory';
 import { asReject, asSuccess } from '@tests/response';
-import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
+import { asCustomer, asAdmin, callerContextAs, testCallerContext } from '@tests/callers';
 import { MISSING_ID } from '@tests/ids';
 import { freezeDate } from '@tests/clock';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -491,7 +491,7 @@ describe('updateById', () => {
         const result = await updateById(
             String(order._id),
             { email: 'moved@example.com' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(true);

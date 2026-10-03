@@ -7,7 +7,9 @@
 
 import { callerForSubject, isSystemActor } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
-import type { AuthContext, Order, OrderActions } from '@types';
+import { outrankedRefusal } from '@modules/access';
+import type { ResponseReject } from '@infrastructure/http/response';
+import type { AuthContext, CallerContext, Order, OrderActions } from '@types';
 import type { OrderDocument } from '../model';
 import { accessibleFilter } from '@kernel/access/query';
 import { orderRepository } from '../repository';
@@ -32,6 +34,65 @@ import { presentOrder } from '../presenter';
  * `{}` is what "these are the conditions, and there are none" honestly looks like.
  */
 export const callerScope = (context?: AuthContext) => accessibleFilter(context, 'Order');
+
+/**
+ * Which orders a caller may CANCEL — the write's own scope, never the read one. A warehouse
+ * operator or a support agent can READ every order (`orders.any.read`) without being allowed to
+ * cancel any: asking `callerScope` here would have scoped a write by a read key.
+ *
+ * - an operator (`orders.any.update`): the update scope, every live order that key reaches;
+ * - anyone else, or a withdrawal (the consumer's own right, never an operator's): the caller's own
+ *   live orders, and nothing at all for a caller with no id.
+ *
+ * @param authContext - the caller; `SYSTEM_ACTOR` for a sweep
+ * @param ownOnly - `true` for a withdrawal, which only the buyer may exercise
+ */
+export const cancelScope = (
+    authContext: AuthContext | undefined,
+    ownOnly = false
+): Record<string, unknown> =>
+    actorOf(authContext) === 'customer' || ownOnly
+        ? authContext
+            ? { ...ownerScope(authContext.id), deletedAt: null }
+            : accessibleFilter(undefined, 'Order', 'update')
+        : accessibleFilter(authContext, 'Order', 'update');
+
+/**
+ * The rank rule for an order already in hand: `403 OUTRANKED` when its buyer ranks at or above the
+ * caller, else `undefined`. Staff handle other people's orders, never an equal's or a superior's —
+ * and since staff and administrators do not shop, a staff member's own order is one only an admin
+ * handles. An order whose buyer is gone (erased) has no owner to outrank.
+ *
+ * @param order - the order about to be changed
+ * @param context - the caller, or `undefined` for a path with no request behind it
+ */
+export const outrankedRefusalFor = (
+    order: Pick<OrderDocument, '_id' | 'userId'>,
+    context: CallerContext | undefined
+): Promise<ResponseReject | undefined> =>
+    outrankedRefusal(
+        context,
+        order.userId ? String(order.userId) : undefined,
+        'order',
+        String(order._id)
+    );
+
+/**
+ * {@link outrankedRefusalFor} for an order known only by id: loads it, unless the caller is one
+ * the rule never refuses (no context, or the system actor), in which case there is no read at all.
+ *
+ * @param orderId - the order about to be changed
+ * @param context - the caller, or `undefined` for a path with no request behind it
+ */
+export const outrankedOrderRefusal = (
+    orderId: string,
+    context: CallerContext | undefined
+): Promise<ResponseReject | undefined> =>
+    !context || context.caller.system
+        ? Promise.resolve(undefined)
+        : orderRepository
+              .findById(orderId)
+              .then((order) => (order ? outrankedRefusalFor(order, context) : undefined));
 
 /**
  * One account's orders, by id rather than by `AuthContext`, WITHOUT excluding soft-deleted rows —

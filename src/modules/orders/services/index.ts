@@ -17,7 +17,13 @@ import { remove, removeById, restoreById } from './remove';
 import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { detachUserId, eraseUserOrders, anonymizeDueOrders } from './retention';
-import { callerScope, ownerScope, withActions } from './scope';
+import {
+    callerScope,
+    ownerScope,
+    outrankedOrderRefusal,
+    outrankedRefusalFor,
+    withActions
+} from './scope';
 import { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
 import {
     markPaid,
@@ -62,7 +68,15 @@ export {
 } from './status';
 export { overrideStatus, forceMove, isForceMoveRefusal } from './override';
 export { detachUserId, eraseUserOrders, anonymizeDueOrders } from './retention';
-export { callerScope, actorOf, ownerScope, withActions } from './scope';
+export {
+    callerScope,
+    cancelScope,
+    actorOf,
+    ownerScope,
+    outrankedOrderRefusal,
+    outrankedRefusalFor,
+    withActions
+} from './scope';
 export { unavailableLines, cancelPendingOrdersHolding, type UnavailableLine } from './availability';
 export { freezeOrderLines } from './snapshot';
 export { allocateOrderNumber } from './order-numbering';
@@ -95,6 +109,8 @@ export const orderService = {
     getById,
     callerScope,
     ownerScope,
+    outrankedOrderRefusal,
+    outrankedRefusalFor,
     create,
     placeOrder,
     sendOrderPlacedEmail,
