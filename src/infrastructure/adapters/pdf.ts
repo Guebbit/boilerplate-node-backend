@@ -145,7 +145,7 @@ const renderOnce = (html: string, pdfOptions: PDFOptions): Promise<Uint8Array> =
                             /*
                              * Wait for the `load` event, which fires once images, stylesheets and
                              * subframes have finished — so referenced assets are painted, not blank.
-                             * The only stronger option, `networkidle0`, no longer exists here:
+                             * The only stronger option, `networkidle0`, is not available here:
                              * puppeteer 25 excludes it from `setContent`, which does not navigate.
                              * What `load` misses is a resource a SCRIPT fetches afterwards, and these
                              * templates run none.

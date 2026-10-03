@@ -288,11 +288,11 @@ export interface AppModule {
      * Runs once, right after {@link subscribe} — every enabled module is known by then, so a
      * module that needs a cross-module lookup (`locales`' `translatables`, `account`'s
      * `personalData` sections) can resolve it itself here instead of `app.ts` collecting it and
-     * handing it in by name — `app.ts` no longer imports `locales`/`account` for this.
+     * handing it in by name — `app.ts` imports neither `locales` nor `account` for this.
      *
      * Also where a module installs its own kernel port (an auth resolver, a translation port, a
-     * locale override provider, an audit sink) — moving that call here from module-file import
-     * time means importing this file no longer enables the port: only a module `registerModules`
+     * locale override provider, an audit sink) — calling it here, not at module-file import
+     * time, means importing this file does not enable the port: only a module `registerModules`
      * is actually given runs its `onRegistered`.
      *
      * @param modules - every enabled module, in registration order

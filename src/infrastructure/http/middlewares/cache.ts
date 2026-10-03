@@ -431,9 +431,9 @@ const serveOrArm = (
 
 /**
  * Cache GET responses in Redis: serve a stored envelope on a hit, or run the controller and let
- * {@link armCacheWrite} store what it answers. A thin sequence of the two steps this used to do
- * inline — {@link applyCacheHeaders}, then {@link serveOrArm} — kept as one export because every
- * route mounts them together, never one without the other.
+ * {@link armCacheWrite} store what it answers. A thin sequence of two steps —
+ * {@link applyCacheHeaders}, then {@link serveOrArm} — kept as one export because every route
+ * mounts them together, never one without the other.
  *
  * @param seconds - TTL for this route's entries; 0 (the default) disables caching entirely
  * @param options - the route's key parameters, tags and cache identity — see {@link CacheOptions}

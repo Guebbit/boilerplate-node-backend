@@ -1,8 +1,8 @@
 /**
  * @module
  * Generic value guards with no home of their own — narrow enough that three unrelated call sites
- * (i18n dictionary merging, locale key trees, an HTTP request body) had each hand-written the same
- * one, until now.
+ * (i18n dictionary merging, locale key trees, an HTTP request body) would each hand-write the
+ * same one.
  */
 
 /**
