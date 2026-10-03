@@ -465,6 +465,27 @@ export const settleOpenRefunds = async (
 };
 
 /**
+ * A refund this caller opened, whose settlement another caller won (the sweep, or a racing request
+ * that finished the open records first): the money did go back, so the opener reports that instead
+ * of "nothing to return". A record still open, or an operator-owed hand-paid one, is not that.
+ *
+ * @param orderId - the order whose payment carries the record
+ * @param refund - the record this caller opened
+ * @returns the payment as it now stands, or `null` when the record is not settled
+ */
+const settledElsewhere = (orderId: string, refund: RefundRecord): Promise<PaymentDocument | null> =>
+    paymentRepository
+        .findByOrderId(orderId)
+        .then((fresh) =>
+            fresh?.refunds.some(
+                (record) =>
+                    String(record._id) === String(refund._id) && record.status === 'succeeded'
+            )
+                ? fresh
+                : null
+        );
+
+/**
  * Refund an order's payment — the operator action, and the listener's compensation.
  *
  * Any refund still open is finished first, so a retried cancel completes the refund it already
@@ -496,7 +517,11 @@ export const performRefund = (
             if (remainingOf(current) <= 0) return settled ? current : null;
 
             return openRefund(current, request ?? CANCELLATION_REQUEST).then((opened) =>
-                opened ? attemptRefund(opened.payment, opened.refund, context) : null
+                opened
+                    ? attemptRefund(opened.payment, opened.refund, context).then(
+                          (after) => after ?? settledElsewhere(orderId, opened.refund)
+                      )
+                    : null
             );
         });
     });

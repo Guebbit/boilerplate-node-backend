@@ -201,6 +201,25 @@ describe('a refund that asks for too much', () => {
         expect(payment.refunds).toHaveLength(1);
     });
 
+    // The sweep finishing the record while its opener is still at the provider: the opener lost the
+    // conditional settle, and the money did go back, so it must not be told there was nothing.
+    it('reports success to the caller whose open refund the sweep settled first', () =>
+        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+            const { orderId } = await paidOrder();
+            const providerRefund = fakePaymentProvider.refund.bind(fakePaymentProvider);
+            jest.spyOn(fakePaymentProvider, 'refund').mockImplementationOnce(async (...args) => {
+                await retryOpenRefunds();
+                return providerRefund(...args);
+            });
+
+            const result = await refund(orderId, { amount: 30 });
+
+            expect(result.success).toBe(true);
+            const payment = await paymentOf(orderId);
+            expect(payment.amountRefunded).toBe(30);
+            expect(payment.refunds).toHaveLength(1);
+        }));
+
     it('refuses an amount in another currency with 422', async () => {
         const { orderId } = await paidOrder();
 
