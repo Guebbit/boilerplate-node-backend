@@ -80,6 +80,9 @@ export const verifyTotpCode = (
     code: string,
     afterTimeStep?: number
 ): Promise<TotpVerification> =>
+    // otplib `verify`: checks `token` against `secret`. `epochTolerance` is the clock-skew window in
+    // seconds either side; `afterTimeStep` refuses any step at or before it (replay protection).
+    // https://otplib.yeojz.dev/
     verify({
         secret,
         token: code,

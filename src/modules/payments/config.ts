@@ -61,8 +61,11 @@ export const validateBankTransferConfig = (): string[] => {
 
     const problems: string[] = [];
     if (iban && !beneficiary) problems.push('NODE_BANK_TRANSFER_BENEFICIARY');
+    // ibantools: `electronicFormatIBAN` strips spaces and upper-cases (`null` if not IBAN-shaped);
+    // `isValidIBAN` checks country length and the mod-97 checksum. https://github.com/Simplify/ibantools
     if (iban && !isValidIBAN(electronicFormatIBAN(iban) ?? iban))
         problems.push('NODE_BANK_TRANSFER_IBAN');
+    // ibantools `isValidBIC`: ISO 9362 shape (8 or 11 characters), no registry lookup.
     if (bic && !isValidBIC(bic)) problems.push('NODE_BANK_TRANSFER_BIC');
     return problems;
 };
