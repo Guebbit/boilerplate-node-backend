@@ -6,7 +6,7 @@
  * `infrastructure/adapters/antibot-providers` directly rather than on this module — which is why
  * this manifest carries no boot-time checks of its own: `app/config.ts` validates the
  * provider selection and its secrets, since that gate keeps running whether or not this module's
- * two HTTP routes are even mounted (SK-06).
+ * two HTTP routes are even mounted.
  *
  * See: docs/modules/antibot.md
  */
