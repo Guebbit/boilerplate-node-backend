@@ -500,16 +500,19 @@ jobs:
 
     test-unit:
         # The fast suites, unit and cross-cutting: pure functions, services and repositories
-        # against in-memory Mongo.
+        # against in-memory Mongo. One parallel jest pass gives the verdict and the JSON report.
         #
-        # ONE jest pass does all three jobs — the verdict, the per-file coverage floors and the
-        # JSON report — because each extra pass re-ran the same ~10-20 minutes to learn nothing new.
-        # 40 minutes because the coverage pass (`--runInBand`) takes over 20 on this runner's
-        # shared hardware, and a bare cancellation hides the failures underneath it.
+        # No coverage here. The per-file floors have their own job below: run `--runInBand` under
+        # coverage this pass reached 277 of 317 files in the old 40-minute budget, and a floor
+        # miss then fails the verdict of a suite whose tests all pass.
         runs-on: ubuntu-latest
-        timeout-minutes: 40
+        timeout-minutes: 30
         permissions:
             contents: read
+        env:
+            # `run-suite.ts --unsharded` takes its worker count from jest.config.js, which reads
+            # this. The runner has 4 vCPUs; one is left for mongod and the OS.
+            JEST_WORKERS: 3
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -520,17 +523,12 @@ jobs:
                   node-version: ${{ env.NODE_VERSION }}
                   setup-mongod: 'true'
 
-            # The per-file floors in `jest.config.js` are enforced here and NOT in the pre-commit
-            # hook: `--runInBand` coverage is minutes rather than the ~60s the hook is designed
-            # around. Jest exits non-zero on a failing test and on a threshold miss alike.
-            #
-            # `--json --outputFile` rides along on the same run: jest writes the per-test report
-            # to the file and keeps its normal console output. `mkdir -p` first, because jest does
+            # `--json --outputFile` is jest's per-test report; `mkdir -p` first, because jest does
             # not create the parent directory and `tmp/` is gitignored.
-            - name: Run unit tests with coverage thresholds and the JSON report
+            - name: Run unit tests with the JSON report
               run: |
                   mkdir -p tmp/reports
-                  npm run test:unit:coverage -- --json --outputFile=tmp/reports/test-report.json
+                  npm run test:unit:report
 
             - name: Per-module test report
               # Prints the rollup of the JSON the run above wrote into the job log, so a red build
@@ -547,6 +545,32 @@ jobs:
                   retention-days: 14
                   if-no-files-found: ignore
 
+    coverage-floors:
+        # The per-file coverage floors in `jest.config.js`, over the same unit and cross-cutting
+        # suites as `test-unit`. Report-only, like `audit` and `demo-strip-measure`: a floor is a
+        # ratchet recording where the code is, and `docs/tools/coverage-and-confidence.md` says
+        # mutation score, not this number, is the signal. It is not in the `ci` gate's `needs:`.
+        runs-on: ubuntu-latest
+        timeout-minutes: 40
+        permissions:
+            contents: read
+        env:
+            JEST_WORKERS: 3
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  setup-mongod: 'true'
+
+            # Jest exits non-zero on a failing test and on a threshold miss alike; the log names
+            # every file under its floor.
+            - name: Run unit tests against the coverage floors
+              run: npm run test:unit:coverage
+
             - name: Upload coverage report
               if: always()
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -554,6 +578,7 @@ jobs:
                   name: coverage-report
                   path: tmp/coverage/
                   retention-days: 14
+                  if-no-files-found: ignore
 
     test-integration:
         # No Mongo/Redis service is started here: today's integration suite only
@@ -798,7 +823,8 @@ jobs:
             - test-contract
             - container-gate
             - frontend-e2e
-            # `audit` and `demo-strip-measure` are deliberately excluded — see their own comments above.
+            # `audit`, `demo-strip-measure` and `coverage-floors` are deliberately excluded — see their
+            # own comments above.
         runs-on: ubuntu-latest
         timeout-minutes: 5
         permissions:

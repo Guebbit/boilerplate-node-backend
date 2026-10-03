@@ -58,7 +58,7 @@
         "measure:scaffold": "tsx scripts/testing/measure-scaffold.ts",
         "measure:demo-strip": "tsx scripts/testing/measure-demo-strip.ts",
         "demo:remove": "tsx scripts/ops/demo-remove.ts",
-        "test:unit:coverage": "cross-env NODE_OPTIONS=--max-old-space-size=4096 tsx scripts/testing/run-suite.ts unit cross-cutting --unsharded --coverage --runInBand",
+        "test:unit:coverage": "cross-env NODE_OPTIONS=--max-old-space-size=4096 tsx scripts/testing/run-suite.ts unit cross-cutting --unsharded --coverage",
         "test:integration": "tsx scripts/testing/run-suite.ts integration",
         "test:contract": "tsx scripts/testing/run-suite.ts contract",
         "test:fuzz": "tsx scripts/testing/run-suite.ts fuzz",
