@@ -908,7 +908,7 @@ describe('requireFreshAuth', () => {
     });
 
     /*
-     * B16: the module docblock promises "every rejection from the identity guards is audited",
+     * The module docblock promises "every rejection from the identity guards is audited",
      * but this direct mount challenged with no trail at all — unlike `requirePermission`'s own
      * declared-stepUp path, which already emits the same action.
      */

@@ -101,7 +101,7 @@ describe('the body media type', () => {
     });
 });
 
-describe('stock writes replay under an Idempotency-Key (WM-D9)', () => {
+describe('stock writes replay under an Idempotency-Key', () => {
     it.each([
         ['receipts', { quantity: 5 }, 5],
         ['adjustments', { delta: -2 }, -2]
@@ -132,7 +132,7 @@ const sendKeyedContact = () =>
         .set('Idempotency-Key', 'located-replay-1')
         .send({ email: 'ada@example.com', subject: 'Replay', message: 'Once only, please.' });
 
-describe('a 201 names the new resource in Location (WM-D1)', () => {
+describe('a 201 names the new resource in Location', () => {
     it('sends /users/{id} for an admin-created user', async () => {
         const { bearer } = await authenticateAs('admin');
 

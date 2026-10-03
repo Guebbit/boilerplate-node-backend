@@ -151,7 +151,7 @@ describe('the real shared authorization files', () => {
 });
 
 /*
- * B14: a plain `PERMISSION_KEYS.length` cannot tell "the same keys" from "different keys of the
+ * A plain `PERMISSION_KEYS.length` cannot tell "the same keys" from "different keys of the
  * same count" — a rename or a key-for-key swap left the version untouched, so a client's cached
  * rules would go stale silently. These pin the fingerprint's actual properties instead.
  */

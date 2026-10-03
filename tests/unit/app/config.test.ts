@@ -269,7 +269,7 @@ describe('the provider-selector group — refused at boot, not the first request
 });
 
 /*
- * Antibot's own checks (SK-06): moved here from `modules/antibot`'s manifest, since the
+ * Antibot's own checks: moved here from `modules/antibot`'s manifest, since the
  * human-challenge gate they validate is cross-cutting middleware `account`/`feedback` call
  * directly — it keeps running whether or not antibot's two HTTP routes are even mounted, so
  * validating it cannot live on a manifest that deleting the module also deletes.

@@ -72,7 +72,7 @@ it('retries the owed refund without re-announcing the cancellation, and delivers
         expect(await orderService.retryPendingEffects()).toBe(1);
 
         // `order.cancelled` fired exactly once — on the cancel itself. The retry announces
-        // `order.refund_owed` instead (B6), which carries no webhook of its own, so a second
+        // `order.refund_owed` instead, which carries no webhook of its own, so a second
         // `order.cancelled` delivery row here would mean the old bug is back.
         const deliveries = await webhookDeliveryRepository.findAll({
             tenant: TEST_TENANT_ID,

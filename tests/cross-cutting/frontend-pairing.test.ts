@@ -19,7 +19,7 @@
  * holds the names to what is actually over there, in both directions — it is the half that can
  * notice the FRONTEND renaming `admin`, dropping `realtime` or adding a module.
  *
- * The second half is conditional on `FRONTEND_PATH` (G-D5): a deployment with no paired frontend
+ * The second half is conditional on `FRONTEND_PATH`: a deployment with no paired frontend
  * at all owes it nothing, and says so out loud rather than passing quietly — the same bargain
  * `tests/unit/scripts/pairing/spec-identity.test.ts` makes, for the same reason: a guard that
  * evaporates in silence is worse than one that is visibly absent.
@@ -66,7 +66,7 @@ describe('the two repositories, module by module', () => {
  *
  * Not `CI`: the pipeline's cross-repo guard is the `spec-identity` job, which checks the sibling out
  * and fails on its own when it cannot — see `tests/unit/scripts/pairing/spec-identity.test.ts`.
- * G-D5: an adopter who stripped the frontend pairing (no `FRONTEND_PATH`) owes it nothing.
+ * An adopter who stripped the frontend pairing (no `FRONTEND_PATH`) owes it nothing.
  */
 const siblingExpected = Boolean(process.env.FRONTEND_PATH?.trim());
 

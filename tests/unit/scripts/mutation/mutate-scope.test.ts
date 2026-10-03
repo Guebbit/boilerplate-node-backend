@@ -43,7 +43,7 @@ describe('changedMutable', () => {
         const changed = [
             'src/modules/orders/service.ts',
             // Real in the diff, but not in scope — either deleted since (so `mutableFiles()`
-            // never walked it) or excluded by Stryker's own globs, the two cases B27 conflated.
+            // never walked it) or excluded by Stryker's own globs, the two cases that must stay apart.
             'src/modules/orders/index.ts',
             'docs/modules/orders.md'
         ];

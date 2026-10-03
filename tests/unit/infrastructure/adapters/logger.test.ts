@@ -678,7 +678,7 @@ describe('the two loggers are configured independently', () => {
         const { logger: appLogger } = await loadLoggers();
 
         // `level`/`transports` are winston's own configuration surface, erased by the narrow
-        // `Logger` port (SK-04) every OTHER caller depends on. This test is the one place that
+        // `Logger` port every OTHER caller depends on. This test is the one place that
         // legitimately needs the concrete implementation back, to prove winston itself is wired
         // the way the port's callers assume.
         expect((appLogger as winston.Logger).level).toBe('error');

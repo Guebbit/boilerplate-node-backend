@@ -170,7 +170,7 @@ describe('credentials and identity', () => {
  * The rail is the point: a deployment may state a preference, but it may not state one that lets
  * a test run reach a real mail server. The demo profile's own guarantee — its `.env` naming
  * `smtp` must not quietly empty the outbox `GET /__test/emails` reads from — is no longer this
- * adapter's job (SK-08): `scenarios/run-server.ts` forces the variable itself, covered by that
+ * adapter's job: `scenarios/run-server.ts` forces the variable itself, covered by that
  * script's own tests rather than here.
  */
 describe('resolveMailTransport', () => {

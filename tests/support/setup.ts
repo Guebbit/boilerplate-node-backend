@@ -58,7 +58,7 @@ void bootI18n(
 registerValidationMessages();
 
 /*
- * The third half of `app.ts`'s boot (SK-15): without it, `templateFile()` throws on every name a
+ * The third half of `app.ts`'s boot: without it, `templateFile()` throws on every name a
  * suite's own `sendTemplatedEmail`/`enqueueEmail` call tries to resolve, since nothing has
  * collected the per-module directories yet. Globbed off disk for the same reason `bootI18n`'s
  * directories are, above — importing `enabledModules` here would load every module before any

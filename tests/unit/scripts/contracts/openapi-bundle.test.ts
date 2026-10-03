@@ -116,8 +116,8 @@ const stampedResult = (yaml: string, moduleByPath: Record<string, string>) =>
     };
 
 /**
- * `withModuleStamps` — tags every operation with the `x-module` the map assigns its path to
- * (FA59). Driven with a small map rather than the real contract, the same split
+ * `withModuleStamps` — tags every operation with the `x-module` the map assigns its path to.
+ * Driven with a small map rather than the real contract, the same split
  * `withAppLevelResponses`'s own tests keep: the property under test is the STAMPING rule, not any
  * particular path's real owner.
  */
@@ -182,7 +182,7 @@ const errorCodesResult = (
 
 /**
  * `withErrorCodes` — publishes the collected error-code catalogue as the bundled document's own
- * `x-error-codes` (CT-D5). Driven with a small map rather than the real contract, same split as
+ * `x-error-codes`. Driven with a small map rather than the real contract, same split as
  * the other two suites above.
  */
 describe('withErrorCodes', () => {

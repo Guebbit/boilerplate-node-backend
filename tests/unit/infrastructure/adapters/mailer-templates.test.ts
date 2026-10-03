@@ -1,5 +1,5 @@
 /**
- * Guards the email/PDF template collection (SK-15).
+ * Guards the email/PDF template collection.
  *
  * A wrong template path breaks every templated email and nothing else — no type catches it, and a
  * suite that mocks the filesystem away cannot see it either. So this collects every enabled
@@ -203,7 +203,7 @@ describe('email templates render in every supported locale', () => {
     });
 
     /**
-     * The invoice PDF lives outside the collected map (SK-15: nothing resolves it by name, so it
+     * The invoice PDF lives outside the collected map (nothing resolves it by name, so it
      * is reached directly, the same way its own module does) but is the same kind of artefact —
      * a document a customer reads — so it is held to the same translation rule.
      */

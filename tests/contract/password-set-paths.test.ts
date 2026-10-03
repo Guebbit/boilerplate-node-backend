@@ -1,8 +1,8 @@
 /**
  * @module
- * S10 `password-set-paths`: every place a password gets written must run the SAME breach check —
+ * `password-set-paths`: every place a password gets written must run the SAME breach check —
  * tested once, across every entry point, instead of once per bug that found a gap in one of them
- * (B25 — admin create skipped it entirely). System-scoped rather than living in one module's own
+ * (admin create once skipped it entirely). System-scoped rather than living in one module's own
  * suite: the five paths below span both `account` (signup, change, reset) and `users` (admin
  * create, admin update).
  *

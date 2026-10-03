@@ -213,7 +213,7 @@ describe('admin offline recording on an order whose product is gone', () => {
     });
 });
 
-describe('a write that fails must not have already announced the deletion (B13)', () => {
+describe('a write that fails must not have already announced the deletion', () => {
     it('a hard delete whose write fails leaves the cart line — the event never fired', async () => {
         const product = await createProduct({ onHand: 5 });
         const user = await createUser();

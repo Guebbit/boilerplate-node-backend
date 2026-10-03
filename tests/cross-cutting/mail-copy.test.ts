@@ -16,8 +16,8 @@
  * fixture happens to construct.
  *
  * ── Scope ─────────────────────────────────────────────────────────────────────────────────────
- * Every `src/modules/<name>/templates/*.ejs` (SK-15 moved these out of `shared/templates`, one
- * directory per owning module) and the `EmailContent`-returning builders in each module's
+ * Every `src/modules/<name>/templates/*.ejs` (one directory per owning module, not a shared
+ * `shared/templates` folder) and the `EmailContent`-returning builders in each module's
  * `emails.ts` — mail only. `invoicing.document.ejs` and its `invoicing.document.vat-table.ejs`
  * partial render a PDF through the same mechanism (EJS, `invoicing/emails.ts`'s
  * `buildDocumentView`) rather than a mail, so this walk never reaches them at all: they live one

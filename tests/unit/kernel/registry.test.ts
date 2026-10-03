@@ -179,7 +179,7 @@ describe('resolvePersonalDataSections', () => {
 });
 
 /**
- * `resolvePublicEvents` (DDD-D4) — the same flattening `resolveTranslatables` does, one lookup
+ * `resolvePublicEvents` — the same flattening `resolveTranslatables` does, one lookup
  * keyed by domain event name instead of `entityType`. Whether an entry's projection actually
  * matches a real, currently-firing domain event is
  * `tests/cross-cutting/webhook-event-producers.test.ts`'s job, not this one's.

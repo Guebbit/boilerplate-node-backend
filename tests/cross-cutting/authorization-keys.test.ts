@@ -47,7 +47,7 @@ describe('the declared keys', () => {
         }
     });
 
-    it('name a deniedCode some module actually declares (CT-D5)', () => {
+    it('name a deniedCode some module actually declares', () => {
         for (const key of PERMISSION_KEYS) {
             if (key.deniedCode) expect(ERROR_CODES).toHaveProperty(key.deniedCode);
         }
@@ -78,7 +78,7 @@ describe('the preset roles', () => {
             (role) => role.scope === 'tenant' && isUnrestrictedRole(role.name, role.scope)
         );
 
-        // `system` (B21) holds `admin`'s own permission list via a YAML alias in
+        // `system` holds `admin`'s own permission list via a YAML alias in
         // `authorization-roles.yaml`, so it is unrestricted for the identical reason and can never
         // drift from it — see `kernel/permissions.ts`'s `SYSTEM_ACTOR`.
         expect(unrestricted.map((role) => role.name)).toEqual(['admin', 'system']);

@@ -878,7 +878,7 @@ describe('consumeFromQueue contract validation', () => {
         );
     });
 
-    it('runs the handler when the payload carries a field the contract does not declare (C14)', async () => {
+    it('runs the handler when the payload carries a field the contract does not declare', async () => {
         const handler = jest.fn().mockResolvedValue(true);
         const onMessage = await captureConsumerCallback(handler, EmailJobPayloadSchema);
 

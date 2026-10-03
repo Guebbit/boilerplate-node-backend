@@ -34,7 +34,7 @@ setupTestDb();
 
 describe('R3 — concurrent writes of the SAME product', () => {
     /*
-     * `POST /cart` ADDS (WM-D6): every participant's increment must land, so the line holds their
+     * `POST /cart` ADDS: every participant's increment must land, so the line holds their
      * sum, and exactly one of them — whoever created the line — is answered 201. Two participants
      * both concluding "absent" and both appending is the failure the `$ne`-in-filter guard
      * prevents; a lost increment is the one the filtered `$inc` prevents.

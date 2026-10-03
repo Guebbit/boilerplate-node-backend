@@ -2,10 +2,10 @@
  * @module
  * The `format: email` half of `tests/support/contract-data.ts`'s payload generator.
  *
- * One shape (`word@example.com`) is not what a real inbox looks like, and `B1` was exactly that
- * gap: a hand-tightened email regex rejected a plus-tag and an 8+ character TLD, and nothing in
- * this generator ever sent one to find out. This pins the fix — every shape the generator can
- * produce actually appears across enough draws.
+ * One shape (`word@example.com`) is not what a real inbox looks like: a hand-tightened email
+ * regex would reject a plus-tag or an 8+ character TLD, and nothing would find out unless the
+ * generator sent one. This pins that every shape the generator can produce actually appears
+ * across enough draws.
  */
 
 import { z } from 'zod';

@@ -31,7 +31,7 @@ describe('start', () => {
         connect.mockRestore();
     });
 
-    describe('autoIndex (B22)', () => {
+    describe('autoIndex', () => {
         it('turns autoIndex off before connecting, in production', async () => {
             setEnvironment({ NODE_ENV: 'production' });
             const setSpy = jest.spyOn(mongoose, 'set');

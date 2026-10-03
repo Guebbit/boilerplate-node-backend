@@ -4,7 +4,7 @@
  * `asyncapi.public.yaml` publishes) has a real producer, and nothing this module's own subscriber
  * fans out ever names an event the catalogue does not declare.
  *
- * Driven from the domain-event bus, not HTTP, and through the REAL registry indirection (DDD-D4):
+ * Driven from the domain-event bus, not HTTP, and through the REAL registry indirection:
  * `orders`, `payments` and `webhooks` are all registered for real, so `webhooks/module.ts`'s
  * `onRegistered` hook resolves `orders`'/`payments`' own `publicEvents` declarations off
  * `kernel/registry.ts` and wires the generic subscriber from them — nothing here hardcodes which

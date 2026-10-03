@@ -147,7 +147,7 @@ describe('PUT /products/{id}', () => {
         expect(response.status).toBe(422);
     });
 
-    // `translations` is part of the replaced representation too (DECISIONS D5): a stored locale
+    // `translations` is part of the replaced representation too: a stored locale
     // the PUT leaves out is deleted, not kept. Keeping one is what PATCH is for.
     it('deletes every stored locale the PUT leaves out', async () => {
         await localeRepository.create(makeLocale({ tag: 'it', name: 'it', nativeName: 'it' }));
@@ -459,7 +459,7 @@ describe('SKU (SH4)', () => {
     });
 });
 
-describe('VAT rate type (C4)', () => {
+describe('VAT rate type', () => {
     // `rateType` says WHY a `taxClass: zero` product is 0% — `zero-rated` or `exempt` — round
     // tripping each value the same way `taxClass` itself already does.
     it.each(['zero-rated', 'exempt'] as const)(

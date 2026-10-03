@@ -25,7 +25,7 @@ import { templateFile } from '@infrastructure/adapters/mailer';
 import { isDeployed, MODULES_ROOT } from '@tests/paths';
 
 // `templateFile` resolves against the collection `tests/support/setup.ts` already built once for
-// this worker, the same as every other suite that sends a templated mail (SK-15).
+// this worker, the same as every other suite that sends a templated mail.
 
 /** `templateFile` now throws on an unregistered name rather than handing back a path that is
  * merely missing — both are "not a template that exists" for this file's purposes. */
@@ -152,8 +152,8 @@ it('publishes the set the pair agreed on', () => {
      * twin has no equivalent feature for at all. `example.published` is Node-only until the twin builds its `example` module. `webhooks.subscription-disabled` is the same
      * story: the PHP twin has no webhook module yet. `returns.notice` is the same story: the PHP twin has no returns module yet. `orders.order-product-unavailable` (a hard
      * delete or a deactivation cancelling a pending order) is likewise Node-only so far. So are
-     * `orders.order-paid` (E5: a payment settling to `succeeded` now mails the buyer) and
-     * `orders.order-card-expired` (E5: a `card` hold's own expiry notice, the twin of
+     * `orders.order-paid` (a payment settling to `succeeded` mails the buyer) and
+     * `orders.order-card-expired` (a `card` hold's own expiry notice, the twin of
      * `orders.order-transfer-expired` for the other payment method) — both new here. So is
      * `account.two-factor-changed`, the notice that a second factor was added, replaced or removed. So is
      * `account.reauth-code`, the step-up code an account with no password passes with. So are

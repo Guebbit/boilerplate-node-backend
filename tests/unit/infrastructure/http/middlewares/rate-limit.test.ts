@@ -59,7 +59,7 @@ const requestFor = (method: string, path: string) => asStub<Request>({ method, p
 
 /**
  * The global browsing budget's own `skip` — an orchestrator's `/livez` and `/readyz` probes, on a fixed
- * interval, must never trip the budget every other caller shares (PL-27).
+ * interval, must never trip the budget every other caller shares.
  */
 describe("the global budget's skip", () => {
     const globalBudget = INFRASTRUCTURE_RATE_LIMITS.find(

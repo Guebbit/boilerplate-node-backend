@@ -83,8 +83,8 @@ interface ApplyResult {
 /**
  * A fresh, never-before-used database on the shared test Mongo server.
  *
- * Through `URL`, not string concatenation: DDD-D2 made the shared server a replica set, so its
- * uri now carries a `?replicaSet=` query string, and appending a db name onto the end of that
+ * Through `URL`, not string concatenation: the shared server is a replica set, so its
+ * uri carries a `?replicaSet=` query string, and appending a db name onto the end of that
  * (rather than into the path, before it) used to silently fold into the query value instead of
  * naming a database — replaced by garbage, not by anything spec-walk or a type could catch.
  */

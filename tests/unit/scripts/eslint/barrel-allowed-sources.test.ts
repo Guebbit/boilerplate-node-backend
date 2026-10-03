@@ -27,7 +27,7 @@ tester.run('barrel-allowed-sources', barrelAllowedSources as never, {
             filename: 'src/modules/products/index.ts'
         },
         {
-            // A presenter's OUTPUT TYPE is the one thing it may publish (T9) — the same
+            // A presenter's OUTPUT TYPE is the one thing it may publish — the same
             // types-only treatment `./model` gets above.
             code: `export type * from './presenter';`
         },

@@ -1,8 +1,8 @@
 /**
  * @module
- * C11 / D17e-1 — "two simultaneous status-change requests on the same order can both pass a check
- * and both write, with the email already sent for the wrong final state". Flagged as never
- * re-checked; this is that check, against real contention over HTTP.
+ * Two simultaneous status-change requests on the same order must not both pass a check and
+ * both write, with the email already sent for the wrong final state. This is that check, against
+ * real contention over HTTP.
  *
  * `delivery`'s ship door is the concrete case the flag describes: it reads the order, decides
  * whether to notify, and writes — three steps a naive implementation could interleave across two

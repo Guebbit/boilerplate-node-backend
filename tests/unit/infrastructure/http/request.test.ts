@@ -557,7 +557,7 @@ describe('parseFormBoolean', () => {
     });
 
     it('does not resolve to an inherited Object.prototype member', () => {
-        // The defect this closes (B26): a plain-object lookup keyed on user input, `word in
+        // The defect this closes: a plain-object lookup keyed on user input, `word in
         // FORM_BOOLEANS`, is true for 'constructor' because every object inherits it from
         // `Object.prototype` — so `?flag=constructor` decoded to the Object constructor function
         // rather than reaching the validator as an unrecognised string.

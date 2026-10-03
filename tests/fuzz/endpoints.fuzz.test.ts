@@ -38,7 +38,7 @@
  * `tests/integration/upload-security.test.ts` driving real magic-byte checks. The count is
  * asserted below so "skipped" cannot quietly become "skipped everything".
  *
- * ── S13: the multipart operations, sent as urlencoded ────────────────────────────────────────
+ * ── The multipart operations, sent as urlencoded ────────────────────────────────────────
  * Every `multipart/form-data` operation here ALSO declares an `application/json` variant, and
  * `readInput`'s decode rule (`docs/theory/request-input.md`#"Only the string transports are
  * decoded") coerces a string-typed boolean/array ONLY for a real multipart body. The second
@@ -282,7 +282,7 @@ describe.each(
 });
 
 /*
- * S13: the multipart operations' JSON-shaped variant, sent as urlencoded — see the module doc.
+ * The multipart operations' JSON-shaped variant, sent as urlencoded — see the module doc.
  * Every one of these also declares an `application/json` body, so `bodySchema` is always present.
  */
 const MULTIPART_FUZZABLE = OPERATIONS.filter(

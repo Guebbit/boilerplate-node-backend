@@ -237,7 +237,7 @@ describe('imageUrl is never a client-named path', () => {
             expect(fileExists(ownUrl)).toBe(true);
         });
 
-        // WM-D5: a client cannot send the current path back, so a PUT is lossless only if an
+        // A client cannot send the current path back, so a PUT is lossless only if an
         // omitted `imageUrl` keeps the image. An explicit null is still the way to remove it.
         it('a PUT that never mentions imageUrl keeps the image; an explicit null clears it', async () => {
             const uploaded = await api()
