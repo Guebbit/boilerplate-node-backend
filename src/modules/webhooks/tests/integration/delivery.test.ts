@@ -434,7 +434,7 @@ describe('sustained failure', () => {
     });
 
     /*
-     * B7: the owner lookup behind the courtesy email (`attempt.ts`'s `notifyOwnerOfAutoDisable`)
+     * The owner lookup behind the courtesy email (`attempt.ts`'s `notifyOwnerOfAutoDisable`)
      * had no `.catch` — a rejection there had nobody left to see it, since the caller does not
      * await this branch either. Logged instead, so a lookup failure is visible without costing
      * the disable itself, which already committed via the audit entry above.
