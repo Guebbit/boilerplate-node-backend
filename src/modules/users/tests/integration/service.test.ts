@@ -260,7 +260,7 @@ describe('userService.search', () => {
         await userService.updateById(
             user._id.toString(),
             { phone: '+1 555 0100' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         // `search()` is the `.lean()` path (`create-repository.ts#findAll`) — unlike every other
@@ -485,7 +485,7 @@ describe('userService.updateById', () => {
         const user = await createUser();
         const id = user._id.toString();
 
-        await userService.updateById(id, { phone: '+1 555 0100' }, testCallerContext);
+        await userService.updateById(id, { phone: '+1 555 0100' }, callerContextAs('admin'));
 
         // Bypasses `presentUser` on purpose — this is what a raw DB read, or a stolen disk/backup,
         // would actually see.
@@ -501,7 +501,7 @@ describe('userService.updateById', () => {
         const result = await userService.updateById(
             '000000000000000000000000',
             { username: 'x' },
-            testCallerContext
+            callerContextAs('admin')
         );
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -511,7 +511,11 @@ describe('userService.updateById', () => {
         const user = await createUser({ imageUrl: '/images/old-avatar.jpg' });
         const id = user._id.toString();
 
-        await userService.updateById(id, { imageUrl: '/images/new-avatar.jpg' }, testCallerContext);
+        await userService.updateById(
+            id,
+            { imageUrl: '/images/new-avatar.jpg' },
+            callerContextAs('admin')
+        );
 
         // The OLD avatar goes, and it goes by its stored url — see `products`' identical case.
         expect(imageStore.remove).toHaveBeenCalledWith('/images/old-avatar.jpg');
@@ -526,7 +530,7 @@ describe('userService.updateById', () => {
         const result = await userService.updateById(
             id,
             { username: 'renamed-once-more' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(imageStore.remove).not.toHaveBeenCalled();
@@ -544,7 +548,7 @@ describe('userService.updateById', () => {
         const result = await userService.updateById(
             id,
             { username: 'renamed-empty-image', imageUrl: '' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(imageStore.remove).not.toHaveBeenCalled();
@@ -559,7 +563,7 @@ describe('userService.updateById', () => {
         await userService.updateById(
             id,
             { imageUrl: '/images/same-avatar.jpg' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(imageStore.remove).not.toHaveBeenCalled();
@@ -569,7 +573,11 @@ describe('userService.updateById', () => {
         const user = await createUser();
         const id = user._id.toString();
 
-        const result = await userService.updateById(id, { active: false }, testCallerContext);
+        const result = await userService.updateById(
+            id,
+            { active: false },
+            callerContextAs('admin')
+        );
 
         expect(result.success).toBe(true);
         expect((result as { data: UserDocument }).data.active).toBe(false);
@@ -581,13 +589,17 @@ describe('userService.updateById', () => {
         const user = await createUser({ active: true });
         const id = user._id.toString();
 
-        // `testCallerContext`'s anonymous granter cannot grant `admin` — the escalation must be
+        // A moderator cannot grant `admin` — the escalation must be
         // refused BEFORE the deactivation half of this same request is allowed to land. Rejects
         // rather than resolving to a 409 envelope: `AccessInvariantError` propagates the same way
         // `create()`'s own escalation refusal does, for `@infrastructure/http/errors`'
         // `databaseErrorInterpreter` to map at whichever `.catch()` sits above the caller.
         await expect(
-            userService.updateById(id, { active: false, role: 'admin' }, testCallerContext)
+            userService.updateById(
+                id,
+                { active: false, role: 'admin' },
+                callerContextAs('moderator')
+            )
         ).rejects.toMatchObject({ name: 'AccessInvariantError' });
 
         const refreshed = await userRepository.findById(id);
@@ -607,7 +619,7 @@ describe('userService.updateById', () => {
         const result = await userService.updateById(
             id,
             { role: 'Customer', active: true },
-            testCallerContext
+            callerContextAs('support')
         );
 
         expect(result.success).toBe(true);
@@ -625,8 +637,8 @@ describe('userService.updateById', () => {
         const user = await createUser({ active: true });
         const id = user._id.toString();
 
-        await userService.updateById(id, { active: false }, testCallerContext);
-        await userService.updateById(id, { active: false }, testCallerContext);
+        await userService.updateById(id, { active: false }, callerContextAs('admin'));
+        await userService.updateById(id, { active: false }, callerContextAs('admin'));
 
         expect(
             analyticsSpy.mock.calls.filter(([event]) => deactivated.asymmetricMatch(event))
@@ -638,7 +650,7 @@ describe('userService.updateById', () => {
         const user = await createUser({ active: true });
         const id = user._id.toString();
 
-        await userService.updateById(id, { active: false }, testCallerContext);
+        await userService.updateById(id, { active: false }, callerContextAs('admin'));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -654,7 +666,7 @@ describe('userService.updateById', () => {
         const user = await createUser({ active: false });
         const id = user._id.toString();
 
-        await userService.updateById(id, { active: true }, testCallerContext);
+        await userService.updateById(id, { active: true }, callerContextAs('admin'));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -670,7 +682,11 @@ describe('userService.updateById', () => {
         const user = await createUser({ active: true, username: 'stays-active' });
         const id = user._id.toString();
 
-        await userService.updateById(id, { active: true, username: 'renamed' }, testCallerContext);
+        await userService.updateById(
+            id,
+            { active: true, username: 'renamed' },
+            callerContextAs('admin')
+        );
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({ action: usersAuditActions.ADMIN_USER_UPDATED })
@@ -682,7 +698,7 @@ describe('userService.updateById', () => {
         const user = await createUser({ active: true });
         const id = user._id.toString();
 
-        await userService.updateById(id, { username: 'renamed-again' }, testCallerContext);
+        await userService.updateById(id, { username: 'renamed-again' }, callerContextAs('admin'));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({ action: usersAuditActions.ADMIN_USER_UPDATED })
@@ -693,7 +709,7 @@ describe('userService.updateById', () => {
         const user = await createUser();
         const id = user._id.toString();
 
-        const result = await userService.updateById(id, { locale: 'fr' }, testCallerContext);
+        const result = await userService.updateById(id, { locale: 'fr' }, callerContextAs('admin'));
 
         expect(result.success).toBe(true);
         expect((result as { data: UserDocument }).data.locale).toBe('fr');

@@ -10,6 +10,7 @@
         "error-service-unavailable": "Questo servizio non è temporaneamente disponibile. Riprova tra poco.",
         "error-unauthorized": "Non hai effettuato l’accesso, oppure la sessione è scaduta.",
         "error-forbidden": "Non hai i permessi per farlo.",
+        "error-outranked": "Non puoi modificare qualcosa che appartiene a una persona del tuo livello o superiore.",
         "error-not-found": "Questo elemento non esiste più.",
         "error-rate-limited": "Troppe richieste. Riprova tra poco.",
         "error-reauth-required": "Conferma che sei tu prima di continuare.",

@@ -10,14 +10,16 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
+import { ERROR_CODES } from '@api/error-codes';
+import { heldKeys } from '@kernel/ability';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { recordAudit } from '@infrastructure/observability/audit';
+import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import type { CallerContext, UpdateUserByIdRequest, WithServerImage } from '@types';
-import { assignRole, assertCanGrant, rolesOf } from '@modules/access';
+import { assignRole, assertCanGrant, outrankedRefusal, rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { TokenType } from '../model';
 import type { UserDocument } from '../model';
@@ -186,6 +188,100 @@ const saveWithRole = (
 };
 
 /**
+ * The key a writable field needs on top of the route's own `users.any.update` — the one
+ * field-to-key map. Every other field (username, image, locale, phone, website, `role`) rides on
+ * `users.any.update` alone; a body mixing fields needs every key its CHANGED fields need.
+ */
+const FIELD_KEYS = { active: 'users.any.ban' } as const;
+
+/**
+ * The keys this update needs beyond the route's. A field counts only when it CHANGES: a PUT
+ * carries `active` on every save, and resending the value an account already has is not a ban.
+ *
+ * @param user - the loaded document, before the update touches it
+ * @param data - the request body
+ */
+const extraKeysNeeded = (
+    user: UserDocument,
+    data: Pick<UpdateUserByIdRequest, 'active'>
+): string[] =>
+    data.active !== undefined && data.active !== (user.active ?? true) ? [FIELD_KEYS.active] : [];
+
+/**
+ * `403 FORBIDDEN` for a field the caller's keys do not cover, audited like the route guard's own
+ * refusal — `requirePermission` can only ask about the route, never about the body.
+ *
+ * @param key - the missing key
+ * @param id - the account the update was aimed at
+ * @param context - the caller
+ */
+const missingKeyRefusal = (key: string, id: string, context: CallerContext): ResponseReject => {
+    recordAudit(context, {
+        action: coreAuditActions.SECURITY_FORBIDDEN,
+        outcome: 'failure',
+        target_type: 'user',
+        target_id: id,
+        metadata: { reason: 'missing_permission', permission: key }
+    });
+
+    return generateReject(403, [
+        { code: ERROR_CODES.FORBIDDEN, message: t('generic.error-forbidden') }
+    ]);
+};
+
+/**
+ * Nobody changes their own role — a promotion is somebody else's decision, a demotion would lock
+ * the person out of what they were trusted with. `403 FORBIDDEN`, audited.
+ *
+ * @param id - the account the update was aimed at
+ * @param context - the caller
+ */
+const ownRoleRefusal = (id: string, context: CallerContext): ResponseReject => {
+    recordAudit(context, {
+        action: coreAuditActions.SECURITY_FORBIDDEN,
+        outcome: 'failure',
+        target_type: 'user',
+        target_id: id,
+        metadata: { reason: 'own_role' }
+    });
+
+    return generateReject(403, [
+        { code: ERROR_CODES.FORBIDDEN, message: t('users.own-role-change') }
+    ]);
+};
+
+/**
+ * Everything an admin update must clear before a field is written, in order: the keys its
+ * changed fields need, the rank rule, and the ban on changing one's own role.
+ *
+ * @param user - the loaded document
+ * @param data - the request body
+ * @param context - the caller
+ * @returns the refusal, or `undefined` to carry on
+ */
+const refusalFor = (
+    user: UserDocument,
+    data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
+    context: CallerContext
+): Promise<ResponseReject | undefined> => {
+    const id = String(user._id);
+    const held = heldKeys(context.caller);
+    const missing = extraKeysNeeded(user, data).find((key) => !held.has(key));
+
+    if (missing) return Promise.resolve(missingKeyRefusal(missing, id, context));
+
+    return outrankedRefusal(context, id, 'user').then(
+        (outranked) =>
+            outranked ??
+            (context.caller.id === id
+                ? changedRole(user, data.role).then((role) =>
+                      role === undefined ? undefined : ownRoleRefusal(id, context)
+                  )
+                : undefined)
+    );
+};
+
+/**
  * Which admin action an update represents: a ban, its reversal, or an ordinary edit — the
  * distinction the history is for. `active` is `undefined` when the request never mentions the
  * field, same as every other optional column `update()` handles; `wasActive` is `undefined` only
@@ -198,18 +294,65 @@ const auditActionForUpdate = (wasActive: boolean | undefined, active?: boolean):
     return active ? usersAuditActions.ADMIN_USER_UNBANNED : usersAuditActions.ADMIN_USER_BANNED;
 };
 
-/** Update an existing user by ID. Fetches the document then delegates to update(). */
+/**
+ * The shape of an admin update's data: the contract's body, plus what the server derives
+ * (`thumbnailUrl`/`pendingImageKey` — see `update()`'s own docblock for why each rides along).
+ */
+type UpdateByIdData = WithServerImage<UpdateUserByIdRequest> & {
+    thumbnailUrl?: string;
+    pendingImageKey?: string;
+};
+
+/**
+ * The write half of {@link updateById}, once every refusal has been cleared: the update itself,
+ * then its audit row and analytics event.
+ *
+ * @param user - the loaded document
+ * @param data - the request body
+ * @param context - the caller
+ * @param wasActive - `user.active` read BEFORE `update()` mutates it in place — the flip is the
+ *   whole signal for the ban/unban audit action and the deactivation event
+ */
+const applyUpdate = (
+    user: UserDocument,
+    data: UpdateByIdData,
+    context: CallerContext,
+    wasActive: boolean | undefined
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    update(user, data, context).then((result) => {
+        if (result.success) {
+            recordAudit(context, {
+                action: auditActionForUpdate(wasActive, data.active),
+                outcome: 'success',
+                target_type: 'user',
+                target_id: String(user._id)
+            });
+            // Deactivation is a product event as well as an administrative one: it is what a
+            // churn dashboard counts, and it is invisible in a plain "updated" signal. Only on
+            // the flip — a PUT resends `active: false` on every save of a deactivated user.
+            if (data.active === false && wasActive !== false)
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    distinctId: String(user._id),
+                    event: usersAnalyticsEvents.USER_DEACTIVATED
+                });
+        }
+        return result;
+    });
+
+/**
+ * Update an existing user by ID: load the document, clear the refusals ({@link refusalFor}),
+ * then {@link applyUpdate}.
+ *
+ * @param id - the account being changed
+ * @param data - the request body
+ * @param context - the caller, whose keys and rank decide what may change
+ */
 export const updateById = (
     id: string,
-    // `thumbnailUrl`/`pendingImageKey`: not on the contract, server-derived — see `update()`'s
-    // own docblock for why each rides along the same way.
-    data: WithServerImage<UpdateUserByIdRequest> & {
-        thumbnailUrl?: string;
-        pendingImageKey?: string;
-    },
+    data: UpdateByIdData,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    // Credentials included: `data.password`, when present, is assigned onto this document.
     userRepository.findByIdWithCredentials(id).then((user) => {
         // Returned, not thrown: a thrown miss is indistinguishable from a genuine database error
         // at the `.catch()` that has to tell them apart.
@@ -218,24 +361,7 @@ export const updateById = (
         // Read before `update()` mutates `user.active` in place — the flip is the whole signal.
         const wasActive = user.active;
 
-        return update(user, data, context).then((result) => {
-            if (result.success) {
-                recordAudit(context, {
-                    action: auditActionForUpdate(wasActive, data.active),
-                    outcome: 'success',
-                    target_type: 'user',
-                    target_id: id
-                });
-                // Deactivation is a product event as well as an administrative one: it is what a
-                // churn dashboard counts, and it is invisible in a plain "updated" signal. Only on
-                // the flip — a PUT resends `active: false` on every save of a deactivated user.
-                if (data.active === false && wasActive !== false)
-                    emitAnalyticsEvent({
-                        ...buildAnalyticsBase(context),
-                        distinctId: id,
-                        event: usersAnalyticsEvents.USER_DEACTIVATED
-                    });
-            }
-            return result;
-        });
+        return refusalFor(user, data, context).then(
+            (refusal) => refusal ?? applyUpdate(user, data, context, wasActive)
+        );
     });

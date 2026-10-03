@@ -10,16 +10,21 @@
  * See: docs/theory/authorization.md · `shared/authorization-roles.yaml`
  */
 
-import type { AuthorizationScope, CallerContext } from '@types';
+import type { AuthorizationScope, CallerContext, RoleLevel } from '@types';
 import {
     findRole,
+    isBelowLevel,
+    levelOfRoles,
     SIGNUP_DEFAULT_ROLE_NAME,
     VERIFIED_CUSTOMER_ROLE_NAME
 } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { recordAudit } from '@infrastructure/observability/audit';
+import { t } from '@infrastructure/i18n';
+import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import { ConflictError } from '@infrastructure/http/errors';
+import { generateReject, type ResponseReject } from '@infrastructure/http/response';
+import { ERROR_CODES } from '@api/error-codes';
 import { membershipRepository, tenantRepository } from './repository';
 import type { MembershipDocument, TenantDocument } from './model';
 import { accessAuditActions } from './audit';
@@ -383,6 +388,76 @@ export const rolesOfMany = (
                   (memberships) =>
                       new Map<string, string>(memberships.map((one) => [one.userId, one.role]))
               );
+
+/**
+ * Where a person ranks: the higher level of the roles they hold in the shop and over the
+ * installation, `user` for someone with no membership at all.
+ *
+ * Read fresh from the membership rows rather than from a session, because it is asked about the
+ * OWNER of a thing — somebody who is not making this request.
+ *
+ * @param userId - the person asked about
+ */
+export const levelOfUser = (userId: string): Promise<RoleLevel> =>
+    rolesOf(userId, DEPLOYMENT_TENANT_ID).then(levelOfRoles);
+
+/**
+ * May this caller change something that belongs to `ownerId`? The rank rule, asked AFTER the
+ * route's key: the owner must rank strictly below the caller.
+ *
+ * Answers yes, without a lookup, for:
+ *
+ *   - no context at all — self-erasure and the other self-service paths have no caller to rank;
+ *   - the system actor — a sweep or the reaper acts for nobody;
+ *   - a thing nobody owns, or the caller's OWN thing — the rule is only about other people's.
+ *
+ * @param context - the caller, or `undefined` for a self-service path with no request behind it
+ * @param ownerId - who the account, order, payment, return or key belongs to
+ */
+export const canActOn = (
+    context: CallerContext | undefined,
+    ownerId: string | null | undefined
+): Promise<boolean> => {
+    if (!context || context.caller.system || !ownerId || context.caller.id === ownerId) {
+        return Promise.resolve(true);
+    }
+
+    return levelOfUser(ownerId).then((ownerLevel) =>
+        isBelowLevel(ownerLevel, context.caller.level)
+    );
+};
+
+/**
+ * {@link canActOn} as a refusal a service can return: `undefined` to carry on, or the
+ * `403 OUTRANKED` envelope — recorded as a failed `security.forbidden` first, so an attempt on an
+ * equal or a superior leaves a row naming who tried what to whom.
+ *
+ * @param context - the caller, or `undefined` for a self-service path
+ * @param ownerId - who the thing belongs to
+ * @param targetType - the audit row's object, e.g. `order`
+ * @param targetId - the audit row's object id, when it is not the owner's own
+ */
+export const outrankedRefusal = (
+    context: CallerContext | undefined,
+    ownerId: string | null | undefined,
+    targetType: string,
+    targetId: string | undefined = ownerId ?? undefined
+): Promise<ResponseReject | undefined> =>
+    canActOn(context, ownerId).then((allowed) => {
+        if (allowed || !context) return undefined;
+
+        recordAudit(context, {
+            action: coreAuditActions.SECURITY_FORBIDDEN,
+            outcome: 'failure',
+            target_type: targetType,
+            target_id: targetId,
+            metadata: { reason: 'outranked', ownerId }
+        });
+
+        return generateReject(403, [
+            { code: ERROR_CODES.OUTRANKED, message: t('generic.error-outranked') }
+        ]);
+    });
 
 /**
  * The one shop this boilerplate ships.

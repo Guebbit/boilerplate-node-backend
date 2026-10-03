@@ -37,6 +37,11 @@ x-error-codes:
             status: 403,
             description: "The caller is authenticated but lacks the permission this route requires. A key's own `deniedCode` can replace this default with a more specific one."
         }
+    OUTRANKED:
+        {
+            status: 403,
+            description: "The caller holds the permission this route requires, but the person whose account, order, payment, return or API key it would change ranks at or above the caller. The one exception is the caller's own: staff and administrators change what is theirs, never what belongs to an equal or a superior."
+        }
     NOT_FOUND:
         {
             status: 404,

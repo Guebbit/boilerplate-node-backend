@@ -10,7 +10,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/callers';
+import { callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import * as userService from '../../services';
 import { userModel } from '../../model';
@@ -43,7 +43,7 @@ describe('userService.updateById — imageUrl: null', () => {
     it('unsets imageUrl and thumbnailUrl on disk, writing no placeholder', async () => {
         const user = await createUser({ imageUrl: AVATAR, thumbnailUrl: THUMBNAIL });
 
-        await userService.updateById(user.id, { imageUrl: null }, testCallerContext);
+        await userService.updateById(user.id, { imageUrl: null }, callerContextAs('admin'));
 
         const row = await storedRow(user.id);
         expect(row).not.toHaveProperty('imageUrl');
@@ -53,7 +53,7 @@ describe('userService.updateById — imageUrl: null', () => {
     it('deletes the old file and its thumbnail after the save', async () => {
         const user = await createUser({ imageUrl: AVATAR, thumbnailUrl: THUMBNAIL });
 
-        await userService.updateById(user.id, { imageUrl: null }, testCallerContext);
+        await userService.updateById(user.id, { imageUrl: null }, callerContextAs('admin'));
 
         expect(existsSync(path.join(root, AVATAR))).toBe(false);
         expect(existsSync(path.join(root, THUMBNAIL))).toBe(false);
@@ -62,7 +62,7 @@ describe('userService.updateById — imageUrl: null', () => {
     it('leaves the file alone when the update never mentions the image', async () => {
         const user = await createUser({ imageUrl: AVATAR, thumbnailUrl: THUMBNAIL });
 
-        await userService.updateById(user.id, { username: 'renamed' }, testCallerContext);
+        await userService.updateById(user.id, { username: 'renamed' }, callerContextAs('admin'));
 
         expect(existsSync(path.join(root, AVATAR))).toBe(true);
         const row = await storedRow(user.id);
@@ -72,7 +72,11 @@ describe('userService.updateById — imageUrl: null', () => {
     it('is a no-op for an account that never had an image', async () => {
         const user = await createUser();
 
-        const result = await userService.updateById(user.id, { imageUrl: null }, testCallerContext);
+        const result = await userService.updateById(
+            user.id,
+            { imageUrl: null },
+            callerContextAs('admin')
+        );
 
         expect(result.success).toBe(true);
         expect(await storedRow(user.id)).not.toHaveProperty('imageUrl');
