@@ -38,6 +38,7 @@ import { refreshLocaleOverrides } from '@infrastructure/i18n';
  * that is not even a string. Takes `unknown` so both share one message format.
  */
 export class UnknownScenarioError extends Error {
+    /** @param name - whatever the caller sent as the scenario name, rendered with `JSON.stringify`. */
     constructor(name: unknown) {
         super(`unknown scenario: ${JSON.stringify(name)}`);
     }

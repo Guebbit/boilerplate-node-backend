@@ -1,7 +1,7 @@
 /**
  * @module
  * `createApp()`: builds one Express application — infrastructure (OTel, cache, queue, i18n),
- * every enabled module mounted — and hands back its start/stop lifecycle (SK-D2). OTel
+ * every enabled module mounted — and hands back its start/stop lifecycle. OTel
  * initializes before anything it instruments is imported — the only ordering constraint the
  * rest of the file exists to preserve.
  *
@@ -20,6 +20,8 @@ import './infrastructure/config/dotenv';
 // `cluster.ts` is the entry and imports this file dynamically: as the entry itself, the static
 // imports below are hoisted above this call.
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
+
+/** Start the OpenTelemetry SDK; see the note above for when this call is early enough. */
 startTracing();
 
 import express from 'express';
@@ -58,7 +60,7 @@ import { installErrorHandling } from '@app/error-handling';
 import { installDemo, restoreScenario } from '@app/demo';
 import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 
-/** One built application's lifecycle — what {@link createApp} hands back (SK-D2). */
+/** One built application's lifecycle — what {@link createApp} hands back. */
 export interface AppInstance {
     /** The mounted Express application — a supertest agent's whole surface, no boot needed. */
     app: Express;

@@ -9,6 +9,8 @@
 import './infrastructure/config/dotenv';
 // OTel must initialize before any other module is loaded.
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
+
+/** Start the OpenTelemetry SDK before express/http/mongoose are loaded (it patches them). */
 startTracing();
 
 import os from 'node:os';
@@ -163,6 +165,10 @@ const supervise = (): void => {
     process.on('SIGINT', () => startPrimaryShutdown('SIGINT'));
 };
 
+/**
+ * Entry fork: the primary supervises workers; a worker (or a single-process run) serves.
+ * https://nodejs.org/api/cluster.html#clusterisprimary
+ */
 if (cluster.isPrimary && CLUSTER_ENABLED) {
     // Lazy: the primary loads every module's config only to judge it, once, before forking.
     void import('@app/config')
@@ -177,7 +183,7 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
         });
 } else {
     /*
-     * Workers execute `./serve` — `createApp()` (SK-D2) built, started, and wired to this
+     * Workers execute `./serve` — `createApp()` built, started, and wired to this
      * worker's own signal handlers. Side-effect only: nothing here needs the instance back.
      */
     void import('./serve');
