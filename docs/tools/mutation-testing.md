@@ -75,7 +75,7 @@ Read this first. The rest of the page uses these words precisely, and several of
 | **Mutation score**     | Killed ÷ (all viable mutants). Reported twice: over _everything_, and over _covered code only_. The gap between the two is the size of the untested surface.                                                                                                                             |
 | **`break` threshold**  | The score below which the run fails. A backstop for "has this collapsed", not a target.                                                                                                                                                                                                  |
 | **Baseline / ratchet** | `mutation-baseline.json` records what **each file** scored. Improvements are written back, regressions fail. See [The per-file ratchet](#the-per-file-ratchet).                                                                                                                          |
-| **Weekly full sweep**  | A GitHub Actions workflow on a `cron` schedule (Sundays, 03:00 UTC) rather than on push. Nothing waits for it. The full scope lives here because a run takes hours; the diff run below is the fast, per-PR complement.                                                                   |
+| **Weekly full sweep**  | A GitHub Actions workflow on a `cron` schedule rather than on push. Nothing waits for it. In this repo, `.github/workflows/mutation-hosted.yml` runs the hosted profile weekly; the diff run below is the fast, per-PR complement.                                                       |
 | **Concurrency**        | How many mutants Stryker tests **in parallel**. Each one is a separate OS process running a full test runner _and its own in-memory mongod_, so the limit is memory, not CPU cores.                                                                                                      |
 | **`coverageAnalysis`** | Set to `perTest`: Stryker first records which tests touch which code, then runs **only the covering tests** for each mutant instead of the whole suite. This is the main reason a run is minutes and not days — except for static mutants, below.                                        |
 | **Static mutant**      | A mutant in code that runs when the file is **imported**, not when a test calls it — a `new Schema({...})`, a repository built at module scope, a config object. See [Why a run is slow](#why-a-run-is-slow-static-mutants); it is the single biggest cost in this repo.                 |
@@ -1356,23 +1356,25 @@ covered file's real score, never as a grade.
 
 ## File map
 
-| Path                                 | Contents                                                                                                     |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `stryker.json`                       | Scope (`mutate`), the narrowed Jest config (integration included), thresholds, concurrency, reporters        |
-| `jest.config.mutation.js`            | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication)               |
-| `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory — see [pending reseed](#baseline-status-pending-a-reseed).  |
-| `scripts/mutation/stryker-run.ts`    | One Stryker invocation, sized for this machine — concurrency, the heap cap, the scratch sweep, the OOM abort |
-| `scripts/mutation/run-diff.ts`       | `npm run mutation` — the files a branch changed, graded against the ratchet                                  |
-| `scripts/mutation/run-shards.ts`     | `npm run mutation:full` — the whole scope, one shard at a time, resumable, merges once closed                |
-| `scripts/mutation/local-policy.ts`   | Which shards a local sweep runs next, given what previous evenings already recorded                          |
-| `scripts/mutation/mutate-scope.ts`   | The real mutate scope, read off the tree — every `.ts` file `stryker.json` declares mutable                  |
-| `scripts/mutation/sharding.ts`       | Bin-packing by line count for the weekly CI matrix and a local sweep alike                                   |
-| `scripts/mutation/shard-plan.ts`     | CLI wrapper: walks the real `mutate` scope, prints the weekly matrix as GitHub Actions job outputs           |
-| `scripts/mutation/baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule, and the merge variant of both                   |
-| `scripts/mutation/check-baseline.ts` | CLI for the commands below                                                                                   |
-| `.github/workflows/mutation.yml`     | Weekly schedule + dispatch, the sharded matrix and its merge job, the PR diff job, the failure issue         |
-| `tmp/reports/mutation/index.html`    | Human-readable report (generated per run)                                                                    |
-| `tmp/reports/mutation/mutation.json` | Machine-readable report the ratchet reads                                                                    |
+| Path                                    | Contents                                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `stryker.json`                          | Local/default profile: scope (`mutate`), narrowed Jest config, thresholds, local-first concurrency           |
+| `stryker.hosted.json`                   | GitHub-hosted profile: same ruler, lower resource knobs (heap pressure/concurrency) for hosted runners       |
+| `jest.config.mutation.js`               | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication)               |
+| `mutation-baseline.json`                | Per-file scores. Committed. The ratchet's memory — see [pending reseed](#baseline-status-pending-a-reseed).  |
+| `scripts/mutation/stryker-run.ts`       | One Stryker invocation, sized for this machine — concurrency, the heap cap, the scratch sweep, the OOM abort |
+| `scripts/mutation/run-diff.ts`          | `npm run mutation` — the files a branch changed, graded against the ratchet                                  |
+| `scripts/mutation/run-shards.ts`        | `npm run mutation:full` — the whole scope, one shard at a time, resumable, merges once closed                |
+| `scripts/mutation/local-policy.ts`      | Which shards a local sweep runs next, given what previous evenings already recorded                          |
+| `scripts/mutation/mutate-scope.ts`      | The real mutate scope, read off the tree — every `.ts` file `stryker.json` declares mutable                  |
+| `scripts/mutation/sharding.ts`          | Bin-packing by line count for the weekly CI matrix and a local sweep alike                                   |
+| `scripts/mutation/shard-plan.ts`        | CLI wrapper: walks scope, prints matrix output; accepts `--target-lines=n` for profile-specific shard sizing |
+| `scripts/mutation/baseline.ts`          | Ratchet logic — scoring, comparison, the "never lower" rule, and the merge variant of both                   |
+| `scripts/mutation/check-baseline.ts`    | CLI for the commands below                                                                                   |
+| `.github/workflows/mutation.yml`        | Existing mutation workflow (`mutation-diff` pull-request gate and full-sweep jobs)                           |
+| `.github/workflows/mutation-hosted.yml` | Hosted-only full-sweep workflow: lower-resource profile, weekly + manual, shard merge + failure issue        |
+| `tmp/reports/mutation/index.html`       | Human-readable report (generated per run)                                                                    |
+| `tmp/reports/mutation/mutation.json`    | Machine-readable report the ratchet reads                                                                    |
 
 ## Commands
 

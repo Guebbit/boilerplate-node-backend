@@ -15,7 +15,17 @@
 import { scopeWithLines } from './mutate-scope';
 import { packIntoShards } from './sharding';
 
+/** A numeric CLI value, e.g. `--target-lines=300`. */
+const numberArgument = (flag: string): number | undefined => {
+    const raw = process.argv.find((argument) => argument.startsWith(`${flag}=`));
+    const value = Number(raw?.slice(flag.length + 1));
+    return Number.isInteger(value) && value > 0 ? value : undefined;
+};
+
+/** Optional target lines override for CI profiles with a different memory/latency budget. */
+const targetLines = numberArgument('--target-lines');
+
 /** This week's shards — the whole mutate scope, bin-packed by line count. */
-const shards = packIntoShards(scopeWithLines());
+const shards = packIntoShards(scopeWithLines(), targetLines);
 
 console.log(`shards=${JSON.stringify(shards.map(({ name, mutate }) => ({ name, mutate })))}`);
