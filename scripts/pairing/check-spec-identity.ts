@@ -27,6 +27,7 @@ import {
 /** The frontend checkout to compare against: the shell's `FRONTEND_PATH`, `.env`'s, or the default. */
 const siblingRoot = resolveFrontendPath();
 
+// No frontend checkout: skip (exit 0) on a developer machine, fail (exit 2) under CI.
 if (!existsSync(siblingRoot)) {
     const message =
         `\n[spec-identity] No checkout found at ${siblingRoot}.\n` +
@@ -51,11 +52,13 @@ const comparisons = compareSharedFiles(siblingRoot);
 /** The human-readable report of every non-identical file, or empty when the pair agrees. */
 const problems = formatSharedFileProblems(comparisons, siblingRoot);
 
+// Any drift fails the check.
 if (problems) {
     console.error(`\n[spec-identity] ${problems}\n`);
     process.exit(1);
 }
 
+// Everything matched.
 console.log(
     `[spec-identity] ${SHARED_FILES.length} shared files identical to ${siblingRoot} (as ${THIS_REPO}).`
 );

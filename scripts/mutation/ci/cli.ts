@@ -207,9 +207,14 @@ const commands: Partial<Record<string, () => void>> = {
     merge
 };
 
+/** The handler for the subcommand named on the command line, if there is one. */
 const command = commands[process.argv[2] ?? ''];
+
+// Exit 2 (usage error) on an unknown or missing subcommand.
 if (!command) {
     console.error(`usage: cli.ts <${Object.keys(commands).join('|')}> [--options]`);
     process.exit(2);
 }
+
+// Run the chosen subcommand.
 command();

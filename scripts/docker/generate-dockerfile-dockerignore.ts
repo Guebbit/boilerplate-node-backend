@@ -29,7 +29,10 @@ const checkOnly = process.argv.includes('--check');
 /** Repo root, two levels up from `scripts/docker/`. */
 const ROOT = path.join(__dirname, '..', '..');
 
+/** The root `.dockerignore`, which this file is derived from. */
 const SOURCE = path.join(ROOT, '.dockerignore');
+
+/** The per-Dockerfile override this script generates. */
 const TARGET = path.join(ROOT, 'docker', 'Dockerfile.dockerignore');
 
 /** Explains the one deliberate difference from the root file, and why this file exists at all. */
@@ -60,8 +63,10 @@ const derive = (): string => {
     return `${HEADER}\n${kept.join('\n\n')}\n`;
 };
 
+/** What the override should contain, derived from the root file. */
 const next = derive();
 
+// `--check`: exit 0 when the file on disk matches, 1 when it has drifted.
 if (checkOnly) {
     const current = readFileSync(TARGET, 'utf8');
     if (current === next) process.exit(0);
@@ -72,5 +77,6 @@ if (checkOnly) {
     process.exit(1);
 }
 
+// Not a check: rewrite the file and say so.
 writeFileSync(TARGET, next);
 console.log(`[docker] ${path.relative(ROOT, TARGET)} updated.`);

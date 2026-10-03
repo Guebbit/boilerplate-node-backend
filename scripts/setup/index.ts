@@ -31,9 +31,16 @@ import path from 'node:path';
 import { fillPlaceholders, readEnvironmentValue } from './environment-file';
 import { fillableKeys } from './required-keys';
 
+/** The repo root, two levels up from `scripts/setup/`. */
 const ROOT = path.join(__dirname, '..', '..');
+
+/** The committed template `.env` is copied from. */
 const ENV_EXAMPLE = path.join(ROOT, '.env-example');
+
+/** The developer's local environment file (gitignored). */
 const ENV_FILE = path.join(ROOT, '.env');
+
+/** Where the Prometheus metrics token is written for the local observability stack. */
 const METRICS_TOKEN_FILE = path.join(ROOT, 'tmp', 'secrets', 'prometheus-metrics-token');
 
 /** Copies `.env-example` to `.env`, but only when `.env` does not exist yet. */
@@ -53,12 +60,19 @@ const writeSecretFile = (target: string, content: string): void => {
     renameSync(temporary, target);
 };
 
+/** Whether this run created `.env` (false when one was already there). */
 const created = ensureEnvironmentFile();
+
+// Say so when a fresh `.env` was just copied.
 if (created) console.log('[setup] .env created from .env-example.');
 
+/** `.env` as it is now. */
 const before = readFileSync(ENV_FILE, 'utf8');
+
+/** `.env` with every placeholder secret replaced by a generated value, and which keys changed. */
 const { content: after, filled } = fillPlaceholders(before, fillableKeys());
 
+// Write `.env` only when something was filled, so a re-run leaves the file untouched.
 if (filled.length > 0) {
     writeSecretFile(ENV_FILE, after);
     console.log(`[setup] filled: ${filled.join(', ')}`);
@@ -66,5 +80,6 @@ if (filled.length > 0) {
     console.log('[setup] nothing to fill — every secret is already set.');
 }
 
+// Mirror the metrics token into its own file, which the Prometheus container reads.
 writeSecretFile(METRICS_TOKEN_FILE, readEnvironmentValue(after, 'NODE_METRICS_TOKEN') ?? '');
 console.log(`[setup] ${path.relative(ROOT, METRICS_TOKEN_FILE)} written for Prometheus.`);

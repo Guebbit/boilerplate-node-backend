@@ -24,6 +24,12 @@ const PROBE = process.env.PRISM_PROBE ?? '/products';
 /** How long prism gets to become answerable before the run is called a failure. */
 const BOOT_TIMEOUT_MS = 30_000;
 
+/**
+ * The Prism mock server child process (`spawn` is Node's `child_process.spawn`). `prism mock`
+ * serves `openapi.yaml` with generated answers; `--errors` makes it refuse requests that break
+ * the spec instead of answering anyway; `--port` is where it listens.
+ * https://github.com/stoplightio/prism
+ */
 const prism = spawn(
     'prism',
     ['mock', 'openapi.yaml', '--errors', '--port', String(PORT)],
@@ -32,7 +38,10 @@ const prism = spawn(
     { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe'] }
 );
 
+/** Everything prism printed, kept to show only if the run fails. */
 let output = '';
+
+// Collect both streams into {@link output}.
 prism.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
 prism.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
 
@@ -40,9 +49,18 @@ prism.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
 const stop = (): void => {
     if (prism.exitCode === null) prism.kill('SIGTERM');
 };
+// Stop prism however this process ends.
 process.on('exit', stop);
+
+// 130 = 128 + SIGINT: the shell convention for "killed by ^C"; the `exit` hook above still runs.
 process.on('SIGINT', () => process.exit(130));
 
+/**
+ * End the run: stop prism, print the outcome (with prism's own output on failure), and exit.
+ *
+ * @param code - the process exit code
+ * @param message - the one-line outcome
+ */
 const finish = (code: number, message: string): never => {
     stop();
     console[code === 0 ? 'info' : 'error'](message);
@@ -51,9 +69,11 @@ const finish = (code: number, message: string): never => {
     process.exit(code);
 };
 
+// A spawn failure (the binary is missing) is a failed run.
 prism.on('error', (error) =>
     finish(1, `[prism] could not start: ${error.message}\n  Is @stoplight/prism-cli installed?`)
 );
+// Prism exiting by itself before the probe answered is a failed run.
 prism.on('exit', (code) => {
     if (code !== 0) finish(1, `[prism] server exited early with code ${code}.`);
 });
@@ -86,4 +106,5 @@ const main = async (): Promise<void> => {
     finish(0, `[prism] GET ${PROBE} answered ${response.status} from the spec's own examples.`);
 };
 
+// Entry point.
 void main();

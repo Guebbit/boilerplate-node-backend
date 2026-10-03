@@ -45,8 +45,8 @@ interface Check {
 
 /**
  * `regenerate` (an adopter's own first step after a removal), then `ts-check`, the cross-cutting
- * suite and the docs build — the three checks a removal must keep green. A failing `regenerate` is a finding, so the
- * later checks still run against whatever it left.
+ * suite and the docs build — the three checks a removal must keep green. A failing `regenerate`
+ * is a finding, so the later checks still run against whatever it left.
  */
 const CHECKS: readonly Check[] = [
     { label: 'regenerate', command: 'npm', args: ['run', 'regenerate', '--', '--no-sync'] },
@@ -109,26 +109,40 @@ const run = (check: Check): boolean => {
     return runIn(SCRATCH, check.command, check.args);
 };
 
+/** The recipe to measure: `--recipe <name>`, else `shop`. */
 const recipeName = process.argv.includes('--recipe')
     ? (process.argv[process.argv.indexOf('--recipe') + 1] ?? '')
     : 'shop';
+/** The recipe object for {@link recipeName}. */
 const recipe = RECIPES[recipeName];
+
+// An unknown name is a usage error: list the known ones.
 if (!recipe)
     throw new Error(
         `[demo-strip] unknown recipe "${recipeName}"; one of ${Object.keys(RECIPES).join(', ')}.`
     );
 
+// Announce what is about to be removed from the scratch copy.
 console.info(`[demo-strip] recipe ${recipeName}: removing ${recipe.describe()}`);
 
+// Copy the repo to a scratch directory, then apply the recipe there — never to this checkout.
 assembleScratchCopy(REPO_ROOT, SCRATCH);
 recipe.apply();
+
+/** Each check with whether it passed on what the recipe left. */
 const results = CHECKS.map((check) => ({ check, passed: run(check) }));
 
+// The summary: a header, then one PASS/FAIL line per check.
 console.info(`\n[demo-strip] summary (${recipeName}) — report-only, not a merge gate:`);
+
+// One line per check.
 for (const { check, passed } of results)
     console.info(`  ${passed ? 'PASS' : 'FAIL'}  ${check.label}`);
 
+/** Whether every check passed. */
 const allPassed = results.every((result) => result.passed);
+
+// The verdict line; the exit code below carries the same answer.
 console.info(
     allPassed
         ? `\n[demo-strip] the ${recipeName} recipe leaves a working repo.`
@@ -136,4 +150,5 @@ console.info(
               'for what still couples the rest of the repo to what was removed.'
 );
 
+// `exitCode`, not `exit()`: lets pending output flush. CI runs this report-only, never as a gate.
 process.exitCode = allPassed ? 0 : 1;

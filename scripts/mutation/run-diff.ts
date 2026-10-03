@@ -43,7 +43,9 @@ import { runStryker } from './stryker-run';
 import { changedMutable, mutableFiles } from './mutate-scope';
 import { REPO_ROOT, mergeBase } from '../git-base';
 
+/** The raw `--base=<ref>` argument, if given. */
 const baseArgument = process.argv.find((a) => a.startsWith('--base='));
+/** The git ref to diff against; `origin/main` unless `--base` says otherwise. */
 const base = baseArgument ? baseArgument.slice('--base='.length) : 'origin/main';
 
 /** Every file the diff touched, changed or added or renamed into — unfiltered. */
@@ -56,17 +58,25 @@ const changedFiles = (baseCommit: string): string[] =>
         .map((line) => line.trim())
         .filter((line) => line !== '');
 
+/** The commit where this branch left `base`; `undefined` (so: skip) when git cannot tell. */
 const baseCommit = mergeBase(base, 'mutation-diff');
+
+// Nothing to compare against: exit 0 rather than block the caller.
 if (baseCommit === undefined) process.exit(0);
 
+/** The changed files that are inside the mutation scope. */
 const files = changedMutable(changedFiles(baseCommit), mutableFiles());
 
+// No mutable file changed: nothing to measure.
 if (files.length === 0) {
     console.log('[mutation-diff] no mutable source files changed — nothing to measure.');
     process.exit(0);
 }
 
+// List what is about to be mutated.
 console.log(`[mutation-diff] ${files.length} changed file(s) against ${base}:`);
+
+// One line per file.
 for (const file of files) console.log(`  ${file}`);
 
 /**

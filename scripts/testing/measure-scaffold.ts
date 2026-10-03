@@ -101,17 +101,27 @@ const run = (check: Check): boolean => {
     return runIn(SCRATCH, check.command, check.args) !== (check.expectFailure ?? false);
 };
 
+// Copy the repo to a scratch directory; every check runs there, never in this checkout.
 assembleScratchCopy(REPO_ROOT, SCRATCH);
+
+/** Each check with whether it gave the answer it should. */
 const results = CHECKS.map((check) => ({ check, passed: run(check) }));
 
+// The summary: a header, then one PASS/FAIL line per check.
 console.info('\n[scaffold-measure] summary — report-only, not a merge gate:');
+
+// One line per check.
 for (const { check, passed } of results)
     console.info(`  ${passed ? 'PASS' : 'FAIL'}  ${check.label}`);
 
+/** Whether every check gave the answer it should. */
 const allPassed = results.every((result) => result.passed);
+
+// The verdict line; the exit code below carries the same answer.
 console.info(
     allPassed
         ? '\n[scaffold-measure] a scaffolded module passes the gate untouched.'
         : '\n[scaffold-measure] see the failing command(s) above.'
 );
+// `exitCode`, not `exit()`: lets pending output flush. CI runs this report-only, never as a gate.
 process.exitCode = allPassed ? 0 : 1;

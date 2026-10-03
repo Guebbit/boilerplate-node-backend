@@ -48,6 +48,7 @@ const fail = (message: string): never => {
 /** Where the copy lands: the shell's `FRONTEND_PATH`, then `.env`'s, then the sibling default. */
 const frontendRoot = resolveFrontendPath();
 
+// No frontend checkout: nothing to copy into, so stop.
 if (!existsSync(frontendRoot))
     fail(
         `[sync] No checkout found at ${frontendRoot}.\n` +
@@ -85,6 +86,7 @@ const STALENESS_GATES = [
     { label: 'the contract bundles', argv: ['scripts/contracts/build-bundles.ts', '--check'] }
 ] as const;
 
+// Run each gate before a byte moves; the first failure stops the sync.
 for (const gate of STALENESS_GATES) {
     try {
         /*
@@ -157,6 +159,7 @@ const list = (items: Outcome[]): string =>
 /** Declared shared, absent here: a broken build or a stale list, and fatal either way. */
 const missing = of('missing-here');
 
+// A declared-shared file that is absent here is fatal.
 if (missing.length > 0)
     fail(
         `[sync] These are declared shared but do not exist here:\n${list(missing)}\n` +
@@ -166,6 +169,7 @@ if (missing.length > 0)
 /** What this run changed over there, or would have without `--dry`. */
 const moved = [...of('copied'), ...of('would-copy')];
 
+// Report what was (or would have been) copied.
 console.info(
     moved.length === 0
         ? `[sync] Every backend-owned file already matches ${frontendRoot}.`

@@ -124,6 +124,7 @@ const splitSuiteNames = (arguments_: readonly string[]): { names: string[]; rest
 /** The layer name(s) from argv, and everything after them, passed through to jest untouched. */
 const { names: suiteNames, rest: passthrough } = splitSuiteNames(argumentsWithoutFlag);
 
+// Exit 2 (usage error) when the first argument names no known suite.
 if (suiteNames.length === 0) {
     console.error(
         `[test] unknown suite ${JSON.stringify(argumentsWithoutFlag[0])} — ` +
@@ -132,6 +133,7 @@ if (suiteNames.length === 0) {
     process.exit(2);
 }
 
+// `--unsharded`: one jest process for every named suite, then exit with its status.
 if (unsharded) {
     // One process, every named suite's patterns at once — no shard/heap math, no `suite` lookup:
     // the caller (coverage, the JSON report, randomized order) already chose its own jest flags.
@@ -150,6 +152,7 @@ if (unsharded) {
     process.exit(result.status ?? 1);
 }
 
+// Sharded mode runs exactly one suite; combining needs `--unsharded`.
 if (suiteNames.length > 1) {
     console.error(
         `[test] sharded mode takes exactly one suite — pass --unsharded to combine ` +
@@ -326,6 +329,7 @@ const main = async () => {
     console.log(`\n[test] ${suiteName}: all ${shards} shard(s) passed`);
 };
 
+// Entry point: a rejection prints the error and exits 1.
 main().catch((error: unknown) => {
     console.error(`[test] ${suiteName} failed to run:`, error);
     process.exit(1);

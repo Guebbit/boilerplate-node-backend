@@ -42,6 +42,7 @@ interface MutationReport {
     files: Record<string, { mutants: { status: string }[] }>;
 }
 
+/** The recorded per-file scores — the ratchet's memory, stored as `mutation-baseline.json`. */
 export interface MutationBaseline {
     /** When the baseline was last written, so a stale one is visible. */
     generatedAt: string;
@@ -49,8 +50,10 @@ export interface MutationBaseline {
     files: Record<string, number>;
 }
 
+/** How one file's score compares with its baseline. */
 export type FileVerdict = 'held' | 'improved' | 'regressed' | 'new' | 'removed';
 
+/** One file's baseline, current score and verdict. A side is absent when the file is new or removed. */
 export interface FileComparison {
     file: string;
     baseline?: number;
@@ -67,6 +70,8 @@ export interface FileComparison {
  * the same thing `mutationScore` does.
  */
 const KILLED = new Set(['Killed', 'Timeout']);
+
+/** Statuses of mutants that never ran as real code: left out of the score's denominator. */
 const NOT_VIABLE = new Set(['RuntimeError', 'CompileError', 'Ignored']);
 
 /** Per-file score from a Stryker JSON report, as a percentage with two decimals. */
@@ -89,6 +94,13 @@ export const scoresFromReport = (report: MutationReport): Record<string, number>
     return scores;
 };
 
+/**
+ * The scores from the last single run's JSON report.
+ *
+ * @param root - repo root; defaults to the working directory
+ * @returns percentage per file
+ * @throws Error when no report exists yet
+ */
 export const readReport = (root = process.cwd()): Record<string, number> => {
     const reportPath = path.join(root, REPORT_PATH);
     if (!existsSync(reportPath))
@@ -122,12 +134,24 @@ export const readReportsUnder = (directory: string): Record<string, number> => {
     return scores;
 };
 
+/**
+ * The recorded baseline.
+ *
+ * @param root - repo root; defaults to the working directory
+ * @returns the baseline, or `undefined` when none has been recorded yet
+ */
 export const readBaseline = (root = process.cwd()): MutationBaseline | undefined => {
     const baselinePath = path.join(root, BASELINE_PATH);
     if (!existsSync(baselinePath)) return undefined;
     return JSON.parse(readFileSync(baselinePath, 'utf8')) as MutationBaseline;
 };
 
+/**
+ * Write the baseline as indented JSON with a trailing newline.
+ *
+ * @param baseline - what to record
+ * @param root - repo root; defaults to the working directory
+ */
 export const writeBaseline = (baseline: MutationBaseline, root = process.cwd()): void => {
     writeFileSync(path.join(root, BASELINE_PATH), `${JSON.stringify(baseline, undefined, 4)}\n`);
 };

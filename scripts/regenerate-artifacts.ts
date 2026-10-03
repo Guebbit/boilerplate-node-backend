@@ -111,6 +111,7 @@ const run = (script: string): void => {
     execFileSync('npm', ['run', script], { cwd: REPO_ROOT, stdio: 'inherit' });
 };
 
+// Run every step in order, announcing each with the reason it exists.
 for (const [index, step] of STEPS.entries()) {
     console.info(`\n[regenerate] ${index + 1}/${STEPS.length + 1}  ${step.script}`);
     console.info(`             ${step.because}`);
@@ -126,6 +127,7 @@ for (const [index, step] of STEPS.entries()) {
  */
 console.info(`\n[regenerate] ${STEPS.length + 1}/${STEPS.length + 1}  sync:frontend`);
 
+// The last step: hand the files over, or say why not.
 if (skipSync) {
     console.info('             skipped (--no-sync)');
 } else if (existsSync(resolveFrontendPath())) {
@@ -138,6 +140,7 @@ if (skipSync) {
     );
 }
 
+// The closing line, worded for whether the frontend was touched.
 console.info(
     skipSync
         ? '\n[regenerate] Done. `npm run complete` verifies the result. Nothing was handed to the ' +

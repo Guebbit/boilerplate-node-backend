@@ -79,6 +79,8 @@ const shards = packIntoShards(scopeWithLines(), shardLines);
 
 /** A shard is recorded when its copied report exists; that file is the unit of banked credit. */
 const shardReport = (name: string): string => path.join(reportRoot, name, 'mutation.json');
+
+/** Shards that already have a report on disk, so a resumed sweep skips them. */
 const completed = shards.map(({ name }) => name).filter((name) => existsSync(shardReport(name)));
 
 /** What this invocation will actually run, after `--only`, `--limit` and `--force`. */
@@ -174,6 +176,7 @@ const mergeAll = (): number => {
     return check.status ?? 2;
 };
 
+/** The sweep: print the plan, or run the selected shards one by one, then grade the merge. */
 const main = async (): Promise<number> => {
     if (process.argv.includes('--list')) {
         printPlan();
@@ -215,4 +218,5 @@ const main = async (): Promise<number> => {
     return mergeAll();
 };
 
+// Entry point: `main`'s return value is the exit code.
 void main().then((code) => process.exit(code));
