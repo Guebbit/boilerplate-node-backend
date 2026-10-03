@@ -23,6 +23,7 @@ import { asReject, asSuccess } from '@tests/response';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { accountAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
+import { setEnvironment } from '@tests/environment';
 
 /*
  * The analytics port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -126,16 +127,9 @@ describe('signup', () => {
     });
 
     describe('NODE_ANTIBOT_EMAIL_POLICY', () => {
-        const originalPolicy = process.env.NODE_ANTIBOT_EMAIL_POLICY;
-
-        afterEach(() => {
-            if (originalPolicy === undefined) delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
-            else process.env.NODE_ANTIBOT_EMAIL_POLICY = originalPolicy;
-        });
-
         // Every anti-automation rung must be provably off by default.
         it('is off by default — a known disposable domain still signs up', async () => {
-            delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
+            setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: undefined });
 
             const response = asSuccess(
                 await accountService.signup(
@@ -155,7 +149,7 @@ describe('signup', () => {
         });
 
         it('answers success for a disposable domain when the policy is on, but never persists it', async () => {
-            process.env.NODE_ANTIBOT_EMAIL_POLICY = 'disposable';
+            setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: 'disposable' });
 
             const response = asSuccess(
                 await accountService.signup(

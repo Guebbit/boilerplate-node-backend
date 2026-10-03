@@ -25,7 +25,7 @@ import {
     TokenReuseError
 } from '@modules/account/session/jwt';
 import { runTokenCleanup } from '@modules/account/services';
-import { withEnvironmentOverrides } from '@tests/environment';
+import { withEnvironmentOverrides, setEnvironment } from '@tests/environment';
 import { advanceDate, freezeDate } from '@tests/clock';
 import {
     RefreshTokenExpiryTime,
@@ -54,27 +54,11 @@ const signAs = (secret: string, payload: object, options: SignOptions = {}) =>
         keyid: keyId(secret)
     });
 
-const originalEnvironment: Record<string, string | undefined> = {};
-const ENV_KEYS = [
-    'NODE_TOKEN_ACCESS',
-    'NODE_TOKEN_REFRESH',
-    'NODE_TOKEN_ACCESS_TIME',
-    'NODE_TOKEN_REFRESH_TIME_SHORT'
-] as const;
-
 beforeEach(() => {
-    for (const key of ENV_KEYS) originalEnvironment[key] = process.env[key];
-    process.env.NODE_TOKEN_ACCESS = ACCESS_SECRET;
-    process.env.NODE_TOKEN_REFRESH = REFRESH_SECRET;
-    process.env.NODE_TOKEN_ACCESS_TIME = '900';
-    process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '3600';
-});
-
-afterEach(() => {
-    for (const key of ENV_KEYS) {
-        if (originalEnvironment[key] === undefined) delete process.env[key];
-        else process.env[key] = originalEnvironment[key];
-    }
+    setEnvironment({ NODE_TOKEN_ACCESS: ACCESS_SECRET });
+    setEnvironment({ NODE_TOKEN_REFRESH: REFRESH_SECRET });
+    setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
+    setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
 });
 
 describe('verifyAccessToken', () => {

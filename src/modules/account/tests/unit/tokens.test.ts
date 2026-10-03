@@ -19,6 +19,7 @@ import {
     getRefreshTokenRing,
     sessionConfig
 } from '@modules/account/session/config';
+import { setEnvironment, withoutEnvironmentInThisFile } from '@tests/environment';
 
 /**
  * Every env var this module reads. Cleared before each test so a value leaking in from the
@@ -35,29 +36,15 @@ const TOKEN_ENV_KEYS = [
     'NODE_TOKEN_REUSE_WINDOW_MS'
 ] as const;
 
-const originalEnvironment: Record<string, string | undefined> = {};
-
-beforeEach(() => {
-    for (const key of TOKEN_ENV_KEYS) {
-        originalEnvironment[key] = process.env[key];
-        delete process.env[key];
-    }
-});
-
-afterEach(() => {
-    for (const key of TOKEN_ENV_KEYS) {
-        if (originalEnvironment[key] === undefined) delete process.env[key];
-        else process.env[key] = originalEnvironment[key];
-    }
-});
+withoutEnvironmentInThisFile(TOKEN_ENV_KEYS);
 
 describe('getExpiryTime', () => {
     it('reads a distinct env var per tier', () => {
         // Distinct values on purpose: if two tiers were wired to the same variable, or two
         // entries of the map were swapped, identical values would hide it.
-        process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '3600';
-        process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM = '86400';
-        process.env.NODE_TOKEN_REFRESH_TIME_LONG = '2592000';
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_MEDIUM: '86400' });
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_LONG: '2592000' });
 
         expect(getExpiryTime(RefreshTokenExpiryTime.SHORT)).toBe(3600);
         expect(getExpiryTime(RefreshTokenExpiryTime.MEDIUM)).toBe(86_400);
@@ -65,10 +52,10 @@ describe('getExpiryTime', () => {
     });
 
     it('uses the short tier when no tier is given (a browser-session login)', () => {
-        process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '3600';
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
         // The access-token variable must be ignored entirely: a session cookie still needs a
         // real server-side limit, and 10 minutes is not it.
-        process.env.NODE_TOKEN_ACCESS_TIME = '900';
+        setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
 
         expect(getExpiryTime()).toBe(3600);
     });
@@ -81,13 +68,13 @@ describe('getExpiryTime', () => {
     it('falls back for an empty variable rather than returning NaN', () => {
         // `Number.parseInt('')` is NaN, which would flow into `expiresIn` and produce a token
         // jsonwebtoken rejects. An unusable value resolves to the tier default, same as an absent one.
-        process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '';
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '' });
 
         expect(getExpiryTime()).toBe(604_800);
     });
 
     it('parses in base 10, so a zero-padded value is not read as octal', () => {
-        process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '0900';
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '0900' });
 
         expect(getExpiryTime()).toBe(900);
     });
@@ -95,14 +82,14 @@ describe('getExpiryTime', () => {
 
 describe('getExpiryTimeMilliseconds', () => {
     it('is the seconds value scaled by exactly 1000', () => {
-        process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM = '86400';
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_MEDIUM: '86400' });
 
         expect(getExpiryTimeMilliseconds(RefreshTokenExpiryTime.MEDIUM)).toBe(86_400_000);
     });
 
     it('honours the same tier routing as getExpiryTime', () => {
-        process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '60';
-        process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM = '120';
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '60' });
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_MEDIUM: '120' });
 
         expect(getExpiryTimeMilliseconds(RefreshTokenExpiryTime.SHORT)).toBe(60_000);
         expect(getExpiryTimeMilliseconds(RefreshTokenExpiryTime.MEDIUM)).toBe(120_000);
@@ -119,15 +106,15 @@ describe('getExpiryTimeMilliseconds', () => {
 describe('token signing rings', () => {
     it('returns a ring of one from a plain, comma-free variable', () => {
         // Unrotated is the common case, and it must read exactly as a single secret always has.
-        process.env.NODE_TOKEN_ACCESS = 'access-secret';
-        process.env.NODE_TOKEN_REFRESH = 'refresh-secret';
+        setEnvironment({ NODE_TOKEN_ACCESS: 'access-secret' });
+        setEnvironment({ NODE_TOKEN_REFRESH: 'refresh-secret' });
 
         expect(getAccessTokenRing()).toEqual(['access-secret']);
         expect(getRefreshTokenRing()).toEqual(['refresh-secret']);
     });
 
     it('splits a comma-separated variable into an ordered ring, newest first', () => {
-        process.env.NODE_TOKEN_ACCESS = 'new-access-secret,old-access-secret';
+        setEnvironment({ NODE_TOKEN_ACCESS: 'new-access-secret,old-access-secret' });
 
         expect(getAccessTokenRing()).toEqual(['new-access-secret', 'old-access-secret']);
     });
@@ -141,7 +128,7 @@ describe('token signing rings', () => {
 
 describe('the access-token TTL', () => {
     it('reads NODE_TOKEN_ACCESS_TIME', () => {
-        process.env.NODE_TOKEN_ACCESS_TIME = '900';
+        setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
 
         expect(getAccessExpiryTime()).toBe(900);
     });
@@ -153,7 +140,7 @@ describe('the access-token TTL', () => {
     });
 
     it('falls back for an empty variable rather than returning NaN', () => {
-        process.env.NODE_TOKEN_ACCESS_TIME = '';
+        setEnvironment({ NODE_TOKEN_ACCESS_TIME: '' });
 
         expect(getAccessExpiryTime()).toBe(600);
     });
@@ -161,8 +148,8 @@ describe('the access-token TTL', () => {
     it('does not read any refresh tier variable', () => {
         // Guards the access/refresh split: an access token inheriting a 7-day refresh TTL is
         // exactly the mistake the browser-session fallback invites.
-        process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '3600';
-        process.env.NODE_TOKEN_REFRESH_TIME_LONG = '2592000';
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_LONG: '2592000' });
 
         expect(getAccessExpiryTime()).toBe(600);
     });
@@ -170,7 +157,7 @@ describe('the access-token TTL', () => {
 
 describe('getCookieMaxAgeMilliseconds', () => {
     it('is the tier in milliseconds when a tier was ticked', () => {
-        process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM = '86400';
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_MEDIUM: '86400' });
 
         expect(getCookieMaxAgeMilliseconds(RefreshTokenExpiryTime.MEDIUM)).toBe(86_400_000);
     });

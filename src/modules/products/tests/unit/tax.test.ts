@@ -5,34 +5,25 @@
  * `tests/support/setup.ts` cannot leak between cases here.
  */
 import { resolveTaxRate } from '../../tax';
-
-const ORIGINAL = {
-    default: process.env.NODE_VAT_RATE_DEFAULT,
-    reduced: process.env.NODE_VAT_RATE_REDUCED
-};
-
-afterEach(() => {
-    process.env.NODE_VAT_RATE_DEFAULT = ORIGINAL.default;
-    process.env.NODE_VAT_RATE_REDUCED = ORIGINAL.reduced;
-});
+import { setEnvironment } from '@tests/environment';
 
 describe('resolveTaxRate', () => {
     it('resolves an absent tax class to the shop default', () => {
-        process.env.NODE_VAT_RATE_DEFAULT = '0.22';
+        setEnvironment({ NODE_VAT_RATE_DEFAULT: '0.22' });
 
         expect(resolveTaxRate(undefined)).toBe(0.22);
     });
 
     it('resolves "reduced" to the reduced rate, not the default', () => {
-        process.env.NODE_VAT_RATE_DEFAULT = '0.22';
-        process.env.NODE_VAT_RATE_REDUCED = '0.1';
+        setEnvironment({ NODE_VAT_RATE_DEFAULT: '0.22' });
+        setEnvironment({ NODE_VAT_RATE_REDUCED: '0.1' });
 
         expect(resolveTaxRate('reduced')).toBe(0.1);
     });
 
     it('resolves "zero" to 0, regardless of configuration', () => {
-        process.env.NODE_VAT_RATE_DEFAULT = '0.22';
-        process.env.NODE_VAT_RATE_REDUCED = '0.1';
+        setEnvironment({ NODE_VAT_RATE_DEFAULT: '0.22' });
+        setEnvironment({ NODE_VAT_RATE_REDUCED: '0.1' });
 
         expect(resolveTaxRate('zero')).toBe(0);
     });

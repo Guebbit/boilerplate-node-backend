@@ -16,10 +16,11 @@ import {
     requiredPaths,
     subSchema
 } from '@tests/schema';
+import { currentEnvironment } from '@infrastructure/config/store';
 
 /** The delivery retention window the schema was built with, in seconds — mirrors `model.ts`'s own default. */
 const DELIVERY_RETENTION_SECONDS =
-    Number(process.env.NODE_WEBHOOK_DELIVERY_RETENTION_DAYS ?? 30) * 24 * 60 * 60;
+    Number(currentEnvironment().NODE_WEBHOOK_DELIVERY_RETENTION_DAYS ?? 30) * 24 * 60 * 60;
 
 describe('webhookSubscriptionSchema', () => {
     it('requires the fan-out fields, and nothing else', () => {

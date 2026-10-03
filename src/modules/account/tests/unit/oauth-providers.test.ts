@@ -13,6 +13,7 @@ import {
 } from '../../oauth/providers';
 import { FAKE_OAUTH_CODE, fakeOAuthProvider } from '../../oauth/providers/fake';
 import { generateCodeVerifier, codeChallengeOf } from '../../oauth/state';
+import { setEnvironment, withoutEnvironmentInThisFile } from '@tests/environment';
 
 /** Every env var a provider's "configured" check reads, restored after each test. */
 const OAUTH_ENV_KEYS = [
@@ -23,21 +24,7 @@ const OAUTH_ENV_KEYS = [
 ] as const;
 
 describe('the OAuth provider registry', () => {
-    const originalEnvironment: Record<string, string | undefined> = {};
-
-    beforeEach(() => {
-        for (const key of OAUTH_ENV_KEYS) {
-            originalEnvironment[key] = process.env[key];
-            delete process.env[key];
-        }
-    });
-
-    afterEach(() => {
-        for (const key of OAUTH_ENV_KEYS) {
-            if (originalEnvironment[key] === undefined) delete process.env[key];
-            else process.env[key] = originalEnvironment[key];
-        }
-    });
+    withoutEnvironmentInThisFile(OAUTH_ENV_KEYS);
 
     it('lists nothing when no credentials are set and nothing else is registered', () => {
         expect(enabledProviders()).toEqual([]);
@@ -47,17 +34,17 @@ describe('the OAuth provider registry', () => {
     });
 
     it('lists google only once both its client id and secret are set', () => {
-        process.env.NODE_OAUTH_GOOGLE_CLIENT_ID = 'client-id';
+        setEnvironment({ NODE_OAUTH_GOOGLE_CLIENT_ID: 'client-id' });
         expect(enabledProviders()).not.toContain('google');
 
-        process.env.NODE_OAUTH_GOOGLE_CLIENT_SECRET = 'client-secret';
+        setEnvironment({ NODE_OAUTH_GOOGLE_CLIENT_SECRET: 'client-secret' });
         expect(enabledProviders()).toContain('google');
         expect(resolveOAuthProvider('google')?.name).toBe('google');
     });
 
     it('lists github independently of google', () => {
-        process.env.NODE_OAUTH_GITHUB_CLIENT_ID = 'client-id';
-        process.env.NODE_OAUTH_GITHUB_CLIENT_SECRET = 'client-secret';
+        setEnvironment({ NODE_OAUTH_GITHUB_CLIENT_ID: 'client-id' });
+        setEnvironment({ NODE_OAUTH_GITHUB_CLIENT_SECRET: 'client-secret' });
 
         expect(enabledProviders()).toEqual(['github']);
     });

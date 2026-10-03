@@ -18,6 +18,7 @@ import { userRepository } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import { observePort } from '@tests/ports';
+import { setEnvironment } from '@tests/environment';
 
 /*
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -291,28 +292,14 @@ const issueRefreshToken = async () => {
  * `jwt.test.ts` sets them — unit tests don't load dotenv.
  */
 describe('accountService.refreshAccessToken', () => {
-    const ENV_KEYS = [
-        'NODE_TOKEN_ACCESS',
-        'NODE_TOKEN_REFRESH',
-        'NODE_TOKEN_ACCESS_TIME',
-        'NODE_TOKEN_REFRESH_TIME_SHORT',
-        'NODE_TOKEN_ROTATION_GRACE_MS'
-    ] as const;
-    const originalEnvironment: Record<string, string | undefined> = {};
-
     beforeEach(() => {
-        for (const key of ENV_KEYS) originalEnvironment[key] = process.env[key];
-        process.env.NODE_TOKEN_ACCESS = 'test-access-secret';
-        process.env.NODE_TOKEN_REFRESH = 'test-refresh-secret';
-        process.env.NODE_TOKEN_ACCESS_TIME = '900';
-        process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '3600';
+        setEnvironment({ NODE_TOKEN_ACCESS: 'test-access-secret' });
+        setEnvironment({ NODE_TOKEN_REFRESH: 'test-refresh-secret' });
+        setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
+        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
     });
 
     afterEach(() => {
-        for (const key of ENV_KEYS) {
-            if (originalEnvironment[key] === undefined) delete process.env[key];
-            else process.env[key] = originalEnvironment[key];
-        }
         jest.restoreAllMocks();
     });
 
@@ -395,7 +382,7 @@ describe('accountService.refreshAccessToken', () => {
         // A zero-length grace window: by the time this next call re-reads the entry, ANY elapsed
         // time counts as outside it — the same test technique `jwt.test.ts` would use, without
         // reaching into `users`' storage to back-date a timestamp by hand.
-        process.env.NODE_TOKEN_ROTATION_GRACE_MS = '0';
+        setEnvironment({ NODE_TOKEN_ROTATION_GRACE_MS: '0' });
 
         await expect(
             accountService.refreshAccessToken(refreshToken, testCallerContext)

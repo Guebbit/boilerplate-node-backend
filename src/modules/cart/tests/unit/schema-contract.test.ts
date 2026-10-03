@@ -20,9 +20,11 @@ import {
     subSchema,
     typeOf
 } from '@tests/schema';
+import { currentEnvironment } from '@infrastructure/config/store';
 
 /** The retention window the schema was built with, in seconds. Mirrors the model's own default. */
-const RETENTION_SECONDS = Number(process.env.NODE_CART_RETENTION_DAYS ?? 365) * 24 * 60 * 60;
+const RETENTION_SECONDS =
+    Number(currentEnvironment().NODE_CART_RETENTION_DAYS ?? 365) * 24 * 60 * 60;
 
 describe('cartSchema', () => {
     it('requires an owner and nothing else', () => {
