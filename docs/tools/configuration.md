@@ -5,7 +5,8 @@ rest of the code as a **typed, frozen object**.
 
 ```mermaid
 flowchart LR
-    Env[".env / the process environment"] --> Store["infrastructure/config/store.ts<br/>the only reader"]
+    Env[".env / the process environment"] -->|"read once"| Store["infrastructure/config/store.ts<br/>the only reader"]
+    Over["createApp({ env }) · test overrides"] -->|"laid on top"| Store
     Store --> Slice["a slice per owner<br/>(config.ts, defineConfig)"]
     Slice -->|"typed getter"| Code["services, adapters,<br/>middleware, scripts"]
     Slice -->|"same slices"| Gate["boot gate<br/>every mistake, once"]
@@ -13,7 +14,7 @@ flowchart LR
 
     classDef layer fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef gate fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class Env,Store,Slice,Code layer;
+    class Env,Over,Store,Slice,Code layer;
     class Gate,Stop gate;
 ```
 
@@ -22,13 +23,13 @@ flowchart LR
 Laravel, AdonisJS, NestJS and Spring Boot all converge on it. This repo follows it on Zod 4, which
 was already a dependency.
 
-| Rule                                  | Where it is enforced here                                                          |
-| ------------------------------------- | ---------------------------------------------------------------------------------- |
-| Read the environment in one layer     | `no-restricted-properties` on `process.env` in `src/`, off only in `config.ts`     |
-| Validate once at boot, list every one | `assertConfig` from `registerModules`, `runScript` and the cluster primary         |
-| Expose a typed, immutable object      | `defineConfig` returns a frozen, memoised accessor                                 |
-| Everything else reads that object     | Getters such as `vatRateDefault()` keep their signature; only their body moved     |
-| Tests override config through a seam  | `tests/support/environment.ts`; see [In tests](#in-tests) for what is still direct |
+| Rule                                  | Where it is enforced here                                                           |
+| ------------------------------------- | ----------------------------------------------------------------------------------- |
+| Read the environment in one layer     | `no-restricted-properties` on `process.env` in `src/`, off only in `config.ts`      |
+| Validate once at boot, list every one | `assertConfig` from `registerModules`, `runScript` and the cluster primary          |
+| Parse once, expose a frozen object    | The store snapshots `process.env` at the first read; a slice parses once per change |
+| Everything else reads that object     | Getters such as `vatRateDefault()` keep their signature; only their body moved      |
+| Tests override config through a seam  | `tests/support/environment.ts`; lint refuses a `process.env` write in a test        |
 
 A junk value **refuses to boot**. It never falls back to the default:
 `NODE_MAX_UPLOAD_BYTES=5mb` used to become 5 MB, quietly. Blank counts as unset.
@@ -112,18 +113,59 @@ A **provider selector** (`NODE_PAYMENT_PROVIDER`, `NODE_ANTIBOT_PROVIDER`, …) 
 slice, because the valid names live in a registry that imports the slice. A shape-less
 `…ProviderProbe` slice, next to the registry, runs the resolver once at boot instead.
 
+## Read once, override on top
+
+The store copies `process.env` the **first** time anything asks, and never again. What changes the
+answer afterwards is an **override**: a layer of names and values on top of that copy. A slice
+parses its variables once and keeps the result until the store changes.
+
+```mermaid
+flowchart TD
+    Dotenv["config/dotenv<br/>loads .env"] -->|"retakes the snapshot"| Snap["snapshot of process.env"]
+    Snap --> Merge["snapshot + overrides"]
+    Over["overrides"] --> Merge
+    Merge -->|"version moved?"| Slice["slice: parse again"]
+    Merge -->|"same version"| Keep["slice: keep the parsed values"]
+```
+
+| Who writes an override          | How                                                            |
+| ------------------------------- | -------------------------------------------------------------- |
+| `createApp({ env })`            | `installEnvironment`: for the life of the process              |
+| The demo and scenario launchers | `installEnvironment`, before the app is imported               |
+| A test                          | `tests/support/environment.ts`, below; undone after every case |
+
+`createApp({ env })` is the injection point: the variables are laid over the process environment,
+pass through the same parser and boot gate, and `process.env` is never written. The slices are
+process-wide, so the last app built wins. A setting read at **import** time (a rate limiter's
+budget) only sees it if it was installed before the first import of `src/app.ts`, which is why the
+launchers install theirs first.
+
+Every entry point imports `config/dotenv` instead of `dotenv/config`. It loads `.env` and tells the
+store, so a read that happened earlier (tracing, a launcher) does not freeze a snapshot without it.
+
 ## In tests
 
-`tests/support/setup.ts` gives every worker a set of `??=` defaults. Jest gives each test **file**
-its own copy of `process.env`, and a slice re-reads its own variables on every call (memoised by
-their raw values), so a test can change one and the next call sees it.
+`tests/support/setup-environment.ts` gives every worker a set of `??=` defaults. It is the first
+import of `setup.ts`, so they land before the store's first read. Jest gives each test **file** its
+own copy of `process.env`, so a file starts from the same snapshot whatever ran before it.
 
-| Helper                                                | Use                                              |
-| ----------------------------------------------------- | ------------------------------------------------ |
-| `withEnvironment` / `withEnvironmentOverrides`        | Set for the body, restore after                  |
-| `withoutEnvironment` / `withoutEnvironmentInThisFile` | Clear for the body or the whole file             |
-| `slice.slice.inspect(env)`                            | Judge a plain object against a slice, no process |
-| `assertConfigIn(slices, env)`                         | The whole gate against a plain object            |
+A test never writes `process.env`: the store would not see it. `no-restricted-syntax` refuses an
+assignment, a `delete` or an `Object.assign` onto it in `tests/` and every `src/modules/*/tests/`,
+and names the helper. Overrides last **one case**: a `setupFilesAfterEnv` hook resets them after
+every test, back to what the file began with (the file sandbox's directories).
+
+| Helper                                                | Use                                                                                    |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `setEnvironment({ NAME: 'x', OTHER: undefined })`     | Override for the rest of the case; `undefined` unsets                                  |
+| `withEnvironment` / `withEnvironmentOverrides`        | Override for a body, restore after                                                     |
+| `withoutEnvironment` / `withoutEnvironmentInThisFile` | Unset for the body, or before every case of the file                                   |
+| `setProcessEnvironment({ NAME: 'x' })`                | The REAL `process.env`, for a script or library that reads it; restored after the case |
+| `slice.slice.inspect(env)`                            | Judge a plain object against a slice, no process                                       |
+| `assertConfigIn(slices, env)`                         | The whole gate against a plain object                                                  |
+
+Set a value in a `beforeEach`, not a `beforeAll`: the reset runs after the first case. A suite that
+re-imports a module (`jest.resetModules()`) keeps its overrides, because the store's state lives on
+`globalThis`, not in the module.
 
 ## Reference
 
