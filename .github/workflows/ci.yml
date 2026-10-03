@@ -480,8 +480,8 @@ jobs:
         #
         # `build` is `ts-check && lint`, so this overlaps the two jobs above on purpose: they report
         # which half failed, this one proves the composite gate a developer actually runs still
-        # passes. It used to call `build-only`, an alias for `npm run lint` inherited from a
-        # frontend template, which made the overlap total rather than partial.
+        # passes. It calls `build`, not `build-only` (an alias for `npm run lint` only, which would
+        # make the overlap total rather than partial).
         runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:

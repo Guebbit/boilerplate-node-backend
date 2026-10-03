@@ -312,10 +312,9 @@ jobs:
                   retention-days: 14
 
     mutation-notify:
-        # 24 failures and 12 cancellations went unnoticed over 35 nights under the old rotation,
-        # before this existed — "check the Actions tab deliberately" was the alternative, tried for
-        # a month, and it produced exactly that silence. One issue, updated in place, surfaces where
-        # the repo is already read instead of adding a channel nobody watches.
+        # A red nightly run must not pass unnoticed: "check the Actions tab deliberately" produces
+        # exactly that silence. One issue, updated in place, surfaces where the repo is already read
+        # instead of adding a channel nobody watches.
         needs:
             [
                 preflight,

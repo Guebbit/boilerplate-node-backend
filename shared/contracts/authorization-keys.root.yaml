@@ -134,11 +134,10 @@ scopes:
 
 # WHY THERE IS NO WILDCARD OF ANY KIND ANY MORE
 #
-# The per-family `manage` key used to expand, unconditionally, to every action its family declared
-# — which was the only way to say "read everyone's, change nothing" for a family whose narrow read
-# carried a condition. That made the family's own write keys reachable through a route asking only
-# for the wide read, and it meant breadth was something a wildcard implied rather than something a
-# role stated. It went first, and breadth has been written on the keys themselves ever since.
+# There is no per-family `manage` key. One that expanded to every action its family declared would
+# make the family's own write keys reachable through a route asking only for the wide read, and
+# would make breadth something a wildcard implied rather than something a role stated. Breadth is
+# written on the keys themselves.
 #
 # `all.manage` — the SCOPE wildcard, `admin`'s alone — is worth naming as the one remaining case:
 # the same argument applies one level up — "a key no module declares grants nothing" is only true
