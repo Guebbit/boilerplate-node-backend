@@ -63,6 +63,7 @@ interface SuiteResult {
     }[];
 }
 
+/** The slice of Jest's `--json` report this script reads. */
 interface Report {
     numTotalTests?: number;
     numPassedTests?: number;
@@ -104,8 +105,10 @@ const bucketOf = (file: string): string => {
     return '(other)';
 };
 
+/** Milliseconds as `1.2s`. */
 const seconds = (milliseconds: number) => `${(milliseconds / 1000).toFixed(1)}s`;
 
+/** Parse the JSON report, or print how to produce one and exit 2 when it is missing. */
 const readReport = (file: string): Report => {
     if (!existsSync(file)) {
         console.error(
@@ -117,11 +120,14 @@ const readReport = (file: string): Report => {
     return JSON.parse(readFileSync(file, 'utf8')) as Report;
 };
 
+/** The report to read: the first CLI argument, else the default location. */
 const reportFile = process.argv[2] ? path.resolve(process.cwd(), process.argv[2]) : DEFAULT_REPORT;
+/** The parsed report. */
 const report = readReport(reportFile);
 
 /* ── Roll the flat file list up by module ───────────────────────────────────────────────────── */
 
+/** What one bucket (a module or a layer) adds up to. */
 interface Bucket {
     suites: number;
     tests: number;
@@ -129,8 +135,10 @@ interface Bucket {
     milliseconds: number;
 }
 
+/** Totals per bucket label. */
 const buckets = new Map<string, Bucket>();
 
+// One pass over every suite: add its counts and time to its bucket.
 for (const suite of report.testResults) {
     const key = bucketOf(suite.name);
     const bucket = buckets.get(key) ?? { suites: 0, tests: 0, failed: 0, milliseconds: 0 };
@@ -150,17 +158,23 @@ for (const suite of report.testResults) {
  * the modules are what someone is looking for.
  */
 const isLayer = (label: string) => label.startsWith('(');
+/** Buckets in print order: modules first, then layers. `toSorted` copies, it never mutates. */
 const rows = [...buckets].toSorted(([a], [b]) =>
     isLayer(a) === isLayer(b) ? a.localeCompare(b) : isLayer(a) ? 1 : -1
 );
 
+/** Test counts as Jest reported them; absent means zero. */
 const total = report.numTotalTests ?? 0;
+
+/** How many tests failed. */
 const failed = report.numFailedTests ?? 0;
+/** Summed suite time: parallel workers make this larger than the real wall clock. */
 const wall = report.testResults.reduce(
     (sum, suite) => sum + ((suite.endTime ?? 0) - (suite.startTime ?? 0)),
     0
 );
 
+// Headline: totals and suite time.
 console.log(
     `\n[test-report] ${total} tests in ${report.testResults.length} suites — ` +
         `${report.numPassedTests ?? 0} passed, ${failed} failed` +
@@ -168,8 +182,12 @@ console.log(
         ` (${seconds(wall)} of suite time)\n`
 );
 
+/** Label column width: the longest label, never narrower than the header. */
 const width = Math.max(...rows.map(([label]) => label.length), 'module'.length);
+
+// The per-bucket table: header, then one row per bucket.
 console.log(`  ${'module'.padEnd(width)}  suites  tests  failed     time`);
+// One row per bucket.
 for (const [label, bucket] of rows)
     console.log(
         `  ${label.padEnd(width)}  ${String(bucket.suites).padStart(6)}  ` +
@@ -179,6 +197,7 @@ for (const [label, bucket] of rows)
 
 /* ── Where the time went ────────────────────────────────────────────────────────────────────── */
 
+/** The {@link SLOWEST} suites by duration. */
 const slowestSuites = report.testResults
     .map((suite) => ({
         file: path.relative(REPO_ROOT, suite.name),
@@ -187,10 +206,13 @@ const slowestSuites = report.testResults
     .toSorted((a, b) => b.milliseconds - a.milliseconds)
     .slice(0, SLOWEST);
 
+// Print the slowest suites.
 console.log(`\n  slowest suites`);
+// One line per slow suite.
 for (const { file, milliseconds } of slowestSuites)
     console.log(`  ${seconds(milliseconds).padStart(8)}  ${file}`);
 
+/** The {@link SLOWEST} single tests by duration, across every suite. */
 const slowestTests = report.testResults
     .flatMap((suite) =>
         suite.assertionResults.map((assertion) => ({
@@ -202,12 +224,15 @@ const slowestTests = report.testResults
     .toSorted((a, b) => b.milliseconds - a.milliseconds)
     .slice(0, SLOWEST);
 
+// Print the slowest tests.
 console.log(`\n  slowest tests`);
+// One line per slow test.
 for (const { name, bucket, milliseconds } of slowestTests)
     console.log(`  ${seconds(milliseconds).padStart(8)}  [${bucket}] ${name}`);
 
 /* ── Failures, named by module ──────────────────────────────────────────────────────────────── */
 
+/** Every failed test, with its bucket, file and first failure line. */
 const failures = report.testResults.flatMap((suite) =>
     suite.assertionResults
         .filter(({ status }) => status === 'failed')
@@ -220,6 +245,7 @@ const failures = report.testResults.flatMap((suite) =>
         }))
 );
 
+// Print the failures, only when there are any.
 if (failures.length > 0) {
     console.log(`\n  failures`);
     for (const failure of failures) {
@@ -267,8 +293,10 @@ const readCoverage = (file: string): Map<string, { hit: number; found: number }>
     return perBucket;
 };
 
+/** Line coverage per bucket, or `undefined` when this was not a coverage run. */
 const coverage = readCoverage(path.join(REPO_ROOT, 'tmp', 'coverage', 'lcov.info'));
 
+// Print the coverage table, only for a coverage run.
 if (coverage) {
     const covered = [...coverage].toSorted(([a], [b]) =>
         isLayer(a) === isLayer(b) ? a.localeCompare(b) : isLayer(a) ? 1 : -1

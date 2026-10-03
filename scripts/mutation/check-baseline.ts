@@ -32,19 +32,30 @@ import {
     BASELINE_PATH
 } from './baseline';
 
+/** `--update`: record this run's scores (a full run only; see the partial-report guard below). */
 const update = process.argv.includes('--update');
+
+/** `--merge`: fold a sharded sweep's reports into the baseline. Needs `--merge-dir`. */
 const merge = process.argv.includes('--merge');
+
+/** The raw `--merge-dir=<path>` argument, if any. */
 const mergeDirectoryArgument = process.argv.find((argument) => argument.startsWith('--merge-dir='));
+/** Where the shard reports live: the argument's value. */
 const mergeDirectory = mergeDirectoryArgument?.slice('--merge-dir='.length);
 
+// Exit 2 (usage error): `--merge` without somewhere to merge from.
 if (merge && !mergeDirectory) {
     console.error('\n[mutation-baseline] --merge requires --merge-dir=<path>\n');
     process.exit(2);
 }
 
+/** The command a person runs to record the first baseline; quoted in messages. */
 const baselineCommand = 'npm run mutation:check -- --update';
 
+/** This run's score per file: from the merge directory's reports, or the last single run's. */
 let current: Record<string, number>;
+
+// An unreadable report is a usage-level failure: say why and exit 2.
 try {
     current = merge && mergeDirectory ? readReportsUnder(mergeDirectory) : readReport();
 } catch (error) {
@@ -52,6 +63,7 @@ try {
     process.exit(2);
 }
 
+/** The recorded baseline, or `undefined` when none exists yet. */
 const baseline = readBaseline();
 
 /*
@@ -82,6 +94,10 @@ if (!baseline) {
     process.exit(0);
 }
 
+/**
+ * `--merge` mode: record new and improved files, report regressions, then exit — the rest of
+ * this file is the single-run path.
+ */
 if (merge) {
     const comparisons = compareMerged(current, baseline);
 
@@ -116,7 +132,10 @@ if (merge) {
  * sharded sweep's partial coverage belongs under `--merge` above, which is written for exactly
  * that case; `--update` still means "this report is the whole scope".
  */
+/** Files the baseline knows that this report does not cover. */
 const missing = missingFromReport(current, baseline);
+
+// Refuse `--update` from a partial report.
 if (update && missing.length > 0) {
     console.error(
         `\n[mutation-baseline] Refusing to update: this report covers ${
@@ -135,8 +154,10 @@ if (update && missing.length > 0) {
     process.exit(1);
 }
 
+/** Every file's verdict against the baseline: held, improved, new, removed or regressed. */
 const comparisons = compareToBaseline(current, baseline);
 
+/** How many files landed in each non-regressed verdict, for the summary line. */
 const counts = {
     held: comparisons.filter(({ verdict }) => verdict === 'held').length,
     improved: comparisons.filter(({ verdict }) => verdict === 'improved').length,
@@ -151,6 +172,7 @@ const counts = {
 for (const { file, current: score } of comparisons.filter(({ verdict }) => verdict === 'new'))
     console.log(`[mutation-baseline] new file recorded: ${file} at ${score!.toFixed(2)}%`);
 
+// Files that scored higher than their baseline.
 for (const { file, baseline: before, current: after } of comparisons.filter(
     ({ verdict }) => verdict === 'improved'
 ))
@@ -158,11 +180,14 @@ for (const { file, baseline: before, current: after } of comparisons.filter(
         `[mutation-baseline] improved: ${file} ${before!.toFixed(2)}% -> ${after!.toFixed(2)}%`
     );
 
+// Files the baseline knows that this run did not measure.
 for (const { file } of comparisons.filter(({ verdict }) => verdict === 'removed'))
     console.log(`[mutation-baseline] no longer mutated: ${file}`);
 
+/** The printable list of files that scored lower than their baseline, if any. */
 const regressions = formatRegressions(comparisons);
 
+// Any regression fails the check.
 if (regressions) {
     console.error(`\n[mutation-baseline] ${regressions}\n`);
     // `--update` still rewrites the file, but `nextBaseline` keeps the higher of the two scores,
@@ -171,6 +196,7 @@ if (regressions) {
     process.exit(1);
 }
 
+// A passing `--update` records the new scores.
 if (update) {
     writeBaseline(nextBaseline(current, baseline));
     console.log(`[mutation-baseline] ${BASELINE_PATH} updated.`);
