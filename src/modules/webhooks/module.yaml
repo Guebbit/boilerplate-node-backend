@@ -1,5 +1,5 @@
 summary: "Outbound event delivery to a subscriber's own URL."
-subdomain: supporting
+subdomain: generic
 group: foundation
 dependsOn:
     - users # resolves the subscription owner's email for the auto-disable notification

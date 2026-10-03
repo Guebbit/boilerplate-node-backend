@@ -19,7 +19,8 @@ import { orderService } from '@modules/orders/services';
 import { ORDER_CANCELLED } from '../../events';
 import { orderRepository } from '../../repository';
 import { OrderStatus } from '@types';
-import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { userService } from '@modules/users';
 import { logger } from '@infrastructure/adapters/logger';
@@ -205,6 +206,8 @@ describe('cancelById — who gets their money back', () => {
 
     beforeEach(() => {
         cancellations.length = 0;
+        // The outbox relay only delivers in a process whose modules are subscribed.
+        markDomainEventsWired();
         onDomainEvent(ORDER_CANCELLED, (payload) => {
             cancellations.push(payload);
             return undefined;
@@ -222,6 +225,8 @@ describe('cancelById — who gets their money back', () => {
 
         await orderService.cancelById(String(order._id), asUser(user), { refund: false });
 
+        await settleOutboxNudges();
+
         expect(cancellations).toEqual([{ orderId: String(order._id), refund: true }]);
     });
 
@@ -231,6 +236,8 @@ describe('cancelById — who gets their money back', () => {
 
         await orderService.cancelById(String(order._id), asAdmin(), { refund: false });
 
+        await settleOutboxNudges();
+
         expect(cancellations).toEqual([{ orderId: String(order._id), refund: false }]);
     });
 
@@ -239,6 +246,8 @@ describe('cancelById — who gets their money back', () => {
         const order = await seedOrder(user);
 
         await orderService.cancelById(String(order._id), asAdmin());
+
+        await settleOutboxNudges();
 
         expect(cancellations).toEqual([{ orderId: String(order._id), refund: true }]);
     });
@@ -252,6 +261,8 @@ describe('cancelById — who gets their money back', () => {
 
         await orderService.cancelById(String(order._id), asModerator(), { refund: false });
 
+        await settleOutboxNudges();
+
         expect(cancellations).toEqual([{ orderId: String(order._id), refund: false }]);
     });
 
@@ -262,6 +273,8 @@ describe('cancelById — who gets their money back', () => {
         const order = await seedOrder(user);
 
         await orderService.cancelById(String(order._id), asAdmin(), { refund: false });
+
+        await settleOutboxNudges();
 
         expect(cancellations).toHaveLength(1);
     });

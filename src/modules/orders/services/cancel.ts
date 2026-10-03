@@ -23,7 +23,7 @@ import {
 } from '@infrastructure/http/response';
 import { inventoryService } from '@modules/inventory';
 import { emitDomainEvent } from '@kernel/events';
-import { withTransaction } from '@infrastructure/runtime/database';
+import { announceInTransaction } from '@kernel/outbox';
 import type { ClientSession } from 'mongoose';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -35,7 +35,7 @@ import { orderRepository } from '../repository';
 import { statusesLeadingTo } from '../domain';
 import { orderEffectRetryMinutes } from '../config';
 import { bankTransferExpiredEmail, cardHoldExpiredEmail, orderCancelledEmail } from '../emails';
-import { getById } from './crud';
+import { getById } from './read';
 import { mailBuyer } from './notify';
 import { callerScope, actorOf } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
@@ -62,38 +62,43 @@ const giveBackStock = async (orderId: string, session: ClientSession): Promise<v
 
 /**
  * The cancel's one atomic step: the conditional status move, and — only if it landed — the stock
- * coming back. The catalogue's stock cache is refreshed after the commit, since that write cannot
- * roll back.
+ * coming back and the `order.cancelled` outbox row. The catalogue's stock cache is refreshed after
+ * the commit, since that write cannot roll back.
  * @param id - the order to cancel
  * @param from - the statuses the caller may cancel from
  * @param scope - the caller's ownership scope, riding in the same filter as the write
  * @param effects - the consequences to write down with the status
+ * @param refund - whether the cancel owes the customer their money, carried on the announcement
  * @returns the cancelled order, or `null` when the conditional move matched nothing
  */
 const moveToCancelled = (
     id: string,
     from: readonly string[],
     scope: Record<string, unknown> | undefined,
-    effects: readonly OrderPendingEffect[] | undefined
+    effects: readonly OrderPendingEffect[] | undefined,
+    refund: boolean
 ): Promise<OrderDocument | null> =>
-    withTransaction(async (session) => {
-        const order = await orderRepository.updateStatusIfIn(
-            id,
-            from,
-            OrderStatus.cancelled,
-            scope,
-            effects,
-            session
-        );
-        if (order) await giveBackStock(id, session);
-        return order;
-    }).then((order) =>
+    announceInTransaction(
+        async (session) => {
+            const order = await orderRepository.updateStatusIfIn(
+                id,
+                from,
+                OrderStatus.cancelled,
+                scope,
+                effects,
+                session
+            );
+            if (order) await giveBackStock(id, session);
+            return order;
+        },
+        () => ({ name: ORDER_CANCELLED, payload: { orderId: id, refund }, aggregateId: id })
+    ).then((order) =>
         order ? inventoryService.refreshStockCacheForOrder(id).then(() => order) : order
     );
 
 /**
- * Everything a successful cancel unlocks: announce it, discharge the refund
- * marker once every listener heard it — then the audit row, the analytics event, and the
+ * Everything a successful cancel unlocks after its commit: announce the owed refund and discharge
+ * its marker once every listener heard it — then the audit row, the analytics event, and the
  * customer's explanation by mail: the sweep's own expiry notice, or — when a person cancelled —
  * the cancelled notice saying what became of their money.
  * @param context - the caller's context; absent for a system-initiated cancel (the reservation
@@ -113,13 +118,6 @@ const afterCancel = async (
     viaReservationExpiry = false,
     byPerson = false
 ): Promise<ResponseSuccess<OrderDocument>> => {
-    // The fact is announced once, unconditionally — whatever a listener does with it (webhooks'
-    // own delivery has its own retry story) is no longer this function's concern.
-    await emitDomainEvent(ORDER_CANCELLED, {
-        orderId: String(order._id),
-        refund
-    });
-
     // The refund is a SEPARATE announcement, retried on its own: re-sending `ORDER_CANCELLED`
     // to retry a stuck refund would re-deliver the customer-facing webhook every time the sweep
     // ran. Discharged only once this send actually returns.
@@ -242,7 +240,8 @@ export const cancelById = (
          * announcement below is not durable — `@kernel/events` has no retry, so a refund that
          * throws is logged and lost. The marker is what `retryPendingEffects` finds afterwards.
          */
-        refund ? PENDING_REFUND : undefined
+        refund ? PENDING_REFUND : undefined,
+        refund
     ).then((order) =>
         order
             ? afterCancel(

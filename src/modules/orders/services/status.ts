@@ -8,11 +8,11 @@
  * See `docs/theory/tactical-ddd.md` §1 "Who writes the status".
  */
 
-import { emitDomainEvent } from '@kernel/events';
+import { announceInTransaction } from '@kernel/outbox';
 import { OrderStatus } from '@types';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
-import { ORDER_STATUS_CHANGED } from '../events';
+import { statusChangedEvent } from './announce';
 import {
     statusesLeadingTo,
     withdrawUntilFrom,
@@ -41,10 +41,11 @@ import { withdrawalPeriodDays } from '../config';
  */
 const markSystemMove = (orderId: string, to: OrderStatus): Promise<OrderDocument | null> => {
     const [from] = statusesLeadingTo(to, 'system');
-    return orderRepository.updateStatusIfIn(orderId, [from], to).then((updated) => {
-        if (updated) void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from, to });
-        return updated;
-    });
+    return announceInTransaction(
+        (session) =>
+            orderRepository.updateStatusIfIn(orderId, [from], to, undefined, undefined, session),
+        () => statusChangedEvent(orderId, from, to)
+    );
 };
 
 /**
@@ -67,11 +68,10 @@ export const markPaid = (
     paymentMethod?: 'card'
 ): Promise<OrderDocument | null> => {
     const [from] = statusesLeadingTo(OrderStatus.paid, 'system');
-    return orderRepository.markPaid(orderId, from, paymentMethod).then((updated) => {
-        if (updated)
-            void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from, to: OrderStatus.paid });
-        return updated;
-    });
+    return announceInTransaction(
+        (session) => orderRepository.markPaid(orderId, from, paymentMethod, session),
+        () => statusChangedEvent(orderId, from, OrderStatus.paid)
+    );
 };
 
 /**
@@ -107,15 +107,10 @@ const markArrived = (
     from: OrderStatus,
     withdrawUntil: Date
 ): Promise<OrderDocument | null> =>
-    orderRepository.markDelivered(orderId, from, withdrawUntil).then((updated) => {
-        if (updated)
-            void emitDomainEvent(ORDER_STATUS_CHANGED, {
-                orderId,
-                from,
-                to: OrderStatus.delivered
-            });
-        return updated;
-    });
+    announceInTransaction(
+        (session) => orderRepository.markDelivered(orderId, from, withdrawUntil, session),
+        () => statusChangedEvent(orderId, from, OrderStatus.delivered)
+    );
 
 /**
  * Report that a parcel arrived. `delivery`'s delivery door calls this only after it has recorded

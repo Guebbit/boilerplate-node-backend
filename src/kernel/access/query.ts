@@ -11,8 +11,9 @@
  * Fails closed: no matching rule compiles to CASL's `EMPTY_RESULT_QUERY`, a filter matching
  *               nothing — never to a filter that is missing, which reads as "unrestricted" to
  *               every caller downstream.
+ * Mongo-only:   the kernel's one store-specific file besides `../outbox.ts`.
  *
- * See: docs/theory/authorization.md
+ * See: docs/theory/authorization.md, docs/theory/layers.md
  */
 
 import { accessibleBy } from '@casl/mongoose';

@@ -11,6 +11,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import {
     createIntent,
@@ -330,5 +331,37 @@ describe('a partial refund on a payment recorded by hand', () => {
         expect(payment.refundedByHand).toBe(true);
         expect(payment.refunds.every((entry) => entry.providerRefundRef === undefined)).toBe(true);
         expect(providerSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe('the payment.refunded announcement', () => {
+    it('is an outbox row written with the settlement, once per refund', async () => {
+        const { orderId } = await paidOrder();
+
+        await refund(orderId, { amount: 30 });
+        await settleOutboxNudges();
+
+        const payment = await paymentOf(orderId);
+        const rows = await outboxEventModel.find({ name: PAYMENT_REFUNDED }).lean();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+            aggregateId: orderId,
+            status: 'published',
+            payload: { orderId, refundId: String(payment.refunds[0]._id), amount: 30, full: false }
+        });
+    });
+
+    it('commits or aborts with the settlement: no row, no settled refund', async () => {
+        const { orderId } = await paidOrder();
+        jest.spyOn(outboxEventModel, 'create').mockRejectedValueOnce(new Error('disk full'));
+
+        await expect(refund(orderId)).rejects.toThrow('disk full');
+
+        // The provider was asked, but the record never settled, so the payment is not `refunded`
+        // and the sweep finishes the refund under the same idempotency key.
+        const payment = await paymentOf(orderId);
+        expect(payment.status).toBe('succeeded');
+        expect(payment.refunds[0].status).not.toBe('succeeded');
+        expect(await outboxEventModel.countDocuments({ name: PAYMENT_REFUNDED })).toBe(0);
     });
 });

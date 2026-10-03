@@ -15,9 +15,9 @@ import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbo
 import { orderService } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { createIntent, confirmPayment, retryPendingEffects } from '@modules/payments/services';
-import { announcePaymentSucceeded } from '@modules/payments/services/announce';
+import { announcePaymentSucceeded, recordDecline } from '@modules/payments/services/announce';
 import { paymentRepository } from '@modules/payments/repository';
-import { PAYMENT_SUCCEEDED } from '@modules/payments/events';
+import { PAYMENT_FAILED, PAYMENT_SUCCEEDED } from '@modules/payments/events';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, testCallerContext } from '@tests/callers';
@@ -71,7 +71,7 @@ describe('a settlement that completes', () => {
         await payFor(String(order._id), user);
         await settleOutboxNudges();
 
-        const rows = await outboxEventModel.find().lean();
+        const rows = await outboxEventModel.find({ name: PAYMENT_SUCCEEDED }).lean();
         expect(rows).toHaveLength(1);
         expect(rows[0]).toMatchObject({
             name: 'payment.succeeded',
@@ -93,7 +93,7 @@ describe('a settlement that completes', () => {
         // The marker is already gone: this caller is not the one that discharged it.
         expect(await announcePaymentSucceeded(String(payment._id), String(order._id))).toBe(false);
 
-        expect(await outboxEventModel.countDocuments()).toBe(1);
+        expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(1);
     });
 });
 
@@ -107,11 +107,11 @@ describe('a settlement that dies after charging', () => {
             await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
 
             // The money moved, but the settlement never reached its announcement.
-            expect(await outboxEventModel.countDocuments()).toBe(0);
+            expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
             expect(heard).toEqual([]);
 
             expect(await retryPendingEffects()).toBe(1);
-            expect(await outboxEventModel.countDocuments()).toBe(1);
+            expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(1);
             await settleOutboxNudges();
             await relayOutbox();
 
@@ -130,7 +130,55 @@ describe('a settlement that dies after charging', () => {
             await retryPendingEffects();
             await relayOutbox();
 
-            expect(await outboxEventModel.countDocuments()).toBe(0);
+            // The refund the cancel owes announces itself; the payment never does.
+            expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
             expect(heard).toEqual([]);
         }));
+});
+
+/** An order with a card intent that nobody has confirmed: the state a decline lands on. */
+const awaitingConfirmation = async () => {
+    const { user, order } = await placedOrder();
+    await createIntent(String(order._id), asCustomer(user.id));
+    return String(order._id);
+};
+
+describe('a declined payment', () => {
+    it('writes the decline and its outbox row together, then delivers payment.failed once', async () => {
+        const orderId = await awaitingConfirmation();
+        const failures: { orderId: string; eventId?: string }[] = [];
+        onDomainEvent(PAYMENT_FAILED, (payload, meta) => {
+            failures.push({ orderId: payload.orderId, eventId: meta.eventId });
+        });
+
+        const declined = await recordDecline(orderId, {});
+        await settleOutboxNudges();
+
+        expect(declined).toMatchObject({ status: 'declined' });
+        const rows = await outboxEventModel.find({ name: PAYMENT_FAILED }).lean();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ aggregateId: orderId, status: 'published' });
+        expect(failures).toEqual([{ orderId, eventId: String(rows[0]._id) }]);
+    });
+
+    it('rolls the decline back when its outbox row cannot be written', async () => {
+        const orderId = await awaitingConfirmation();
+        jest.spyOn(outboxEventModel, 'create').mockRejectedValueOnce(new Error('disk full'));
+
+        await expect(recordDecline(orderId, {})).rejects.toThrow('disk full');
+
+        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe(
+            'requires_confirmation'
+        );
+        expect(await outboxEventModel.countDocuments({ name: PAYMENT_FAILED })).toBe(0);
+    });
+
+    it('announces nothing for a decline that lost its race', async () => {
+        const orderId = await awaitingConfirmation();
+        await paymentRepository.updateStatusIfIn(orderId, ['requires_confirmation'], 'succeeded');
+
+        expect(await recordDecline(orderId, {})).toBeNull();
+
+        expect(await outboxEventModel.countDocuments({ name: PAYMENT_FAILED })).toBe(0);
+    });
 });

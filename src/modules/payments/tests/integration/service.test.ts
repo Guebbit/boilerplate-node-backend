@@ -17,6 +17,7 @@ import {
     toOrderItem
 } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import { userService } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
@@ -1420,6 +1421,8 @@ describe('order.cancelled — closing a still-open intent at the provider (E17)'
         const cancelled = await orderService.cancelById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
+        // The listener runs off the outbox, after the cancel's own response.
+        await settleOutboxNudges();
         expect(cancelSpy).toHaveBeenCalledWith(prepared!.providerRef, {
             reason: 'Order cancelled'
         });
@@ -1438,6 +1441,8 @@ describe('order.cancelled — closing a still-open intent at the provider (E17)'
         const cancelled = await orderService.cancelById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
+        // The listener runs off the outbox, after the cancel's own response.
+        await settleOutboxNudges();
         expect(cancelSpy).toHaveBeenCalled();
         cancelSpy.mockRestore();
         await expect(
@@ -1454,6 +1459,8 @@ describe('order.cancelled — closing a still-open intent at the provider (E17)'
         const cancelled = await orderService.cancelById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
+        // The listener runs off the outbox, after the cancel's own response.
+        await settleOutboxNudges();
         expect(cancelSpy).not.toHaveBeenCalled();
         cancelSpy.mockRestore();
     });

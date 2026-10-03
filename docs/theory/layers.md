@@ -39,6 +39,10 @@ The rule, enforced by `eslint-plugin-boundaries` in `eslint.config.ts`:
 - `app` may import anything: it is the tier allowed to know which domains exist;
 - nothing outside a module imports its internals.
 
+The kernel is **Mongo-only**, on purpose: `kernel/access/query.ts` compiles a caller's rules into a
+Mongo filter (`@casl/mongoose`), and `kernel/outbox.ts` is a Mongoose model written inside a
+Mongo transaction. A different store means replacing those two files, not configuring them.
+
 Two things hold that beyond what a per-file rule can see:
 
 - **Nothing is permitted by default.** `boundaries/dependencies` runs `default: 'disallow'`, so an
@@ -156,7 +160,11 @@ controllers, and a fourth flow that forgot the expiry comparison would have ship
 worked forever. It is one function now, and `local/no-persistence-imports` is what stops a
 controller reaching the `tokens` array to re-derive it again.
 
-`locales` is the third, and it carries the constraint worth knowing before a split like it: an i18n
+`orders` split into `read.ts` (search and the narrow reads siblings ask for), `crud.ts` (create and
+amend), `remove.ts` (soft and hard delete, restore), beside `place.ts`, `status.ts`, `cancel.ts` and
+`override.ts`, which were already their own files.
+
+`locales` is the fourth, and it carries the constraint worth knowing before a split like it: an i18n
 admin is a solved problem, so there are no rules here worth a `domain/` folder and the pure ones
 have nowhere below `services/` to go. `keys.ts` is where they live instead — the internal file, in
 `view.ts`'s role.
@@ -169,11 +177,10 @@ have nowhere below `services/` to go. `keys.ts` is where they live instead — t
 | `entries.ts`      | one language's rows: the editing page, the writes and the bulk import |
 | `messages.ts`     | the two reads that hand out stored copy                               |
 
-**These modules are over the threshold and have not been split:**
+**This file is over the threshold and has not been split:**
 
 | File                              | Why it is over                                                                                        |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `orders/services/crud.ts`         | `getById`/`create`/`update`/`updateById`/`remove`/`removeById` — the whole write half                 |
 | `payments/services/settlement.ts` | confirm, sync and webhook reconciliation — the one settlement choreography every path funnels through |
 
 That is recorded rather than quietly fixed, because the number's job is to make the split feel

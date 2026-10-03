@@ -96,7 +96,7 @@ describe('payment.succeeded through the outbox', () => {
 
             // A relay that crashed after publishing but before marking it: the row is pending again.
             await outboxEventModel.updateOne(
-                {},
+                { name: 'payment.succeeded' },
                 {
                     $set: { status: 'pending', nextAttemptAt: new Date(0) },
                     $unset: { publishedAt: 1 }
@@ -116,7 +116,7 @@ describe('payment.succeeded through the outbox', () => {
             await settleOutboxNudges();
             await relayOutbox();
 
-            const row = await outboxEventModel.findOne().lean();
+            const row = await outboxEventModel.findOne({ name: 'payment.succeeded' }).lean();
             const [delivery] = await webhookDeliveryRepository.findAll({}, { limit: 10 });
             expect(delivery.eventId).toBe(String(row?._id));
         }));
@@ -130,13 +130,18 @@ describe('payment.succeeded through the outbox', () => {
             // The sweep's own nudge is the first relay pass, and it hits the blip.
             await retryPendingEffects();
             await settleOutboxNudges();
-            expect(await outboxEventModel.findOne().lean()).toMatchObject({
+            expect(
+                await outboxEventModel.findOne({ name: 'payment.succeeded' }).lean()
+            ).toMatchObject({
                 status: 'pending',
                 attempts: 1
             });
             expect(await webhookDeliveryRepository.count({})).toBe(0);
 
-            await outboxEventModel.updateMany({}, { $set: { nextAttemptAt: new Date(0) } });
+            await outboxEventModel.updateMany(
+                { name: 'payment.succeeded' },
+                { $set: { nextAttemptAt: new Date(0) } }
+            );
             expect(await relayOutbox()).toMatchObject({ published: 1, retried: 0 });
             expect(await webhookDeliveryRepository.count({})).toBe(1);
         }));
