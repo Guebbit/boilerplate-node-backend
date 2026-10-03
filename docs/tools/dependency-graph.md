@@ -135,8 +135,8 @@ several modules' `tests/factories.ts` back and forth. `tests/` is excluded from 
 entirely rather than filtered after the fact.
 
 The fix for a real cycle is always the same: the sibling that has to reach back moves the read onto
-the domain event bus (`kernel/events.ts`) instead — see any module already listening for
-`USER_DELETED` for the shape.
+the domain event bus (`kernel/events.ts`) instead — see `webhooks`, which reacts to
+`orders`' and `payments`' events without importing either.
 
 ## Two settings that decide whether the rules mean anything
 

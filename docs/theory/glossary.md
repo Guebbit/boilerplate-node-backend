@@ -146,7 +146,7 @@ language is kept per context rather than shared.
 | **User**        | The person record. Owns identity and the `role` name; owns no credentials workflow — see `account`.                              |
 | **Role**        | A named permission set on the User (`shared/authorization-roles.yaml`), not a boolean — see [authorization](./authorization.md). |
 | **Token**       | A single-use secret bound to a user and a purpose (`TokenType`), stored on the record.                                           |
-| **Soft delete** | A destroyed account, kept for the audit trail. Emits `user.deleted`, which is what actually clears the cart and wishlist.        |
+| **Soft delete** | A destroyed account, kept for the audit trail. The cart and wishlist go only with a hard delete.                                 |
 
 ## `webhooks`
 

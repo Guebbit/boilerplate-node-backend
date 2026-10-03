@@ -135,7 +135,8 @@ nothing. Deleting either takes exactly one folder and one page with it.
 Mutual awareness without a cycle is the shape worth noticing. `products` is reached by four modules
 and reaches none — a deleted product still has to leave every cart and wishlist, and that half
 travels back as a **domain event** (`product.deleted`) rather than as an import. Same for
-`user.deleted`, and for `inventory.reservation_expired` from `inventory` to `orders`. The arrows above stay
+`inventory.reservation_expired` from `inventory` to `orders`. A user's hard delete travels the other
+way, as a `personalData.erase` hook each module declares and `users` runs in one transaction. The arrows above stay
 one-way because the return path is the event bus; see [Events & Logging](../tools/events-and-logging.md).
 
 ::: warning Not every coupling is an arrow

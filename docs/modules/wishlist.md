@@ -65,7 +65,7 @@ flowchart LR
     W -->|"move-to-cart"| C["cart line<br/><i>qty 1, or incremented</i>"]
     C --> X["and it leaves the wishlist"]
     P["products"] -. "product.deleted" .-> W
-    U["users"] -. "user.deleted" .-> W
+    U["users"] -. "personalData.erase" .-> W
 
     classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;

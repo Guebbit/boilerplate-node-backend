@@ -3,8 +3,8 @@
 ::: tip At a glance
 **Owns** — the address book: one document per user, entries keeping their own id (two addresses
 can be identical in every field and still be different entries).
-**Depends on** — [`users`](./users.md), for the `user.deleted` event name only — never a service
-call.
+**Depends on** — [`users`](./users.md), which runs this module's `personalData.erase` hook inside
+its hard delete — never a service call.
 **Breaks if you change** — [`cart`](./cart.md)'s checkout, the only sibling consumer of
 `addressForCheckout`.
 :::
@@ -56,10 +56,10 @@ verify, the user read and the membership read run twice for one request; `getAut
 second router's mount costs nothing beyond the first.
 :::
 
-`users` is reached only through the domain-event bus, for one subscription: a destroyed account
-takes its address book with it, the same `user.deleted` event `cart`, `wishlist`, `payments` and
-`orders` each answer on their own collection. Nothing here ever calls into `users`' service — the
-import in `module.yaml` is for the event's name constant alone.
+`users` is reached only the other way round: a hard-deleted account takes its address book with
+it, through the `personalData.erase` hook this module declares and `users` runs inside the delete's
+transaction — the same hook `cart`, `wishlist`, `payments` and `orders` each declare for their own
+collection. Nothing here ever calls into `users`' service.
 
 ## The pipeline
 
@@ -74,7 +74,7 @@ flowchart LR
     PA["PATCH /account/addresses/:id"] --> B
     D["DELETE /account/addresses/:id"] --> B
     B -->|"addressForCheckout"| C["cart's checkout"]
-    US["users"] -. "user.deleted" .-> X["book deleted"]
+    US["users"] -. "personalData.erase" .-> X["book deleted"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;

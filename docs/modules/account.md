@@ -49,9 +49,9 @@ why.
 
 An account nobody has signed into in a long time is a live account with no live purpose —
 `npm run reap:inactive-accounts` (`docker/crontab`, nightly, disabled by default via
-`NODE_INACTIVE_ACCOUNT_DAYS=0`) warns, then soft-, then hard-deletes one, the hard delete firing the
-same `user.deleted` event [`addresses`](./addresses.md), `cart` and `wishlist` each answer on their
-own collection. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
+`NODE_INACTIVE_ACCOUNT_DAYS=0`) warns, then soft-, then hard-deletes one, the hard delete running the
+same `personalData.erase` hooks [`addresses`](./addresses.md), `cart` and `wishlist` each declare
+for their own collection. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
 
 ::: tip The barrel is one line wide, and that is the story
 `session/`, `two-factor/` and `oauth/` are three folders and not one exported symbol between them.

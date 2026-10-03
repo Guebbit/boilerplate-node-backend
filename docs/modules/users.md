@@ -73,7 +73,7 @@ visible on the map as a `shared-kernel` arrow rather than hidden inside a barrel
 :::
 
 Several modules depend on this one and it depends on none, so it sits at the bottom of the graph —
-see the generated diagram above for exactly which ones, and which cascade on `user.deleted`; that
+see the generated diagram above for exactly which ones, and which declare a `personalData.erase` hook; that
 list is checked on every regenerate, so it is never repeated by hand here.
 
 ## The pipeline
@@ -96,7 +96,7 @@ path, `toUser` (`model.ts`) decrypts it on the way out, whether the source docum
 
 `DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, the account's sessions are
 revoked, and a repeated `DELETE` changes nothing. `POST /users/:id/restore` undoes it; the owner
-signs in again. `?hardDelete=true` is the one that fires `user.deleted` (the cascade above) and
+signs in again. `?hardDelete=true` is the one that runs every module's `personalData.erase` hook (the cascade above) and
 actually removes the row.
 
 Only the hard path **discharges an Art. 17 erasure request**. The audit trail says
@@ -122,4 +122,4 @@ a `## Libraries` table naming alternatives here: nothing about the choice is spe
 - [`account`](./account.md) — the other service over this collection
 - [Strategic DDD](../theory/strategic-ddd.md#_5-published-language-—-the-barrel) — why a wide barrel is a map edge, not a private detail
 - [Security](../tools/security.md) — password hashing and the token shapes
-- [Events & Logging](../tools/events-and-logging.md) — `user.deleted` and its three listeners
+- [Events & Logging](../tools/events-and-logging.md) — the domain-event bus

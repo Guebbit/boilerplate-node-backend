@@ -530,14 +530,17 @@ bottom as a passive listener while four modules each moved stock themselves — 
 The reverse direction is domain events, and it is a **separate** graph on purpose — an event edge is
 exactly the edge that would have made the import graph a cycle:
 
-| Event                           | Emitted by  | Handled by                    |
-| ------------------------------- | ----------- | ----------------------------- |
-| `product.deleted`               | `products`  | `cart`, `wishlist`            |
-| `user.deleted`                  | `users`     | `cart`, `wishlist`, `account` |
-| `order.status_changed`          | `orders`    | `delivery` (on `shipped`)     |
-| `order.cancelled`               | `orders`    | `webhooks` (fans out)         |
-| `order.refund_owed`             | `orders`    | `payments` (refunds)          |
-| `inventory.reservation_expired` | `inventory` | `orders` (cancels the order)  |
+| Event                           | Emitted by  | Handled by                   |
+| ------------------------------- | ----------- | ---------------------------- |
+| `product.deleted`               | `products`  | `cart`, `wishlist`           |
+| `order.status_changed`          | `orders`    | `delivery` (on `shipped`)    |
+| `order.cancelled`               | `orders`    | `webhooks` (fans out)        |
+| `order.refund_owed`             | `orders`    | `payments` (refunds)         |
+| `inventory.reservation_expired` | `inventory` | `orders` (cancels the order) |
+
+A user's hard delete is deliberately not in this table: it is not an event. Each module declares a
+`personalData.erase` hook and `users` runs them all inside one transaction, so a failing eraser
+aborts the whole erasure instead of being logged and skipped.
 
 Note who emits: every one comes from a module low in the import graph telling a module above it
 something, because a module cannot import its own dependants. `inventory.reservation_expired` is the
