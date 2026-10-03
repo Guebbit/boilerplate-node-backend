@@ -38,8 +38,8 @@ export const operationName = (verb: string, entity: string, suffix = ''): string
  * function carries — what every stack trace, the request log line and `docs/modules/` print.
  *
  * A computed property key is the one way to do this without `Object.defineProperty`: a function
- * expression's `.name` is read-only once assigned, but an object literal's method takes its name
- * from the key it was declared under, including a key computed from a variable.
+ * LITERAL written at that key takes the key's name. A reference stored under the key keeps its
+ * own name, so the handler is wrapped in a literal that forwards to it.
  *
  * @param operation - the name to give `handler`, from {@link operationName}
  * @param handler - the Express handler itself
@@ -47,7 +47,12 @@ export const operationName = (verb: string, entity: string, suffix = ''): string
 export const namedHandler = <THandler extends (request: Request, response: Response) => unknown>(
     operation: string,
     handler: THandler
-): THandler => ({ [operation]: handler })[operation];
+): THandler =>
+    // `as THandler`: the forwarder has the handler's own parameters and return, but the compiler
+    // only sees the constraint, not the caller's narrower type.
+    ({ [operation]: (request: Request, response: Response) => handler(request, response) })[
+        operation
+    ] as THandler;
 
 /**
  * What a service hands back: either data with a status, or a status and the reasons — the exact
