@@ -23,6 +23,11 @@ export const router = Router();
  */
 router.use(getAuth, isAuth);
 
+// GET /api-keys — list the keys (never their secrets).
 router.get('/', requirePermission('apikeys.any.read'), listApiKeys);
+
+// POST /api-keys — mint a key.
 router.post('/', requirePermission('apikeys.any.create'), mintApiKey);
+
+// DELETE /api-keys/:id — revoke a key.
 router.delete('/:id', requirePermission('apikeys.any.delete'), revokeApiKey);
