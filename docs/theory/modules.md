@@ -422,14 +422,17 @@ version: 1 } })`, never a plain `findByIdAndUpdate` — a version that does not 
    `document.toJSON() as SomeResponse` cast, ad hoc, once per call site, would still have the
    compiler enforce the OUTPUT type — but nothing would enforce that two call sites for the same
    resource agree on how they got there, and a sibling wanting the same shape would find it cheaper
-   to import the raw Mongoose `Document` type than to ask. `presenter.ts` is the fix: one pure function per resource
+   to copy the cast than to ask. `presenter.ts` is the fix: one pure function per resource
    (`presentProduct(document): Product`), the single place a Mongoose document becomes the wire
    shape, replacing every ad hoc cast in that module's own controllers. A sibling reaches the
    transform through the owning module's SERVICE, the same door it already uses for a repository
-   read — never the presenter file directly, and never the raw `Document` type, which is exactly
-   the model-runtime leak
-   [barrel rule](./strategic-ddd.md#_5-published-language-—-the-barrel) already refuses for a
-   repository. Only the presenter's OUTPUT TYPE may leave the barrel, as
+   read — never the presenter file directly, never the wire-shape cast, and never the repository,
+   which the [barrel rule](./strategic-ddd.md#_5-published-language-—-the-barrel) already refuses.
+   A type import from a sibling's barrel (`export type * from './model'`) is not a leak: it is
+   compile-time only, carries no runtime value and writes nothing. What a sibling may not do with
+   that type is write through it — no `.save()`, no mutation of another module's document; the
+   service is the door for a write. That half is held by this rule, not by the compiler. Only the
+   presenter's OUTPUT TYPE may leave the barrel, as
    `export type *`, the same treatment `model.ts` already gets — `barrel-allowed-sources` checks
    both. A module presenting more than one resource shape (webhooks: subscriptions AND deliveries;
    locales: a language AND its entries) uses `presenters.ts`, plural, one function per resource
