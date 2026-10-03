@@ -21,7 +21,7 @@
  *
  * See: docs/reference/ops.md
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { orderService } from '@modules/orders';
 import { runScript } from '../run-script';

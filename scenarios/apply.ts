@@ -22,9 +22,10 @@
  *   npm run scenario:apply:reset [scenario]    # empty it first
  *   npm run scenario:apply -- --describe-to=x  # also write the accounts and subjects to `x`
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { currentEnvironment, installEnvironment } from '@infrastructure/config/store';
 import { emptyDatabase, isDatabaseEmpty } from '@infrastructure/runtime/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
@@ -50,13 +51,13 @@ const deploymentRateLimitRedisUrl = rateLimitRedisUrl();
  * this makes several hundred requests from one address in seconds. Left alone, the auth rung
  * refuses the shop owner's very first login and the build dies on a 429 that names none of this.
  *
- * Safe because of the production gate below — and because `buildRateLimiter` reads `process.env`
- * once, when the middleware is wired up during the dynamic `import('../src/app')` below, never
+ * Safe because of the production gate below — and because `buildRateLimiter` reads the
+ * environment once, when the middleware is wired up during the dynamic `import('../src/app')` below, never
  * per request. Setting these here, before that import ever runs, binds only the app this process
  * is about to boot, for as long as the seed takes. `dotenv/config` above has already run and
  * never overwrites a key that is present.
  */
-Object.assign(process.env, SCRIPTED_RATE_LIMITS);
+installEnvironment(SCRIPTED_RATE_LIMITS);
 
 /*
  * A seed PLACES orders, and every one of them wants to email a confirmation — to addresses this
@@ -67,7 +68,7 @@ Object.assign(process.env, SCRIPTED_RATE_LIMITS);
  * Overridden rather than defaulted, same as the budgets above: `.env` naming a real mail server
  * is exactly the case this protects against.
  */
-process.env.NODE_MAIL_TRANSPORT = 'log';
+installEnvironment({ NODE_MAIL_TRANSPORT: 'log' });
 
 /*
  * The broker off for this process, so an email job runs INLINE through the `log` transport above.
@@ -75,14 +76,20 @@ process.env.NODE_MAIL_TRANSPORT = 'log';
  * a live backend, with its real SMTP transport — sends the seed's several dozen mails to the
  * fictional recipients, which also fills a live e2e run's mailbox after it was emptied.
  */
-process.env.NODE_RABBITMQ_ENABLED = '0';
+installEnvironment({ NODE_RABBITMQ_ENABLED: '0' });
 
 /*
  * Applied only where nothing is set, unlike the budgets above: a deployment that names its own
  * beneficiary keeps it, and one that names none still gets a shop whose `order.awaitingTransfer`
  * guarantee can hold.
  */
-for (const [key, value] of Object.entries(DEMO_BANK_TRANSFER)) process.env[key] ??= value;
+installEnvironment(
+    Object.fromEntries(
+        Object.entries(DEMO_BANK_TRANSFER).filter(
+            ([key]) => currentEnvironment()[key] === undefined
+        )
+    )
+);
 
 /** `--reset`: empty the database before building, rather than refusing a non-empty one. */
 const reset = process.argv.includes('--reset');

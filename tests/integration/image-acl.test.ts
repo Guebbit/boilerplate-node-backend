@@ -8,6 +8,7 @@ import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
 import { localeService } from '@modules/locales/services';
 import { productRepository } from '@modules/products/repository';
+import { currentEnvironment } from '@infrastructure/config/store';
 
 /**
  * A client may never name a path in the image store — the cross-module rule behind
@@ -23,7 +24,7 @@ import { productRepository } from '@modules/products/repository';
 
 // `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
 // runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
-const PUBLIC_DIRECTORY = path.resolve(process.env.NODE_PUBLIC_PATH!);
+const PUBLIC_DIRECTORY = path.resolve(currentEnvironment().NODE_PUBLIC_PATH!);
 
 /** A decodable PNG: every upload without a broker is digested inline, so sharp must accept it. */
 let PNG_BYTES: Buffer;

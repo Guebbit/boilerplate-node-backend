@@ -15,6 +15,7 @@ import { callerAs } from '@tests/callers';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { update } from '@modules/webhooks/services/subscriptions';
 import { seedWebhooksCollection } from '@scenarios/webhooks';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
@@ -27,16 +28,8 @@ const context = {
     analyticsConsent: false
 };
 
-/** The variable's value before each case, restored after it. */
-const originalSink = process.env.NODE_WEBHOOK_DEMO_SINK_URL;
-
 beforeEach(() => {
-    process.env.NODE_WEBHOOK_DEMO_SINK_URL = SINK_URL;
-});
-
-afterEach(() => {
-    if (originalSink === undefined) delete process.env.NODE_WEBHOOK_DEMO_SINK_URL;
-    else process.env.NODE_WEBHOOK_DEMO_SINK_URL = originalSink;
+    setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: SINK_URL });
 });
 
 /** Seed, then read the one subscription it wrote. */
@@ -51,7 +44,7 @@ const seededSubscription = () =>
 
 describe('seedWebhooksCollection', () => {
     it('seeds nothing while no sink is configured', async () => {
-        delete process.env.NODE_WEBHOOK_DEMO_SINK_URL;
+        setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: undefined });
 
         await expect(seedWebhooksCollection()).resolves.toEqual([]);
     });

@@ -10,6 +10,7 @@ import { create } from '@modules/webhooks/services/subscriptions';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { callerAs, TEST_TENANT_ID } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
@@ -21,15 +22,8 @@ const subscriptionBody = (url: string) => ({
 });
 
 describe('create — the subscription cap boundary', () => {
-    const originalCap = process.env.NODE_WEBHOOK_SUBSCRIPTION_CAP;
-
     beforeEach(() => {
-        process.env.NODE_WEBHOOK_SUBSCRIPTION_CAP = '1';
-    });
-
-    afterEach(() => {
-        if (originalCap === undefined) delete process.env.NODE_WEBHOOK_SUBSCRIPTION_CAP;
-        else process.env.NODE_WEBHOOK_SUBSCRIPTION_CAP = originalCap;
+        setEnvironment({ NODE_WEBHOOK_SUBSCRIPTION_CAP: '1' });
     });
 
     it('two truly concurrent creates at the cap cannot both succeed', async () => {

@@ -14,7 +14,7 @@
  *
  * See: docs/tools/email-and-rendering.md
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { reapSpooled } from '@infrastructure/adapters/mail-spool';

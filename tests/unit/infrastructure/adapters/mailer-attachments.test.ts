@@ -19,6 +19,7 @@ jest.mock('nodemailer', () => ({
 
 import { sendTemplatedEmail, resetTransporter } from '@infrastructure/adapters/mailer';
 import { spoolAttachment } from '@infrastructure/adapters/mail-spool';
+import { setEnvironment } from '@tests/environment';
 
 /** The copy `account.reset-confirm.ejs` needs — irrelevant to what this file asserts on. */
 const DATA = {
@@ -35,20 +36,17 @@ const DATA = {
 };
 
 let spoolRoot: string;
-const originalSpoolPath = process.env.NODE_MAIL_SPOOL_PATH;
 
 beforeEach(async () => {
     jest.clearAllMocks();
     sendMailMock.mockResolvedValue({ messageId: 'smtp-1' });
     resetTransporter();
     spoolRoot = await mkdtemp(path.join(tmpdir(), 'mailer-attachments-test-'));
-    process.env.NODE_MAIL_SPOOL_PATH = spoolRoot;
+    setEnvironment({ NODE_MAIL_SPOOL_PATH: spoolRoot });
 });
 
 afterEach(async () => {
     await rm(spoolRoot, { recursive: true, force: true });
-    if (originalSpoolPath === undefined) delete process.env.NODE_MAIL_SPOOL_PATH;
-    else process.env.NODE_MAIL_SPOOL_PATH = originalSpoolPath;
 });
 
 describe('resolveAttachments — resolving attachments', () => {

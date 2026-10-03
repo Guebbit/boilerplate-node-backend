@@ -320,7 +320,7 @@ const MFA_CHALLENGE_BUDGET: RateLimitBudget = {
         'distributed attacker rotating IPs is still capped per challenge.',
     audited: true,
     keyGenerator: challengeKey,
-    // Deliberately NOT raised in `tests/support/setup.ts` — see that file for why.
+    // Deliberately NOT raised in `tests/support/setup-environment.ts` — see that file for why.
     testExemption:
         'two-factor.test.ts\'s "kills the challenge after too many wrong attempts" case fires 6 ' +
         "concurrent guesses at ONE challenge specifically to prove this budget's tight production " +

@@ -21,8 +21,7 @@ import {
     type TranslationPort
 } from '@kernel/translation';
 import { runWithLocale } from '@infrastructure/i18n';
-
-const ORIGINAL_FALLBACK = process.env.NODE_FALLBACK_LOCALE;
+import { setEnvironment } from '@tests/environment';
 
 /** A port double whose methods are jest mocks by default, overridable per test. */
 const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => ({
@@ -37,8 +36,6 @@ const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => 
 
 afterEach(() => {
     registerTranslationPort(undefined);
-    if (ORIGINAL_FALLBACK === undefined) delete process.env.NODE_FALLBACK_LOCALE;
-    else process.env.NODE_FALLBACK_LOCALE = ORIGINAL_FALLBACK;
 });
 
 describe('resolveTranslations', () => {
@@ -121,7 +118,7 @@ describe('searchTranslatedEntityIds', () => {
 
 describe('planTranslations', () => {
     beforeEach(() => {
-        process.env.NODE_FALLBACK_LOCALE = 'en';
+        setEnvironment({ NODE_FALLBACK_LOCALE: 'en' });
     });
 
     it('plans a single fallback-locale upsert when no port is registered', async () => {
@@ -254,7 +251,7 @@ describe('applyTranslations', () => {
     });
 
     it('resolves against the ambient locale, base and fallback', async () => {
-        process.env.NODE_FALLBACK_LOCALE = 'en';
+        setEnvironment({ NODE_FALLBACK_LOCALE: 'en' });
         const resolve = jest.fn().mockResolvedValue(new Map());
         registerTranslationPort(fakePort({ resolve }));
 

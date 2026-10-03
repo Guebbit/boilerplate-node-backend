@@ -8,6 +8,7 @@
 import { isOAuthProviderConfigured } from '../../oauth/config';
 import { sign } from 'jsonwebtoken';
 import { googleOAuthProvider } from '../../oauth/providers/google';
+import { setEnvironment } from '@tests/environment';
 
 /** The client id, which doubles as the `aud` claim every accepted ID token must carry. */
 const CLIENT_ID = 'test-google-client-id';
@@ -19,23 +20,12 @@ const REDIRECT_URI = 'https://api.test/account/oauth/google/callback';
 const idToken = (claims: Record<string, unknown>): string =>
     sign(claims, 'irrelevant-signing-key', { algorithm: 'HS256', noTimestamp: true });
 
-/** The real credentials, saved so `afterAll` can put back whatever the developer had set. */
-const originalEnvironment = {
-    id: process.env.NODE_OAUTH_GOOGLE_CLIENT_ID,
-    secret: process.env.NODE_OAUTH_GOOGLE_CLIENT_SECRET
-};
-
 beforeEach(() => {
-    process.env.NODE_OAUTH_GOOGLE_CLIENT_ID = CLIENT_ID;
-    process.env.NODE_OAUTH_GOOGLE_CLIENT_SECRET = 'test-google-client-secret';
+    setEnvironment({ NODE_OAUTH_GOOGLE_CLIENT_ID: CLIENT_ID });
+    setEnvironment({ NODE_OAUTH_GOOGLE_CLIENT_SECRET: 'test-google-client-secret' });
 });
 
 afterEach(() => {
-    if (originalEnvironment.id === undefined) delete process.env.NODE_OAUTH_GOOGLE_CLIENT_ID;
-    else process.env.NODE_OAUTH_GOOGLE_CLIENT_ID = originalEnvironment.id;
-    if (originalEnvironment.secret === undefined)
-        delete process.env.NODE_OAUTH_GOOGLE_CLIENT_SECRET;
-    else process.env.NODE_OAUTH_GOOGLE_CLIENT_SECRET = originalEnvironment.secret;
     jest.restoreAllMocks();
 });
 
@@ -45,7 +35,7 @@ describe('google provider configuration', () => {
     });
 
     it('is false when either half is missing', () => {
-        delete process.env.NODE_OAUTH_GOOGLE_CLIENT_SECRET;
+        setEnvironment({ NODE_OAUTH_GOOGLE_CLIENT_SECRET: undefined });
         expect(isOAuthProviderConfigured('google')).toBe(false);
     });
 });

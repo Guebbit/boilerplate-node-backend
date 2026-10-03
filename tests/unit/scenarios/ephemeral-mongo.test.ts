@@ -10,18 +10,16 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { startEphemeralMongo, type EphemeralMongo } from '@scenarios/support/ephemeral-mongo';
+import { setProcessEnvironment } from '@tests/environment';
 
 const startInProcess = jest.fn(
     (_dbPath: string | undefined): Promise<EphemeralMongo> =>
         Promise.resolve({ uri: 'mongodb://127.0.0.1:1/ephemeral', stop: () => Promise.resolve() })
 );
 
-/** Externally configurable, restored to whatever this run's own environment set them to. */
-const RESTORED_ENV_KEYS = ['NODE_TEST_MONGO_URI', 'MONGOMS_SYSTEM_BINARY'] as const;
-
 /**
  * `usePreinstalledBinary`'s own derived bookkeeping — never legitimately pre-existing config, so
- * always cleared rather than "restored". `globalSetup` calls the same function to boot the REAL
+ * always cleared before a case. `globalSetup` calls the same function to boot the REAL
  * ephemeral Mongo every suite shares, and does it in the process these tests' own worker forked
  * from — so when `MONGOMS_SYSTEM_BINARY` names a binary that genuinely exists on the machine,
  * these two are ALREADY 'false' by the time this file's module scope runs, and capturing that as
@@ -29,28 +27,20 @@ const RESTORED_ENV_KEYS = ['NODE_TEST_MONGO_URI', 'MONGOMS_SYSTEM_BINARY'] as co
  */
 const CLEARED_ENV_KEYS = ['MONGOMS_SYSTEM_BINARY_VERSION_CHECK', 'MONGOMS_MD5_CHECK'] as const;
 
-/** Every externally configurable var, saved so each case restores exactly what it found. */
-const ORIGINAL = Object.fromEntries(RESTORED_ENV_KEYS.map((key) => [key, process.env[key]]));
-
 // A clean slate regardless of run order: a mutation run's `enableFindRelatedTests` can run any
 // one of these cases alone, with no earlier `afterEach` in this file to have cleared them first.
 beforeEach(() => {
-    for (const key of CLEARED_ENV_KEYS) delete process.env[key];
+    setProcessEnvironment(Object.fromEntries(CLEARED_ENV_KEYS.map((key) => [key, undefined])));
 });
 
 afterEach(() => {
     startInProcess.mockClear();
-    for (const key of RESTORED_ENV_KEYS) {
-        if (ORIGINAL[key] === undefined) delete process.env[key];
-        else process.env[key] = ORIGINAL[key];
-    }
-    for (const key of CLEARED_ENV_KEYS) delete process.env[key];
 });
 
 describe('startEphemeralMongo', () => {
     it('uses NODE_TEST_MONGO_URI when set, and never calls startInProcess', async () => {
-        delete process.env.MONGOMS_SYSTEM_BINARY;
-        process.env.NODE_TEST_MONGO_URI = 'mongodb://compose-mongo:27017/test-suite';
+        setProcessEnvironment({ MONGOMS_SYSTEM_BINARY: undefined });
+        setProcessEnvironment({ NODE_TEST_MONGO_URI: 'mongodb://compose-mongo:27017/test-suite' });
 
         const mongo = await startEphemeralMongo({ startInProcess });
 
@@ -59,7 +49,7 @@ describe('startEphemeralMongo', () => {
     });
 
     it('stop() is a no-op on the external path', async () => {
-        process.env.NODE_TEST_MONGO_URI = 'mongodb://compose-mongo:27017/test-suite';
+        setProcessEnvironment({ NODE_TEST_MONGO_URI: 'mongodb://compose-mongo:27017/test-suite' });
 
         const mongo = await startEphemeralMongo({ startInProcess });
 
@@ -67,11 +57,11 @@ describe('startEphemeralMongo', () => {
     });
 
     it('sets the skip-download vars when a pre-installed binary exists, before calling startInProcess', async () => {
-        delete process.env.NODE_TEST_MONGO_URI;
+        setProcessEnvironment({ NODE_TEST_MONGO_URI: undefined });
         const directory = mkdtempSync(path.join(tmpdir(), 'mongod-binary-test-'));
         const binary = path.join(directory, 'mongod');
         writeFileSync(binary, '');
-        process.env.MONGOMS_SYSTEM_BINARY = binary;
+        setProcessEnvironment({ MONGOMS_SYSTEM_BINARY: binary });
 
         try {
             await startEphemeralMongo({ startInProcess });
@@ -86,8 +76,8 @@ describe('startEphemeralMongo', () => {
     });
 
     it('leaves an overridden but non-existent binary path unset', async () => {
-        delete process.env.NODE_TEST_MONGO_URI;
-        process.env.MONGOMS_SYSTEM_BINARY = '/definitely/not/a/real/path/mongod';
+        setProcessEnvironment({ NODE_TEST_MONGO_URI: undefined });
+        setProcessEnvironment({ MONGOMS_SYSTEM_BINARY: '/definitely/not/a/real/path/mongod' });
 
         await startEphemeralMongo({ startInProcess });
 
@@ -96,8 +86,8 @@ describe('startEphemeralMongo', () => {
     });
 
     it('passes a given dbPath through to startInProcess', async () => {
-        delete process.env.NODE_TEST_MONGO_URI;
-        delete process.env.MONGOMS_SYSTEM_BINARY;
+        setProcessEnvironment({ NODE_TEST_MONGO_URI: undefined });
+        setProcessEnvironment({ MONGOMS_SYSTEM_BINARY: undefined });
 
         await startEphemeralMongo({ dbPath: '/tmp/some-db-path', startInProcess });
 

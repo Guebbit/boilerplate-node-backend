@@ -17,7 +17,8 @@ import {
 import {
     withEnvironment,
     withoutEnvironment,
-    withoutEnvironmentInThisFile
+    withoutEnvironmentInThisFile,
+    setEnvironment
 } from '@tests/environment';
 
 withoutEnvironmentInThisFile([
@@ -34,7 +35,7 @@ withoutEnvironmentInThisFile([
 
 describe('isRelaxedEnvironment', () => {
     it.each(['development', 'test'])('is relaxed for %s', (value) => {
-        process.env.NODE_ENV = value;
+        setEnvironment({ NODE_ENV: value });
 
         expect(isRelaxedEnvironment()).toBe(true);
     });
@@ -42,7 +43,7 @@ describe('isRelaxedEnvironment', () => {
     it.each(['production', 'staging', 'Production', 'dev', ' development', 'test '])(
         'is strict for %p — a typo must not turn the safety switches off',
         (value) => {
-            process.env.NODE_ENV = value;
+            setEnvironment({ NODE_ENV: value });
 
             expect(isRelaxedEnvironment()).toBe(false);
         }
@@ -55,11 +56,11 @@ describe('isRelaxedEnvironment', () => {
 
 describe('isTestEnvironment and nodeEnvironment', () => {
     it('is a test only for exactly `test`', () => {
-        process.env.NODE_ENV = 'test';
+        setEnvironment({ NODE_ENV: 'test' });
         expect(isTestEnvironment()).toBe(true);
         expect(nodeEnvironment()).toBe('test');
 
-        process.env.NODE_ENV = 'development';
+        setEnvironment({ NODE_ENV: 'development' });
         expect(isTestEnvironment()).toBe(false);
     });
 });
@@ -67,13 +68,13 @@ describe('isTestEnvironment and nodeEnvironment', () => {
 describe('the server slice', () => {
     it('defaults the port and reads an override', () => {
         expect(serverConfig().NODE_PORT).toBe(3000);
-        process.env.NODE_PORT = '8081';
+        setEnvironment({ NODE_PORT: '8081' });
 
         expect(serverConfig().NODE_PORT).toBe(8081);
     });
 
     it.each(['0', '70000', 'abc', '3000x'])('refuses the port %p', (value) => {
-        process.env.NODE_PORT = value;
+        setEnvironment({ NODE_PORT: value });
 
         expect(() => serverConfig()).toThrow(/NODE_PORT/);
     });
@@ -93,13 +94,13 @@ describe('the database slice', () => {
     });
 
     it('reads a blank URI as unset, which is how `npm run host` reaches a container', () => {
-        process.env.NODE_DB_URI = '';
+        setEnvironment({ NODE_DB_URI: '' });
 
         expect(databaseConfig().NODE_DB_URI).toBeUndefined();
     });
 
     it('refuses a junk port instead of building a broken URI from it', () => {
-        process.env.NODE_MONGODB_PORT = 'mongo';
+        setEnvironment({ NODE_MONGODB_PORT: 'mongo' });
 
         expect(() => databaseConfig()).toThrow(/NODE_MONGODB_PORT/);
     });
@@ -114,15 +115,15 @@ describe('the cluster slice', () => {
     });
 
     it('accepts both switch vocabularies', () => {
-        process.env.NODE_ENABLE_CLUSTERING = '1';
+        setEnvironment({ NODE_ENABLE_CLUSTERING: '1' });
         expect(clusterConfig().NODE_ENABLE_CLUSTERING).toBe(true);
 
-        process.env.NODE_ENABLE_CLUSTERING = 'off';
+        setEnvironment({ NODE_ENABLE_CLUSTERING: 'off' });
         expect(clusterConfig().NODE_ENABLE_CLUSTERING).toBe(false);
     });
 
     it('refuses a crash limit of zero: it would give up before the first respawn', () => {
-        process.env.NODE_CLUSTER_CRASH_LIMIT = '0';
+        setEnvironment({ NODE_CLUSTER_CRASH_LIMIT: '0' });
 
         expect(() => clusterConfig()).toThrow(/NODE_CLUSTER_CRASH_LIMIT/);
     });
@@ -134,16 +135,16 @@ describe('the logging slice', () => {
     });
 
     it('refuses a mode that is not one of the three', () => {
-        process.env.NODE_LOG_PERSONAL_FIELDS = 'sha256';
+        setEnvironment({ NODE_LOG_PERSONAL_FIELDS: 'sha256' });
 
         expect(() => loggingConfig()).toThrow(/NODE_LOG_PERSONAL_FIELDS/);
     });
 
     it('reads a level case-insensitively, and refuses one winston does not know', () => {
-        process.env.NODE_LOG_LEVEL = 'DEBUG';
+        setEnvironment({ NODE_LOG_LEVEL: 'DEBUG' });
         expect(loggingConfig().NODE_LOG_LEVEL).toBe('debug');
 
-        process.env.NODE_LOG_LEVEL = 'loud';
+        setEnvironment({ NODE_LOG_LEVEL: 'loud' });
         expect(() => loggingConfig()).toThrow(/NODE_LOG_LEVEL/);
     });
 });

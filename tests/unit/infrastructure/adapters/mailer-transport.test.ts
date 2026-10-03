@@ -26,7 +26,7 @@ import {
     resetTransporter,
     resolveMailTransport
 } from '@infrastructure/adapters/mailer';
-import { withoutEnvironmentInThisFile } from '@tests/environment';
+import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
 /**
  * The options the module handed to `createTransport` for a given environment.
@@ -41,12 +41,7 @@ const transportOptions = async (
     createTransportMock.mockClear();
     resetTransporter();
 
-    const previous: Record<string, string | undefined> = {};
-    for (const [key, value] of Object.entries(environment)) {
-        previous[key] = process.env[key];
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-    }
+    setEnvironment(environment);
 
     // Any send builds the transport; the envelope itself is irrelevant here.
     await sendTemplatedEmail({ to: 'ada@example.com' }, 'account.reset-confirm', {
@@ -61,11 +56,6 @@ const transportOptions = async (
         linkUrl: '',
         footer: ''
     }).catch(() => {});
-
-    for (const [key, value] of Object.entries(previous)) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-    }
 
     return createTransportMock.mock.calls[0][0] as Record<string, unknown>;
 };
@@ -192,14 +182,14 @@ describe('resolveMailTransport', () => {
     });
 
     it.each(['smtp', 'log', 'outbox'] as const)('honours a named %s transport', (named) => {
-        process.env.NODE_ENV = 'development';
-        process.env.NODE_MAIL_TRANSPORT = named;
+        setEnvironment({ NODE_ENV: 'development' });
+        setEnvironment({ NODE_MAIL_TRANSPORT: named });
 
         expect(resolveMailTransport()).toBe(named);
     });
 
     it('refuses an unrecognised value instead of silently falling back to SMTP', () => {
-        process.env.NODE_MAIL_TRANSPORT = 'carrier-pigeon';
+        setEnvironment({ NODE_MAIL_TRANSPORT: 'carrier-pigeon' });
 
         expect(() => resolveMailTransport()).toThrow(
             /NODE_MAIL_TRANSPORT: expected one of smtp, log, outbox/
@@ -209,8 +199,8 @@ describe('resolveMailTransport', () => {
     it.each(['production', 'staging', undefined])(
         'refuses the outbox when NODE_ENV is %p, where it would silently send nothing',
         (value) => {
-            if (value !== undefined) process.env.NODE_ENV = value;
-            process.env.NODE_MAIL_TRANSPORT = 'outbox';
+            setEnvironment({ NODE_ENV: value });
+            setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' });
 
             expect(() => resolveMailTransport()).toThrow(/demo profile only/);
         }
@@ -218,8 +208,8 @@ describe('resolveMailTransport', () => {
 
     it('refuses to let a test run reach a real mail server', () => {
         // Losing this is not a failing test, it is mail leaving the building.
-        process.env.NODE_ENV = 'test';
-        process.env.NODE_MAIL_TRANSPORT = 'smtp';
+        setEnvironment({ NODE_ENV: 'test' });
+        setEnvironment({ NODE_MAIL_TRANSPORT: 'smtp' });
 
         expect(resolveMailTransport()).toBe('log');
     });

@@ -17,16 +17,17 @@ import { ORDER_REFUND_OWED } from '../../events';
 import { orderRepository } from '../../repository';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { asAdmin } from '@tests/callers';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
 /* The sweep's grace window, zeroed so a marker written this millisecond is already due. */
 beforeEach(() => {
-    process.env.NODE_ORDER_EFFECT_RETRY_MINUTES = '0';
+    setEnvironment({ NODE_ORDER_EFFECT_RETRY_MINUTES: '0' });
 });
 
 afterEach(() => {
-    delete process.env.NODE_ORDER_EFFECT_RETRY_MINUTES;
+    setEnvironment({ NODE_ORDER_EFFECT_RETRY_MINUTES: undefined });
     resetDomainEvents();
 });
 
@@ -178,7 +179,7 @@ describe('retryPendingEffects', () => {
 
     it('waits out the grace window rather than racing the cancel it just ran', async () => {
         // The default window exists so a slow-but-working refund is not retried underneath itself.
-        process.env.NODE_ORDER_EFFECT_RETRY_MINUTES = '5';
+        setEnvironment({ NODE_ORDER_EFFECT_RETRY_MINUTES: '5' });
         onDomainEvent(ORDER_REFUND_OWED, () => {
             throw new Error('payment provider unreachable');
         });

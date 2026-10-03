@@ -42,8 +42,9 @@ flowchart LR
 ```
 
 Each registry entry is a **closure re-checked on every call**, never a value computed at import: a
-provider becomes configured the moment its `NODE_OAUTH_<NAME>_CLIENT_ID` / `_CLIENT_SECRET` pair is
-set, with no restart-shaped memoisation to go stale. An unconfigured provider resolves `undefined`
+provider is configured when its `NODE_OAUTH_<NAME>_CLIENT_ID` / `_CLIENT_SECRET` pair is set in
+the environment the process was started with (or a test override), and the registry holds no copy
+of its own to go stale. An unconfigured provider resolves `undefined`
 and the route answers 404 — the same "loud, never silently wrong" stance an unset
 `NODE_PAYMENT_PROVIDER` gets.
 

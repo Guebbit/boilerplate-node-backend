@@ -14,7 +14,7 @@
  *
  * See: docs/reference/ops.md
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { bootstrapAccessModel } from '@modules/access';
 import { logger } from '@infrastructure/adapters/logger';

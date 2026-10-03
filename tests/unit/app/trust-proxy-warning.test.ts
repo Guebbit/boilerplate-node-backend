@@ -6,7 +6,7 @@
 import express from 'express';
 import { installSecurity } from '@app/security';
 import { logger } from '@infrastructure/adapters/logger';
-import { withoutEnvironmentInThisFile } from '@tests/environment';
+import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
 withoutEnvironmentInThisFile(['NODE_ENV', 'NODE_TRUST_PROXY_HOPS']);
 
@@ -20,14 +20,13 @@ const warnsAboutProxy = (): boolean => {
 };
 
 it.each(['production', 'staging', undefined])('warns when NODE_ENV is %p', (value) => {
-    if (value === undefined) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = value;
+    setEnvironment({ NODE_ENV: value });
 
     expect(warnsAboutProxy()).toBe(true);
 });
 
 it.each(['development', 'test'])('stays quiet when NODE_ENV is %s', (value) => {
-    process.env.NODE_ENV = value;
+    setEnvironment({ NODE_ENV: value });
 
     expect(warnsAboutProxy()).toBe(false);
 });

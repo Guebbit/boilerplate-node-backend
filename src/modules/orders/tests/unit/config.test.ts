@@ -29,7 +29,7 @@ import {
     shopIdentity
 } from '../../config';
 import ordersModule from '../../module';
-import { withoutEnvironmentInThisFile } from '@tests/environment';
+import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
 /** The required identity variables, each with a value that satisfies its rule. */
 const IDENTITY = {
@@ -72,25 +72,25 @@ withoutEnvironmentInThisFile(TOUCHED);
 
 /** A deployment that satisfies every check, for a case to break one thing in. */
 const configure = (): void => {
-    process.env.NODE_ENV = 'development';
-    process.env.NODE_URL = 'https://api.example.com/';
-    process.env.NODE_SHOP_COUNTRY = 'IT';
-    Object.assign(process.env, IDENTITY);
+    setEnvironment({ NODE_ENV: 'development' });
+    setEnvironment({ NODE_URL: 'https://api.example.com/' });
+    setEnvironment({ NODE_SHOP_COUNTRY: 'IT' });
+    setEnvironment(IDENTITY);
 };
 
 describe('the shop jurisdiction boot gate', () => {
     it('refuses to boot with no NODE_SHOP_COUNTRY — a checkout with no VAT jurisdiction is not one', () => {
         configure();
-        delete process.env.NODE_SHOP_COUNTRY;
+        setEnvironment({ NODE_SHOP_COUNTRY: undefined });
 
         expect(() => assertModuleConfig([ordersModule], [])).toThrow(/NODE_SHOP_COUNTRY/);
     });
 });
 
 describe('reading the jurisdiction', () => {
-    it('reads the field per call, so a correction needs no restart', () => {
+    it('reads the field per call, so an override applies to the next read', () => {
         configure();
-        process.env.NODE_SHOP_COUNTRY = 'FR';
+        setEnvironment({ NODE_SHOP_COUNTRY: 'FR' });
 
         expect(shopCountry()).toBe('FR');
     });
@@ -98,20 +98,20 @@ describe('reading the jurisdiction', () => {
 
 describe('shipToCountries', () => {
     it("defaults to the shop's own country alone", () => {
-        process.env.NODE_SHOP_COUNTRY = 'IT';
+        setEnvironment({ NODE_SHOP_COUNTRY: 'IT' });
 
         expect(shipToCountries()).toEqual(['IT']);
     });
 
     it('is empty when neither variable is set', () => {
-        delete process.env.NODE_SHOP_COUNTRY;
+        setEnvironment({ NODE_SHOP_COUNTRY: undefined });
 
         expect(shipToCountries()).toEqual([]);
     });
 
     it('reads the configured list over the shop country, upper-cased and trimmed', () => {
-        process.env.NODE_SHOP_COUNTRY = 'IT';
-        process.env.NODE_SHIP_TO_COUNTRIES = 'it, fr ,de';
+        setEnvironment({ NODE_SHOP_COUNTRY: 'IT' });
+        setEnvironment({ NODE_SHIP_TO_COUNTRIES: 'it, fr ,de' });
 
         expect(shipToCountries()).toEqual(['IT', 'FR', 'DE']);
     });
@@ -123,18 +123,18 @@ describe('bankTransferEnabled', () => {
     });
 
     it('is false with only the beneficiary set', () => {
-        process.env.NODE_BANK_TRANSFER_BENEFICIARY = 'Guebbit Shop';
+        setEnvironment({ NODE_BANK_TRANSFER_BENEFICIARY: 'Guebbit Shop' });
         expect(bankTransferEnabled()).toBe(false);
     });
 
     it('is false with only the IBAN set', () => {
-        process.env.NODE_BANK_TRANSFER_IBAN = 'DE89370400440532013000';
+        setEnvironment({ NODE_BANK_TRANSFER_IBAN: 'DE89370400440532013000' });
         expect(bankTransferEnabled()).toBe(false);
     });
 
     it('is true once both are set', () => {
-        process.env.NODE_BANK_TRANSFER_BENEFICIARY = 'Guebbit Shop';
-        process.env.NODE_BANK_TRANSFER_IBAN = 'DE89370400440532013000';
+        setEnvironment({ NODE_BANK_TRANSFER_BENEFICIARY: 'Guebbit Shop' });
+        setEnvironment({ NODE_BANK_TRANSFER_IBAN: 'DE89370400440532013000' });
         expect(bankTransferEnabled()).toBe(true);
     });
 });
@@ -147,7 +147,7 @@ describe('bankTransferBeneficiary / bankTransferIban / bankTransferBic', () => {
     });
 
     it('answer the configured value', () => {
-        process.env.NODE_BANK_TRANSFER_BIC = 'COBADEFFXXX';
+        setEnvironment({ NODE_BANK_TRANSFER_BIC: 'COBADEFFXXX' });
         expect(bankTransferBic()).toBe('COBADEFFXXX');
     });
 });
@@ -158,12 +158,12 @@ describe('bankTransferIbanFriendly', () => {
     });
 
     it('groups the IBAN into 4-character blocks', () => {
-        process.env.NODE_BANK_TRANSFER_IBAN = 'DE89370400440532013000';
+        setEnvironment({ NODE_BANK_TRANSFER_IBAN: 'DE89370400440532013000' });
         expect(bankTransferIbanFriendly()).toBe('DE89 3704 0044 0532 0130 00');
     });
 
     it('re-groups a value already typed with spaces, rather than doubling them', () => {
-        process.env.NODE_BANK_TRANSFER_IBAN = 'DE89 3704 0044 0532 0130 00';
+        setEnvironment({ NODE_BANK_TRANSFER_IBAN: 'DE89 3704 0044 0532 0130 00' });
         expect(bankTransferIbanFriendly()).toBe('DE89 3704 0044 0532 0130 00');
     });
 });
@@ -174,7 +174,7 @@ describe('bankTransferHoldHours', () => {
     });
 
     it('reads NODE_BANK_TRANSFER_HOLD_HOURS when set', () => {
-        process.env.NODE_BANK_TRANSFER_HOLD_HOURS = '48';
+        setEnvironment({ NODE_BANK_TRANSFER_HOLD_HOURS: '48' });
         expect(bankTransferHoldHours()).toBe(48);
     });
 });
@@ -185,7 +185,7 @@ describe('bankTransferMaxOpenPerAccount', () => {
     });
 
     it('reads NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT when set', () => {
-        process.env.NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT = '5';
+        setEnvironment({ NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT: '5' });
         expect(bankTransferMaxOpenPerAccount()).toBe(5);
     });
 });
@@ -203,7 +203,7 @@ describe('orderFrontendLink', () => {
     });
 
     it('lets a deployment override the template without touching account links', () => {
-        process.env.NODE_FRONTEND_LINK_ORDER = 'my-orders/{id}/details';
+        setEnvironment({ NODE_FRONTEND_LINK_ORDER: 'my-orders/{id}/details' });
 
         expect(orderFrontendLink({ locale: 'en', id: 'order-1' })).toBe(
             'http://localhost:8080/en/my-orders/order-1/details'
@@ -220,7 +220,7 @@ describe('orderFrontendLink', () => {
 describe('the shop identity boot gate', () => {
     it.each(IDENTITY_VARIABLES)('refuses to boot with no %s', (name) => {
         configure();
-        delete process.env[name];
+        setEnvironment({ [name]: undefined });
 
         expect(() => assertModuleConfig([ordersModule], [])).toThrow(new RegExp(name));
     });
@@ -233,7 +233,7 @@ describe('the shop identity boot gate', () => {
 
     it('refuses an email that is not one', () => {
         configure();
-        process.env.NODE_SHOP_EMAIL = 'not-an-address';
+        setEnvironment({ NODE_SHOP_EMAIL: 'not-an-address' });
 
         expect(() => assertModuleConfig([ordersModule], [])).toThrow(/NODE_SHOP_EMAIL/);
     });
@@ -246,14 +246,14 @@ describe('the withdrawal period', () => {
 
     it('refuses 20 at boot: less than the law plus the longest roll-over', () => {
         configure();
-        process.env.NODE_WITHDRAWAL_PERIOD_DAYS = '20';
+        setEnvironment({ NODE_WITHDRAWAL_PERIOD_DAYS: '20' });
 
         expect(() => assertModuleConfig([ordersModule], [])).toThrow(/NODE_WITHDRAWAL_PERIOD_DAYS/);
     });
 
     it('accepts 21 at boot and reads it back', () => {
         configure();
-        process.env.NODE_WITHDRAWAL_PERIOD_DAYS = '21';
+        setEnvironment({ NODE_WITHDRAWAL_PERIOD_DAYS: '21' });
 
         expect(() => assertModuleConfig([ordersModule], [])).not.toThrow();
         expect(withdrawalPeriodDays()).toBe(21);
@@ -277,14 +277,14 @@ describe('shopIdentity', () => {
 
     it('carries the VAT number when set', () => {
         configure();
-        process.env.NODE_SHOP_VAT_NUMBER = 'IT12345678901';
+        setEnvironment({ NODE_SHOP_VAT_NUMBER: 'IT12345678901' });
 
         expect(shopIdentity().vatNumber).toBe('IT12345678901');
     });
 
     it('refuses to answer with a required field unset, rather than print an empty notice', () => {
         configure();
-        delete process.env.NODE_SHOP_PHONE;
+        setEnvironment({ NODE_SHOP_PHONE: undefined });
 
         expect(() => shopIdentity()).toThrow(/NODE_SHOP_PHONE/);
     });
@@ -305,11 +305,11 @@ describe('returnAddress', () => {
 
     it('is the configured address, country upper-cased', () => {
         configure();
-        process.env.NODE_RETURN_ADDRESS_NAME = 'Returns dept';
-        process.env.NODE_RETURN_ADDRESS_STREET = 'Via Torino 9';
-        process.env.NODE_RETURN_ADDRESS_CITY = 'Torino';
-        process.env.NODE_RETURN_ADDRESS_ZIP = '10100';
-        process.env.NODE_RETURN_ADDRESS_COUNTRY = 'it';
+        setEnvironment({ NODE_RETURN_ADDRESS_NAME: 'Returns dept' });
+        setEnvironment({ NODE_RETURN_ADDRESS_STREET: 'Via Torino 9' });
+        setEnvironment({ NODE_RETURN_ADDRESS_CITY: 'Torino' });
+        setEnvironment({ NODE_RETURN_ADDRESS_ZIP: '10100' });
+        setEnvironment({ NODE_RETURN_ADDRESS_COUNTRY: 'it' });
 
         expect(returnAddress()).toEqual({
             name: 'Returns dept',
@@ -322,7 +322,7 @@ describe('returnAddress', () => {
 
     it('reads a partly-set return address as unset, and falls back to the shop address', () => {
         configure();
-        process.env.NODE_RETURN_ADDRESS_STREET = 'Via Torino 9';
+        setEnvironment({ NODE_RETURN_ADDRESS_STREET: 'Via Torino 9' });
 
         expect(returnAddress().street).toBe('Via Roma 1');
     });
@@ -334,13 +334,13 @@ describe('returnPostagePayer', () => {
     });
 
     it('is the shop when a deployment offers free returns', () => {
-        process.env.NODE_RETURN_POSTAGE_PAYER = 'shop';
+        setEnvironment({ NODE_RETURN_POSTAGE_PAYER: 'shop' });
 
         expect(returnPostagePayer()).toBe('shop');
     });
 
     it('refuses a value that is neither, rather than guessing who pays', () => {
-        process.env.NODE_RETURN_POSTAGE_PAYER = 'nobody';
+        setEnvironment({ NODE_RETURN_POSTAGE_PAYER: 'nobody' });
 
         expect(() => returnPostagePayer()).toThrow(/NODE_RETURN_POSTAGE_PAYER/);
     });

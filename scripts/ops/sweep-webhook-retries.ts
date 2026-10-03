@@ -21,7 +21,7 @@
  *
  * See: docs/reference/ops.md
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { sweepDueWebhookDeliveries } from '@modules/webhooks';
 import { runScript } from '../run-script';

@@ -16,6 +16,7 @@ import { setCookie } from '@tests/cookies';
 import { createAdminUser, createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { connection } from '@infrastructure/runtime/database';
 import { leaseModel } from '@infrastructure/persistence/lease';
+import { currentEnvironment } from '@infrastructure/config/store';
 
 setupTestDb();
 
@@ -324,7 +325,7 @@ describe('GET /observability/metrics', () => {
     it('answers the Prometheus exposition to the configured scraper', async () => {
         const response = await api()
             .get('/observability/metrics')
-            .set('Authorization', `Bearer ${process.env.NODE_METRICS_TOKEN ?? ''}`);
+            .set('Authorization', `Bearer ${currentEnvironment().NODE_METRICS_TOKEN ?? ''}`);
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('text/plain');

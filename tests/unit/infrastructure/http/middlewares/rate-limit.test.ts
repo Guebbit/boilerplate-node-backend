@@ -26,7 +26,7 @@ describe('rate limit defaults', () => {
     it('measures the browsing budget per minute', () =>
         // The window is the load-bearing half of the pair: the same 100 requests spread over a
         // quarter of an hour is a session quota an ordinary browsing session trips. Unset first:
-        // `tests/support/setup.ts` raises it tenfold for the suites.
+        // `tests/support/setup-environment.ts` raises it tenfold for the suites.
         withoutEnvironment(['NODE_RATE_LIMIT_WINDOW_MS'], () => {
             expect(rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS).toBe(60 * 1000);
             expect(DEFAULT_RATE_LIMIT_MAX).toBe(100);

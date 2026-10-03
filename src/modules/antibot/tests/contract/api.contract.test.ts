@@ -9,34 +9,20 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
 /** Saved so the rungs these cases turn on are restored for every other suite. */
-const ORIGINAL_PROVIDER = process.env.NODE_ANTIBOT_PROVIDER;
 
 /** Likewise for rung 2 — `GET /antibot/config` reports both, so both are steered here. */
-const ORIGINAL_EMAIL_POLICY = process.env.NODE_ANTIBOT_EMAIL_POLICY;
-
-afterEach(() => {
-    if (ORIGINAL_PROVIDER === undefined) delete process.env.NODE_ANTIBOT_PROVIDER;
-    else process.env.NODE_ANTIBOT_PROVIDER = ORIGINAL_PROVIDER;
-    if (ORIGINAL_EMAIL_POLICY === undefined) delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
-    else process.env.NODE_ANTIBOT_EMAIL_POLICY = ORIGINAL_EMAIL_POLICY;
-});
 
 describe('GET /antibot/challenge', () => {
     /** Saved so the self-hosted provider's secret does not leak into other suites. */
-    const ORIGINAL_ALTCHA_SECRET = process.env.NODE_ANTIBOT_ALTCHA_SECRET;
-
-    afterEach(() => {
-        if (ORIGINAL_ALTCHA_SECRET === undefined) delete process.env.NODE_ANTIBOT_ALTCHA_SECRET;
-        else process.env.NODE_ANTIBOT_ALTCHA_SECRET = ORIGINAL_ALTCHA_SECRET;
-    });
 
     it('matches the contract for the self-hosted provider: a challenge to solve', async () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'altcha';
-        process.env.NODE_ANTIBOT_ALTCHA_SECRET = 'contract-test-altcha-secret';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'altcha' });
+        setEnvironment({ NODE_ANTIBOT_ALTCHA_SECRET: 'contract-test-altcha-secret' });
 
         const response = await api().get('/antibot/challenge');
 
@@ -44,7 +30,7 @@ describe('GET /antibot/challenge', () => {
     });
 
     it('answers 404 when no provider this server hosts is selected — the default', async () => {
-        delete process.env.NODE_ANTIBOT_PROVIDER;
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: undefined });
 
         const response = await api().get('/antibot/challenge');
 
@@ -52,7 +38,7 @@ describe('GET /antibot/challenge', () => {
     });
 
     it('answers 404 for a vendor-hosted provider, which issues its challenges itself', async () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
 
         const response = await api().get('/antibot/challenge');
 
@@ -62,8 +48,8 @@ describe('GET /antibot/challenge', () => {
 
 describe('GET /antibot/config', () => {
     it('matches the contract while every rung is off — the default', async () => {
-        delete process.env.NODE_ANTIBOT_PROVIDER;
-        delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: undefined });
+        setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: undefined });
 
         const response = await api().get('/antibot/config');
 
@@ -76,8 +62,8 @@ describe('GET /antibot/config', () => {
     });
 
     it('publishes the selected provider and its public parameters', async () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
-        process.env.NODE_ANTIBOT_TURNSTILE_SITE_KEY = 'site-key-for-the-browser';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
+        setEnvironment({ NODE_ANTIBOT_TURNSTILE_SITE_KEY: 'site-key-for-the-browser' });
 
         const response = await api().get('/antibot/config');
 
@@ -87,7 +73,7 @@ describe('GET /antibot/config', () => {
     });
 
     it("publishes rung 2's active posture alongside rung 3's provider", async () => {
-        process.env.NODE_ANTIBOT_EMAIL_POLICY = 'mx';
+        setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: 'mx' });
 
         const response = await api().get('/antibot/config');
 
@@ -96,7 +82,7 @@ describe('GET /antibot/config', () => {
     });
 
     it('answers 500 rather than falling back when the provider name is unknown', async () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'not-a-provider';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'not-a-provider' });
 
         const response = await api().get('/antibot/config');
 
@@ -104,7 +90,7 @@ describe('GET /antibot/config', () => {
     });
 
     it('answers 500 rather than falling back when the email policy is unknown', async () => {
-        process.env.NODE_ANTIBOT_EMAIL_POLICY = 'not-a-policy';
+        setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: 'not-a-policy' });
 
         const response = await api().get('/antibot/config');
 
@@ -120,7 +106,7 @@ describe('the gate it guards, end to end on one guarded route', () => {
     };
 
     it('lets the guarded route through untouched while the provider is `none`', async () => {
-        delete process.env.NODE_ANTIBOT_PROVIDER;
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: undefined });
 
         const response = await api().post('/feedback/contact').send(CONTACT_PAYLOAD);
 
@@ -128,7 +114,7 @@ describe('the gate it guards, end to end on one guarded route', () => {
     });
 
     it('refuses the guarded route with no token once a provider is selected', async () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
 
         const response = await api().post('/feedback/contact').send(CONTACT_PAYLOAD);
 

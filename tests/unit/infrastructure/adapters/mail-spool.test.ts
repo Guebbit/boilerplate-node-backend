@@ -17,19 +17,17 @@ import {
     resolveSpooled,
     spoolAttachment
 } from '@infrastructure/adapters/mail-spool';
+import { setEnvironment } from '@tests/environment';
 
 let spoolRoot: string;
-const originalSpoolPath = process.env.NODE_MAIL_SPOOL_PATH;
 
 beforeEach(async () => {
     spoolRoot = await mkdtemp(path.join(tmpdir(), 'mail-spool-test-'));
-    process.env.NODE_MAIL_SPOOL_PATH = spoolRoot;
+    setEnvironment({ NODE_MAIL_SPOOL_PATH: spoolRoot });
 });
 
 afterEach(async () => {
     await rm(spoolRoot, { recursive: true, force: true });
-    if (originalSpoolPath === undefined) delete process.env.NODE_MAIL_SPOOL_PATH;
-    else process.env.NODE_MAIL_SPOOL_PATH = originalSpoolPath;
 });
 
 describe('spoolAttachment', () => {

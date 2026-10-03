@@ -76,7 +76,7 @@ export interface RateLimitBudget {
     requestPropertyName?: string;
 
     /**
-     * Why this budget's env var is deliberately NOT raised in `tests/support/setup.ts`, when it
+     * Why this budget's env var is deliberately NOT raised in `tests/support/setup-environment.ts`, when it
      * isn't. Absent means `tests/cross-cutting/rate-limit-budgets.test.ts` requires it raised;
      * present is that test's exemption, and the reason it prints on failure.
      */

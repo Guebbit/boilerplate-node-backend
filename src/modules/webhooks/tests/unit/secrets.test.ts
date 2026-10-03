@@ -1,6 +1,6 @@
 /**
  * Secret-ring encryption at rest and the ring operations built on it — see `../../secrets.ts`.
- * `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` is set for every suite in `tests/support/setup.ts`. The
+ * `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` is set for every suite in `tests/support/setup-environment.ts`. The
  * crypto and version-mismatch behaviour itself is `versioned-secret.ts`'s, tested once in
  * `tests/unit/infrastructure/security/versioned-secret.test.ts` — this just holds the wiring.
  */

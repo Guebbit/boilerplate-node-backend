@@ -6,6 +6,7 @@
 
 import { isOAuthProviderConfigured } from '../../oauth/config';
 import { githubOAuthProvider } from '../../oauth/providers/github';
+import { setEnvironment } from '@tests/environment';
 
 /** The client id every case below asserts reaches GitHub, in the URL or the token exchange. */
 const CLIENT_ID = 'test-github-client-id';
@@ -17,23 +18,12 @@ const REDIRECT_URI = 'https://api.test/account/oauth/github/callback';
 const jsonResponse = (body: unknown, ok = true): Response =>
     ({ ok, status: ok ? 200 : 400, json: () => Promise.resolve(body) }) as Response;
 
-/** The real credentials, saved so `afterAll` can put back whatever the developer had set. */
-const originalEnvironment = {
-    id: process.env.NODE_OAUTH_GITHUB_CLIENT_ID,
-    secret: process.env.NODE_OAUTH_GITHUB_CLIENT_SECRET
-};
-
 beforeEach(() => {
-    process.env.NODE_OAUTH_GITHUB_CLIENT_ID = CLIENT_ID;
-    process.env.NODE_OAUTH_GITHUB_CLIENT_SECRET = 'test-github-client-secret';
+    setEnvironment({ NODE_OAUTH_GITHUB_CLIENT_ID: CLIENT_ID });
+    setEnvironment({ NODE_OAUTH_GITHUB_CLIENT_SECRET: 'test-github-client-secret' });
 });
 
 afterEach(() => {
-    if (originalEnvironment.id === undefined) delete process.env.NODE_OAUTH_GITHUB_CLIENT_ID;
-    else process.env.NODE_OAUTH_GITHUB_CLIENT_ID = originalEnvironment.id;
-    if (originalEnvironment.secret === undefined)
-        delete process.env.NODE_OAUTH_GITHUB_CLIENT_SECRET;
-    else process.env.NODE_OAUTH_GITHUB_CLIENT_SECRET = originalEnvironment.secret;
     jest.restoreAllMocks();
 });
 
@@ -43,7 +33,7 @@ describe('github provider configuration', () => {
     });
 
     it('is false when either half is missing', () => {
-        delete process.env.NODE_OAUTH_GITHUB_CLIENT_ID;
+        setEnvironment({ NODE_OAUTH_GITHUB_CLIENT_ID: undefined });
         expect(isOAuthProviderConfigured('github')).toBe(false);
     });
 });

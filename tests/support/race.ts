@@ -18,7 +18,7 @@
  *    Removing the flag would not make these tests "more concurrent"; it would make them flaky for
  *    an unrelated reason.
  *
- *  - **The rate limiters are raised, not disabled** (`tests/support/setup.ts` sets the credential
+ *  - **The rate limiters are raised, not disabled** (`tests/support/setup-environment.ts` sets the credential
  *    budgets to 1000). A race truncated by a limiter would still PASS, because "not two users" is
  *    trivially true when some of the requests never reached the handler — a green test that
  *    measured nothing — so the assertions below count 4xx codes by value and reject 429 explicitly

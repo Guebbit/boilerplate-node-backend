@@ -24,6 +24,7 @@
 import { asStub } from '@tests/stub';
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { installErrorHandling } from '@app/error-handling';
+import { setEnvironment } from '@tests/environment';
 
 /** Enough of an Express app for `app.use(handler)`. */
 const appStub = () => asStub<Parameters<typeof installErrorHandling>[0]>({ use: jest.fn() });
@@ -38,11 +39,9 @@ const appStub = () => asStub<Parameters<typeof installErrorHandling>[0]>({ use: 
 const installUnder = (nodeEnv: string) => {
     const beforeExceptions = process.listeners('uncaughtException');
     const beforeRejections = process.listeners('unhandledRejection');
-    const originalEnv = process.env.NODE_ENV;
 
-    process.env.NODE_ENV = nodeEnv;
+    setEnvironment({ NODE_ENV: nodeEnv });
     installErrorHandling(appStub());
-    process.env.NODE_ENV = originalEnv;
 
     const addedExceptions = process
         .listeners('uncaughtException')

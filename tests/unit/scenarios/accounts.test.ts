@@ -13,33 +13,21 @@ import {
     SEED_TWO_FACTOR_BACKUP_CODES,
     seedCredentials
 } from '@scenarios/accounts';
+import { setEnvironment } from '@tests/environment';
 
 /** What every password-setting endpoint enforces, reduced to a yes/no. */
 const satisfiesPolicy = (password: string): boolean =>
     zodUserSchema.pick({ password: true }).safeParse({ password }).success;
 
-/** The two override vars, saved so a case that sets one restores whatever was there. */
-const ORIGINAL = {
-    admin: process.env.NODE_SEED_ADMIN_PASSWORD,
-    user: process.env.NODE_SEED_USER_PASSWORD
-};
-
 /** Reloads the module with the two vars set as given, so the constants re-evaluate. */
 const reloadWith = async (admin: string | undefined, user: string | undefined) => {
-    if (admin === undefined) delete process.env.NODE_SEED_ADMIN_PASSWORD;
-    else process.env.NODE_SEED_ADMIN_PASSWORD = admin;
-    if (user === undefined) delete process.env.NODE_SEED_USER_PASSWORD;
-    else process.env.NODE_SEED_USER_PASSWORD = user;
+    setEnvironment({ NODE_SEED_ADMIN_PASSWORD: admin, NODE_SEED_USER_PASSWORD: user });
 
     jest.resetModules();
     return import('@scenarios/accounts');
 };
 
 afterEach(() => {
-    if (ORIGINAL.admin === undefined) delete process.env.NODE_SEED_ADMIN_PASSWORD;
-    else process.env.NODE_SEED_ADMIN_PASSWORD = ORIGINAL.admin;
-    if (ORIGINAL.user === undefined) delete process.env.NODE_SEED_USER_PASSWORD;
-    else process.env.NODE_SEED_USER_PASSWORD = ORIGINAL.user;
     jest.resetModules();
 });
 

@@ -14,10 +14,9 @@ import { testCallerContext } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import * as userService from '../../services';
 import { userModel } from '../../model';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
-
-const ORIGINAL_PUBLIC_PATH = process.env.NODE_PUBLIC_PATH;
 
 let root: string;
 
@@ -30,12 +29,11 @@ beforeEach(async () => {
     await mkdir(path.join(root, 'images', 'thumbs', 'v1'), { recursive: true });
     await writeFile(path.join(root, AVATAR), 'avatar');
     await writeFile(path.join(root, THUMBNAIL), 'thumbnail');
-    process.env.NODE_PUBLIC_PATH = root;
+    setEnvironment({ NODE_PUBLIC_PATH: root });
 });
 
 afterEach(async () => {
     await rm(root, { recursive: true, force: true });
-    process.env.NODE_PUBLIC_PATH = ORIGINAL_PUBLIC_PATH;
 });
 
 /** The stored document as MongoDB holds it, with no Mongoose default applied on the way out. */

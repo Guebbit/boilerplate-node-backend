@@ -18,6 +18,7 @@ import { asStub } from '@tests/stub';
 import type { Request } from 'express';
 import { makeResponseStub } from '@tests/express';
 import { isMetricsScraper } from '../../metrics-scraper';
+import { setEnvironment } from '@tests/environment';
 
 /** Captures the status/body pair `rejectResponse` writes, without an HTTP server. */
 const makeRequest = (authorization?: string) =>
@@ -26,16 +27,9 @@ const makeRequest = (authorization?: string) =>
             name.toLowerCase() === 'authorization' ? authorization : undefined
     });
 
-const originalToken = process.env.NODE_METRICS_TOKEN;
-
-afterEach(() => {
-    if (originalToken === undefined) delete process.env.NODE_METRICS_TOKEN;
-    else process.env.NODE_METRICS_TOKEN = originalToken;
-});
-
 describe('isMetricsScraper', () => {
     it('refuses every request when no token is configured', () => {
-        delete process.env.NODE_METRICS_TOKEN;
+        setEnvironment({ NODE_METRICS_TOKEN: undefined });
         const response = makeResponseStub();
         const next = jest.fn();
 
@@ -46,7 +40,7 @@ describe('isMetricsScraper', () => {
     });
 
     it('admits a request carrying the exact token', () => {
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
+        setEnvironment({ NODE_METRICS_TOKEN: 'scrape-me' });
         const response = makeResponseStub();
         const next = jest.fn();
 
@@ -57,7 +51,7 @@ describe('isMetricsScraper', () => {
     });
 
     it('rejects the right token sent without the Bearer scheme', () => {
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
+        setEnvironment({ NODE_METRICS_TOKEN: 'scrape-me' });
         const response = makeResponseStub();
         const next = jest.fn();
 
@@ -68,7 +62,7 @@ describe('isMetricsScraper', () => {
     });
 
     it('rejects a different scheme carrying the right value', () => {
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
+        setEnvironment({ NODE_METRICS_TOKEN: 'scrape-me' });
         const response = makeResponseStub();
         const next = jest.fn();
 
@@ -79,7 +73,7 @@ describe('isMetricsScraper', () => {
     });
 
     it('rejects a missing Authorization header', () => {
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
+        setEnvironment({ NODE_METRICS_TOKEN: 'scrape-me' });
         const response = makeResponseStub();
         const next = jest.fn();
 
@@ -93,7 +87,7 @@ describe('isMetricsScraper', () => {
         // `timingSafeEqual` throws on a length mismatch. Without the length comparison folded
         // into `matches`, this case leaves the middleware as an unhandled throw — and the throw
         // itself distinguishes a wrong-length token from a wrong-value one, which is the oracle.
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
+        setEnvironment({ NODE_METRICS_TOKEN: 'scrape-me' });
         const response = makeResponseStub();
         const next = jest.fn();
 
@@ -106,7 +100,7 @@ describe('isMetricsScraper', () => {
         // Same length, so the comparison actually reaches `timingSafeEqual` rather than being
         // short-circuited by the length guard — this is the case that proves the guard is not
         // the only thing rejecting anything.
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
+        setEnvironment({ NODE_METRICS_TOKEN: 'scrape-me' });
         const response = makeResponseStub();
         const next = jest.fn();
 
@@ -119,7 +113,7 @@ describe('isMetricsScraper', () => {
     it('rejects an empty configured token as unconfigured', () => {
         // `!expected` treats '' as unset, which is the safe reading: an empty string in the
         // environment is a variable someone meant to fill in.
-        process.env.NODE_METRICS_TOKEN = '';
+        setEnvironment({ NODE_METRICS_TOKEN: '' });
         const response = makeResponseStub();
         const next = jest.fn();
 

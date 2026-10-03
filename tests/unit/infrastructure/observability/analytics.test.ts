@@ -26,6 +26,7 @@ import { productsAnalyticsEvents } from '@modules/products/analytics';
 import { cartAnalyticsEvents } from '@modules/cart/analytics';
 import { ordersAnalyticsEvents } from '@modules/orders/analytics';
 import { callerAs, strangerCaller } from '../../../support/callers';
+import { setEnvironment } from '@tests/environment';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -60,28 +61,28 @@ const { PostHog: mockedPostHog } = require('posthog-node') as {
 
 /** Umami settings that make the provider send rather than warn. */
 const configureUmami = () => {
-    process.env.NODE_ANALYTICS_PROVIDER = 'umami';
-    process.env.NODE_UMAMI_INGEST_HOST = 'http://umami:3000';
-    process.env.NODE_UMAMI_WEBSITE_ID = 'site-uuid';
+    setEnvironment({ NODE_ANALYTICS_PROVIDER: 'umami' });
+    setEnvironment({ NODE_UMAMI_INGEST_HOST: 'http://umami:3000' });
+    setEnvironment({ NODE_UMAMI_WEBSITE_ID: 'site-uuid' });
 };
 
 const configurePostHog = () => {
-    process.env.NODE_ANALYTICS_PROVIDER = 'posthog';
-    process.env.NODE_POSTHOG_API_KEY = 'phc_test_key';
-    process.env.NODE_POSTHOG_HOST = 'https://app.posthog.com';
+    setEnvironment({ NODE_ANALYTICS_PROVIDER: 'posthog' });
+    setEnvironment({ NODE_POSTHOG_API_KEY: 'phc_test_key' });
+    setEnvironment({ NODE_POSTHOG_HOST: 'https://app.posthog.com' });
 };
 
 const clearAnalyticsEnvironment = () => {
-    delete process.env.NODE_ANALYTICS_PROVIDER;
-    delete process.env.NODE_UMAMI_INGEST_HOST;
-    delete process.env.NODE_UMAMI_HOST;
-    delete process.env.NODE_UMAMI_WEBSITE_ID;
-    delete process.env.NODE_POSTHOG_API_KEY;
-    delete process.env.NODE_POSTHOG_HOST;
+    setEnvironment({ NODE_ANALYTICS_PROVIDER: undefined });
+    setEnvironment({ NODE_UMAMI_INGEST_HOST: undefined });
+    setEnvironment({ NODE_UMAMI_HOST: undefined });
+    setEnvironment({ NODE_UMAMI_WEBSITE_ID: undefined });
+    setEnvironment({ NODE_POSTHOG_API_KEY: undefined });
+    setEnvironment({ NODE_POSTHOG_HOST: undefined });
     // Set, not deleted: the real default is `true`, and every case in this file except the
     // "consent gate" describe block below is testing what a provider DOES with an event once
     // `emitAnalyticsEvent` has decided to capture it in full — not the gate itself.
-    process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'false';
+    setEnvironment({ NODE_ANALYTICS_REQUIRE_CONSENT: 'false' });
 };
 
 /**
@@ -132,28 +133,28 @@ describe('resolveAnalyticsProvider', () => {
         ['posthog', 'posthog'],
         ['none', 'none']
     ])('selects %s when NODE_ANALYTICS_PROVIDER names it', (configured, expected) => {
-        process.env.NODE_ANALYTICS_PROVIDER = configured;
+        setEnvironment({ NODE_ANALYTICS_PROVIDER: configured });
 
         expect(resolveAnalyticsProvider().name).toBe(expected);
     });
 
     it('memoises, so the environment cannot change under a running process', () => {
         expect(resolveAnalyticsProvider().name).toBe('umami');
-        process.env.NODE_ANALYTICS_PROVIDER = 'none';
+        setEnvironment({ NODE_ANALYTICS_PROVIDER: 'none' });
 
         expect(resolveAnalyticsProvider().name).toBe('umami');
     });
 
     it('re-reads the environment after a reset', () => {
         resolveAnalyticsProvider();
-        process.env.NODE_ANALYTICS_PROVIDER = 'none';
+        setEnvironment({ NODE_ANALYTICS_PROVIDER: 'none' });
         resetAnalyticsProvider();
 
         expect(resolveAnalyticsProvider().name).toBe('none');
     });
 
     it('refuses an unknown provider name, naming the variable and the allowed set', () => {
-        process.env.NODE_ANALYTICS_PROVIDER = 'umamii';
+        setEnvironment({ NODE_ANALYTICS_PROVIDER: 'umamii' });
 
         expect(() => resolveAnalyticsProvider()).toThrow(
             'Unknown NODE_ANALYTICS_PROVIDER: "umamii". Allowed: umami, posthog, none.'
@@ -189,7 +190,7 @@ describe('the umami provider', () => {
 
     it('tolerates a trailing slash on the host, because someone will paste one', () => {
         configureUmami();
-        process.env.NODE_UMAMI_INGEST_HOST = 'http://umami:3000/';
+        setEnvironment({ NODE_UMAMI_INGEST_HOST: 'http://umami:3000/' });
         emitAnalyticsEvent({
             analyticsConsent: true,
             distinctId: 'u1',
@@ -202,9 +203,9 @@ describe('the umami provider', () => {
     it('falls back to the public host when no ingest host is set', () => {
         // Correct only where the API and the browser reach Umami at the same address, which is
         // why it is a fallback rather than the setting.
-        process.env.NODE_ANALYTICS_PROVIDER = 'umami';
-        process.env.NODE_UMAMI_HOST = 'https://analytics.example.com';
-        process.env.NODE_UMAMI_WEBSITE_ID = 'site-uuid';
+        setEnvironment({ NODE_ANALYTICS_PROVIDER: 'umami' });
+        setEnvironment({ NODE_UMAMI_HOST: 'https://analytics.example.com' });
+        setEnvironment({ NODE_UMAMI_WEBSITE_ID: 'site-uuid' });
         emitAnalyticsEvent({
             analyticsConsent: true,
             distinctId: 'u1',
@@ -356,8 +357,8 @@ describe('the umami provider', () => {
     });
 
     it('sends nothing, and warns once, when the website id is missing', () => {
-        process.env.NODE_ANALYTICS_PROVIDER = 'umami';
-        process.env.NODE_UMAMI_INGEST_HOST = 'http://umami:3000';
+        setEnvironment({ NODE_ANALYTICS_PROVIDER: 'umami' });
+        setEnvironment({ NODE_UMAMI_INGEST_HOST: 'http://umami:3000' });
 
         emitAnalyticsEvent({
             analyticsConsent: true,
@@ -476,7 +477,7 @@ describe('the posthog provider', () => {
     });
 
     it('sends nothing, and warns once, when the credentials are missing', () => {
-        process.env.NODE_ANALYTICS_PROVIDER = 'posthog';
+        setEnvironment({ NODE_ANALYTICS_PROVIDER: 'posthog' });
 
         emitAnalyticsEvent({
             analyticsConsent: true,
@@ -498,10 +499,10 @@ describe('the posthog provider', () => {
 
 describe('the none provider', () => {
     it('reaches no backend at all, and says nothing about it', () => {
-        process.env.NODE_ANALYTICS_PROVIDER = 'none';
+        setEnvironment({ NODE_ANALYTICS_PROVIDER: 'none' });
         // Configured credentials must not tempt it: `none` is a stated choice, not a fallback.
-        process.env.NODE_UMAMI_INGEST_HOST = 'http://umami:3000';
-        process.env.NODE_UMAMI_WEBSITE_ID = 'site-uuid';
+        setEnvironment({ NODE_UMAMI_INGEST_HOST: 'http://umami:3000' });
+        setEnvironment({ NODE_UMAMI_WEBSITE_ID: 'site-uuid' });
 
         emitAnalyticsEvent({
             analyticsConsent: true,
@@ -521,7 +522,7 @@ describe('the none provider', () => {
      * code path no request ever exercises.
      */
     it('shuts down cleanly, so selecting it cannot break process exit', () => {
-        process.env.NODE_ANALYTICS_PROVIDER = 'none';
+        setEnvironment({ NODE_ANALYTICS_PROVIDER: 'none' });
         emitAnalyticsEvent({
             analyticsConsent: true,
             distinctId: 'u1',
@@ -552,7 +553,7 @@ describe('shutdownAnalytics', () => {
     it('resolves without resolving a provider when none was ever used', () => {
         // Otherwise a misconfigured NODE_ANALYTICS_PROVIDER would throw on the way OUT of a
         // process that never emitted an event, turning a config typo into a crashing shutdown.
-        process.env.NODE_ANALYTICS_PROVIDER = 'nonsense';
+        setEnvironment({ NODE_ANALYTICS_PROVIDER: 'nonsense' });
 
         return expect(shutdownAnalytics()).resolves.toBeUndefined();
     });
@@ -623,7 +624,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
     };
 
     it('captures in full when the gate is off, regardless of consent', () => {
-        process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'false';
+        setEnvironment({ NODE_ANALYTICS_REQUIRE_CONSENT: 'false' });
         configureUmami();
 
         emitAnalyticsEvent({ ...baseEvent, analyticsConsent: false });
@@ -632,7 +633,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
     });
 
     it('captures in full when consent is granted', () => {
-        process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
+        setEnvironment({ NODE_ANALYTICS_REQUIRE_CONSENT: 'true' });
         configureUmami();
 
         emitAnalyticsEvent({ ...baseEvent, analyticsConsent: true });
@@ -642,7 +643,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
     });
 
     it('drops the event outright when consent is denied', () => {
-        process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
+        setEnvironment({ NODE_ANALYTICS_REQUIRE_CONSENT: 'true' });
         configureUmami();
 
         emitAnalyticsEvent({ ...baseEvent, analyticsConsent: false });
@@ -651,7 +652,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
     });
 
     it('never lets the internal consent field itself reach the provider', () => {
-        process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
+        setEnvironment({ NODE_ANALYTICS_REQUIRE_CONSENT: 'true' });
         configureUmami();
 
         emitAnalyticsEvent({ ...baseEvent, analyticsConsent: true });
@@ -660,7 +661,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
     });
 
     it('defaults to required when the variable is unset — Art. 25(2), the private setting first', () => {
-        delete process.env.NODE_ANALYTICS_REQUIRE_CONSENT;
+        setEnvironment({ NODE_ANALYTICS_REQUIRE_CONSENT: undefined });
         configureUmami();
 
         emitAnalyticsEvent({ ...baseEvent, analyticsConsent: false });

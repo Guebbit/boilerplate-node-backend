@@ -142,8 +142,8 @@ populations**:
 The two numbers will not match, and should not. Sharing the threshold while differing on the
 population is the intended arrangement.
 
-Both settings are read **per call** rather than captured at import, so an operator changing an env
-var affects the next request.
+Both settings are read through their slice on every call rather than captured at import, and the
+slice parses the environment once per process: a changed variable takes effect on restart.
 
 ## Related pages
 

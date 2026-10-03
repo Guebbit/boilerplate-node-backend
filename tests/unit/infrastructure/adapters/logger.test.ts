@@ -23,6 +23,7 @@ import {
     resolveConsoleFormat,
     resolvePersonalFieldMode
 } from '@infrastructure/adapters/logger';
+import { setEnvironment } from '@tests/environment';
 
 describe('redactSensitiveFields', () => {
     it('returns primitives unchanged', () => {
@@ -162,15 +163,8 @@ describe('serializeError', () => {
 });
 
 describe('serializeError — the production stack guard', () => {
-    const originalEnvironment = process.env.NODE_ENV;
-
-    afterEach(() => {
-        if (originalEnvironment === undefined) delete process.env.NODE_ENV;
-        else process.env.NODE_ENV = originalEnvironment;
-    });
-
     it('includes the stack outside production, where it is the useful part', () => {
-        process.env.NODE_ENV = 'development';
+        setEnvironment({ NODE_ENV: 'development' });
 
         expect(serializeError(new Error('boom'))).toHaveProperty('stack');
     });
@@ -179,14 +173,14 @@ describe('serializeError — the production stack guard', () => {
         // A stack trace names absolute paths and dependency internals. Locally that is debugging;
         // in an aggregated production log it is a map of the filesystem handed to anyone with
         // read access to the log tool. Nothing asserted this, so both mutants of the guard lived.
-        process.env.NODE_ENV = 'production';
+        setEnvironment({ NODE_ENV: 'production' });
 
         expect(serializeError(new Error('boom'))).not.toHaveProperty('stack');
     });
 
     it('still reports name and message in production', () => {
         // Omitting the stack must not degrade into omitting the error.
-        process.env.NODE_ENV = 'production';
+        setEnvironment({ NODE_ENV: 'production' });
 
         expect(serializeError(new Error('boom'))).toMatchObject({
             name: 'Error',
@@ -197,15 +191,14 @@ describe('serializeError — the production stack guard', () => {
     it.each([undefined, '', 'staging'])(
         'keeps the stack out of the log when NODE_ENV is %p: only development and test relax it',
         (value) => {
-            if (value === undefined) delete process.env.NODE_ENV;
-            else process.env.NODE_ENV = value;
+            setEnvironment({ NODE_ENV: value });
 
             expect(serializeError(new Error('boom'))).not.toHaveProperty('stack');
         }
     );
 
     it.each(['development', 'test'])('keeps the stack when NODE_ENV is %s', (value) => {
-        process.env.NODE_ENV = value;
+        setEnvironment({ NODE_ENV: value });
 
         expect(serializeError(new Error('boom'))).toHaveProperty('stack');
     });
@@ -366,20 +359,10 @@ describe('the sensitive-field policy, entry by entry', () => {
 });
 
 describe('the personal-data policy', () => {
-    const originalMode = process.env.NODE_LOG_PERSONAL_FIELDS;
-    const originalKey = process.env.NODE_PSEUDONYM_KEY;
-
-    afterEach(() => {
-        if (originalMode === undefined) delete process.env.NODE_LOG_PERSONAL_FIELDS;
-        else process.env.NODE_LOG_PERSONAL_FIELDS = originalMode;
-        if (originalKey === undefined) delete process.env.NODE_PSEUDONYM_KEY;
-        else process.env.NODE_PSEUDONYM_KEY = originalKey;
-    });
-
     // Table-driven over the REAL set, same reasoning as the sensitive-field policy above: a field
     // added to PERSONAL_FIELDS is covered automatically, and one removed makes its case vanish.
     it.each([...PERSONAL_FIELDS])('hashes %s by default — correlatable, not readable', (field) => {
-        delete process.env.NODE_LOG_PERSONAL_FIELDS;
+        setEnvironment({ NODE_LOG_PERSONAL_FIELDS: undefined });
         const redacted = redactSensitiveFields({ [field]: 'the-value' }) as Record<string, unknown>;
 
         expect(redacted[field]).toMatch(/^hmac:[\da-f]{12}$/);
@@ -415,13 +398,13 @@ describe('the personal-data policy', () => {
     it('hashes the SAME input to a DIFFERENT digest under a different NODE_PSEUDONYM_KEY', () => {
         // The whole point of a KEYED hash (D7, GDPR pseudonymisation): a digest is only stable
         // for callers who share the key, not universally guessable like a bare sha256 would be.
-        delete process.env.NODE_PSEUDONYM_KEY;
+        setEnvironment({ NODE_PSEUDONYM_KEY: undefined });
         const withDefaultKey = redactSensitiveFields({ email: 'user@example.com' }) as Record<
             string,
             unknown
         >;
 
-        process.env.NODE_PSEUDONYM_KEY = 'a-different-key-entirely';
+        setEnvironment({ NODE_PSEUDONYM_KEY: 'a-different-key-entirely' });
         const withCustomKey = redactSensitiveFields({ email: 'user@example.com' }) as Record<
             string,
             unknown
@@ -431,7 +414,7 @@ describe('the personal-data policy', () => {
     });
 
     it('drops personal fields entirely under NODE_LOG_PERSONAL_FIELDS=redact', () => {
-        process.env.NODE_LOG_PERSONAL_FIELDS = 'redact';
+        setEnvironment({ NODE_LOG_PERSONAL_FIELDS: 'redact' });
 
         const redacted = redactSensitiveFields({ email: 'user@example.com' }) as Record<
             string,
@@ -442,7 +425,7 @@ describe('the personal-data policy', () => {
     });
 
     it('leaves personal fields untouched under NODE_LOG_PERSONAL_FIELDS=plain', () => {
-        process.env.NODE_LOG_PERSONAL_FIELDS = 'plain';
+        setEnvironment({ NODE_LOG_PERSONAL_FIELDS: 'plain' });
 
         const redacted = redactSensitiveFields({ email: 'user@example.com' }) as Record<
             string,
@@ -453,7 +436,7 @@ describe('the personal-data policy', () => {
     });
 
     it('refuses an unrecognised value instead of silently falling back to hash', () => {
-        process.env.NODE_LOG_PERSONAL_FIELDS = 'not-a-real-mode';
+        setEnvironment({ NODE_LOG_PERSONAL_FIELDS: 'not-a-real-mode' });
 
         expect(() => resolvePersonalFieldMode()).toThrow(
             /NODE_LOG_PERSONAL_FIELDS: expected one of hash, redact, plain/
@@ -546,41 +529,30 @@ describe('redactFormat — the winston wiring', () => {
 });
 
 describe('resolveLogLevel', () => {
-    const originalLevel = process.env.NODE_LOG_LEVEL;
-    const originalEnvironment = process.env.NODE_ENV;
-
-    afterEach(() => {
-        if (originalLevel === undefined) delete process.env.NODE_LOG_LEVEL;
-        else process.env.NODE_LOG_LEVEL = originalLevel;
-        if (originalEnvironment === undefined) delete process.env.NODE_ENV;
-        else process.env.NODE_ENV = originalEnvironment;
-    });
-
     it('prefers an explicit NODE_LOG_LEVEL over anything else', () => {
-        process.env.NODE_LOG_LEVEL = 'silly';
-        process.env.NODE_ENV = 'production';
+        setEnvironment({ NODE_LOG_LEVEL: 'silly' });
+        setEnvironment({ NODE_ENV: 'production' });
 
         expect(resolveLogLevel()).toBe('silly');
     });
 
     it('is quiet in production, to avoid paying ingestion cost for noise', () => {
-        delete process.env.NODE_LOG_LEVEL;
-        process.env.NODE_ENV = 'production';
+        setEnvironment({ NODE_LOG_LEVEL: undefined });
+        setEnvironment({ NODE_ENV: 'production' });
 
         expect(resolveLogLevel()).toBe('info');
     });
 
     it('is verbose everywhere else, because that is where someone is watching', () => {
-        delete process.env.NODE_LOG_LEVEL;
-        process.env.NODE_ENV = 'development';
+        setEnvironment({ NODE_LOG_LEVEL: undefined });
+        setEnvironment({ NODE_ENV: 'development' });
 
         expect(resolveLogLevel()).toBe('debug');
     });
 
     it.each([undefined, 'staging'])('is quiet when NODE_ENV is %p, like a deployment', (value) => {
-        delete process.env.NODE_LOG_LEVEL;
-        if (value === undefined) delete process.env.NODE_ENV;
-        else process.env.NODE_ENV = value;
+        setEnvironment({ NODE_LOG_LEVEL: undefined });
+        setEnvironment({ NODE_ENV: value });
 
         expect(resolveLogLevel()).toBe('info');
     });
@@ -588,8 +560,8 @@ describe('resolveLogLevel', () => {
     it('treats an empty NODE_LOG_LEVEL as unset rather than as a level', () => {
         // An empty string in the environment is a variable someone meant to fill in; passing it
         // to winston would silence the logger completely.
-        process.env.NODE_LOG_LEVEL = '';
-        process.env.NODE_ENV = 'development';
+        setEnvironment({ NODE_LOG_LEVEL: '' });
+        setEnvironment({ NODE_ENV: 'development' });
 
         expect(resolveLogLevel()).toBe('debug');
     });
@@ -622,12 +594,9 @@ describe('resolveConsoleFormat', () => {
      */
     const LEVEL = Symbol.for('level');
 
-    const originalEnvironment = process.env.NODE_ENV;
     const originalIsTty = process.stdout.isTTY;
 
     afterEach(() => {
-        if (originalEnvironment === undefined) delete process.env.NODE_ENV;
-        else process.env.NODE_ENV = originalEnvironment;
         setTty(originalIsTty);
     });
 
@@ -646,7 +615,7 @@ describe('resolveConsoleFormat', () => {
     it('emits parseable JSON when stdout is not a terminal, which is every collected runtime', () => {
         // A container writing to its log file, a pipe, a CI job: nobody is reading this by eye
         // and something downstream has to parse it.
-        process.env.NODE_ENV = 'development';
+        setEnvironment({ NODE_ENV: 'development' });
         setTty(false);
 
         expect(() => JSON.parse(render())).not.toThrow();
@@ -654,7 +623,7 @@ describe('resolveConsoleFormat', () => {
     });
 
     it('emits the human layout only when a person is watching a terminal', () => {
-        process.env.NODE_ENV = 'development';
+        setEnvironment({ NODE_ENV: 'development' });
         setTty(true);
 
         const line = render();
@@ -664,7 +633,7 @@ describe('resolveConsoleFormat', () => {
     });
 
     it('stays JSON when NODE_ENV is unset, even on a terminal', () => {
-        delete process.env.NODE_ENV;
+        setEnvironment({ NODE_ENV: undefined });
         setTty(true);
 
         expect(() => JSON.parse(render())).not.toThrow();
@@ -673,7 +642,7 @@ describe('resolveConsoleFormat', () => {
     it('stays JSON in production even on a terminal', () => {
         // A production container started interactively still has its logs collected, so the
         // terminal says nothing about who ends up reading them.
-        process.env.NODE_ENV = 'production';
+        setEnvironment({ NODE_ENV: 'production' });
         setTty(true);
 
         expect(() => JSON.parse(render())).not.toThrow();
@@ -698,19 +667,13 @@ describe('the two loggers are configured independently', () => {
      * The module is re-imported per case because both loggers are constructed at import time
      * from the environment as it stands then.
      */
-    const originalLevel = process.env.NODE_LOG_LEVEL;
-    const originalEnvironment = process.env.NODE_ENV;
 
     afterEach(() => {
-        if (originalLevel === undefined) delete process.env.NODE_LOG_LEVEL;
-        else process.env.NODE_LOG_LEVEL = originalLevel;
-        if (originalEnvironment === undefined) delete process.env.NODE_ENV;
-        else process.env.NODE_ENV = originalEnvironment;
         jest.resetModules();
     });
 
     it('lets NODE_LOG_LEVEL quieten the ordinary logger', async () => {
-        process.env.NODE_LOG_LEVEL = 'error';
+        setEnvironment({ NODE_LOG_LEVEL: 'error' });
 
         const { logger: appLogger } = await loadLoggers();
 
@@ -724,7 +687,7 @@ describe('the two loggers are configured independently', () => {
     it('does NOT let NODE_LOG_LEVEL quieten the audit logger', async () => {
         // The compliance property. Set the app to `error` and audit records must still be
         // written — otherwise one environment variable erases the trail.
-        process.env.NODE_LOG_LEVEL = 'error';
+        setEnvironment({ NODE_LOG_LEVEL: 'error' });
 
         const { auditLogger: audit } = await loadLoggers();
 
@@ -732,8 +695,8 @@ describe('the two loggers are configured independently', () => {
     });
 
     it('keeps the audit logger at info even in production', async () => {
-        delete process.env.NODE_LOG_LEVEL;
-        process.env.NODE_ENV = 'production';
+        setEnvironment({ NODE_LOG_LEVEL: undefined });
+        setEnvironment({ NODE_ENV: 'production' });
 
         const { auditLogger: audit } = await loadLoggers();
 

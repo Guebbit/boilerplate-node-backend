@@ -386,8 +386,8 @@ when the shop offers a longer withdrawal period.
 
 The VAT RATES charged against an order line are a different thing with a different owner — see
 [products](./products.md#configuration); this module only freezes onto the order the rate `products`
-hands it at checkout. Every getter is read fresh per call (`config.ts`), so a correction needs no
-restart.
+hands it at checkout. Every getter asks its slice (`config.ts`) per call, and the slice parses once per process, so a
+correction takes effect on restart.
 
 ## Related pages
 

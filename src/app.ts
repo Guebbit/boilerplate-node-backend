@@ -12,16 +12,20 @@
  * (`cluster.ts`'s worker branch, `dev:docker`) actually wants a listening server.
  */
 
+// First: the tracing setup below already reads config, and the config store reads the environment
+// once — `.env` has to be loaded before that read.
+import './infrastructure/config/dotenv';
+
 // OTel must initialize before express/http/mongoose are imported. That only holds when
 // `cluster.ts` is the entry and imports this file dynamically: as the entry itself, the static
 // imports below are hoisted above this call.
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
 startTracing();
 
-import 'dotenv/config';
 import express from 'express';
 import type { Express } from 'express';
 import type { Server } from 'node:http';
+import { installEnvironment, type EnvironmentOverrides } from '@infrastructure/config/store';
 import { start as startDatabase } from '@infrastructure/runtime/database';
 import { startCache } from '@infrastructure/adapters/cache';
 import { startQueue } from '@infrastructure/adapters/queue';
@@ -79,6 +83,19 @@ export interface AppInstance {
     stop: () => Promise<void>;
 }
 
+/** What {@link createApp} takes. */
+export interface AppOptions {
+    /**
+     * Environment variables to run this app with, laid over the process environment (`undefined`
+     * unsets one). They pass through the same parser and boot gate as the real ones.
+     *
+     * Process-wide, because the config slices are: the last app built wins. Read-at-import
+     * settings (a limiter's budget) only see it if it was installed before the first import of
+     * this file — `scenarios/apply.ts` does that with `installEnvironment` itself.
+     */
+    env?: EnvironmentOverrides;
+}
+
 /**
  * Builds one Express application, synchronously: validates every module's required config,
  * attaches its domain-event handlers, lets each pull whatever cross-module lookup it needs
@@ -88,10 +105,14 @@ export interface AppInstance {
  * only wants `.app` (a supertest agent) needs neither.
  *
  * Callable more than once — each call is an independent instance with its own `activeServer`/
- * `shutdownPromise` closure, which is what lets `boot`/`start`/`stop` take no config of their own
- * yet (SK-D4 adds a config parameter here once this shape exists to inject it into).
+ * `shutdownPromise` closure, so `boot`/`start`/`stop` take no config of their own: the one
+ * parameter is {@link AppOptions}, applied before anything below reads a setting.
+ *
+ * @param options - the environment to build with, if not the process's own
  */
-export const createApp = (): AppInstance => {
+export const createApp = (options: AppOptions = {}): AppInstance => {
+    if (options.env) installEnvironment(options.env);
+
     const app = express();
 
     /** The server this instance is currently listening on, if any. */

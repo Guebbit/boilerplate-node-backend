@@ -16,9 +16,11 @@ import {
     pathNames,
     requiredPaths
 } from '@tests/schema';
+import { currentEnvironment } from '@infrastructure/config/store';
 
 /** The retention window the schema was built with, in seconds. Mirrors the model's own default. */
-const RETENTION_SECONDS = Number(process.env.NODE_AUDIT_RETENTION_DAYS ?? 90) * 24 * 60 * 60;
+const RETENTION_SECONDS =
+    Number(currentEnvironment().NODE_AUDIT_RETENTION_DAYS ?? 90) * 24 * 60 * 60;
 
 describe('auditLogSchema — what an entry must carry', () => {
     it('requires who, what, how it went, when and at what level', () => {

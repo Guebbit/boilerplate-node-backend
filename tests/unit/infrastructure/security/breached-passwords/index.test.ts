@@ -12,6 +12,7 @@ import {
     checkPasswordBreach,
     assertPasswordNotBreached
 } from '@infrastructure/security/breached-passwords';
+import { setEnvironment } from '@tests/environment';
 
 /** In the committed list — see `scripts/ops/refresh-breached-passwords.ts`. */
 const IN_LIST_PASSWORD = 'Password1!';
@@ -24,17 +25,9 @@ const textResponse = (body: string, ok = true): Response =>
     ({ ok, status: ok ? 200 : 503, text: () => Promise.resolve(body) }) as Response;
 
 /** The saved switches, restored after every case — the same pattern `antibot-providers` uses. */
-const original = {
-    list: process.env.NODE_PASSWORD_BREACH_LIST,
-    hibp: process.env.NODE_PASSWORD_BREACH_HIBP
-};
 
 afterEach(() => {
     jest.restoreAllMocks();
-    if (original.list === undefined) delete process.env.NODE_PASSWORD_BREACH_LIST;
-    else process.env.NODE_PASSWORD_BREACH_LIST = original.list;
-    if (original.hibp === undefined) delete process.env.NODE_PASSWORD_BREACH_HIBP;
-    else process.env.NODE_PASSWORD_BREACH_HIBP = original.hibp;
 });
 
 describe('isInBundledBreachList', () => {
@@ -87,8 +80,8 @@ describe('checkHibpRange', () => {
 
 describe('checkPasswordBreach', () => {
     it('short-circuits on rung 1 without calling fetch', async () => {
-        process.env.NODE_PASSWORD_BREACH_LIST = 'on';
-        process.env.NODE_PASSWORD_BREACH_HIBP = 'on';
+        setEnvironment({ NODE_PASSWORD_BREACH_LIST: 'on' });
+        setEnvironment({ NODE_PASSWORD_BREACH_HIBP: 'on' });
         const fetchSpy = jest.spyOn(globalThis, 'fetch');
 
         await expect(checkPasswordBreach(IN_LIST_PASSWORD)).resolves.toEqual({ breached: true });
@@ -96,8 +89,8 @@ describe('checkPasswordBreach', () => {
     });
 
     it('skips rung 2 entirely when it is disabled', async () => {
-        process.env.NODE_PASSWORD_BREACH_LIST = 'on';
-        process.env.NODE_PASSWORD_BREACH_HIBP = 'off';
+        setEnvironment({ NODE_PASSWORD_BREACH_LIST: 'on' });
+        setEnvironment({ NODE_PASSWORD_BREACH_HIBP: 'off' });
         const fetchSpy = jest.spyOn(globalThis, 'fetch');
 
         await expect(checkPasswordBreach(NOT_IN_LIST_PASSWORD)).resolves.toEqual({
@@ -107,8 +100,8 @@ describe('checkPasswordBreach', () => {
     });
 
     it('falls through to rung 2 when rung 1 misses and HIBP is enabled', async () => {
-        process.env.NODE_PASSWORD_BREACH_LIST = 'on';
-        process.env.NODE_PASSWORD_BREACH_HIBP = 'on';
+        setEnvironment({ NODE_PASSWORD_BREACH_LIST: 'on' });
+        setEnvironment({ NODE_PASSWORD_BREACH_HIBP: 'on' });
         jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(textResponse(''));
 
         await expect(checkPasswordBreach(NOT_IN_LIST_PASSWORD)).resolves.toEqual({
@@ -119,7 +112,7 @@ describe('checkPasswordBreach', () => {
 
 describe('assertPasswordNotBreached', () => {
     it('returns a validation error, never saying which rung caught it', async () => {
-        process.env.NODE_PASSWORD_BREACH_LIST = 'on';
+        setEnvironment({ NODE_PASSWORD_BREACH_LIST: 'on' });
 
         await expect(assertPasswordNotBreached(IN_LIST_PASSWORD)).resolves.toEqual([
             {
@@ -131,8 +124,8 @@ describe('assertPasswordNotBreached', () => {
     });
 
     it('returns no errors for an acceptable password', async () => {
-        process.env.NODE_PASSWORD_BREACH_LIST = 'on';
-        process.env.NODE_PASSWORD_BREACH_HIBP = 'off';
+        setEnvironment({ NODE_PASSWORD_BREACH_LIST: 'on' });
+        setEnvironment({ NODE_PASSWORD_BREACH_HIBP: 'off' });
 
         await expect(assertPasswordNotBreached(NOT_IN_LIST_PASSWORD)).resolves.toEqual([]);
     });

@@ -10,6 +10,7 @@
 import { Types } from 'mongoose';
 import { registerTranslationPort, type TranslationPort } from '@kernel/translation';
 import { freezeOrderLines, resolveSnapshotProducts } from '../../services/snapshot';
+import { setEnvironment } from '@tests/environment';
 
 /** A port double whose methods are jest mocks by default, overridable per test. */
 const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => ({
@@ -90,17 +91,12 @@ describe('resolveSnapshotProducts', () => {
 });
 
 describe('freezeOrderLines — the VAT rate', () => {
-    const ORIGINAL_DEFAULT = process.env.NODE_VAT_RATE_DEFAULT;
-    const ORIGINAL_REDUCED = process.env.NODE_VAT_RATE_REDUCED;
-
     afterEach(() => {
-        process.env.NODE_VAT_RATE_DEFAULT = ORIGINAL_DEFAULT;
-        process.env.NODE_VAT_RATE_REDUCED = ORIGINAL_REDUCED;
         registerTranslationPort(undefined);
     });
 
     it("resolves an absent taxClass to the shop's default rate", async () => {
-        process.env.NODE_VAT_RATE_DEFAULT = '0.22';
+        setEnvironment({ NODE_VAT_RATE_DEFAULT: '0.22' });
         registerTranslationPort(fakePort());
 
         const [item] = await freezeOrderLines(
@@ -113,8 +109,8 @@ describe('freezeOrderLines — the VAT rate', () => {
     });
 
     it('resolves "reduced" to the reduced rate, not the default', async () => {
-        process.env.NODE_VAT_RATE_DEFAULT = '0.22';
-        process.env.NODE_VAT_RATE_REDUCED = '0.1';
+        setEnvironment({ NODE_VAT_RATE_DEFAULT: '0.22' });
+        setEnvironment({ NODE_VAT_RATE_REDUCED: '0.1' });
         registerTranslationPort(fakePort());
 
         const [item] = await freezeOrderLines(

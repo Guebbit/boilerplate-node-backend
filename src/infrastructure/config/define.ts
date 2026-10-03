@@ -12,7 +12,7 @@
  */
 
 import type { Field, FieldDocument, Presence } from './fields';
-import { currentEnvironment, type Environment } from './store';
+import { currentEnvironment, environmentVersion, type Environment } from './store';
 
 /** The fields of one slice, keyed by the environment variable each one reads. */
 export type Shape = Readonly<Record<string, Field<unknown>>>;
@@ -201,8 +201,8 @@ const presenceProblems = (
 };
 
 /**
- * Turns a definition into its accessor. The accessor parses lazily, memoises per set of raw
- * values, and throws a {@link ConfigError} when a value is refused.
+ * Turns a definition into its accessor. The accessor parses on first use, keeps the result until
+ * the store changes, and throws a {@link ConfigError} when a value is refused.
  *
  * @param definition - name, shape and optional cross-field check
  * @returns the accessor, carrying its type-erased slice as `.slice`
@@ -211,7 +211,6 @@ export const defineConfig = <TShape extends Shape>(
     definition: ConfigDefinition<TShape>
 ): ConfigAccessor<TShape> => {
     const info = describeShape(definition.shape);
-    const names = info.map(({ name }) => name);
 
     const slice: ConfigSlice = {
         name: definition.name,
@@ -229,18 +228,19 @@ export const defineConfig = <TShape extends Shape>(
         }
     };
 
-    let memo: { raws: readonly (string | undefined)[]; value: Parsed<TShape> } | undefined;
+    // The parsed values and the store version they were parsed at. A refusal is never kept, so a
+    // bad value throws on every read until it is fixed.
+    let memo: { version: number; value: Parsed<TShape> } | undefined;
     const read = (): Parsed<TShape> => {
-        const environment = currentEnvironment();
-        const raws = names.map((name) => environment[name]);
-        if (memo?.raws.every((raw, index) => raw === raws[index])) return memo.value;
+        const version = environmentVersion();
+        if (memo?.version === version) return memo.value;
 
-        const parsed = parseShape(definition.shape, environment);
+        const parsed = parseShape(definition.shape, currentEnvironment());
         if (!parsed.ok)
             throw new ConfigError(
                 `Invalid configuration (${definition.name}): ${parsed.issues.join('; ')}`
             );
-        memo = { raws, value: parsed.value };
+        memo = { version, value: parsed.value };
         return parsed.value;
     };
 

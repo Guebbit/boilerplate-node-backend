@@ -52,7 +52,7 @@ export const availableMemoryMb = (): number => {
  *
  * `parseEnv` rather than `process.loadEnvFile()`, for the same reason `jest.config.js` gives: the
  * latter merges into `process.env`, and this script hands its environment to every jest it spawns.
- * The app's real rate limits would then land before `tests/support/setup.ts` can raise them, and
+ * The app's real rate limits would then land before `tests/support/setup-environment.ts` can raise them, and
  * the concurrency suites would answer 429 to their own fixtures. Only the sizing knobs below are
  * ever taken out of the result.
  *

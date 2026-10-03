@@ -8,24 +8,12 @@
  */
 import { isHumanChallengeEnabled } from '@infrastructure/adapters/antibot-providers';
 import { withoutHumanChallenge } from '@scenarios/support/no-human-challenge';
-
-/** The two variables an altcha provider needs, saved so each case restores what was there. */
-const KEYS = ['NODE_ANTIBOT_PROVIDER', 'NODE_ANTIBOT_ALTCHA_SECRET'] as const;
-const ORIGINAL = Object.fromEntries(KEYS.map((key) => [key, process.env[key]]));
-
-/** Put `key` back to `value`, deleting it when it was unset. */
-const restore = (key: string, value: string | undefined) => {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-};
+import { currentEnvironment } from '@infrastructure/config/store';
+import { setEnvironment } from '@tests/environment';
 
 beforeEach(() => {
-    process.env.NODE_ANTIBOT_PROVIDER = 'altcha';
-    process.env.NODE_ANTIBOT_ALTCHA_SECRET = 'a-test-altcha-signing-secret';
-});
-
-afterEach(() => {
-    for (const key of KEYS) restore(key, ORIGINAL[key]);
+    setEnvironment({ NODE_ANTIBOT_PROVIDER: 'altcha' });
+    setEnvironment({ NODE_ANTIBOT_ALTCHA_SECRET: 'a-test-altcha-signing-secret' });
 });
 
 describe('withoutHumanChallenge', () => {
@@ -49,14 +37,14 @@ describe('withoutHumanChallenge', () => {
             withoutHumanChallenge(() => Promise.reject(new Error('the flows broke')))
         ).rejects.toThrow('the flows broke');
 
-        expect(process.env.NODE_ANTIBOT_PROVIDER).toBe('altcha');
+        expect(currentEnvironment().NODE_ANTIBOT_PROVIDER).toBe('altcha');
     });
 
     it('leaves an unset provider unset, not the string "undefined"', async () => {
-        delete process.env.NODE_ANTIBOT_PROVIDER;
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: undefined });
 
         await withoutHumanChallenge(() => Promise.resolve());
 
-        expect('NODE_ANTIBOT_PROVIDER' in process.env).toBe(false);
+        expect('NODE_ANTIBOT_PROVIDER' in currentEnvironment()).toBe(false);
     });
 });

@@ -5,6 +5,7 @@
  * the two decisions that proof rests on: "touching" keeps a node in, and no slice means no-op.
  */
 import type { IgnorerPath } from '../../../../../scripts/mutation/ci/slice-ignorer';
+import { setProcessEnvironment } from '@tests/environment';
 import {
     SLICE_IGNORE_REASON,
     outsideSlice,
@@ -21,9 +22,7 @@ const node = (start: number, end: number) => ({ start: { line: start }, end: { l
 const pluginWith = async (
     slice: string | undefined
 ): Promise<(path: IgnorerPath) => string | undefined> => {
-    const saved = process.env.MUTATION_SLICE;
-    if (slice === undefined) delete process.env.MUTATION_SLICE;
-    else process.env.MUTATION_SLICE = slice;
+    setProcessEnvironment({ MUTATION_SLICE: slice });
 
     let shouldIgnore: ((path: IgnorerPath) => string | undefined) | undefined;
     await jest.isolateModulesAsync(async () => {
@@ -31,8 +30,6 @@ const pluginWith = async (
         shouldIgnore = strykerPlugins[0].value.shouldIgnore;
     });
 
-    if (saved === undefined) delete process.env.MUTATION_SLICE;
-    else process.env.MUTATION_SLICE = saved;
     // Assigned inside the callback above, which `isolateModulesAsync` has awaited by now.
     return shouldIgnore!;
 };
