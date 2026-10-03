@@ -49,6 +49,7 @@ const CREATE_USER_KEY = 'users.any.create';
  * `ConflictError` to 409 by `instanceof`, never by knowing `access` exists.
  */
 export class AccessInvariantError extends ConflictError {
+    /** @param message - which invariant the write would have broken. */
     constructor(message: string) {
         super(message);
         this.name = 'AccessInvariantError';
