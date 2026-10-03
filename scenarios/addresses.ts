@@ -5,17 +5,19 @@
  * every order the flow runner places for that customer freezes a copy of as its `shippingAddress`
  * (and `billingAddress`) — which is what makes "an order remembers where it was sent" checkable
  * against a book that can still change. Staff and administrators do not shop, so no staff persona
- * keeps an address for checkout.
+ * keeps an address for checkout; the pending-email persona does, as the SECOND customer — the
+ * shopper a two-shoppers journey needs once no staff persona can stand in for one.
  */
 
 import { Types } from 'mongoose';
-import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
+import { SEED_ADMIN_ID, SEED_PENDING_EMAIL_ID, SEED_USER_ID } from '@scenarios/accounts';
 import { type SeedOutcome, insertIfAbsentForOwner } from '@scenarios/seed';
 import { makeAddressBook } from '@modules/addresses/factories';
 import { addressBookRepository } from '@modules/addresses/repository';
 
 /**
- * The seeded books: the owner's (two entries) and the ordinary customer's (one).
+ * The seeded books: the owner's (two entries), the ordinary customer's (one) and the second
+ * customer's (one, its default billing address).
  *
  * No pinned `_id` on the BOOK — `insertIfAbsentForOwner` keys on `userId`, so an id buys no
  * idempotency. Each ENTRY needs one too — the contract requires it — but nothing looks one up by
@@ -70,6 +72,21 @@ export const addressBookFixtures = [
                 street: 'Via Pino 7',
                 city: 'Napoli',
                 zip: '80121',
+                country: 'IT',
+                default: true
+            }
+        ]
+    }),
+    makeAddressBook({
+        userId: SEED_PENDING_EMAIL_ID,
+        items: [
+            {
+                id: new Types.ObjectId().toHexString(),
+                label: 'home',
+                fullName: 'Pia Pending',
+                street: 'Via Pendente 3',
+                city: 'Parma',
+                zip: '43121',
                 country: 'IT',
                 default: true
             }

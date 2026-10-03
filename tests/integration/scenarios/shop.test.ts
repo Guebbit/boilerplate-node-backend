@@ -48,6 +48,7 @@ import {
     SEED_EDITOR_ID,
     SEED_MANAGER_ID,
     SEED_MODERATOR_ID,
+    SEED_PENDING_EMAIL_ID,
     SEED_PENDING_EMAIL_TARGET,
     SEED_SUPPORT_ID,
     SEED_WAREHOUSE_ID,
@@ -522,5 +523,15 @@ describe('conformance: a produced row parses as the response the API would serve
             expect(items.length).toBeGreaterThan(0);
             for (const address of items) expect(() => addressSchema.parse(address)).not.toThrow();
         }
+    });
+
+    // The second customer a two-shoppers journey logs in as: no staff persona can stand in for it.
+    it('gives the second customer a default billing address, and no staff persona one', async () => {
+        const holders = await addressBookModel.find().exec();
+        const owners = holders.map((book) => book.userId.toString());
+
+        expect(owners).toContain(SEED_PENDING_EMAIL_ID);
+        for (const staffId of [SEED_EDITOR_ID, SEED_MANAGER_ID, SEED_MODERATOR_ID, SEED_SUPPORT_ID])
+            expect(owners).not.toContain(staffId);
     });
 });
