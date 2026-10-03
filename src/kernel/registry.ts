@@ -97,7 +97,7 @@ export interface TranslatableTarget {
      * ANY translation write, so a missing entity answers the contract's declared 404 instead of
      * writing orphan translation rows first and only discovering the miss when {@link writeDerived}
      * runs. Supplied by the OWNING module, same reasoning as {@link writeDerived}: `locales` cannot
-     * resolve the target's Mongoose model by collection name to check this itself (SD-09).
+     * resolve the target's Mongoose model by collection name to check this itself.
      *
      * @param entityId - the id exactly as it arrived on the request path — may be malformed
      * @returns whether a document with this id exists
@@ -122,7 +122,7 @@ export interface TranslatableTarget {
      * Copies the fallback-locale row's fields onto this entity's own document — the derived,
      * sortable/indexable column a translated write also updates. Supplied by the OWNING module
      * (see {@link ImageTarget.writeback} for the same shape), so `locales` never has to find the
-     * target's Mongoose model by collection name to reach it (SD-09).
+     * target's Mongoose model by collection name to reach it.
      */
     writeDerived: (entityId: string, fields: Record<string, string | null>) => Promise<void>;
 
