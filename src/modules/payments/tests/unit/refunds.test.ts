@@ -20,6 +20,17 @@ jest.mock('@infrastructure/observability/audit', () => ({
     recordAudit: (...args: unknown[]) => recordAudit(...args)
 }));
 
+/*
+ * The announcement's transaction is replaced too: this suite has no database, and what it asserts
+ * (the audit outcome) does not depend on the outbox row. Atomicity is proved in the integration
+ * suites against a real Mongo.
+ */
+jest.mock('@kernel/outbox', () => ({
+    __esModule: true,
+    ...jest.requireActual('@kernel/outbox'),
+    announceInTransaction: (write: (session: unknown) => Promise<unknown>) => write({})
+}));
+
 afterEach(() => jest.restoreAllMocks());
 
 /** A `succeeded` payment carrying no `providerRef` — the impossible, corrupted state under test. */

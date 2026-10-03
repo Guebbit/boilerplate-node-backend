@@ -40,6 +40,10 @@ declare module '@kernel/events' {
          *
          * `amount` is THIS refund's, not the payment's. `full` says the refund is the whole payment,
          * the one case where a credit note mirrors the invoice instead of apportioning it.
+         *
+         * Delivered through the transactional outbox, written in the transaction that settles the
+         * refund record (`./services/refunds.ts`): at-least-once, so a listener dedupes on
+         * `meta.eventId`.
          */
         'payment.refunded': {
             paymentId: string;

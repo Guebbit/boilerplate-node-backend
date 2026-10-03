@@ -17,7 +17,7 @@
  *           whichever provider actually took the money, even if the deployment has since switched.
  */
 
-import { Types } from 'mongoose';
+import { Types, type ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { t } from '@infrastructure/i18n';
@@ -30,7 +30,8 @@ import {
 import type { AuthContext } from '@types';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { emitDomainEvent } from '@kernel/events';
+import type { DomainEventMap } from '@kernel/events';
+import { announceInTransaction } from '@kernel/outbox';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import {
     orderService,
@@ -239,13 +240,9 @@ const mailRefundIssued = (payment: PaymentDocument, refund: RefundRecord): void 
 };
 
 /**
- * Tell the rest of the system a refund landed: the log line, the audit row, the buyer's mail, and
- * the fact `invoicing` issues a credit note from and `webhooks` fans out.
- *
- * Fire-and-forget, same reasoning as `PAYMENT_SUCCEEDED` in `./settlement.ts`: a slow or failing
- * listener must not delay this call's own caller. Emitted even for the corrupted-row case
- * (`outcome: 'failure'`) — `invoicing` cannot see that distinction, and a credit note is owed
- * either way.
+ * Tell the rest of the system a refund landed: the log line, the audit row and the buyer's mail.
+ * The `payment.refunded` fact itself is not here: it is written with the settlement
+ * ({@link settleRefund}), so it exists exactly when the refund settled.
  *
  * @param payment - the payment after the refund settled
  * @param refund - the record that settled
@@ -275,23 +272,68 @@ const announceRefund = (
     });
     reportRefundedToOrder(payment);
     if (outcome === 'success') mailRefundIssued(payment, refund);
-    void emitDomainEvent(PAYMENT_REFUNDED, {
-        paymentId: String(payment._id),
-        orderId,
-        refundId: String(refund._id),
-        ...(refund.returnId ? { returnId: refund.returnId } : {}),
-        amount: refund.amount,
-        currency: refund.currency,
-        full:
-            toMinorUnits(refund.amount, refund.currency) ===
-            toMinorUnits(payment.amount, payment.currency)
-    });
 };
+
+/**
+ * The `payment.refunded` payload for one settled refund — the fact `invoicing` issues a credit note
+ * from and `webhooks` fans out. Built even for the corrupted-row case (`outcome: 'failure'`):
+ * `invoicing` cannot see that distinction, and a credit note is owed either way.
+ *
+ * @param payment - the payment after the refund settled
+ * @param refund - the record that settled
+ */
+const refundedPayload = (
+    payment: PaymentDocument,
+    refund: RefundRecord
+): DomainEventMap['payment.refunded'] => ({
+    paymentId: String(payment._id),
+    orderId: String(payment.orderId),
+    refundId: String(refund._id),
+    ...(refund.returnId ? { returnId: refund.returnId } : {}),
+    amount: refund.amount,
+    currency: refund.currency,
+    full:
+        toMinorUnits(refund.amount, refund.currency) ===
+        toMinorUnits(payment.amount, payment.currency)
+});
+
+/**
+ * The settlement's writes, inside the caller's transaction: the refund record goes `succeeded`,
+ * and the payment moves to `refunded` when that was the last of it.
+ *
+ * @param payment - the payment the refund belongs to
+ * @param refund - the record being settled
+ * @param fields - see {@link settleRefund}
+ * @param session - the transaction both writes join
+ * @returns the payment as it now stands, or `null` when the record was no longer open
+ */
+const writeSettlement = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    fields: { providerRefundRef?: string; refundedByHand?: true },
+    session: ClientSession
+): Promise<PaymentDocument | null> =>
+    paymentRepository
+        .settleRefund(String(payment._id), String(refund._id), fields, session)
+        .then((settled) => {
+            if (!settled) return null;
+            if (!isFullyRefunded(settled)) return settled;
+            return paymentRepository
+                .updateStatusIfIn(
+                    String(settled.orderId),
+                    [REFUNDABLE_PAYMENT_STATUS],
+                    'refunded',
+                    {},
+                    session
+                )
+                .then((moved) => moved ?? settled);
+        });
 
 /**
  * Settle one open refund, and move the payment to `refunded` if that was the last of it. The
  * conditional write IS the idempotence: a second caller (the sweep racing the request) finds the
- * record already `succeeded` and answers `null`, so the announcement fires once.
+ * record already `succeeded` and answers `null`, so the announcement fires once. The
+ * `payment.refunded` outbox row commits with the writes, never after them.
  *
  * @param payment - the payment the refund belongs to
  * @param refund - the record being settled
@@ -307,24 +349,17 @@ const settleRefund = (
     context: CallerContext | undefined,
     outcome: 'success' | 'failure' = 'success'
 ): Promise<PaymentDocument | null> =>
-    paymentRepository
-        .settleRefund(String(payment._id), String(refund._id), fields)
-        .then((settled) => {
-            if (!settled) return null;
-            const finished = isFullyRefunded(settled)
-                ? paymentRepository
-                      .updateStatusIfIn(
-                          String(settled.orderId),
-                          [REFUNDABLE_PAYMENT_STATUS],
-                          'refunded'
-                      )
-                      .then((moved) => moved ?? settled)
-                : Promise.resolve(settled);
-            return finished.then((final) => {
-                announceRefund(final, refund, context, outcome);
-                return final;
-            });
-        });
+    announceInTransaction(
+        (session) => writeSettlement(payment, refund, fields, session),
+        (final) => ({
+            name: PAYMENT_REFUNDED,
+            payload: refundedPayload(final, refund),
+            aggregateId: String(final.orderId)
+        })
+    ).then((final) => {
+        if (final) announceRefund(final, refund, context, outcome);
+        return final;
+    });
 
 /**
  * Ask the provider to return one refund's money, and record its answer. A refusal marks the record

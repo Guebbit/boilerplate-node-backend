@@ -130,7 +130,8 @@ describe('a settlement that dies after charging', () => {
             await retryPendingEffects();
             await relayOutbox();
 
-            expect(await outboxEventModel.countDocuments()).toBe(0);
+            // The refund the cancel owes announces itself; the payment never does.
+            expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
             expect(heard).toEqual([]);
         }));
 });
