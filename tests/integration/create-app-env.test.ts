@@ -3,7 +3,7 @@
  * `process.env`. The subject: an injected value is what the config slices read, it goes through the
  * real boot gate, and `process.env` itself is never touched.
  */
-import { createApp } from '../../../src/app';
+import { createApp } from '../../src/app';
 import { appConfig } from '@app/config';
 
 describe('createApp({ env })', () => {

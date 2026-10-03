@@ -13,6 +13,7 @@ import {
     refreshEnvironment,
     resetEnvironmentOverrides
 } from '@infrastructure/config/store';
+import { setProcessEnvironment } from '@tests/environment';
 
 /** A variable no real environment sets, so every case starts from "absent". */
 const NAME = 'NODE_STORE_TEST_VARIABLE';
@@ -23,26 +24,25 @@ describe('the environment store', () => {
     // is harmless here — nothing in this file depends on it.
     afterEach(() => {
         Reflect.deleteProperty(globalThis, Symbol.for('boilerplate-node-backend.config.store'));
-        Reflect.deleteProperty(process.env, NAME);
     });
 
     it('reads process.env once: a later write is not seen', () => {
         currentEnvironment();
 
-        process.env[NAME] = 'late';
+        setProcessEnvironment({ [NAME]: 'late' });
 
         expect(currentEnvironment()[NAME]).toBeUndefined();
     });
 
     it('sees a write made before the first read', () => {
-        process.env[NAME] = 'early';
+        setProcessEnvironment({ [NAME]: 'early' });
 
         expect(currentEnvironment()[NAME]).toBe('early');
     });
 
     it('takes the snapshot again on refresh, and only then', () => {
         currentEnvironment();
-        process.env[NAME] = 'loaded';
+        setProcessEnvironment({ [NAME]: 'loaded' });
 
         refreshEnvironment();
 

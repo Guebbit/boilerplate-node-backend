@@ -11,7 +11,7 @@ import {
     isRelaxedIn
 } from '@infrastructure/config/define';
 import { flag, int, secret, text } from '@infrastructure/config/fields';
-import { resetEnvironment, setEnvironment } from '@tests/environment';
+import { resetEnvironment, setEnvironment, setProcessEnvironment } from '@tests/environment';
 
 /** A slice covering one field of each rule kind. */
 const slice = defineConfig({
@@ -70,11 +70,9 @@ describe('the accessor', () => {
     it('does not see a later write to process.env: the environment is read once', () => {
         slice();
 
-        process.env.NODE_SAMPLE_LIMIT = '99';
+        setProcessEnvironment({ NODE_SAMPLE_LIMIT: '99' });
 
         expect(slice().NODE_SAMPLE_LIMIT).toBe(10);
-
-        Reflect.deleteProperty(process.env, 'NODE_SAMPLE_LIMIT');
     });
 
     it('returns the same object while nothing changed', () => {
