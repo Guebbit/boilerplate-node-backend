@@ -30,7 +30,7 @@ import {
     type ContractBundle
 } from './bundle-registry';
 
-/** CLI arguments after `node script.ts`. The trailing underscore avoids shadowing `arguments`. */
+/** CLI arguments after the script's own path. The trailing underscore avoids shadowing `arguments`. */
 const arguments_ = process.argv.slice(2);
 
 /** `--check`: verify the bundles on disk instead of writing them. */
