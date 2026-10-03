@@ -30,22 +30,16 @@ jest.mock('puppeteer-core', () => ({
 }));
 
 import { renderHtmlToPdf, settleRenders } from '@infrastructure/adapters/pdf';
+import { setEnvironment } from '@tests/environment';
 
 /** The options object handed to the last `puppeteer.launch` call. */
 const lastLaunchOptions = () =>
     launch.mock.calls.at(-1)?.[0] as { executablePath: string; args: string[] };
 
 describe('renderHtmlToPdf', () => {
-    const previousExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-
-    afterEach(() => {
-        if (previousExecutablePath === undefined) delete process.env.PUPPETEER_EXECUTABLE_PATH;
-        else process.env.PUPPETEER_EXECUTABLE_PATH = previousExecutablePath;
-    });
-
     describe('the browser it launches', () => {
         it('reads PUPPETEER_EXECUTABLE_PATH at call time, not at import time', async () => {
-            process.env.PUPPETEER_EXECUTABLE_PATH = '/opt/chrome/chrome';
+            setEnvironment({ PUPPETEER_EXECUTABLE_PATH: '/opt/chrome/chrome' });
 
             await renderHtmlToPdf('<p>hello</p>');
 
@@ -53,7 +47,7 @@ describe('renderHtmlToPdf', () => {
         });
 
         it('falls back to the distribution package path when the variable is unset', async () => {
-            delete process.env.PUPPETEER_EXECUTABLE_PATH;
+            setEnvironment({ PUPPETEER_EXECUTABLE_PATH: undefined });
 
             await renderHtmlToPdf('<p>hello</p>');
 

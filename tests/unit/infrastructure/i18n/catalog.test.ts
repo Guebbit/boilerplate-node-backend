@@ -17,6 +17,7 @@ import enTranslation from '../../../../src/locales/en.json';
 import enUsers from '@modules/users/locales/en.json';
 import itTranslation from '../../../../src/locales/it.json';
 import itUsers from '@modules/users/locales/it.json';
+import { setEnvironment } from '@tests/environment';
 
 describe('locale discovery', () => {
     it('lists every dictionary in src/locales', () => {
@@ -24,15 +25,12 @@ describe('locale discovery', () => {
     });
 
     it('honours NODE_SUPPORTED_LOCALES when set', () => {
-        const original = process.env.NODE_SUPPORTED_LOCALES;
-        process.env.NODE_SUPPORTED_LOCALES = 'en, it ,';
+        setEnvironment({ NODE_SUPPORTED_LOCALES: 'en, it ,' });
         resetSupportedLocales();
 
         try {
             expect(listSupportedLocales()).toEqual(['en', 'it']);
         } finally {
-            if (original === undefined) delete process.env.NODE_SUPPORTED_LOCALES;
-            else process.env.NODE_SUPPORTED_LOCALES = original;
             resetSupportedLocales();
         }
     });
@@ -45,14 +43,8 @@ describe('locale discovery', () => {
     it('is cached, so it cannot drift from the resources i18next registered', () => {
         const first = listSupportedLocales();
 
-        const original = process.env.NODE_SUPPORTED_LOCALES;
-        process.env.NODE_SUPPORTED_LOCALES = 'kl';
-        try {
-            expect(listSupportedLocales()).toEqual(first);
-        } finally {
-            if (original === undefined) delete process.env.NODE_SUPPORTED_LOCALES;
-            else process.env.NODE_SUPPORTED_LOCALES = original;
-        }
+        setEnvironment({ NODE_SUPPORTED_LOCALES: 'kl' });
+        expect(listSupportedLocales()).toEqual(first);
     });
 
     it('reads a dictionary off disk, merged with every registered module', () => {
@@ -91,15 +83,8 @@ describe('locale discovery', () => {
 });
 
 describe('localeCandidatesFor', () => {
-    const originalFallback = process.env.NODE_FALLBACK_LOCALE;
-
     beforeEach(() => {
-        process.env.NODE_FALLBACK_LOCALE = 'en';
-    });
-
-    afterEach(() => {
-        if (originalFallback === undefined) delete process.env.NODE_FALLBACK_LOCALE;
-        else process.env.NODE_FALLBACK_LOCALE = originalFallback;
+        setEnvironment({ NODE_FALLBACK_LOCALE: 'en' });
     });
 
     it('builds the exact, base and fallback chain for a region-tagged locale', () => {
@@ -115,7 +100,7 @@ describe('localeCandidatesFor', () => {
     });
 
     it('does not repeat a region-tagged fallback locale', () => {
-        process.env.NODE_FALLBACK_LOCALE = 'pt-BR';
+        setEnvironment({ NODE_FALLBACK_LOCALE: 'pt-BR' });
 
         expect(localeCandidatesFor('pt-BR')).toEqual(['pt-BR', 'pt']);
     });

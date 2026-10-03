@@ -11,9 +11,7 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { applyImageWriteback, filesystemImageStore } from '@infrastructure/adapters/image-store';
-
-const ORIGINAL_PUBLIC_PATH = process.env.NODE_PUBLIC_PATH;
-const ORIGINAL_QUARANTINE_PATH = process.env.NODE_QUARANTINE_PATH;
+import { setEnvironment } from '@tests/environment';
 
 let root: string;
 
@@ -36,14 +34,12 @@ const makeThumbnail = async (stem: string) => {
 beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), 'image-store-test-'));
     await mkdir(path.join(root, 'images'));
-    process.env.NODE_PUBLIC_PATH = root;
-    process.env.NODE_QUARANTINE_PATH = path.join(root, 'quarantine');
+    setEnvironment({ NODE_PUBLIC_PATH: root });
+    setEnvironment({ NODE_QUARANTINE_PATH: path.join(root, 'quarantine') });
 });
 
 afterEach(async () => {
     await rm(root, { recursive: true, force: true });
-    process.env.NODE_PUBLIC_PATH = ORIGINAL_PUBLIC_PATH;
-    process.env.NODE_QUARANTINE_PATH = ORIGINAL_QUARANTINE_PATH;
 });
 
 /** A file standing in for a staged upload, in its own directory outside the public root. */
@@ -344,12 +340,12 @@ describe('filesystemImageStore.remove', () => {
 
     it('resolves the public directory at call time, not at import time', async () => {
         const { file, imageUrl } = await makeImage('relocated.png');
-        process.env.NODE_PUBLIC_PATH = path.join(root, 'elsewhere');
+        setEnvironment({ NODE_PUBLIC_PATH: path.join(root, 'elsewhere') });
 
         await expect(filesystemImageStore.remove(imageUrl)).resolves.toBe(false);
         expect(existsSync(file)).toBe(true);
 
-        process.env.NODE_PUBLIC_PATH = root;
+        setEnvironment({ NODE_PUBLIC_PATH: root });
         await expect(filesystemImageStore.remove(imageUrl)).resolves.toBe(true);
     });
 
@@ -373,7 +369,7 @@ describe('filesystemImageStore.remove', () => {
         await writeFile(file, 'not really a png');
 
         try {
-            delete process.env.NODE_PUBLIC_PATH;
+            setEnvironment({ NODE_PUBLIC_PATH: undefined });
             process.chdir(root);
 
             await expect(filesystemImageStore.remove('/images/default-root.png')).resolves.toBe(

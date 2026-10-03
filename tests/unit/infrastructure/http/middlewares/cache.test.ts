@@ -20,6 +20,7 @@ import {
 } from '@infrastructure/http/middlewares/cache';
 import * as cache from '@infrastructure/adapters/cache';
 import { cacheRequestsTotal } from '@infrastructure/observability/metrics-cache';
+import { setEnvironment } from '@tests/environment';
 
 jest.mock('@infrastructure/adapters/cache', () => ({
     getCacheValue: jest.fn(),
@@ -41,21 +42,6 @@ const mockedCache = jest.mocked(cache);
  * caller does, the ordinary case for every route in this suite's fixtures.
  */
 const GUEST_SCOPE = () => true;
-
-const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
-const ORIGINAL_TTL_MAX = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
-const ORIGINAL_MAX_BYTES = process.env.NODE_REDIS_CACHE_MAX_BYTES;
-
-const restore = (key: string, value: string | undefined) => {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-};
-
-afterEach(() => {
-    restore('NODE_ENV', ORIGINAL_NODE_ENV);
-    restore('NODE_REDIS_CACHE_DEV_TTL_MAX', ORIGINAL_TTL_MAX);
-    restore('NODE_REDIS_CACHE_MAX_BYTES', ORIGINAL_MAX_BYTES);
-});
 
 const createResponse = () => {
     const headers: Record<string, string> = {};
@@ -198,7 +184,7 @@ describe('setCache', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         // No cap: these cases are about the key and the headers, not about clamping.
-        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '0';
+        setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: '0' });
     });
 
     it('returns a cached response when Redis has a match', async () => {
@@ -318,7 +304,7 @@ describe('setCache', () => {
 
     it('stores and advertises the clamped TTL, not the declared one', async () => {
         // The dev cap: the route asks for an hour, the ceiling allows 30s.
-        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '30';
+        setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: '30' });
         mockedCache.getCacheValue.mockResolvedValue(undefined);
 
         const middleware = setCache(3600, {
@@ -766,7 +752,7 @@ describe('setCache', () => {
 describe('refresh-ahead (stale-while-revalidate)', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '0';
+        setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: '0' });
     });
 
     it('serves a HIT without attempting a claim while still within the soft TTL', async () => {
@@ -854,7 +840,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
     // out-of-band write's stale answer would then survive almost as long as production's full
     // hour, rather than the few seconds the ceiling promises.
     it('clamps the grace window to the resolved TTL outside production', async () => {
-        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '10';
+        setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: '10' });
         mockedCache.getCacheValue.mockResolvedValue(undefined);
         const { response } = createResponse();
 
@@ -980,55 +966,55 @@ describe('noStore', () => {
  */
 describe('resolveCacheTtl', () => {
     it('leaves the declared TTL alone in production', () => {
-        process.env.NODE_ENV = 'production';
+        setEnvironment({ NODE_ENV: 'production' });
 
         expect(resolveCacheTtl(3600)).toBe(3600);
     });
 
     it('leaves the declared TTL alone when NODE_ENV is unset, like any server', () => {
-        delete process.env.NODE_ENV;
+        setEnvironment({ NODE_ENV: undefined });
 
         expect(resolveCacheTtl(3600)).toBe(3600);
     });
 
     it('clamps long TTLs to the 30s default outside production', () => {
-        process.env.NODE_ENV = 'development';
-        delete process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
+        setEnvironment({ NODE_ENV: 'development' });
+        setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: undefined });
 
         expect(resolveCacheTtl(3600)).toBe(30);
     });
 
     it('leaves TTLs already below the ceiling untouched', () => {
-        process.env.NODE_ENV = 'development';
-        delete process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
+        setEnvironment({ NODE_ENV: 'development' });
+        setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: undefined });
 
         expect(resolveCacheTtl(10)).toBe(10);
     });
 
     it('honours a custom ceiling', () => {
-        process.env.NODE_ENV = 'development';
-        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '5';
+        setEnvironment({ NODE_ENV: 'development' });
+        setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: '5' });
 
         expect(resolveCacheTtl(3600)).toBe(5);
     });
 
     it('treats 0 as "no cap" rather than "never cache"', () => {
-        process.env.NODE_ENV = 'development';
-        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '0';
+        setEnvironment({ NODE_ENV: 'development' });
+        setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: '0' });
 
         expect(resolveCacheTtl(3600)).toBe(3600);
     });
 
     it('takes the default for a blank ceiling, which is an unset one', () => {
-        process.env.NODE_ENV = 'development';
-        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '';
+        setEnvironment({ NODE_ENV: 'development' });
+        setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: '' });
 
         expect(resolveCacheTtl(3600)).toBe(30);
     });
 
     it.each(['not-a-number', '-1'])('refuses %p as a ceiling instead of guessing', (value) => {
-        process.env.NODE_ENV = 'development';
-        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = value;
+        setEnvironment({ NODE_ENV: 'development' });
+        setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: value });
 
         expect(() => resolveCacheTtl(3600)).toThrow(/NODE_REDIS_CACHE_DEV_TTL_MAX/);
     });
@@ -1049,7 +1035,7 @@ const bodyOfAtLeast = (bytes: number) => ({ items: 'x'.repeat(bytes) });
 describe('the per-entry size limit', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '0';
+        setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: '0' });
     });
 
     it('stores a response within the limit', async () => {
@@ -1067,7 +1053,7 @@ describe('the per-entry size limit', () => {
     // Measured against the bytes that would actually be written: a body of multi-byte characters
     // is larger than its length in code units suggests.
     it('measures bytes, not string length', async () => {
-        process.env.NODE_REDIS_CACHE_MAX_BYTES = '100';
+        setEnvironment({ NODE_REDIS_CACHE_MAX_BYTES: '100' });
 
         await storeThrough({ items: '€'.repeat(40) });
 
@@ -1075,7 +1061,7 @@ describe('the per-entry size limit', () => {
     });
 
     it('honours a custom limit', async () => {
-        process.env.NODE_REDIS_CACHE_MAX_BYTES = String(1024 * 1024);
+        setEnvironment({ NODE_REDIS_CACHE_MAX_BYTES: String(1024 * 1024) });
 
         await storeThrough(bodyOfAtLeast(300 * 1024));
 

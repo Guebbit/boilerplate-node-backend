@@ -7,18 +7,12 @@
 import { solveChallenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
 import { altchaProvider } from '@infrastructure/adapters/antibot-providers/altcha';
-
-/** The whole environment, saved: these cases set several ALTCHA vars and must leave none behind. */
-const ORIGINAL = { ...process.env };
+import { setEnvironment } from '@tests/environment';
 
 beforeEach(() => {
-    process.env.NODE_ANTIBOT_ALTCHA_SECRET = 'an-altcha-signing-secret-value';
+    setEnvironment({ NODE_ANTIBOT_ALTCHA_SECRET: 'an-altcha-signing-secret-value' });
     // A tiny cost keeps the solver honest but fast; production defaults to 100_000.
-    process.env.NODE_ANTIBOT_ALTCHA_COST = '500';
-});
-
-afterEach(() => {
-    process.env = { ...ORIGINAL };
+    setEnvironment({ NODE_ANTIBOT_ALTCHA_COST: '500' });
 });
 
 /** What a widget sends back: base64 of the challenge it was given plus the solution it found. */
@@ -67,13 +61,13 @@ describe('the altcha provider', () => {
 
     it('refuses a payload this server never signed', async () => {
         const payload = await solvedPayload();
-        process.env.NODE_ANTIBOT_ALTCHA_SECRET = 'a-completely-different-secret!';
+        setEnvironment({ NODE_ANTIBOT_ALTCHA_SECRET: 'a-completely-different-secret!' });
 
         await expect(altchaProvider.verify(payload)).resolves.toBe('refused');
     });
 
     it('refuses rather than throwing when the secret is missing', async () => {
-        delete process.env.NODE_ANTIBOT_ALTCHA_SECRET;
+        setEnvironment({ NODE_ANTIBOT_ALTCHA_SECRET: undefined });
 
         await expect(altchaProvider.verify('anything')).resolves.toBe('refused');
     });

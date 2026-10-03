@@ -26,6 +26,7 @@ import {
     shardTargetMb,
     workerCount
 } from '../../../../scripts/testing/machine-budget';
+import { setProcessEnvironment } from '@tests/environment';
 
 /** How many files the integration layer holds today — the layer that forced sharding to exist. */
 const INTEGRATION_FILES = 75;
@@ -49,12 +50,8 @@ describe('positiveInteger', () => {
 describe('environmentKnob', () => {
     const NAME = 'JEST_WORKERS_TEST_ONLY';
 
-    afterEach(() => {
-        delete process.env[NAME];
-    });
-
     it('reads a positive integer out of the real environment', () => {
-        process.env[NAME] = '3';
+        setProcessEnvironment({ [NAME]: '3' });
 
         expect(environmentKnob(NAME)).toBe(3);
     });
@@ -62,7 +59,7 @@ describe('environmentKnob', () => {
     it.each(['0', '-1', 'plenty', ''])('treats %p as unset rather than as a value', (value) => {
         // Nonsense must not read as zero: a zero worker count or a zero-file shard is a run that
         // tests nothing and reports green.
-        process.env[NAME] = value;
+        setProcessEnvironment({ [NAME]: value });
 
         expect(environmentKnob(NAME)).toBeUndefined();
     });

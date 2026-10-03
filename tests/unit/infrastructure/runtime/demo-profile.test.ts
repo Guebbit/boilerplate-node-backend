@@ -3,12 +3,10 @@
  */
 import { enableDemoProfile, isDemoMode } from '@infrastructure/runtime/demo-profile';
 import { logger } from '@infrastructure/adapters/logger';
-
-const originalNodeEnv = process.env.NODE_ENV;
+import { setEnvironment } from '@tests/environment';
 
 afterEach(() => {
     enableDemoProfile(false);
-    process.env.NODE_ENV = originalNodeEnv;
 });
 
 it('is demo mode exactly when enableDemoProfile() was called', () => {
@@ -20,7 +18,7 @@ it('is demo mode exactly when enableDemoProfile() was called', () => {
 it('refuses production even after enableDemoProfile(), and logs it', () => {
     const error = jest.spyOn(logger, 'error').mockImplementation(() => logger);
     enableDemoProfile();
-    process.env.NODE_ENV = 'production';
+    setEnvironment({ NODE_ENV: 'production' });
 
     expect(isDemoMode()).toBe(false);
     expect(error).toHaveBeenCalledWith(
@@ -31,7 +29,7 @@ it('refuses production even after enableDemoProfile(), and logs it', () => {
 it('refuses an unset NODE_ENV too: only development and test may mount the demo', () => {
     const error = jest.spyOn(logger, 'error').mockImplementation(() => logger);
     enableDemoProfile();
-    delete process.env.NODE_ENV;
+    setEnvironment({ NODE_ENV: undefined });
 
     expect(isDemoMode()).toBe(false);
     expect(error).toHaveBeenCalled();

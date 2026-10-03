@@ -13,6 +13,7 @@ import {
 } from '@infrastructure/adapters/queue';
 import { logger } from '@infrastructure/adapters/logger';
 import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
+import { setEnvironment } from '@tests/environment';
 
 /**
  * The two argument groups `queue.ts` declares every quorum queue with — not exported (they are
@@ -152,16 +153,16 @@ const simulateReconnect = async () => {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const enableRabbitMQ = () => {
-    process.env.NODE_RABBITMQ_URL = '******localhost:5672';
+    setEnvironment({ NODE_RABBITMQ_URL: '******localhost:5672' });
 };
 
 const disableRabbitMQ = () => {
-    delete process.env.NODE_RABBITMQ_URL;
-    delete process.env.NODE_RABBITMQ_HOST;
-    delete process.env.NODE_RABBITMQ_PORT;
-    delete process.env.NODE_RABBITMQ_USER;
-    delete process.env.NODE_RABBITMQ_PASS;
-    delete process.env.NODE_RABBITMQ_ENABLED;
+    setEnvironment({ NODE_RABBITMQ_URL: undefined });
+    setEnvironment({ NODE_RABBITMQ_HOST: undefined });
+    setEnvironment({ NODE_RABBITMQ_PORT: undefined });
+    setEnvironment({ NODE_RABBITMQ_USER: undefined });
+    setEnvironment({ NODE_RABBITMQ_PASS: undefined });
+    setEnvironment({ NODE_RABBITMQ_ENABLED: undefined });
 };
 
 /**
@@ -192,22 +193,22 @@ describe('isQueueEnabled()', () => {
     });
 
     it('returns true when HOST + PORT are set', () => {
-        process.env.NODE_RABBITMQ_HOST = 'localhost';
-        process.env.NODE_RABBITMQ_PORT = '5672';
+        setEnvironment({ NODE_RABBITMQ_HOST: 'localhost' });
+        setEnvironment({ NODE_RABBITMQ_PORT: '5672' });
         expect(isQueueEnabled()).toBe(true);
     });
 
     it('returns false when explicitly disabled', () => {
         enableRabbitMQ();
-        process.env.NODE_RABBITMQ_ENABLED = '0';
+        setEnvironment({ NODE_RABBITMQ_ENABLED: '0' });
         expect(isQueueEnabled()).toBe(false);
     });
 
     it('encodes credentials assembled from parts, so a generated password survives the URL', async () => {
-        delete process.env.NODE_RABBITMQ_URL;
-        process.env.NODE_RABBITMQ_PORT = '5672';
-        process.env.NODE_RABBITMQ_USER = 'app';
-        process.env.NODE_RABBITMQ_PASS = 'p@ss/w#rd';
+        setEnvironment({ NODE_RABBITMQ_URL: undefined });
+        setEnvironment({ NODE_RABBITMQ_PORT: '5672' });
+        setEnvironment({ NODE_RABBITMQ_USER: 'app' });
+        setEnvironment({ NODE_RABBITMQ_PASS: 'p@ss/w#rd' });
         await stopQueue();
         mockConnect.mockClear();
 
@@ -217,8 +218,8 @@ describe('isQueueEnabled()', () => {
             'amqp://app:p%40ss%2Fw%23rd@127.0.0.1:5672',
             expect.anything()
         );
-        delete process.env.NODE_RABBITMQ_USER;
-        delete process.env.NODE_RABBITMQ_PASS;
+        setEnvironment({ NODE_RABBITMQ_USER: undefined });
+        setEnvironment({ NODE_RABBITMQ_PASS: undefined });
     });
 });
 
@@ -523,7 +524,7 @@ describe('the boot announcement', () => {
     });
 
     it('names the broker it will use, without the credentials', async () => {
-        process.env.NODE_RABBITMQ_URL = 'amqp://app:s3cret@rabbitmq:5673/shop';
+        setEnvironment({ NODE_RABBITMQ_URL: 'amqp://app:s3cret@rabbitmq:5673/shop' });
 
         const messages = await messagesAt('info');
 
@@ -533,9 +534,9 @@ describe('the boot announcement', () => {
     });
 
     it('names a broker assembled from host and port', async () => {
-        process.env.NODE_RABBITMQ_HOST = 'broker.internal';
-        process.env.NODE_RABBITMQ_PORT = '5672';
-        process.env.NODE_RABBITMQ_PASS = 's3cret';
+        setEnvironment({ NODE_RABBITMQ_HOST: 'broker.internal' });
+        setEnvironment({ NODE_RABBITMQ_PORT: '5672' });
+        setEnvironment({ NODE_RABBITMQ_PASS: 's3cret' });
 
         const messages = await messagesAt('info');
 
@@ -551,8 +552,8 @@ describe('the boot announcement', () => {
     });
 
     it('warns when the URL is set together with a port, since the URL wins', async () => {
-        process.env.NODE_RABBITMQ_URL = 'amqp://rabbitmq:5672';
-        process.env.NODE_RABBITMQ_PORT = '5673';
+        setEnvironment({ NODE_RABBITMQ_URL: 'amqp://rabbitmq:5672' });
+        setEnvironment({ NODE_RABBITMQ_PORT: '5673' });
 
         const messages = await messagesAt('warn');
 
@@ -561,19 +562,19 @@ describe('the boot announcement', () => {
     });
 
     it('warns when the URL is set together with a host', async () => {
-        process.env.NODE_RABBITMQ_URL = 'amqp://rabbitmq:5672';
-        process.env.NODE_RABBITMQ_HOST = '127.0.0.1';
+        setEnvironment({ NODE_RABBITMQ_URL: 'amqp://rabbitmq:5672' });
+        setEnvironment({ NODE_RABBITMQ_HOST: '127.0.0.1' });
 
         expect(await messagesAt('warn')).toHaveLength(1);
     });
 
     it('does not warn about a URL on its own, or host and port on their own', async () => {
-        process.env.NODE_RABBITMQ_URL = 'amqp://rabbitmq:5672';
+        setEnvironment({ NODE_RABBITMQ_URL: 'amqp://rabbitmq:5672' });
         expect(await messagesAt('warn')).toEqual([]);
 
         disableRabbitMQ();
-        process.env.NODE_RABBITMQ_HOST = '127.0.0.1';
-        process.env.NODE_RABBITMQ_PORT = '5672';
+        setEnvironment({ NODE_RABBITMQ_HOST: '127.0.0.1' });
+        setEnvironment({ NODE_RABBITMQ_PORT: '5672' });
         expect(await messagesAt('warn')).toEqual([]);
     });
 });

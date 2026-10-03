@@ -11,14 +11,12 @@ import { asStub } from '@tests/stub';
 import type { Request } from 'express';
 import { makeResponseStub } from '@tests/express';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
+import { setEnvironment } from '@tests/environment';
 
 /** Saved so the provider each case selects is restored for every other suite. */
-const ORIGINAL = process.env.NODE_ANTIBOT_PROVIDER;
 
 afterEach(() => {
-    if (ORIGINAL === undefined) delete process.env.NODE_ANTIBOT_PROVIDER;
-    else process.env.NODE_ANTIBOT_PROVIDER = ORIGINAL;
-    delete process.env.NODE_ANTIBOT_TURNSTILE_SECRET;
+    setEnvironment({ NODE_ANTIBOT_TURNSTILE_SECRET: undefined });
     jest.restoreAllMocks();
 });
 
@@ -33,7 +31,7 @@ const makeRequest = (token?: string) =>
 
 describe('humanChallengeGate', () => {
     it('is off by default — calls next() without reading a header', () => {
-        delete process.env.NODE_ANTIBOT_PROVIDER;
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: undefined });
         const next = jest.fn();
         const header = jest.fn();
 
@@ -44,7 +42,7 @@ describe('humanChallengeGate', () => {
     });
 
     it('refuses with 401 when a provider is selected and no token is sent', () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
         const response = makeResponseStub();
         const next = jest.fn();
 
@@ -55,8 +53,8 @@ describe('humanChallengeGate', () => {
     });
 
     it('calls next() when the provider vouches for the token', async () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
-        process.env.NODE_ANTIBOT_TURNSTILE_SECRET = 'secret';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
+        setEnvironment({ NODE_ANTIBOT_TURNSTILE_SECRET: 'secret' });
         jest.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ success: true }));
         const next = jest.fn();
 
@@ -67,8 +65,8 @@ describe('humanChallengeGate', () => {
     });
 
     it('refuses when the provider throws rather than answering — never a pass', async () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
-        process.env.NODE_ANTIBOT_TURNSTILE_SECRET = 'secret';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
+        setEnvironment({ NODE_ANTIBOT_TURNSTILE_SECRET: 'secret' });
         jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network down'));
         const response = makeResponseStub();
         const next = jest.fn();

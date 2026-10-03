@@ -4,6 +4,7 @@
 import mongoose from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { isPermanentConnectError, start, stopDatabase } from '@infrastructure/runtime/database';
+import { setEnvironment } from '@tests/environment';
 
 describe('isPermanentConnectError', () => {
     it.each([
@@ -31,14 +32,8 @@ describe('start', () => {
     });
 
     describe('autoIndex (B22)', () => {
-        const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
-
-        afterEach(() => {
-            process.env.NODE_ENV = ORIGINAL_NODE_ENV;
-        });
-
         it('turns autoIndex off before connecting, in production', async () => {
-            process.env.NODE_ENV = 'production';
+            setEnvironment({ NODE_ENV: 'production' });
             const setSpy = jest.spyOn(mongoose, 'set');
             const connect = jest.spyOn(mongoose, 'connect').mockImplementation(() => {
                 // Every cron process (a reaper, a sweep) shares this same guard, not only the
@@ -55,7 +50,7 @@ describe('start', () => {
         });
 
         it('turns autoIndex off when NODE_ENV is unset, like any server', async () => {
-            delete process.env.NODE_ENV;
+            setEnvironment({ NODE_ENV: undefined });
             const setSpy = jest.spyOn(mongoose, 'set');
             const connect = jest.spyOn(mongoose, 'connect').mockResolvedValue(mongoose);
 
@@ -67,7 +62,7 @@ describe('start', () => {
         });
 
         it('leaves the development default untouched', async () => {
-            process.env.NODE_ENV = 'development';
+            setEnvironment({ NODE_ENV: 'development' });
             const setSpy = jest.spyOn(mongoose, 'set');
             const connect = jest.spyOn(mongoose, 'connect').mockResolvedValue(mongoose);
 

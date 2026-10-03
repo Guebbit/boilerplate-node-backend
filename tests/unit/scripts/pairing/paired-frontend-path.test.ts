@@ -16,9 +16,7 @@ import {
     DEFAULT_FRONTEND_PATH,
     resolveFrontendPath
 } from '../../../../scripts/pairing/paired-frontend-path';
-
-/** The shell's value before this suite touched it, restored after every case. */
-const previous = process.env.FRONTEND_PATH;
+import { setProcessEnvironment } from '@tests/environment';
 
 /** The throwaway working directory of the current case. */
 let workingDirectory: string;
@@ -38,14 +36,12 @@ const sibling = (): string => path.resolve(workingDirectory, DEFAULT_FRONTEND_PA
 beforeEach(() => {
     workingDirectory = mkdtempSync(path.join(tmpdir(), 'paired-frontend-path-'));
     jest.spyOn(process, 'cwd').mockReturnValue(workingDirectory);
-    delete process.env.FRONTEND_PATH;
+    setProcessEnvironment({ FRONTEND_PATH: undefined });
 });
 
 afterEach(() => {
     jest.restoreAllMocks();
     rmSync(workingDirectory, { recursive: true, force: true });
-    if (previous === undefined) delete process.env.FRONTEND_PATH;
-    else process.env.FRONTEND_PATH = previous;
 });
 
 describe('resolveFrontendPath', () => {
@@ -61,14 +57,14 @@ describe('resolveFrontendPath', () => {
 
     it('lets the shell win over .env, so a one-off run needs no file edit', () => {
         writeEnvironmentFile('FRONTEND_PATH=/srv/lanes/from-file\n');
-        process.env.FRONTEND_PATH = '/srv/lanes/from-shell';
+        setProcessEnvironment({ FRONTEND_PATH: '/srv/lanes/from-shell' });
 
         expect(resolveFrontendPath()).toBe('/srv/lanes/from-shell');
     });
 
     it('treats an empty shell value as unset, and reads .env instead', () => {
         writeEnvironmentFile('FRONTEND_PATH=/srv/lanes/from-file\n');
-        process.env.FRONTEND_PATH = '   ';
+        setProcessEnvironment({ FRONTEND_PATH: '   ' });
 
         expect(resolveFrontendPath()).toBe('/srv/lanes/from-file');
     });

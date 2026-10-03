@@ -11,27 +11,16 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { gitEnvironment, resolves, trackedTargets } from '../../../../scripts/docs/repo-references';
+import { setProcessEnvironment } from '@tests/environment';
 
-/** The three vars git exports into a hook's process — restored after every case. */
+/** The three vars git exports into a hook's process — put back after every case by the harness. */
 const HOOK_VARS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE'] as const;
-const previous: Record<string, string | undefined> = {};
-
-beforeEach(() => {
-    for (const key of HOOK_VARS) previous[key] = process.env[key];
-});
-
-afterEach(() => {
-    for (const key of HOOK_VARS) {
-        if (previous[key] === undefined) delete process.env[key];
-        else process.env[key] = previous[key];
-    }
-});
 
 describe('gitEnvironment', () => {
     it('strips GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE, simulating a hook environment', () => {
-        process.env.GIT_DIR = '/repo/.git';
-        process.env.GIT_WORK_TREE = '/repo';
-        process.env.GIT_INDEX_FILE = '/repo/.git/index';
+        setProcessEnvironment({ GIT_DIR: '/repo/.git' });
+        setProcessEnvironment({ GIT_WORK_TREE: '/repo' });
+        setProcessEnvironment({ GIT_INDEX_FILE: '/repo/.git/index' });
 
         const environment = gitEnvironment();
 
@@ -41,7 +30,7 @@ describe('gitEnvironment', () => {
     });
 
     it('leaves every other variable untouched', () => {
-        process.env.GIT_DIR = '/repo/.git';
+        setProcessEnvironment({ GIT_DIR: '/repo/.git' });
 
         const environment = gitEnvironment();
 
@@ -49,7 +38,7 @@ describe('gitEnvironment', () => {
     });
 
     it('is a no-op copy when none of the three are set', () => {
-        for (const key of HOOK_VARS) delete process.env[key];
+        setProcessEnvironment(Object.fromEntries(HOOK_VARS.map((key) => [key, undefined])));
 
         expect(gitEnvironment()).toEqual(process.env);
     });
