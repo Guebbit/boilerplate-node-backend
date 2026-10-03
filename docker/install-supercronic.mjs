@@ -16,6 +16,7 @@
 import { createHash } from 'node:crypto';
 import { chmod, writeFile } from 'node:fs/promises';
 
+/** The supercronic release to install; bump it together with the digests below. */
 const VERSION = 'v0.2.49';
 
 /** Release asset digests, keyed by Node's `process.arch`. */
@@ -30,20 +31,28 @@ const SHA256 = {
     }
 };
 
+/** Where the binary lands; on `PATH` in both images. */
 const TARGET = '/usr/local/bin/supercronic';
 
+/** The release asset and digest for this machine's CPU, or `undefined` for an unpinned one. */
 const pinned = SHA256[process.arch];
 if (!pinned) throw new Error(`supercronic: no pinned build for architecture ${process.arch}`);
 
+/** The release asset's download URL. */
 const url = `https://github.com/aptible/supercronic/releases/download/${VERSION}/supercronic-linux-${pinned.asset}`;
+/** The download. `fetch` is Node's built-in (undici); it follows redirects, which GitHub releases use. */
 const response = await fetch(url);
 if (!response.ok) throw new Error(`supercronic: download failed, HTTP ${response.status}`);
 
+/** The downloaded bytes. */
 const binary = Buffer.from(await response.arrayBuffer());
+
+/** The bytes' SHA-256 as hex, to compare with the pinned digest. */
 const actual = createHash('sha256').update(binary).digest('hex');
 if (actual !== pinned.digest)
     throw new Error(`supercronic: checksum mismatch, expected ${pinned.digest}, got ${actual}`);
 
+// Install: write the file, then make it executable (0o755 = rwxr-xr-x).
 await writeFile(TARGET, binary);
 await chmod(TARGET, 0o755);
 console.log(`supercronic ${VERSION} (${pinned.asset}) installed at ${TARGET}`);

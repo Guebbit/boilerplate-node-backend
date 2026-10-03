@@ -91,6 +91,12 @@ const factoriesImportPattern = {
         'A factories.ts builder is for tests and scenarios/, not production code — it writes past the domain rules a service enforces.'
 };
 
+/**
+ * The whole lint configuration, as a flat-config array: ignores first, then the shared rule set,
+ * then scoped blocks that adjust it, then Prettier's off-switch last.
+ * `tseslint.config` only types and flattens its arguments.
+ * https://typescript-eslint.io/packages/typescript-eslint#config
+ */
 export default tseslint.config(
     /**
      * Excluded files — GENERATED OR FOREIGN ONLY.

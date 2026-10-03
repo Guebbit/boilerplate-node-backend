@@ -2,6 +2,11 @@ import type { EnhanceAppContext } from 'vitepress';
 import DefaultTheme from 'vitepress/theme';
 import './custom.css';
 
+/**
+ * Show one Mermaid diagram enlarged in a full-screen overlay; a backdrop click or Escape closes it.
+ *
+ * @param container - the `.mermaid` element whose SVG is cloned into the overlay
+ */
 function openOverlay(container: HTMLElement): void {
     const svg = container.querySelector('svg');
     if (!svg) return;
@@ -43,6 +48,7 @@ function openOverlay(container: HTMLElement): void {
     document.addEventListener('keydown', onKey);
 }
 
+/** Make every diagram not yet wired clickable, once each (`data-zoom-attached` marks the done). */
 function attachToUnprocessed(): void {
     for (const el of document.querySelectorAll<HTMLElement>('.vp-doc .mermaid')) {
         if (el.dataset.zoomAttached || !el.querySelector('svg')) continue;
@@ -51,6 +57,11 @@ function attachToUnprocessed(): void {
     }
 }
 
+/**
+ * The VitePress theme: the default one, plus a `MutationObserver` that wires up diagrams as the
+ * page renders them (Mermaid draws client-side, after the page loads).
+ * https://vitepress.dev/guide/extending-default-theme
+ */
 export default {
     extends: DefaultTheme,
     enhanceApp(_ctx: EnhanceAppContext): void {
