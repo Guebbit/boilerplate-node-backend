@@ -214,7 +214,7 @@
         "mongodb": "^7.1.1",
         "mongoose": "^9.9.5",
         "multer": "^2.3.0",
-        "nodemailer": "^9.1.1",
+        "nodemailer": "^10.0.9",
         "otplib": "^13.5.0",
         "posthog-node": "^5.33.0",
         "prom-client": "^15.1.3",
