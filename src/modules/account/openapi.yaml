@@ -966,7 +966,7 @@ components:
                 data:
                     $ref: '#/components/schemas/AuthTokens'
 
-        # B23: `POST /account/password` alone can degrade to 200 with `data` absent — the
+        # `POST /account/password` alone can degrade to 200 with `data` absent — the
         # password write and the session revoke already committed by the time the re-mint runs,
         # so a 500 would misreport a change that DID succeed. `reauth` and `loginTwoFactor` never
         # degrade this way (see their controllers), so they keep the stricter AuthTokensEnvelope;
