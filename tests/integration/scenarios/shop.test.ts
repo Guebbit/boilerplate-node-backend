@@ -42,6 +42,7 @@ import { addressBookModel } from '@modules/addresses/model';
 import { decryptAddressItem } from '@modules/addresses/pii';
 import { reservationModel, stockMovementModel } from '@modules/inventory/model';
 import { Types } from 'mongoose';
+import { SEED_CUSTOMER_IDS } from '@scenarios/users';
 import {
     SEED_ADMIN_ID,
     SEED_EDITOR_ID,
@@ -232,20 +233,6 @@ describe('each subject names a row that really has the property', () => {
         }
     });
 
-    it.each([
-        ['address.managerDefault', SEED_MANAGER_ID],
-        ['address.warehouseDefault', SEED_WAREHOUSE_ID],
-        ['address.supportDefault', SEED_SUPPORT_ID],
-        ['address.editorDefault', SEED_EDITOR_ID],
-        ['address.moderatorDefault', SEED_MODERATOR_ID]
-    ])("%s is its owner's one default entry, so the persona can check out", async (name, owner) => {
-        const book = await addressBookModel.findOne({ userId: owner }).exec();
-        const defaults = book?.items.filter((entry) => entry.default) ?? [];
-
-        expect(defaults).toHaveLength(1);
-        expect(String(defaults[0]._id)).toBe(subjects[name]);
-    });
-
     it('the two-factor persona has email 2FA armed and backup codes that verify', async () => {
         const user = await userModel
             .findOne({ email: seedCredentials.twoFactor.email })
@@ -259,15 +246,32 @@ describe('each subject names a row that really has the property', () => {
             );
     });
 
-    it('order.ownerPending is pending, the admin account owns it, and it holds real stock', async () => {
-        const order = await orderModel.findById(subjects['order.ownerPending']).exec();
+    it('order.otherPending is pending, a filler shopper owns it, and it holds real stock', async () => {
+        const order = await orderModel.findById(subjects['order.otherPending']).exec();
         expect(order?.status).toBe('pending');
-        expect(order?.userId?.toString()).toBe(SEED_ADMIN_ID);
+        // Neither the signed-in customer nor the administrator: staff and administrators do not
+        // shop, and the `customer` account must not own the order meant to be foreign to it.
+        expect(order?.userId?.toString()).toBe(SEED_CUSTOMER_IDS.harper);
 
         const hold = await reservationModel
-            .findOne({ orderId: subjects['order.ownerPending'] })
+            .findOne({ orderId: subjects['order.otherPending'] })
             .exec();
         expect(hold?.status).toBe('held');
+    });
+
+    it('no order belongs to a staff member or an administrator, who do not shop', async () => {
+        const staff = [
+            SEED_ADMIN_ID,
+            SEED_MANAGER_ID,
+            SEED_WAREHOUSE_ID,
+            SEED_SUPPORT_ID,
+            SEED_EDITOR_ID,
+            SEED_MODERATOR_ID
+        ];
+
+        const owned = await orderModel.countDocuments({ userId: { $in: staff } }).exec();
+
+        expect(owned).toBe(0);
     });
 
     it.each([

@@ -167,17 +167,11 @@ const CUSTOMER_ORDERS: Line[][] = [
  *
  * Filled LAST, and through `POST /cart` like everything else here, for a reason that is not
  * stylistic: a checkout empties the cart it came from, so any cart written before these flows ran
- * would be gone by the time anyone looked. Only four people have one — absence and an empty cart
- * are the same state, so "has never added anything" is most of the customer base's fixture.
+ * would be gone by the time anyone looked. Only three people have one — absence and an empty cart
+ * are the same state, so "has never added anything" is most of the customer base's fixture. Never
+ * the shop owner's: staff and administrators do not shop.
  */
-const CARTS: [who: 'admin' | keyof typeof SEED_CUSTOMER_IDS, lines: Line[]][] = [
-    [
-        'admin',
-        [
-            { productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 2 },
-            { productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 3 }
-        ]
-    ],
+const CARTS: [who: keyof typeof SEED_CUSTOMER_IDS, lines: Line[]][] = [
     [
         'marcus',
         [
@@ -315,20 +309,20 @@ const signOutEveryone = (callers: Caller[]): Promise<void> =>
     );
 
 /**
- * The signed-in caller shopping as `who` — the customer base's own entry, or `owner` for the one
- * basket that belongs to the shop owner.
+ * The signed-in caller shopping as `who` — one of the customer base. Never the shop owner: an
+ * administrator holds no basket, so an owner-owned order would be one only another admin could
+ * ship.
  *
  * A throw rather than a silent skip: a name with no session behind it means this file and
  * `scenarios/users.ts` have drifted, and an order quietly never placed would surface weeks later
  * as a missing row with nothing pointing at the cause.
  *
  * @param base - every filler shopper, as {@link signInCustomerBase} signed them in
- * @param owner - the shop owner's own caller
- * @param who - a `SEED_CUSTOMER_IDS` key, or `'admin'`
+ * @param who - a `SEED_CUSTOMER_IDS` key
  * @throws {Error} when nothing signed in under that name
  */
-const shopperFor = (base: ReadonlyMap<string, Caller>, owner: Caller, who: string): Caller => {
-    const shopper = who === 'admin' ? owner : base.get(who);
+const shopperFor = (base: ReadonlyMap<string, Caller>, who: string): Caller => {
+    const shopper = base.get(who);
     if (!shopper) throw new Error(`shop history: no signed-in caller for "${who}"`);
 
     return shopper;
@@ -392,7 +386,7 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     for (const { customer: who, lines } of FILLER_ORDERS) {
         const orderId = dated(
             await checkoutAndPay(
-                shopperFor(base, owner, who),
+                shopperFor(base, who),
                 lines.map(([index, quantity]) => ({ productId: fillerProductId(index), quantity }))
             )
         );
@@ -505,16 +499,16 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     await recordOfflinePayment(owner, subjects['order.paidOffline'], 'cash');
 
     /*
-     * The owner's own shipped order, placed last of the dated rows so the courier tick above has
+     * The customer's shipped order, placed last of the dated rows so the courier tick above has
      * already been and gone — this is the one parcel in transit. `standard` shipping against a
      * basket well over the free-above threshold, so what it froze is 0 rather than the rate card.
      */
     subjects['order.shipped'] = dated(
-        await checkout(owner, [{ productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 20 }], {
+        await checkout(customer, [{ productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 20 }], {
             shippingMethodId: 'standard'
         })
     );
-    await submitCard(owner, await openPayment(owner, subjects['order.shipped']), CARD.visa);
+    await submitCard(customer, await openPayment(customer, subjects['order.shipped']), CARD.visa);
     await startProcessing(owner, subjects['order.shipped']);
     await shipOrder(owner, subjects['order.shipped']);
 
@@ -572,14 +566,16 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
      * The two rows that stay dated TODAY, because both are still holding stock against a
      * deadline: backdating either would leave a hold that expired before the shop opened.
      */
-    subjects['order.ownerPending'] = await checkout(owner, DOG_FOOD(2));
+    // A shopper other than the `customer` account: the unpaid order that is NOT the signed-in
+    // customer's, which an operator may work and a customer must never reach.
+    subjects['order.otherPending'] = await checkout(shopperFor(base, 'harper'), DOG_FOOD(2));
     subjects['order.awaitingTransfer'] = await checkout(customer, DOG_FOOD(1), {
         paymentMethod: 'bank_transfer'
     });
 
     /* The baskets people are still shopping with — after every checkout, which empties one. */
     for (const [who, lines] of CARTS) {
-        const shopper = shopperFor(base, owner, who);
+        const shopper = shopperFor(base, who);
         for (const line of lines) await shopper.call('POST', '/cart', line);
     }
 

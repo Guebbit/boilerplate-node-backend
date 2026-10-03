@@ -33,20 +33,5 @@ export default {
             erase: addressesDeleteByUserId
         }
     ],
-    locales: path.join(__dirname, 'locales'),
-    /**
-     * One default address per staff persona that can check out, SEEDED: a journey that logs in as
-     * one places an order without first writing an address. `scenarios/subjects.ts` pins the row
-     * behind each, and `tests/integration/scenarios/shop.test.ts` checks each is its owner's one
-     * default entry.
-     */
-    scenario: {
-        shop: [
-            'address.managerDefault',
-            'address.warehouseDefault',
-            'address.supportDefault',
-            'address.editorDefault',
-            'address.moderatorDefault'
-        ]
-    }
+    locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

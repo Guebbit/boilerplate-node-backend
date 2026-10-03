@@ -1,50 +1,21 @@
 /**
  * @module
  * The address book's slice of the demo dataset. The admin keeps two entries so "exactly one
- * default" is observable; the ordinary customer keeps one, the common case; every staff persona
- * that can check out keeps one default, so a journey that logs in as it can place an order (every
- * order carries a billing address) without first writing one. The flow runner
- * freezes a copy of the owner's default entry as one order's `shippingAddress` (and its
- * `billingAddress`), which is what makes "an order remembers where it was sent" checkable against a book that can still change.
+ * default" is observable; the ordinary customer keeps one, the common case, and it is the entry
+ * every order the flow runner places for that customer freezes a copy of as its `shippingAddress`
+ * (and `billingAddress`) — which is what makes "an order remembers where it was sent" checkable
+ * against a book that can still change. Staff and administrators do not shop, so no staff persona
+ * keeps an address for checkout.
  */
 
 import { Types } from 'mongoose';
-import {
-    SEED_ADMIN_ID,
-    SEED_EDITOR_ID,
-    SEED_MANAGER_ID,
-    SEED_MODERATOR_ID,
-    SEED_SUPPORT_ID,
-    SEED_USER_ID,
-    SEED_WAREHOUSE_ID
-} from '@scenarios/accounts';
-import { SEED_STAFF_ADDRESS_IDS } from '@scenarios/subjects';
+import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
 import { type SeedOutcome, insertIfAbsentForOwner } from '@scenarios/seed';
 import { makeAddressBook } from '@modules/addresses/factories';
 import { addressBookRepository } from '@modules/addresses/repository';
 
 /**
- * One staff persona's book: a single default entry at a pinned id.
- *
- * @param userId - the persona's account id
- * @param entryId - the entry's pinned id, one of `SEED_STAFF_ADDRESS_IDS`
- * @param fullName - who the entry names
- * @param place - the street, city and zip the entry carries
- */
-const staffBook = (
-    userId: string,
-    entryId: string,
-    fullName: string,
-    place: { street: string; city: string; zip: string }
-) =>
-    makeAddressBook({
-        userId,
-        items: [{ id: entryId, label: 'home', fullName, country: 'IT', default: true, ...place }]
-    });
-
-/**
- * The seeded books: the owner's (two entries), the ordinary customer's (one) and one default
- * entry for each staff persona that can check out.
+ * The seeded books: the owner's (two entries) and the ordinary customer's (one).
  *
  * No pinned `_id` on the BOOK — `insertIfAbsentForOwner` keys on `userId`, so an id buys no
  * idempotency. Each ENTRY needs one too — the contract requires it — but nothing looks one up by
@@ -103,31 +74,6 @@ export const addressBookFixtures = [
                 default: true
             }
         ]
-    }),
-    staffBook(SEED_MANAGER_ID, SEED_STAFF_ADDRESS_IDS.manager, 'Marta Manager', {
-        street: 'Via Emilia 10',
-        city: 'Modena',
-        zip: '41121'
-    }),
-    staffBook(SEED_WAREHOUSE_ID, SEED_STAFF_ADDRESS_IDS.warehouse, 'Walter Warehouse', {
-        street: 'Via Mazzini 20',
-        city: 'Bologna',
-        zip: '40121'
-    }),
-    staffBook(SEED_SUPPORT_ID, SEED_STAFF_ADDRESS_IDS.support, 'Sara Support', {
-        street: 'Via Roma 30',
-        city: 'Parma',
-        zip: '43121'
-    }),
-    staffBook(SEED_EDITOR_ID, SEED_STAFF_ADDRESS_IDS.editor, 'Elena Editor', {
-        street: 'Via Verdi 40',
-        city: 'Reggio Emilia',
-        zip: '42121'
-    }),
-    staffBook(SEED_MODERATOR_ID, SEED_STAFF_ADDRESS_IDS.moderator, 'Mario Moderator', {
-        street: 'Via Dante 50',
-        city: 'Ferrara',
-        zip: '44121'
     })
 ];
 

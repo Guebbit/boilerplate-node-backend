@@ -239,7 +239,7 @@ const namedProducts = [
      * an opening receipt (see {@link OPENING_STOCK}), so it is still at zero once the flows have
      * run — the storefront's out-of-stock badge and checkout's refusal both need it. It's `onHand`
      * itself that is zero, not just availability; the other way to be unbuyable (units held, all
-     * reserved) is what `order.ownerPending` exercises instead.
+     * reserved) is what `order.otherPending` exercises instead.
      */
     makeUnstockedProduct({
         id: SEED_PRODUCT_IDS.scratchPostOutOfStock,

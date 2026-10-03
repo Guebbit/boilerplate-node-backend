@@ -115,7 +115,7 @@ export default {
      */
     scenario: {
         shop: [
-            'order.ownerPending',
+            'order.otherPending',
             'order.paid',
             'order.paidExpress',
             'order.shipped',
