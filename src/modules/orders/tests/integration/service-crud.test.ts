@@ -122,7 +122,7 @@ describe('create', () => {
         expect(secondSeq).toBe(firstSeq + 1);
     });
 
-    // FA37: `currency` is frozen the same way `orderNumber` is — read once, at creation, never
+    // `currency` is frozen the same way `orderNumber` is — read once, at creation, never
     // recomputed against whatever the deployment's config says later.
     it('freezes the shop currency at creation, unaffected by a later config change', () =>
         withEnvironment('NODE_DEFAULT_CURRENCY', 'GBP', async () => {

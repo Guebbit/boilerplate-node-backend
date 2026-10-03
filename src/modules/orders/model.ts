@@ -365,7 +365,7 @@ export const orderSchema = new Schema<OrderDocument>(
             // Same casters as `users.email` — every stored row is consistently cased, whatever
             // casing the snapshot was taken with. Search is aggregation-based here (`repository.ts`
             // `search`), which does not cast `$match`, so its own `withNormalizedEmailFilter`
-            // normalises the QUERY side to match (PL-29).
+            // normalises the QUERY side to match.
             lowercase: true,
             trim: true
         },

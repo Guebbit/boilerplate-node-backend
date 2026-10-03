@@ -170,7 +170,7 @@ describe('freezeOrderLines — the VAT rate', () => {
         });
     });
 
-    // C4: unlike `taxClass` (resolved into `taxRate`, then dropped), `rateType` has no resolved
+    // Unlike `taxClass` (resolved into `taxRate`, then dropped), `rateType` has no resolved
     // form — an invoice needs the actual reason code, not a decimal, so it rides across as-is.
     it('freezes the product’s rateType onto the line, same as sku/weight — unlike taxClass', () => {
         registerTranslationPort(fakePort());

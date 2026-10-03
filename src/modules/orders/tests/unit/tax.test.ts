@@ -156,7 +156,7 @@ describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value', (
     });
 
     /*
-     * E16(1): shipping is ancillary to the goods it delivers — a digital line never carries any of
+     * Shipping is ancillary to the goods it delivers — a digital line never carries any of
      * it, so a physical line on the same order absorbs the WHOLE shipping cost rather than only
      * its own pro-rata share.
      */

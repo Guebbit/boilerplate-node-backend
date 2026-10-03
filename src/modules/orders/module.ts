@@ -31,7 +31,7 @@ import { ORDER_CANCELLED, ORDER_CREATED, ORDER_STATUS_CHANGED } from './events';
 import { ordersConfig } from './config';
 
 /**
- * DDD-D4: this module's public (webhook-visible) events — `webhooks/services/publish.ts`
+ * This module's public (webhook-visible) events — `webhooks/services/publish.ts`
  * subscribes to these generically, through `kernel/registry.ts`'s `resolvePublicEvents`, instead
  * of importing `ORDER_CREATED` and siblings by name.
  *
@@ -75,7 +75,7 @@ export default {
         {
             section: 'orders',
             collect: (subject) => findOwnOrders(subject.userId),
-            // DDD-D6: detach, never delete — the order survives the account, inside the same
+            // Detach, never delete — the order survives the account, inside the same
             // hard-delete transaction. A never-paid order is also cancelled, after the commit.
             // See `eraseUserOrders`.
             erase: eraseUserOrders

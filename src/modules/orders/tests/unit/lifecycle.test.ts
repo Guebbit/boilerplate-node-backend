@@ -217,7 +217,7 @@ describe('canTransition', () => {
         expect(statusesReachableFrom(OrderStatus.pending, 'admin')).toEqual([
             OrderStatus.cancelled
         ]);
-        // B21: the system actor also reaches `cancelled` from `pending` — the reservation-sweep
+        // The system actor also reaches `cancelled` from `pending` — the reservation-sweep
         // expiry, narrower than `admin`'s own reach since it stops there (see the `who may cancel`
         // describe block below).
         expect(statusesReachableFrom(OrderStatus.pending, 'system')).toEqual([

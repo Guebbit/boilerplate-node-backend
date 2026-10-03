@@ -52,7 +52,7 @@ export const ownerScope = (userId: string): Record<string, unknown> =>
  * `SYSTEM_ACTOR` carries `roles.tenant: 'admin'` for every ORDINARY permission check, so this must
  * ask the identity question FIRST — an `authContext && holdsKey(...)` check alone would read it as
  * a plain admin and hand the sweep's expiry the admin column's wider `cancelled` rule, exactly the
- * race B21 closes (see `../domain/lifecycle.ts`'s own comment on `pending.cancelled`).
+ * race this rule closes (see `../domain/lifecycle.ts`'s own comment on `pending.cancelled`).
  *
  * Otherwise gated on `orders.any.update` by name, the same key `cancelById` asks for its own
  * operator/customer split — a broader check would have missed a moderator or manager and

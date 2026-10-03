@@ -14,6 +14,7 @@
  * See `docs/theory/tactical-ddd.md` §3.
  */
 
+/** Type-only brand: a `unique symbol` that exists for the compiler, never at runtime. */
 declare const MONEY_BRAND: unique symbol;
 
 /** An amount in minor units. Never a float. */

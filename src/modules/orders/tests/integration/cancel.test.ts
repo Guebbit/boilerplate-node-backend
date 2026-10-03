@@ -170,7 +170,7 @@ describe('cancelById', () => {
     });
 
     /**
-     * B21: the reservation-sweep expiry (the system actor) must never cancel an order that has
+     * The reservation-sweep expiry (the system actor) must never cancel an order that has
      * already been paid, even when its own deadline check runs just after payment landed —
      * `pending.cancelled` is the ONLY edge the system actor holds, unlike `admin`'s wider one.
      */
@@ -314,7 +314,7 @@ describe('cancelById — audit and analytics', () => {
             expect.objectContaining({
                 action: ordersAuditActions.ORDER_CANCELLED,
                 outcome: 'success',
-                // B21: the system actor, not admin — `SYSTEM_ACTOR` is its own role now, not an
+                // The system actor, not admin — `SYSTEM_ACTOR` is its own role now, not an
                 // alias for a human admin's, and the audit trail says so.
                 actor_role: 'system',
                 actor_user_id: 'system'
@@ -358,9 +358,8 @@ describe('cancelById — the payment-window-expired email', () => {
     });
 
     /*
-     * E5's leftover: this used to send nothing at all — "that hold is thirty minutes and nobody
-     * has read a confirmation email by then" was the reasoning, but thirty minutes is still long
-     * enough to abandon a checkout tab and wonder later where the order went.
+     * A card hold's expiry mails the buyer: thirty minutes is long enough to abandon a checkout
+     * tab and wonder later where the order went, so silence is not an option.
      */
     it('sends the card-expired email when a card order times out with no context', async () => {
         mockEnqueueEmail.mockClear();
@@ -723,7 +722,7 @@ describe('withActions', () => {
     });
 
     /*
-     * E16(3): `fulfill` and `ship` are mutually exclusive doors for the same `processing` status —
+     * `fulfill` and `ship` are mutually exclusive doors for the same `processing` status —
      * which one a client offers depends entirely on whether the order has anything to ship.
      */
     it('gives the warehouse `fulfill` instead of `ship` for a digital-only order once processing', async () => {

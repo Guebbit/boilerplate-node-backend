@@ -14,7 +14,7 @@ import { orderPiiRetentionDays } from '../config';
 import { cancelById } from './cancel';
 
 /**
- * DDD-D6's `personalData.erase` hook. Unsets `userId` on every order this account placed and
+ * The `personalData.erase` hook. Unsets `userId` on every order this account placed and
  * marks each for `scripts/ops/reap-orders.ts` to scrub after `NODE_ORDER_PII_RETENTION_DAYS`
  * (default 3650, ~10 years — the outer edge of common commercial record-keeping periods) FROM ITS
  * OWN `createdAt`, not from today — see `orderRepository.detachUserId`'s own per-order clock, which

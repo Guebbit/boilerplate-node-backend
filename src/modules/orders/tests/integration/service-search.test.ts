@@ -127,7 +127,7 @@ describe('orderService.search', () => {
         expect(result.items).toHaveLength(1);
     });
 
-    it('filters by email regardless of the query casing (PL-29)', async () => {
+    it('filters by email regardless of the query casing', async () => {
         const user = await createUser({ email: 'alice@example.com', username: 'alice' });
         const product = await createProduct({ price: 10 });
         await createOrder(user, [toOrderItem(product, 1)]);

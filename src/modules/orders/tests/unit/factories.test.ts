@@ -110,7 +110,7 @@ describe('makeOrder — the embedded product snapshot', () => {
     });
 
     it('has no override at all for onHand/reserved — OrderSnapshotInput does not declare them', () => {
-        // The type-level half of B1: a snapshot override literally cannot name a live-stock
+        // The type-level half: a snapshot override literally cannot name a live-stock
         // counter. The write-time half — that a counter riding along on the LIVE product
         // document still gets dropped — is `orders/tests/integration/schema-contract.test.ts`'s
         // to prove.

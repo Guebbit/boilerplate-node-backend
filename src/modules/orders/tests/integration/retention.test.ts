@@ -58,7 +58,7 @@ describe('orders — detach on account erasure', () => {
         expect(daysAhead).toBeLessThan(7.1);
     });
 
-    it('runs the clock from the ORDER, not from today (B17)', async () => {
+    it('runs the clock from the ORDER, not from today', async () => {
         setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
         const user = await createUser();
         const product = await createProduct();
@@ -78,7 +78,7 @@ describe('orders — detach on account erasure', () => {
         expect(daysAhead).toBeLessThan(2.1);
     });
 
-    it('an order already past its own window is due immediately, not re-extended (B17)', async () => {
+    it('an order already past its own window is due immediately, not re-extended', async () => {
         setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
         const user = await createUser();
         const product = await createProduct();
@@ -230,7 +230,7 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         expect(reloaded!.shippingAddress!.city).toBe('London');
         expect(reloaded!.shippingAddress!.country).toBe('GB');
         expect(reloaded!.anonymizeAfter).toBeUndefined();
-        // B17: the buyer's free-text notes are personal data too, and must not survive the scrub.
+        // The buyer's free-text notes are personal data too, and must not survive the scrub.
         expect(reloaded!.notes).toBeUndefined();
     });
 

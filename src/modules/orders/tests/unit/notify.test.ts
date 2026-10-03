@@ -3,7 +3,7 @@
  * `sendOrderPlacedEmail` (`services/notify.ts`): which mail it builds — `orderConfirmEmail` vs.
  * `bankTransferInstructionsEmail` has its own coverage in `emails.test.ts` — and that NEITHER ever
  * carries an attachment: nothing is invoiced yet at placement time, whatever the payment method
- * (B16 under SH2 option A — see `docs/modules/invoicing.md`).
+ * (see `docs/modules/invoicing.md`).
  */
 
 import { asStub } from '@tests/stub';

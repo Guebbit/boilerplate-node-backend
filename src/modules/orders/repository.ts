@@ -64,7 +64,7 @@ const aggregate = <T = OrderDocument>(
 };
 
 /**
- * The `email` filter, normalised the same way the schema casts the stored field (PL-29) — `$match`
+ * The `email` filter, normalised the same way the schema casts the stored field — `$match`
  * does not cast the way `find()` does (see `search` below), so a differently-cased search would
  * otherwise silently match nothing.
  */
