@@ -56,6 +56,14 @@ flowchart LR
     class B,C,D,F,H fix;
 ```
 
+::: tip What the desk may and may not do to an account
+Support fixes a customer's details (a phone number, a name) and nothing that is the customer's own
+to prove: there is no password, email or second-factor reset on anyone's behalf, because those are
+the owner's alone. It cannot ban or reactivate an account either: that is `users.any.ban`, the
+[moderator's](./moderator.md) key. And it works only on customers: another staff member's account
+ranks at or above it, so an edit is refused with `403 OUTRANKED`.
+:::
+
 A person can see every device currently signed in to their account and end any of them, or all of
 them, themselves. → [`account`](../modules/account.md)
 
@@ -98,8 +106,9 @@ There is a health page that answers plainly, plus a live activity view that upda
 you watch it — useful for "is anything happening at all right now".
 
 And there is the **90-day record of every staff action**: who changed that price, who cancelled that
-order, when. Most "what happened here?" questions end there — reachable from your own role, without
-needing the platform-wide view a developer or operator would use instead.
+order, when. Most "what happened here?" questions end there, but not from this desk: the record is
+[the moderator's](./moderator.md) and [the manager's](./manager.md) to read, and the desk asks one
+of them. Neither is the platform-wide view a developer or operator would use instead.
 
 → [`observability`](../modules/observability.md) · [`audit-logs`](../modules/audit-logs.md)
 
@@ -149,12 +158,12 @@ Worth knowing before promising anything to a customer:
 
 ## The words we used
 
-| Word             | In plain terms                                                                                 |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| **Triage**       | Deciding what a new message is and who deals with it. → [`feedback`](../modules/feedback.md)   |
-| **Verified**     | Confirmed their email. Informational here — nothing is refused without it.                     |
-| **Session**      | One signed-in device. → [`account`](../modules/account.md)                                     |
-| **Audit log**    | The 90-day record of staff actions. → [`audit-logs`](../modules/audit-logs.md)                 |
-| **Health check** | A page that says whether the shop is running. → [`observability`](../modules/observability.md) |
-| **Delivery**     | One attempt to notify another system of one event. → [`webhooks`](../modules/webhooks.md)      |
-| **Replay**       | Resending a delivery right now, instead of waiting for its next automatic retry.               |
+| Word             | In plain terms                                                                                                        |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Triage**       | Deciding what a new message is and who deals with it. → [`feedback`](../modules/feedback.md)                          |
+| **Verified**     | Confirmed their email. Informational here — nothing is refused without it.                                            |
+| **Session**      | One signed-in device. → [`account`](../modules/account.md)                                                            |
+| **Audit log**    | The 90-day record of staff actions, read by the moderator and the manager. → [`audit-logs`](../modules/audit-logs.md) |
+| **Health check** | A page that says whether the shop is running. → [`observability`](../modules/observability.md)                        |
+| **Delivery**     | One attempt to notify another system of one event. → [`webhooks`](../modules/webhooks.md)                             |
+| **Replay**       | Resending a delivery right now, instead of waiting for its next automatic retry.                                      |

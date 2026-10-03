@@ -47,7 +47,8 @@ replica set's keyFile, `mongo-rs-init` initiates the set, `setup` runs `db:sync`
 
 **A fresh stack has an organisation but no admin** — every signup is a `customer`, on purpose (a
 race to be first is a known vulnerability pattern). Sign up through the app once, then the
-technician gives that account the `admin` role by writing its membership into the database by hand.
+technician gives that account the `admin` role by writing its membership into the database by hand
+(the exact command is under [The first admin](../getting-started-production.md#the-first-admin)).
 
 Verified end to end on this exact sequence: signup, the verification email arriving (a local
 Mailpit stood in for real SMTP), the hand-written admin grant, login, and a real checkout — all against a stack

@@ -5,8 +5,8 @@
 where.
 **Depends on** — nothing. It sits low enough in the graph that [`account`](./account.md),
 [`api-keys`](./api-keys.md) and [`users`](./users.md) all import it, never the reverse.
-**Breaks if you change** — the escalation refusal in `assignRole`: it is the one thing standing
-between any grant form and a privilege-escalation endpoint.
+**Breaks if you change** — the escalation refusal in `assignRole`, and `canActOn`: the two things
+standing between any grant form, or any writer, and a privilege-escalation endpoint.
 :::
 
 ## Its neighbourhood
@@ -79,8 +79,20 @@ key on that role is `.self.` — power over the new account's own data, not the 
 ::: info The last administrator CAN be removed
 Revoking, demoting or deleting a shop's last administrator is allowed, and leaves the shop with
 none. A refusal would only guard against an operator who knows what they are doing, and the repair
-is one database write: give somebody an administrator membership again.
+is one database write: give somebody an administrator membership again, with the command under
+[The first admin](../getting-started-production.md#the-first-admin).
 :::
+
+## Whose things a role may touch
+
+A key says what kind of thing; it never said whose. Every role carries a **level** (`admin`,
+`staff` or `user`, in `shared/authorization-roles.yaml`), and a write on someone else's thing
+needs the owner to rank strictly below the caller, or it is a `403 OUTRANKED`. `canActOn` answers
+it for a user id, `outrankedRefusal` wraps it into the envelope the services return, and
+`levelOfUser` / `levelsOfMany` read an owner's level from their memberships, the higher of two
+roles winning. The rule, its exemptions and where each service asks it are on
+[Authorization](../theory/authorization.md#acting-on-someone-else-s-things); this module owns only
+the question, never the places it is asked.
 
 ## Related pages
 

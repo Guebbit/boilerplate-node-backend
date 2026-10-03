@@ -62,6 +62,14 @@ own collection, and the only reason this document carries a copy at all is read 
 write to any of the three from anywhere but `inventory`'s own sync is a bug, not a shortcut.
 :::
 
+**A shopper sees two flags, not the shelf.** The counters tell a competitor how fast a line sells
+and how much is left, so a response carries `onHand`, `reserved` and `available` only for a caller
+holding `inventory.any.read` (`canSeeStock` in `services/stock-view.ts`). Everyone else, a guest
+included, gets `inStock` (is anything available) and `lowStock` (available at or below
+`NODE_LOW_STOCK_THRESHOLD`), derived by `stockFlags` in `domain/stock.ts`. Both flags ride on every
+representation, so a client never has to guess from an absent number. A cached public list is
+keyed by the caller's reach, so one reader's counters are never served to another.
+
 Deletion is soft by default: `active` and `deletedAt`, with a restore route, because an order that
 embedded a product still has to render months later. An admin can still ask for a hard delete
 (`hardDelete: true`), which destroys the row outright — see

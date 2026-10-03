@@ -105,6 +105,26 @@ does that automatically. Sign up through the app once, then the technician gives
 role by writing the membership into the database by hand. There is no command for it, the first
 owner included, and the same hand-written fix is the way back if every admin is ever locked out.
 
+The write, from the stack's own `database` container (the id is the account's `_id`, shown by
+`db.users.findOne({ email: "<their email>" })`; the tenant id is the deployment's fixed one):
+
+```bash
+docker compose --env-file "clients/<name>/.env" -f docker-compose.production.yml \
+  exec database mongosh --tls --tlsCAFile /keyfile-dir/mongo-ca.crt \
+  -u "$MONGO_ROOT_USER" -p --authenticationDatabase admin "<MONGO_DB>" --eval '
+    db.memberships.updateOne(
+      { userId: "<the account id>", tenantId: "65dd20000000000000000001", scope: "tenant" },
+      { $set: { role: "admin" }, $currentDate: { updatedAt: true, createdAt: true } },
+      { upsert: true }
+    )
+  '
+```
+
+One membership per person per place, so the same command also _changes_ a role. An administrator
+that was switched off, or erased, comes back with `db.users.updateOne({ _id: ObjectId("<id>") },
+{ $set: { active: true }, $unset: { deletedAt: "" } })`. The app has no way to do either on an
+administrator's behalf: nobody outranks one ([Authorization](./theory/authorization.md#acting-on-someone-else-s-things)).
+
 ## Publish a disclosure contact
 
 Set `NODE_SECURITY_CONTACT`, `NODE_SECURITY_EXPIRES` (and optionally `NODE_SECURITY_POLICY_URL`) so

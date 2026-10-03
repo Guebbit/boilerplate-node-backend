@@ -86,6 +86,26 @@ merges (a field left out keeps its current value) — the same replace/merge spl
 [`request-flow.md`](../theory/request-flow.md) documents for the rest of the API, through the same
 shared factory.
 
+**What an edit needs, beyond the route's key.** Three rules sit in `services/update.ts` and
+`services/remove.ts`, asked before anything is written:
+
+| Rule                      | Refusal         | Why                                                                     |
+| ------------------------- | --------------- | ----------------------------------------------------------------------- |
+| the field's own key       | `403 FORBIDDEN` | `active` needs `users.any.ban`, a different key from `users.any.update` |
+| the owner ranks below you | `403 OUTRANKED` | [R1](../theory/authorization.md#acting-on-someone-else-s-things)        |
+| not your own role         | `403 FORBIDDEN` | promotion is somebody else's act                                        |
+
+A key is asked only when the field **changes**: a `PUT` resends `active` and `role` on every save,
+and resending what the account already has is no ban and no promotion. The same rank rule covers
+soft delete, hard delete and restore. A refused attempt on a rank is audited as `security.forbidden`
+with `metadata.reason: outranked`.
+
+**Credentials are the owner's alone.** `POST /users` takes no password: the account is created
+without one and always mails a setup link (`USER_SETUP_REQUESTED`, handled in
+[`account`](./account.md)), so no administrator ever types, sees or resets another person's
+password, second factor or sign-in email. Each row also carries an `actions` block (`update`,
+`ban`, `delete`) with the rank already applied, which is what a screen renders its buttons from.
+
 `phone` is stored AES-256-GCM under `NODE_PII_ENCRYPTION_KEY`
 (`@infrastructure/security/pii-encryption`) — `services/update.ts`'s `update` encrypts it on the one write
 path, `toUser` (`model.ts`) decrypts it on the way out, whether the source document was hydrated or

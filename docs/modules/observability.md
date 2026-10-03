@@ -75,7 +75,7 @@ flowchart LR
     SC["/metrics scrape<br/><i>static credential — a scraper has no session</i>"] --> K
     EV["/events · SSE<br/><i>cookie — EventSource cannot send a header</i>"] --> K
     K --> R["infrastructure/observability<br/><i>the shared Prometheus registry and HTTP counters</i>"]
-    AU["/audit<br/><i>normal guard</i>"] --> AL["audit-logs<br/><i>the one collection behind a route here</i>"]
+    AU["/audit<br/><i>normal guard, incidents only</i>"] --> AL["audit-logs<br/><i>the one collection behind a route here</i>"]
     K --> AD["frontend admin"]
     AU --> AD
     EV --> RT["frontend realtime"]

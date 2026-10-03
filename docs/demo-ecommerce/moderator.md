@@ -8,18 +8,19 @@ owner's.
 
 ## Four keys, three jobs
 
-| Key                                                   | Buys                                                      |
-| ----------------------------------------------------- | --------------------------------------------------------- |
-| `users.any.read` / `.create` / `.update` / `.delete`  | Add, edit, erase an account — and ban one.                |
-| `orders.any.read` / `.create` / `.update` / `.delete` | Read and update any order in the shop, not only your own. |
-| `payments.any.read` / `.create` / `.update`           | Read any payment, and refund it.                          |
-| `audit.any.read`                                      | Read the history of what everyone with a key did.         |
+| Key                                                                   | Buys                                                      |
+| --------------------------------------------------------------------- | --------------------------------------------------------- |
+| `users.any.read` / `.create` / `.update` / `.delete`, `users.any.ban` | Add, edit, erase an account — and ban one.                |
+| `orders.any.read` / `.update`                                         | Read and update any order in the shop, not only your own. |
+| `payments.any.read` / `.create` / `.update`                           | Read any payment, and refund it.                          |
+| `audit.any.read`                                                      | Read the history of what everyone with a key did.         |
 
-## Banning an account is not a fourth feature
+## Banning is its own key
 
 There is no separate "ban" button in the data model. Banning an account **is** setting `active` to
-`false` on it — the same field, the same endpoint, that a support agent or an owner would use to
-deactivate one for any other reason:
+`false` on it — the same field, the same endpoint, that an edit uses — but changing that one field
+needs `users.any.ban`, a key [support](./support.md) does not hold. A role that fixes a customer's
+phone number should not, by that alone, be able to lock them out:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
@@ -70,13 +71,14 @@ for the platform operator, reached through a different door with a different key
 nothing about the platform, only about this shop, which is exactly the key a shop's own staff can
 be handed. → [`audit-logs`](../modules/audit-logs.md)
 
-## One deliberate rough edge
+## What a moderator ranks above
 
-This role holds `orders.any.delete` alongside the read and the update — there is no narrower key
-that grants read-and-update-but-not-delete on an order, so this role can technically delete one.
-That is a real capability, granted by name rather than absorbed from a wildcard, and it is the
-price of being able to update any order rather than only its own. Nothing in the demo exercises
-that edge; it is named here rather than left for someone to discover by trying it.
+Every write on someone else's thing needs the owner to rank **strictly below** the caller
+([the rule](../theory/authorization.md#acting-on-someone-else-s-things)). A moderator is staff: it
+can ban, edit and erase a customer, and it cannot touch another staff member or an administrator,
+whatever the keys say; the refusal is `403 OUTRANKED`. It cannot change its own role either. A
+moderator holds no `orders.any.delete` or `orders.any.create`: sorting an order out is updating it,
+and removing or raising one on someone's behalf is [the manager's](./manager.md) job.
 
 ::: tip What this role cannot touch
 No `products.*` — a moderator cannot change what a thing costs or looks like; that is

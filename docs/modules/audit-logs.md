@@ -40,7 +40,7 @@ exactly as headless as it always was — see the tip below. The read side used t
 shop's own staff.
 
 This module now owns a second, tenant-facing door onto the same collection: `GET /audit`, gated on
-`audit.any.read` — held by `manager`, `support` and `moderator` in the demo. Same rows, same shape,
+`audit.any.read` — held by `manager` and `moderator` in the demo. Same rows, same shape,
 different audience: `observability`'s route answers "what happened across every shop", this
 module's own route answers "what happened in mine". Enabling this module without `observability`
 now gives you a working `GET /audit` and no platform-wide view — still a legitimate build, just a
@@ -112,6 +112,15 @@ flowchart LR
     class P seam;
     class R,M,X own;
 ```
+
+**The operator's read is an incident feed, not the trail.** `GET /observability/audit` goes through
+`searchIncidents`, which ANDs the operator's own filters with an allow-list (`INCIDENT_SCOPE` in
+`service.ts`): the `security.*` and `worker.*` actions, a refused sign-in, a failed second-factor
+challenge or provider sign-in, a reused refresh token and an auto-disabled webhook. Orders,
+payments, products and successful sign-ins stay on the shop's own `GET /audit`, and every address
+is returned as a keyed digest (`hmac:…`): the operator can correlate "this address, three
+incidents" and never read the address. An operator watching an installation needs the incidents,
+and holding no shop key was never meant to include reading a shop's customers.
 
 ## Related pages
 

@@ -135,6 +135,82 @@ invent a key, because a key nothing checks grants nothing while looking like it 
 A role's ASSIGNMENT — who holds it, where — is the one thing the database stores; see
 [Where it lives](#where-it-lives).
 
+## Acting on someone else's things
+
+A key says _what kind_ of thing you may touch. It does not say _whose_. Without a second rule, a
+support agent who holds `users.any.update` may edit the administrator's account, which is a
+privilege escalation with extra steps. So every role has a **level**, and a write on another
+person's thing must clear it.
+
+| Level   | Roles                                                    | Why                                      |
+| ------- | -------------------------------------------------------- | ---------------------------------------- |
+| `admin` | `admin`, `operator`, `system`                            | runs the shop, or the installation       |
+| `staff` | `manager`, `warehouse`, `support`, `editor`, `moderator` | works in the shop under an administrator |
+| `user`  | `customer`, `unverified`, and a visitor                  | shops                                    |
+
+> **R1.** After the route's key is held, a write on someone else's thing needs the owner to rank
+> strictly **below** the caller. Otherwise the answer is `403 OUTRANKED`.
+
+Four details carry the rule:
+
+- **Your own things are exempt** from the comparison, so an administrator still edits their own
+  account. But nobody changes their **own role**: promotion is somebody else's act.
+- **Two roles count at the higher one**: an account that is a `support` agent and the platform
+  `operator` is an `admin`-level owner.
+- **An API key acts at its minter's level**, re-read on every request, so demoting the minter
+  lowers the key with them.
+- **No one outranks an administrator**, and an administrator does not outrank one. Switching an
+  administrator off, or back on, is therefore not something the app does; it is a technician's
+  edit of the database, by decision.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
+flowchart TD
+    accTitle: How a write on someone else's thing is decided
+    accDescr: The route first requires the key. A write on the caller's own thing is allowed, except changing their own role. Otherwise the owner's level is read from the database and compared with the caller's, and a caller who does not rank strictly above the owner is refused with OUTRANKED.
+
+    K{"holds the route's key?"} -- no --> F403["403 FORBIDDEN"]
+    K -- yes --> O{"the caller's own thing?"}
+    O -- yes --> R{"changing their own role?"}
+    R -- yes --> F403
+    R -- no --> OK["allowed"]
+    O -- no --> L{"caller's level above the owner's?"}
+    L -- no --> OUT["403 OUTRANKED<br/><i>audited as security.forbidden</i>"]
+    L -- yes --> OK
+
+    classDef good fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
+    class OK good;
+    class F403,OUT bad;
+```
+
+**Where it is applied.** `canActOn` and `outrankedRefusal` in `@modules/access` answer it; each
+service that writes on a person's behalf asks first, **before** it reads the row, so the refusal
+never depends on the row existing:
+
+| Writes on                 | Asked in                                                          |
+| ------------------------- | ----------------------------------------------------------------- |
+| a user                    | `users`: edit, delete, restore                                    |
+| an order                  | `orders`: cancel, edit, delete, override; `delivery`: start, ship |
+| a payment                 | `payments`: record by hand, refund                                |
+| a return                  | `returns`: decide, receive                                        |
+| a key someone else minted | `api-keys`: revoke                                                |
+
+The owner of an order, payment or return is its buyer. The read side tells a client the same
+thing: the `actions` block on a user, order, payment or return already has the rank applied, so a
+screen renders only what would be accepted, and never counts levels itself.
+
+**Credentials belong to their owner.** A password, a second factor and a sign-in email are never
+written by anyone else, whatever their key or level: `POST /users` takes no password and always
+mails a setup link, and there is no admin reset of a second factor. Switching an account off is
+its own key (`users.any.ban`), because a role that edits a customer's phone should not by that
+alone lock them out.
+
+**Staff do not shop.** `cart.self.update` and `cart.self.checkout` are held by shoppers only,
+and are flagged `shopperOnly` so that an administrator still counts as holding every _other_ key.
+An order a staff member could place would be one only an administrator may handle, so the demo
+shop's history has none.
+
 ## Where it lives
 
 The model is stored, evaluated, compiled into every scoped read, published to the client and
@@ -148,7 +224,9 @@ enforced per key.
 - **`@modules/access`** stores the ASSIGNMENT half — tenants and memberships, never a role's own
   permissions — with the invariants as refusals: a granter cannot hand over what they do not
   hold, self-service signup can grant nothing but the default role. Removing a shop's last
-  administrator is allowed. Routeless — `account`, `api-keys` and `users` are its only consumers.
+  administrator is allowed. It also answers the rank rule (`canActOn`), reading an owner's level
+  from their memberships. Routeless — `account`, `api-keys`, `users` and the modules that write
+  on a buyer's behalf are its consumers.
 - **`kernel/access/query.ts`** compiles the rules into the Mongo filter every scoped read spreads,
   so a key that grants more returns more without anybody editing a fragment.
 - **`GET /account/abilities`** publishes the packed rules; the frontend evaluates _those_, not a
