@@ -152,6 +152,31 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         expect(afterDemotion?.caller.level).toBe('user');
     });
 
+    // The minter's deactivation is the only way to switch a key off without touching it: an
+    // administrator cannot ban another administrator, so this is what a hand edit of the account
+    // (the technician's door) does to every key that account minted.
+    it('holds nothing for a key whose minter was deactivated, and the key itself is untouched', async () => {
+        const user = await createRealUser('banned-minter');
+        const userId = String(user._id);
+        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
+        const minted = await mint(
+            { name: 'about to lose its minter', permissions: ['apikeys.any.read'] },
+            contextFor(userId, permissionsOfRole('admin'))
+        );
+        if (!minted.data) throw new Error('setup failed: mint was refused');
+        const before = await resolveCredential(minted.data.secret);
+
+        await userRepository.updateMany({ _id: userId }, { active: false });
+        const after = await resolveCredential(minted.data.secret);
+        const stored = await apiKeyRepository.findById(minted.data.id);
+
+        expect(before?.caller.permissions).toContain('apikeys.any.read');
+        // Still recognised (the guest's floor, not a refusal at the door), holding none of the minter's keys.
+        expect(after?.caller.permissions).not.toContain('apikeys.any.read');
+        expect(after?.caller.permissions.every((key) => key.endsWith('.read'))).toBe(true);
+        expect(stored?.revokedAt).toBeUndefined();
+    });
+
     it('carries the credential id for the audit trail, display-shaped, never the secret', async () => {
         const user = await createRealUser('display-id');
         const context = contextFor(String(user._id), ['apikeys.any.read']);
