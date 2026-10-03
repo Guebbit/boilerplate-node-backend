@@ -15,7 +15,7 @@
  *
  * See: docs/reference/data.md
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import mongoose from 'mongoose';
 import { start, connection } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';

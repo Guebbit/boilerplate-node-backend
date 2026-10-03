@@ -17,7 +17,7 @@
  *
  * See: docs/tools/outbox.md
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { registerModules } from '@kernel/registry';
 import { relayOutbox } from '@kernel/outbox';

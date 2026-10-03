@@ -21,7 +21,7 @@
  * (`kernel/registry.ts#resolveImageTargets`) — a module adding a third `imageTargets` entry needs
  * no change here.
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import path from 'node:path';
 import mongoose from 'mongoose';
 import { start, stopDatabase } from '@infrastructure/runtime/database';

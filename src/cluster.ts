@@ -6,7 +6,7 @@
  * statement — including the `startTracing()` call in `app.ts` itself.
  */
 // First: every other import reads the environment, and this is what loads `.env` into it.
-import 'dotenv/config';
+import './infrastructure/config/dotenv';
 // OTel must initialize before any other module is loaded.
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
 startTracing();

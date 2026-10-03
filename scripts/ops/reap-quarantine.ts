@@ -18,7 +18,7 @@
  *
  * See: docs/tools/image-processing.md
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { reapDirectory } from '@infrastructure/adapters/filesystem';

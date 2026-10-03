@@ -14,7 +14,7 @@
  *   npm run db:cache:clear         # against the compose Redis hostname
  *   npm run host -- db:cache:clear  # against localhost
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { clearCache, stopCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
