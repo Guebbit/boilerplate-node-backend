@@ -45,16 +45,15 @@ export const createUser = (
      */
     const body = parseBody(
         CreateUserBody,
-        readInput(request, { surface: 'create', booleans: ['active', 'sendSetupEmail'] }),
+        readInput(request, { surface: 'create', booleans: ['active'] }),
         response
     );
     if (!body) return deleteUpload();
-    const { role, active, sendSetupEmail } = body;
+    const { role, active } = body;
 
     /**
-     * `false`: password is never required at this schema layer. A create may satisfy it via
-     * `sendSetupEmail` instead — the either/or the schema can't express, enforced by
-     * `userService.create` itself instead of here.
+     * `false`: the password is never part of this body — the owner chooses it through the setup
+     * email `userService.create` queues.
      */
     const errors = userService.validateData(
         {
@@ -87,8 +86,7 @@ export const createUser = (
                 ...body,
                 ...validated,
                 // Server-decided, so it joins only after the body was validated as `null`-only.
-                imageUrl,
-                sendSetupEmail
+                imageUrl
             },
             callerContextOf(request)
         )

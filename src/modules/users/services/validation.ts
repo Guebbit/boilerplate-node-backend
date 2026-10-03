@@ -1,6 +1,6 @@
 /**
  * @module
- * Admin-form validation and the one password rule `create` and `update` share.
+ * Admin-form validation for `create`.
  */
 
 import { zodUserSchema } from '../model';
@@ -25,11 +25,3 @@ export const validateData = (userData: unknown, requirePassword = true): Respons
     if (!parseResult.success) return validationErrors(parseResult.error);
     return [];
 };
-
-/**
- * Whether an incoming password field is actually usable — present, and not just whitespace.
- * Shared by `create` (falls back to a random value when this is false) and `update` (leaves the
- * stored hash alone when it is), so the same rule isn't spelled out twice.
- */
-export const nonBlankPassword = (password?: string): boolean =>
-    Boolean(password && password.trim().length > 0);

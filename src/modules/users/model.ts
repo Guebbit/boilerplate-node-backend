@@ -13,11 +13,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { localeConfig } from '@infrastructure/i18n/config';
-import {
-    CreateUserBody,
-    createUserBodyPasswordMin,
-    createUserBodyUsernameMin
-} from '@api/schemas.zod';
+import { CreateUserBody, createUserBodyUsernameMin, signupBodyPasswordMin } from '@api/schemas.zod';
 import { type User } from '@types';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
@@ -310,13 +306,14 @@ export const zodUserSchema = CreateUserBody.extend({
         .min(createUserBodyUsernameMin, { error: () => t('users.field-username-min') }),
 
     // Complexity beyond length duplicates `PasswordNew`'s contract pattern in translated form —
-    // the generated schema (`CreateUserBody`) would answer first in English, same reason as the
-    // length check above. One `.refine()` per rule so each gets its own message, matching the
-    // paired frontend's `usersPasswordSchema` rule-for-rule (`schemas.ts`).
+    // the generated schema (`SignupBody`) would answer first in English, same reason as the
+    // length check above. The length floor is `SignupBody`'s: `/users` carries no password.
+    // One `.refine()` per rule so each gets its own message, matching the paired frontend's
+    // `usersPasswordSchema` rule-for-rule (`schemas.ts`).
     password: z
         .string()
         .min(1, { error: () => t('users.field-password-required') })
-        .min(createUserBodyPasswordMin, { error: () => t('users.field-password-min') })
+        .min(signupBodyPasswordMin, { error: () => t('users.field-password-min') })
         .refine((password) => /[a-z]/.test(password), {
             error: () => t('users.field-password-lowercase')
         })

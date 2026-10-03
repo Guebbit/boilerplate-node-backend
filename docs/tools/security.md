@@ -315,9 +315,10 @@ delivered method armed, because a mailed code has an SMTP queue and an app switc
 - **Disabling requires proving a factor** — fresh critical auth plus a valid code or backup code —
   so a stolen-but-fresh session cannot strip 2FA off an account on its own. Removing one method
   and removing all of them are held to the same bar.
-- **Recovery is admin-assisted, not self-service.** A lost device and lost backup codes reduce to
-  the `/users` admin surface, deliberately: a mailbox-based reset would make 2FA only as strong as
-  the inbox it defends against.
+- **There is no app path to recover a lost factor.** No self-service reset (a mailbox-based one
+  would make 2FA only as strong as the inbox it defends against), and no staff reset either: a
+  credential is its owner's alone, so no `/users` route can clear a second factor. A lost device
+  and lost backup codes are fixed by a technician, by hand, in the database.
 
 ### OAuth and the second factor
 

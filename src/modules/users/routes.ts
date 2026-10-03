@@ -16,7 +16,6 @@ import { replaceUser, updateUser } from './controllers/update-user';
 import { deleteUsers } from './controllers/delete-users';
 import { restoreUsers } from './controllers/restore-users';
 import { getUserItem } from './controllers/get-user-item';
-import { deleteUserTwoFactor } from './controllers/delete-user-two-factor';
 import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
@@ -80,8 +79,3 @@ router.delete(
     routeFlag('hardDelete'),
     deleteUsers
 );
-
-// DELETE /users/:id/2fa — admin-assisted 2FA recovery, no code required. The one deliberate
-// exception to "prove the factor to remove it" — see the controller's own comment. Clearing a
-// second factor is `users.any.update`'s own description in `shared/authorization-keys.yaml`.
-router.delete('/:id/2fa', requirePermission('users.any.update'), deleteUserTwoFactor);

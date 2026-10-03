@@ -57,9 +57,9 @@ for their own collection. See [Scheduled jobs](../reference/ops.md#scheduled-job
 `session/`, `two-factor/` and `oauth/` are three folders and not one exported symbol between them.
 They used to look like something authorization would need. It does not: `kernel/authentication.ts`
 is the port every request goes through, and this module fills it using its own relative imports. No
-sibling has ever reached for a token, a factor or a provider — even the admin 2FA reset in
-[`users`](./users.md) clears the fields rather than importing anything from here. Proving who
-somebody is _is_ what `account` is, and none of it is anyone else's business.
+sibling has ever reached for a token, a factor or a provider — and no staff route in
+[`users`](./users.md) touches a credential at all. Proving who somebody is _is_ what `account` is,
+and none of it is anyone else's business.
 :::
 
 ## The pipeline

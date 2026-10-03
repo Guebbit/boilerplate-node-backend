@@ -8,7 +8,7 @@
 import { Types } from 'mongoose';
 import { makeUser, PLAIN_PASSWORD } from '@modules/users/factories';
 import { zodUserSchema } from '../../model';
-import { createUserBodyPasswordMin } from '@api/schemas.zod';
+import { signupBodyPasswordMin } from '@api/schemas.zod';
 import { isInBundledBreachList } from '@infrastructure/security/breached-passwords';
 import {
     LEGACY_PASSWORD,
@@ -102,13 +102,13 @@ describe('the password vocabulary', () => {
     it('keeps LEGACY_PASSWORD long enough to be an existing credential', () => {
         // It fails only on character classes. A password below the length floor could not have
         // been set under ANY past policy, so it would prove nothing about a legacy account.
-        expect(LEGACY_PASSWORD.length).toBeGreaterThanOrEqual(createUserBodyPasswordMin);
+        expect(LEGACY_PASSWORD.length).toBeGreaterThanOrEqual(signupBodyPasswordMin);
     });
 
     it('keeps MINIMAL_PASSWORD exactly at the length floor', () => {
         // Its whole job is to be the shortest legal value. A longer one silently stops testing
         // the boundary.
-        expect(MINIMAL_PASSWORD).toHaveLength(createUserBodyPasswordMin);
+        expect(MINIMAL_PASSWORD).toHaveLength(signupBodyPasswordMin);
     });
 
     it.each([

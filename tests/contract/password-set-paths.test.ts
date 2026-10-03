@@ -1,19 +1,22 @@
 /**
  * @module
  * `password-set-paths`: every place a password gets written must run the SAME breach check —
- * tested once, across every entry point, instead of once per bug that found a gap in one of them
- * (admin create once skipped it entirely). System-scoped rather than living in one module's own
- * suite: the five paths below span both `account` (signup, change, reset) and `users` (admin
- * create, admin update).
+ * tested once, across every entry point, instead of once per bug that found a gap in one of them.
  *
- * Two of the five are one function under the hood — `account/services/profile.ts#passwordChange`
+ * Only the owner sets a password: signup, the authenticated change and the reset or setup link.
+ * The last describe below pins that list against the contract, so a staff route that sets one
+ * cannot appear unnoticed. System-scoped because the paths span the contract, not one module.
+ *
+ * Two of the three are one function under the hood — `account/services/profile.ts#passwordChange`
  * is the shared funnel `passwordResetChange` (reset) and `passwordChangeWithCurrent` (change) both
  * end at, so "change" and "reset" are two ENTRY POINTS sharing one already-tested rule, not two
- * independent implementations. Signup, admin create and admin update each run their own check —
- * see `authentication.ts#signup`, `users/services/create.ts#create` and `services/update.ts#update`.
+ * independent implementations. Signup runs its own check — see `authentication.ts#signup`.
  */
 
 import '@tests/contract';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import YAML from 'yaml';
 import type { Response } from 'supertest';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
@@ -105,52 +108,7 @@ const resetPath: PasswordSetPath = {
     }
 };
 
-/** `POST /users` — an operator handing a brand-new account its first password. */
-const adminCreatePath: PasswordSetPath = {
-    name: 'admin create',
-    attempt: async () => {
-        const { bearer } = await authenticateAs('admin');
-        const email = 'breach-admin-create@example.com';
-        const response = await api().post('/users').set('Authorization', bearer).send({
-            email,
-            username: 'breachadmincreate',
-            password: BREACHED_PASSWORD
-        });
-        return {
-            response,
-            assertNoChange: async () => {
-                expect(await userRepository.findOne({ email })).toBeNull();
-            }
-        };
-    }
-};
-
-/** `PUT /users/{id}` — an operator resetting someone else's password. */
-const adminUpdatePath: PasswordSetPath = {
-    name: 'admin update',
-    attempt: async () => {
-        const { bearer } = await authenticateAs('admin');
-        const target = await createUser({
-            username: 'breachupdatetarget',
-            email: 'breach-update-target@example.com'
-        });
-        const response = await api()
-            .put(`/users/${target.id}`)
-            .set('Authorization', bearer)
-            .send({ email: target.email, username: target.username, password: BREACHED_PASSWORD });
-        return {
-            response,
-            assertNoChange: async () => {
-                const relogin = await api()
-                    .post('/account/login')
-                    .send({ email: target.email, password: PLAIN_PASSWORD });
-                expect(relogin.status).toBe(200);
-            }
-        };
-    }
-};
-
-describe.each([signupPath, changePath, resetPath, adminCreatePath, adminUpdatePath])(
+describe.each([signupPath, changePath, resetPath])(
     '$name refuses a breached password',
     ({ attempt }) => {
         it('answers 422 and writes nothing', async () => {
@@ -161,3 +119,58 @@ describe.each([signupPath, changePath, resetPath, adminCreatePath, adminUpdatePa
         });
     }
 );
+
+/** The slice of the bundled contract the canary below reads. */
+interface RawSpec {
+    paths: Record<string, Record<string, { requestBody?: unknown } | undefined>>;
+    components: { schemas: Record<string, { properties?: Record<string, { $ref?: string }> }> };
+}
+
+/** Where the bundled contract sits on disk — `npm run contracts:bundle` writes it. */
+const SPEC_FILE = path.join(__dirname, '..', '..', 'openapi.yaml');
+
+/** The schema name a request body points at, whatever its media type, or none. */
+const bodySchemaNames = (requestBody: unknown): string[] => {
+    const { content } = requestBody as { content?: Record<string, { schema?: { $ref?: string } }> };
+
+    return Object.values(content ?? {})
+        .map((media) => media.schema?.$ref?.split('/').pop())
+        .filter((name): name is string => name !== undefined);
+};
+
+/**
+ * Every operation whose request body carries a `PasswordNew`: a password being SET, as opposed
+ * to one being proved (login, re-auth, delete-account).
+ */
+const operationsThatSetAPassword = (): string[] => {
+    const spec = YAML.parse(readFileSync(SPEC_FILE, 'utf8')) as RawSpec;
+    const setsPassword = (name: string): boolean =>
+        Object.values(spec.components.schemas[name]?.properties ?? {}).some((property) =>
+            property.$ref?.endsWith('/PasswordNew')
+        );
+
+    return Object.entries(spec.paths)
+        .flatMap(([route, item]) =>
+            Object.entries(item).map(([method, operation]) => ({ route, method, operation }))
+        )
+        .filter(
+            ({ operation }) =>
+                operation?.requestBody !== undefined &&
+                bodySchemaNames(operation.requestBody).some((name) => setsPassword(name))
+        )
+        .map(({ route, method }) => `${method.toUpperCase()} ${route}`)
+        .toSorted();
+};
+
+describe('the routes that can set a password', () => {
+    // The owner's own three, and nobody else's: no staff route sets, resets or creates one. The
+    // exact list is the canary, so a new route that sets a password fails here until it is a
+    // deliberate addition (and gains a breach-check case above).
+    it('are exactly signup, the owner’s own change and the reset or setup link', () => {
+        expect(operationsThatSetAPassword()).toEqual([
+            'POST /account/password',
+            'POST /account/reset-confirm',
+            'POST /account/signup'
+        ]);
+    });
+});

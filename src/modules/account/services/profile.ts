@@ -513,7 +513,7 @@ const writeProfile = (
     if (emailOutcome.conflict)
         return Promise.resolve(generateReject(409, [t('account.update.email-already-used')]));
 
-    return userService.update(user, { ...fields, email: undefined }, context).then((result) => {
+    return userService.update(user, fields, context).then((result) => {
         if (!result.success || !emailOutcome.requested) return result;
         return notifyEmailChangeRequested(result.data, context).then(() => result);
     });

@@ -18,7 +18,6 @@ import { enqueueIfPending } from './image';
 import { create } from './create';
 import { update, updateById } from './update';
 import { remove, restoreById, removeById } from './remove';
-import { adminDisableTwoFactor } from './admin-two-factor';
 import {
     findAuthenticatableById,
     findByIdWithCredentials,
@@ -72,7 +71,6 @@ export { enqueueIfPending } from './image';
 export { create } from './create';
 export { update, updateById } from './update';
 export { remove, restoreById, removeById } from './remove';
-export { adminDisableTwoFactor } from './admin-two-factor';
 export { consumeToken } from './tokens';
 
 /** The service's public surface — the controllers call through this, never the bare functions. */
@@ -90,7 +88,6 @@ export const userService = {
     remove,
     removeById,
     restoreById,
-    adminDisableTwoFactor,
     findByEmail,
     emailTaken,
     findAuthenticatableById,

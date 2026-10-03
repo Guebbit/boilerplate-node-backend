@@ -11,7 +11,7 @@ import { testCallerContext, callerContextAs } from '@tests/callers';
 import { systemCallerContext } from '@kernel/permissions';
 import type { ClientSession } from 'mongoose';
 import { personalDataErasers, setPersonalDataErasers } from '../../erasure-registry';
-import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import * as userService from '@modules/users/services';
 import { USER_SETUP_REQUESTED } from '../../events';
 import { userRepository } from '../../repository';
@@ -352,16 +352,13 @@ describe('userService.create', () => {
         const user = await expectCreated(
             {
                 email: 'created@example.com',
-                username: 'createduser',
-                password: PLAIN_PASSWORD
+                username: 'createduser'
             },
             callerContextAs('admin')
         );
 
         expect(user._id).toBeDefined();
         expect(user.email).toBe('created@example.com');
-        // Password should have been hashed by the pre-save hook
-        expect(user.password).not.toBe(PLAIN_PASSWORD);
     });
 
     it('creates a user in the role the request names', async () => {
@@ -369,7 +366,6 @@ describe('userService.create', () => {
             {
                 email: 'superadmin@example.com',
                 username: 'superadmin',
-                password: PLAIN_PASSWORD,
                 role: 'admin'
             },
             callerContextAs('admin')
@@ -386,8 +382,7 @@ describe('userService.create', () => {
         const user = await expectCreated(
             {
                 email: 'moderator-made@example.com',
-                username: 'moderatormade',
-                password: PLAIN_PASSWORD
+                username: 'moderatormade'
             },
             callerContextAs('moderator')
         );
@@ -405,7 +400,6 @@ describe('userService.create', () => {
                 {
                     email: 'never-created@example.com',
                     username: 'nevercreated',
-                    password: PLAIN_PASSWORD,
                     role: 'admin'
                 },
                 callerContextAs('moderator')
@@ -415,42 +409,16 @@ describe('userService.create', () => {
         expect(await userRepository.findOne({ email: 'never-created@example.com' })).toBeNull();
     });
 
-    // This ran on `update` already, but never on `create` — an admin could hand a brand-new
-    // account a password already on every breach list, the exact exposure the update path closes.
-    it('rejects a breached password with 422, and creates no user row', async () => {
-        const result = await userService.create(
-            {
-                email: 'breached@example.com',
-                username: 'breacheduser',
-                // A listed, composition-valid entry in `breached-passwords/list.txt` — same
-                // fixture `account/tests/integration/service-flows.test.ts` uses for its own
-                // breach case, so composition rules alone can't be what rejects it.
-                password: 'Password1!'
-            },
-            callerContextAs('admin')
-        );
-
-        expect(result.success).toBe(false);
-        expect((result as ResponseReject).status).toBe(422);
-        expect(await userRepository.findOne({ email: 'breached@example.com' })).toBeNull();
-    });
-
-    describe('with no password', () => {
+    describe('the owner chooses the password', () => {
         afterEach(() => {
             resetDomainEvents();
         });
 
         it('fills the field with something the caller was never told, rather than leaving it empty', async () => {
-            // `password` is `required: true` at the Mongoose layer (see `./model`) regardless of
-            // what the contract allows, so a create with no password still has to write SOMETHING.
-            // `sendSetupEmail: true` is what makes an absent password valid input at all — see the
-            // rejection case below.
+            // `password` is `required: true` at the Mongoose layer (see `./model`), so a create
+            // still has to write SOMETHING; nobody is told what.
             const user = await expectCreated(
-                {
-                    email: 'no-password@example.com',
-                    username: 'nopassworduser',
-                    sendSetupEmail: true
-                },
+                { email: 'no-password@example.com', username: 'nopassworduser' },
                 callerContextAs('admin')
             );
 
@@ -459,66 +427,36 @@ describe('userService.create', () => {
             expect(stored?.password).not.toBe('');
         });
 
-        it('is refused with 422 when there is neither a password nor a way to set one', async () => {
-            // Previously enforced only in the controller (`create-user.ts`) — a caller reaching
-            // `userService.create` directly could still produce an account nobody can ever log
-            // into. The invariant now lives where every caller has to cross it.
-            const seen: string[] = [];
-            onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
-                seen.push(userId);
-            });
-
-            const result = await userService.create(
-                { email: 'no-setup@example.com', username: 'nosetupuser' },
+        it('gives two accounts two different unknown passwords', async () => {
+            const first = await expectCreated(
+                { email: 'unknown-one@example.com', username: 'unknownone' },
+                callerContextAs('admin')
+            );
+            const second = await expectCreated(
+                { email: 'unknown-two@example.com', username: 'unknowntwo' },
                 callerContextAs('admin')
             );
 
-            expect(result.success).toBe(false);
-            expect((result as ResponseReject).status).toBe(422);
-            expect(await userRepository.findOne({ email: 'no-setup@example.com' })).toBeNull();
-            expect(seen).toEqual([]);
+            const [one, two] = await Promise.all([
+                userRepository.findByIdWithCredentials(String(first._id)),
+                userRepository.findByIdWithCredentials(String(second._id))
+            ]);
+            expect(one?.password).not.toBe(two?.password);
         });
 
-        it('emits USER_SETUP_REQUESTED for this user when sendSetupEmail is true', async () => {
+        it('emits USER_SETUP_REQUESTED for this user, always', async () => {
             const seen: string[] = [];
             onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
                 seen.push(userId);
             });
 
             const user = await expectCreated(
-                {
-                    email: 'setup-me@example.com',
-                    username: 'setupmeuser',
-                    sendSetupEmail: true
-                },
+                { email: 'setup-me@example.com', username: 'setupmeuser' },
                 callerContextAs('admin')
             );
 
             expect(seen).toEqual([String(user._id)]);
         });
-    });
-
-    it('never emits USER_SETUP_REQUESTED when a password was supplied, even with sendSetupEmail: true', async () => {
-        const seen: string[] = [];
-        onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
-            seen.push(userId);
-        });
-
-        try {
-            await userService.create(
-                {
-                    email: 'has-password@example.com',
-                    username: 'haspassworduser',
-                    password: PLAIN_PASSWORD,
-                    sendSetupEmail: true
-                },
-                callerContextAs('admin')
-            );
-
-            expect(seen).toEqual([]);
-        } finally {
-            resetDomainEvents();
-        }
     });
 });
 
@@ -541,28 +479,6 @@ describe('userService.updateById', () => {
         expect(updated.username).toBe('new-name');
         const roles = await rolesOf(String(updated._id), DEPLOYMENT_TENANT_ID);
         expect(roles.tenant).toBe('admin');
-    });
-
-    it('changes the password when a non-empty password is supplied', async () => {
-        const user = await createUser({ email: 'pwdupdate@example.com' });
-        const id = user._id.toString();
-        const originalHash = user.password;
-
-        await userService.updateById(id, { password: REPLACEMENT_PASSWORD }, testCallerContext);
-
-        const refreshed = await userRepository.findByIdWithCredentials(id);
-        expect(refreshed!.password).not.toBe(originalHash);
-    });
-
-    it('does not touch the password when an empty string is supplied', async () => {
-        const user = await createUser();
-        const id = user._id.toString();
-        const originalHash = user.password;
-
-        await userService.updateById(id, { password: '' }, testCallerContext);
-
-        const refreshed = await userRepository.findByIdWithCredentials(id);
-        expect(refreshed!.password).toBe(originalHash);
     });
 
     it('stores phone encrypted, never as the plaintext submitted, and decrypts it back through presentUser', async () => {

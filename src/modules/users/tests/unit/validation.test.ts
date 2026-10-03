@@ -7,7 +7,7 @@
  * and a message attached to the wrong rule, by asserting on `en.json`'s own copy.
  */
 import { zodUserSchema } from '@modules/users/model';
-import { createUserBodyPasswordMin } from '@api/schemas.zod';
+import { signupBodyPasswordMin } from '@api/schemas.zod';
 import { readLocaleDictionary } from '@infrastructure/i18n';
 import { PLAIN_PASSWORD } from '@modules/users/factories';
 import { MINIMAL_PASSWORD } from '@modules/users/tests/factories';
@@ -82,7 +82,7 @@ describe('password messages', () => {
         // Length read from the generated schema rather than written here, so a change to
         // openapi.yaml moves this boundary with it instead of leaving a stale literal behind.
         const messages = messagesFor(
-            { ...validUser, password: 'a'.repeat(createUserBodyPasswordMin - 1) },
+            { ...validUser, password: 'a'.repeat(signupBodyPasswordMin - 1) },
             'password'
         );
 
@@ -99,10 +99,7 @@ describe('password messages', () => {
     // documents the same rule. This and the four cases below pin the server-side enforcement.
     it('rejects a password the contract minimum accepts on length alone', () => {
         expect(
-            messagesFor(
-                { ...validUser, password: 'a'.repeat(createUserBodyPasswordMin) },
-                'password'
-            )
+            messagesFor({ ...validUser, password: 'a'.repeat(signupBodyPasswordMin) }, 'password')
         ).not.toEqual([]);
     });
 

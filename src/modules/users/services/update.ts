@@ -10,7 +10,6 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
@@ -25,7 +24,6 @@ import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { usersAnalyticsEvents } from '../analytics';
 import { usersAuditActions } from '../audit';
-import { nonBlankPassword } from './validation';
 import { enqueueIfPending } from './image';
 
 /**
@@ -58,38 +56,26 @@ export const update = (
      */
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const password = nonBlankPassword(data.password) ? data.password : undefined;
+    if (data.username !== undefined) user.username = data.username;
+    // `role` is not written here — there is no column, only the membership,
+    // written below in `updateSavedUser` once the rest of the document has saved.
+    if (data.active !== undefined) user.active = data.active;
+    // The old url is captured before the overwrite so `updateSavedUser` can delete it once
+    // the new one is durably saved — see `applyImageWriteback`'s own docblock for the gate
+    // shared with `products/services/crud.ts`'s own `update`. `null` unsets the field, and the
+    // same old-url capture then deletes the file and its thumbnail.
+    const oldImageUrl = applyImageWriteback(user, data);
+    // The preference that outlives the request — see the `locale` field on the user
+    // schema. `null` clears the override — $unset on save.
+    if (data.locale !== undefined) user.locale = clearedOrValue(data.locale);
+    if (data.phone !== undefined)
+        user.phone = data.phone === null ? undefined : encryptPii(data.phone);
+    if (data.website !== undefined) user.website = clearedOrValue(data.website);
+    // Absent leaves the stored choice alone, same as every field above; only an explicit
+    // boolean changes it.
+    if (data.analyticsConsent !== undefined) user.analyticsConsent = data.analyticsConsent;
 
-    // Checked before any field is assigned: a breached password fails the whole update, and
-    // nothing else here is worth mutating first.
-    return (password ? assertPasswordNotBreached(password) : Promise.resolve([])).then(
-        (breachErrors) => {
-            if (breachErrors.length > 0) return generateReject(422, breachErrors);
-
-            if (data.email !== undefined) user.email = data.email;
-            if (data.username !== undefined) user.username = data.username;
-            // `role` is not written here — there is no column, only the membership,
-            // written below in `updateSavedUser` once the rest of the document has saved.
-            if (data.active !== undefined) user.active = data.active;
-            // The old url is captured before the overwrite so `updateSavedUser` can delete it once
-            // the new one is durably saved — see `applyImageWriteback`'s own docblock for the gate
-            // shared with `products/services/crud.ts`'s own `update`. `null` unsets the field, and the
-            // same old-url capture then deletes the file and its thumbnail.
-            const oldImageUrl = applyImageWriteback(user, data);
-            // The preference that outlives the request — see the `locale` field on the user
-            // schema. `null` clears the override — $unset on save.
-            if (data.locale !== undefined) user.locale = clearedOrValue(data.locale);
-            if (data.phone !== undefined)
-                user.phone = data.phone === null ? undefined : encryptPii(data.phone);
-            if (data.website !== undefined) user.website = clearedOrValue(data.website);
-            // Absent leaves the stored choice alone, same as every field above; only an explicit
-            // boolean changes it.
-            if (data.analyticsConsent !== undefined) user.analyticsConsent = data.analyticsConsent;
-            if (password) user.password = password;
-
-            return updateSavedUser(user, data, context, oldImageUrl);
-        }
-    );
+    return updateSavedUser(user, data, context, oldImageUrl);
 };
 
 /**

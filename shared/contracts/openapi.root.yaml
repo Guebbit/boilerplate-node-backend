@@ -525,8 +525,8 @@ components:
             # those are what a person reads when they get it wrong.
             pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\dA-Za-z]).{8,}$'
             description: >-
-                A password being SET — signup, reset, change, and every admin-issued user
-                password. Must contain a lowercase letter, an uppercase letter, a digit and a
+                A password being SET by its owner — signup, reset (or the setup link) and change.
+                Must contain a lowercase letter, an uppercase letter, a digit and a
                 symbol, on top of `Password`'s length floor — enforced server-side, not just by
                 the paired frontend's form.
         Locale:
@@ -1978,8 +1978,6 @@ paths:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}~1restore'
     /users/{id}/hard:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}~1hard'
-    /users/{id}/2fa:
-        $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}~12fa'
     /users/search:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1search'
 

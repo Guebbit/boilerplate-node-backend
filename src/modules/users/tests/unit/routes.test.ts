@@ -32,8 +32,7 @@ const ALL = [
     'PATCH /:id',
     'DELETE /:id',
     'POST /:id/restore',
-    'DELETE /:id/hard',
-    'DELETE /:id/2fa'
+    'DELETE /:id/hard'
 ];
 
 describe('user routes — what is mounted', () => {

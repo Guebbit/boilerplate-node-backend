@@ -23,8 +23,6 @@ export const usersAuditActions = {
     SYSTEM_USER_SOFT_DELETED: 'system.user.soft_deleted',
     /** The inactivity reaper's own hard delete — nobody at the keyboard, so not `admin.*`. */
     SYSTEM_USER_ERASED: 'system.user.erased',
-    /** An admin stripped a user's second factor — the one non-self-service 2FA recovery path. */
-    ADMIN_USER_2FA_DISABLED: 'admin.user.two_factor_disabled',
     /*
      * A ban is `active: false` on the same PUT every other edit uses — see `users/services/update.ts`'s
      * `auditActionForUpdate`. Split from `ADMIN_USER_UPDATED` so the history answers "was this

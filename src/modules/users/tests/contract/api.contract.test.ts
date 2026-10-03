@@ -10,6 +10,8 @@ import { api, authenticateAs } from '@tests/http';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
+import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { USER_SETUP_REQUESTED } from '../../events';
 
 setupTestDb();
 
@@ -132,53 +134,44 @@ describe('POST /account/signup', () => {
 });
 
 /**
- * These four cover password provisioning on admin create: supplied directly, deferred to
- * `sendSetupEmail`, or neither — which must 422 rather than silently create an unreachable account.
+ * An admin creates an account, never a password: the owner chooses theirs through the setup
+ * email, so the body carries neither a `password` nor a `sendSetupEmail` switch.
  */
 describe('POST /users', () => {
-    it('creates a user with a password supplied directly, and exposes no credentials', async () => {
+    afterEach(() => {
+        resetDomainEvents();
+    });
+
+    it('creates a user without a password, exposes no credentials, and mails the owner a setup link', async () => {
+        const seen: string[] = [];
+        onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
+            seen.push(userId);
+        });
         const { bearer } = await authenticateAs('admin');
         const response = await api().post('/users').set('Authorization', bearer).send({
             email: 'admin-created@example.com',
-            username: 'admincreated',
-            password: PLAIN_PASSWORD
+            username: 'admincreated'
         });
 
         expect(response.status).toBe(201);
         assertNoCredentials(response.body);
+        expect(seen).toEqual([(response.body as { data: { id: string } }).data.id]);
     });
 
-    it('creates a user with no password when sendSetupEmail is true', async () => {
+    it.each([
+        ['password', { password: PLAIN_PASSWORD }],
+        ['sendSetupEmail', { sendSetupEmail: true }]
+    ])('refuses a %s in the body with a 422 and creates nobody', async (_field, extra) => {
         const { bearer } = await authenticateAs('admin');
-        const response = await api().post('/users').set('Authorization', bearer).send({
-            email: 'setup-email@example.com',
-            username: 'setupemailuser',
-            sendSetupEmail: true
-        });
+        const email = 'credential-field@example.com';
 
-        expect(response.status).toBe(201);
-        assertNoCredentials(response.body);
-    });
-
-    it('matches the error contract for neither a password nor sendSetupEmail', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const response = await api().post('/users').set('Authorization', bearer).send({
-            email: 'no-way-in@example.com',
-            username: 'nowayinuser'
-        });
+        const response = await api()
+            .post('/users')
+            .set('Authorization', bearer)
+            .send({ email, username: 'credentialfield', ...extra });
 
         expect(response.status).toBe(422);
-    });
-
-    it('accepts sendSetupEmail: false the same as omitting it', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const response = await api().post('/users').set('Authorization', bearer).send({
-            email: 'setup-false@example.com',
-            username: 'setupfalseuser',
-            sendSetupEmail: false
-        });
-
-        expect(response.status).toBe(422);
+        expect(await userRepository.findOne({ email })).toBeNull();
     });
 
     /*
@@ -197,21 +190,20 @@ describe('POST /users', () => {
         const response = await api()
             .post('/users')
             .set('Authorization', bearer)
-            .send({ email, username: 'undeclaredfield', password: PLAIN_PASSWORD, ...extra });
+            .send({ email, username: 'undeclaredfield', ...extra });
 
         expect(response.status).toBe(422);
         expect(await userRepository.findOne({ email })).toBeNull();
     });
 
-    // The breach check on create (and that it creates no user row) is table-driven across every
-    // password-set path now, in `tests/contract/password-set-paths.test.ts`.
+    // The paths that can set a password are listed, with their breach checks, in
+    // `tests/contract/password-set-paths.test.ts`: `POST /users` is not one of them.
 });
 
 describe('PUT /users/{id}', () => {
     // A PUT body IS the new resource (RFC 9110 §9.3.4) — every omitted optional field is
-    // cleared, not left alone. `password` and `imageUrl` are the exceptions: the first keeps its
-    // own flow, the second belongs to an upload, so both are left out of this body and
-    // both survive it.
+    // cleared, not left alone. `imageUrl` is the exception: it belongs to an upload, so it is
+    // left out of this body and survives it.
     it('replaces every writable field, clearing every omitted optional one', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser(
@@ -228,7 +220,6 @@ describe('PUT /users/{id}', () => {
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
             .send({
-                email: target.email,
                 username: 'replacedfull',
                 role: 'customer',
                 active: true
@@ -239,8 +230,8 @@ describe('PUT /users/{id}', () => {
         expect(response.body.data.phone).toBeUndefined();
     });
 
-    // `email`/`username`/`role`/`active` are the Replace schema's `required` set — an omitted one
-    // is a malformed PUT, not a value to fill in.
+    // `username`/`role`/`active` are the Replace schema's `required` set — an omitted one is a
+    // malformed PUT, not a value to fill in.
     it('refuses a body missing one of the required identity fields', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser(
@@ -256,9 +247,7 @@ describe('PUT /users/{id}', () => {
         expect(response.status).toBe(422);
     });
 
-    // Regression guard: the controller once defaulted `requirePassword` to true on updates too,
-    // so an admin couldn't edit a user without resubmitting their password.
-    it('updates a user without resubmitting a password', async () => {
+    it('updates a user with no credential in the body', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser(
             { username: 'editnocredential', email: 'editnocredential@example.com' },
@@ -269,7 +258,6 @@ describe('PUT /users/{id}', () => {
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
             .send({
-                email: target.email,
                 username: 'editednocredential',
                 role: 'customer',
                 active: true
@@ -279,12 +267,33 @@ describe('PUT /users/{id}', () => {
         assertNoCredentials(response.body);
     });
 
-    // The breach check on PUT is table-driven across every password-set path now, in
-    // `tests/contract/password-set-paths.test.ts`.
+    // A credential is its owner's alone: neither is a declared field, so the strict schema
+    // refuses it and the stored values stay as they were.
+    it.each([
+        ['email', { email: 'taken-over@example.com' }],
+        ['password', { password: PLAIN_PASSWORD }]
+    ])('refuses a %s with a 422 and changes nothing', async (field, extra) => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser(
+            { username: 'putcredential', email: 'putcredential@example.com' },
+            'customer'
+        );
+        const before = await userRepository.findByIdWithCredentials(String(target._id));
+
+        const response = await api()
+            .put(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ username: 'putcredential', role: 'customer', active: true, ...extra });
+
+        expect(response.status).toBe(422);
+        const after = await userRepository.findByIdWithCredentials(String(target._id));
+        expect(after?.email).toBe(before?.email);
+        expect(after?.password).toBe(before?.password);
+        expect(field).toBeDefined();
+    });
 });
 
 describe('PATCH /users/{id}', () => {
-    // The paired frontend's `updateOwnRole` sends `{ role }` alone.
     it('merges only the given field, leaving email and username unchanged', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser(
@@ -352,8 +361,27 @@ describe('PATCH /users/{id}', () => {
         expect(response.status).toBe(422);
     });
 
-    // The breach check on PATCH is table-driven across every password-set path now, in
-    // `tests/contract/password-set-paths.test.ts`.
+    it.each([
+        ['email', { email: 'taken-over@example.com' }],
+        ['password', { password: PLAIN_PASSWORD }]
+    ])('refuses a %s with a 422 and changes nothing', async (_field, extra) => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser(
+            { username: 'patchcredential', email: 'patchcredential@example.com' },
+            'customer'
+        );
+        const before = await userRepository.findByIdWithCredentials(String(target._id));
+
+        const response = await api()
+            .patch(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send(extra);
+
+        expect(response.status).toBe(422);
+        const after = await userRepository.findByIdWithCredentials(String(target._id));
+        expect(after?.email).toBe(before?.email);
+        expect(after?.password).toBe(before?.password);
+    });
 });
 
 describe('DELETE /users/{id} — the audit action names which discharge happened', () => {
@@ -423,8 +451,8 @@ describe('POST /users/{id}/restore', () => {
 });
 
 /*
- * The body-addressed twin of `DELETE /users/{id}`, the explicit hard delete, the admin 2FA
- * reset — and the refusals every one of them owes an anonymous caller.
+ * The body-addressed twin of `DELETE /users/{id}`, the explicit hard delete — and the refusals
+ * every one of them owes an anonymous caller.
  */
 describe('DELETE /users — the id in the body', () => {
     it('matches the contract for a soft delete', async () => {
@@ -456,8 +484,12 @@ describe('DELETE /users/{id}/hard', () => {
     });
 });
 
+/**
+ * There is no staff path to a second factor: the owner removes it with a code, and a lost one is
+ * fixed by hand in the database. The route that once did it is gone, not merely guarded.
+ */
 describe('DELETE /users/{id}/2fa', () => {
-    it('answers success for a user with no factor armed — the reset is idempotent', async () => {
+    it('is not a route any more', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser({ email: 'no-factor@example.com' });
 
@@ -465,26 +497,7 @@ describe('DELETE /users/{id}/2fa', () => {
             .delete(`/users/${String(target._id)}/2fa`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
-    });
-
-    it('matches the contract when it disarms a factor the user had', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const target = await createUser({ email: 'locked-out@example.com' });
-        // Armed directly: the admin reset is about the ROW, and the enrollment dance is
-        // `account`'s own contract, covered there.
-        const stored = await userRepository.findByIdWithCredentials(String(target._id));
-        stored!.twoFactorMethods.push({ method: 'email', enrolledAt: new Date() });
-        stored!.twoFactorEnabledAt = new Date();
-        await userRepository.save(stored!);
-
-        const response = await api()
-            .delete(`/users/${String(target._id)}/2fa`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(200);
-        const after = await userRepository.findByIdWithCredentials(String(target._id));
-        expect(after!.twoFactorMethods).toEqual([]);
+        expect(response.status).toBe(404);
     });
 });
 
@@ -504,16 +517,16 @@ describe.each([
 });
 
 describe('an id nobody holds', () => {
-    it.each([
-        ['DELETE', '/users/65dc8a99604c307b702b5ccc/hard'],
-        ['DELETE', '/users/65dc8a99604c307b702b5ccc/2fa']
-    ] as const)('%s %s matches the 404 contract', async (_method, path) => {
-        const { bearer } = await authenticateAs('admin');
+    it.each([['DELETE', '/users/65dc8a99604c307b702b5ccc/hard']] as const)(
+        '%s %s matches the 404 contract',
+        async (_method, path) => {
+            const { bearer } = await authenticateAs('admin');
 
-        const response = await api().delete(path).set('Authorization', bearer);
+            const response = await api().delete(path).set('Authorization', bearer);
 
-        expect(response.status).toBe(404);
-    });
+            expect(response.status).toBe(404);
+        }
+    );
 });
 
 const emailsOf = (response: { body: { data: { items: { email: string }[] } } }) =>
