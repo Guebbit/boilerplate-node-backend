@@ -270,6 +270,26 @@ describe('malformedIdIssues', () => {
         ]);
     });
 
+    it('finds an id inside a union and an intersection', () => {
+        const wrapped = z.strictObject({
+            either: z.union([idSchema(), z.number()]),
+            both: z.intersection(
+                z.strictObject({ a: idSchema() }),
+                z.strictObject({ b: z.number() })
+            )
+        });
+
+        expect(
+            malformedIdIssues(wrapped, { either: 'abc', both: { a: 'abc', b: 1 } })
+                .map((issue) => (issue.details as { field: string }).field)
+                .toSorted()
+        ).toEqual(['both.a', 'either']);
+    });
+
+    it('reads something that is not a Zod 4 schema as having no ids', () => {
+        expect(malformedIdIssues(asStub<z.ZodType>({}), { id: 'abc' })).toEqual([]);
+    });
+
     it('reads a schema built without the contract pattern as having no ids', () => {
         const plain = z.strictObject({ productId: z.string() });
 
