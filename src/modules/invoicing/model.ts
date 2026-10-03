@@ -71,7 +71,7 @@ export interface FrozenTaxDocument {
     number: string;
     /** The moment this document was issued — an order's `paidAt` for an invoice, a payment's refund moment for a credit note. */
     issuedAt: Date;
-    /** ISO-4217, frozen from the ORDER's own `currency` (E6/FA37) — never re-read from config. */
+    /** ISO-4217, frozen from the ORDER's own `currency` — never re-read from config. */
     currency: string;
     /** The language every string on the rendered PDF is in — the order's own frozen locale. */
     locale: string;

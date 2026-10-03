@@ -20,6 +20,7 @@ import { invoicingLimiter } from './rate-limits';
 /** Express router for invoicing's download routes. */
 export const router = Router();
 
+// Everything below needs a signed-in user: `getAuth` resolves the session, `isAuth` refuses none.
 router.use(getAuth, isAuth);
 
 // GET /orders/:id/invoice — not cached: every hit renders fresh, and caching PDF bytes as a

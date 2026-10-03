@@ -1,6 +1,6 @@
 /**
  * @module
- * `GET /orders/{id}/invoice` and `/credit-notes` over real HTTP — the gate B16 asked for: 404 for
+ * `GET /orders/{id}/invoice` and `/credit-notes` over real HTTP: 404 for
  * an order that has not been invoiced yet, 200 once it has, and the same ownership scope every
  * other order read already enforces.
  */

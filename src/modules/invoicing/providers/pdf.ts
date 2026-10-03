@@ -13,7 +13,7 @@ import type { EInvoicingProvider } from './index';
 
 /**
  * The EJS template every render — invoice or credit note — prints through, owned by this module
- * (SK-15) rather than by `shared/templates` — deleting `invoicing` now deletes it too.
+ * rather than by `shared/templates` — deleting `invoicing` now deletes it too.
  *
  * Under `templates/documents/`, one level deeper than a module's OTHER templates: nothing ever
  * resolves this file BY NAME (unlike an `EmailContent.template`, which travels through a queue as

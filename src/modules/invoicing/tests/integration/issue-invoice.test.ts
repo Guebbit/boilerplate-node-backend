@@ -133,7 +133,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         expect(invoice.grandTotal).toBe(0.3);
     });
 
-    // C4: `rateType` rides frozen onto the order line at checkout (`orders/services/snapshot.ts`)
+    // `rateType` rides frozen onto the order line at checkout (`orders/services/snapshot.ts`)
     // and freezes again onto the invoice line here — the field a rendered PDF needs to tell a
     // zero-rated line from an exempt one, neither of which `taxRate` alone can say.
     it('freezes the order line’s rateType onto the invoice line', async () => {

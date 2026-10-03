@@ -1,7 +1,7 @@
 /**
  * @module
  * Invoicing: the frozen tax invoice and credit-note documents `orders`' receipt never was — see
- * `docs/modules/invoicing.md` for the full design and `DECISIONS_0925_2`'s SH2 option A for why.
+ * `docs/modules/invoicing.md` for the full design and why it is a module of its own.
  *
  * Owns:        the `Invoice`/`CreditNote` collections and their own numbering series, outright.
  * Depends on:  `orders` (the VAT breakdown, the seller's jurisdiction, an auth-scoped order read)
