@@ -66,7 +66,7 @@ shared rule belongs to whichever domain OWNS it, exported through that module's 
 
 So `kernel` holds only what would lose its reason to exist if modules did — which today is NOT
 just the module system machinery (`registry.ts`, `events.ts`): six of its ten files, and most of
-its code, are the authn/authz surface every module's guard shares (SK-16). That is a real weight,
+its code, are the authn/authz surface every module's guard shares. That is a real weight,
 not an oversight — the table below is what earns each file its place, module system or not:
 
 | File                            | Why it cannot be infrastructure                                                                          |

@@ -35,7 +35,7 @@ rather than the edge:
 ```
 
 Four rules use it: `infrastructure` against the domains above it, `src-cannot-reach-scenarios`,
-`unit-layer-stays-database-free`, and `foundation-cannot-reach-shop` (DDD-D1).
+`unit-layer-stays-database-free`, and `foundation-cannot-reach-shop`.
 
 ### Domain purity — an allow-list, not a deny-list (T11)
 
@@ -56,7 +56,7 @@ A `domain/` file may reach its own module's domain siblings and `@types` — eve
 `domain/` file in this repo makes today — and nothing else. A rule reporting `mongoose` unresolved
 would have said nothing about `node:fs`; this one reports anything not on the list, by construction.
 
-### Unresolvable imports (DDD-D1)
+### Unresolvable imports
 
 Nothing used to catch a specifier dependency-cruiser cannot resolve to a file on disk at all —
 `not-to-unresolvable` does, so a deleted module or package left behind by an incomplete rename

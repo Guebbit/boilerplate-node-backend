@@ -42,9 +42,8 @@ flowchart LR
 
 `orders`' own PDF used to be titled "Fattura n." — a tax invoice's name — while behaving like
 neither one: numbered and emailed before any payment, re-rendered from whatever the shop's config
-said today, downloadable on a cancelled order, and destroyed outright by a hard delete. Three
-sessions of review (`AUDIT_0924`, `DECISIONS_0925_2`) relabelled it honestly first — "order
-confirmation / receipt, not a tax invoice" — and this module is the second half: the real thing,
+said today, downloadable on a cancelled order, and destroyed outright by a hard delete. A review
+relabelled it honestly first — "order confirmation / receipt, not a tax invoice" — and this module is the second half: the real thing,
 built once the relabel had already shipped.
 
 The model here is Stripe's invoice lifecycle (finalize once, void rather than delete) and Magento's
