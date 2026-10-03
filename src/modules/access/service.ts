@@ -402,6 +402,30 @@ export const levelOfUser = (userId: string): Promise<RoleLevel> =>
     rolesOf(userId, DEPLOYMENT_TENANT_ID).then(levelOfRoles);
 
 /**
+ * {@link levelOfUser} for a set of people, in two queries rather than two per person — the
+ * batched sibling the inactivity reaper needs to leave staff and administrators alone.
+ *
+ * @param userIds - the people asked about
+ * @returns each id's level; a person with no membership is `user`
+ */
+export const levelsOfMany = (userIds: readonly string[]): Promise<Map<string, RoleLevel>> =>
+    Promise.all([
+        rolesOfMany(userIds, DEPLOYMENT_TENANT_ID, 'tenant'),
+        rolesOfMany(userIds, null, 'platform')
+    ]).then(
+        ([tenant, platform]) =>
+            new Map(
+                userIds.map((id) => [
+                    id,
+                    levelOfRoles({
+                        tenant: tenant.get(id) ?? null,
+                        platform: platform.get(id) ?? null
+                    })
+                ])
+            )
+    );
+
+/**
  * May this caller change something that belongs to `ownerId`? The rank rule, asked AFTER the
  * route's key: the owner must rank strictly below the caller.
  *
