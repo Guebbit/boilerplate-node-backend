@@ -2,7 +2,7 @@
  * @module
  * Outbound webhooks: subscriptions, the delivery log, and the admin surface over both. Reacts to
  * every domain event a registered module's manifest names a `publicEvents` entry for
- * (`kernel/registry.ts`'s `PublicEventTarget`, DDD-D4) via the domain-event bus — the reverse edge
+ * (`kernel/registry.ts`'s `PublicEventTarget`) via the domain-event bus — the reverse edge
  * described in `docs/modules/webhooks.md`, so this module never imports `orders`/`payments`, nor
  * they it.
  *
@@ -25,7 +25,7 @@ import { webhooksConfig } from './config';
 
 /**
  * Once every enabled module is known, collect their `publicEvents` declarations and subscribe —
- * `subscribe()` itself runs too early for this: the full module list DDD-D4's registry lookup
+ * `subscribe()` itself runs too early for this: the full module list the registry lookup
  * needs only exists by `onRegistered`, the same reason `locales`' `translatables` lookup is built
  * here rather than at `subscribe()` time.
  *

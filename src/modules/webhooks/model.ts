@@ -132,6 +132,8 @@ export const webhookSubscriptionSchema = new Schema<
 // "This tenant's subscriptions", and "which subscriptions want event X" — the two questions
 // `publish` and the admin list both ask.
 webhookSubscriptionSchema.index({ tenant: 1, createdAt: -1 });
+
+// Which enabled subscriptions listen for event X — `publish`'s fan-out read.
 webhookSubscriptionSchema.index({ enabled: 1, eventTypes: 1 });
 
 /**
@@ -268,15 +270,25 @@ export const webhookDeliverySchema = new Schema<WebhookDeliveryDocument, Webhook
     { timestamps: true }
 );
 
-// The admin log's own filters (subscription, status), newest first.
+// Mongoose `index(fields, options)`: 1 ascending, -1 descending; `unique` makes it a constraint.
+// https://mongoosejs.com/docs/guide.html#indexes
 // One row per (subscription, event): what makes a redelivered event's fan-out idempotent — see
 // `services/publish.ts`.
 webhookDeliverySchema.index({ subscriptionId: 1, eventId: 1 }, { unique: true });
+
+// The admin log's tenant-wide list, newest first.
 webhookDeliverySchema.index({ tenant: 1, createdAt: -1 });
+
+// The admin log filtered to one subscription, newest first.
 webhookDeliverySchema.index({ subscriptionId: 1, createdAt: -1 });
+
+// The admin log filtered to one status, newest first.
 webhookDeliverySchema.index({ status: 1, createdAt: -1 });
-// The retry sweep's own read: due, retryable rows, in no particular order — see `scripts/ops/sweep-webhook-retries.ts`.
+
+// The retry sweep's own read: due, retryable rows, in no particular order — see
+// `scripts/ops/sweep-webhook-retries.ts`.
 webhookDeliverySchema.index({ status: 1, nextAttemptAt: 1 });
+
 // The same read's other half: a STRANDED in-flight row whose lease already expired.
 webhookDeliverySchema.index({ status: 1, leaseExpiresAt: 1 });
 

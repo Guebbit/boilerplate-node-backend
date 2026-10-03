@@ -76,7 +76,7 @@ flowchart LR
 ## The story
 
 `orders` and `payments` can tell this module that something happened; this module cannot ask them
-anything back, and (DDD-D4) it does not even import their event name constants to listen for it.
+anything back, and it does not even import their event name constants to listen for it.
 Each of the two declares its own `publicEvents` on its `module.ts` manifest — a domain event name
 mapped to a projection of that event's payload — and `webhooks/module.ts`'s `onRegistered` hook
 collects every registered module's declarations (`kernel/registry.ts`'s `resolvePublicEvents`) and

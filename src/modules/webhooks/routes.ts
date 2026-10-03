@@ -29,39 +29,56 @@ export const router = Router();
 // module exists to do.
 router.use(getAuth, isAuthOrCredential);
 
+// GET /webhooks/subscriptions — list this tenant's subscriptions
 router.get('/subscriptions', requirePermission('webhooks.any.read'), listWebhookSubscriptions);
+
+// POST /webhooks/subscriptions — create one
 router.post('/subscriptions', requirePermission('webhooks.any.create'), createWebhookSubscription);
+
+// PUT /webhooks/subscriptions/:id — replace the whole subscription
 router.put(
     '/subscriptions/:id',
     requirePermission('webhooks.any.update'),
     replaceWebhookSubscription
 );
+
+// PATCH /webhooks/subscriptions/:id — change the fields sent
 router.patch(
     '/subscriptions/:id',
     requirePermission('webhooks.any.update'),
     updateWebhookSubscription
 );
+
+// DELETE /webhooks/subscriptions/:id — remove the subscription
 router.delete(
     '/subscriptions/:id',
     requirePermission('webhooks.any.delete'),
     deleteWebhookSubscription
 );
+
+// POST /webhooks/subscriptions/:id/rotate-secret — add a new ring secret; the old one stays active
 router.post(
     '/subscriptions/:id/rotate-secret',
     requirePermission('webhooks.any.update'),
     rotateWebhookSubscriptionSecret
 );
+
+// DELETE /webhooks/subscriptions/:id/secrets/:secretId — drop one ring secret, the rotation's end
 router.delete(
     '/subscriptions/:id/secrets/:secretId',
     requirePermission('webhooks.any.update'),
     removeWebhookSubscriptionSecret
 );
 
+// GET /webhooks/deliveries — the delivery log, newest first
 router.get('/deliveries', requirePermission('webhooks.any.read'), listWebhookDeliveries);
+
+// POST /webhooks/deliveries/:id/replay — re-send one delivery now
 router.post(
     '/deliveries/:id/replay',
     requirePermission('webhooks.any.update'),
     replayWebhookDelivery
 );
 
+// GET /webhooks/events — the public event catalogue a subscription may filter on
 router.get('/events', requirePermission('webhooks.any.read'), listWebhookEvents);

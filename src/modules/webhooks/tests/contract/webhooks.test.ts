@@ -469,7 +469,7 @@ describe('GET /webhooks/events', () => {
 /** The next lookup answers a private address, as a hostile DNS record would. */
 const resolvesToPrivateAddress = () => jest.mocked(resolve4).mockResolvedValueOnce(['10.0.0.5']);
 
-describe('a private target is refused at create and update (WM-D13)', () => {
+describe('a private target is refused at create and update', () => {
     afterEach(() => {
         setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: undefined });
     });

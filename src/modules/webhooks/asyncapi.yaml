@@ -11,10 +11,10 @@
 #
 # `webhooks/module.ts`'s `onRegistered` hook subscribes generically to every domain event a
 # registered module's manifest names a `publicEvents` entry for (`kernel/registry.ts`'s
-# `PublicEventTarget`, DDD-D4) and republishes the ones a subscription's filter matches, signed, to
+# `PublicEventTarget`) and republishes the ones a subscription's filter matches, signed, to
 # the URL it names. `orders`/`payments` own the MAPPING — which domain event, projected how,
 # becomes which public name — on their own `module.ts`; nothing here or in `webhooks` imports the
-# other module's event constants any more.
+# other module's event constants.
 #
 # This file still owns the CHANNEL CATALOGUE below, though, rather than each event's owning module
 # splitting off its own channel: every one binds to the single `subscriberEndpoint` server and
