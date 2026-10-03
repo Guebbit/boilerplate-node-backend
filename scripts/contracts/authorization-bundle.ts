@@ -3,7 +3,7 @@
  * `shared/authorization-keys.yaml`, assembled from one fragment per module plus a root residual
  * file for the app-level keys — `npm run authorization:bundle`.
  *
- * DDD-D5 part A: each key is defined in its own module's `authorization.yaml`, so a module's keys
+ * Each key is defined in its own module's `authorization.yaml`, so a module's keys
  * never outlive its own deletion — a fact about this bundle (it reads only fragments that exist),
  * checked below, rather than two hand-kept lists reconciled by a test.
  *
@@ -83,8 +83,8 @@ const fragmentPath = (section: string): string =>
 
 /**
  * The raw `keys:` list text a fragment contributes, its own `keys:` heading stripped — what gets
- * spliced under the bundle's single `keys:` line. Also the fail-closed check DDD-D5 part A leans
- * on: a fragment whose own key names a DIFFERENT module than the folder it lives in is a typo the
+ * spliced under the bundle's single `keys:` line. Also the fail-closed check that
+ * guarantee leans on: a fragment whose own key names a DIFFERENT module than the folder it lives in is a typo the
  * bundle refuses to launder.
  * @param section - the module name, or `core` for the app-level fragment
  * @throws Error if the fragment is missing, malformed, or misattributes one of its own keys

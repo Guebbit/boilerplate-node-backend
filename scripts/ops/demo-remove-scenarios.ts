@@ -1,6 +1,6 @@
 /**
  * @module
- * G-D2 step 3, the "demo scenario data" half: the files under `scenarios/` and
+ * The "demo scenario data" half of the strip: the files under `scenarios/` and
  * `scripts/contracts/client-collections-bundle.ts` that exist only to give the shop's own modules
  * (`products`, `wishlist`, and the order book `flows/shop-history.ts` drives) something to show —
  * `demo-remove.ts` deletes what is entirely theirs and edits what a foundation-only deployment

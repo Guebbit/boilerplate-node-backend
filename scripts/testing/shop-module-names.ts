@@ -1,7 +1,7 @@
 /**
  * @module
  * One shared reader for "which module folders are `group: shop` today" — the same question
- * `measure-demo-strip.ts` (report-only) and `demo-remove.ts` (the real strip, G-D2 step 3) both
+ * `measure-demo-strip.ts` (report-only) and `demo-remove.ts` (the real strip) both
  * ask, off each module's own `module.yaml` rather than a hand-kept list. A relabelled module
  * changes both scripts without an edit to either.
  */

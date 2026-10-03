@@ -437,7 +437,7 @@ const zodExpression = (schema: JsonSchema, depth = 0, tolerant = false): string 
              * `additionalProperties: false` becomes `.strict()` EXCEPT inside a queue payload
              * (`tolerant`), where it is left off instead — Zod's default already drops a key the
              * schema doesn't know rather than keeping it, which is the tolerant-reader behaviour
-             * C14 asks for: a producer adding a field is not a reason to reject the whole message.
+             * (Postel's law): a producer adding a field is not a reason to reject the whole message.
              * Everywhere else `.strict()` still stands, so the runtime refuses what the contract
              * forbids instead of quietly dropping it.
              */

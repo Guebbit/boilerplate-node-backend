@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
- * G-D2 step 3 / FE-D4: `npm run demo:remove` — the actual one-command strip, once
- * `measure:demo-strip` (step 1) and CT-D3/CT-D4/DDD-D5 (step 2) made it small enough to be one.
+ * `npm run demo:remove` — the actual one-command strip. `measure:demo-strip` is its report-only
+ * twin: same recipe, run against a scratch copy.
  *
  * Deletes every `group: shop` module folder, the reap/sweep scripts and `docker/crontab`/
  * `package.json` lines that belong to one, and the demo catalogue's own scenario data — then edits

@@ -1,6 +1,6 @@
 /**
  * @module
- * G-D2 step 2/3, the one contract fragment that still names shop modules by hand:
+ * The one contract fragment that still names shop modules by hand:
  * `shared/contracts/openapi.root.yaml` — "what belongs to no module" (CLAUDE.md's contract
  * workflow) — carries `POST /account/export`'s `AccountExportResponse` (one field per
  * contributing module; `account`'s own fragment cannot name a sibling's schema). The path index

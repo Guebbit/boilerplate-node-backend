@@ -13,8 +13,8 @@
  *   this rule does not need its own allowance for it, dead or otherwise. A named pick from
  *   `./model` is checked by NAME instead: a pure helper is fine, the schema, its transform or the
  *   model object are not — see `isModelRuntimeValueName`. A named pick from `./presenter(s)` is
- *   simpler still: the function is never fine, since a sibling reaches it through the service
- *   (T9) — only its OUTPUT TYPE, and only via `export type *`, ever leaves.
+ *   simpler still: the function is never fine, since a sibling reaches it through the service,
+ *   and only its OUTPUT TYPE, via `export type *`, ever leaves.
  * - `import { x } from './y'; export { x };` — resolved through this file's own import map,
  *   since the export itself carries no source.
  */
@@ -45,7 +45,7 @@ const isWiringSource = (stem: string): boolean =>
 /** Value files a barrel may `export *` from, or name-pick from `export { x } from './y'`. */
 const VALUE_SOURCES = new Set(['services', 'service', 'domain', 'events', 'emails']);
 
-/** `presenter.ts`, or `presenters.ts` for a module presenting more than one resource shape (T9). */
+/** `presenter.ts`, or `presenters.ts` for a module presenting more than one resource shape. */
 const PRESENTER_SOURCES = new Set(['presenter', 'presenters']);
 
 /** The same, plus `model` and the presenter(s) — reachable, but types only. */

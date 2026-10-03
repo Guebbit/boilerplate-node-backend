@@ -154,7 +154,7 @@ interface Operation {
     responses?: Record<string, unknown>;
 }
 
-/** One error code's declaration, as a fragment's `x-error-codes` map holds it (CT-D5). */
+/** One error code's declaration, as a fragment's `x-error-codes` map holds it. */
 interface ErrorCodeEntry {
     status: number;
     description: string;
@@ -376,7 +376,7 @@ const collectErrorCodes = (): Record<string, ErrorCodeEntry> => {
  * Publishes the collected error-code catalogue as the bundled document's own `x-error-codes` —
  * `ErrorItem.code` itself stays `type: string` with its one illustrative `example`, deliberately
  * NEVER an `enum`, which could never gain a code later without being a breaking response change
- * (Zalando API guideline #112, CT-D5). OpenAPI 3.0 (this contract's version) has no schema-level
+ * (Zalando API guideline #112). OpenAPI 3.0 (this contract's version) has no schema-level
  * `examples` LIST the way 3.1 does — `oas3-schema` refuses one — so the full, documented set lives
  * in this vendor extension instead, which also carries each code's status and description,
  * strictly more than a bare list of names would.

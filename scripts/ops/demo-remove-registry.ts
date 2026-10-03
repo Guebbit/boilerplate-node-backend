@@ -1,13 +1,13 @@
 /**
  * @module
- * G-D2 step 3, the "central lists" half: every place a `group: shop` module's NAME is written
+ * The "central lists" half of the strip: every place a `group: shop` module's NAME is written
  * down outside its own folder, edited generically off that name rather than by a second hand-kept
  * list — `demo-remove.ts`'s registry-editing steps.
  *
  * `src/modules.ts` is the one central file that names a module (an import line per module, then one
  * entry per module in a literal); everything else — the contract's path index, the test suite's
  * router map, the docs — reads what is on disk or in the registry. A
- * `scripts/ops/*.ts` file's own "Removal: owned by `<module>`" comment (DDD-D5) is what tells this
+ * `scripts/ops/*.ts` file's own "Removal: owned by `<module>`" comment is what tells this
  * script which reap/sweep scripts, npm-script lines and `docker/crontab` entries belong to a
  * module being removed — nothing here hand-lists them either.
  */
@@ -81,7 +81,7 @@ interface OwnedOpsFile {
 
 /**
  * Every `scripts/ops/*.ts` file that declares its own owner via a `Removal: owned by \`<module>\``
- * doc comment (DDD-D5) — the reap/sweep scripts a module takes with it when it goes, read off the
+ * doc comment — the reap/sweep scripts a module takes with it when it goes, read off the
  * files themselves rather than a second list of which script belongs to which module.
  */
 const readOwnedOpsFiles = (repoRoot: string): OwnedOpsFile[] => {

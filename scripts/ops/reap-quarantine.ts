@@ -32,7 +32,7 @@ const retentionMs = (): number => imageConfig().NODE_QUARANTINE_RETENTION_HOURS 
 
 /**
  * Sweep first, connect after: the sweep itself never touches Mongo, only `runScript`'s outcome
- * record does, so a Mongo outage must not block a cleanup that never needed it (PL-28).
+ * record does, so a Mongo outage must not block a cleanup that never needed it.
  */
 const main = (): Promise<void> => {
     const root = quarantineRoot();

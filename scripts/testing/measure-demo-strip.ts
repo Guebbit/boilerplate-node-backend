@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * G-D2 step 1: measure how far "a module is removable" actually is — `npm run measure:demo-strip
+ * Measure how far "a module is removable" actually is — `npm run measure:demo-strip
  * [-- --recipe shop|locales]`.
  *
  * NOT `demo:remove`, and not meant to be green. It applies a removal RECIPE to a scratch copy of
@@ -45,7 +45,7 @@ interface Check {
 
 /**
  * `regenerate` (an adopter's own first step after a removal), then `ts-check`, the cross-cutting
- * suite and the docs build — the three G-D2 asks for. A failing `regenerate` is a finding, so the
+ * suite and the docs build — the three checks a removal must keep green. A failing `regenerate` is a finding, so the
  * later checks still run against whatever it left.
  */
 const CHECKS: readonly Check[] = [

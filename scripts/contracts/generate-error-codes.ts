@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /*
- * Generates the error-code catalogue from `openapi.yaml`'s `x-error-codes` (CT-D5) — a
+ * Generates the error-code catalogue from `openapi.yaml`'s `x-error-codes` — a
  * TypeScript constants object plus the union type derived from it.
  *
  * SHARED SCRIPT — byte-identical in both repos of the pair, and both write an `error-codes.ts`
@@ -9,7 +9,7 @@
  * the frontend as part of the shared `openapi.yaml`.
  *
  * Deliberately a constants object, never a Zod `z.enum(...)`: `errors[].code` stays `type: string`
- * with no `enum` in the contract (CT-D5, Zalando API guideline #112), so a new code is additive,
+ * with no `enum` in the contract (Zalando API guideline #112), so a new code is additive,
  * not a breaking response change. This catalogue exists so a call site can write
  * `ERROR_CODES.CART_EMPTY` instead of retyping the string — the compiler catches a typo or a
  * removed code, but nothing here REJECTS a code the contract doesn't (yet) know about.
@@ -91,7 +91,7 @@ const output =
     ' * GENERATED — do not edit manually.\n' +
     ' * Source: openapi.yaml  |  Regenerate: npm run gen:api\n' +
     ' */\n\n' +
-    '/** Every error code the contract declares — CT-D5. Open-ended: a new one is additive, never a breaking change. */\n' +
+    '/** Every error code the contract declares. Open-ended: a new one is additive, never a breaking change. */\n' +
     `export const ERROR_CODES = {\n${rows}\n} as const;\n\n` +
     "/** Any code `errors[].code` may carry. NOT exhaustive at the type level — the contract's own `enum`-free `code: string` is the reason this exists. */\n" +
     'export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];\n';
