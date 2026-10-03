@@ -1473,27 +1473,27 @@ covered file's real score, never as a grade.
 
 ## File map
 
-| Path                                  | Contents                                                                                                     |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `stryker.json`                        | Scope (`mutate`), the narrowed Jest config (integration included), thresholds, concurrency, reporters        |
-| `stryker.hosted.json`                 | Hosted-runner profile: same ruler, lower resource knobs for GitHub-hosted capacity                           |
-| `jest.config.mutation.js`             | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication)               |
-| `mutation-baseline.json`              | Per-file scores. Committed. The ratchet's memory — see [pending reseed](#baseline-status-pending-a-reseed).  |
-| `scripts/mutation/stryker-run.ts`     | One Stryker invocation, sized for this machine — concurrency, the heap cap, the scratch sweep, the OOM abort |
-| `scripts/mutation/run-diff.ts`        | `npm run mutation` — the files a branch changed, graded against the ratchet                                  |
-| `scripts/mutation/run-shards.ts`      | `npm run mutation:full` — the whole scope, one shard at a time, resumable, merges once closed                |
-| `scripts/mutation/local-policy.ts`    | Which shards a local sweep runs next, given what previous evenings already recorded                          |
-| `scripts/mutation/mutate-scope.ts`    | The real mutate scope, read off the tree — every `.ts` file `stryker.json` declares mutable                  |
-| `scripts/mutation/sharding.ts`        | Bin-packing by line count for a local sweep                                                                  |
-| `scripts/mutation/shard-plan.ts`      | Optional hosted planner helper with `--target-lines=n` override                                              |
-| `scripts/mutation/ci/`                | The GitHub sweep only — wave planner, slice ignorer, report merge, and the CLI the workflows call            |
-| `scripts/mutation/baseline.ts`        | Ratchet logic — scoring, comparison, the "never lower" rule, and the merge variant of both                   |
-| `scripts/mutation/check-baseline.ts`  | CLI for the commands below                                                                                   |
-| `.github/workflows/mutation.yml`      | Weekly schedule + dispatch, eight waves and the merge job, the PR diff job, the failure issue                |
-| `.github/workflows/mutation-wave.yml` | One wave: plan it, then run its shards as a matrix                                                           |
-| `.github/workflows/mutation-hosted.yml` | Hosted-only full sweep profile for GitHub runners: weekly + manual and baseline merge                      |
-| `tmp/reports/mutation/index.html`     | Human-readable report (generated per run)                                                                    |
-| `tmp/reports/mutation/mutation.json`  | Machine-readable report the ratchet reads                                                                    |
+| Path                                    | Contents                                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `stryker.json`                          | Scope (`mutate`), the narrowed Jest config (integration included), thresholds, concurrency, reporters        |
+| `stryker.hosted.json`                   | Hosted-runner profile: same ruler, lower resource knobs for GitHub-hosted capacity                           |
+| `jest.config.mutation.js`               | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication)               |
+| `mutation-baseline.json`                | Per-file scores. Committed. The ratchet's memory — see [pending reseed](#baseline-status-pending-a-reseed).  |
+| `scripts/mutation/stryker-run.ts`       | One Stryker invocation, sized for this machine — concurrency, the heap cap, the scratch sweep, the OOM abort |
+| `scripts/mutation/run-diff.ts`          | `npm run mutation` — the files a branch changed, graded against the ratchet                                  |
+| `scripts/mutation/run-shards.ts`        | `npm run mutation:full` — the whole scope, one shard at a time, resumable, merges once closed                |
+| `scripts/mutation/local-policy.ts`      | Which shards a local sweep runs next, given what previous evenings already recorded                          |
+| `scripts/mutation/mutate-scope.ts`      | The real mutate scope, read off the tree — every `.ts` file `stryker.json` declares mutable                  |
+| `scripts/mutation/sharding.ts`          | Bin-packing by line count for a local sweep                                                                  |
+| `scripts/mutation/shard-plan.ts`        | Optional hosted planner helper with `--target-lines=n` override                                              |
+| `scripts/mutation/ci/`                  | The GitHub sweep only — wave planner, slice ignorer, report merge, and the CLI the workflows call            |
+| `scripts/mutation/baseline.ts`          | Ratchet logic — scoring, comparison, the "never lower" rule, and the merge variant of both                   |
+| `scripts/mutation/check-baseline.ts`    | CLI for the commands below                                                                                   |
+| `.github/workflows/mutation.yml`        | Weekly schedule + dispatch, eight waves and the merge job, the PR diff job, the failure issue                |
+| `.github/workflows/mutation-wave.yml`   | One wave: plan it, then run its shards as a matrix                                                           |
+| `.github/workflows/mutation-hosted.yml` | Hosted-only full sweep profile for GitHub runners: weekly + manual and baseline merge                        |
+| `tmp/reports/mutation/index.html`       | Human-readable report (generated per run)                                                                    |
+| `tmp/reports/mutation/mutation.json`    | Machine-readable report the ratchet reads                                                                    |
 
 ## Commands
 
