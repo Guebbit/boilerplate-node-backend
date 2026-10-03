@@ -14,7 +14,7 @@ import type { PaymentDocument } from '../model';
 import { abandonedPaymentRetentionDays } from '../config';
 
 /**
- * DDD-D6's `personalData.erase` hook. Unsets `userId` on every payment this account made; the
+ * The `personalData.erase` hook. Unsets `userId` on every payment this account made; the
  * payment row itself is never touched, same as `orders`' detach.
  *
  * @param userId - the erased account's id

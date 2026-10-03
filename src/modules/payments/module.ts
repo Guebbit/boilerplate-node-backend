@@ -32,7 +32,7 @@ import { paymentsConfig } from './config';
 import { paymentProviderProbe } from './providers';
 
 /**
- * DDD-D4: this module's public (webhook-visible) events — `webhooks/services/publish.ts`
+ * This module's public (webhook-visible) events — `webhooks/services/publish.ts`
  * subscribes to these generically, through `kernel/registry.ts`'s `resolvePublicEvents`, instead
  * of importing `PAYMENT_SUCCEEDED`/`PAYMENT_FAILED`/`PAYMENT_REFUNDED` by name.
  * `payment.succeeded`/`payment.failed` are a straight rename: the public payload is exactly the
@@ -84,7 +84,7 @@ export default {
         {
             section: 'payments',
             collect: (subject) => findOwnPaymentsForExport(subject.userId),
-            // DDD-D6: detach, never delete — the payment survives the account, inside the same
+            // Detach, never delete — the payment survives the account, inside the same
             // hard-delete transaction. See `detachUserId`.
             erase: detachUserId
         }
@@ -94,7 +94,7 @@ export default {
         // owed, so there is no boolean left to branch on.
         onDomainEvent(ORDER_REFUND_OWED, ({ orderId }) => refundForOrder(orderId));
         // `ORDER_CANCELLED` itself, for the OTHER thing a cancel can leave behind: a card intent
-        // nobody ever finished, still open at the provider (E17). Best-effort — the cancel already
+        // nobody ever finished, still open at the provider. Best-effort — the cancel already
         // happened by the time this runs, so a provider failure here is logged, never rethrown.
         onDomainEvent(ORDER_CANCELLED, ({ orderId }) => cancelOpenIntentForOrder(orderId));
     },

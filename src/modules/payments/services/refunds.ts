@@ -98,7 +98,7 @@ const leaveForOperator = (orderId: string, payment: PaymentDocument): Promise<Pa
     );
     // Stryker restore all
     // No `actor_role`/`actor_user_id` override needed: `buildAuditEvent`'s defaults already read
-    // them off `SYSTEM_ACTOR`'s own caller (B21).
+    // them off `SYSTEM_ACTOR`'s own caller.
     recordAudit(
         { caller: callerForSubject(SYSTEM_ACTOR, 'Payment'), analyticsConsent: false },
         {

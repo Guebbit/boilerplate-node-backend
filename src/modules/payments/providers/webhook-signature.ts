@@ -30,6 +30,7 @@ const TOLERANCE_SECONDS = 300;
  * the signature case would make that message look like a lie for the other two.
  */
 export class WebhookRejected extends Error {
+    /** @param message - why the delivery was refused; logged as the headline. */
     constructor(message: string) {
         super(message);
         this.name = 'WebhookRejected';

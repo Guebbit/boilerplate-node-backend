@@ -17,6 +17,11 @@ export const paymentsAnalyticsEvents = {
     PAYMENT_RECORDED_OFFLINE: 'payment_recorded_offline'
 } as const;
 
+/**
+ * TypeScript module augmentation: registers this module's event names with the analytics
+ * port's `AnalyticsEventMap`, so an emit of these names type-checks and a typo does not.
+ * https://www.typescriptlang.org/docs/handbook/declaration-merging.html#module-augmentation
+ */
 declare module '@infrastructure/observability/analytics' {
     interface AnalyticsEventMap {
         payments: (typeof paymentsAnalyticsEvents)[keyof typeof paymentsAnalyticsEvents];

@@ -156,7 +156,7 @@ export const cancelOpenIntent = (payment: PaymentDocument, reason: string): Prom
 /**
  * `order.cancelled`'s listener (see `../module.ts`): close a still-open, never-settled intent at
  * the provider once its order is gone, so an abandoned one cannot resolve on its own later with no
- * local row left to catch it (E17). A `succeeded`/`refunded` payment is skipped outright — that
+ * local row left to catch it. A `succeeded`/`refunded` payment is skipped outright — that
  * money is `payments`' own `order.refund_owed` listener to give back, not this one's to cancel.
  *
  * Best-effort, unlike {@link cancelOpenIntent}'s other caller (`recordOfflinePayment`): the order

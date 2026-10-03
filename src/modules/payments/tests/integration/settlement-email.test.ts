@@ -1,8 +1,8 @@
 /**
  * @module
- * E5's leftover: a payment settling to `succeeded` used to mail nobody — the placed-order
- * confirmation only ever said the order was received, never that it was paid. This pins that
- * `settlePayment`'s happy path now sends {@link paymentSucceededEmail}, and only on the write that
+ * A payment settling to `succeeded` mails the buyer: the placed-order confirmation only says the
+ * order was received, never that it was paid. This pins that `settlePayment`'s happy path sends
+ * {@link paymentSucceededEmail}, and only on the write that
  * actually commits the stock (never on a decline, or a retry of an already-settled payment).
  */
 

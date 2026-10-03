@@ -114,7 +114,7 @@ describe('POST /payments/intent', () => {
         expect(response.body.data.status).toBe('requires_confirmation');
     });
 
-    // WM-D8: a 201 says a payment was created (RFC 9110 §15.3.2). Asking again refreshes the one
+    // A 201 says a payment was created (RFC 9110 §15.3.2). Asking again refreshes the one
     // row an order can have, so it answers 200 — the same payment, no second Location.
     it('answers 200 for the same intent when asked again, and 201 with a Location only the first time', async () => {
         const { bearer, order } = await authenticateWithOrder();
@@ -337,7 +337,7 @@ describe('POST /payments/webhook', () => {
     });
 
     /*
-     * B2: `parseWebhook` cast the parsed JSON straight to `PaymentWebhookEventBody`, `status`
+     * `parseWebhook` cast the parsed JSON straight to `PaymentWebhookEventBody`, `status`
      * included — the cast typed the field, it never checked it, so any string reached
      * `settlePayment` and got written to the row verbatim.
      */

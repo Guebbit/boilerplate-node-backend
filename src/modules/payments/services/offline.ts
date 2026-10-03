@@ -66,7 +66,7 @@ export const recordOfflinePayment = async (
 
     const existing = await paymentRepository.findByOrderId(orderId);
     // A card intent still open at the provider: tell IT the customer is paying another way now,
-    // rather than overwriting this row out from under it (E17) — an intent nobody closes can
+    // rather than overwriting this row out from under it — an intent nobody closes can
     // still resolve there days later, with no local row left to catch the charge it makes.
     if (existing) {
         const refusal = await cancelOpenIntent(existing, 'Recorded as an offline payment')

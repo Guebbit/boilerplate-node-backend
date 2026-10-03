@@ -408,7 +408,7 @@ describe('refund on cancel', () => {
             refundSpy.mockRestore();
         }));
 
-    it('leaves an owed refund on an order lost mid-payment for the sweep to finish (B1)', () =>
+    it('leaves an owed refund on an order lost mid-payment for the sweep to finish', () =>
         withEnvironment('NODE_ORDER_EFFECT_RETRY_MINUTES', '0', async () => {
             const { user, order } = await orderFor();
             const intent = await createIntent(String(order._id), auth(user));
@@ -665,12 +665,12 @@ describe('the confirm commits the order’s held units', () => {
 });
 
 /**
- * B2: cancelling a PAID order only ever released a hold that payment had already turned into a
+ * Cancelling a PAID order only ever released a hold that payment had already turned into a
  * sale — `releaseForOrder` claims `held → released`, but a paid hold is `committed`, so it matched
  * nothing and the units were lost from the shelf for good. `restockForOrder` is what gives them
  * back once the release itself finds nothing to do.
  */
-describe('cancelling a paid order restocks its units (B2)', () => {
+describe('cancelling a paid order restocks its units', () => {
     it('gives on-hand back, records a restock movement, and refuses a second cancel', async () => {
         const { user, product, order } = await placedOrder(10, 3);
         await payFor(String(order._id), user);
@@ -894,7 +894,7 @@ describe('in-flight settlement', () => {
     });
 
     /*
-     * B3: a payment that goes `processing` can settle over days (a SEPA debit, some bank
+     * A payment that goes `processing` can settle over days (a SEPA debit, some bank
      * redirects), so the ordinary 30-minute hold gets extended to the bank-transfer window —
      * otherwise the reservation sweep would cancel an order whose money is still on its way.
      * The TTL is zeroed so an un-extended hold is already stale by the time the sweep below runs.
@@ -1307,11 +1307,11 @@ describe('recordOfflinePayment', () => {
     });
 
     /**
-     * E17's actual bug: an intent nobody ever confirmed was previously overwritten by hand with
-     * the provider never told, so an abandoned card could still resolve there later with no row
-     * left to catch the charge. `cancel` closes it first now.
+     * An intent nobody ever confirmed must be closed at the provider before the money is recorded
+     * by hand: otherwise an abandoned card could still resolve there later with no row left to
+     * catch the charge. `cancel` closes it first.
      */
-    it('cancels a never-confirmed intent at the provider before recording the money by hand (E17)', async () => {
+    it('cancels a never-confirmed intent at the provider before recording the money by hand', async () => {
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));
         const prepared = await paymentRepository.findByOrderId(String(order._id));
@@ -1403,7 +1403,7 @@ describe('recordOfflinePayment — refunding it back', () => {
     });
 });
 
-describe('order.cancelled — closing a still-open intent at the provider (E17)', () => {
+describe('order.cancelled — closing a still-open intent at the provider', () => {
     beforeEach(() => {
         registerCheckoutModules([paymentsModule]);
     });

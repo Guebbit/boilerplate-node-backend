@@ -12,6 +12,7 @@
  * `PaymentProvider.cancel`, and nowhere else in this port.
  */
 export class PaymentInFlightError extends Error {
+    /** @param message - what the provider said about the intent's state. */
     constructor(message: string) {
         super(message);
         this.name = 'PaymentInFlightError';
