@@ -47,8 +47,8 @@ export const moduleDescriptorSchema = z
         group: z.enum(['foundation', 'shop', 'example']),
         dependsOn: z.array(z.string()),
         /**
-         * Present only on a module that deliberately emits no audit action, holding the reason — the
-         * decision `audit-actions.test.ts` used to keep in its own list. A module with an `audit.ts`
+         * Present only on a module that deliberately emits no audit action, holding the reason (`audit-actions.test.ts`
+         * reads it, rather than keeping its own list). A module with an `audit.ts`
          * must not carry it.
          */
         noAudit: z.string().min(1).optional(),

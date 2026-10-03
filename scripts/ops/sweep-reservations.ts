@@ -4,7 +4,7 @@
  * Expire every stale reservation hold — `npm run sweep:reservations`.
  *
  * Shares:    `POST /inventory/reservations/sweep`, the admin route this schedules; nothing else
- *            ever called it, so an abandoned checkout used to hold its units forever.
+ *            calls it, so without this schedule an abandoned checkout would hold its units forever.
  * Registers: `registerModules` first — this sweep works by emitting `RESERVATION_EXPIRED`, and
  *            without the modules registered there is no `orders` listener to hear it, the same
  *            trap `sweep-order-effects.ts` guards against.

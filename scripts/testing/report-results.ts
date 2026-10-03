@@ -7,8 +7,8 @@
  * `boilerplate-vue-frontend`. Not in `SHARED_FILES` (`scripts/pairing/spec-identity.ts`), so
  * nothing enforces it — `diff` is the tool, by hand, when you change one copy. What makes sharing
  * it possible at all: Vitest's `json` reporter emits the same shape Jest's `--json` does, a
- * `testResults[]` of files, each with `assertionResults[]`. Verified rather than assumed — both
- * were run and their keys diffed before this was written.
+ * `testResults[]` of files, each with `assertionResults[]`. Verified rather than assumed: both
+ * reporters' output was diffed key by key.
  *
  * ── Why JSON and not JUnit ───────────────────────────────────────────────────────────────────
  * JUnit is the format CI dashboards read, and it would need `jest-junit` as a dependency on the

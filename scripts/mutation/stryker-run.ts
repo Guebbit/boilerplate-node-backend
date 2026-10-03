@@ -3,9 +3,9 @@
  * One Stryker invocation, sized for THIS machine — the half every mutation entry point shares.
  *
  * Owns:   concurrency, the per-worker heap cap, the scratch sweep, and the OOM-loop abort.
- * Why:    both entry points (`run-diff`, `run-shards`) need all four, and one that used to call
- *         `npx stryker` directly silently ran without the heap cap — which is the one setting a
- *         run on a 30 GB machine cannot do without.
+ * Why:    both entry points (`run-diff`, `run-shards`) need all four, and one that called
+ *         `npx stryker` directly would silently run without the heap cap — which is the one setting
+ *         a run on a 30 GB machine cannot do without.
  *
  * See: docs/tools/mutation-testing.md#worker-heap-cap
  */

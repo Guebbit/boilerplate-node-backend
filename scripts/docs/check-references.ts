@@ -16,8 +16,8 @@
  *   - Resolution is by SUFFIX, so `orders/model.ts` matches `src/modules/orders/model.ts` without
  *     every page having to spell a path from the root.
  *   - A `#anchor` riding on a path this repo tracks is checked too, against that page's own
- *     headings — a page renamed out from under a citation elsewhere still resolves as a FILE, and
- *     only the anchor half used to go unchecked. Limited to a page in THIS repo: the peer's
+ *     headings — a page renamed out from under a citation elsewhere still resolves as a FILE, so
+ *     the anchor half needs its own check. Limited to a page in THIS repo: the peer's
  *     headings are its own tree to answer for, not ours to parse.
  *   - `@`-prefixed tokens are rewritten through `tsconfig`'s own path aliases, so `@modules/x`
  *     is checked and `@asyncapi/cli` — matching no alias — is read as the npm package it is.

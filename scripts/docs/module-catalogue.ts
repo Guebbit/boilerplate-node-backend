@@ -2,7 +2,7 @@
  * @module
  * The module catalogue: every module's place in the docs, derived from what it says about itself.
  *
- * Feeds two readers that used to be hand-kept lists of module names — the "Every module" section
+ * Feeds two readers that would otherwise be hand-kept lists of module names — the "Every module" section
  * of `docs/modules/index.md` and the `/modules/` sidebar in `docs/.vitepress/config.mts`. Both
  * group by `module.yaml#group` (foundation first, then the demo shop), so a new module appears in
  * the right place by declaring its group and a summary, and nothing else.
