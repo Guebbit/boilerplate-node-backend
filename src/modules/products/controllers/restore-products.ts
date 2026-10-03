@@ -15,6 +15,6 @@ import { productService } from '../services';
 export const restoreProducts = createRestoreController({
     entity: 'product',
     restore: (id, request) => productService.restoreById(id, callerContextOf(request)),
-    present: (product) => productService.toProduct(product),
+    present: (product, request) => productService.toProduct(product, request.caller),
     notFoundKey: 'products.not-found'
 });

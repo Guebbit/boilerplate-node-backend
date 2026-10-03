@@ -17,6 +17,7 @@ import { carryVersion } from '@infrastructure/persistence/versioning';
 import { accessibleFilterFor } from '@kernel/access/query';
 import { productsAnalyticsEvents } from '../analytics';
 import { presentProduct } from '../presenter';
+import { canSeeStock, redactStock } from './stock-view';
 import { productRepository } from '../repository';
 
 /**
@@ -78,7 +79,8 @@ export const getByIdViewed = (
                 event: productsAnalyticsEvents.PRODUCT_VIEWED,
                 properties: { product_id: id }
             });
-        return product;
+        // The exact counters go only to a caller holding `inventory.any.read` — see `./stock-view`.
+        return product ? redactStock(product, canSeeStock(context.caller)) : product;
     });
 
 /**
@@ -91,7 +93,7 @@ export const getByIdViewed = (
  * fallback tab is built here from the product's own `title`/`description` columns instead, which
  * are the fallback language's real content either way (see `update`'s `derivedFields`).
  */
-export const getAdmin = (id: string): Promise<ProductAdmin | null> =>
+export const getAdmin = (id: string, caller?: Caller): Promise<ProductAdmin | null> =>
     productRepository.findById(id).then((product) => {
         if (!product) return null;
 
@@ -114,6 +116,9 @@ export const getAdmin = (id: string): Promise<ProductAdmin | null> =>
                     ...(product.description ? { description: product.description } : {})
                 };
 
-            return carryVersion(product, { ...presentProduct(product), translations });
+            return redactStock(
+                carryVersion(product, { ...presentProduct(product), translations }),
+                canSeeStock(caller)
+            );
         });
     });

@@ -15,19 +15,26 @@ import { CreateProductBody, ReplaceProductByIdBody, UpdateProductByIdBody } from
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import type { TranslationFieldIssue } from '@kernel/registry';
-import { availableStock } from './domain/stock';
-import { productCurrency } from './config';
+import { availableStock, stockFlags } from './domain/stock';
+import { lowStockThreshold, productCurrency } from './config';
 import type { Product } from '@types';
 
 /**
  * A product's stored fields, without Mongoose's document machinery — `Product` from
- * `openapi.yaml` with its three dates as real `Date`s. `available` is omitted: it's derived at
- * serialization, never persisted. Kept separate from `ProductDocument` so a plain object (a lean
+ * `openapi.yaml` with its three dates as real `Date`s. `available`, `inStock` and `lowStock` are
+ * omitted: they are derived at serialization, never persisted. Kept separate from `ProductDocument` so a plain object (a lean
  * read, a fixture) can satisfy the shape without also satisfying `Document`.
  */
 export interface ProductRecord extends Omit<
     Product,
-    'id' | 'available' | 'currency' | 'createdAt' | 'updatedAt' | 'deletedAt'
+    | 'id'
+    | 'available'
+    | 'inStock'
+    | 'lowStock'
+    | 'currency'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'deletedAt'
 > {
     /** Spelled exactly as Mongoose spells it on a document, so `ProductDocument` can extend this. */
     _id: Types.ObjectId;
@@ -365,7 +372,9 @@ productSchema.index({ sku: 1 }, { name: 'products_sku', unique: true, sparse: tr
 const applyProductAvailability = (serialized: Record<string, unknown>) => {
     const onHand = typeof serialized.onHand === 'number' ? serialized.onHand : 0;
     const reserved = typeof serialized.reserved === 'number' ? serialized.reserved : 0;
-    serialized.available = availableStock(onHand, reserved);
+    const available = availableStock(onHand, reserved);
+    serialized.available = available;
+    Object.assign(serialized, stockFlags(available, lowStockThreshold()));
     serialized.currency = productCurrency();
 };
 

@@ -16,3 +16,20 @@
  */
 export const availableStock = (onHand?: number, reserved?: number): number =>
     Math.max(0, (onHand ?? 0) - (reserved ?? 0));
+
+/**
+ * What a shopper may know about stock without learning the count: whether anything is for sale,
+ * and whether what is left is running low. `lowStock` is only ever true while something is still
+ * for sale — an empty shelf is `inStock: false`, not both.
+ *
+ * @param available - units a customer may buy ({@link availableStock})
+ * @param threshold - the availability at or under which stock reads as low
+ * @returns the two flags a response carries for every caller
+ */
+export const stockFlags = (
+    available: number,
+    threshold: number
+): { inStock: boolean; lowStock: boolean } => ({
+    inStock: available > 0,
+    lowStock: available > 0 && available <= threshold
+});

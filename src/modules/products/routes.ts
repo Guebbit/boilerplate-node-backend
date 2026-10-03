@@ -23,6 +23,7 @@ import { invalidateCache, searchCache, setCache } from '@infrastructure/http/mid
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { hasAnonymousReadScope } from '@kernel/access/query';
 import { callerScope } from './services';
+import { canSeeStock } from './services/stock-view';
 
 /** Express router for product catalogue endpoints (public read, admin write). */
 export const router = Router();
@@ -38,12 +39,13 @@ router.use(getAuth);
 
 /**
  * A caller who reads exactly what a guest reads shares the guest's cached entry; a caller who
- * sees more (admins — inactive products included) bypasses Redis entirely rather than risk
+ * sees more (admins — inactive products included, or the exact stock counters) bypasses Redis
+ * entirely rather than risk
  * serving or storing their wider answer under that shared key. `hasAnonymousReadScope` is what
  * makes this safe BY CONSTRUCTION — see its own docblock.
  */
 const cacheScopeKey = (request: Request): boolean =>
-    hasAnonymousReadScope(callerScope, request.caller);
+    hasAnonymousReadScope(callerScope, request.caller) && !canSeeStock(request.caller);
 
 /**
  * Shared cache middleware for both search entry points, keyed on the query parameters that

@@ -15,5 +15,5 @@ export const getProductAdmin = createItemController({
     entity: 'product',
     notFoundKey: 'products.not-found',
     handlerSuffix: 'Admin',
-    fetch: (id) => productService.getAdmin(id)
+    fetch: (id, request) => productService.getAdmin(id, request.caller)
 });

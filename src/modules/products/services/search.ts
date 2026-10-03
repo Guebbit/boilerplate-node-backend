@@ -12,6 +12,7 @@ import { toSearchPattern } from '@infrastructure/persistence/search';
 import { toObjectId, withScope } from '@infrastructure/persistence/create-repository';
 import { productsAnalyticsEvents } from '../analytics';
 import { productRepository } from '../repository';
+import { canSeeStock, redactStock } from './stock-view';
 
 /**
  * The columns a free-text search compares against — the same pair `repository.ts` declares as
@@ -114,7 +115,12 @@ export const searchViewed = (
                 result_count: result.items.length
             }
         });
-        return result;
+        // The exact counters go only to a caller holding `inventory.any.read` — see `./stock-view`.
+        const seesStock = canSeeStock(context.caller);
+        return {
+            ...result,
+            items: result.items.map((product) => redactStock(product, seesStock))
+        };
     });
 
 /**

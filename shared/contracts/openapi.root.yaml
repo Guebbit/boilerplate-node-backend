@@ -957,7 +957,7 @@ components:
         Product:
             type: object
             additionalProperties: false
-            required: [id, title, price, currency]
+            required: [id, title, price, currency, inStock, lowStock]
             properties:
                 id:
                     $ref: '#/components/schemas/Id'
@@ -985,36 +985,51 @@ components:
                     $ref: '#/components/schemas/RateType'
                 sku:
                     $ref: '#/components/schemas/Sku'
-                # ── The two counters and the number derived from them ──────────────────────
+                # ── What a shopper may know about stock, and what only a stock reader sees ──
                 #
-                # `onHand` is how many units exist; `reserved` is how many of those an open
-                # order has already claimed. A storefront should read NEITHER — what a customer
-                # may buy is `available`, and the two stored numbers are published mainly so an
-                # admin screen can explain a low availability ("forty here, thirty-eight
-                # spoken for") rather than merely assert it.
+                # `inStock` and `lowStock` are on every response, for every caller. The exact
+                # numbers behind them are not: `onHand`, `reserved` and `available` are present
+                # ONLY for a caller holding `inventory.any.read` (the manager, the warehouse and
+                # the admin), because exact counters leak sales velocity to a competitor and help
+                # plan a denial of inventory. A storefront reads the two flags; an admin screen
+                # reads the counters so it can explain a low availability ("forty here,
+                # thirty-eight spoken for") rather than merely assert it.
                 #
-                # All three are read-only. No request body anywhere in this contract accepts a
-                # counter except `CreateProductRequest.onHand`, which is a new product's opening
+                # Every field here is read-only. No request body anywhere in this contract accepts
+                # a counter except `CreateProductRequest.onHand`, which is a new product's opening
                 # count. Everything after that moves through the `/inventory` transitions, which
                 # are signed, conditional, and leave a ledger row.
+                inStock:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        Something is for sale. `false` renders as out of stock — the catalogue
+                        still lists the product, and checkout is what refuses it
+                        (`CART_INSUFFICIENT_STOCK`).
+                lowStock:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        What is left is at or under the shop's low-stock threshold
+                        (`NODE_LOW_STOCK_THRESHOLD`) while something is still for sale. Never
+                        true together with `inStock` false.
                 onHand:
                     type: integer
                     minimum: 0
                     readOnly: true
-                    description: Units physically present, whether or not they are spoken for.
+                    description: Units physically present, whether or not they are spoken for. Only for a caller holding `inventory.any.read`.
                 reserved:
                     type: integer
                     minimum: 0
                     readOnly: true
-                    description: Units held by an open order — present, but not for sale.
+                    description: Units held by an open order — present, but not for sale. Only for a caller holding `inventory.any.read`.
                 # Derived (`onHand - reserved`), never stored, so it cannot disagree with the
-                # pair it comes from. `0` renders as out of stock: the catalogue still lists the
-                # product, checkout is what refuses it (`CART_INSUFFICIENT_STOCK`).
+                # pair it comes from.
                 available:
                     type: integer
                     minimum: 0
                     readOnly: true
-                    description: What a customer may actually buy. Derived from the two counters above.
+                    description: Units a customer may actually buy, derived from the two counters above. Only for a caller holding `inventory.any.read`.
                 description:
                     type: string
                 active:

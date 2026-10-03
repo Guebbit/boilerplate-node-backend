@@ -75,7 +75,7 @@ export const createProduct = (
                     .then(() => {
                         rejectResponse(response, result.status, result.errors);
                     });
-            const product = productService.toProduct(result.data);
+            const product = productService.toProduct(result.data, request.caller);
             createdResponse<Product>(response, product, `/products/${product.id}`);
         })
         .catch((error: unknown) =>

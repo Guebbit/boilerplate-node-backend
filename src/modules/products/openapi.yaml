@@ -535,7 +535,7 @@ components:
         ProductAdmin:
             type: object
             additionalProperties: false
-            required: [id, title, price, currency, translations]
+            required: [id, title, price, currency, inStock, lowStock, translations]
             description: >-
                 A product with every language it has a row for, not just the caller's resolved
                 one — what the editor's form needs to populate its tabs. `title`/`description`
@@ -561,6 +561,16 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
                 sku:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
+                inStock:
+                    type: boolean
+                    readOnly: true
+                    description: See `Product.inStock`.
+                lowStock:
+                    type: boolean
+                    readOnly: true
+                    description: See `Product.lowStock`.
+                # The three counters follow `Product`: present only for a caller holding
+                # `inventory.any.read`.
                 onHand:
                     type: integer
                     minimum: 0

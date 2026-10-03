@@ -529,3 +529,48 @@ describe('GET /products/{id}/admin', () => {
         expect(response.status).toBe(401);
     });
 });
+
+/** A create body with an opening count, titled in the fallback language. */
+const bodyTitled = (title: string) => ({ price: 10, onHand: 7, translations: { en: { title } } });
+
+describe('the stock counters on the product writes follow inventory.any.read', () => {
+    /** The three counters only a stock reader sees. */
+    const COUNTERS = ['onHand', 'reserved', 'available'];
+
+    it('hides them from an editor who creates, and shows them to an admin', async () => {
+        const editor = await authenticateAsRole('editor');
+        const admin = await authenticateAsRole('admin');
+
+        const byEditor = await api()
+            .post('/products')
+            .set('Authorization', editor.bearer)
+            .send(bodyTitled('Editor desk'));
+        const byAdmin = await api()
+            .post('/products')
+            .set('Authorization', admin.bearer)
+            .send(bodyTitled('Admin desk'));
+
+        expect(byEditor.status).toBe(201);
+        expect(COUNTERS.filter((field) => field in byEditor.body.data)).toEqual([]);
+        expect(byEditor.body.data.inStock).toBe(true);
+        expect(byAdmin.status).toBe(201);
+        expect(byAdmin.body.data).toMatchObject({ onHand: 7, available: 7 });
+    });
+
+    it('hides them on the editor’s all-languages read, and shows them to a stock reader', async () => {
+        const product = await createProduct({ onHand: 9 });
+        const editor = await authenticateAsRole('editor');
+        const admin = await authenticateAsRole('admin');
+
+        const byEditor = await api()
+            .get(`/products/${product.id}/admin`)
+            .set('Authorization', editor.bearer);
+        const byAdmin = await api()
+            .get(`/products/${product.id}/admin`)
+            .set('Authorization', admin.bearer);
+
+        expect(COUNTERS.filter((field) => field in byEditor.body.data)).toEqual([]);
+        expect(byEditor.body.data.inStock).toBe(true);
+        expect(byAdmin.body.data).toMatchObject({ onHand: 9, available: 9 });
+    });
+});

@@ -36,7 +36,10 @@ import { enqueueIfPending } from './image';
 export const create = (
     // `currency` omitted: it's never stored, always read live at serialization — see `./model`'s
     // `applyProductAvailability`.
-    data: Omit<Product, 'id' | 'currency' | 'createdAt' | 'updatedAt' | 'deletedAt'> & {
+    data: Omit<
+        Product,
+        'id' | 'currency' | 'inStock' | 'lowStock' | 'createdAt' | 'updatedAt' | 'deletedAt'
+    > & {
         /** Set alongside the pending-image placeholder — see `readUploadedImage`. */
         pendingImageKey?: string;
     },

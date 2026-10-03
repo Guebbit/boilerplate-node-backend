@@ -4,4 +4,4 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-export { availableStock } from './stock';
+export { availableStock, stockFlags } from './stock';

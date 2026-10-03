@@ -9,8 +9,11 @@
  * door sibling modules read and cache through.
  */
 
+import type { Caller, Product } from '@types';
 import { zodProductReplaceSchema, zodProductUpdateSchema } from '../model';
+import type { ProductDocument } from '../model';
 import { presentProduct } from '../presenter';
+import { canSeeStock, redactStock } from './stock-view';
 import { validateCreateData, validateUpdateData } from './validation';
 import { search, searchViewed, facets } from './search';
 import { callerScope, getById, getByIdViewed, getAdmin } from './read';
@@ -29,6 +32,16 @@ export { callerScope, getById, getByIdViewed, getAdmin } from './read';
 export { create, update, updateById } from './crud';
 export { writeCreate, writeUpdate, clearOmittedLocales } from './translated-write';
 export { remove, removeById, restoreById } from './remove';
+
+/**
+ * A product document as the wire shape `caller` may see — the counters only for a holder of
+ * `inventory.any.read`, the `inStock`/`lowStock` flags for everyone.
+ *
+ * @param document - the stored product
+ * @param caller - `request.caller`, or `undefined` for a path with no request (sees no counters)
+ */
+const toProduct = (document: ProductDocument, caller?: Caller): Product =>
+    redactStock(presentProduct(document), canSeeStock(caller));
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const productService = {
@@ -52,7 +65,7 @@ export const productService = {
     restoreById,
     // A controller may not reach `./presenter` directly (the persistence wall), so the shaping
     // helper it needs to build a response rides through the service instead.
-    toProduct: presentProduct,
+    toProduct,
     findByIdRaw,
     findPublicById,
     findManyByIds,
