@@ -42,8 +42,9 @@ flowchart LR
 ```
 
 Each registry entry is a **closure re-checked on every call**, never a value computed at import: a
-provider becomes configured the moment its `NODE_OAUTH_<NAME>_CLIENT_ID` / `_CLIENT_SECRET` pair is
-set, with no restart-shaped memoisation to go stale. An unconfigured provider resolves `undefined`
+provider is configured when its `NODE_OAUTH_<NAME>_CLIENT_ID` / `_CLIENT_SECRET` pair is set in
+the environment the process was started with (or a test override), and the registry holds no copy
+of its own to go stale. An unconfigured provider resolves `undefined`
 and the route answers 404 — the same "loud, never silently wrong" stance an unset
 `NODE_PAYMENT_PROVIDER` gets.
 
@@ -162,17 +163,21 @@ read it like any other method. It returns no access token: the frontend's
 
 - **An OAuth-only account has no password.** `users.password` is deliberately not `required`, and
   sign-in for such an account works only through a provider — until a password reset gives it one.
-- **The callback does not consult `twoFactorEnabledAt`.** An account with a linked provider
-  therefore has an unchallenged way in, whatever
-  [two-factor auth](./account-two-factor.md) it has armed. What that costs is
-  [Security](../tools/security.md#what-is-not-covered)'s to say; that it is true of _this_ route is
-  this page's.
+  Its step-up is a code mailed to its verified address, so enabling a provider needs mail that
+  delivers: boot refuses the pair otherwise outside development and test
+  ([how](./account-sessions.md#step-up-for-an-account-with-no-password)).
+- **The callback applies the account's second factor.** An account with `twoFactorEnabledAt` set gets
+  the same login challenge `POST /account/login` would issue, not a session: the callback redirects
+  the browser to the frontend's 2FA step and the session is minted only after
+  [`POST /account/login/2fa`](./account-two-factor.md). A provider is one way to prove the first
+  factor, never a replacement for the second (the attack row:
+  [Federated login](../theory/defences/authentication.md#federated-login)).
 
 ## Related pages
 
 - [`account`](./account.md) — the module this belongs to
 - [Sessions](./account-sessions.md) — the session a callback mints, and `amr`
-- [Two-factor authentication](./account-two-factor.md) — the control this path skips
+- [Two-factor authentication](./account-two-factor.md) — the second factor this path also owes
 - [`users`](./users.md) — `oauthAccounts` and the unique index behind it
 - [Web attack defences](../theory/defences/authentication.md#federated-login) — the same subsystem as attack rows
 - [`payments` provider port](./payments-provider-port.md) — the port this one is shaped after

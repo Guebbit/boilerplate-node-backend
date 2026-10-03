@@ -1,3 +1,4 @@
+import { setEnvironment } from '@tests/environment';
 /**
  * @module
  * The TTL retention this module's collection is configured with.
@@ -22,22 +23,18 @@ const ttlSeconds = (schema: Awaited<ReturnType<typeof loadSchema>>): number | un
         .find((value) => value !== undefined);
 
 describe('audit log retention', () => {
-    const originalRetention = process.env.NODE_AUDIT_RETENTION_DAYS;
-
     afterEach(() => {
-        if (originalRetention === undefined) delete process.env.NODE_AUDIT_RETENTION_DAYS;
-        else process.env.NODE_AUDIT_RETENTION_DAYS = originalRetention;
         jest.resetModules();
     });
 
     it('defaults to 90 days when the variable is unset', async () => {
-        delete process.env.NODE_AUDIT_RETENTION_DAYS;
+        setEnvironment({ NODE_AUDIT_RETENTION_DAYS: undefined });
 
         expect(ttlSeconds(await loadSchema())).toBe(90 * 24 * 60 * 60);
     });
 
     it('honours a configured retention', async () => {
-        process.env.NODE_AUDIT_RETENTION_DAYS = '30';
+        setEnvironment({ NODE_AUDIT_RETENTION_DAYS: '30' });
 
         expect(ttlSeconds(await loadSchema())).toBe(30 * 24 * 60 * 60);
     });

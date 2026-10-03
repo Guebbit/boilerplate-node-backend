@@ -14,27 +14,15 @@ import {
     isKnownTenant,
     listTenants
 } from '../../tenants';
+import { setEnvironment, withoutEnvironmentInThisFile } from '@tests/environment';
 
 const KEYS = [
     'NODE_LOCALE_TENANT_BACKEND',
     'NODE_LOCALE_TENANT_FRONTEND',
     'NODE_LOCALE_TENANTS_EXTRA'
 ] as const;
-const original: Partial<Record<(typeof KEYS)[number], string | undefined>> = {};
 
-beforeEach(() => {
-    for (const key of KEYS) {
-        original[key] = process.env[key];
-        delete process.env[key];
-    }
-});
-
-afterEach(() => {
-    for (const key of KEYS) {
-        if (original[key] === undefined) delete process.env[key];
-        else process.env[key] = original[key];
-    }
-});
+withoutEnvironmentInThisFile(KEYS);
 
 describe('the tenant registry', () => {
     it('defaults to the demo pair, the backend first', () => {
@@ -47,14 +35,16 @@ describe('the tenant registry', () => {
     });
 
     it('reads the two ids from the environment', () => {
-        process.env.NODE_LOCALE_TENANT_BACKEND = 'shop-api';
-        process.env.NODE_LOCALE_TENANT_FRONTEND = 'shop-web';
+        setEnvironment({ NODE_LOCALE_TENANT_BACKEND: 'shop-api' });
+        setEnvironment({ NODE_LOCALE_TENANT_FRONTEND: 'shop-web' });
 
         expect(listTenants().map(({ id }) => id)).toEqual(['shop-api', 'shop-web']);
     });
 
     it('adds the extra frontends, labelled or not, and drops a duplicate', () => {
-        process.env.NODE_LOCALE_TENANTS_EXTRA = ' mobile=Mobile app , kiosk ,, demo-fe=Again ';
+        setEnvironment({
+            NODE_LOCALE_TENANTS_EXTRA: ' mobile=Mobile app , kiosk ,, demo-fe=Again '
+        });
 
         expect(listTenants()).toEqual([
             { id: 'demo-be', label: 'API', kind: 'backend' },
@@ -65,7 +55,7 @@ describe('the tenant registry', () => {
     });
 
     it('tells a frontend tenant from the backend one and from a stranger', () => {
-        process.env.NODE_LOCALE_TENANTS_EXTRA = 'mobile';
+        setEnvironment({ NODE_LOCALE_TENANTS_EXTRA: 'mobile' });
 
         expect(frontendTenantIds()).toEqual(['demo-fe', 'mobile']);
         expect(isFrontendTenant('mobile')).toBe(true);

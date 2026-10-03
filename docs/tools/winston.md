@@ -96,6 +96,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_EMAIL_CHANGE_CANCELLED`               | `auth.email_change.cancelled`               | —                      |
 | `account`        | `AUTH_EMAIL_CHANGE_COMPLETED`               | `auth.email_change.completed`               | —                      |
 | `account`        | `AUTH_EMAIL_CHANGE_REQUESTED`               | `auth.email_change.requested`               | —                      |
+| `account`        | `AUTH_EMAIL_CHANGE_RESENT`                  | `auth.email_change.resent`                  | —                      |
 | `account`        | `AUTH_EMAIL_VERIFY_COMPLETED`               | `auth.email_verify.completed`               | —                      |
 | `account`        | `AUTH_EMAIL_VERIFY_REQUESTED`               | `auth.email_verify.requested`               | —                      |
 | `account`        | `AUTH_LOGGED_OUT`                           | `auth.logout`                               | —                      |
@@ -107,6 +108,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_PASSWORD_RESET_COMPLETED`             | `auth.password_reset.completed`             | —                      |
 | `account`        | `AUTH_PASSWORD_RESET_REQUESTED`             | `auth.password_reset.requested`             | —                      |
 | `account`        | `AUTH_PROFILE_UPDATED`                      | `auth.profile.updated`                      | —                      |
+| `account`        | `AUTH_REAUTH_CODE_SENT`                     | `auth.reauth.code_sent`                     | —                      |
 | `account`        | `AUTH_REAUTHENTICATED`                      | `auth.reauth`                               | —                      |
 | `account`        | `AUTH_REFRESH_TOKEN_REUSE_DETECTED`         | `auth.refresh_token.reuse_detected`         | —                      |
 | `account`        | `AUTH_SESSION_REVOKED`                      | `auth.session.revoked`                      | —                      |
@@ -121,6 +123,10 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `delivery`       | `ADMIN_ORDER_FULFILLED`                     | `admin.order.fulfilled`                     | —                      |
 | `delivery`       | `ADMIN_ORDER_FULFILMENT_STARTED`            | `admin.order.fulfilment_started`            | —                      |
 | `delivery`       | `ADMIN_ORDER_SHIPPED`                       | `admin.order.shipped`                       | —                      |
+| `example`        | `EXAMPLE_COVER_CHANGED`                     | `example.cover_changed`                     | `example`              |
+| `example`        | `EXAMPLE_CREATED`                           | `example.created`                           | `example`              |
+| `example`        | `EXAMPLE_DELETED`                           | `example.deleted`                           | `example`              |
+| `example`        | `EXAMPLE_UPDATED`                           | `example.updated`                           | `example`              |
 | `feedback`       | `ADMIN_FEEDBACK_DELETED`                    | `admin.feedback.deleted`                    | `feedback`             |
 | `feedback`       | `ADMIN_FEEDBACK_STATUS_UPDATED`             | `admin.feedback.status_updated`             | `feedback`             |
 | `feedback`       | `ADMIN_FEEDBACK_VIEWED`                     | `admin.feedback.viewed`                     | —                      |

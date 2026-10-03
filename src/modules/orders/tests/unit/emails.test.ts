@@ -8,7 +8,12 @@
  * The invoice document itself is `invoicing`'s own — see
  * `src/modules/invoicing/tests/unit/emails.test.ts`.
  */
-import { orderConfirmEmail, type OrderLines } from '@modules/orders/emails';
+import {
+    orderConfirmEmail,
+    orderCancelledEmail,
+    refundIssuedEmail,
+    type OrderLines
+} from '@modules/orders/emails';
 import { orderTotal } from '@modules/orders/domain';
 import { orderFrontendLink, orderCurrency } from '@modules/orders/config';
 
@@ -157,5 +162,88 @@ describe('orderConfirmEmail', () => {
         expect(`${subject} ${body}`).toMatch(/awaiting payment/i);
         expect(subject).not.toMatch(/confirmed/i);
         expect(body).not.toMatch(/confirmed/i);
+    });
+});
+
+describe('orderCancelledEmail', () => {
+    const PAID = { ...ORDER, currency: 'EUR', paidAt: new Date('2026-09-19T12:00:00.000Z') };
+    const UNPAID = { ...ORDER, currency: 'EUR' };
+    /** The grand total the order itself computes — what a full refund returns. */
+    const TOTAL = new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR' }).format(
+        orderTotal({ ...ORDER, currency: 'EUR' })
+    );
+
+    it('names the cancelled template and the order', () => {
+        const mail = orderCancelledEmail('en', NAME, PAID, '2026-000041', true);
+
+        expect(mail.template).toBe('orders.order-cancelled');
+        expect(mail.data.body).toContain('2026-000041');
+    });
+
+    it('says the paid total is going back when the cancel refunds', () => {
+        const { data } = orderCancelledEmail('en', NAME, PAID, ORDER_ID, true);
+
+        expect(data.refundNote).toContain(TOTAL);
+        expect(data.refundNote).toContain('returned');
+    });
+
+    it('says no refund was issued when an operator cancelled a paid order without one', () => {
+        const { data } = orderCancelledEmail('en', NAME, PAID, ORDER_ID, false);
+
+        expect(data.refundNote).toContain('No refund');
+        expect(data.refundNote).not.toContain(TOTAL);
+    });
+
+    it('says nothing was charged for an order that was never paid, refund flag or not', () => {
+        const withFlag = orderCancelledEmail('en', NAME, UNPAID, ORDER_ID, true).data.refundNote;
+        const without = orderCancelledEmail('en', NAME, UNPAID, ORDER_ID, false).data.refundNote;
+
+        expect(withFlag).toContain('nothing was charged');
+        expect(without).toBe(withFlag);
+    });
+
+    it('translates by the recipient locale and echoes no key', () => {
+        const english = orderCancelledEmail('en', NAME, PAID, ORDER_ID, true);
+        const italian = orderCancelledEmail('it', NAME, PAID, ORDER_ID, true);
+
+        expect(italian.subject).not.toBe(english.subject);
+        for (const mail of [english, italian])
+            for (const value of [mail.subject, mail.data.body, mail.data.refundNote])
+                expect(value).not.toMatch(/^orders\./);
+    });
+});
+
+describe('refundIssuedEmail', () => {
+    it('names the refunded template, the order and the amount that went back', () => {
+        const mail = refundIssuedEmail(
+            'en',
+            NAME,
+            '2026-000041',
+            { amount: 12.5, currency: 'EUR' },
+            true
+        );
+
+        expect(mail.template).toBe('orders.order-refunded');
+        expect(mail.data.body).toContain('2026-000041');
+        expect(mail.data.body).toContain('12.50');
+    });
+
+    it('tells a full refund from a partial one', () => {
+        const refund = { amount: 5, currency: 'EUR' };
+
+        const full = refundIssuedEmail('en', NAME, ORDER_ID, refund, true).data.detail;
+        const partial = refundIssuedEmail('en', NAME, ORDER_ID, refund, false).data.detail;
+
+        expect(full).not.toBe(partial);
+        expect(full).toContain('everything');
+        expect(partial).toContain('part');
+    });
+
+    it('translates by the recipient locale', () => {
+        const refund = { amount: 5, currency: 'EUR' };
+
+        expect(refundIssuedEmail('it', NAME, ORDER_ID, refund, true).subject).not.toBe(
+            refundIssuedEmail('en', NAME, ORDER_ID, refund, true).subject
+        );
     });
 });

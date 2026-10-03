@@ -7,12 +7,7 @@
  */
 import sharp from 'sharp';
 import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
-
-const ORIGINAL_ENV = { ...process.env };
-
-afterEach(() => {
-    process.env = { ...ORIGINAL_ENV };
-});
+import { setEnvironment } from '@tests/environment';
 
 /** sharp's own metadata reader, wrapped so callers never inline `(await sharp(x).metadata())`. */
 const metadataOf = (buffer: Buffer) => sharp(buffer).metadata();
@@ -61,7 +56,7 @@ describe('digestImage', () => {
     });
 
     it('caps the longest edge at NODE_IMAGE_MAX_DIMENSION', async () => {
-        process.env.NODE_IMAGE_MAX_DIMENSION = '50';
+        setEnvironment({ NODE_IMAGE_MAX_DIMENSION: '50' });
         const input = await makeImage('png', 400, 200);
 
         const digested = await digestImage(input, 'image/png');
@@ -72,7 +67,7 @@ describe('digestImage', () => {
     });
 
     it('leaves an image already smaller than the cap at its own resolution', async () => {
-        process.env.NODE_IMAGE_MAX_DIMENSION = '2048';
+        setEnvironment({ NODE_IMAGE_MAX_DIMENSION: '2048' });
         const input = await makeImage('png', 40, 30);
 
         const digested = await digestImage(input, 'image/png');
@@ -85,12 +80,12 @@ describe('digestImage', () => {
     it('reads NODE_IMAGE_MAX_DIMENSION at call time, not at import time', async () => {
         const input = await makeImage('png', 400, 400);
 
-        process.env.NODE_IMAGE_MAX_DIMENSION = '10';
+        setEnvironment({ NODE_IMAGE_MAX_DIMENSION: '10' });
         const small = await digestImage(input, 'image/png');
         const smallMetadata = await metadataOf(small);
         expect(smallMetadata.width).toBe(10);
 
-        process.env.NODE_IMAGE_MAX_DIMENSION = '20';
+        setEnvironment({ NODE_IMAGE_MAX_DIMENSION: '20' });
         const larger = await digestImage(input, 'image/png');
         const largerMetadata = await metadataOf(larger);
         expect(largerMetadata.width).toBe(20);
@@ -102,7 +97,7 @@ describe('digestImage', () => {
 
     /* The decompression-bomb guard: without it, the decode step itself is unbounded work. */
     it('rejects an input that decodes past NODE_IMAGE_MAX_INPUT_PIXELS', async () => {
-        process.env.NODE_IMAGE_MAX_INPUT_PIXELS = '100';
+        setEnvironment({ NODE_IMAGE_MAX_INPUT_PIXELS: '100' });
         const input = await makeImage('png', 50, 50);
 
         await expect(digestImage(input, 'image/png')).rejects.toThrow();
@@ -123,7 +118,7 @@ describe('thumbnailImage', () => {
     );
 
     it('caps the longest edge at NODE_IMAGE_THUMBNAIL_DIMENSION', async () => {
-        process.env.NODE_IMAGE_THUMBNAIL_DIMENSION = '32';
+        setEnvironment({ NODE_IMAGE_THUMBNAIL_DIMENSION: '32' });
         const input = await makeImage('png', 400, 800);
 
         const thumbnail = await thumbnailImage(input);

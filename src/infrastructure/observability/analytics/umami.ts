@@ -10,6 +10,7 @@
 
 import { logger } from '@infrastructure/adapters/logger';
 import type { AnalyticsEvent, AnalyticsProvider } from './index';
+import { analyticsConfig } from '@infrastructure/observability/config';
 
 /**
  * Stand-in user-agent for events with no browser behind them (webhooks, scheduled jobs, queue
@@ -43,8 +44,9 @@ const stripPort = (host: string): string => {
  * itself). This dials the ingest host, falling back to the public one for single-host setups.
  */
 const readConfig = (): { host: string; websiteId: string } | undefined => {
-    const host = (process.env.NODE_UMAMI_INGEST_HOST ?? process.env.NODE_UMAMI_HOST)?.trim();
-    const websiteId = process.env.NODE_UMAMI_WEBSITE_ID?.trim();
+    const config = analyticsConfig();
+    const host = config.NODE_UMAMI_INGEST_HOST ?? config.NODE_UMAMI_HOST;
+    const websiteId = config.NODE_UMAMI_WEBSITE_ID;
 
     if (!host || !websiteId) return undefined;
 

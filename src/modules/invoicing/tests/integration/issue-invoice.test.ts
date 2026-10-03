@@ -44,7 +44,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         const user = await createUser();
         const product = await createProduct({ price: 19.9, taxClass: undefined });
         const order = await createOrder(user, [toOrderItem(product, 2)], {
-            shippingAddress: {
+            billingAddress: {
                 fullName: 'Ada Lovelace',
                 street: '1 Way',
                 city: 'London',
@@ -60,6 +60,51 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         expect(invoice.billingAddress?.fullName).toBe('Ada Lovelace');
         expect(invoice.lines).toHaveLength(1);
         expect(invoice.grandTotal).toBeCloseTo(39.8, 2);
+    });
+
+    it('bills the billing address, never the ship-to one', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            shippingAddress: {
+                fullName: 'Grace Hopper',
+                street: '2 Depot Rd',
+                city: 'Leeds',
+                zip: 'LS1 1AA',
+                country: 'GB'
+            },
+            billingAddress: {
+                fullName: 'Ada Lovelace',
+                street: '1 Way',
+                city: 'London',
+                zip: 'W1A 1AA',
+                country: 'GB'
+            }
+        });
+
+        await markPaid(String(order._id));
+        const invoice = await waitForInvoice(String(order._id));
+
+        expect(invoice.billingAddress?.fullName).toBe('Ada Lovelace');
+    });
+
+    it('carries no buyer address when the order recorded only a ship-to one', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            shippingAddress: {
+                fullName: 'Grace Hopper',
+                street: '2 Depot Rd',
+                city: 'Leeds',
+                zip: 'LS1 1AA',
+                country: 'GB'
+            }
+        });
+
+        await markPaid(String(order._id));
+        const invoice = await waitForInvoice(String(order._id));
+
+        expect(invoice.billingAddress).toBeUndefined();
     });
 
     // BR-CO-17: VAT is rounded once per rate, on the rate's whole taxable total. Three 0.10 lines

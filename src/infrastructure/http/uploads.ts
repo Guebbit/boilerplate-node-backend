@@ -9,6 +9,7 @@
 import type { Request } from 'express';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { bodyRecordOf } from '@infrastructure/http/request';
+import { uploadConfig } from '@infrastructure/http/config';
 
 /**
  * Extract the uploaded file's path from a multer-processed request, wrapped in an array so
@@ -89,9 +90,8 @@ export const readUploadedImage = (
 
     if (pendingKey)
         return {
-            imageUrl: process.env.NODE_PENDING_IMAGE_URL ?? '/images/system/pending.png',
-            thumbnailUrl:
-                process.env.NODE_PENDING_THUMBNAIL_URL ?? '/images/system/pending-thumb.webp',
+            imageUrl: uploadConfig().NODE_PENDING_IMAGE_URL,
+            thumbnailUrl: uploadConfig().NODE_PENDING_THUMBNAIL_URL,
             pendingImageKey: pendingKey,
             deleteUpload: () => imageStore.removeQuarantined(pendingKey)
         };

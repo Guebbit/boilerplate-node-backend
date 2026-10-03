@@ -31,6 +31,40 @@ const bannedDoubleCasts = [
 ];
 
 /**
+ * A write to `process.env` — assignment, `delete`, or `Object.assign` onto it — in a test.
+ *
+ * The config store reads the process environment once, so such a write is not seen by any slice
+ * that has already read: a test would change nothing and fail far from the cause. A test overrides
+ * through `tests/support/environment.ts`. `no-restricted-syntax` does not merge across configs, so
+ * every block that configures it for tests spreads this in.
+ */
+const bannedEnvironmentWrites = [
+    {
+        selector:
+            'AssignmentExpression[left.type="MemberExpression"][left.object.object.name="process"][left.object.property.name="env"]',
+        message:
+            'Do not write process.env in a test: the config store reads it once and never sees the write. Use setEnvironment / withEnvironment from @tests/environment (setProcessEnvironment for a script that reads the real one).'
+    },
+    {
+        selector: 'AssignmentExpression[left.object.name="process"][left.property.name="env"]',
+        message:
+            'Do not replace process.env in a test: the config store reads it once. Use setEnvironment / withEnvironment from @tests/environment.'
+    },
+    {
+        selector:
+            'UnaryExpression[operator="delete"] > MemberExpression[object.object.name="process"][object.property.name="env"]',
+        message:
+            'Do not delete from process.env in a test: the config store reads it once. Use setEnvironment({ NAME: undefined }) from @tests/environment.'
+    },
+    {
+        selector:
+            'CallExpression[callee.object.name="Object"][callee.property.name="assign"][arguments.0.object.name="process"][arguments.0.property.name="env"]',
+        message:
+            'Do not assign onto process.env in a test: the config store reads it once. Use setEnvironment from @tests/environment.'
+    }
+];
+
+/**
  * The `TryStatement` ban — a production try/catch is allowed only where a throwing API has no
  * safe wrapper and the failure has a local answer. `no-restricted-syntax` does not merge across
  * configs (the nearest match REPLACES the list), so every block that configures that rule lists
@@ -526,6 +560,37 @@ export default tseslint.config(
         rules: {
             'local/no-hardcoded-user-text': 'error',
             'no-restricted-syntax': ['error', ...bannedDoubleCasts, bannedTryCatch]
+        }
+    },
+
+    /**
+     * The environment is read in ONE layer: each owner's `config.ts` (a `defineConfig` slice) and the
+     * store beneath them. Everything else asks a slice for a typed value.
+     *
+     * `no-restricted-properties` is core ESLint and covers the destructured spelling too
+     * (`const { env } = process`). `no-process-env` is deprecated, and its replacement lives in
+     * `eslint-plugin-n`, which this repo does not install.
+     *
+     * A test may not WRITE `process.env` either — see `bannedEnvironmentWrites` above, and
+     * docs/tools/configuration.md.
+     */
+    {
+        files: ['src/**/*.ts'],
+        ignores: [
+            'src/**/config.ts',
+            'src/infrastructure/config/store.ts',
+            'src/modules/*/tests/**/*.ts'
+        ],
+        rules: {
+            'no-restricted-properties': [
+                'error',
+                {
+                    object: 'process',
+                    property: 'env',
+                    message:
+                        'Read the environment through your owner’s config.ts (defineConfig), never process.env — see docs/tools/configuration.md.'
+                }
+            ]
         }
     },
 
@@ -1344,6 +1409,7 @@ export default tseslint.config(
             '.dependency-cruiser.cjs',
             '.dependency-cruiser.modules.cjs',
             'jest.config.cluster.js',
+            'jest.config.broker.js',
             'docs/.vitepress/**/*.{ts,mts}'
         ],
         extends: [tseslint.configs.disableTypeChecked],
@@ -1423,8 +1489,22 @@ export default tseslint.config(
             // and a test try/catches to assert on what was thrown. The double-cast ban stays:
             // tests are where that idiom bred.
             '@typescript-eslint/unbound-method': 'off',
-            'no-restricted-syntax': ['error', ...bannedDoubleCasts]
+            'no-restricted-syntax': ['error', ...bannedDoubleCasts, ...bannedEnvironmentWrites]
         }
+    },
+
+    /**
+     * The three files that ARE the seam: the worker's defaults (written before the store's first
+     * read), the helpers behind `setProcessEnvironment`, and the main-process setup that hands the
+     * workers their Mongo address through the real environment.
+     */
+    {
+        files: [
+            'tests/support/setup-environment.ts',
+            'tests/support/environment.ts',
+            'tests/support/global-setup.ts'
+        ],
+        rules: { 'no-restricted-syntax': ['error', ...bannedDoubleCasts] }
     },
 
     /**

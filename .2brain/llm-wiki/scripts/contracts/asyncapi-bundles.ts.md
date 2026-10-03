@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/asyncapi-bundles.ts
-sha256: c9846c18af3dec0ca47ad9c0ffee796e4f4ed16a4bb306cb7086e7013ab69f8c
-generated_at: 2026-09-23T17:21:29.731610+00:00
+sha256: 81dd2f0bbf367c97d486c983f0e54543b4f707c3a2d4d264a60e938e91d65aa9
+generated_at: 2026-10-01T12:25:05.364642+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Merges per-section AsyncAPI YAML documents into two complete bundles: a full backend contract (every channel the service has) and a shared/public contract (only channels an API client can reach). The split is determined by a `SHARED_SECTIONS` allowlist. Deliberately avoids `asyncapi bundle` (which dereferences `$ref`s and would strip the refs that type generation walks), instead performing a shallow, collision-refusing merge of five top-level maps through the YAML AST to preserve authored quoting and scalar style.
+Merges one AsyncAPI document per section into two committed bundles: `asyncapi.yaml` (every channel the service has) and `asyncapi.public.yaml` (only channels an API client can reach). The split is driven by a per-section `scope` convention (top-level `asyncapi.yaml` = public, `asyncapi.internal.yaml` = backend-only), so both bundles come from the same source documents and can never disagree. This file performs a shallow copy of five known maps into a root skeleton document, deliberately avoiding `asyncapi bundle`'s `$ref` dereferencing to keep refs intact for the downstream type generator.
 
 ## Key elements
 
-- **`ASYNC_SECTION_ORDER`** (export) — Ordered list of all section names: fixed sections (`observability`, `webhooks`, `workers`) plus dynamically discovered `<module>-internal` sections.
-- **`internalSections()`** — Scans `src/modules/` for directories containing `asyncapi.internal.yaml` and returns sorted `<name>-internal` identifiers. Deleting or adding a module's internal queue requires no change here.
-- **`SHARED_SECTIONS`** — Set of section names visible to API clients (`observability`, `webhooks`). Everything absent is backend-only.
-- **`sectionsInScope(scope)`** — Filters `ASYNC_SECTION_ORDER` to the subset for a given `AsyncScope` (`'shared'` or `'backend'`).
-- **`asyncSectionDocument(section)`** — Resolves the file path for a section: `shared/contracts/asyncapi.workers.yaml` for workers, `<module>/asyncapi.internal.yaml` for internal sections, `<module>/asyncapi.yaml` otherwise.
-- **`mergeInto(target, keyPath, section, source)`** — Copies a section's map into the target document at the given key path. Throws with a named-collision error if a key already exists (prevents silent channel/schema loss).
-- **`compile(scope)`** — Reads the root document, clears its leading comment, merges each in-scope section's five maps (`servers`, `channels`, `operations`, `components.messages`, `components.schemas`) in order, serialises with `indent: 4, lineWidth: 0`, prepends a source-marker header, and caches the result.
-- **`asyncapiBundle`** (export, `ContractBundle`) — The full backend bundle. Output: `asyncapi.yaml`. `compiled: true`.
-- **`asyncapiPublicBundle`** (export, `ContractBundle`) — The shared/public bundle. Output: `asyncapi.public.yaml`. `compiled: true`.
-- **`AsyncScope`** (type) — `'shared' | 'backend'`.
-- **`AsyncSectionName`** (type) — `FixedSection | \`${string}-internal\``.
+- **`ASYNC_SECTION_ORDER`** (exported) — readonly array of section names in merge/output order: public module sections (in `MODULE_ASYNC_ORDER` preference), then `-internal` queue sections (sorted), then `workers`.
+- **`asyncapiBundle`** (exported, `ContractBundle`) — the full backend bundle; `content()` compiles all sections, `sources()` lists the root + every section file.
+- **`asyncapiPublicBundle`** (exported, `ContractBundle`) — the shared/public bundle; same shape but `content()` compiles only sections in `SHARED_SECTIONS`.
+- **`compile(scope)`** (internal) — reads the root document, strips its leading comment, iterates `sectionsInScope(scope)`, calls `mergeInto` for each of the five `MERGED_PATHS`, then serialises with `indent: 4, lineWidth: 0`. Caches result per scope in a module-level `Map`.
+- **`mergeInto(target, keyPath, section, source)`** (internal) — copies items from a section's map into the target at `keyPath`; **throws** on any key collision with both section names in the message.
+- **`modulesWithAsyncapi()`** / **`internalSections()`** — discover module directories from disk that contain `asyncapi.yaml` or `asyncapi.internal.yaml` respectively.
+- **`resolveModuleAsyncSections()`** — applies `MODULE_ASYNC_ORDER` preference over discovered modules via `orderSections`.
+- **`SHARED_SECTIONS`** — a `Set` of public section names; everything else is backend-only.
+- **`asyncSectionDocument(section)`** — resolves the file path for a section (workers → shared, `-internal` suffix → module internal file, otherwise → module public file).
+- **`MERGED_PATHS`** — the five key paths copied per section: `servers`, `channels`, `operations`, `components.messages`, `components.schemas`.
+- **`marker(sections)`** — generates the `# Code generated … DO NOT EDIT` header listing every source file.
 
 ## Relationships
 
-- **`scripts/contracts/bundle-kinds.ts`** — Source of the `ContractBundle` type and `REPO_ROOT` constant used throughout this file.
-- **`scripts/contracts/bundle-registry.ts`** — Consumes the two `ContractBundle` exports (`asyncapiBundle`, `asyncapiPublicBundle`) to register them in the build/check pipeline.
-- **`scripts/contracts/generate-asyncapi-types.ts`** — Walks the `$ref`s that this merge deliberately preserves (rather than dereferencing) to derive TypeScript model names. Using `asyncapi bundle` here would leave that script with nothing to follow.
-- **`src/modules/webhooks/asyncapi.yaml`** — Read as the `webhooks` section; present in both the backend and shared bundles.
-- **`src/modules/webhooks/asyncapi.internal.yaml`** — Discovered by `internalSections()` and merged as `webhooks-internal`; present only in the backend bundle.
-- **`tests/contract/request-sources.test.ts`** — Exercises the `sources()` methods on both bundle exports to verify the declared input files.
-- **`tests/cross-cutting/side-effects-have-one-layer.test.ts`** — Enforces that this module only reads files and returns strings (no `writeFileSync`, no side effects beyond the `compiled` cache), keeping the I/O boundary in the registry layer.
+- **`scripts/contracts/bundle-kinds.ts`** — provides the `REPO_ROOT` constant and the `ContractBundle` interface that both exported bundles implement.
+- **`scripts/contracts/section-order.ts`** — provides `orderSections`, used to reconcile `MODULE_ASYNC_ORDER` against the modules actually present on disk.
+- **`scripts/contracts/bundle-registry.ts`** — consumes the two exported bundles (registers them for build/check scripts); this file is the sole producer of the AsyncAPI bundle definitions.
+- **`src/modules/webhooks/asyncapi.yaml`** — discovered by `modulesWithAsyncapi()`; contributes a public section.
+- **`src/modules/webhooks/asyncapi.internal.yaml`** — discovered by `internalSections()`; contributes a `webhooks-internal` backend section.
+- **`tests/contract/request-sources.test.ts`** — exercises the `sources()` methods of both bundles to verify the declared dependency list.
+- **`tests/cross-cutting/side-effects-have-one-layer.test.ts`** — asserts that compiled-contract output is produced by exactly one layer (this file), not scattered across modules.
 
 ## Notes
 
-- The merge is a **shallow copy of five maps**, not a deep merge. A collision (e.g. two sections declaring the same channel name) throws immediately rather than last-write-wins, because the loser would silently vanish from the frontend-generated client.
-- The root document's leading comment is cleared off the **first key node**, not off the document itself. The `yaml` library attaches a leading comment block to whatever node follows it; `doc.commentBefore` is only set when the document has no content. Setting the latter silently does nothing.
-- `lineWidth: 0` prevents the YAML serializer from re-flowing long lines, which would produce spurious diff noise on unrelated edits and trip the `check:contracts-bundle` staleness check.
-- The `compiled` map caches one result per scope, so a build that emits both bundles merges the shared sections only once.
-- `asyncapiPublicBundle` has no `shared` property set to `false` (unlike `asyncapiBundle`), signalling to the registry that it is the cross-repo hash-compared artefact that must be committed rather than generated on demand.
+- **No `$ref` dereferencing.** The merge copies map nodes verbatim via the YAML AST (`keepSourceTokens: true`), preserving authored quoting and scalar style. Using the `asyncapi` CLI's `bundle` command would inline every ref, tripling the document and removing the refs that `scripts/contracts/generate-asyncapi-types.ts` walks to name its models.
+- **Collision is fatal, not a warning.** `mergeInto` throws if two sections declare the same server, channel, message, or schema key. This prevents a silent "last writer wins" that would drop a channel from the frontend-generated client.
+- **Comment stripping is key-level, not document-level.** The `yaml` library attaches a leading comment block to the node that follows it; `doc.commentBefore` is only set on empty documents. The code clears `commentBefore` on the first map key's key node.
+- **`lineWidth: 0`** in serialisation prevents the YAML emitter from re-wrapping long lines, which would produce diff noise on unrelated edits and false staleness in `check:contracts-bundle`.
+- **Discovery, not enumeration.** Module sections are found by reading `src/modules/` from disk. Adding or removing a module with an AsyncAPI file requires no edit here; only the `MODULE_ASYNC_ORDER` preference array needs updating to change narrative order.
+- **`compiled` cache** is a module-level `Map<AsyncScope, string>`: a full build run compiles each scope once even if both bundles are requested.

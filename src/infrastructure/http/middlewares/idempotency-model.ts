@@ -12,7 +12,7 @@
 
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { idempotencyConfig } from '@infrastructure/http/config';
 
 /** Where a record sits in its own lifecycle — see `idempotency.ts`'s three-way branch on it. */
 export type IdempotencyRecordState = 'in-flight' | 'done';
@@ -44,7 +44,7 @@ export type IdempotencyRecordModel = Model<IdempotencyRecordDocument>;
  * Default: 24 — long enough to outlast any client's retry backoff, short enough that a ledger
  * entry is never mistaken for a durable record of the write itself.
  */
-const retentionHours = environmentNumber('NODE_IDEMPOTENCY_RETENTION_HOURS', 24, 1);
+const retentionHours = idempotencyConfig().NODE_IDEMPOTENCY_RETENTION_HOURS;
 
 /** Idempotency ledger schema. */
 export const idempotencyRecordSchema = new Schema<

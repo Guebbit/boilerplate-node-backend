@@ -12,23 +12,27 @@
  * (`cluster.ts`'s worker branch, `dev:docker`) actually wants a listening server.
  */
 
+// First: the tracing setup below already reads config, and the config store reads the environment
+// once — `.env` has to be loaded before that read.
+import './infrastructure/config/dotenv';
+
 // OTel must initialize before express/http/mongoose are imported. That only holds when
 // `cluster.ts` is the entry and imports this file dynamically: as the entry itself, the static
 // imports below are hoisted above this call.
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
 startTracing();
 
-import 'dotenv/config';
 import express from 'express';
 import type { Express } from 'express';
 import type { Server } from 'node:http';
+import { installEnvironment, type EnvironmentOverrides } from '@infrastructure/config/store';
 import { start as startDatabase } from '@infrastructure/runtime/database';
 import { startCache } from '@infrastructure/adapters/cache';
 import { startQueue } from '@infrastructure/adapters/queue';
 import { registerWorkers } from '@app/workers';
 import { registerTemplateDirectories } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { serverConfig } from '@infrastructure/runtime/config';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
 import { listenOn, shutdownInfra } from '@infrastructure/runtime/server-lifecycle';
 import { markServerListening } from '@infrastructure/runtime/readiness';
@@ -42,7 +46,7 @@ import { isTranslationAvailable } from '@kernel/translation';
 
 import { registerModules } from '@kernel/registry';
 import { enabledModules, enabledModuleLocales, enabledModuleTemplateDirectories } from './modules';
-import { APP_NON_MODULE_CHECKS } from '@app/required-config';
+import { APP_CONFIG_SLICES, securityTxtSettings } from '@app/config';
 import { securityTxtWarning } from '@app/security-txt';
 
 import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
@@ -53,9 +57,6 @@ import { installRoutes } from '@app/routes';
 import { installErrorHandling } from '@app/error-handling';
 import { installDemo, restoreScenario } from '@app/demo';
 import { isDemoMode } from '@infrastructure/runtime/demo-profile';
-
-/** Fallback port when `NODE_PORT` is unset. */
-const DEFAULT_PORT = 3000;
 
 /** One built application's lifecycle — what {@link createApp} hands back (SK-D2). */
 export interface AppInstance {
@@ -82,6 +83,19 @@ export interface AppInstance {
     stop: () => Promise<void>;
 }
 
+/** What {@link createApp} takes. */
+export interface AppOptions {
+    /**
+     * Environment variables to run this app with, laid over the process environment (`undefined`
+     * unsets one). They pass through the same parser and boot gate as the real ones.
+     *
+     * Process-wide, because the config slices are: the last app built wins. Read-at-import
+     * settings (a limiter's budget) only see it if it was installed before the first import of
+     * this file — `scenarios/apply.ts` does that with `installEnvironment` itself.
+     */
+    env?: EnvironmentOverrides;
+}
+
 /**
  * Builds one Express application, synchronously: validates every module's required config,
  * attaches its domain-event handlers, lets each pull whatever cross-module lookup it needs
@@ -91,10 +105,14 @@ export interface AppInstance {
  * only wants `.app` (a supertest agent) needs neither.
  *
  * Callable more than once — each call is an independent instance with its own `activeServer`/
- * `shutdownPromise` closure, which is what lets `boot`/`start`/`stop` take no config of their own
- * yet (SK-D4 adds a config parameter here once this shape exists to inject it into).
+ * `shutdownPromise` closure, so `boot`/`start`/`stop` take no config of their own: the one
+ * parameter is {@link AppOptions}, applied before anything below reads a setting.
+ *
+ * @param options - the environment to build with, if not the process's own
  */
-export const createApp = (): AppInstance => {
+export const createApp = (options: AppOptions = {}): AppInstance => {
+    if (options.env) installEnvironment(options.env);
+
     const app = express();
 
     /** The server this instance is currently listening on, if any. */
@@ -156,15 +174,14 @@ export const createApp = (): AppInstance => {
                  */
                 .then(() => (isDemoMode() ? restoreScenario() : undefined))
                 .then(() => {
-                    const port = environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
+                    const { NODE_PORT: port, NODE_HOST: host } = serverConfig();
                     // Unset by default, which binds every interface — the shape every profile but
                     // the demo one wants. `run-server.ts` sets it to loopback: the demo profile's
                     // tokens are signed with a public, hard-coded secret, so binding every interface
                     // would let anyone on the LAN mint one.
-                    const host = process.env.NODE_HOST?.trim();
                     // Stryker disable next-line all
                     logger.info('------------- SERVER START -------------');
-                    return listenOn(app, port, host || undefined).then((server) => {
+                    return listenOn(app, port, host).then((server) => {
                         /*
                          * Before the first request can arrive, because they bound how long one may
                          * take to send. See `app/security.ts`.
@@ -192,10 +209,10 @@ export const createApp = (): AppInstance => {
         return shutdownPromise;
     };
 
-    registerModules(enabledModules, APP_NON_MODULE_CHECKS);
+    registerModules(enabledModules, APP_CONFIG_SLICES);
 
     // Not a refusal: a boilerplate must boot unconfigured. But a stale security.txt is worse than none.
-    const securityTxtProblem = securityTxtWarning(process.env);
+    const securityTxtProblem = securityTxtWarning(securityTxtSettings());
     if (securityTxtProblem) logger.warn({ message: securityTxtProblem });
 
     // LOCALES_OPTIONAL_0925 D-LO1: `locales` being absent is a supported deployment shape, not a

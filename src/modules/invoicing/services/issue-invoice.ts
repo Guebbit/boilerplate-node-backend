@@ -9,27 +9,20 @@
  * See: docs/modules/invoicing.md
  */
 
-import { orderTaxBreakdown, orderTotal, orderCurrency, shopCountry } from '@modules/orders';
+import { orderTaxBreakdown, orderTotal, orderCurrency, shopIdentity } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { shopLegalName, shopVatNumber, shopStreet, shopCity, shopZip } from '../config';
 import { invoicingRepository } from '../repository';
 import { allocateInvoiceNumber } from './numbering';
 import type { InvoiceDocument, InvoiceLine, InvoiceSeller } from '../model';
 
 /**
  * The seller's own identity, frozen fresh at every issue — never re-read once an invoice exists.
- * Whichever of legal name/VAT number/street/city/zip/country a deployment has configured is
- * printed; an unconfigured one is simply absent, the same "print what is there" rule
- * `orders/emails.ts` used to apply to the old receipt's own supplier block.
+ * Everything but the VAT number is required at boot, so only that one can be absent.
  */
-const frozenSeller = (): InvoiceSeller => ({
-    ...(shopLegalName() ? { legalName: shopLegalName() } : {}),
-    ...(shopVatNumber() ? { vatNumber: shopVatNumber() } : {}),
-    ...(shopStreet() ? { street: shopStreet() } : {}),
-    ...(shopCity() ? { city: shopCity() } : {}),
-    ...(shopZip() ? { zip: shopZip() } : {}),
-    ...(shopCountry() ? { country: shopCountry() } : {})
-});
+const frozenSeller = (): InvoiceSeller => {
+    const { legalName, vatNumber, street, city, zip, country } = shopIdentity();
+    return { legalName, ...(vatNumber ? { vatNumber } : {}), street, city, zip, country };
+};
 
 /**
  * One order line, frozen onto the invoice — title, quantity, the frozen unit price, VAT rate and
@@ -50,9 +43,9 @@ const frozenLines = (order: OrderDocument): InvoiceLine[] =>
 
 /**
  * Freezes and numbers one order's invoice — the whole job `module.ts`'s `ORDER_STATUS_CHANGED`
- * listener delegates here. Reads the order's OWN frozen `shippingAddress` as the Art. 226 billing
- * address: this shop collects no separate billing address, and the ship-to address is the only
- * customer address a checkout ever records. The render locale is the order's own frozen locale
+ * listener delegates here. Reads the order's OWN frozen `billingAddress` as the Art. 226 buyer
+ * address — the one the checkout asked for, never the ship-to address by assumption: a
+ * digital-only order has no ship-to at all. The render locale is the order's own frozen locale
  * (`items[0].locale`) — the language its product titles were resolved into at checkout — same
  * reasoning the old receipt render followed.
  *
@@ -78,7 +71,7 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
             currency,
             locale: order.items[0].locale,
             ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
-            ...(order.shippingAddress ? { billingAddress: order.shippingAddress } : {}),
+            ...(order.billingAddress ? { billingAddress: order.billingAddress } : {}),
             seller: frozenSeller(),
             lines: frozenLines(order),
             ...(order.shippingCost === undefined ? {} : { shippingCost: order.shippingCost }),

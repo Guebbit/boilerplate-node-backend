@@ -4,6 +4,7 @@ import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { withReloadedRateLimits } from '@tests/rate-limit-harness';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { setEnvironment } from '@tests/environment';
 
 /**
  * The credential-endpoint rate limiter and the antibot challenge gate — the hardening properties
@@ -158,16 +159,12 @@ describe('credential endpoints are rate limited separately', () => {
 });
 
 describe('loginChallengeGate — rung 3 only once the identity budget is mostly spent', () => {
-    const ORIGINAL_PROVIDER = process.env.NODE_ANTIBOT_PROVIDER;
-
     afterEach(() => {
         jest.resetModules();
-        if (ORIGINAL_PROVIDER === undefined) delete process.env.NODE_ANTIBOT_PROVIDER;
-        else process.env.NODE_ANTIBOT_PROVIDER = ORIGINAL_PROVIDER;
     });
 
     it('never engages while no provider is selected, budget spent or not', async () => {
-        delete process.env.NODE_ANTIBOT_PROVIDER;
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: undefined });
         const app = await appWithBudget(4);
         const attempt = () => supertest(app).post('/login').send({ email: 'ada@example.com' });
 
@@ -178,7 +175,7 @@ describe('loginChallengeGate — rung 3 only once the identity budget is mostly 
     });
 
     it('passes an honest first attempt through untouched once a provider is selected', async () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
         const app = await appWithBudget(4);
 
         const response = await supertest(app).post('/login').send({ email: 'ada@example.com' });
@@ -190,7 +187,7 @@ describe('loginChallengeGate — rung 3 only once the identity budget is mostly 
     });
 
     it('challenges once the identity budget is at least half spent', async () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
         const app = await appWithBudget(4);
         const attempt = () => supertest(app).post('/login').send({ email: 'ada@example.com' });
 

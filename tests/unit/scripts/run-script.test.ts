@@ -10,6 +10,7 @@
 import { runScript } from '../../../scripts/run-script';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordJobOutcome } from '@infrastructure/persistence/lease';
+import { assertProcessConfig } from '@app/config';
 
 // Inline `jest.fn()`s rather than outer consts: `jest.mock` is hoisted above the imports, so a
 // factory closing over a `const` would read it before initialisation.
@@ -19,16 +20,76 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 jest.mock('@infrastructure/persistence/lease', () => ({
     recordJobOutcome: jest.fn().mockResolvedValue(undefined)
 }));
+// The real gate loads every module; what is under test here is only what runScript does with its
+// verdict. The gate itself is `tests/unit/app/config.test.ts`'s and `tests/unit/kernel/`'s.
+jest.mock('@app/config', () => ({ assertProcessConfig: jest.fn() }));
 
 const mockError = jest.mocked(logger.error);
 const mockWarn = jest.mocked(logger.warn);
 const mockRecordJobOutcome = jest.mocked(recordJobOutcome);
+const mockAssertProcessConfig = jest.mocked(assertProcessConfig);
 
 const ORIGINAL_EXIT_CODE = process.exitCode;
 
 afterEach(() => {
     process.exitCode = ORIGINAL_EXIT_CODE;
     mockRecordJobOutcome.mockClear();
+    mockAssertProcessConfig.mockReset();
+});
+
+/** The verdict the gate gives: a typo'd variable. */
+const refuse = (): void => {
+    mockAssertProcessConfig.mockImplementation(() => {
+        throw new Error('Refusing to boot: invalid values — NODE_PORT: expected whole number');
+    });
+};
+
+describe('runScript on an invalid environment', () => {
+    it('never runs the body, says why, and exits non-zero', async () => {
+        refuse();
+        const main = jest.fn().mockResolvedValue(undefined);
+
+        await runScript('reap:orders', main, () => Promise.resolve());
+
+        expect(main).not.toHaveBeenCalled();
+        expect(process.exitCode).toBe(1);
+        expect(mockError).toHaveBeenCalledWith(
+            expect.objectContaining({ error: expect.stringContaining('NODE_PORT') as string })
+        );
+    });
+
+    it('still closes what the caller opened', async () => {
+        refuse();
+        const cleanup = jest.fn().mockResolvedValue(undefined);
+
+        await runScript(undefined, () => Promise.resolve(), cleanup);
+
+        expect(cleanup).toHaveBeenCalledTimes(1);
+    });
+
+    it('records no job outcome: the job never ran, and recording one needs the database', async () => {
+        refuse();
+
+        await runScript(
+            'reap:orders',
+            () => Promise.resolve(),
+            () => Promise.resolve()
+        );
+
+        expect(mockRecordJobOutcome).not.toHaveBeenCalled();
+    });
+
+    it('does not let a failing cleanup reject', async () => {
+        refuse();
+
+        await expect(
+            runScript(
+                undefined,
+                () => Promise.resolve(),
+                () => Promise.reject(new Error('quit failed'))
+            )
+        ).resolves.toBeUndefined();
+    });
 });
 
 describe('runScript', () => {

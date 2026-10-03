@@ -10,7 +10,7 @@
  *   - nothing a module declares is also declared in `INFRASTRUCTURE_RATE_LIMITS` — ownership is
  *     exactly one place, or a docs/test reader sees a budget twice and a change to one silently
  *     leaves the other stale;
- *   - every budget's env var is raised in `tests/support/setup.ts` AND in
+ *   - every budget's env var is raised in `tests/support/setup-environment.ts` AND in
  *     `scenarios/rate-limits.ts`, unless it carries a `testExemption` — see `RateLimitBudget` in
  *     `src/types/rate-limit-budget.ts` for what that means and why it is a decision recorded on
  *     the budget rather than a name typed here.
@@ -42,11 +42,14 @@ const duplicatesOf = (field: 'name' | 'namespace' | 'environmentVariable'): stri
 
 /**
  * Every `process.env.NODE_..._RATE_LIMIT... ??=` (or `..._WINDOW_MS`/`..._MFA_...`) assignment in
- * `tests/support/setup.ts`, read as TEXT rather than imported — importing it here would run its
- * side effects (i18next init, locale registration) for a check that only needs its literal source.
+ * `tests/support/setup-environment.ts`, read as TEXT rather than imported — importing it here would write the
+ * worker's environment a second time, for a check that only needs its literal source.
  */
 const raisedInSetup = (): Set<string> => {
-    const setupSource = readFileSync(path.join(__dirname, '../support/setup.ts'), 'utf8');
+    const setupSource = readFileSync(
+        path.join(__dirname, '../support/setup-environment.ts'),
+        'utf8'
+    );
     const matches = setupSource.matchAll(/process\.env\.(NODE_\w+)\s*\?\?=/g);
     return new Set([...matches].map(([, name]) => name));
 };
@@ -75,7 +78,7 @@ describe('rate-limit budgets, as a set', () => {
         expect(redeclared).toEqual([]);
     });
 
-    it('raises every budget without a testExemption in tests/support/setup.ts', () => {
+    it('raises every budget without a testExemption in tests/support/setup-environment.ts', () => {
         const raised = raisedInSetup();
         const missing = allBudgets
             .filter((budget) => budget.testExemption === undefined)
@@ -93,7 +96,7 @@ describe('rate-limit budgets, as a set', () => {
 
     it('raises every budget without a testExemption in scenarios/rate-limits.ts too', () => {
         // A scripted driver (`apply.ts`, `run-server.ts`) hits the app just as hard as this
-        // suite does, from its own list — `tests/support/setup.ts`'s own completeness above
+        // suite does, from its own list — `tests/support/setup-environment.ts`'s own completeness above
         // does not cover it, so a budget added to a module here silently missed the other side.
         const raised = new Set(RAISED_RATE_LIMIT_ENV_VARS);
         const missing = allBudgets

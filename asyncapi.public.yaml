@@ -6,14 +6,9 @@ asyncapi: 3.0.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
 info:
     title: Boilerplate Node Backend Async Contracts
-    # Bumped alongside `openapi.root.yaml`'s own 2.0.0: the Standard Webhooks envelope
-    # (`webhooks/asyncapi.yaml`, `{ type, timestamp, data }` plus the signed headers) is a
-    # deliberate, reviewed break for a subscriber on the old raw-event-body shape. Note:
-    # `check:asyncapi-breaking`'s major-version skip compares the `asyncapi:` SPEC version
-    # (currently 3.0.0 everywhere), not this field — this bump documents the break for a human
-    # reader, it does not silence that gate, which is expected to report real breaking changes
-    # against `origin/main` until this work is actually pushed and becomes the new baseline.
-    version: 2.0.0
+    # Alpha, the same `0.1.0` as `openapi.root.yaml` and every module fragment (SemVer §4:
+    # `0.y.z` is initial development). `check:asyncapi-breaking` ignores this field.
+    version: 0.1.0
     contact:
         name: Boilerplate maintainers
         url: https://github.com/Guebbit/boilerplate-node-backend
@@ -136,7 +131,7 @@ channels:
                 $ref: '#/components/messages/PaymentRefundedEvent'
     return.requested:
         address: return.requested
-        description: A return was opened for goods that had shipped — a withdrawal or a request.
+        description: A return was opened — a withdrawal or a request.
         servers:
             - $ref: '#/servers/subscriberEndpoint'
         messages:
@@ -158,6 +153,14 @@ channels:
         messages:
             ReturnClosedEvent:
                 $ref: '#/components/messages/ReturnClosedEvent'
+    example.published:
+        address: example.published
+        description: An example was published. The `example` module's one webhook, there to be copied.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ExamplePublishedEvent:
+                $ref: '#/components/messages/ExamplePublishedEvent'
 operations:
     sseMetricsSnapshot:
         action: send
@@ -247,9 +250,9 @@ operations:
         action: send
         channel:
             $ref: '#/channels/return.requested'
-        summary: A return was opened for goods that had shipped.
+        summary: A return was opened — a withdrawal or a request.
         description: >-
-            One-to-one with the `return.requested` domain event — see `returns/services/create.ts`. Never fired for a withdrawal before dispatch: that has no return row, it is a cancel and `order.cancelled` says so.
+            One-to-one with the `return.requested` domain event — see `returns/services/create.ts`. A withdrawal before dispatch fires it too, followed at once by `return.closed`: the return is born closed, and `order.cancelled` says the order was cancelled.
         messages:
             - $ref: '#/channels/return.requested/messages/ReturnRequestedEvent'
     webhookReturnReceived:
@@ -267,9 +270,18 @@ operations:
             $ref: '#/channels/return.closed'
         summary: A return finished — the money went back.
         description: >-
-            One-to-one with the `return.closed` domain event — see `returns/services/close.ts`. Fired when the refund settles: straight after the goods were received, or later when the payment sweep completed a refund the provider first refused.
+            One-to-one with the `return.closed` domain event — see `returns/services/close.ts`. Fired when the refund settles: straight after the goods were received, or later when the payment sweep completed a refund the provider first refused. A withdrawal before dispatch fires it at birth, right after `return.requested`.
         messages:
             - $ref: '#/channels/return.closed/messages/ReturnClosedEvent'
+    webhookExamplePublished:
+        action: send
+        channel:
+            $ref: '#/channels/example.published'
+        summary: An example was published.
+        description: >-
+            One-to-one with the `example.published` domain event — see `example/services/crud.ts`. Fired each time an example moves to `published`, including after being archived and brought back.
+        messages:
+            - $ref: '#/channels/example.published/messages/ExamplePublishedEvent'
 components:
     messages:
         MetricsSnapshotEvent:
@@ -350,6 +362,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/ReturnClosedEnvelope'
+        ExamplePublishedEvent:
+            name: ExamplePublishedEvent
+            title: Example published
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ExamplePublishedEnvelope'
         ReturnRequestedEvent:
             name: ReturnRequestedEvent
             title: Return requested
@@ -542,6 +561,18 @@ components:
                     type: string
                     description: ISO-4217, e.g. `EUR`.
             additionalProperties: false
+        ExamplePublishedPayload:
+            type: object
+            required:
+                - exampleId
+                - title
+            properties:
+                exampleId:
+                    type: string
+                title:
+                    type: string
+                    description: The fallback-language title.
+            additionalProperties: false
         OrderCreatedEnvelope:
             type: object
             required:
@@ -723,4 +754,22 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/ReturnClosedPayload'
+            additionalProperties: false
+        ExamplePublishedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ExamplePublishedEventType
+                    type: string
+                    enum:
+                        - example.published
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ExamplePublishedPayload'
             additionalProperties: false

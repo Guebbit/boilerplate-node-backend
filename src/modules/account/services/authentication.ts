@@ -9,7 +9,7 @@
 
 import { z } from 'zod';
 import { getCurrentLocale, t } from '@infrastructure/i18n';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { accountConfig } from '../config';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
@@ -111,19 +111,12 @@ const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), 12)
  */
 export const PASSWORD_RESET_TOKEN_TYPE = 'password';
 
-/** Fallback for `NODE_PASSWORD_RESET_TTL_MS`: an hour, in milliseconds. */
-const DEFAULT_PASSWORD_RESET_TTL_MS = 3_600_000;
-
 /**
  * How long a reset link works — how long a stolen mailbox stays useful. Tunable because the safe
  * direction is SHORTER, and that trade against a user who reads mail on a delay is a
  * deployment's call, not this file's.
  */
-const PASSWORD_RESET_TOKEN_TTL_MS = environmentNumber(
-    'NODE_PASSWORD_RESET_TTL_MS',
-    DEFAULT_PASSWORD_RESET_TTL_MS,
-    1
-);
+const PASSWORD_RESET_TOKEN_TTL_MS = accountConfig().NODE_PASSWORD_RESET_TTL_MS;
 
 /**
  * Issue a password-reset token and deliver it — or silently do nothing for an unregistered
@@ -624,37 +617,3 @@ export const verifyOwnPassword = (
                         : generateReject(422, [t(wrongKey)])
                 );
         });
-
-/**
- * Re-authenticate an already-signed-in caller by password — the verification half of
- * `POST /account/reauth`. Proves the password and audits the attempt; re-minting the session (a
- * fresh `auth_time`) is the CONTROLLER's job via `issueSession`, the same split `passwordChange`
- * keeps from `postPasswordChange`'s own re-mint.
- *
- * Not `login`'s path: `login`'s 401 and its dummy-compare exist to stop an ANONYMOUS caller telling
- *               "no such account" apart from "wrong password" by timing. There is no such caller
- *               here — the access token already names exactly who is asking.
- * Not re-checked: the active/deletedAt gate `isAuth` already ran for this request, same reason
- *               `passwordChangeWithCurrent` and `updateProfile` skip it too.
- *
- * @param userId - the caller's own id, from their already-verified access token
- * @param password - the password to confirm against the stored hash
- * @param context - for the audit record
- */
-export const reauth = (
-    userId: string,
-    password: string,
-    context: CallerContext
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const outcome = verifyOwnPassword(userId, password, 'account.reauth.wrong-password').catch(
-        (error: unknown) => rejectDatabaseEnvelope('auth', error)
-    );
-
-    return outcome.then((result) => {
-        recordAudit(context, {
-            action: accountAuditActions.AUTH_REAUTHENTICATED,
-            outcome: result.success ? 'success' : 'failure'
-        });
-        return result;
-    });
-};

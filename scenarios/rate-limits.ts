@@ -12,8 +12,8 @@
  * default throttles a script exactly as the global one would. `docs/tools/security.md` lists what
  * each bounds.
  *
- * Never for a deployment. Both callers refuse production — `run-server.ts` binds loopback with
- * throwaway secrets, and `apply.ts`'s first gate is `NODE_ENV === 'production'`.
+ * Never for a deployment. Both callers refuse a deployment — `run-server.ts` binds loopback with
+ * throwaway secrets, and `apply.ts`'s first gate is `isRelaxedEnvironment()`.
  */
 
 /**
@@ -69,9 +69,12 @@ export const RAISED_RATE_LIMIT_ENV_VARS = [
     'NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX',
     'NODE_INVOICING_RATE_LIMIT_MAX',
     'NODE_RETURNS_RATE_LIMIT_MAX',
+    'NODE_EXAMPLE_RATE_LIMIT_MAX',
     'NODE_API_KEY_RATE_LIMIT_MAX',
     'NODE_PASSWORD_CHECK_RATE_LIMIT_MAX',
-    'NODE_MFA_SEND_MAX'
+    'NODE_MFA_SEND_MAX',
+    'NODE_MFA_ACCOUNT_SEND_MAX',
+    'NODE_MFA_ACCOUNT_GUESS_MAX'
 ];
 
 /** Every budget raised to {@link SCRIPTED_MAX}, plus {@link PRIVATE_COUNTERS}. */

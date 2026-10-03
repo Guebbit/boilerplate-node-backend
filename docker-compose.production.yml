@@ -189,19 +189,18 @@ services:
             setup:
                 condition: service_completed_successfully
 
-        # Readiness, not liveness: `/readyz` answers 503 while booting, while draining, or with
-        # Mongo down, so a load balancer stops routing here before this container's connections
-        # are cut — `/` would report healthy through all three. `node -e`, not `curl -f`: the
-        # runtime image is node:*-alpine and ships no curl. `start_period` is generous because
-        # `setup` (indexes + the shop's row) has already run by the time this container starts —
-        # the wait is for Mongo's own connection handshake, not for a seed.
+        # Liveness, never readiness: `/livez` checks only that the process answers, so a Mongo blip
+        # cannot mark a healthy container unhealthy (Swarm would replace it). `/readyz` is for a
+        # load balancer's own probe. Kept here although the image declares the same check: Podman
+        # builds OCI images by default, and OCI drops `HEALTHCHECK`. `node -e`, not `curl -f`: the
+        # runtime image is node:*-alpine and ships no curl. See docs/tools/health-checks.md.
         healthcheck:
             test:
                 [
                     'CMD',
                     'node',
                     '-e',
-                    "fetch('http://localhost:${NODE_PORT:-3000}/readyz').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                    "fetch('http://localhost:${NODE_PORT:-3000}/livez').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
                 ]
             interval: 30s
             timeout: 5s
@@ -250,7 +249,31 @@ services:
             # Same reasoning as `app`'s own mount — `scripts/ops/reap-*`/`sweep:*` connect to
             # Mongo too.
             - mongo-ca-dir:/ca-dir:ro
-        command: ['supercronic', '-passthrough-logs', '/app/crontab']
+        # `-prometheus-listen-address` makes supercronic serve `/health` (and `/metrics`), bound to
+        # loopback so it stays private to the container. It answers `OK` while the scheduler runs.
+        # https://github.com/aptible/supercronic
+        command:
+            [
+                'supercronic',
+                '-passthrough-logs',
+                '-prometheus-listen-address',
+                '127.0.0.1:9746',
+                '/app/crontab'
+            ]
+        # This container's own job is the scheduler, so it checks the scheduler — the image's web
+        # check would never pass here (nothing listens on the app port). See docs/tools/health-checks.md.
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:9746/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
         depends_on:
             database:
                 condition: service_healthy
@@ -288,6 +311,10 @@ services:
             - mongo-ca-dir:/ca-dir:ro
 
         command: ['sh', '-c', 'npm run deploy:setup']
+        # A one-shot job: its exit code is the signal, which `depends_on: service_completed_successfully`
+        # already reads. The image's web check would only mark it unhealthy while it runs.
+        healthcheck:
+            disable: true
         depends_on:
             database:
                 condition: service_healthy

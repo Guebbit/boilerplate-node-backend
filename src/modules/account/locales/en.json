@@ -28,11 +28,15 @@
         },
         "reauth": {
             "wrong-password": "The password is incorrect.",
-            "success": "Identity confirmed."
+            "success": "Identity confirmed.",
+            "no-password": "This account has no password. Request a code by email instead.",
+            "method-unavailable": "That way of confirming isn't available for this account.",
+            "wrong-code": "That code didn't work. Check it and try again."
         },
         "two-factor": {
             "setup-not-started": "Start setup for this method before confirming a code.",
             "wrong-code": "That code didn't work. Check it and try again.",
+            "code-required": "Enter a code from one of your armed methods, or a backup code, to change your second factors.",
             "not-enabled": "Two-factor authentication isn't enabled on this account.",
             "unknown-method": "That two-factor method isn't available on this deployment.",
             "not-delivered": "That method doesn't send codes — read it off your device instead.",
@@ -62,7 +66,9 @@
         "email-change": {
             "token-not-found": "Invalid or expired token, please try again.",
             "success": "Email address changed.",
-            "cancelled": "The pending email change was cancelled."
+            "cancelled": "The pending email change was cancelled.",
+            "resent": "A new confirmation link was sent to the new address.",
+            "nothing-pending": "There is no pending email change."
         },
         "email": {
             "verify-request": {
@@ -129,6 +135,23 @@
                 "meta-title": "Email change requested",
                 "greeting": "Hello, {{name}}!",
                 "body": "Someone asked to change the email address on this account to {{newEmail}}. If this was you, no action is needed — it takes effect once the new address is confirmed. If it wasn't, change your password and sign out of every device right away."
+            },
+            "two-factor-changed": {
+                "subject": "Your two-factor settings changed",
+                "meta-title": "Two-factor settings changed",
+                "greeting": "Hello, {{name}}!",
+                "body-enrolled": "A second sign-in step ({{method}}) was added or replaced on your account.",
+                "body-removed": "The second sign-in step ({{method}}) was removed from your account.",
+                "body-disabled": "Two-factor authentication was turned off on your account.",
+                "advice": "If this was not you, change your password and sign out everywhere now."
+            },
+            "reauth-code": {
+                "subject": "Your confirmation code",
+                "meta-title": "Confirmation code",
+                "greeting": "Hello, {{name}}!",
+                "intro": "Here is the code to confirm it's you:",
+                "expiry": "It stops working in {{minutes}} minutes.",
+                "ignore": "If you didn't ask for this, ignore this email and change your password."
             }
         },
         "oauth": {

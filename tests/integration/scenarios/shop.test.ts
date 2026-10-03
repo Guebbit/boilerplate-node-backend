@@ -32,14 +32,29 @@ import { productModel } from '@modules/products/model';
 import { presentProduct } from '@modules/products/presenter';
 import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
+import { asCustomer } from '@tests/callers';
 import { paymentModel } from '@modules/payments/model';
+import { shipmentModel } from '@modules/delivery/model';
+import { returnModel } from '@modules/returns/model';
 import { userModel } from '@modules/users/model';
 import { auditLogModel } from '@modules/audit-logs/model';
 import { addressBookModel } from '@modules/addresses/model';
 import { decryptAddressItem } from '@modules/addresses/pii';
 import { reservationModel, stockMovementModel } from '@modules/inventory/model';
 import { Types } from 'mongoose';
-import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
+import {
+    SEED_ADMIN_ID,
+    SEED_EDITOR_ID,
+    SEED_MANAGER_ID,
+    SEED_MODERATOR_ID,
+    SEED_PENDING_EMAIL_TARGET,
+    SEED_SUPPORT_ID,
+    SEED_WAREHOUSE_ID,
+    SEED_TWO_FACTOR_BACKUP_CODES,
+    SEED_USER_ID,
+    seedCredentials
+} from '@scenarios/accounts';
+import { hashBackupCode } from '@modules/account/two-factor/backup-codes';
 import {
     CreateProduct201Response,
     CreateOrder201Response,
@@ -149,6 +164,101 @@ describe('each subject names a row that really has the property', () => {
         expect(product?.active).toBe(true);
     });
 
+    it('product.lowStock has exactly one unit free and nothing held against it', async () => {
+        const product = await productModel.findById(subjects['product.lowStock']).exec();
+        expect(presentProduct(product!).available).toBe(1);
+        // No seeded order holds it: the one unit is the test's to take.
+        expect(product?.reserved).toBe(0);
+        expect(product?.active).toBe(true);
+    });
+
+    it('product.noWithdrawal is physical, in stock and flagged as carrying no right of withdrawal', async () => {
+        const product = await productModel.findById(subjects['product.noWithdrawal']).exec();
+        expect(product?.noWithdrawal).toBe(true);
+        expect(product?.requiresShipping).not.toBe(false);
+        expect(presentProduct(product!).available).toBeGreaterThan(0);
+        expect(product?.active).toBe(true);
+    });
+
+    it('product.heavy outweighs express and fits standard, and is in stock', async () => {
+        const product = await productModel.findById(subjects['product.heavy']).exec();
+        // `SHIPPING_METHODS`: express tops out at 5000 g, standard at 30000 g.
+        expect(product?.weight).toBeGreaterThan(5000);
+        expect(product?.weight).toBeLessThanOrEqual(30_000);
+        expect(presentProduct(product!).available).toBeGreaterThan(0);
+        expect(product?.active).toBe(true);
+    });
+
+    it('the catalogue carries the VAT and shipping data the journeys need', async () => {
+        const reduced = await productModel.countDocuments({ taxClass: 'reduced' }).exec();
+        const zeroRated = await productModel
+            .countDocuments({ taxClass: 'zero', rateType: 'zero-rated' })
+            .exec();
+        const exempt = await productModel
+            .countDocuments({ taxClass: 'zero', rateType: 'exempt' })
+            .exec();
+        const weighed = await productModel.countDocuments({ weight: { $gt: 0 } }).exec();
+        const digital = await productModel
+            .countDocuments({ requiresShipping: false, deletedAt: { $exists: false } })
+            .exec();
+
+        expect(reduced).toBeGreaterThan(0);
+        expect(zeroRated).toBeGreaterThan(0);
+        expect(exempt).toBeGreaterThan(0);
+        expect(weighed).toBeGreaterThan(100);
+        // The hand-written course plus the two downloadable guides.
+        expect(digital).toBeGreaterThanOrEqual(3);
+    });
+
+    it('each persona account is in the state its name promises', async () => {
+        const unverified = await userModel.findOne({ email: seedCredentials.unverified.email });
+        expect(unverified?.verifiedAt).toBeFalsy();
+
+        const banned = await userModel.findOne({ email: seedCredentials.banned.email });
+        expect(banned?.active).toBe(false);
+
+        const pending = await userModel
+            .findOne({ email: seedCredentials.pendingEmail.email })
+            .select('+pendingEmail');
+        expect(pending?.pendingEmail).toBe(SEED_PENDING_EMAIL_TARGET);
+        expect(pending?.email).toBe(seedCredentials.pendingEmail.email);
+    });
+
+    it('the staff accounts are active, verified logins', async () => {
+        for (const staff of ['manager', 'warehouse', 'support', 'operator'] as const) {
+            const user = await userModel.findOne({ email: seedCredentials[staff].email });
+            expect(user?.active).toBe(true);
+            expect(user?.verifiedAt).toBeTruthy();
+        }
+    });
+
+    it.each([
+        ['address.managerDefault', SEED_MANAGER_ID],
+        ['address.warehouseDefault', SEED_WAREHOUSE_ID],
+        ['address.supportDefault', SEED_SUPPORT_ID],
+        ['address.editorDefault', SEED_EDITOR_ID],
+        ['address.moderatorDefault', SEED_MODERATOR_ID]
+    ])("%s is its owner's one default entry, so the persona can check out", async (name, owner) => {
+        const book = await addressBookModel.findOne({ userId: owner }).exec();
+        const defaults = book?.items.filter((entry) => entry.default) ?? [];
+
+        expect(defaults).toHaveLength(1);
+        expect(String(defaults[0]._id)).toBe(subjects[name]);
+    });
+
+    it('the two-factor persona has email 2FA armed and backup codes that verify', async () => {
+        const user = await userModel
+            .findOne({ email: seedCredentials.twoFactor.email })
+            .select('+twoFactorMethods +twoFactorBackupCodes +twoFactorBackupCodeSalt');
+
+        expect(user?.twoFactorEnabledAt).toBeDefined();
+        expect(user?.twoFactorMethods.map((entry) => entry.method)).toEqual(['email']);
+        for (const code of SEED_TWO_FACTOR_BACKUP_CODES)
+            expect(user?.twoFactorBackupCodes).toContain(
+                hashBackupCode(code, user!.twoFactorBackupCodeSalt!)
+            );
+    });
+
     it('order.ownerPending is pending, the admin account owns it, and it holds real stock', async () => {
         const order = await orderModel.findById(subjects['order.ownerPending']).exec();
         expect(order?.status).toBe('pending');
@@ -168,6 +278,72 @@ describe('each subject names a row that really has the property', () => {
     ])('%s is in status %s', async (subject, status) => {
         const order = await orderModel.findById(subjects[subject]).exec();
         expect(order?.status).toBe(status);
+    });
+
+    it('order.paidExpress is paid, tracked, unshipped, and sits on the non-admin account', async () => {
+        const order = await orderModel.findById(subjects['order.paidExpress']).exec();
+        expect(order?.status).toBe('paid');
+        expect(order?.shippingMethod).toBe('express');
+        expect(order?.userId?.toString()).toBe(SEED_USER_ID);
+
+        // Nobody has started it: a shipment row would make "mark started" unreachable.
+        const shipment = await shipmentModel
+            .findOne({ orderId: subjects['order.paidExpress'] })
+            .exec();
+        expect(shipment).toBeNull();
+    });
+
+    it('order.deliveredRecent is delivered today, inside its withdrawal window, and paid for by card', async () => {
+        const order = await orderModel.findById(subjects['order.deliveredRecent']).exec();
+        expect(order?.status).toBe('delivered');
+        expect(order?.userId?.toString()).toBe(SEED_USER_ID);
+        // Shipped somewhere, so the delivery charge is part of what a withdrawal refunds.
+        expect(order?.shippingMethod).toBe('standard');
+        expect(order!.withdrawUntil!.getTime()).toBeGreaterThan(Date.now());
+
+        const payment = await paymentModel
+            .findOne({ orderId: subjects['order.deliveredRecent'] })
+            .exec();
+        expect(payment?.status).toBe('succeeded');
+        expect(payment?.method).toBe('card');
+    });
+
+    it('order.deliveredLongAgo was delivered at the start of the history, and its withdrawal window has closed', async () => {
+        const order = await orderModel.findById(subjects['order.deliveredLongAgo']).exec();
+        expect(order?.status).toBe('delivered');
+        expect(order?.userId?.toString()).toBe(SEED_USER_ID);
+        // Closed by a wide margin, so a deployment offering a longer period than today's still finds it shut.
+        const closedFor = Date.now() - order!.withdrawUntil!.getTime();
+        expect(closedFor).toBeGreaterThan(30 * 24 * 60 * 60 * 1000);
+
+        const shipment = await shipmentModel
+            .findOne({ orderId: subjects['order.deliveredLongAgo'] })
+            .exec();
+        expect(shipment?.deliveredAt!.getTime()).toBeLessThan(
+            Date.now() - 60 * 24 * 60 * 60 * 1000
+        );
+    });
+
+    it('return.requested and return.requestedSecond await an answer, each on its own open-window order', async () => {
+        const returns = await Promise.all(
+            ['return.requested', 'return.requestedSecond'].map((name) =>
+                returnModel.findById(subjects[name]).exec()
+            )
+        );
+        for (const opened of returns) {
+            expect(opened?.status).toBe('requested');
+            expect(opened?.reason).toBe('defective');
+        }
+        expect(String(returns[0]?.orderId)).not.toBe(String(returns[1]?.orderId));
+
+        const orders = await orderModel
+            .find({ _id: { $in: returns.map((opened) => opened!.orderId) } })
+            .exec();
+        for (const order of orders) {
+            expect(order.status).toBe('delivered');
+            expect(order.userId?.toString()).toBe(SEED_USER_ID);
+            expect(order.withdrawUntil!.getTime()).toBeGreaterThan(Date.now());
+        }
     });
 
     it('order.softDeleted is hidden, and sits on the non-admin account', async () => {
@@ -232,6 +408,30 @@ describe('the history reads as a history', () => {
         // `createdAt` is optional on the contract type but always written by `timestamps: true`.
         const drift = Math.abs(entry!.timestamp.getTime() - order!.createdAt!.getTime());
         expect(drift / 1000).toBeLessThan(60);
+    });
+
+    it('moves the withdrawal deadline with the order, so a delivered-weeks-ago order is past it', async () => {
+        const order = await orderModel.findById(subjects['order.delivered']).exec();
+        expect(order?.withdrawUntil).toBeDefined();
+
+        // Delivery follows the checkout within seconds, so the deadline sits one withdrawal period
+        // (30 days by default) after `createdAt`, rounded up to the end of that UTC day (the
+        // window ends with the last hour of its last day). Left at boot time it would be weeks later.
+        const gapMs = order!.withdrawUntil!.getTime() - order!.createdAt!.getTime();
+        const periodMs = 30 * 86_400_000;
+        expect(gapMs).toBeGreaterThanOrEqual(periodMs);
+        expect(gapMs - periodMs).toBeLessThan(2 * 86_400_000);
+    });
+
+    it.each([
+        ['order.withdrawal-open', true],
+        ['order.withdrawal-last-day', true],
+        ['order.withdrawal-closed', false]
+    ] as const)('%s offers its buyer the withdraw button: %s', async (subject, offered) => {
+        const order = await orderModel.findById(subjects[subject]).exec();
+        const wire = await orderService.withActions(order!, asCustomer(SEED_USER_ID));
+
+        expect(wire.actions?.withdraw).toBe(offered);
     });
 
     it('accounts for every unit of stock with a movement the app wrote', async () => {

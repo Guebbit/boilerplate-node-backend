@@ -4,6 +4,7 @@ import { asStub } from '@tests/stub';
 import { withReloadedRateLimits } from '@tests/rate-limit-harness';
 import type { Request, RequestHandler } from 'express';
 import type { AuthContext } from '@types';
+import { setEnvironment } from '@tests/environment';
 
 /**
  * The card-testing velocity budgets on `POST /payments/:id/confirm`: attempts, declines, and the
@@ -144,48 +145,40 @@ describe('payment-velocity: the decline budget', () => {
     });
 });
 
-describe('paymentDeclineChallengeGate — rung 3 only once the account has a decline on record', () => {
-    const ORIGINAL_PROVIDER = process.env.NODE_ANTIBOT_PROVIDER;
+/**
+ * Same `jest.resetModules()` recipe `limitersWithBudget` uses: the decline limiter and the
+ * gate must come from the SAME module instance, since the gate reads the property name the
+ * decline limiter was configured with.
+ */
+const appWithBudget = async (declineLimit: number) => {
+    setEnvironment({ NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX: String(declineLimit) });
+    jest.resetModules();
 
+    const { paymentConfirmDeclineLimiter, paymentDeclineChallengeGate } =
+        await import('@modules/payments/rate-limits');
+
+    const app = express();
+    app.use(express.json());
+    app.use(asAccount('account-1'));
+    app.post(
+        '/confirm',
+        paymentConfirmDeclineLimiter,
+        paymentDeclineChallengeGate,
+        (request: Request, response: express.Response) => {
+            request.paymentConfirmDeclined = true;
+            response.status(409).json({ errors: [{ code: 'PAYMENT_DECLINED' }] });
+        }
+    );
+    return app;
+};
+
+describe('paymentDeclineChallengeGate — rung 3 only once the account has a decline on record', () => {
     afterEach(() => {
         jest.resetModules();
-        if (ORIGINAL_PROVIDER === undefined) delete process.env.NODE_ANTIBOT_PROVIDER;
-        else process.env.NODE_ANTIBOT_PROVIDER = ORIGINAL_PROVIDER;
     });
 
-    /**
-     * Same `jest.resetModules()` recipe `limitersWithBudget` uses: the decline limiter and the
-     * gate must come from the SAME module instance, since the gate reads the property name the
-     * decline limiter was configured with.
-     */
-    const appWithBudget = async (declineLimit: number) => {
-        const original = process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX;
-        process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX = String(declineLimit);
-        jest.resetModules();
-
-        const { paymentConfirmDeclineLimiter, paymentDeclineChallengeGate } =
-            await import('@modules/payments/rate-limits');
-
-        if (original === undefined) delete process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX;
-        else process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX = original;
-
-        const app = express();
-        app.use(express.json());
-        app.use(asAccount('account-1'));
-        app.post(
-            '/confirm',
-            paymentConfirmDeclineLimiter,
-            paymentDeclineChallengeGate,
-            (request: Request, response: express.Response) => {
-                request.paymentConfirmDeclined = true;
-                response.status(409).json({ errors: [{ code: 'PAYMENT_DECLINED' }] });
-            }
-        );
-        return app;
-    };
-
     it('never engages while no provider is selected, decline or not', async () => {
-        delete process.env.NODE_ANTIBOT_PROVIDER;
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: undefined });
         const app = await appWithBudget(10);
         const attempt = () => supertest(app).post('/confirm').send({});
 
@@ -196,7 +189,7 @@ describe('paymentDeclineChallengeGate — rung 3 only once the account has a dec
     });
 
     it('passes the first, honest attempt through untouched once a provider is selected', async () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
         const app = await appWithBudget(10);
 
         const response = await supertest(app).post('/confirm').send({});
@@ -208,7 +201,7 @@ describe('paymentDeclineChallengeGate — rung 3 only once the account has a dec
     });
 
     it('challenges once the account already has a decline on record', async () => {
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
         const app = await appWithBudget(10);
         const attempt = () => supertest(app).post('/confirm').send({});
 

@@ -1,17 +1,20 @@
 /**
  * @module
  * The webhooks module's slice of the demo dataset — the one entry in `scenarios/index.ts`'s table
- * that seeds nothing by default. A demo subscription pointing at `webhook-tester`
- * (`docker-compose.yml`'s `integrations` profile) is a FIXTURE, not code, per
+ * that seeds nothing by default. A demo subscription pointing at the sink (`webhook-tester`
+ * behind `webhook-tester-tls`, `docker-compose.yml`'s `integrations` profile, or the frontend's
+ * own Cypress listener) is a FIXTURE, not code, per
  * `docs/modules/webhooks.md`'s "Seeing it work" section: it reads the sink's base url from
  * `NODE_WEBHOOK_DEMO_SINK_URL` and seeds nothing when that is unset, so a developer who never
  * enables the profile never gets a dead subscription auto-disabling in their logs — the same
  * inert-by-default shape as `@infrastructure/adapters/demo-outbox.ts`.
  *
- * Reachable at all only because `@infrastructure/adapters/ssrf-guard`'s one exemption
- * (`@modules/webhooks/config`'s `getWebhookDemoAllowedHost`) lets THIS ONE hostname through
- * without `https:` or a public address — `webhook-tester` is plain HTTP on a private compose
- * address, which the guard refuses for everyone else. Honoured only in development/test.
+ * The URL is `https://` like every webhook URL, so the edit form can save it. Reachable at all only
+ * because `@infrastructure/adapters/ssrf-guard`'s one exemption (`@modules/webhooks/config`'s
+ * `getWebhookDemoAllowedHost`) lets THIS ONE hostname through without a public address — the sink
+ * is on loopback, which the guard refuses for everyone else. The sink's certificate is the test
+ * CA's (`scenarios/support/tls/`), trusted by the backend through `NODE_EXTRA_CA_CERTS`.
+ * Honoured only in development/test.
  *
  * A fixed session id, not a generated one: `webhook-tester`'s `AUTO_CREATE_SESSIONS=true` means a
  * POST to `/<any-uuid>` creates that session on arrival, so this subscription is watchable without
@@ -26,6 +29,7 @@
 
 import { Types } from 'mongoose';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { webhooksConfig } from '@modules/webhooks/config';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { encryptRingSecret } from '@modules/webhooks/secrets';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
@@ -57,7 +61,7 @@ export const WEBHOOK_DEMO_SECRET =
  * Seeds nothing when `NODE_WEBHOOK_DEMO_SINK_URL` is unset, the default.
  */
 export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
-    const sinkBaseUrl = process.env.NODE_WEBHOOK_DEMO_SINK_URL;
+    const sinkBaseUrl = webhooksConfig().NODE_WEBHOOK_DEMO_SINK_URL;
     if (!sinkBaseUrl) return Promise.resolve([]);
 
     // `id`/`ciphertext` only — `createdAt` is the ring entry's own subdocument timestamp

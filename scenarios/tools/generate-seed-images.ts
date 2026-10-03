@@ -19,7 +19,7 @@
  *
  * See: docs/tools/image-processing.md
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';

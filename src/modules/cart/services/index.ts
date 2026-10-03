@@ -29,7 +29,7 @@ export {
     cartRemove,
     cartShippingMethodSet
 } from './items';
-export { orderConfirm } from './checkout';
+export { orderConfirm, type CheckoutChoices } from './checkout';
 export { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
 
 /** The module's barrel export — controllers and siblings call through this, never the bare functions. */

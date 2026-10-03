@@ -6,6 +6,7 @@
  * email.
  */
 
+import { mailConfig } from '@infrastructure/adapters/config';
 import { t } from '@infrastructure/i18n';
 import type { CallerContext } from '@types';
 import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
@@ -26,7 +27,7 @@ import {
  * mailbox, not enough for anyone else to learn an address from. Masked here rather than in a
  * client, so two clients cannot redact the same address two different ways.
  */
-const maskEmail = (email: string): string => {
+export const maskEmail = (email: string): string => {
     const [local = '', domain = ''] = email.split('@', 2);
     if (local.length <= 2) return `${'*'.repeat(local.length)}@${domain}`;
     return `${local[0]}***${local.at(-1)}@${domain}`;
@@ -82,7 +83,7 @@ export const emailMethod: TwoFactorMethodHandler = {
     // itself (`scenarios/run-server.ts`, SK-08) — this reads the same setting `resolveMailTransport`
     // would, rather than asking whether it is specifically the demo profile asking.
     available: () =>
-        process.env.NODE_MAIL_TRANSPORT === 'outbox' || Boolean(process.env.NODE_SMTP_HOST),
+        mailConfig().NODE_MAIL_TRANSPORT === 'outbox' || Boolean(mailConfig().NODE_SMTP_HOST),
 
     eligibility: (user) =>
         user.verifiedAt

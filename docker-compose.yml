@@ -46,6 +46,9 @@ services:
             # "database" service, or NODE_DB_URI when set. Do not redeclare it here — an entry in
             # this block shadows `.env` and makes an external URI impossible to set without editing compose.
             NODE_ENV: 'development' # Node environment (production or development)
+            # Trusts the demo webhook sink's test CA, so a delivery to `webhook-tester-tls` verifies.
+            # Read once at process start (hence here, not `.env`); this service is development only.
+            NODE_EXTRA_CA_CERTS: '/app/scenarios/support/tls/webhook-sink-ca.pem'
             NODE_REDIS_URL: 'redis://redis:6379'
             NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
             NODE_ENABLE_CLUSTERING: '${NODE_ENABLE_CLUSTERING:-0}'
@@ -144,19 +147,20 @@ services:
             rabbitmq:
                 condition: service_started
 
-        # Health check to verify the container is ready to accept traffic
+        # Health check to verify the container is alive (liveness, not readiness)
         # Inspect with "podman ps" or "podman inspect <container name>"
         healthcheck:
+            # Liveness (`/livez`), never a dependency — see docs/tools/health-checks.md.
             # `node -e`, not `curl -f`: the image is node:*-alpine and does not ship curl, so the
             # curl form exited non-zero every time and parked the container on `unhealthy` while
-            # the API was answering 200 on `/` throughout. Node's built-in fetch needs nothing
-            # added to the image.
+            # the API was answering 200 throughout. Node's built-in fetch needs nothing added to
+            # the image.
             test:
                 [
                     'CMD',
                     'node',
                     '-e',
-                    "fetch('http://localhost:${NODE_PORT:-3000}/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                    "fetch('http://localhost:${NODE_PORT:-3000}/livez').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
                 ]
             # How often to run the test
             interval: 2m
@@ -200,7 +204,28 @@ services:
             - .:/app:Z
             - /app/node_modules
             - ./docker/crontab:/app/crontab:ro,Z
-        command: ['supercronic', '-passthrough-logs', '/app/crontab']
+        # Same as production: supercronic serves `/health` on loopback, and that is this
+        # container's own check — see docs/tools/health-checks.md.
+        command:
+            [
+                'supercronic',
+                '-passthrough-logs',
+                '-prometheus-listen-address',
+                '127.0.0.1:9746',
+                '/app/crontab'
+            ]
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:9746/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
         depends_on:
             database:
                 condition: service_healthy
@@ -553,9 +578,8 @@ services:
             STORAGE_DRIVER: 'memory'
             # Structured lines, so Promtail ships them to Loki parsed rather than as opaque text.
             LOG_FORMAT: 'json'
-        ports:
-            # 3070 sits in this repo's 3000-3099 block — see docs/tools/pairing-and-ports.md.
-            - '${WEBHOOK_TESTER_PORT:-3070}:8080'
+        # No published port: the host reaches it only through `webhook-tester-tls` below, because
+        # every webhook URL is https — the contract refuses any other scheme.
         healthcheck:
             # The image ships its own probe for this. It is `scratch`-based: no shell, no curl and
             # no node, so the `node -e` form the app service uses is not available here.
@@ -564,6 +588,58 @@ services:
             timeout: 5s
             retries: 3
             start_period: 10s
+
+    # webhook-tester-tls: the TLS door in front of `webhook-tester`. A webhook URL must be https
+    # (`^https://` in the contract), so the sink is reached through this proxy and never directly.
+    #
+    # Serves the committed demo leaf certificate (`scenarios/support/tls/`), valid for 127.0.0.1
+    # and this service's own name. The backend trusts it through `NODE_EXTRA_CA_CERTS`, set by the
+    # `dev`, `demo` and `e2e:serve` scripts and by the `app` service above. Nothing else trusts it.
+    #
+    # Remake and trust recipe: docs/modules/webhooks.md#https-in-the-demo
+    # https://caddyserver.com/docs/caddyfile/directives/reverse_proxy
+    #
+    # WARNING: owned by the webhooks module — delete it when removing the module
+    # (docs/modules/webhooks.md)
+    webhook-tester-tls:
+        logging: *container-logging
+        profiles: ['integrations']
+        image: caddy:2.10.2-alpine
+        restart: unless-stopped
+        depends_on:
+            - webhook-tester
+        command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+        volumes:
+            # Read-only. `Z` relabels for SELinux, as the `app` bind mount above does.
+            - ./docker/webhook-tester-tls.Caddyfile:/etc/caddy/Caddyfile:ro,Z
+            - ./scenarios/support/tls:/certs:ro,Z
+        ports:
+            # Loopback only. 3070 sits in this repo's 3000-3099 block — see
+            # docs/tools/pairing-and-ports.md.
+            - '127.0.0.1:${WEBHOOK_TESTER_PORT:-3070}:8443'
+
+    # mailpit: a local SMTP sink with a web inbox. Somewhere for the app's mail to be delivered TO
+    # during a live e2e run, so reset links and 2FA codes are readable and nothing leaves the machine.
+    #
+    # Receives only. Point the app at it with NODE_SMTP_HOST=127.0.0.1 (host) or `mailpit` (the
+    # `app` container) and port 1025; the e2e mail guard allows exactly those hosts.
+    #
+    # Profile-gated, so a plain `up` is unchanged: `--profile integrations` starts it.
+    # https://mailpit.axllent.org/docs/configuration/runtime-options/
+    mailpit:
+        logging: *container-logging
+        profiles: ['integrations']
+        image: axllent/mailpit:latest
+        restart: unless-stopped
+        environment:
+            # Accept any login: the app sends NODE_SMTP_USER/PASS, and a sink has no accounts.
+            MP_SMTP_AUTH_ACCEPT_ANY: '1'
+            # Accept AUTH without TLS; the app's port-1025 connection is plain SMTP.
+            MP_SMTP_AUTH_ALLOW_INSECURE: '1'
+        ports:
+            # Loopback only: the inbox holds reset tokens. No volume: mail is in memory, gone on restart.
+            - '127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025'
+            - '127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025'
 
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:

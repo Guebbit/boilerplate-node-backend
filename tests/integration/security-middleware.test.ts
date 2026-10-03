@@ -15,6 +15,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Response } from 'supertest';
 import { api } from '@tests/http';
+import { currentEnvironment } from '@infrastructure/config/store';
 
 /** The global budget's `remaining`, off the draft-7 `RateLimit` header (`limit=…, remaining=…`). */
 const remainingOf = (response: Response): number =>
@@ -62,7 +63,7 @@ describe('trust proxy', () => {
 
 describe('static files', () => {
     // This file's own sandbox (`tests/support/file-sandbox.ts`) — empty until these land.
-    const publicRoot = process.env.NODE_PUBLIC_PATH!;
+    const publicRoot = currentEnvironment().NODE_PUBLIC_PATH!;
 
     beforeAll(async () => {
         await mkdir(path.join(publicRoot, 'images'), { recursive: true });
@@ -97,7 +98,7 @@ describe('static files', () => {
 
 describe('CORS', () => {
     it('lets a browser send Idempotency-Key and read the rate-limit answer', async () => {
-        const origin = (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:8080')
+        const origin = (currentEnvironment().NODE_CORS_ORIGIN ?? 'http://localhost:8080')
             .split(',', 1)[0]
             .trim();
         const preflight = await api()

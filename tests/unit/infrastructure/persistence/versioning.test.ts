@@ -156,7 +156,7 @@ describe('checkedDelete', () => {
     });
 
     it('deletes on a matching tag, and with no precondition at all', async () => {
-        const write = jest.fn().mockResolvedValue(undefined);
+        const write = jest.fn().mockResolvedValue({ deletedCount: 1 });
 
         await runWithPrecondition(on(etagOf(STAMP.getTime())), () =>
             checkedDelete(loaded(), write)
@@ -164,5 +164,22 @@ describe('checkedDelete', () => {
         await checkedDelete(loaded(), write);
 
         expect(write).toHaveBeenCalledTimes(2);
+    });
+
+    it('fences the delete on the loaded version, and refuses when the fence matched nothing', async () => {
+        const document = loaded();
+        const write = jest.fn().mockResolvedValue({ deletedCount: 0 });
+
+        await expect(
+            runWithPrecondition(on(etagOf(STAMP.getTime())), () => checkedDelete(document, write))
+        ).rejects.toBeInstanceOf(PreconditionFailedError);
+
+        expect(document).toMatchObject({ $where: { updatedAt: STAMP } });
+    });
+
+    it('does not read a zero count as a conflict when no precondition was sent', async () => {
+        const write = jest.fn().mockResolvedValue({ deletedCount: 0 });
+
+        await expect(checkedDelete(loaded(), write)).resolves.toBeUndefined();
     });
 });

@@ -23,7 +23,9 @@ import { registerAuthResolver } from '@kernel/authentication';
 import { onDomainEvent } from '@kernel/events';
 import { userService, USER_SETUP_REQUESTED } from '@modules/users';
 import { accountAuthResolver } from './session/resolver';
-import { invalidTokenWindows } from './session/config';
+import { accountConfig } from './config';
+import { sessionConfig } from './session/config';
+import { oauthConfig } from './oauth/config';
 import { requestAccountSetup } from './services/authentication';
 import { router } from './routes';
 import { accountRateLimits } from './rate-limits';
@@ -52,44 +54,14 @@ const onRegistered = (modules: readonly AppModule[]): void => {
 export default {
     name: 'account',
     basePath: '/account',
-    /**
-     * The permission keys this module introduces. Deleting the module deletes them:
-     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
-     * whose module is gone, and a module claiming one the file does not attribute to it.
-     */
     routes: router,
     /** The credential/signup/reset/MFA/password-check budgets — see `./rate-limits.ts`. */
     rateLimits: accountRateLimits,
     // No collection of its own — see the module docblock. `POST /account/export` assembles every
     // OTHER module's section; this module contributes none of its own data to it.
     personalData: 'none',
-    /*
-     * `.env-example` ships both as literal placeholders that sign and verify perfectly —
-     * `getAccessTokenRing`/`getRefreshTokenRing` (`session/config.ts`) read `process.env.X ?? ''`
-     * with no validation of their own. Each is an ordered, comma-separated key ring (newest
-     * first, see `docs/modules/account-sessions.md`); `required-config.ts`'s `minLength`/
-     * `placeholder` check applies to every comma-separated member, not the joined string, so a
-     * rotated-in second entry left as the placeholder still refuses to boot. 16 rather than a
-     * stricter minimum: this rejects empty and drastically truncated values without pretending to
-     * assess real secret strength, which is an operator's job, not a boot-time character count.
-     */
-    requiredConfig: [
-        { key: 'NODE_TOKEN_ACCESS', minLength: 16, placeholder: 'your-access-token-secret-here' },
-        { key: 'NODE_TOKEN_REFRESH', minLength: 16, placeholder: 'your-refresh-token-secret-here' },
-        // A TOTP secret encrypted under the shipped placeholder is recoverable by anyone who has
-        // read this repository — same failure shape as the two above, same fix.
-        {
-            key: 'NODE_TOTP_ENCRYPTION_KEY',
-            minLength: 16,
-            placeholder: 'your-totp-encryption-key-here'
-        }
-    ],
-    /*
-     * The two token windows are independent variables with a required ORDER, which no per-key
-     * check can express — see `session/config.ts#invalidTokenWindows` for why getting it wrong
-     * disables reuse detection without failing anything.
-     */
-    customCheck: invalidTokenWindows,
+    // Token rings, the token windows and the second-factor key: see `./session/config.ts`.
+    config: [accountConfig.slice, sessionConfig.slice, oauthConfig.slice],
     onRegistered,
     subscribe: () => {
         /*

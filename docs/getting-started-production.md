@@ -91,7 +91,7 @@ what's running is exactly what was built.
 
 ```bash
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml logs -f app
-curl http://127.0.0.1:3000/          # health probe
+curl http://127.0.0.1:3000/livez     # liveness probe
 ```
 
 The port is published to `127.0.0.1`, not `0.0.0.0` — reachable from the host, not from the
@@ -101,15 +101,9 @@ network. That is deliberate, see [Putting a reverse proxy in front](#putting-a-r
 
 `setup` gives the database its shop and its preset roles, but nobody starts with a role above
 `customer` — the first signup racing to become admin is a known vulnerability pattern, so nothing
-does that automatically. Sign up through the app once, then grant the account a role from the host:
-
-```bash
-docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml \
-    exec app npm run access:grant -- you@example.com admin
-```
-
-The same command is the recovery path if every admin is ever locked out — `--scope platform` grants
-an installation-wide role (an operator) instead of a shop role.
+does that automatically. Sign up through the app once, then the technician gives that account its
+role by writing the membership into the database by hand. There is no command for it, the first
+owner included, and the same hand-written fix is the way back if every admin is ever locked out.
 
 ## Publish a disclosure contact
 

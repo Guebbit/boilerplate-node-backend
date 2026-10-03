@@ -16,7 +16,6 @@ import multer, { type FileFilterCallback, type Multer } from 'multer';
 // filenames would let someone guess the URL of another user's upload.
 import { randomBytes } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createLocaleContext, runWithLocaleContext, t } from '@infrastructure/i18n';
 import {
@@ -32,7 +31,7 @@ import { queueState } from '@infrastructure/adapters/queue';
 import { getFormFiles } from '@infrastructure/http/uploads';
 import { logger } from '@infrastructure/adapters/logger';
 import { rejectResponse } from '@infrastructure/http/response';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { uploadConfig } from '@infrastructure/http/config';
 
 /**
  * Where an upload is written while the request is still being decided — NOT the public directory.
@@ -45,8 +44,7 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
  *
  * See: docs/tools/security.md
  */
-export const uploadStagingPath = () =>
-    process.env.NODE_UPLOAD_STAGING_PATH ?? path.join(tmpdir(), 'node-api-uploads');
+export const uploadStagingPath = () => uploadConfig().NODE_UPLOAD_STAGING_PATH;
 
 /**
  * The one field name every image upload route accepts — every mount point wants the same field,
@@ -143,21 +141,14 @@ export const fileFilter = (
     ACCEPTED_UPLOAD_MIMETYPES.has(file.mimetype) ? callback(null, true) : callback(null, false);
 
 /**
- * Ceiling on a single upload, in bytes. 5 MB by default, overridable per deployment.
+ * Ceiling on a single upload, in bytes: `NODE_MAX_UPLOAD_BYTES`, 5 MB by default.
  *
  * Multer's own default is UNLIMITED — on a public endpoint that's a DoS with no exploit needed,
  * since every byte is written to disk before any handler runs. Has to live here, not in a
- * handler, for the same reason.
+ * handler, for the same reason. Read at call time, so a test can ask for the number rather than
+ * restating the default and hoping they agree.
  */
-const DEFAULT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-
-/**
- * The ceiling a mount applies right now. Read at call time, so a deployment that sets
- * `NODE_MAX_UPLOAD_BYTES` after this module is evaluated still gets its value — and so a test can
- * ask for the number rather than restating the default and hoping they agree.
- */
-export const maxUploadBytes = (): number =>
-    environmentNumber('NODE_MAX_UPLOAD_BYTES', DEFAULT_MAX_UPLOAD_BYTES, 1);
+export const maxUploadBytes = (): number => uploadConfig().NODE_MAX_UPLOAD_BYTES;
 
 /**
  * The configured multer instance, built on first use.

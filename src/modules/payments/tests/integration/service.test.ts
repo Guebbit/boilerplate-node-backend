@@ -17,7 +17,9 @@ import {
     toOrderItem
 } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
+import { userService } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
 import {
     createIntent,
@@ -158,6 +160,42 @@ describe('confirmPayment', () => {
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
         expect(payment!.cardLast4).toBe('4242');
+    });
+
+    it('says `card` on an order checked out as bank transfer once the card pays it (JB8)', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 25 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer'
+        });
+        const intent = await createIntent(String(order._id), auth(user));
+
+        await confirmPayment(
+            String(intent.success && intent.data?.id),
+            GOOD_METHOD,
+            auth(user),
+            testCallerContext
+        );
+
+        expect((await orderService.getById(String(order._id)))!.paymentMethod).toBe('card');
+    });
+
+    it('keeps `bank_transfer` when the money was recorded by hand instead of a card', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 25 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer'
+        });
+
+        await recordOfflinePayment(
+            String(order._id),
+            { method: 'bank_transfer', reference: 'TRX-JB8' },
+            testCallerContext
+        );
+
+        expect((await orderService.getById(String(order._id)))!.paymentMethod).toBe(
+            'bank_transfer'
+        );
     });
 
     it('reports a decline with the stable code, leaves the order pending, and stays retryable', async () => {
@@ -320,6 +358,22 @@ describe('refund on cancel', () => {
         const payment = await paymentRepository.findByOrderId(String(order._id));
         // The intent survives untouched — no money moved, so there is nothing to move back.
         expect(payment!.status).toBe('requires_confirmation');
+    });
+
+    it('erasing the account cancels its open intent at the provider and releases the hold', async () => {
+        const { user, order } = await orderFor(25, 2);
+        const [line] = order.items;
+        await inventoryService.reserveForOrder(String(order._id), [
+            { productId: String(line.product._id), quantity: 2 }
+        ]);
+        await createIntent(String(order._id), auth(user));
+        const { providerRef } = (await paymentRepository.findByOrderId(String(order._id)))!;
+        const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
+
+        await userService.remove(user, true);
+
+        expect(cancelSpy).toHaveBeenCalledWith(providerRef, expect.anything());
+        expect(await countersOf(line.product._id)).toMatchObject({ reserved: 0 });
     });
 
     /*
@@ -1367,6 +1421,8 @@ describe('order.cancelled — closing a still-open intent at the provider (E17)'
         const cancelled = await orderService.cancelById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
+        // The listener runs off the outbox, after the cancel's own response.
+        await settleOutboxNudges();
         expect(cancelSpy).toHaveBeenCalledWith(prepared!.providerRef, {
             reason: 'Order cancelled'
         });
@@ -1385,6 +1441,8 @@ describe('order.cancelled — closing a still-open intent at the provider (E17)'
         const cancelled = await orderService.cancelById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
+        // The listener runs off the outbox, after the cancel's own response.
+        await settleOutboxNudges();
         expect(cancelSpy).toHaveBeenCalled();
         cancelSpy.mockRestore();
         await expect(
@@ -1401,6 +1459,8 @@ describe('order.cancelled — closing a still-open intent at the provider (E17)'
         const cancelled = await orderService.cancelById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
+        // The listener runs off the outbox, after the cancel's own response.
+        await settleOutboxNudges();
         expect(cancelSpy).not.toHaveBeenCalled();
         cancelSpy.mockRestore();
     });

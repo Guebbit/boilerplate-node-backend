@@ -28,11 +28,15 @@
         },
         "reauth": {
             "wrong-password": "La password non è corretta.",
-            "success": "Identità confermata."
+            "success": "Identità confermata.",
+            "no-password": "Questo account non ha una password. Richiedi invece un codice via email.",
+            "method-unavailable": "Questo modo di confermare non è disponibile per questo account.",
+            "wrong-code": "Quel codice non ha funzionato. Controllalo e riprova."
         },
         "two-factor": {
             "setup-not-started": "Avvia la configurazione di questo metodo prima di confermare un codice.",
             "wrong-code": "Il codice non è corretto. Controllalo e riprova.",
+            "code-required": "Inserisci un codice da uno dei tuoi metodi attivi, o un codice di backup, per modificare i tuoi secondi fattori.",
             "not-enabled": "L'autenticazione a due fattori non è attiva su questo account.",
             "unknown-method": "Questo metodo di autenticazione a due fattori non è disponibile.",
             "not-delivered": "Questo metodo non invia codici: leggilo dal tuo dispositivo.",
@@ -62,7 +66,9 @@
         "email-change": {
             "token-not-found": "Token non valido o scaduto, riprova.",
             "success": "Indirizzo email modificato.",
-            "cancelled": "La modifica dell'indirizzo email in sospeso è stata annullata."
+            "cancelled": "La modifica dell'indirizzo email in sospeso è stata annullata.",
+            "resent": "Un nuovo link di conferma è stato inviato al nuovo indirizzo.",
+            "nothing-pending": "Non c'è nessuna modifica dell'indirizzo email in sospeso."
         },
         "email": {
             "verify-request": {
@@ -129,6 +135,23 @@
                 "meta-title": "Modifica email richiesta",
                 "greeting": "Ciao, {{name}}!",
                 "body": "Qualcuno ha richiesto di modificare l'indirizzo email di questo account in {{newEmail}}. Se sei stato tu, non devi fare nulla — la modifica avrà effetto una volta confermato il nuovo indirizzo. Se non sei stato tu, cambia subito la password e disconnetti tutti i dispositivi."
+            },
+            "two-factor-changed": {
+                "subject": "Le tue impostazioni di verifica in due passaggi sono cambiate",
+                "meta-title": "Verifica in due passaggi modificata",
+                "greeting": "Ciao, {{name}}!",
+                "body-enrolled": "Un secondo passaggio di accesso ({{method}}) è stato aggiunto o sostituito sul tuo account.",
+                "body-removed": "Il secondo passaggio di accesso ({{method}}) è stato rimosso dal tuo account.",
+                "body-disabled": "La verifica in due passaggi è stata disattivata sul tuo account.",
+                "advice": "Se non sei stato tu, cambia la password ed esci da tutti i dispositivi adesso."
+            },
+            "reauth-code": {
+                "subject": "Il tuo codice di conferma",
+                "meta-title": "Codice di conferma",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "Ecco il codice per confermare che sei tu:",
+                "expiry": "Smette di funzionare tra {{minutes}} minuti.",
+                "ignore": "Se non l'hai richiesto, ignora questa email e cambia la password."
             }
         },
         "oauth": {

@@ -23,6 +23,7 @@ import { SEED_PRODUCT_IDS } from '../subjects';
 import { fillerProductId, openingStockFor, productFixtures } from '../products';
 import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from '../users';
 import { historyEdits } from '../shop-modules';
+import { withdrawalPeriodDays } from '@modules/orders/services';
 import { PLAIN_PASSWORD } from '@modules/users/factories';
 import { signIn, type Caller } from './client';
 import {
@@ -30,6 +31,7 @@ import {
     shipOrder,
     deliverOrder,
     cancelOrder,
+    requestReturn,
     CARD,
     checkout,
     checkoutAndPay,
@@ -415,8 +417,55 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     // Every parcel shipped above arrives. Everything shipped after this line stays in transit.
     for (const orderId of shippedBeforeDelivery) await deliverOrder(owner, orderId);
 
+    /*
+     * Delivered TODAY, never backdated: the withdrawal window (and a return's) runs from the
+     * delivery, so these are the rows where it is still open — `order.delivered` above is weeks
+     * past it. Standard shipping, so the refund has a delivery charge to give back or keep.
+     * Paid through a real card, which is why they are seeded and not built by a journey.
+     */
+    const deliveredToday = async (): Promise<string> => {
+        const orderId = await checkoutAndPay(customer, DOG_FOOD(1), {
+            shippingMethodId: 'standard'
+        });
+        await startProcessing(owner, orderId);
+        await shipOrder(owner, orderId);
+        await deliverOrder(owner, orderId);
+        return orderId;
+    };
+    subjects['order.deliveredRecent'] = await deliveredToday();
+
+    /*
+     * Delivered at the very start of the shop's history, so its withdrawal window closed long ago
+     * whatever period a deployment offers: `order.delivered` is only as old as its place in the
+     * sequence, which a longer period can put back inside the window. Not in `dated()`: its age is
+     * this one, not a share of the spread, so it is set explicitly when the ages are built below.
+     */
+    subjects['order.deliveredLongAgo'] = await deliveredToday();
+
+    // Two defective-goods requests nobody has answered — the queue support works through.
+    const firstDefective = await deliveredToday();
+    subjects['return.requested'] = await requestReturn(
+        customer,
+        firstDefective,
+        'defective',
+        'The bag arrived torn open.'
+    );
+    const secondDefective = await deliveredToday();
+    subjects['return.requestedSecond'] = await requestReturn(
+        customer,
+        secondDefective,
+        'defective',
+        'Not the food I ordered.'
+    );
+
     // ── The named rows, each a branch the storefront or the admin actually has a screen for ────
     subjects['order.paid'] = dated(await checkoutAndPay(customer, DOG_FOOD(2)));
+
+    // Paid and waiting for the warehouse, by EXPRESS: a tracked method, so shipping it needs a
+    // tracking code — the one thing the pickup `order.paid` above can never ask for.
+    subjects['order.paidExpress'] = dated(
+        await checkoutAndPay(customer, DOG_FOOD(1), { shippingMethodId: 'express' })
+    );
 
     // A card refused, then the same order paid with another — the retry the payment form offers.
     const retried = dated(await checkout(customer, DOG_FOOD(1)));
@@ -498,6 +547,28 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     await hardDeleteProduct(owner, fillerProductId(123));
 
     /*
+     * One delivered order per withdrawal-window state, aged from the period rather than a literal.
+     * Shipped by standard, so a withdrawal journey's refund has a delivery charge to give back.
+     * Backdating moves `withdrawUntil` by the same days as the delivery, so each keeps its state
+     * whatever the period is. Kept out of `placed`: the even spread below would land them anywhere.
+     */
+    const period = withdrawalPeriodDays();
+    const windowAges: Record<string, number> = {};
+    const deliveredForWindow = async (subject: string, daysBack: number): Promise<void> => {
+        const orderId = await checkoutAndPay(customer, DOG_FOOD(1), {
+            shippingMethodId: 'standard'
+        });
+        await startProcessing(owner, orderId);
+        await shipOrder(owner, orderId);
+        await deliverOrder(owner, orderId);
+        subjects[subject] = orderId;
+        windowAges[orderId] = daysBack;
+    };
+    await deliveredForWindow('order.withdrawal-open', 1);
+    await deliveredForWindow('order.withdrawal-last-day', period);
+    await deliveredForWindow('order.withdrawal-closed', period + 1);
+
+    /*
      * The two rows that stay dated TODAY, because both are still holding stock against a
      * deadline: backdating either would leave a hold that expired before the shop opened.
      */
@@ -531,5 +602,7 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
         ])
     );
 
-    return { subjects, ages };
+    ages[subjects['order.deliveredLongAgo']] = OLDEST_DAYS;
+
+    return { subjects, ages: { ...ages, ...windowAges } };
 };

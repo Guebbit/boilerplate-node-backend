@@ -12,6 +12,7 @@ import bcrypt from 'bcrypt';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
+import { localeConfig } from '@infrastructure/i18n/config';
 import {
     CreateUserBody,
     createUserBodyPasswordMin,
@@ -146,6 +147,13 @@ export interface UserRecord extends Omit<
     /** Every second factor this account has enrolled or half-enrolled — see {@link TwoFactorMethodRecord}. */
     twoFactorMethods: TwoFactorMethodRecord[];
 
+    /**
+     * The step-up code mailed to an account with no password, while one is in flight — see
+     * `account/services/reauth.ts`. Kept apart from `twoFactorMethods` because it is not a factor:
+     * it is never armed, never challenges a login, and is gone the moment the code is spent.
+     */
+    reauthCode?: DeliveredCodeState;
+
     /** Salted-scrypt digests of unused backup codes — see `account/two-factor/backup-codes.ts`. */
     twoFactorBackupCodes: string[];
 
@@ -185,6 +193,25 @@ export interface UserRecord extends Omit<
 }
 
 /**
+ * A delivered one-time code in flight: its digest, its clock and its attempt count. One shape for
+ * a second factor's code and for a step-up code alike, so `account/two-factor/delivered-codes.ts`
+ * has one set of rules for both.
+ */
+export interface DeliveredCodeState {
+    /** HMAC of the delivered code currently in flight — see `account/two-factor/delivered-codes.ts`. */
+    codeHash?: string;
+
+    /** When the code in flight stops being accepted. */
+    codeExpiresAt?: Date;
+
+    /** When the code in flight was sent — the anchor the resend cooldown is measured from. */
+    codeSentAt?: Date;
+
+    /** Wrong guesses against the code in flight. Past its ceiling the code is burned, not the account. */
+    codeAttempts?: number;
+}
+
+/**
  * One second factor on an account — armed or still pending confirmation.
  *
  * One shape for every method rather than a per-method collection: `account/two-factor/` decides
@@ -192,7 +219,7 @@ export interface UserRecord extends Omit<
  * handler, not a migration. `enrolledAt` is what separates a factor that guards logins from one
  * whose setup was abandoned halfway.
  */
-export interface TwoFactorMethodRecord {
+export interface TwoFactorMethodRecord extends DeliveredCodeState {
     /** The subdocument id Mongoose assigns; absent until the entry is first written. */
     _id?: Types.ObjectId;
 
@@ -207,18 +234,6 @@ export interface TwoFactorMethodRecord {
 
     /** The RFC 6238 time step of the last code accepted by a device method — replay protection. */
     lastUsedStep?: number;
-
-    /** HMAC of the delivered code currently in flight — see `account/two-factor/delivered-codes.ts`. */
-    codeHash?: string;
-
-    /** When the code in flight stops being accepted. */
-    codeExpiresAt?: Date;
-
-    /** When the code in flight was sent — the anchor the resend cooldown is measured from. */
-    codeSentAt?: Date;
-
-    /** Wrong guesses against the code in flight. Past its ceiling the code is burned, not the account. */
-    codeAttempts?: number;
 }
 
 /**
@@ -385,7 +400,7 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
          */
         locale: {
             type: String,
-            default: process.env.NODE_DEFAULT_LOCALE ?? 'en'
+            default: localeConfig().NODE_DEFAULT_LOCALE
         },
         // Self-service profile fields, no format enforced: a phone number's valid shapes vary too
         // widely by country to regex safely, and a website is free text the same way `imageUrl` is.
@@ -544,6 +559,22 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             ],
             select: false,
             default: []
+        },
+        /*
+         * The step-up code in flight for an account with no password. `select: false` like the
+         * 2FA fields: it is credential material, and only the re-auth flow reads it.
+         */
+        reauthCode: {
+            type: new Schema(
+                {
+                    codeHash: { type: String, required: false },
+                    codeExpiresAt: { type: Date, required: false },
+                    codeSentAt: { type: Date, required: false },
+                    codeAttempts: { type: Number, required: false }
+                },
+                { _id: false }
+            ),
+            select: false
         },
         /*
          * When the FIRST factor was armed, cleared when the last one goes. Derivable from
@@ -754,6 +785,7 @@ export type UserWire = Omit<
     | 'twoFactorMethods'
     | 'twoFactorBackupCodes'
     | 'twoFactorBackupCodeSalt'
+    | 'reauthCode'
     | 'oauthAccounts'
 >;
 
@@ -784,6 +816,7 @@ export const applyUserTransform = applySerialization(userSchema, {
         'twoFactorMethods',
         'twoFactorBackupCodes',
         'twoFactorBackupCodeSalt',
+        'reauthCode',
         'oauthAccounts'
     ]
 });

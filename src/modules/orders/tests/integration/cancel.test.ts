@@ -9,12 +9,18 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, setWithdrawUntil, toOrderItem } from '@modules/orders/tests/factories';
+import {
+    createOrder,
+    markOrderPaidAt,
+    setWithdrawUntil,
+    toOrderItem
+} from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
 import { ORDER_CANCELLED } from '../../events';
 import { orderRepository } from '../../repository';
 import { OrderStatus } from '@types';
-import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { userService } from '@modules/users';
 import { logger } from '@infrastructure/adapters/logger';
@@ -200,6 +206,8 @@ describe('cancelById — who gets their money back', () => {
 
     beforeEach(() => {
         cancellations.length = 0;
+        // The outbox relay only delivers in a process whose modules are subscribed.
+        markDomainEventsWired();
         onDomainEvent(ORDER_CANCELLED, (payload) => {
             cancellations.push(payload);
             return undefined;
@@ -217,6 +225,8 @@ describe('cancelById — who gets their money back', () => {
 
         await orderService.cancelById(String(order._id), asUser(user), { refund: false });
 
+        await settleOutboxNudges();
+
         expect(cancellations).toEqual([{ orderId: String(order._id), refund: true }]);
     });
 
@@ -226,6 +236,8 @@ describe('cancelById — who gets their money back', () => {
 
         await orderService.cancelById(String(order._id), asAdmin(), { refund: false });
 
+        await settleOutboxNudges();
+
         expect(cancellations).toEqual([{ orderId: String(order._id), refund: false }]);
     });
 
@@ -234,6 +246,8 @@ describe('cancelById — who gets their money back', () => {
         const order = await seedOrder(user);
 
         await orderService.cancelById(String(order._id), asAdmin());
+
+        await settleOutboxNudges();
 
         expect(cancellations).toEqual([{ orderId: String(order._id), refund: true }]);
     });
@@ -247,6 +261,8 @@ describe('cancelById — who gets their money back', () => {
 
         await orderService.cancelById(String(order._id), asModerator(), { refund: false });
 
+        await settleOutboxNudges();
+
         expect(cancellations).toEqual([{ orderId: String(order._id), refund: false }]);
     });
 
@@ -257,6 +273,8 @@ describe('cancelById — who gets their money back', () => {
         const order = await seedOrder(user);
 
         await orderService.cancelById(String(order._id), asAdmin(), { refund: false });
+
+        await settleOutboxNudges();
 
         expect(cancellations).toHaveLength(1);
     });
@@ -368,7 +386,9 @@ describe('cancelById — the payment-window-expired email', () => {
 
         await orderService.cancelById(String(order._id), asUser(user), {}, testCallerContext);
 
-        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+        // The cancelled notice is the answer to a person's cancel; the expiry one is not.
+        const templates = mockEnqueueEmail.mock.calls.map(([, template]) => template);
+        expect(templates).toEqual(['orders.order-cancelled']);
     });
 
     it('still cancels and sends the expiry notice when the buyer lookup fails', async () => {
@@ -420,6 +440,117 @@ describe('cancelById — the payment-window-expired email', () => {
         await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+});
+
+/** One cancel, the mails it queued as `[recipient, template]` pairs. */
+const mailsFor = async (
+    cancel: (orderId: string) => Promise<unknown>,
+    extras: Parameters<typeof createOrder>[2] = {}
+) => {
+    mockEnqueueEmail.mockClear();
+    const user = await createUser();
+    const product = await createProduct();
+    const order = await createOrder(user, [toOrderItem(product, 1)], extras);
+    await cancel(String(order._id));
+    return {
+        user,
+        order,
+        mails: mockEnqueueEmail.mock.calls.map(([envelope, template, data]) => ({
+            to: envelope.to,
+            template,
+            data
+        }))
+    };
+};
+
+describe('cancelById — the cancelled notice', () => {
+    it('mails the buyer when the customer cancels, saying nothing was charged for an unpaid order', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        mockEnqueueEmail.mockClear();
+
+        await orderService.cancelById(String(order._id), asUser(user), {}, testCallerContext);
+
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
+        expect(envelope.to).toBe(user.email);
+        expect(template).toBe('orders.order-cancelled');
+        expect((data as { refundNote: string }).refundNote).toContain('nothing was charged');
+    });
+
+    it('says the money is going back when the cancelled order was paid', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+        await markOrderPaidAt(String(order._id), new Date());
+        mockEnqueueEmail.mockClear();
+
+        await orderService.cancelById(String(order._id), asUser(user), {}, testCallerContext);
+
+        const [, template, data] = mockEnqueueEmail.mock.calls[0];
+        expect(template).toBe('orders.order-cancelled');
+        expect((data as { refundNote: string }).refundNote).toContain('returned');
+    });
+
+    it('mails the buyer when staff cancel, and says when staff chose not to refund', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+        await markOrderPaidAt(String(order._id), new Date());
+        mockEnqueueEmail.mockClear();
+
+        await orderService.cancelById(
+            String(order._id),
+            asAdmin(),
+            { refund: false },
+            testCallerContext
+        );
+
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
+        expect(envelope.to).toBe(user.email);
+        expect(template).toBe('orders.order-cancelled');
+        expect((data as { refundNote: string }).refundNote).toContain('No refund');
+    });
+
+    it('does not mail for a withdrawal — `returns` acknowledges that one itself', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        mockEnqueueEmail.mockClear();
+
+        const result = await orderService.cancelById(
+            String(order._id),
+            asUser(user),
+            { withdrawal: true },
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+
+    it('does not mail for the system’s own cancels (the sweep, a removed product, an erasure)', async () => {
+        const { mails } = await mailsFor((orderId) =>
+            orderService.cancelById(orderId, SYSTEM_ACTOR)
+        );
+
+        expect(mails).toEqual([]);
+    });
+
+    it('mails nothing when the cancel is refused', async () => {
+        const { mails } = await mailsFor(
+            (orderId) => orderService.cancelById(orderId, asAdmin(), {}, testCallerContext),
+            { status: OrderStatus.shipped }
+        );
+
+        expect(mails).toEqual([]);
     });
 });
 

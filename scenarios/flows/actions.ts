@@ -50,14 +50,38 @@ export const receiveStock = (owner: Caller, productId: string, quantity: number)
         .then(() => undefined);
 
 /**
+ * Give a shopper with an empty address book one entry — every order carries a billing address
+ * for its invoice, so a checkout by an account that keeps none is refused.
+ *
+ * @param caller - the shopper
+ */
+const ensureAddress = (caller: Caller): Promise<void> =>
+    caller
+        .call<{ addresses: unknown[] }>('GET', '/account/addresses')
+        .then(({ addresses }) =>
+            addresses.length > 0
+                ? undefined
+                : caller.call('POST', '/account/addresses', {
+                      label: 'home',
+                      fullName: caller.email,
+                      street: 'Via Roma 1',
+                      city: 'Modena',
+                      zip: '41121',
+                      country: 'IT'
+                  })
+        )
+        .then(() => undefined);
+
+/**
  * Fill the caller's cart and check it out — the whole customer half of an order.
  *
  * The cart is filled line by line because that is what `POST /cart` takes; the lines land in one
  * order either way, since a cart belongs to one account and this awaits each add.
  *
  * Defaults to `pickup`: every demo product is physical, so checkout refuses a basket with no
- * method at all, and `pickup` is the one method that needs no address — not every seeded shopper
- * has one. A flow demonstrating a real shipment (`standard`) overrides it.
+ * method at all, and `pickup` is the one method that needs no shipping address. A shopper with an
+ * empty address book is given one first: billing needs an address whatever the method. A flow
+ * demonstrating a real shipment (`standard`) overrides the method.
  *
  * The shipping method is the cart's own choice now (`PUT /cart/shipping-method`), set here before
  * checkout rather than sent in its body — see `docs/modules/cart-checkout.md`.
@@ -72,6 +96,7 @@ export const checkout = async (
     lines: Line[],
     options: { shippingMethodId?: string; paymentMethod?: string } = {}
 ): Promise<string> => {
+    await ensureAddress(caller);
     for (const line of lines) await caller.call('POST', '/cart', line);
 
     const { shippingMethodId = 'pickup', ...rest } = options;
@@ -126,9 +151,17 @@ export const syncPayment = (caller: Caller, paymentId: string): Promise<string> 
         .call<PaymentData>('POST', `/payments/${paymentId}/sync`)
         .then((payment) => payment.status);
 
-/** Checkout, then pay it off with a card that settles first time. */
-export const checkoutAndPay = async (caller: Caller, lines: Line[]): Promise<string> => {
-    const orderId = await checkout(caller, lines);
+/**
+ * Checkout, then pay it off with a card that settles first time.
+ *
+ * @param options - shipping and payment choices, as {@link checkout} takes them
+ */
+export const checkoutAndPay = async (
+    caller: Caller,
+    lines: Line[],
+    options: Parameters<typeof checkout>[2] = {}
+): Promise<string> => {
+    const orderId = await checkout(caller, lines, options);
     await submitCard(caller, await openPayment(caller, orderId), CARD.visa);
     return orderId;
 };
@@ -147,21 +180,14 @@ export const recordOfflinePayment = (
     owner.call('POST', `/payments/order/${orderId}/offline`, { method }).then(() => undefined);
 
 /**
- * Move a paid order into `processing`, as an operator would. `paid → processing` left
- * `PUT /orders/{id}` with SH1 — it is `system`-only in `orders/domain/lifecycle.ts` until
- * `delivery` grows its own door for it, so the admin override
- * (`POST /orders/{id}/status-override`) is the only reachable path onto it today, the same one a
- * mis-scanned parcel or a manual correction uses.
+ * Move a paid order into `processing`, as an operator would: the warehouse's own door,
+ * `POST /delivery/order/{id}/start`. Going through it means a seeded order carries the ordinary
+ * history, not an override's status-correction audit rows.
  *
- * @param owner - a caller holding `orders.any.override`
+ * @param owner - a caller holding `delivery.any.start`
  */
 export const startProcessing = (owner: Caller, orderId: string): Promise<void> =>
-    owner
-        .call('POST', `/orders/${orderId}/status-override`, {
-            to: 'processing',
-            reason: 'scenario seed: begin fulfilment'
-        })
-        .then(() => undefined);
+    owner.call('POST', `/delivery/order/${orderId}/start`).then(() => undefined);
 
 /**
  * Record a parcel's handover to the carrier — the door that moves an order `processing → shipped`
@@ -191,6 +217,24 @@ export const cancelOrder = (caller: Caller, orderId: string, refund?: boolean): 
     caller
         .call('POST', `/orders/${orderId}/cancel`, refund === undefined ? {} : { refund })
         .then(() => undefined);
+
+/**
+ * Open a return on a delivered order — `POST /returns`, the customer's own door. Every line, since
+ * the body names none.
+ *
+ * @param caller - the order's own buyer; staff cannot exercise a consumer's right for them
+ * @param reason - `defective`, `wrong_item`, `other` or `withdrawal`
+ * @returns the return's id
+ */
+export const requestReturn = (
+    caller: Caller,
+    orderId: string,
+    reason: string,
+    note?: string
+): Promise<string> =>
+    caller
+        .call<{ id: string }>('POST', '/returns', { orderId, reason, ...(note ? { note } : {}) })
+        .then((opened) => opened.id);
 
 /**
  * Soft-delete an order — `deletedAt`, not a removal.

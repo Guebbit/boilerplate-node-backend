@@ -19,11 +19,11 @@ import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
-import { environmentNumber } from '@infrastructure/runtime/environment';
 // js-toolkit: consults a bare string, an `Error`, then a `message` on the value itself, so a
 // rejection that is not an `Error` still yields its message. `String(error)` is the fallback
 // rather than the toolkit's default empty string. https://github.com/Guebbit/js-toolkit
 import { extractErrorMessage } from '@guebbit/js-toolkit';
+import { persistenceConfig } from '@infrastructure/persistence/config';
 
 /**
  * A stored lease, one document per job name.
@@ -80,7 +80,7 @@ export const leaseSchema: Schema<LeaseDocument, LeaseModel> = new Schema<LeaseDo
  * is garbage collection for a job retired from the roster, not the mutual-exclusion window a
  * running job holds its lease for.
  */
-const leaseRetentionDays = environmentNumber('NODE_LEASE_RETENTION_DAYS', 30, 1);
+const leaseRetentionDays = persistenceConfig().NODE_LEASE_RETENTION_DAYS;
 
 /*
  * TTL index on `updatedAt`, not `expiresAt`: every successful `findOneAndUpdate` in

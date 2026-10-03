@@ -394,12 +394,15 @@ const violationsForField = (fieldSchema: ZodType): { violation: string; value: u
 /**
  * Builds one payload per constraint violated: each is otherwise `validPayload(schema)`, with
  * exactly one field mutated — missing (for a required field) or out of bounds / wrong format
- * (for a field carrying a min/max/format constraint). Only object schemas are supported; every
- * `*Body` export in `api/schemas.zod.ts` is one.
+ * (for a field carrying a min/max/format constraint). Object schemas are supported, and a union of
+ * them (a tagged body, like `POST /account/reauth`'s) is walked branch by branch; every `*Body`
+ * export in `api/schemas.zod.ts` is one of the two.
  */
 export const invalidPayloads = (schema: ZodType): InvalidPayloadCase[] => {
     ensureSeeded();
     const def = defOf(schema);
+    if (def.type === 'union')
+        return (def.options ?? []).flatMap((option) => invalidPayloads(option));
     if (def.type !== 'object')
         throw new Error(`invalidPayloads: expected an object schema, got "${def.type}"`);
 

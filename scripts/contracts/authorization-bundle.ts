@@ -3,12 +3,9 @@
  * `shared/authorization-keys.yaml`, assembled from one fragment per module plus a root residual
  * file for the app-level keys — `npm run authorization:bundle`.
  *
- * DDD-D5 part A: a permission key's DEFINITION used to live centrally, though every key already
- * named its own module (`module:`) and every module's manifest ALSO listed its own keys, by hand
- * — `tests/cross-cutting/module-permissions.test.ts` reconciled the two. The manifest's own
- * `permissions` field is gone now, not merely derived: its only reader was that test, and the
- * property it protected — a module's keys never outlive its own deletion — is now a fact about the
- * bundle itself, checked below, rather than something to keep two lists honest about.
+ * DDD-D5 part A: each key is defined in its own module's `authorization.yaml`, so a module's keys
+ * never outlive its own deletion — a fact about this bundle (it reads only fragments that exist),
+ * checked below, rather than two hand-kept lists reconciled by a test.
  *
  * Spliced as TEXT, not merged through the YAML AST the way `asyncapi-bundles.ts` merges channel
  * maps: every key here is a flat, self-contained list item with no cross-fragment reference to
@@ -87,8 +84,8 @@ const fragmentPath = (section: string): string =>
 /**
  * The raw `keys:` list text a fragment contributes, its own `keys:` heading stripped — what gets
  * spliced under the bundle's single `keys:` line. Also the fail-closed check DDD-D5 part A leans
- * on instead of `module-permissions.test.ts`'s old reconciliation: a fragment whose own key names
- * a DIFFERENT module than the folder it lives in is a typo the bundle refuses to launder.
+ * on: a fragment whose own key names a DIFFERENT module than the folder it lives in is a typo the
+ * bundle refuses to launder.
  * @param section - the module name, or `core` for the app-level fragment
  * @throws Error if the fragment is missing, malformed, or misattributes one of its own keys
  */

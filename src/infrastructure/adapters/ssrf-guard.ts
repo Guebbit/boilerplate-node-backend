@@ -67,10 +67,9 @@ const stripBrackets = (hostname: string): string =>
  * reach {@link isAddressUnsafe} as `127.0.0.1` rather than slipping past it as an opaque hostname.
  * https://url.spec.whatwg.org/#concept-ipv4-parser
  *
- * @param exemptHostname - see {@link resolveSafeOutboundTarget}'s own parameter
  * @throws {SsrfRefusedError} `invalid-url` | `insecure-scheme` | `credentials-in-url`
  */
-const parseOutboundUrl = (rawUrl: string, exemptHostname?: string): URL => {
+const parseOutboundUrl = (rawUrl: string): URL => {
     let parsed: URL;
     // eslint-disable-next-line no-restricted-syntax -- URL's constructor has no non-throwing form; an unparseable URL is a refusal, not a crash
     try {
@@ -79,10 +78,8 @@ const parseOutboundUrl = (rawUrl: string, exemptHostname?: string): URL => {
         throw new SsrfRefusedError('invalid-url', `Not a valid URL: ${rawUrl}`);
     }
 
-    const isExempt =
-        exemptHostname !== undefined && stripBrackets(parsed.hostname) === exemptHostname;
-
-    if (parsed.protocol !== 'https:' && !isExempt)
+    // No exemption, not even for the demo host: the scheme rule has no development exception.
+    if (parsed.protocol !== 'https:')
         throw new SsrfRefusedError(
             'insecure-scheme',
             `URL must use https:, got ${parsed.protocol}`
@@ -90,8 +87,7 @@ const parseOutboundUrl = (rawUrl: string, exemptHostname?: string): URL => {
 
     // Rejected outright rather than stripped: a subscription that embeds credentials is already
     // misconfigured, and silently dropping them would deliver to a URL the owner didn't intend.
-    // Never exempted, even for the demo host — a URL with embedded credentials is malformed input,
-    // not an insecure-transport choice, and the exemption only ever covers the latter.
+    // Never exempted, even for the demo host: the exemption only ever covers the address check.
     if (parsed.username || parsed.password)
         throw new SsrfRefusedError('credentials-in-url', 'URL must not embed credentials');
 
@@ -230,7 +226,7 @@ const buildPinnedLookup = (address: string): LookupFunction => {
  * "always rejects".
  *
  * @param exemptHostname - an exact hostname (case-sensitive; callers pass an already-lowercased
- *   host) to exempt from the `https:` and private/unsafe-address checks, and ONLY those two —
+ *   host) to exempt from the private/unsafe-address check, and ONLY that one — the `https:` rule,
  *   parsing, credentials and DNS resolution still run in full. For a caller's own
  *   development/test-only exemption; absent for every other caller and every other call.
  * @param signal - the caller's total-attempt-budget abort, so a slow resolver can't add its own
@@ -244,7 +240,7 @@ export const resolveSafeOutboundTarget = (
     signal?: AbortSignal
 ): Promise<SafeOutboundTarget> =>
     Promise.resolve()
-        .then(() => stripBrackets(parseOutboundUrl(rawUrl, exemptHostname).hostname))
+        .then(() => stripBrackets(parseOutboundUrl(rawUrl).hostname))
         .then((hostname) =>
             resolveAllAddresses(hostname, signal).then((addresses) => {
                 const isExempt = hostname === exemptHostname;

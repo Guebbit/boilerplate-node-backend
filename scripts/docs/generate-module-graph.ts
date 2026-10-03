@@ -312,6 +312,14 @@ const applyTarget = ({ file, start, end, body }: Target): Promise<number> =>
         rerunScript: 'docs:graph'
     });
 
+/**
+ * Whether a module has its own page under `docs/modules/`. The one `group: example` module has
+ * none: it exists to be copied, and `docs/theory/modules.md#the-module-template` is where it is
+ * explained, so a neighbourhood block has nowhere to go.
+ */
+const hasModulePage = (name: string): boolean =>
+    readModuleDescriptor(path.join(MODULES_ROOT, name, 'module.yaml')).group !== 'example';
+
 /** Every block this script owns: the index map, then one neighbourhood per module page. */
 const targets = (): Target[] => {
     const edges = readEdges();
@@ -327,6 +335,7 @@ const targets = (): Target[] => {
         },
         ...Object.keys(SUBDOMAIN)
             .toSorted()
+            .filter((name) => hasModulePage(name))
             .map((name) => ({
                 file: path.join(ROOT, 'docs', 'modules', `${name}.md`),
                 start: `<!-- module-graph:${name}:start -->`,

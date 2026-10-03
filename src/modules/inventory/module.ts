@@ -23,17 +23,14 @@ import { ensureLevel, receive, removeLevel } from './services';
 import './events';
 // Registers the two domain gauges with the metrics registry at module load.
 import './metrics';
+import { inventoryConfig } from './config';
 
 /** This module's manifest entry: routes, the two domain gauges, and locales. */
 export default {
     name: 'inventory',
     basePath: '/inventory',
-    /**
-     * The permission keys this module introduces. Deleting the module deletes them:
-     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
-     * whose module is gone, and a module claiming one the file does not attribute to it.
-     */
     routes: router,
+    config: [inventoryConfig.slice],
     /*
      * `products` cannot call this module back (it already imports `products`, and the graph must
      * stay acyclic — see `.dependency-cruiser.cjs`), so this is how a new product gets its opening

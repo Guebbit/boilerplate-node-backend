@@ -1,3 +1,4 @@
+import { setEnvironment } from '@tests/environment';
 /**
  * Cache adapter — the byte store the caching middleware is built on.
  *
@@ -20,20 +21,6 @@
  *
  * The blocks below re-import the adapter, because it memoises its Redis client in module scope.
  */
-
-const ORIGINAL_ENVIRONMENT = {
-    NODE_REDIS_URL: process.env.NODE_REDIS_URL,
-    NODE_REDIS_HOST: process.env.NODE_REDIS_HOST,
-    NODE_REDIS_PORT: process.env.NODE_REDIS_PORT,
-    NODE_REDIS_CACHE_ENABLED: process.env.NODE_REDIS_CACHE_ENABLED
-};
-
-afterEach(() => {
-    for (const [key, value] of Object.entries(ORIGINAL_ENVIRONMENT)) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-    }
-});
 
 // ─── clearCache: "nothing to clear" vs "could not clear" ──────────────────────
 
@@ -120,23 +107,23 @@ describe('clearCache', () => {
     });
 
     it('reports reachable with a count when Redis answers', async () => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockScanIterator.mockReturnValue(scanBatches([['a', 'b'], [], ['c']]));
 
         await expect(freshCache().clearCache()).resolves.toEqual({ deleted: 3, reachable: true });
     });
 
     it('reports reachable when caching is switched off — there is nothing to go stale', async () => {
-        delete process.env.NODE_REDIS_URL;
-        delete process.env.NODE_REDIS_PORT;
+        setEnvironment({ NODE_REDIS_URL: undefined });
+        setEnvironment({ NODE_REDIS_PORT: undefined });
 
         await expect(freshCache().clearCache()).resolves.toEqual({ deleted: 0, reachable: true });
         expect(mockConnect).not.toHaveBeenCalled();
     });
 
     it('honours the NODE_REDIS_CACHE_ENABLED=0 kill switch the same way', async () => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
-        process.env.NODE_REDIS_CACHE_ENABLED = '0';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
+        setEnvironment({ NODE_REDIS_CACHE_ENABLED: '0' });
 
         await expect(freshCache().clearCache()).resolves.toEqual({ deleted: 0, reachable: true });
         expect(mockConnect).not.toHaveBeenCalled();
@@ -148,14 +135,14 @@ describe('clearCache', () => {
      * and exit 0 with a full cache.
      */
     it('reports UNREACHABLE when caching is on but Redis refuses the connection', async () => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockConnect.mockRejectedValue(new Error('ECONNREFUSED'));
 
         await expect(freshCache().clearCache()).resolves.toEqual({ deleted: 0, reachable: false });
     });
 
     it('reports unreachable when the connection dies mid-scan', async () => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockScanIterator.mockImplementation(() => {
             throw new Error('socket closed');
         });
@@ -164,7 +151,7 @@ describe('clearCache', () => {
     });
 
     it('never rejects, so callers choose whether to fail open', async () => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockConnect.mockRejectedValue(new Error('ECONNREFUSED'));
 
         await expect(freshCache().clearCache()).resolves.toBeDefined();
@@ -179,7 +166,7 @@ describe('clearCache', () => {
  */
 describe('getCacheValue', () => {
     beforeEach(() => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockConnect.mockImplementation(() => Promise.resolve());
     });
 
@@ -218,8 +205,8 @@ describe('getCacheValue', () => {
     it('resolves undefined when caching is switched off, without connecting', async () => {
         // Both routes to a URL — the explicit one and the host/port fallback — or `getRedisUrl`
         // still resolves one from a loaded `.env`, as it did under the mutation runner.
-        delete process.env.NODE_REDIS_URL;
-        delete process.env.NODE_REDIS_PORT;
+        setEnvironment({ NODE_REDIS_URL: undefined });
+        setEnvironment({ NODE_REDIS_PORT: undefined });
 
         await expect(freshCache().getCacheValue('GET:/products')).resolves.toBeUndefined();
         expect(mockConnect).not.toHaveBeenCalled();
@@ -228,7 +215,7 @@ describe('getCacheValue', () => {
 
 describe('setCacheValue tag index', () => {
     beforeEach(() => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockConnect.mockImplementation(() => Promise.resolve());
         mockSet.mockImplementation(() => Promise.resolve('OK'));
         mockSAdd.mockImplementation(() => Promise.resolve(1));
@@ -312,7 +299,7 @@ describe('setCacheValue tag index', () => {
  */
 describe('claimCacheRefresh', () => {
     beforeEach(() => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockConnect.mockImplementation(() => Promise.resolve());
     });
 
@@ -346,8 +333,8 @@ describe('claimCacheRefresh', () => {
     });
 
     it('loses the claim when caching is switched off, without connecting', async () => {
-        delete process.env.NODE_REDIS_URL;
-        delete process.env.NODE_REDIS_PORT;
+        setEnvironment({ NODE_REDIS_URL: undefined });
+        setEnvironment({ NODE_REDIS_PORT: undefined });
 
         await expect(freshCache().claimCacheRefresh('GET:/products', 60)).resolves.toBe(false);
         expect(mockConnect).not.toHaveBeenCalled();
@@ -369,9 +356,9 @@ describe('the Redis client', () => {
     // Both spellings are supported so deployment config can stay flexible; the fragments are the
     // half a compose file usually has.
     it('assembles a URL from host and port when no full URL is given', async () => {
-        delete process.env.NODE_REDIS_URL;
-        process.env.NODE_REDIS_HOST = 'redis.internal';
-        process.env.NODE_REDIS_PORT = '6380';
+        setEnvironment({ NODE_REDIS_URL: undefined });
+        setEnvironment({ NODE_REDIS_HOST: 'redis.internal' });
+        setEnvironment({ NODE_REDIS_PORT: '6380' });
 
         await freshCache().startCache();
 
@@ -381,9 +368,9 @@ describe('the Redis client', () => {
     });
 
     it('defaults the host to localhost when only a port is given', async () => {
-        delete process.env.NODE_REDIS_URL;
-        delete process.env.NODE_REDIS_HOST;
-        process.env.NODE_REDIS_PORT = '6379';
+        setEnvironment({ NODE_REDIS_URL: undefined });
+        setEnvironment({ NODE_REDIS_HOST: undefined });
+        setEnvironment({ NODE_REDIS_PORT: '6379' });
 
         await freshCache().startCache();
 
@@ -393,7 +380,7 @@ describe('the Redis client', () => {
     });
 
     it('closes politely on shutdown', async () => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         const cache = freshCache();
         await cache.startCache();
 
@@ -409,7 +396,7 @@ describe('the Redis client', () => {
      * the way out, which reads as a stuck deploy rather than as a dead cache.
      */
     it('destroys the socket when QUIT itself fails', async () => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockQuit.mockImplementation(() => Promise.reject(new Error('socket closed')));
         const cache = freshCache();
         await cache.startCache();
@@ -420,8 +407,8 @@ describe('the Redis client', () => {
     });
 
     it('closes nothing when caching was never switched on', async () => {
-        delete process.env.NODE_REDIS_URL;
-        delete process.env.NODE_REDIS_PORT;
+        setEnvironment({ NODE_REDIS_URL: undefined });
+        setEnvironment({ NODE_REDIS_PORT: undefined });
 
         await expect(freshCache().stopCache()).resolves.toBeUndefined();
 
@@ -432,13 +419,13 @@ describe('the Redis client', () => {
     // The state a health payload reports, and the reason it is a memory read: `GET
     // /observability/health` is polled by every replica forever, so it may not open a socket.
     it('reports disabled without connecting, and ready once connected', async () => {
-        delete process.env.NODE_REDIS_URL;
-        delete process.env.NODE_REDIS_PORT;
+        setEnvironment({ NODE_REDIS_URL: undefined });
+        setEnvironment({ NODE_REDIS_PORT: undefined });
         const cache = freshCache();
 
         expect(cache.cacheState()).toBe('disabled');
 
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockClient.isReady = true;
         try {
             await cache.startCache();
@@ -451,7 +438,7 @@ describe('the Redis client', () => {
 
 describe('invalidateCacheTags', () => {
     beforeEach(() => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockConnect.mockImplementation(() => Promise.resolve());
         mockSMembers.mockImplementation(() => Promise.resolve([]));
         mockDel.mockImplementation(() => Promise.resolve(1));
@@ -544,7 +531,7 @@ describe('invalidateCacheTags', () => {
  */
 describe('invalidateCacheTagsLogged', () => {
     beforeEach(() => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockConnect.mockImplementation(() => Promise.resolve());
         mockSMembers.mockImplementation(() => Promise.resolve([]));
         mockDel.mockImplementation(() => Promise.resolve(1));

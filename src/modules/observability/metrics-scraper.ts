@@ -11,6 +11,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
+import { observabilityConfig } from './config';
 
 /**
  * Guards the Prometheus scrape endpoint with a static bearer credential — Prometheus cannot hold a
@@ -23,7 +24,7 @@ import { logger } from '@infrastructure/adapters/logger';
  * See: docs/tools/security.md#why-the-metrics-endpoint-has-its-own-credential
  */
 export const isMetricsScraper = (request: Request, response: Response, next: NextFunction) => {
-    const expected = process.env.NODE_METRICS_TOKEN;
+    const expected = observabilityConfig().NODE_METRICS_TOKEN;
 
     if (!expected) {
         // Stryker disable all

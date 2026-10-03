@@ -89,7 +89,24 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * `<frontend>/contracts/permission-actions.ts`, so the frontend's `PermissionAction` cannot drift from the
      * vocabulary the backend enforces.
      */
-    { backend: 'shared/authorization-keys.yaml', frontend: 'contracts/authorization-keys.yaml' }
+    { backend: 'shared/authorization-keys.yaml', frontend: 'contracts/authorization-keys.yaml' },
+    /*
+     * The demo webhook sink's TLS pair. The backend trusts the CA (`NODE_EXTRA_CA_CERTS`), the
+     * frontend's Cypress sink serves the leaf and its key: a fork between them fails every demo
+     * delivery at the handshake, and nothing in either suite would say why.
+     */
+    {
+        backend: 'scenarios/support/tls/webhook-sink-ca.pem',
+        frontend: 'scripts/e2e/tls/webhook-sink-ca.pem'
+    },
+    {
+        backend: 'scenarios/support/tls/webhook-sink-cert.pem',
+        frontend: 'scripts/e2e/tls/webhook-sink-cert.pem'
+    },
+    {
+        backend: 'scenarios/support/tls/webhook-sink-key.pem',
+        frontend: 'scripts/e2e/tls/webhook-sink-key.pem'
+    }
     /*
      * `src/types/asyncapi.generated.ts` is deliberately absent: an OUTPUT whose every input is
      * already compared, and the two are not meant to match — this repo's carries the queue

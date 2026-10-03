@@ -22,7 +22,7 @@ A minimal root endpoint used to verify the process is alive.
 
 > The domain behind these routes: [`observability`](../modules/observability.md) · routes and middleware: `src/modules/observability/routes.ts`
 
-Endpoints for health checks, metrics, and audit logs. The two public routes feed external scrapers (Prometheus) and the live dashboard (SSE). The rest need `platform.observability.any.read` and are intended for internal tooling. See the dedicated [Observability Endpoints](./observability.md) page for response shapes and tool links.
+Endpoints for health checks, metrics, and audit logs. None of these is public. The live dashboard's SSE stream needs `platform.observability.any.read` (by session cookie, since an `EventSource` cannot set a header), Prometheus scrapes `/observability/metrics` with a static token, and the rest need `platform.observability.any.read` and are intended for internal tooling. See the dedicated [Observability Endpoints](./observability.md) page for response shapes and tool links.
 
 ## Account & Auth
 

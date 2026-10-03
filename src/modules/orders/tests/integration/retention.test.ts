@@ -21,20 +21,17 @@ import { userService } from '@modules/users';
 import { resetDomainEvents } from '@kernel/events';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { OrderStatus } from '@types';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
 describe('orders — detach on account erasure', () => {
-    const originalRetention = process.env.NODE_ORDER_PII_RETENTION_DAYS;
-
     beforeEach(() => {
         registerCheckoutModules();
     });
 
     afterEach(() => {
         resetDomainEvents();
-        if (originalRetention === undefined) delete process.env.NODE_ORDER_PII_RETENTION_DAYS;
-        else process.env.NODE_ORDER_PII_RETENTION_DAYS = originalRetention;
     });
 
     // Each of these three pins the order to `paid` (`markOrderPaidAt`) — the per-order-clock
@@ -43,7 +40,7 @@ describe('orders — detach on account erasure', () => {
     // rule has its own describe block below.
 
     it('unsets userId and schedules anonymization when the account is hard-deleted', async () => {
-        process.env.NODE_ORDER_PII_RETENTION_DAYS = '7';
+        setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
@@ -61,7 +58,7 @@ describe('orders — detach on account erasure', () => {
     });
 
     it('runs the clock from the ORDER, not from today (B17)', async () => {
-        process.env.NODE_ORDER_PII_RETENTION_DAYS = '7';
+        setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
         const user = await createUser();
         const product = await createProduct();
         // Placed 5 days ago: due in ~2 more days, not a fresh 7 counted from the erasure.
@@ -81,7 +78,7 @@ describe('orders — detach on account erasure', () => {
     });
 
     it('an order already past its own window is due immediately, not re-extended (B17)', async () => {
-        process.env.NODE_ORDER_PII_RETENTION_DAYS = '7';
+        setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
         const user = await createUser();
         const product = await createProduct();
         const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
@@ -134,18 +131,14 @@ describe('orders — detach on account erasure', () => {
 });
 
 describe('orders — a never-paid order is due for anonymization AT ONCE (A1)', () => {
-    const originalRetention = process.env.NODE_ORDER_PII_RETENTION_DAYS;
-
     beforeEach(() => registerCheckoutModules());
 
     afterEach(() => {
         resetDomainEvents();
-        if (originalRetention === undefined) delete process.env.NODE_ORDER_PII_RETENTION_DAYS;
-        else process.env.NODE_ORDER_PII_RETENTION_DAYS = originalRetention;
     });
 
     it('is due immediately, not after the retention window, while still pending', async () => {
-        process.env.NODE_ORDER_PII_RETENTION_DAYS = '7';
+        setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
         const user = await createUser();
         const product = await createProduct();
         // Old enough that a paid order's own clock would still have days left on its window.
@@ -176,7 +169,7 @@ describe('orders — a never-paid order is due for anonymization AT ONCE (A1)', 
     it('keeps the FULL window for an order that was paid and only later cancelled', async () => {
         // `paidAt` is what decides this, not the CURRENT status — a refunded order was still once
         // a real tax record.
-        process.env.NODE_ORDER_PII_RETENTION_DAYS = '7';
+        setEnvironment({ NODE_ORDER_PII_RETENTION_DAYS: '7' });
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
@@ -207,6 +200,14 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
                 country: 'GB',
                 phone: '+44 20 0000 0000'
             },
+            billingAddress: {
+                fullName: 'Ada Lovelace',
+                street: '1 Accounts Office Way',
+                city: 'Leeds',
+                zip: 'LS1',
+                country: 'GB',
+                phone: '+44 113 000 0000'
+            },
             notes: 'Leave with the concierge, 2nd floor'
         });
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
@@ -219,6 +220,11 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         expect(reloaded!.shippingAddress!.fullName).toBe('Anonymized');
         expect(reloaded!.shippingAddress!.street).toBe('Anonymized');
         expect(reloaded!.shippingAddress!.phone).toBeUndefined();
+        // The billing address is the same personal data under another name.
+        expect(reloaded!.billingAddress!.fullName).toBe('Anonymized');
+        expect(reloaded!.billingAddress!.street).toBe('Anonymized');
+        expect(reloaded!.billingAddress!.phone).toBeUndefined();
+        expect(reloaded!.billingAddress!.city).toBe('Leeds');
         // City and country are not personal data on their own — kept.
         expect(reloaded!.shippingAddress!.city).toBe('London');
         expect(reloaded!.shippingAddress!.country).toBe('GB');
@@ -227,7 +233,7 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         expect(reloaded!.notes).toBeUndefined();
     });
 
-    it('leaves an order with no shippingAddress at all working, scrubbing only email', async () => {
+    it('leaves an order with no address at all working, scrubbing only email', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
@@ -238,6 +244,45 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         const reloaded = await orderRepository.findById(String(order._id));
         expect(reloaded!.email).toBe('anonymized@deleted.invalid');
         expect(reloaded!.shippingAddress).toBeUndefined();
+        expect(reloaded!.billingAddress).toBeUndefined();
+    });
+
+    it('scrubs a billing address alone — a digital-only order has no shipping one', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            billingAddress: {
+                fullName: 'Ada Lovelace',
+                street: '1 Accounts Office Way',
+                city: 'Leeds',
+                zip: 'LS1',
+                country: 'GB'
+            }
+        });
+        await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
+
+        const reloaded = await orderRepository.findById(String(order._id));
+        expect(reloaded!.billingAddress!.fullName).toBe('Anonymized');
+        // No partial shipping address is conjured by the scrub.
+        expect(reloaded!.shippingAddress).toBeUndefined();
+    });
+
+    it('moves updatedAt, so an edit form opened before the sweep is refused afterwards', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
+        const stampOf = (): Promise<number> =>
+            orderRepository
+                .findById(String(order._id))
+                .then((row) => row?.updatedAt?.getTime() ?? 0);
+        const before = await stampOf();
+
+        await orderService.anonymizeDueOrders();
+
+        expect(await stampOf()).toBeGreaterThan(before);
     });
 
     it('does not touch an order whose anonymizeAfter has not arrived yet', async () => {

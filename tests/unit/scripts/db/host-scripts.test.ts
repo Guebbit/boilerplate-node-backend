@@ -35,6 +35,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { getDatabaseUri } from '@infrastructure/runtime/database';
+import { setEnvironment } from '@tests/environment';
 
 const ROOT = path.join(__dirname, '../../../..');
 
@@ -107,24 +108,14 @@ describe('the host script', () => {
 });
 
 describe('database URI resolution', () => {
-    const saved = new Map<string, string | undefined>();
-
+    // The Mongo variables are unset before every case, so an ambient value never decides one.
     beforeEach(() => {
-        for (const key of MONGO_VARS) {
-            saved.set(key, process.env[key]);
-            delete process.env[key];
-        }
-    });
-
-    afterEach(() => {
-        for (const [key, value] of saved)
-            if (value === undefined) delete process.env[key];
-            else process.env[key] = value;
+        setEnvironment(Object.fromEntries(MONGO_VARS.map((key) => [key, undefined])));
     });
 
     it('prefers an explicit NODE_DB_URI', () => {
-        process.env.NODE_DB_URI = 'mongodb+srv://user:pw@cluster.example/appdb';
-        process.env.NODE_MONGODB_NAME = 'ignored';
+        setEnvironment({ NODE_DB_URI: 'mongodb+srv://user:pw@cluster.example/appdb' });
+        setEnvironment({ NODE_MONGODB_NAME: 'ignored' });
 
         expect(getDatabaseUri()).toBe('mongodb+srv://user:pw@cluster.example/appdb');
     });
@@ -135,18 +126,18 @@ describe('database URI resolution', () => {
      * rather than as a deliberate signal.
      */
     it('falls through to the fragments when NODE_DB_URI is EMPTY', () => {
-        process.env.NODE_DB_URI = '';
-        process.env.NODE_MONGODB_HOST = 'localhost';
-        process.env.NODE_MONGODB_PORT = '27017';
-        process.env.NODE_MONGODB_NAME = 'renamed-db';
+        setEnvironment({ NODE_DB_URI: '' });
+        setEnvironment({ NODE_MONGODB_HOST: 'localhost' });
+        setEnvironment({ NODE_MONGODB_PORT: '27017' });
+        setEnvironment({ NODE_MONGODB_NAME: 'renamed-db' });
 
         expect(getDatabaseUri()).toBe('mongodb://localhost:27017/renamed-db');
     });
 
     it('honours a renamed database — the failure this whole change is about', () => {
-        process.env.NODE_DB_URI = '';
-        process.env.NODE_MONGODB_HOST = 'localhost';
-        process.env.NODE_MONGODB_NAME = 'my-actual-data';
+        setEnvironment({ NODE_DB_URI: '' });
+        setEnvironment({ NODE_MONGODB_HOST: 'localhost' });
+        setEnvironment({ NODE_MONGODB_NAME: 'my-actual-data' });
 
         // A hardcoded URI would produce `…/boilerplate-node-backend` here, seeding a database the
         // developer never heard of while their real one sat untouched.

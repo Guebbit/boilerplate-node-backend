@@ -1,26 +1,24 @@
+import {
+    resetEnvironmentOverrides,
+    overrideEnvironment,
+    type EnvironmentOverrides
+} from '@infrastructure/config/store';
+
 /**
- * Put every variable back as it was read: a value restored, a key that did not exist removed
- * again — including one the body itself created.
+ * An override set that unsets every one of `keys`.
  *
- * The distinction is the point: deleting a key that held a value, or leaving an empty string where
- * there was no key, are both a changed environment for whatever reads it next.
- *
- * @param previous - variable name → the value it held, or `undefined` for "no key at all"
+ * @param keys - the variables to hide
  */
-const restore = (previous: ReadonlyMap<string, string | undefined>): void => {
-    for (const [key, value] of previous) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-    }
-};
+const unset = (keys: readonly string[]): Record<string, undefined> =>
+    Object.fromEntries(keys.map((key) => [key, undefined]));
 
 /**
  * Run a body with one environment variable set, and put the environment back afterwards.
  *
- * Every config value in this codebase is read lazily, at the point of use, PRECISELY so a test can
- * vary it for one case — see `@infrastructure/runtime/environment`. What that buys is only safe
- * with the restore: a variable left changed leaks into every later case in the file, and the case
- * that fails is not the one that changed it.
+ * Overrides go to the config store's override layer, never to `process.env`: the store reads the
+ * process environment once, so only an override can change what a slice sees. They pass through
+ * the real parser. The restore matters: an override left in place leaks into every later case in
+ * the file, and the case that fails is not the one that changed it.
  *
  * @param key - the variable to set
  * @param value - what to set it to
@@ -43,23 +41,23 @@ export const withEnvironment = (
  * @param body - what to run with them set; its resolved value passes through
  */
 export const withEnvironmentOverrides = async <T>(
-    overrides: Readonly<Record<string, string>>,
+    overrides: EnvironmentOverrides,
     body: () => Promise<T>
 ): Promise<T> => {
-    const previous = new Map(Object.keys(overrides).map((key) => [key, process.env[key]]));
-    for (const [key, value] of Object.entries(overrides)) process.env[key] = value;
+    const restore = overrideEnvironment(overrides);
+    // `finally` rather than a chain: the restore must run whether `body` resolved, rejected or threw.
     try {
         return await body();
     } finally {
-        restore(previous);
+        restore();
     }
 };
 
 /**
  * {@link withEnvironment}'s opposite: run a body with these variables UNSET, then put them back.
  *
- * For the case whose subject is a deployment that configured nothing — which `process.env` alone
- * cannot express once `tests/support/setup.ts` has given the whole worker a value, as it does for
+ * For the case whose subject is a deployment that configured nothing — which the worker's own
+ * environment cannot express once `tests/support/setup-environment.ts` has given the whole worker a value, as it does for
  * bank transfer so the `shop` scenario can hold its `order.awaitingTransfer` guarantee.
  *
  * @param keys - the variables to clear for the duration
@@ -69,12 +67,11 @@ export const withoutEnvironment = async (
     keys: readonly string[],
     body: () => Promise<void>
 ): Promise<void> => {
-    const previous = new Map(keys.map((key) => [key, process.env[key]]));
-    for (const key of keys) delete process.env[key];
+    const restore = overrideEnvironment(unset(keys));
     try {
         await body();
     } finally {
-        restore(previous);
+        restore();
     }
 };
 
@@ -83,20 +80,74 @@ export const withoutEnvironment = async (
  * worker's own values are back before the next file runs.
  *
  * For a suite whose subject IS the configuration — it drives these variables case by case, so
- * wrapping each one in a body would be noise. Saved rather than merely deleted, for the same
- * reason {@link withoutEnvironment} exists at all: the worker may have been given a value by
- * `tests/support/setup.ts`, and `process.env` is shared by every suite that worker runs.
+ * wrapping each one in a body would be noise. Unset as an override rather than deleted from
+ * `process.env`: the store has already read the process environment, and the worker may have been
+ * given a value by `tests/support/setup-environment.ts`.
  *
  * @param keys - the variables this file owns for its duration
  */
 export const withoutEnvironmentInThisFile = (keys: readonly string[]): void => {
-    const previous = new Map(keys.map((key) => [key, process.env[key]]));
+    let restore: (() => void) | undefined;
 
     beforeEach(() => {
-        for (const key of keys) delete process.env[key];
+        restore = overrideEnvironment(unset(keys));
     });
 
     afterEach(() => {
-        restore(previous);
+        restore?.();
+        restore = undefined;
     });
+};
+
+/**
+ * Override variables for the rest of the case — or the file — whichever the caller's own cleanup
+ * ends. `undefined` unsets one. Pair it with {@link resetEnvironment} in an `afterEach`.
+ *
+ * For a test that varies a setting across several statements, where {@link withEnvironment}'s
+ * body would only add indentation. Passes through the real parser, like every override.
+ *
+ * @param overrides - variable name → value, or `undefined` to unset
+ */
+export const setEnvironment = (overrides: EnvironmentOverrides): void => {
+    overrideEnvironment(overrides);
+};
+
+/**
+ * Drop every override this file made, so each variable reads as the worker started it: the
+ * defaults from `tests/support/setup-environment.ts` and whatever the real environment held.
+ */
+export const resetEnvironment = (): void => {
+    resetEnvironmentOverrides();
+};
+
+/** What `process.env` held for each variable {@link setProcessEnvironment} touched, first touch wins. */
+const processOriginals = new Map<string, string | undefined>();
+
+/**
+ * Write the REAL `process.env`, for a subject that reads it directly: a script under `scripts/`,
+ * or a library such as mongodb-memory-server. The config store never sees these.
+ *
+ * Put back after every case by `setup-environment-reset.ts`, which calls
+ * {@link restoreProcessEnvironment}. `undefined` removes the variable.
+ *
+ * @param overrides - variable name → value, or `undefined` to remove it
+ */
+export const setProcessEnvironment = (overrides: EnvironmentOverrides): void => {
+    for (const [name, value] of Object.entries(overrides)) {
+        if (!processOriginals.has(name)) processOriginals.set(name, process.env[name]);
+        if (value === undefined) Reflect.deleteProperty(process.env, name);
+        else process.env[name] = value;
+    }
+};
+
+/**
+ * Undo every {@link setProcessEnvironment}: a value restored, a variable that did not exist
+ * removed again. "Removed" and "empty" differ to whatever reads it next.
+ */
+export const restoreProcessEnvironment = (): void => {
+    for (const [name, value] of processOriginals) {
+        if (value === undefined) Reflect.deleteProperty(process.env, name);
+        else process.env[name] = value;
+    }
+    processOriginals.clear();
 };

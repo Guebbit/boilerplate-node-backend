@@ -9,21 +9,17 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
-import { environmentFlag } from '@infrastructure/runtime/environment';
 import { router } from './routes';
 import { feedbackRateLimits } from './rate-limits';
 import { findOwnTicketsForExport } from './service';
+import { feedbackConfig } from './config';
 
 /** This module's manifest entry: public contact form, keyed triage (`feedback.*`). */
 export default {
     name: 'feedback',
     basePath: '/feedback',
-    /**
-     * The permission keys this module introduces. Deleting the module deletes them:
-     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
-     * whose module is gone, and a module claiming one the file does not attribute to it.
-     */
     routes: router,
+    config: [feedbackConfig.slice],
     /** The contact-form budgets — see `./rate-limits.ts`. */
     rateLimits: feedbackRateLimits,
     personalData: [
@@ -34,7 +30,7 @@ export default {
             // entirely — `feedback` is optional in the contract precisely because most exports
             // carry none.
             collect: (subject) =>
-                environmentFlag('NODE_EXPORT_INCLUDE_FEEDBACK', false)
+                feedbackConfig().NODE_EXPORT_INCLUDE_FEEDBACK
                     ? findOwnTicketsForExport(subject.email)
                     : Promise.resolve(undefined)
         }

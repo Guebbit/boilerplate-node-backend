@@ -1,13 +1,14 @@
 openapi: 3.0.3
 info:
     title: cart — module contract
-    version: '2.0.0'
+    version: '0.1.0'
 
 x-error-codes:
-    CART_ADDRESS_NOT_APPLICABLE: { status: 409, description: 'The cart is all-digital and needs no shipping address.' }
+    CART_ADDRESS_NOT_APPLICABLE: { status: 409, description: 'Nothing in this checkout ships to an address (all-digital, or a method that ships to none), so a shipping `addressId` cannot apply.' }
     CART_ADDRESS_NOT_FOUND: { status: 404, description: 'The named address does not exist, or does not belong to the caller.' }
     CART_ADDRESS_REQUIRED: { status: 422, description: 'A shipping address is required and none was supplied or found on file.' }
     CART_BANK_TRANSFER_LIMIT: { status: 409, description: 'This order total exceeds the bank-transfer payment method''s configured ceiling.' }
+    CART_BILLING_ADDRESS_REQUIRED: { status: 422, description: 'No billing address could be resolved — none was named, nothing ships, and the address book has no default.' }
     CART_CHANGED: { status: 409, description: 'The cart changed between the request that read it and this write — reload and retry.' }
     CART_EMPTY: { status: 409, description: 'Checkout was attempted on a cart with no lines.' }
     CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines exceed the product''s available stock — see `errors[].details.lines`.' }
@@ -272,26 +273,27 @@ paths:
                 # refuses rather than shipping nowhere. `errors[].code` is `CART_ADDRESS_NOT_FOUND`.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Checking out an empty cart (`CART_EMPTY`), insufficient stock
-                # (`CART_INSUFFICIENT_STOCK`), a race with another checkout (`CART_CHANGED`), the
-                # cart's chosen shipping method no longer applying to a basket that has since gone
-                # all-digital (`CART_SHIPPING_NOT_APPLICABLE`) — re-checked here even though
-                # `PUT /cart/shipping-method` already checked it once, since the basket can change
-                # afterward — an `addressId` sent for a chosen method whose `requiresAddress` is
-                # false (`CART_ADDRESS_NOT_APPLICABLE`, the same treatment as the shipping-method
-                # case above: that method ships to no address at all, so naming one is a client
-                # error, not a lookup that might resolve), the basket's weight no longer fitting
-                # the cart's chosen method (`CART_SHIPPING_METHOD_WEIGHT`, re-checked for the same
-                # reason), a `paymentMethod` this deployment does not offer
-                # (`CART_PAYMENT_METHOD_NOT_AVAILABLE`), or the caller already has
-                # `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT` transfer orders awaiting payment
-                # (`CART_BANK_TRANSFER_LIMIT`).
+                # (`CART_INSUFFICIENT_STOCK`), a race with another checkout (`CART_CHANGED`), an
+                # `addressId` sent for a chosen method whose `requiresAddress` is false
+                # (`CART_ADDRESS_NOT_APPLICABLE`: that method ships to no address at all — and
+                # neither does an all-digital basket — so naming one is a client error, not a
+                # lookup that might resolve), a `paymentMethod` this
+                # deployment does not offer (`CART_PAYMENT_METHOD_NOT_AVAILABLE`), or the caller
+                # already has `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT` transfer orders awaiting
+                # payment (`CART_BANK_TRANSFER_LIMIT`). A stored shipping choice the basket no
+                # longer fits (gone digital-only, lost its last physical line, outgrown the method)
+                # is not a refusal here: it reads as no choice, as in `GET /cart`'s `shipping.selected`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 # A basket holding any `requiresShipping: true` line with no shipping method chosen
                 # on the cart (`CART_SHIPPING_METHOD_REQUIRED` — see `PUT /cart/shipping-method`),
                 # a chosen method whose `requiresAddress` is true with no `addressId` and no
                 # default address on file (`CART_ADDRESS_REQUIRED`) — nobody would know how or
-                # where to send the order — or that method's resolved address naming a country
-                # outside `NODE_SHIP_TO_COUNTRIES` (`CART_SHIP_TO_COUNTRY_NOT_SUPPORTED`).
+                # where to send the order — that method's resolved address naming a country
+                # outside `NODE_SHIP_TO_COUNTRIES` (`CART_SHIP_TO_COUNTRY_NOT_SUPPORTED`), or no
+                # billing address resolvable: none named, no shipping address to reuse (an
+                # all-digital or pickup basket) and no default on file
+                # (`CART_BILLING_ADDRESS_REQUIRED`). A `billingAddressId` that names none of the
+                # caller's addresses is the same 404 as `addressId`.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -439,13 +441,25 @@ components:
                 addressId:
                     allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }]
                     description: >-
-                        Which of the caller's saved addresses to ship to. Omitted, the default
-                        address is used when one exists; an id that matches none of the caller's
-                        addresses refuses the checkout with 404 rather than shipping nowhere. A
-                        method with `requiresAddress: true` and no address resolved refuses with
-                        422, `errors[].code` `CART_ADDRESS_REQUIRED`. The shipping method itself is
-                        not part of this request — it is the cart's own choice, set ahead of time
+                        Which of the caller's saved addresses to SHIP to — meaningful only when a
+                        line ships to an address. Omitted, the default address is used; an id that
+                        matches none of the caller's addresses refuses the checkout with 404 rather
+                        than shipping nowhere. A method with `requiresAddress: true` and no address
+                        resolved refuses with 422, `errors[].code` `CART_ADDRESS_REQUIRED`. Sent for
+                        a basket that ships to no address (all-digital, or a pickup method) it
+                        refuses with 409, `CART_ADDRESS_NOT_APPLICABLE`. The shipping method itself
+                        is not part of this request — it is the cart's own choice, set ahead of time
                         via `PUT /cart/shipping-method`.
+                billingAddressId:
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }]
+                    description: >-
+                        Which of the caller's saved addresses the order is INVOICED to (the order's
+                        `billingAddress`). Omitted, it is "same as the shipping address" when one
+                        was resolved, otherwise the default address; with neither the checkout
+                        refuses with 422, `errors[].code` `CART_BILLING_ADDRESS_REQUIRED`. An
+                        all-digital checkout asks for this one only. An id that matches none of the
+                        caller's addresses refuses with 404, `CART_ADDRESS_NOT_FOUND`. Unlike the
+                        shipping address, billing is not held to `NODE_SHIP_TO_COUNTRIES`.
                 paymentMethod:
                     allOf:
                         [

@@ -12,7 +12,8 @@ import {
     setupRequestEmail,
     resetConfirmEmail,
     deleteRequestEmail,
-    deleteConfirmEmail
+    deleteConfirmEmail,
+    twoFactorChangedEmail
 } from '@modules/account/emails';
 import { accountFrontendLink } from '@modules/account/config';
 
@@ -162,5 +163,40 @@ describe('account emails — the copy', () => {
 
         expect(new Set(footers).size).toBe(1);
         expect(footers[0]).not.toBe('');
+    });
+});
+
+describe('account emails — the two-factor change notice', () => {
+    it('renders its own template, distinct from every other', () => {
+        expect(twoFactorChangedEmail('en', NAME, 'enrolled', 'email').template).toBe(
+            'account.two-factor-changed'
+        );
+    });
+
+    it.each(['enrolled', 'removed', 'disabled'] as const)(
+        'says %s in real copy, in both shipped languages, with the name and no raw keys',
+        (change) => {
+            for (const locale of ['en', 'it']) {
+                const { data, subject } = twoFactorChangedEmail(locale, NAME, change, 'email');
+
+                for (const value of [subject, data.greeting, data.body, data.advice]) {
+                    expect(typeof value).toBe('string');
+                    expect(value).not.toBe('');
+                    expect(value).not.toMatch(/^account\.email\./);
+                    expect(value).not.toContain('{{');
+                }
+                expect(data.greeting).toContain(NAME);
+            }
+        }
+    );
+
+    it('names the factor for an add and a removal, and a different sentence for each change', () => {
+        const bodies = (['enrolled', 'removed', 'disabled'] as const).map(
+            (change) => twoFactorChangedEmail('en', NAME, change, 'totp').data.body as string
+        );
+
+        expect(bodies[0]).toContain('totp');
+        expect(bodies[1]).toContain('totp');
+        expect(new Set(bodies).size).toBe(3);
     });
 });

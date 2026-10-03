@@ -5,72 +5,64 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/cart/
-files: 38
-updated: 2026-09-27T16:19:39.560572+00:00
+files: 39
+updated: 2026-10-01T14:26:57.463280+00:00
 ---
 
 # src/modules/cart/
 
 ## Purpose
 
-The cart module is the bounded context responsible for a user's shopping basket: reading, adding, updating, removing, clearing, and ultimately converting cart lines into a confirmed order at checkout. It owns the "may this cart proceed?" validation rules, the per-user cart document in MongoDB, the full HTTP surface for cart operations, and the cross-module side-effects that accompany checkout and user/product deletion.
+The cart module owns a user's shopping basket: adding, removing, and re-quantifying line items, selecting a shipping method, and converting the basket into a placed order at checkout. It enforces the invariant of exactly one cart document per user (keyed by `userId`), keeps all business rules in a pure domain layer, and exposes a single service facade so that sibling modules never bypass validation.
 
 ## Key parts
 
-- **Domain rules** (`domain/`) — Pure, framework-free validation functions (checkout eligibility, weight limits, shipping requirement) that return typed verdicts. No HTTP codes, no i18n; the service layer maps verdicts to responses.
-- **Service layer** (`services/`) — The business-logic heart, split by concern:
-  - `items.ts` — All CRUD on cart lines plus shipping-method selection.
-  - `checkout.ts` — The race-sensitive cart→order conversion; sequences order-write-before-cart-clear.
-  - `reorder.ts` — Copies a past order's lines back into the caller's cart.
-  - `cleanup.ts` — External hooks other modules invoke when a user or product is deleted.
-  - `view.ts` — Shared projection: turns a stored document into the `CartResponse` shape and provides the product-join helper.
-- **Controllers & routes** (`controllers/`, `routes.ts`) — Thin HTTP adapters that validate, extract identity, delegate to the service, and map errors. All routes require authentication; `POST /checkout` adds re-auth, permission, idempotency, and cache invalidation.
-- **Persistence** (`model.ts`, `repository.ts`, `factories.ts`) — Mongoose schema (one document per user, unique on `userId`), repository write operations (upsert line, remove, clear, version-bump), and a fixture factory for seed/test setup.
-- **Module wiring** (`module.ts`, `index.ts`) — `module.ts` registers routes, permissions, GDPR lifecycle hooks, and event subscriptions with the kernel. `index.ts` is the sole public import surface for sibling modules, exporting service and domain APIs while keeping the repository internal.
-- **Cross-cutting & contracts** (`analytics.ts`, `audit.ts`, `metrics.ts`, `openapi.yaml`, `probes.ts`) — Typed event/action name registration, Prometheus counters, the OpenAPI 3 spec, and edge-case probe definitions for the runnable-collections pipeline.
-- **Tests** (`tests/`) — Unit tests for domain rules, factories, schema, and routes; integration tests against real MongoDB for service behaviour, checkout version-guard, stock reservation, and schema contracts; contract tests verifying every endpoint against the OpenAPI spec.
+- **HTTP boundary** — `routes.ts` declares the six `/cart` endpoints and their middleware chains (auth, idempotency, cache invalidation). The `controllers/` directory holds one thin adapter per endpoint; none contain business logic.
+- **Service layer** (`services/`) — `items.ts` handles read/mutate operations; `checkout.ts` sequences the order-write-before-cart-clear race guard; `reorder.ts` copies a past order's lines into the current cart; `cleanup.ts` exposes external hooks for user/product deletion; `view.ts` (internal) performs the shared product-join projection. `services/index.ts` is the barrel that exposes a single `cartService` object.
+- **Domain rules** (`domain/`) — Pure, framework-free validation (checkout eligibility, basket weight, shipping gating) that return typed verdicts without any HTTP or i18n coupling.
+- **Persistence** — `model.ts` defines the Mongoose schema (one document per user, unique index on `userId`); `repository.ts` wraps the six write operations and bumps `__v` on every mutation for the checkout version guard.
+- **Module wiring & public API** — `module.ts` registers routes, permissions, GDPR hooks, and domain-event subscriptions with the kernel. `index.ts` is the *only* import surface available to sibling modules, deliberately hiding the repository and model internals.
+- **Observability** — `analytics.ts` and `audit.ts` register event/action names into app-wide TypeScript maps; `metrics.ts` declares the module's Prometheus counters.
+- **Contract & tests** — `openapi.yaml` is the source of truth for client codegen; `probes.ts` lists edge-case requests the spec can't express. The `tests/` tree spans unit (domain rules, schema, factories, retention, routes), integration (service, stock, checkout-version, schema-contract), and contract (API shape vs. OpenAPI) levels.
 
 ## How it connects
 
-- **Products** — The view layer joins cart lines against the product catalogue for pricing and availability; `domain/rules.ts` relies on the caller having already resolved `available` via the products module.
-- **Orders** — Checkout (`services/checkout.ts`) writes a new order through the orders module and then clears the cart. Reorder reads an order's lines to populate the cart. `post-checkout` shapes its success response via `orderService.withActions`.
-- **Users** — The cart is addressed by `userId`. The cleanup service is called by the users module when an account is permanently deleted.
-- **Wishlist** — The "move to cart" path in wishlist reuses the same `cartItemAdd` service function, keeping add-or-replace logic consistent.
-- **Kernel** — `module.ts` registers the cart's routes, permission key, personal-data lifecycle hooks, and domain-event subscription with the application kernel.
-- **Infrastructure** — The repository extends a shared `createRepository` factory; controllers use the shared HTTP adapter layer; the Mongoose model is the persistence mechanism.
-- **Observability** — `analytics.ts` and `audit.ts` register typed event/action names into app-wide maps; `metrics.ts` declares Prometheus counters for the shared registry.
-- **Inventory** — Checkout's stock-reservation flow coordinates with the inventory module to hold units between order creation and payment.
-- **Scripts** — `factories.ts` provides the `makeCart` builder used by seed scripts and test setup.
+- **products** — Every cart read performs a product join to compute line pricing and availability. Domain rules depend on the products module having resolved each line's `available` flag before they evaluate checkout eligibility. Checkout also invalidates the product cache.
+- **orders** — Checkout *writes* a new order (the only cart→orders write). Reorder *reads* a past order's lines to repopulate the cart. This preserves the `cart → orders` dependency direction.
+- **wishlist** — The wishlist module calls the cart service's `cartItemAdd` on its "move to cart" path, so eligibility checks stay consistent across both entry points.
+- **users** — The cart is addressed solely by `userId`. The `cleanup` service is invoked by the users module when an account is permanently deleted.
+- **inventory / payments** — Checkout coordinates stock reservation and payment-method validation before committing the order-write, then clears the cart only on success.
+- **delivery / addresses** — The shipping-method endpoint and checkout pricing depend on the delivery module's rate calculation; address data flows through checkout.
+- **infrastructure / observability** — Controllers sit on the shared Express adapter layer; metrics and audit events are published to the shared registry consumed by the observability module.
 
 ## Where to start
 
-Read `index.ts` first to see exactly what the module exposes to the rest of the application and what it deliberately keeps internal. Then move to `services/items.ts` — it is the most frequently exercised code path (add, update, remove, get) and, once you understand its response envelope and the `upsertLine` pattern, the rest of the service layer and the thin controllers around it become straightforward.
+1. **`routes.ts`** — A single file that shows every endpoint, its auth level, and its middleware chain. Reading it first gives you the full API surface before diving into any controller or service.
+2. **`services/items.ts`** — The core read/write logic (add, set, remove, clear, shipping). It shows how the service layer validates, writes via the repository, joins products, and returns the priced cart view—all without any Express or Mongoose leakage into the domain rules.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_cart["src/modules/cart/"]
-    m_scripts["scripts/<br/>67 files"]
-    m_src["src/<br/>19 files"]
-    m_src_infrastructure["src/infrastructure/<br/>44 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>23 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>19 files"]
-    m_src_kernel["src/kernel/<br/>11 files"]
-    m_src_modules_addresses["src/modules/addresses/<br/>17 files"]
-    m_src_modules_api_keys["src/modules/api-keys/<br/>18 files"]
-    m_src_modules_delivery["src/modules/delivery/<br/>24 files"]
-    m_src_modules_inventory["src/modules/inventory/<br/>25 files"]
-    m_src_modules_observability["src/modules/observability/<br/>30 files"]
-    m_src_modules_orders["src/modules/orders/<br/>65 files"]
-    m_src_modules_orders_services["src/modules/orders/services/<br/>15 files"]
-    m_src_modules_payments["src/modules/payments/<br/>39 files"]
-    m_src_modules_payments_services["src/modules/payments/services/<br/>11 files"]
-    m_src_modules_cart --- m_scripts
+    m_src["src/<br/>48 files"]
+    m_src_infrastructure["src/infrastructure/<br/>58 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
+    m_src_modules_addresses["src/modules/addresses/<br/>21 files"]
+    m_src_modules_api_keys["src/modules/api-keys/<br/>19 files"]
+    m_src_modules_delivery["src/modules/delivery/<br/>27 files"]
+    m_src_modules_inventory["src/modules/inventory/<br/>33 files"]
+    m_src_modules_observability["src/modules/observability/<br/>33 files"]
+    m_src_modules_orders["src/modules/orders/<br/>68 files"]
+    m_src_modules_orders_services["src/modules/orders/services/<br/>14 files"]
+    m_src_modules_payments["src/modules/payments/<br/>56 files"]
+    m_src_modules_products["src/modules/products/<br/>51 files"]
+    m_src_modules_users["src/modules/users/<br/>48 files"]
+    m_src_modules_wishlist["src/modules/wishlist/<br/>23 files"]
     m_src_modules_cart --- m_src
     m_src_modules_cart --- m_src_infrastructure
     m_src_modules_cart --- m_src_infrastructure_adapters
     m_src_modules_cart --- m_src_infrastructure_http
-    m_src_modules_cart --- m_src_kernel
     m_src_modules_cart --- m_src_modules_addresses
     m_src_modules_cart --- m_src_modules_api_keys
     m_src_modules_cart --- m_src_modules_delivery
@@ -79,15 +71,18 @@ flowchart LR
     m_src_modules_cart --- m_src_modules_orders
     m_src_modules_cart --- m_src_modules_orders_services
     m_src_modules_cart --- m_src_modules_payments
-    m_src_modules_cart --- m_src_modules_payments_services
+    m_src_modules_cart --- m_src_modules_products
+    m_src_modules_cart --- m_src_modules_users
+    m_src_modules_cart --- m_src_modules_wishlist
     style m_src_modules_cart stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_kernel|src/kernel/]] · [[boilerplate-node-backend_src_modules_addresses|src/modules/addresses/]] · [[boilerplate-node-backend_src_modules_api-keys|src/modules/api-keys/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_observability|src/modules/observability/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_orders_services|src/modules/orders/services/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · … and 4 more
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_addresses|src/modules/addresses/]] · [[boilerplate-node-backend_src_modules_api-keys|src/modules/api-keys/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_observability|src/modules/observability/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_orders_services|src/modules/orders/services/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]] · … and 1 more
 
 ## Files
 - `src/modules/cart/analytics.ts` — Declares the analytics event names emitted by the cart module and registers them into the application-wide `AnalyticsEventMap` via TypeScript module augmentation. It exists so that event-name strings live alongside the code that emits them, keeping the global catalogue self-documenting and typed.
 - `src/modules/cart/audit.ts` — Declares the audit action names the cart module emits and registers them into the app-wide `AuditActionMap` via TypeScript module augmentation. The actions exist to create an auditable trail of customer-initiated cart mutations (item removal, bulk reorder) that serve as the authoritative record for support disputes about cart contents.
+- `src/modules/cart/config.ts`
 - `src/modules/cart/controllers/delete-cart-all.ts` — Thin HTTP adapter that handles the `DELETE /cart/all` endpoint. It delegates to `cartService.cartRemove` to remove every item from the authenticated user's cart. It lives on a dedicated URL (not `DELETE /cart`) so that a missing or stripped request body can never accidentally trigger a full cart wipe.
 - `src/modules/cart/controllers/delete-cart-item.ts` — Single exported controller that handles both `DELETE /cart/:productId` (canonical) and `DELETE /cart` (alias) by delegating to `cartService.cartItemRemoveById`. It resolves `productId` from whichever surface the route provides, validates it, and returns the updated cart or an appropriate HTTP error.
 - `src/modules/cart/controllers/get-cart-summary.ts` — Thin HTTP controller for the `GET /cart/summary` endpoint. It extracts the authenticated user's ID, delegates to `cartService.cartGetForBadge`, and sends back only the `summary` portion of the result. All business logic lives in the service layer; this file exists solely to bridge the HTTP boundary.

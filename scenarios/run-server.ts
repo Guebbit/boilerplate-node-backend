@@ -23,7 +23,10 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseDotenv } from 'dotenv';
+import { currentEnvironment, installEnvironment } from '@infrastructure/config/store';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
+import { registerDemoClock } from '@infrastructure/runtime/demo-clock';
+import { installDemoClock } from './support/demo-clock';
 import { registerOAuthProvider } from '@modules/account/oauth/providers';
 import { fakeOAuthProvider } from '@modules/account/oauth/providers/fake';
 import { startEphemeralMongo } from './support/ephemeral-mongo';
@@ -64,10 +67,19 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_PII_ENCRYPTION_KEY: 'demo-pii-encryption-key',
     NODE_TOTP_ENCRYPTION_KEY: 'demo-totp-encryption-key',
     NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'demo-webhook-secret-encryption-key',
-    // `orders`' and `products`' own boot-time requirements (SK-08) — `assertRequiredConfig` no
+    // Known, so the paired e2e suite can sign a payment-provider delivery (`POST /payments/webhook`)
+    // itself; the frontend's `paymentWebhookSecret` carries the same value.
+    NODE_PAYMENT_WEBHOOK_SECRET: 'demo-payment-webhook-secret',
+    // `orders`' and `products`' own boot-time requirements (SK-08) — `assertModuleConfig` no
     // longer exempts this profile, so it satisfies the gate the ordinary way, with the same
     // values `.env-example` ships for a plain developer checkout.
     NODE_SHOP_COUNTRY: 'IT',
+    NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
+    NODE_SHOP_STREET: 'Via Roma 1',
+    NODE_SHOP_CITY: 'Milano',
+    NODE_SHOP_ZIP: '20100',
+    NODE_SHOP_EMAIL: 'shop@example.com',
+    NODE_SHOP_PHONE: '+39 02 1234567',
     NODE_VAT_RATE_DEFAULT: '0.22',
     NODE_VAT_RATE_REDUCED: '0.10',
     // `.env`'s own value when it sets one — a lane pointed at non-default frontend ports (to
@@ -150,28 +162,44 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
                     .then(() => process.exit(0));
             });
 
-        for (const [key, value] of Object.entries(REQUIRED_DEFAULTS))
-            process.env[key] = process.env[key]?.trim() ? process.env[key] : value;
-        for (const key of FORCED_ABSENT) process.env[key] = '';
-        process.env.NODE_MAIL_TRANSPORT = FORCED_MAIL_TRANSPORT;
+        // The shell's own value wins, read off the real `process.env` on purpose (a `.env` is not
+        // loaded yet, so this is the shell and nothing else). Written to the config store, which
+        // reads `process.env` once and would never see a later write.
+        installEnvironment({
+            ...Object.fromEntries(
+                Object.entries(REQUIRED_DEFAULTS).map(([key, value]) => [
+                    key,
+                    process.env[key]?.trim() ? process.env[key] : value
+                ])
+            ),
+            ...Object.fromEntries(FORCED_ABSENT.map((key) => [key, ''])),
+            NODE_MAIL_TRANSPORT: FORCED_MAIL_TRANSPORT
+        });
 
         // Always the `demo` database, regardless of source: a stable name is what lets the
         // external-Mongo path (`NODE_TEST_MONGO_URI`) persist across restarts instead of scattering
         // across a freshly named database every boot.
         const databaseUri = new URL(mongo.uri);
         databaseUri.pathname = '/demo';
-        process.env.NODE_DB_URI = databaseUri.href;
+        installEnvironment({ NODE_DB_URI: databaseUri.href });
         // Always derived, never defaulted-when-unset like the block above: a checked-in `.env`'s
         // `NODE_URL` names the SINGLE-instance developer setup (:3000), and this profile's whole
         // point is several instances on several ports (see this file's own module doc) — the
         // OAuth redirect_uri and emailed password-reset/verify links (`emails.ts`) both build off
         // `NODE_URL`, so a stale value here means those links point at the wrong instance instead
         // of this one, on every port but the default.
-        process.env.NODE_URL = `http://localhost:${process.env.NODE_PORT ?? '3000'}/`;
+        installEnvironment({
+            NODE_URL: `http://localhost:${currentEnvironment().NODE_PORT ?? '3000'}/`
+        });
 
         // The only call site in the whole codebase, on purpose: no copied `.env` can mount the
         // control surface on a host that isn't this one.
         enableDemoProfile();
+
+        // The movable clock behind `/__test/clock`. Installed before the app is imported, so every
+        // module sees the fake `Date` from its first read; a time journey moves it, and the next
+        // restore puts it back. See `scenarios/support/demo-clock.ts`.
+        registerDemoClock(installDemoClock());
 
         // This profile's own OAuth identity provider (SK-08) — production's registry seeds none,
         // so a Cypress spec clicking "Continue with Google" needs this profile to put one there
@@ -181,7 +209,7 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
         // Import AFTER the environment is shaped. `createApp()` (SK-D2) builds the app; its own
         // `start()` seeds `shop` (via `restoreScenario`, since `enableDemoProfile()` above turned
         // the demo profile on) before it starts listening.
-        const port = process.env.NODE_PORT ?? '3000';
+        const port = currentEnvironment().NODE_PORT ?? '3000';
         return import('../src/app')
             .then(({ createApp }) => createApp().start())
             .then(() => waitUntilListening(port))

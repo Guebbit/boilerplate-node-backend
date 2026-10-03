@@ -10,7 +10,8 @@
  *
  * The version is `updatedAt`, not Mongoose's `__v`: `__v` moves only when an array changes, so a
  * scalar edit would leave it — and any ETag built on it — untouched. Every `save()` that changes
- * a `timestamps: true` row moves `updatedAt` atomically, and the writes that are NOT an edit
+ * a `timestamps: true` row moves `updatedAt` atomically, an edit that lives outside the row (a
+ * role, a translation) stamps it by hand, and the writes that are NOT an edit
  * (stock mirror, image digest, session tokens) already pass `timestamps: false`, so they never
  * invalidate an editor's copy.
  *
@@ -145,19 +146,33 @@ export const fencedSave = <T>(
 };
 
 /**
- * Checks a document `deleteOne()` against the open precondition. Check only, no fence: Mongoose
- * gives a delete no `$where`, so a hard delete keeps the load-to-delete window a plain one has.
+ * What a document `deleteOne()` resolves to: the driver's count of rows it removed.
+ */
+export interface DeleteOutcome {
+    /** `0` when the fence matched nothing — the row moved, or is already gone. */
+    deletedCount: number;
+}
+
+/**
+ * Checks a document `deleteOne()` against the open precondition, and fences it the way
+ * {@link fencedSave} does: Mongoose applies `Document#$where` to a document delete too (9.9.5,
+ * `Model.prototype.deleteOne`), so a row edited between the load and the delete is not removed.
  *
  * @param document - the hydrated document about to be removed
  * @param write - `document.deleteOne()`
- * @throws {PreconditionFailedError} when the tag no longer matches
+ * @throws {PreconditionFailedError} when the tag no longer matches, or the fence matched nothing
  */
-export const checkedDelete = <T>(
+export const checkedDelete = (
     document: { _id?: unknown; updatedAt?: unknown },
-    write: () => Promise<T>
-): Promise<T> => {
+    write: () => Promise<DeleteOutcome>
+): Promise<void> => {
     const precondition = takePrecondition(document);
-    return precondition && !accepts(precondition, versionOf(document))
-        ? Promise.reject(new PreconditionFailedError())
-        : write();
+    if (!precondition) return write().then(() => undefined);
+    if (!accepts(precondition, versionOf(document)))
+        return Promise.reject(new PreconditionFailedError());
+
+    Object.assign(document, { $where: { updatedAt: document.updatedAt } });
+    return write().then(({ deletedCount }) => {
+        if (deletedCount === 0) throw new PreconditionFailedError();
+    });
 };

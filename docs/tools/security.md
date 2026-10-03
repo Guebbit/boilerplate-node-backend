@@ -181,6 +181,13 @@ credential guard fails the suite rather than production.
 `tests/cross-cutting/api-key-authentication.test.ts` covers the other mount rule instead — that no
 module mounts BOTH identity guards — driving a real credential over the real chain.
 
+**A key's read permissions count.** `products` reads narrow through `callerScope(request.caller)`,
+which a session and a key both set, so a key holding `products.any.read` sees drafts and soft-deleted
+rows exactly as a session with it does, and the response cache bypass follows from the same filter
+(`hasAnonymousReadScope`). A resolved credential never holds fewer keys than a stranger: the public
+baseline is unioned in (`api-keys/services/resolver.ts`), so a key minted for something else still
+reads the published catalogue instead of an empty one.
+
 Two exclusions are decisions, not consequences, and each says so at its mount:
 
 - **`api-keys` itself.** It reads no `authContext` and would qualify mechanically. A credential
@@ -312,12 +319,12 @@ delivered method armed, because a mailed code has an SMTP queue and an app switc
   the `/users` admin surface, deliberately: a mailbox-based reset would make 2FA only as strong as
   the inbox it defends against.
 
-### What is NOT covered
+### OAuth and the second factor
 
-`GET /account/oauth/{provider}/callback` mints a session without consulting `twoFactorEnabledAt`.
-An account with a linked provider therefore has an unchallenged way in, and 2FA on this deployment
-is a control on the password path only — see [OAuth](../modules/account-oauth.md) for that path's
-own defences.
+`GET /account/oauth/{provider}/callback` checks `twoFactorEnabledAt` the way `postLogin` does: an
+account with an armed factor gets the login challenge instead of a session, so 2FA guards every
+way in, not the password path alone. See [OAuth](../modules/account-oauth.md) for that path's own
+defences.
 
 ## The rate-limit budgets
 
@@ -422,6 +429,9 @@ Every budget above, as declared data (`RateLimitBudget` on the owning module's m
 | Password resets — per address block     | `account`        | `NODE_RESET_RATE_LIMIT_BLOCK_MAX`      | 40      | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /64)                                                                                                            | yes     |
 | MFA challenge guesses                   | `account`        | `NODE_MFA_CHALLENGE_MAX`               | 5       | 600000ms                    | the challenge string, hashed (falls back to address block when absent)                                                                        | yes     |
 | MFA code deliveries                     | `account`        | `NODE_MFA_SEND_MAX`                    | 3       | 600000ms                    | the challenge string, hashed (falls back to address block when absent)                                                                        | yes     |
+| MFA code deliveries — per account       | `account`        | `NODE_MFA_ACCOUNT_SEND_MAX`            | 5       | 3600000ms                   | the authenticated account                                                                                                                     | yes     |
+| Two-factor code guesses — per account   | `account`        | `NODE_MFA_ACCOUNT_GUESS_MAX`           | 5       | 3600000ms                   | the authenticated account                                                                                                                     | yes     |
+| Example creation                        | `example`        | `NODE_EXAMPLE_RATE_LIMIT_MAX`          | 30      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account                                                                                                                     | yes     |
 | Contact submissions — per address       | `feedback`       | `NODE_SUBMISSION_RATE_LIMIT_MAX`       | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                                                                                       | yes     |
 | Contact submissions — per email         | `feedback`       | `NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX` | 5       | `NODE_RATE_LIMIT_WINDOW_MS` | the submitted email, normalised and pseudonymised (falls back to address block when absent)                                                   | yes     |
 | Contact submissions — per address block | `feedback`       | `NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX` | 20      | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /64)                                                                                                            | yes     |
@@ -499,6 +509,34 @@ by accident.
 One detail is load-bearing: a term that vanishes under stripping returns **`undefined`**, not an
 empty pattern. `$regex: ''` matches every document, so it would silently turn a filter into
 "everything" — the exact inversion of what the caller asked for.
+
+## One environment switch
+
+`NODE_ENV` has two settings that matter: **development or test** (a developer's machine, CI) and
+**everything else**. Everything else is strict, an unset value and `staging` included. One helper
+says which, `isRelaxedEnvironment()` in `infrastructure/runtime/config.ts`, and every switch
+below reads it. The failure it closes: a safety switch that turned on only for the exact word
+`production` stayed off for a server that forgot to set it.
+
+| Switch                                                           | Strict (a deployment)        | Relaxed (development/test)        |
+| ---------------------------------------------------------------- | ---------------------------- | --------------------------------- |
+| Session and OAuth cookies                                        | `Secure`                     | not `Secure`, so local HTTP works |
+| `scenario:apply` (the seeder)                                    | refuses to run               | runs                              |
+| Presence rules marked production-only, `forbiddenOutsideRelaxed` | checked                      | skipped                           |
+| The demo profile (`/__test` routes)                              | refused, and logged          | mounted when asked                |
+| Stripe `sk_test_` key                                            | refused at boot              | accepted                          |
+| `NODE_MAIL_TRANSPORT=outbox`                                     | refused                      | accepted                          |
+| Webhook demo sink exemption (address check only)                 | none                         | the sink host is exempt           |
+| Stack traces in logs                                             | left out                     | kept                              |
+| Log level, console format                                        | `info`, JSON                 | `debug`, pretty on a terminal     |
+| Cache `max-age`, `autoIndex`                                     | as declared, `autoIndex` off | clamped, Mongoose's default       |
+| Trust-proxy hops of `0`                                          | a boot warning               | silent                            |
+
+A staging server therefore cannot seed demo data or use a Stripe test key. That is intended: a
+switch that must differ gets its own explicit variable, never a relaxed `NODE_ENV`. Standards:
+[OWASP secure by default](https://devguide.owasp.org/en/04-design/02-web-app-checklist/01-secure-by-default/),
+[Node.js: run with `NODE_ENV=production`](https://nodejs.org/en/learn/getting-started/nodejs-the-difference-between-development-and-production),
+[Twelve-Factor config](https://12factor.net/config).
 
 ## `trust proxy`, and the two ways to get it wrong
 

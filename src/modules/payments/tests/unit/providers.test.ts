@@ -18,6 +18,7 @@ import {
     verifyWebhookSignature,
     WebhookRejected
 } from '../../providers/webhook-signature';
+import { resetEnvironment, setEnvironment } from '@tests/environment';
 
 const charge = { amount: 1000, currency: 'eur' };
 const metadata = { orderId: 'order-1', paymentId: 'payment-1' };
@@ -177,10 +178,9 @@ describe('webhook signatures', () => {
     });
 
     it('refuses a signature signed with another secret', () => {
-        const original = process.env.NODE_PAYMENT_WEBHOOK_SECRET;
-        process.env.NODE_PAYMENT_WEBHOOK_SECRET = 'someone-elses-secret';
+        setEnvironment({ NODE_PAYMENT_WEBHOOK_SECRET: 'someone-elses-secret' });
         const forged = signWebhookPayload(body);
-        process.env.NODE_PAYMENT_WEBHOOK_SECRET = original;
+        resetEnvironment();
 
         expect(() => verifyWebhookSignature(body, forged)).toThrow(WebhookRejected);
     });
@@ -255,23 +255,19 @@ const loadResolver = async () => {
 };
 
 describe('resolvePaymentProvider', () => {
-    const originalProvider = process.env.NODE_PAYMENT_PROVIDER;
-
     afterEach(() => {
-        if (originalProvider === undefined) delete process.env.NODE_PAYMENT_PROVIDER;
-        else process.env.NODE_PAYMENT_PROVIDER = originalProvider;
         jest.resetModules();
     });
 
     it('defaults to the fake provider when unset', async () => {
-        delete process.env.NODE_PAYMENT_PROVIDER;
+        setEnvironment({ NODE_PAYMENT_PROVIDER: undefined });
         const resolvePaymentProvider = await loadResolver();
 
         expect(resolvePaymentProvider().name).toBe('fake');
     });
 
     it('honours an explicit known provider', async () => {
-        process.env.NODE_PAYMENT_PROVIDER = 'fake';
+        setEnvironment({ NODE_PAYMENT_PROVIDER: 'fake' });
         const resolvePaymentProvider = await loadResolver();
 
         expect(resolvePaymentProvider().name).toBe('fake');
@@ -280,7 +276,7 @@ describe('resolvePaymentProvider', () => {
     it('refuses a name this build does not have, rather than falling back', async () => {
         // A typo'd variable must not quietly answer `fake`: that marks orders paid that nobody
         // was charged for.
-        process.env.NODE_PAYMENT_PROVIDER = 'stripe';
+        setEnvironment({ NODE_PAYMENT_PROVIDER: 'stripe' });
         const resolvePaymentProvider = await loadResolver();
 
         expect(() => resolvePaymentProvider()).toThrow(/stripe/u);

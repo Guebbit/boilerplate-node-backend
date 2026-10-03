@@ -189,14 +189,28 @@ const updateStatusIfIn = (
  * @param id - the order to move
  * @param from - the status this move must currently be in — see `domain/lifecycle.ts`'s
  *   `statusesLeadingTo`
+ * @param paymentMethod - how it was actually paid, when that is a fact the order should keep
+ *   (a card settling a bank-transfer order); absent leaves the checkout choice as it was
+ * @param session - joins the write to the caller's transaction, so its outbox row rides with it
  * @returns the order as it now stands, or `null` if it was not in `from`
  */
-const markPaid = (id: string, from: OrderStatus): Promise<OrderDocument | null> =>
+const markPaid = (
+    id: string,
+    from: OrderStatus,
+    paymentMethod?: 'card',
+    session?: ClientSession
+): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
             { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
-            { $set: { status: OrderStatus.paid, paidAt: new Date() } },
-            { returnDocument: 'after' }
+            {
+                $set: {
+                    status: OrderStatus.paid,
+                    paidAt: new Date(),
+                    ...(paymentMethod ? { paymentMethod } : {})
+                }
+            },
+            { returnDocument: 'after', session }
         )
         .exec();
 
@@ -208,18 +222,20 @@ const markPaid = (id: string, from: OrderStatus): Promise<OrderDocument | null> 
  * @param id - the order that arrived
  * @param from - the status this move must currently be in
  * @param withdrawUntil - the last instant a withdrawal is valid
+ * @param session - joins the write to the caller's transaction, so its outbox row rides with it
  * @returns the order as it now stands, or `null` if it was not in `from`
  */
 const markDelivered = (
     id: string,
     from: OrderStatus,
-    withdrawUntil: Date
+    withdrawUntil: Date,
+    session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
             { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
             { $set: { status: OrderStatus.delivered, withdrawUntil } },
-            { returnDocument: 'after' }
+            { returnDocument: 'after', session }
         )
         .exec();
 
@@ -269,6 +285,7 @@ const setProjection = (
  * @param entry - the override-history entry to append
  * @param withdrawUntil - the withdrawal deadline to freeze in the same write, for a move into
  *   `delivered`; absent for every other destination
+ * @param session - joins the write to the caller's transaction, so its outbox row rides with it
  * @returns the order as it now stands, or `null` if `id`'s current status was not in `from`
  */
 const applyStatusOverride = (
@@ -276,7 +293,8 @@ const applyStatusOverride = (
     from: readonly OrderStatus[],
     to: OrderStatus,
     entry: OrderStatusOverride,
-    withdrawUntil?: Date
+    withdrawUntil?: Date,
+    session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
@@ -285,7 +303,7 @@ const applyStatusOverride = (
                 $set: { status: to, ...(withdrawUntil ? { withdrawUntil } : {}) },
                 $push: { statusOverrides: entry }
             },
-            { returnDocument: 'after' }
+            { returnDocument: 'after', session }
         )
         .exec();
 
@@ -380,22 +398,26 @@ const countOpenBankTransfers = (userId: string): Promise<number> =>
     });
 
 /**
- * Which of `ids` still name a real order — `scripts/ops/reap-invoices.ts`'s existence check for a stored
- * invoice PDF found on disk with nothing left to serve it: `remove()`'s hard-delete path cleans up
- * its own order's file, but a row removed outside it (a scenario reset's `emptyDatabase()`, a
- * manual drop) leaves the file behind with nothing to name it an orphan except this lookup.
+ * The ids of this account's never-paid orders still open — `pending`, with no `paidAt`. What an
+ * erasure has to cancel, read BEFORE {@link detachUserId} unsets the `userId` that finds them.
  *
- * A malformed id (not what `toObjectId` accepts) is filtered out before this runs — see the
- * reaper's own caller — so every entry here is a well-formed candidate.
- *
- * @param ids - candidate order ids, one per `.pdf` filename on disk
- * @returns the subset of `ids` a document still exists for
+ * @param userId - the account being erased
+ * @param session - the erasure's transaction, so the read sees what the detach will update
+ * @returns the order ids
  */
-const existingIds = (ids: readonly string[]): Promise<Set<string>> =>
+const findOpenUnpaidIdsOf = (userId: string, session?: ClientSession): Promise<string[]> =>
     orderModel
-        .find({ _id: { $in: ids.map((id) => toObjectId(id)) } }, { _id: 1 })
-        .lean()
-        .then((documents) => new Set(documents.map((document) => String(document._id))));
+        .find(
+            {
+                userId: toObjectId(userId),
+                status: OrderStatus.pending,
+                paidAt: { $exists: false }
+            },
+            { _id: 1 },
+            session ? { session } : {}
+        )
+        .exec()
+        .then((orders) => orders.map((order) => String(order._id)));
 
 /**
  * Unset `userId` on every order this account placed, and mark each for
@@ -466,23 +488,48 @@ const detachUserId = (
 /** The scrubbed-in-place values `scrubDueForAnonymization` replaces required PII with. */
 const ANONYMIZED_EMAIL = 'anonymized@deleted.invalid';
 
-/** Same placeholder for `shippingAddress.fullName` and `.street` — both required on the schema. */
+/** Same placeholder for an embedded address's `fullName` and `street` — both required on the schema. */
 const ANONYMIZED_TEXT = 'Anonymized';
+
+/**
+ * Replaces the PII of one embedded address on every due order that carries it.
+ *
+ * @param path - which embedded address to scrub
+ * @param due - the filter selecting the orders whose anonymization is due
+ */
+const scrubEmbeddedAddress = (
+    path: 'shippingAddress' | 'billingAddress',
+    due: { anonymizeAfter: { $lte: Date } }
+): Promise<unknown> =>
+    orderModel
+        .updateMany(
+            { ...due, [path]: { $exists: true } },
+            {
+                $set: {
+                    [`${path}.fullName`]: ANONYMIZED_TEXT,
+                    [`${path}.street`]: ANONYMIZED_TEXT
+                },
+                $unset: { [`${path}.phone`]: 1 }
+            }
+        )
+        .exec();
 
 /**
  * `scripts/ops/reap-orders.ts`'s sweep. Every order whose `anonymizeAfter` has elapsed gets its remaining
  * PII scrubbed.
  *
- * Scrub:      `email` and the required `shippingAddress` fields (`fullName`, `street`) are
- *             REPLACED, since the schema requires them; the optional `shippingAddress.phone` and
- *             the buyer's free-text `notes` are unset outright. City, country, zip, amounts, line
+ * Scrub:      `email` and the required fields (`fullName`, `street`) of BOTH embedded addresses
+ *             (`shippingAddress`, `billingAddress`) are REPLACED, since the schema requires them;
+ *             each address's optional `phone` and the buyer's free-text `notes` are unset outright. City, country, zip, amounts, line
  *             items and dates survive — none of it is personal data once the name and street are
  *             gone.
- * Two writes: an order placed by an account that kept no address book (pickup, or a guest with
- *             none) has no `shippingAddress` at all, and a single `$set` on its sub-fields would
- *             CREATE a partial one — present but missing the required `city`/`zip`/`country`,
- *             which no validator runs on a bulk update to catch. The second write is scoped to
- *             orders that actually have one.
+ * Separate writes: an order can lack either address (a digital-only order has no
+ *             `shippingAddress`, an admin-created one no `billingAddress`), and a single `$set`
+ *             on its sub-fields would CREATE a partial one — present but missing the required
+ *             `city`/`zip`/`country`, which no validator runs on a bulk update to catch. Each
+ *             address gets its own write, scoped to orders that actually have it.
+ * Versioned:  the scrub is an edit, so `updatedAt` moves (no `timestamps: false`) — an open edit
+ *             form holding the old ETag is refused instead of putting the email back.
  * Idempotent: `anonymizeAfter` is unset in the same write, so a later run cannot rescrub an
  *             already-scrubbed row — the sparse index this field carries no longer holds it, so
  *             the next sweep's `$lte` filter cannot match it again.
@@ -493,32 +540,17 @@ const ANONYMIZED_TEXT = 'Anonymized';
 const scrubDueForAnonymization = (cutoff: Date): Promise<number> => {
     const due = { anonymizeAfter: { $lte: cutoff } };
 
-    // Shipping address FIRST, filtered on `due` while `anonymizeAfter` still carries it — the
-    // second write below unsets that field, which would make this filter match nothing run
-    // the other way around.
-    return orderModel
-        .updateMany(
-            { ...due, shippingAddress: { $exists: true } },
-            {
-                $set: {
-                    'shippingAddress.fullName': ANONYMIZED_TEXT,
-                    'shippingAddress.street': ANONYMIZED_TEXT
-                },
-                $unset: { 'shippingAddress.phone': 1 }
-            },
-            { timestamps: false }
-        )
-        .exec()
+    // The addresses FIRST, filtered on `due` while `anonymizeAfter` still carries it — the last
+    // write below unsets that field, which would make these filters match nothing run the other
+    // way around.
+    return scrubEmbeddedAddress('shippingAddress', due)
+        .then(() => scrubEmbeddedAddress('billingAddress', due))
         .then(() =>
             orderModel
-                .updateMany(
-                    due,
-                    {
-                        $set: { email: ANONYMIZED_EMAIL },
-                        $unset: { anonymizeAfter: 1, notes: 1 }
-                    },
-                    { timestamps: false }
-                )
+                .updateMany(due, {
+                    $set: { email: ANONYMIZED_EMAIL },
+                    $unset: { anonymizeAfter: 1, notes: 1 }
+                })
                 .exec()
                 .then(({ modifiedCount }) => modifiedCount)
         );
@@ -572,7 +604,12 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         effects?: readonly OrderPendingEffect[],
         session?: ClientSession
     ) => Promise<OrderDocument | null>;
-    markPaid: (id: string, from: OrderStatus) => Promise<OrderDocument | null>;
+    markPaid: (
+        id: string,
+        from: OrderStatus,
+        paymentMethod?: 'card',
+        session?: ClientSession
+    ) => Promise<OrderDocument | null>;
     setProjection: (
         id: string,
         fields: { paymentStatus?: string | undefined; returnStatus?: string | undefined }
@@ -580,21 +617,23 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     markDelivered: (
         id: string,
         from: OrderStatus,
-        withdrawUntil: Date
+        withdrawUntil: Date,
+        session?: ClientSession
     ) => Promise<OrderDocument | null>;
     applyStatusOverride: (
         id: string,
         from: readonly OrderStatus[],
         to: OrderStatus,
         entry: OrderStatusOverride,
-        withdrawUntil?: Date
+        withdrawUntil?: Date,
+        session?: ClientSession
     ) => Promise<OrderDocument | null>;
     findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
     findPendingByProductId: (productId: string) => Promise<OrderDocument[]>;
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
     addPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<void>;
     countOpenBankTransfers: (userId: string) => Promise<number>;
-    existingIds: (ids: readonly string[]) => Promise<Set<string>>;
+    findOpenUnpaidIdsOf: (userId: string, session?: ClientSession) => Promise<string[]>;
     detachUserId: (
         userId: string,
         retentionDays: number,
@@ -618,7 +657,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     clearPendingEffect,
     addPendingEffect,
     countOpenBankTransfers,
-    existingIds,
+    findOpenUnpaidIdsOf,
     detachUserId,
     scrubDueForAnonymization,
     incrementOrderNumberCounter

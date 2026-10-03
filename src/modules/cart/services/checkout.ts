@@ -20,19 +20,12 @@ import {
     placeOrder,
     sendOrderPlacedEmail,
     retractOrder,
-    sumLineItems,
-    isShippedItem,
     type OrderDocument
 } from '@modules/orders';
 import { availableStock } from '@modules/products';
 import { userService } from '@modules/users';
 import { addressForCheckout, type AddressItem } from '@modules/addresses';
-import {
-    findShippingMethod,
-    methodFitsWeight,
-    priceShipping,
-    type StaticShippingMethod
-} from '@modules/delivery';
+import { findShippingMethod, type StaticShippingMethod } from '@modules/delivery';
 import { paymentService, type PaymentMethodInfo } from '@modules/payments';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -40,20 +33,26 @@ import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
 import {
     evaluateCheckout,
-    basketWeight,
-    needsShipping,
     evaluateShippingRequirement,
+    needsShipping,
     type CheckoutShortfall,
     type UnavailableCartLine
 } from '../domain';
-import { isJoined, readCartLines } from './view';
+import {
+    effectiveShippingChoice,
+    isJoined,
+    readCartLines,
+    shippingOptionsFor,
+    shippingPriceFor
+} from './view';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
- * The snapshot an order embeds, from a book entry: the shipment's fields, none of the book's.
- * Spelled field by field so the entry's `_id`/`default` cannot ride along into the order.
+ * The snapshot an order embeds, from a book entry — as its shipping or its billing address: the
+ * address's fields, none of the book's. Spelled field by field so the entry's `_id`/`default`
+ * cannot ride along into the order.
  */
-const toShippingAddress = (address: AddressItem) => ({
+const toOrderAddress = (address: AddressItem) => ({
     fullName: address.fullName,
     street: address.street,
     city: address.city,
@@ -61,6 +60,22 @@ const toShippingAddress = (address: AddressItem) => ({
     country: address.country,
     ...(address.phone === undefined ? {} : { phone: address.phone })
 });
+
+/**
+ * What the buyer chose in the checkout request, every field optional.
+ *
+ * - `addressId`: the book entry to ship to; omitted means the default entry.
+ * - `billingAddressId`: the book entry to invoice; omitted means "same as shipping", or the
+ *   default entry when nothing ships to an address.
+ * - `paymentMethod`: a method id from `GET /payments/methods`; omitted means `card`.
+ * - `notes`: free text left for the order.
+ */
+export interface CheckoutChoices {
+    addressId?: string;
+    billingAddressId?: string;
+    paymentMethod?: string;
+    notes?: string;
+}
 
 /** Either half of a pre-flight step: what {@link runCheckout} needs to proceed, or why not. */
 type PreflightOutcome<T> = ({ ok: true } & T) | { ok: false; reject: ResponseReject };
@@ -121,9 +136,10 @@ const resolvePaymentMethod = async (
  * shipping cost and whether the method fits are {@link evaluateShippingRequirement}'s call, made
  * later once the joined lines are known.
  *
- * pickup:  a method whose `requiresAddress` is false never resolves an address at all, not even
- *          the caller's default — `addressForCheckout(userId, undefined)` would silently hand
- *          one back, and the order would freeze a shipping address nobody ships to.
+ * Nothing ships to an address: an all-digital basket, or a method whose `requiresAddress` is
+ *          false (pickup). No shipping address is resolved at all — not even the caller's
+ *          default — so the order never freezes one nobody ships to (billing has its own,
+ *          {@link resolveBilling}).
  * Refused: an explicit `addressId` sent anyway is refused (409), not quietly dropped — a value
  *          that cannot apply here is a state conflict, the same status
  *          `CART_SHIPPING_NOT_APPLICABLE` already answers for a method named for an all-digital
@@ -133,11 +149,13 @@ const resolvePaymentMethod = async (
  * @param addressId - the shipping address's entry id, or `undefined` for the default/no address
  * @param shippingMethodId - the cart's chosen shipping method id (`PUT /cart/shipping-method`),
  * or `undefined` for none
+ * @param basketShips - whether any line of the basket needs shipping
  */
 const resolveShipping = async (
     userId: string,
     addressId: string | undefined,
-    shippingMethodId: string | undefined
+    shippingMethodId: string | undefined,
+    basketShips: boolean
 ): Promise<
     PreflightOutcome<{
         shippingMethod: StaticShippingMethod | undefined;
@@ -157,7 +175,11 @@ const resolveShipping = async (
             ])
         };
 
-    if (shippingMethod && !shippingMethod.requiresAddress) {
+    // A physical basket with no method is refused later as `CART_SHIPPING_METHOD_REQUIRED`;
+    // until then there is simply no address to resolve.
+    if (!shippingMethod && basketShips) return { ok: true, shippingMethod, address: undefined };
+
+    if (!shippingMethod?.requiresAddress) {
         if (addressId !== undefined)
             return {
                 ok: false,
@@ -183,14 +205,10 @@ const resolveShipping = async (
             ])
         };
 
-    /*
-     * Only once a method that actually `requiresAddress` resolved one — a digital-only basket
-     * with no method chosen may still resolve the caller's default address (it rides on the
-     * order unused), and that must never block on where the shopper happens to live. No default
-     * address on file leaves `address` `undefined` here too; `evaluateShippingRequirement` further
-     * down is what refuses THAT case (`CART_ADDRESS_REQUIRED`).
-     */
-    if (shippingMethod && address && !shipToCountries().includes(address.country))
+    // No default address on file leaves `address` `undefined` here;
+    // `evaluateShippingRequirement` further down is what refuses THAT case
+    // (`CART_ADDRESS_REQUIRED`).
+    if (address && !shipToCountries().includes(address.country))
         return {
             ok: false,
             reject: generateReject(422, [
@@ -202,6 +220,51 @@ const resolveShipping = async (
         };
 
     return { ok: true, shippingMethod, address };
+};
+
+/**
+ * Which address the order is invoiced to — every checkout order carries one (the invoice prints
+ * it as the buyer's, EU VAT Directive Art. 226), so this refuses when none can be found.
+ *
+ * Named:   the book entry `billingAddressId` points at (404 when it is not the caller's).
+ * Same:    none named and a shipping address resolved — "same as shipping", the default choice.
+ * Default: none named and nothing ships to an address — the book's default entry.
+ * Refused: none of those — 422 `CART_BILLING_ADDRESS_REQUIRED`.
+ *
+ * @param userId - the caller's id, whose address book `billingAddressId` is looked up against
+ * @param billingAddressId - the billing entry's id, or `undefined` for "same as shipping"/default
+ * @param shippingAddress - the resolved shipping address, or `undefined` when nothing ships to one
+ */
+const resolveBilling = async (
+    userId: string,
+    billingAddressId: string | undefined,
+    shippingAddress: AddressItem | undefined
+): Promise<PreflightOutcome<{ billingAddress: AddressItem }>> => {
+    if (billingAddressId === undefined && shippingAddress)
+        return { ok: true, billingAddress: shippingAddress };
+
+    const billingAddress = await addressForCheckout(userId, billingAddressId);
+    if (billingAddress === null)
+        return {
+            ok: false,
+            reject: generateReject(404, [
+                {
+                    code: ERROR_CODES.CART_ADDRESS_NOT_FOUND,
+                    message: t('cart.address-not-found')
+                }
+            ])
+        };
+    if (billingAddress === undefined)
+        return {
+            ok: false,
+            reject: generateReject(422, [
+                {
+                    code: ERROR_CODES.CART_BILLING_ADDRESS_REQUIRED,
+                    message: t('cart.billing-address-required')
+                }
+            ])
+        };
+    return { ok: true, billingAddress };
 };
 
 /**
@@ -253,15 +316,11 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
  * `clearLinesIfUnchanged` documents why this is a conditional write, not a transaction.
  *
  * @param userId - the caller's id
- * @param addressId - the shipping address's entry id, or `undefined` for the default/no address
- * @param paymentMethod - the chosen payment method's id, or `undefined` for `card`
- * @param notes - free-text notes the buyer left at checkout, or `undefined` for none
+ * @param choices - what the buyer chose in the request body; see {@link CheckoutChoices}
  */
 const runCheckout = async (
     userId: string,
-    addressId: string | undefined,
-    paymentMethod: string | undefined,
-    notes: string | undefined
+    { addressId, billingAddressId, paymentMethod, notes }: CheckoutChoices
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     const user = await userService.getById(userId);
     if (!user) return generateReject(404, []);
@@ -283,13 +342,24 @@ const runCheckout = async (
     // products are being resolved invalidates this checkout rather than being missed.
     const version = cart?.__v ?? 0;
 
+    const lines = await readCartLines(cart);
+    const joined = lines.filter((line) => isJoined(line));
+
     // The cart's own choice (`PUT /cart/shipping-method`), read here rather than from the
-    // request — see this module's `openapi.yaml` `CheckoutRequest` description.
-    const shippingResolution = await resolveShipping(userId, addressId, cart?.shippingMethodId);
+    // request — see this module's `openapi.yaml` `CheckoutRequest` description. A stored choice the
+    // basket no longer fits counts as none, exactly as the cart's own view reads it.
+    const chosenMethodId = effectiveShippingChoice(
+        cart?.shippingMethodId,
+        shippingOptionsFor(joined).options
+    );
+    const shippingResolution = await resolveShipping(
+        userId,
+        addressId,
+        chosenMethodId ?? undefined,
+        needsShipping(joined)
+    );
     if (!shippingResolution.ok) return shippingResolution.reject;
     const { shippingMethod, address } = shippingResolution;
-
-    const lines = await readCartLines(cart);
 
     /*
      * The rule is in `../domain`; what a refusal looks like on the wire is here.
@@ -325,21 +395,6 @@ const runCheckout = async (
         return buildStockRefusal({ type: 'unavailable', status: 404, lines: verdict.lines });
     }
 
-    const joined = lines.filter((line) => isJoined(line));
-
-    /*
-     * A method was named, but nothing in the basket needs one — every line is a digital good
-     * (`requiresShipping: false`). Refused rather than silently ignored: a client that thinks it
-     * is paying for shipping on a purchase that never ships should not proceed uncorrected.
-     */
-    if (shippingMethod && !needsShipping(joined))
-        return generateReject(409, [
-            {
-                code: ERROR_CODES.CART_SHIPPING_NOT_APPLICABLE,
-                message: t('cart.shipping-not-applicable')
-            }
-        ]);
-
     /*
      * The rest of the rule, once shipping applicability itself is settled above: a physical
      * basket names a method, and — only when that method demands it — an address. A
@@ -360,18 +415,11 @@ const runCheckout = async (
                 : { code: ERROR_CODES.CART_ADDRESS_REQUIRED, message: t('cart.address-required') }
         ]);
 
-    /*
-     * Enforced here, not just at `GET /delivery/methods`: that list is advisory (it filters by
-     * whatever weight the CLIENT last computed), so the basket's real weight — joined
-     * server-side, right now — is what actually decides whether the chosen method may carry it.
-     */
-    if (shippingMethod && !methodFitsWeight(shippingMethod, basketWeight(joined)))
-        return generateReject(409, [
-            {
-                code: ERROR_CODES.CART_SHIPPING_METHOD_WEIGHT,
-                message: t('cart.shipping-method-weight')
-            }
-        ]);
+    // After the shipping requirement, so a physical basket short of a method or an address is
+    // told that first; only then does the invoice's own address get resolved.
+    const billingResolution = await resolveBilling(userId, billingAddressId, address);
+    if (!billingResolution.ok) return billingResolution.reject;
+    const { billingAddress } = billingResolution;
 
     /*
      * `bank_transfer`'s hold is `methodInfo.holdHours`, converted to the unit
@@ -399,25 +447,18 @@ const runCheckout = async (
             product: line.product
         })),
         paymentMethod: requestedMethod,
+        billingAddress: toOrderAddress(billingAddress),
         shipping: {
-            ...(address ? { address: toShippingAddress(address) } : {}),
+            ...(address ? { address: toOrderAddress(address) } : {}),
             ...(shippingMethod
                 ? {
                       method: {
                           id: shippingMethod.id,
-                          // The threshold prices only what ships — a digital line's price
-                          // shouldn't count toward "spend enough for free shipping" when it never
-                          // needed shipping to begin with.
                           // The shop's CURRENT currency, not a frozen one — this runs as `placeOrder`
-                          // is still deciding what to freeze onto the new order.
+                          // is still deciding what to freeze onto the new order. Every line counts
+                          // toward the free-shipping line, as the cart's own quote counts it.
                           priceFor: (frozenLines) =>
-                              priceShipping(
-                                  shippingMethod,
-                                  sumLineItems(
-                                      frozenLines.filter((line) => isShippedItem(line)),
-                                      shopCurrency()
-                                  ).price
-                              )
+                              shippingPriceFor(shippingMethod, frozenLines, shopCurrency())
                       }
                   }
                 : {}),
@@ -454,11 +495,9 @@ const runCheckout = async (
 export const orderConfirm = (
     userId: string,
     context: CallerContext,
-    addressId?: string,
-    paymentMethod?: string,
-    notes?: string
+    choices: CheckoutChoices = {}
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
-    runCheckout(userId, addressId, paymentMethod, notes)
+    runCheckout(userId, choices)
         .catch((error: unknown) => rejectDatabaseEnvelope('cart', error))
         .then((result) => {
             /*

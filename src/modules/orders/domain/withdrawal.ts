@@ -37,12 +37,28 @@ export const isBeforeDispatch = (status: OrderStatus): boolean =>
 
 /**
  * When the withdrawal window closes, counted from the moment its clock starts.
+ *
+ * Calendar days, as CRD recital 41 → Regulation 1182/71 Art. 3(1) and 3(2)(c) count them:
+ *
+ * - the day the event happens is not counted;
+ * - the period ends with the last hour of its last day, not `days × 24 h` after the event.
+ *
+ * Days are UTC days. Weekend and public-holiday roll-over (Art. 3(4)) is not computed: the
+ * period's minimum (`orders/config.ts`) always outlasts it.
+ * See docs/modules/orders.md#the-withdrawal-window
+ *
  * @param start - delivery for goods, or the conclusion of the contract for digital content
- * @param days - the withdrawal period (14 by law; a deployment may offer longer)
+ * @param days - the withdrawal period (14 by law, 21 at least here, 30 by default)
  * @returns the last instant a withdrawal is still valid
  */
-export const withdrawUntilFrom = (start: Date, days: number): Date =>
-    new Date(start.getTime() + days * DAY_MS);
+export const withdrawUntilFrom = (start: Date, days: number): Date => {
+    const startOfEventDay = Date.UTC(
+        start.getUTCFullYear(),
+        start.getUTCMonth(),
+        start.getUTCDate()
+    );
+    return new Date(startOfEventDay + (days + 1) * DAY_MS - 1);
+};
 
 /** The one fact about a line that decides whether the right of withdrawal reaches it. */
 export interface WithdrawableLine {

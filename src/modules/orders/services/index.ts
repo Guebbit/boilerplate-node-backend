@@ -3,30 +3,20 @@
  * Order service — all business logic for the Order entity, and the one place a controller may call
  * into. A folder rather than one file because it passed ~300 lines; see `docs/theory/layers.md`.
  *
- * `place.ts` is the one function that writes a new order; `crud.ts` reads and amends one, and
- * `retract.ts` undoes a write `place.ts` or checkout could not keep; `notify.ts` sends the
+ * `place.ts` is the one function that writes a new order; `read.ts`, `crud.ts` and `remove.ts`
+ * read, amend and delete one, and `retract.ts` undoes a write `place.ts` or checkout could not keep; `notify.ts` sends the
  * placed-order email. `cancel.ts` runs the cancellation and the sweep behind its marker,
  * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
  * `availability.ts` answers whether a line is still sellable and cancels an order that no longer
  * is.
  */
 
-import {
-    search,
-    getById,
-    create,
-    countOpenBankTransfers,
-    getByTransferReference,
-    recordCreated,
-    update,
-    updateById,
-    remove,
-    removeById,
-    restoreById
-} from './crud';
+import { search, getById, countOpenBankTransfers, getByTransferReference } from './read';
+import { create, recordCreated, update, updateById } from './crud';
+import { remove, removeById, restoreById } from './remove';
 import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
-import { detachUserId, anonymizeDueOrders } from './retention';
+import { detachUserId, eraseUserOrders, anonymizeDueOrders } from './retention';
 import { callerScope, ownerScope, withActions } from './scope';
 import { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
 import {
@@ -50,18 +40,13 @@ import { unavailableLines } from './availability';
 export {
     search,
     getById,
-    create,
     countOpenBankTransfers,
     getByTransferReference,
-    recordCreated,
-    update,
-    updateById,
-    remove,
-    removeById,
-    restoreById,
     ownOrderIds,
     findOwnOrders
-} from './crud';
+} from './read';
+export { create, recordCreated, update, updateById } from './crud';
+export { remove, removeById, restoreById } from './remove';
 export { retractOrder } from './retract';
 export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
 export { sendOrderPlacedEmail, mailBuyer } from './notify';
@@ -76,14 +61,14 @@ export {
     markReturnStatus
 } from './status';
 export { overrideStatus, forceMove, isForceMoveRefusal } from './override';
-export { detachUserId, anonymizeDueOrders } from './retention';
+export { detachUserId, eraseUserOrders, anonymizeDueOrders } from './retention';
 export { callerScope, actorOf, ownerScope, withActions } from './scope';
 export { unavailableLines, cancelPendingOrdersHolding, type UnavailableLine } from './availability';
 export { freezeOrderLines } from './snapshot';
 export { allocateOrderNumber } from './order-numbering';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.
-// `shopCountry` is here for `invoicing`'s own seller-address block — see `docs/modules/invoicing.md`.
+// The shop's identity and return address are read by `invoicing`, `delivery` and `returns` from here.
 export {
     bankTransferBeneficiary,
     bankTransferBic,
@@ -95,8 +80,14 @@ export {
     shopCurrency,
     orderCurrency,
     shopCountry,
-    shipToCountries
+    shopIdentity,
+    withdrawalPeriodDays,
+    shipToCountries,
+    returnAddress,
+    returnPostagePayer,
+    RETURN_POSTAGE_PAYERS
 } from '../config';
+export type { ShopIdentity, ReturnAddress, ReturnPostagePayer } from '../config';
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const orderService = {
@@ -126,6 +117,7 @@ export const orderService = {
     overrideStatus,
     forceMove,
     detachUserId,
+    eraseUserOrders,
     anonymizeDueOrders,
     cancelById,
     retryPendingEffects,

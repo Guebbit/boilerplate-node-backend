@@ -67,6 +67,17 @@ describe('product routes — what is mounted', () => {
     });
 });
 
+describe('product routes — the product page and its stock count', () => {
+    it('GET /:id makes the browser revalidate, so a stock change is not hidden for an hour', () => {
+        // The page shows `available`, which a stock write changes. A server-side clear cannot
+        // reach a copy already in a browser, so the browser must check first (a 304 when equal).
+        expect(optionsOf(chainOf(router, 'GET /:id'), 'setCache')).toMatchObject({
+            tags: [TAG],
+            browserRevalidate: true
+        });
+    });
+});
+
 describe('product routes — authorization', () => {
     /** Everything that changes catalogue state, plus the admin-only all-languages read. */
     const GUARDED = [

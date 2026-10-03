@@ -12,6 +12,7 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { withEnvironment, withoutEnvironment } from '@tests/environment';
+import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
@@ -19,9 +20,13 @@ import { MISSING_ID } from '@tests/ids';
 
 setupTestDb();
 
-/** Logs a user in and puts one product in their cart, returning both. */
+/**
+ * Logs a user in and puts one product in their cart, returning both. The account keeps one
+ * address, since every checkout order carries a billing address.
+ */
 const authenticateWithCart = async (quantity = 2) => {
-    const { bearer } = await authenticateAs('user');
+    const { bearer, user } = await authenticateAs('user');
+    await giveAddress(user.id);
     const product = await createProduct();
     const response = await api()
         .post('/cart')
@@ -520,14 +525,15 @@ describe('POST /cart/checkout', () => {
 
     it('a pickup method needing no address is never blocked by the shopper own country', async () => {
         const { bearer } = await authenticateWithCart();
-        // The caller's only (default) address is outside the ship-to list — irrelevant to pickup,
-        // which resolves no address at all.
+        // The caller's default address is outside the ship-to list — irrelevant to pickup, which
+        // resolves no shipping address at all, and to billing, which the list does not bind.
         await api().post('/account/addresses').set('Authorization', bearer).send({
             fullName: 'Ada Lovelace',
             street: '1 Kings Road',
             city: 'London',
             zip: 'SW1A 1AA',
-            country: 'GB'
+            country: 'GB',
+            default: true
         });
 
         await api()
@@ -537,6 +543,57 @@ describe('POST /cart/checkout', () => {
         const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
         expect(response.status).toBe(201);
+    });
+
+    // The order answers both addresses: billing on every checkout order, shipping only when a
+    // line ships to an address.
+    it('answers a billingAddress on a pickup order and no shippingAddress', async () => {
+        const { bearer } = await authenticateWithCart();
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
+        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+
+        expect(response.status).toBe(201);
+        expect(response.body.data.billingAddress).toMatchObject({ street: 'Via Roma 1' });
+        expect(response.body.data.shippingAddress).toBeUndefined();
+    });
+
+    it('bills the address named by billingAddressId and ships to the default', async () => {
+        const { bearer } = await authenticateWithCart();
+        const office = await api().post('/account/addresses').set('Authorization', bearer).send({
+            fullName: 'Ada Lovelace',
+            street: 'Via Milano 2',
+            city: 'Modena',
+            zip: '41122',
+            country: 'IT'
+        });
+        await api()
+            .put('/cart/shipping-method')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'standard' });
+        const response = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .send({ billingAddressId: office.body.data.id as string });
+
+        expect(response.status).toBe(201);
+        expect(response.body.data.shippingAddress.street).toBe('Via Roma 1');
+        expect(response.body.data.billingAddress.street).toBe('Via Milano 2');
+    });
+
+    it('matches the error contract for a checkout with no billing address to use', async () => {
+        const { bearer } = await authenticateAs('user');
+        const digital = await createProduct({ requiresShipping: false });
+        await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(digital._id), quantity: 1 });
+        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].code).toBe('CART_BILLING_ADDRESS_REQUIRED');
     });
 
     it('empties the cart on success', async () => {
@@ -588,7 +645,7 @@ describe('POST /cart/checkout', () => {
     });
 
     it('matches the error contract for an unoffered payment method', () =>
-        // Explicitly unset: `tests/support/setup.ts` configures transfer for the whole worker, so
+        // Explicitly unset: `tests/support/setup-environment.ts` configures transfer for the whole worker, so
         // "this deployment offers no transfer" is a state this case has to create.
         withoutEnvironment(
             ['NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],

@@ -1,0 +1,18 @@
+{
+    "example": {
+        "created": "Esempio creato.",
+        "updated": "Esempio aggiornato.",
+        "deleted": "Esempio eliminato.",
+        "cover-changed": "Immagine di copertina aggiornata.",
+        "not-found": "Esempio non trovato.",
+        "owner-unknown": "Proprietario sconosciuto",
+        "cover-missing": "Invia l'immagine nel campo imageUpload.",
+        "error-transition": "Un esempio non può passare da {{from}} a {{to}}.",
+        "error-body-too-long": "Il testo può avere al massimo {{maximum}} caratteri.",
+        "email-published": {
+            "subject": "Il tuo esempio è pubblicato: {{title}}",
+            "greeting": "Ciao, {{name}}!",
+            "body": "\"{{title}}\" ora è pubblico. Chiunque può leggerlo."
+        }
+    }
+}

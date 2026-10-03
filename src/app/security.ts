@@ -19,7 +19,9 @@ import cookieParser from 'cookie-parser';
 import { rateLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { requireDeclaredContentType } from '@infrastructure/http/middlewares/content-type';
 import { REQUEST_CONTENT_TYPES } from '@api/request-content-types';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
+import { siteConfig } from '@infrastructure/http/config';
+import { appConfig } from './config';
 import { logger } from '@infrastructure/adapters/logger';
 import { enabledModules } from '../modules';
 
@@ -28,7 +30,7 @@ import { enabledModules } from '../modules';
  * implicit one nobody reading this file would find. Explicit and
  * configurable, same shape as `NODE_MAX_UPLOAD_BYTES` for multipart bodies.
  */
-const JSON_BODY_LIMIT = process.env.NODE_JSON_BODY_LIMIT ?? '100kb';
+const JSON_BODY_LIMIT = appConfig().NODE_JSON_BODY_LIMIT;
 
 /**
  * Every path whose body must survive parsing verbatim, composed from each module's own declaration.
@@ -56,10 +58,9 @@ const isRawBodyPath = (url: string): boolean =>
  * empty origin to the set.
  */
 const allowedOrigins = new Set(
-    (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:8080')
-        .split(',')
-        .map((originValue) => originValue.trim())
-        .filter(Boolean)
+    siteConfig().NODE_CORS_ORIGIN.length > 0
+        ? siteConfig().NODE_CORS_ORIGIN
+        : ['http://localhost:8080']
 );
 
 /**
@@ -81,14 +82,14 @@ export const applyServerTimeouts = (server: Server): void => {
      * them. Measured from the request's FIRST BYTE, not from when the socket opened, so this may
      * safely sit below `keepAliveTimeout` — an idle keep-alive socket is not affected.
      */
-    server.headersTimeout = environmentNumber('NODE_HTTP_HEADERS_TIMEOUT_MS', 15_000, 1);
+    server.headersTimeout = appConfig().NODE_HTTP_HEADERS_TIMEOUT_MS;
 
     /*
      * The whole request, headers and body. Generous rather than tight because it is also the
      * ceiling on a legitimate upload: `NODE_MAX_UPLOAD_BYTES` (5 MB) over a poor mobile link needs
      * most of this, and the endpoint answering 408 mid-upload is worse than the connection cost.
      */
-    server.requestTimeout = environmentNumber('NODE_HTTP_REQUEST_TIMEOUT_MS', 120_000, 1);
+    server.requestTimeout = appConfig().NODE_HTTP_REQUEST_TIMEOUT_MS;
 
     /*
      * Node's own 5s default, exposed rather than changed. RAISE it above the idle timeout of
@@ -98,7 +99,7 @@ export const applyServerTimeouts = (server: Server): void => {
      *
      * See: docs/tools/security.md
      */
-    server.keepAliveTimeout = environmentNumber('NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS', 5000, 1);
+    server.keepAliveTimeout = appConfig().NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS;
 };
 
 /**
@@ -117,7 +118,7 @@ export const installSecurity = (app: Express): void => {
      *
      * See: docs/tools/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong
      */
-    const trustProxyHops = environmentNumber('NODE_TRUST_PROXY_HOPS', 0, 0);
+    const trustProxyHops = appConfig().NODE_TRUST_PROXY_HOPS;
     app.set('trust proxy', trustProxyHops);
 
     /*
@@ -127,11 +128,11 @@ export const installSecurity = (app: Express): void => {
      * limiter, and the warning below reads the same either way — nothing here can tell which one
      * this deployment is.
      */
-    if (trustProxyHops === 0 && process.env.NODE_ENV === 'production')
+    if (trustProxyHops === 0 && !isRelaxedEnvironment())
         // Stryker disable all
         logger.warn({
             message:
-                'NODE_TRUST_PROXY_HOPS=0 in production. Correct only if this API is reached directly, with no reverse proxy in front of it — otherwise the rate limiter is bucketing every caller together.'
+                'NODE_TRUST_PROXY_HOPS=0 outside development/test. Correct only if this API is reached directly, with no reverse proxy in front of it — otherwise the rate limiter is bucketing every caller together.'
         });
     // Stryker restore all
 

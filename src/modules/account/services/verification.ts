@@ -10,7 +10,7 @@
  */
 
 import { t } from '@infrastructure/i18n';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { accountConfig } from '../config';
 import { userService, TokenType, type UserDocument } from '@modules/users';
 import { tokenAdd } from './authentication';
 import { verifyRequestEmail, recipientLocale } from '../emails';
@@ -47,19 +47,12 @@ export const EMAIL_VERIFY_TOKEN_TYPE = 'verify';
  */
 export const EMAIL_CHANGE_TOKEN_TYPE = 'email-change';
 
-/** Fallback for `NODE_EMAIL_VERIFY_TTL_MS`: 24 hours, in milliseconds. */
-const DEFAULT_EMAIL_VERIFY_TTL_MS = 86_400_000;
-
 /**
  * How long a verification link works, shared by both token kinds. Tunable because the safe
  * direction is SHORTER, and how long an unclaimed mailbox stays trustworthy is a deployment's
  * call, not this file's.
  */
-const EMAIL_VERIFY_TOKEN_TTL_MS = environmentNumber(
-    'NODE_EMAIL_VERIFY_TTL_MS',
-    DEFAULT_EMAIL_VERIFY_TTL_MS,
-    1
-);
+const EMAIL_VERIFY_TOKEN_TTL_MS = accountConfig().NODE_EMAIL_VERIFY_TTL_MS;
 
 /**
  * Seconds between two verification emails for one account — what the client counts down before
@@ -147,17 +140,22 @@ export const requestEmailVerification = (
     });
 
 /**
- * Seconds still to wait before this account may ask for another verification email, or 0.
+ * Seconds still to wait before this account may ask for another verification email of `type`, or 0.
  *
  * The anchor is the live token's own `sentAt` — `sendVerificationEmail` removes every token of
  * the kind before adding one, so there is exactly one and it was minted by the last send.
  *
  * @param user - the account, carrying its credential fields
+ * @param type - which kind of token (and so which button) is asking
  * @returns seconds to wait, or 0 when a send may go ahead
  */
-const resendCooldownRemaining = (user: UserDocument, now: Date = new Date()): number =>
+const resendCooldownRemaining = (
+    user: UserDocument,
+    type: VerificationTokenType,
+    now: Date = new Date()
+): number =>
     cooldownRemaining(
-        user.tokens.find(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE)?.sentAt,
+        user.tokens.find((token) => token.type === type)?.sentAt,
         VERIFY_RESEND_SECONDS,
         now
     );
@@ -183,7 +181,7 @@ export const requestEmailVerificationFor = (
         if (!user) return generateReject(404, [t('users.not-found')]);
         if (user.verifiedAt) return generateReject(409, [t('account.verify.already-verified')]);
 
-        const wait = resendCooldownRemaining(user);
+        const wait = resendCooldownRemaining(user, EMAIL_VERIFY_TOKEN_TYPE);
         if (wait > 0)
             return resendTooSoon(
                 VERIFY_RESEND_TOO_SOON_CODE,
@@ -198,6 +196,55 @@ export const requestEmailVerificationFor = (
                 t('account.verify.email-sent')
             )
         );
+    });
+
+/**
+ * `POST /account/pending-email/resend` end to end: mails the NEW (pending) address a fresh link and
+ * nothing else — the old address was told once, when the change was requested, and hearing it
+ * again reads like a takeover alert. A no-op (`resendAfter` 0, nothing sent, nothing audited) when
+ * no change is pending, so a client need not read the profile first.
+ *
+ * Same cooldown and the same per-account budget as {@link requestEmailVerificationFor}, anchored on
+ * the `email-change` token, since that is the one the last send minted. `sendVerificationEmail`
+ * revokes the previous link, so only the newest one ever confirms.
+ *
+ * @param userId - the caller's own account
+ * @param context - caller context, for the mail's locale fallback and the audit record
+ */
+export const resendPendingEmailVerificationFor = (
+    userId: string,
+    context: CallerContext
+): Promise<ResponseSuccess<EmailVerificationRequested> | ResponseReject> =>
+    // Credentials included: issuing the token pushes onto this document's `tokens`.
+    userService.findByIdWithCredentials(userId).then((user) => {
+        // A valid token for a since-deleted account is unauthenticated, as on `PUT /account`.
+        if (!user) return generateReject(401, []);
+        if (!user.pendingEmail)
+            return generateSuccess<EmailVerificationRequested>(
+                { resendAfter: 0 },
+                200,
+                t('account.email-change.nothing-pending')
+            );
+
+        const wait = resendCooldownRemaining(user, EMAIL_CHANGE_TOKEN_TYPE);
+        if (wait > 0)
+            return resendTooSoon(
+                VERIFY_RESEND_TOO_SOON_CODE,
+                t('account.verify.resend-too-soon'),
+                wait
+            );
+
+        return sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE).then(() => {
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT,
+                outcome: 'success'
+            });
+            return generateSuccess<EmailVerificationRequested>(
+                { resendAfter: VERIFY_RESEND_SECONDS },
+                200,
+                t('account.email-change.resent')
+            );
+        });
     });
 
 /**

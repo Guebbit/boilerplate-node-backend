@@ -27,7 +27,8 @@ export type ProjectedReturnStatus =
  * Priority runs from what still needs a person to what is finished: a request awaiting staff shows
  * first, then goods approved and awaited, and only once every return that holds goods has come back
  * does the answer say how much — `returned` when every unit on the order is covered, else
- * `partially_returned`. A declined return holds nothing, so it never appears.
+ * `partially_returned`. A declined return holds nothing, so it never appears; nor does one with
+ * no lines.
  *
  * @param returns - every return on the order
  * @param ordered - how many units of each product the order held
@@ -36,8 +37,10 @@ export const projectReturnStatus = (
     returns: readonly ProjectedReturn[],
     ordered: ReadonlyMap<string, number>
 ): ProjectedReturnStatus => {
-    const holding = returns.filter(({ status }) =>
-        QUANTITY_HOLDING_RETURN_STATUSES.includes(status)
+    // A return with no lines (a withdrawal before dispatch: the order was cancelled, nothing comes
+    // back) holds no goods, so it says nothing about how much of the order is back.
+    const holding = returns.filter(
+        ({ status, lines }) => lines.length > 0 && QUANTITY_HOLDING_RETURN_STATUSES.includes(status)
     );
     if (holding.length === 0) return undefined;
     if (holding.some(({ status }) => status === 'requested')) return 'requested';

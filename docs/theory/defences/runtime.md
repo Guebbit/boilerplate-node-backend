@@ -35,14 +35,14 @@ throw is unknown — which is why the answer below is "stop", not "carry on".
 `process.env` is untrusted input that happens to arrive at boot rather than over HTTP, and it is
 usually typed as `string | undefined` and then used as a number.
 
-| Attack                       | How it works                                                                   | This boilerplate                                                                                                                                                                                                                                                                           |
-| ---------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Environment-variable trust   | unvalidated config; proxy vars, `NODE_OPTIONS`, `NODE_TLS_REJECT_UNAUTHORIZED` | `environmentNumber` bounds every numeric env read — a typo produces the documented default, not `NaN` propagating into a timeout — and the boot gate refuses to start on a missing, too-short or placeholder secret — `infrastructure/runtime/environment.ts`, `kernel/required-config.ts` |
-| Debugger / inspector exposed | `--inspect` reachable from the network is remote code execution                | Nothing passes `--inspect`; `npm start` is `tsx src/cluster.ts` — `package.json`                                                                                                                                                                                                           |
+| Attack                       | How it works                                                                   | This boilerplate                                                                                                                                                                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Environment-variable trust   | unvalidated config; proxy vars, `NODE_OPTIONS`, `NODE_TLS_REJECT_UNAUTHORIZED` | Every variable is read through a typed slice: a number that is not a whole number is refused at boot, never read as `NaN` or quietly replaced by a default, and the same gate refuses a missing, too-short or placeholder secret — [Configuration](../../tools/configuration.md), `infrastructure/config/define.ts` |
+| Debugger / inspector exposed | `--inspect` reachable from the network is remote code execution                | Nothing passes `--inspect`; `npm start` is `tsx src/cluster.ts` — `package.json`                                                                                                                                                                                                                                    |
 
 The `body-parser` advisory is the cautionary tale for this section: an INVALID `limit` value
 silently disabled size enforcement rather than failing. A config value that is wrong should be
-loud, which is exactly what `environmentNumber` and the boot gate are for.
+loud, which is exactly what the config slices and the boot gate are for.
 
 ## Native code
 

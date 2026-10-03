@@ -25,6 +25,8 @@ export const accountAuditActions = {
     AUTH_EMAIL_CHANGE_COMPLETED: 'auth.email_change.completed',
     /** `DELETE /account/pending-email` discarded a pending change without proving it. */
     AUTH_EMAIL_CHANGE_CANCELLED: 'auth.email_change.cancelled',
+    /** `POST /account/pending-email/resend` mailed the pending address a fresh link. */
+    AUTH_EMAIL_CHANGE_RESENT: 'auth.email_change.resent',
     AUTH_TOKEN_REFRESHED: 'auth.token.refreshed',
     /*
      * A refresh token was presented AFTER it was already rotated away, and outside the grace
@@ -33,8 +35,10 @@ export const accountAuditActions = {
      * breath.
      */
     AUTH_REFRESH_TOKEN_REUSE_DETECTED: 'auth.refresh_token.reuse_detected',
-    /** A caller re-proved their password to earn a fresh session. */
+    /** A caller re-proved who they are to earn a fresh session — `metadata.method` names how. */
     AUTH_REAUTHENTICATED: 'auth.reauth',
+    /** A step-up code was mailed to an account with no password. */
+    AUTH_REAUTH_CODE_SENT: 'auth.reauth.code_sent',
     AUTH_LOGGED_OUT: 'auth.logout',
     AUTH_LOGGED_OUT_EVERYWHERE: 'auth.logout_all',
     AUTH_SESSION_REVOKED: 'auth.session.revoked',

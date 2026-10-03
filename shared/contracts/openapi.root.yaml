@@ -1,7 +1,8 @@
 openapi: 3.0.3
 info:
     title: Ecommerce Demo API
-    version: '2.0.0'
+    # Alpha: the first real version is 1.0.0 (SemVer §4, 0.y.z is initial development).
+    version: '0.1.0'
     description: |
         Stable, codegen-oriented OpenAPI contract.
         Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs).
@@ -177,6 +178,8 @@ tags:
       description: Sending goods back — including the EU withdrawal button, which is a return with `reason` `withdrawal`.
     - name: Inventory
     - name: Feedback
+    - name: Examples
+      description: The example module - the small, complete domain to copy when starting a new one. Safe to delete.
     - name: System
       description: Public system endpoints (ping, liveness).
     - name: Observability
@@ -1053,9 +1056,10 @@ components:
                     type: integer
                     minimum: 1
 
-        # The address an order ships to — a SNAPSHOT, exactly like the product snapshots the
-        # items embed: an order must keep where it was going, not what the address book says
-        # today. No `id`, no `default` — those are facts about the book entry, not the shipment.
+        # An address an order freezes, as `shippingAddress` or `billingAddress` — a SNAPSHOT,
+        # exactly like the product snapshots the items embed: an order must keep where it was
+        # going and who it was billed to, not what the address book says today. No `id`, no
+        # `default` — those are facts about the book entry, not the order.
         OrderAddress:
             type: object
             additionalProperties: false
@@ -1525,10 +1529,19 @@ components:
                     format: double
                     minimum: 0
                     description: What that method cost at checkout time — a later rate change cannot re-price history.
-                # Absent under the same conditions as `shippingMethod` above, or when the chosen
-                # method itself needs no address (`requiresAddress: false`, e.g. pickup) — present
-                # whenever a shipment actually needs somewhere to go.
+                # Where the goods go — present only when a line ships to an address. Absent under
+                # the same conditions as `shippingMethod` above, when the chosen method itself
+                # needs no address (`requiresAddress: false`, e.g. pickup), and on an all-digital
+                # order: nothing travels, so nothing is frozen here. `billingAddress` is the one
+                # every checkout order carries.
                 shippingAddress:
+                    $ref: '#/components/schemas/OrderAddress'
+                # Who the order is invoiced to — the address the invoice prints as the buyer's
+                # (EU VAT Directive Art. 226). Present on every order a checkout places: the
+                # shipping address when the buyer chose "same as shipping", otherwise the book
+                # entry they named, otherwise their default. Absent on an admin-created order
+                # (`POST /orders` runs no checkout) and on one placed before this field existed.
+                billingAddress:
                     $ref: '#/components/schemas/OrderAddress'
                 # Absent on orders placed before this existed, and on order creation that isn't a
                 # checkout (the admin `POST /orders` path names no method).
@@ -1612,7 +1625,8 @@ components:
                     auditLog,
                     apiKeys,
                     invoicing,
-                    returns
+                    returns,
+                    examples
                 ]
             properties:
                 exportedAt:
@@ -1708,6 +1722,11 @@ components:
                     type: array
                     items:
                         $ref: '../../src/modules/returns/openapi.yaml#/components/schemas/ExportReturn'
+                # Every example this account owns, drafts and archived included. Empty, never absent.
+                examples:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/example/openapi.yaml#/components/schemas/Example'
 
         AccountExportEnvelope:
             type: object
@@ -1764,7 +1783,9 @@ paths:
         get:
             tags: [System]
             summary: API health check
-            description: Public ping endpoint. Returns a simple liveness indicator confirming the API process is running.
+            description: |
+                Public ping for clients (the frontend's API-down banner), rate-limited like any
+                browser call. Not an orchestrator probe: `/livez` is liveness, `/readyz` readiness.
             operationId: getHealth
             responses:
                 '200':
@@ -1774,18 +1795,33 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/HealthPingEnvelope'
 
+    /livez:
+        get:
+            tags: [System]
+            summary: Liveness check
+            description: |
+                Is the process up. For an orchestrator (Kubernetes' own `/livez` + `/readyz`
+                convention) and for every container HEALTHCHECK. Empty body, no I/O: it checks
+                nothing else, on purpose. A failing dependency must never fail liveness, because
+                a restart does not bring a downed database back.
+            operationId: getLivez
+            responses:
+                '200':
+                    description: The process is up.
+
     /readyz:
         get:
             tags: [System]
             summary: Readiness check
             description: |
-                Public readiness probe for an orchestrator (Kubernetes' own `/livez` + `/readyz`
-                convention). Empty body either way: 200 once this instance has finished booting,
-                has not started draining for shutdown, and can reach the database; 503 otherwise.
+                Public readiness probe, for a load balancer's own probe (a Kubernetes
+                readinessProbe, an AWS ALB target group, Traefik's service health check). Empty
+                body either way: 200 once this instance has finished booting, has not started
+                draining for shutdown, and can reach the database; 503 otherwise.
 
-                NOT the liveness probe — `GET /` is that, and answers regardless of readiness.
-                Point a load balancer or a container HEALTHCHECK here instead of at `/`, so a
-                draining instance stops receiving new traffic before its connections are cut.
+                NOT for a container HEALTHCHECK: the tools that read Docker's health status treat
+                it as liveness, so a database blip would restart or replace healthy containers.
+                `GET /livez` is that probe.
             operationId: getReadyz
             responses:
                 '200':
@@ -1858,6 +1894,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account'
     /account/pending-email:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1pending-email'
+    /account/pending-email/resend:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1pending-email~1resend'
     /account/abilities:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1abilities'
     /account/password:
@@ -1912,6 +1950,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}'
     /account/2fa/methods/{method}/setup:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1setup'
+    /account/2fa/methods/{method}/send:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1send'
     /account/2fa/methods/{method}/confirm:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1confirm'
     /account/2fa/backup-codes:

@@ -26,8 +26,21 @@ import {
     SEED_EDITOR_PASSWORD,
     SEED_MODERATOR_EMAIL,
     SEED_MODERATOR_ID,
-    SEED_MODERATOR_PASSWORD
+    SEED_MODERATOR_PASSWORD,
+    seedPersonaCredentials,
+    SEED_UNVERIFIED_ID,
+    SEED_TWO_FACTOR_ID,
+    SEED_TWO_FACTOR_BACKUP_CODES,
+    SEED_PENDING_EMAIL_ID,
+    SEED_PENDING_EMAIL_TARGET,
+    SEED_BANNED_ID,
+    seedStaffCredentials,
+    SEED_MANAGER_ID,
+    SEED_WAREHOUSE_ID,
+    SEED_SUPPORT_ID,
+    SEED_OPERATOR_ID
 } from '@scenarios/accounts';
+import { generateBackupCodeSalt, hashBackupCodes } from '@modules/account/two-factor/backup-codes';
 import userImages from './users-images.generated.json';
 import { makeUser } from '@modules/users/factories';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
@@ -63,7 +76,85 @@ export const SEED_CUSTOMER_IDS = {
 } as const;
 
 /**
- * The four test-critical accounts — one per role a person actually logs in as. Exported so the
+ * The two-factor persona's backup-code salt, minted once per process: the digests are stored under
+ * it, and the codes themselves are fixed ({@link SEED_TWO_FACTOR_BACKUP_CODES}), so any salt works
+ * as long as the two stay together.
+ */
+const twoFactorBackupCodeSalt = generateBackupCodeSalt();
+
+/**
+ * The four personas — customers in one particular state each, written straight to the collection
+ * because reaching the state through the API needs a mail or a code the seeder does not read.
+ * Ids, addresses and passwords come from `@scenarios/accounts`.
+ */
+const personaUsers = [
+    // Signed up, never proved the address: no `verifiedAt`, so the verify-your-email nag shows.
+    makeUser({
+        id: SEED_UNVERIFIED_ID,
+        username: 'unverified',
+        ...seedPersonaCredentials.unverified,
+        ...userImages.customer
+    }),
+    // Email 2FA armed. A login mails a code (read it from the outbox or Mailpit), or a backup code
+    // from `SEED_TWO_FACTOR_BACKUP_CODES` gets in instead.
+    makeUser({
+        id: SEED_TWO_FACTOR_ID,
+        username: 'two-factor',
+        email: seedPersonaCredentials.twoFactor.email,
+        password: seedPersonaCredentials.twoFactor.password,
+        verifiedAt: new Date(),
+        twoFactorEnabledAt: new Date().toISOString(),
+        twoFactorMethods: [{ method: 'email', enrolledAt: new Date() }],
+        twoFactorBackupCodes: hashBackupCodes(
+            SEED_TWO_FACTOR_BACKUP_CODES,
+            twoFactorBackupCodeSalt
+        ),
+        twoFactorBackupCodeSalt,
+        ...userImages.customer
+    }),
+    // An address change asked for and not confirmed: `pendingEmail` set, the live email unchanged.
+    makeUser({
+        id: SEED_PENDING_EMAIL_ID,
+        username: 'pending-email',
+        ...seedPersonaCredentials.pendingEmail,
+        verifiedAt: new Date(),
+        pendingEmail: SEED_PENDING_EMAIL_TARGET,
+        ...userImages.customer
+    }),
+    // Switched off by an admin: `active: false`, so a login is refused.
+    makeUser({
+        id: SEED_BANNED_ID,
+        username: 'banned',
+        ...seedPersonaCredentials.banned,
+        verifiedAt: new Date(),
+        active: false,
+        ...userImages.customer
+    })
+];
+
+/**
+ * The four staff accounts — three shop roles and a platform-only operator. Verified, because each
+ * exists to be logged into; the role itself is a membership, assigned by `seedAccessModel`.
+ */
+const staffUsers = (
+    [
+        { name: 'manager', id: SEED_MANAGER_ID },
+        { name: 'warehouse', id: SEED_WAREHOUSE_ID },
+        { name: 'support', id: SEED_SUPPORT_ID },
+        { name: 'operator', id: SEED_OPERATOR_ID }
+    ] as const
+).map(({ name, id }) =>
+    makeUser({
+        id,
+        username: name,
+        ...seedStaffCredentials[name],
+        verifiedAt: new Date(),
+        ...userImages.root
+    })
+);
+
+/**
+ * The test-critical accounts — one per role a person actually logs in as. Exported so the
  * `blank` scenario ({@link seedNamedUsersCollection}) can seed exactly these and none of the
  * filler customer base below — `blank` has no shop for a customer to shop in.
  */
@@ -109,7 +200,9 @@ export const namedUsers = [
         password: SEED_MODERATOR_PASSWORD,
         verifiedAt: new Date(),
         ...userImages.root
-    })
+    }),
+    ...personaUsers,
+    ...staffUsers
 ];
 
 /**

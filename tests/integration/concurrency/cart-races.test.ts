@@ -23,6 +23,7 @@
 import type { Response } from 'supertest';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
 import { cartModel } from '@modules/cart/model';
@@ -130,6 +131,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
     it('produces exactly one order, not one per request', async () => {
         // The bug this closes charges the customer twice.
         const { user, bearer } = await authenticateAs();
+        await giveAddress(user.id);
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
@@ -150,7 +152,8 @@ describe('R2 — concurrent checkouts of one cart', () => {
     });
 
     it('answers one success and rejects the rest with 409', async () => {
-        const { bearer } = await authenticateAs();
+        const { user, bearer } = await authenticateAs();
+        await giveAddress(user.id);
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
@@ -173,6 +176,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
 
     it('empties the cart exactly once', async () => {
         const { user, bearer } = await authenticateAs();
+        await giveAddress(user.id);
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
@@ -197,6 +201,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         // so it retracts it. Without that compensation the invariant above would still read
         // "one cart emptied" while the collection quietly held N orders.
         const { user, bearer } = await authenticateAs();
+        await giveAddress(user.id);
         const product = await createProduct({ price: 10, onHand: RACE_SIZE * 5 });
 
         await api()
@@ -223,7 +228,8 @@ describe('R2 — concurrent checkouts of one cart', () => {
         // each loser has already called `reserveForOrder` and the product accumulates a
         // permanent hold per loser that no sweep can ever find, since it is keyed to an order
         // that no longer exists.
-        const { bearer } = await authenticateAs();
+        const { user, bearer } = await authenticateAs();
+        await giveAddress(user.id);
         const product = await createProduct({ price: 10, onHand: RACE_SIZE * 5 });
 
         await api()
@@ -257,7 +263,8 @@ describe('R2 — concurrent checkouts of one cart', () => {
 
     it('still checks out normally when nothing is competing', async () => {
         // The conditional write must not make the ordinary, uncontended checkout fail.
-        const { bearer } = await authenticateAs();
+        const { user, bearer } = await authenticateAs();
+        await giveAddress(user.id);
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
@@ -280,6 +287,7 @@ describe('account deletion racing a cart write', () => {
         // A cart is its own document keyed by `userId`, reachable only through the account, so a
         // cart that outlives its user is a row nothing can ever read or clean up.
         const { user, bearer } = await authenticateAs();
+        await giveAddress(user.id);
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()

@@ -2,13 +2,13 @@
  * @module
  * POST /returns
  * Open a return — and the EU withdrawal button, which is this same call with `reason:
- * withdrawal`. The answer depends on where the goods are: a return written (201, `Location`) once
- * they have shipped, or the order cancelled (200) when a withdrawal reaches it before dispatch.
+ * withdrawal`. Always a return written (201, `Location`): open once the goods have shipped, closed
+ * at birth when a withdrawal reaches the order before dispatch and cancels it.
  */
 
 import type { Request, Response } from 'express';
-import type { Order, Return } from '@types';
-import { createdResponse, rejectResponse, successResponse } from '@infrastructure/http/response';
+import type { Return } from '@types';
+import { createdResponse, rejectResponse } from '@infrastructure/http/response';
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { CreateReturnBody } from '@api/schemas.zod';
@@ -31,16 +31,13 @@ export const postReturn = (request: Request, response: Response) => {
                 rejectResponse(response, outcome.reject.status, outcome.reject.errors);
                 return;
             }
-            if (outcome.kind === 'cancelled') {
-                successResponse<Order>(response, outcome.order, 200, t('returns.withdrawn'));
-                return;
-            }
             const created = returnService.withActions(outcome.created, authContext);
             createdResponse<Return>(
                 response,
                 created,
                 `/returns/${created.id}`,
-                t('returns.requested')
+                // Closed at birth means the withdrawal already cancelled and refunded the order.
+                t(created.status === 'closed' ? 'returns.withdrawn' : 'returns.requested')
             );
         })
         .catch(catchAs(response, 'postReturn'));

@@ -38,12 +38,13 @@ export const moduleDescriptorSchema = z
 
         subdomain: z.enum(['core', 'supporting', 'generic']),
         /**
-         * Whether this module belongs to every deployment (`foundation`) or is the demo shop's own
-         * worked example (`shop`) — see `docs/theory/strategic-ddd.md`'s foundation/shop section.
-         * `.dependency-cruiser.cjs`'s `foundation-cannot-reach-shop` rule reads this, fail-closed:
-         * the line is enforced, not aspirational.
+         * Whether this module belongs to every deployment (`foundation`), is the demo shop's own
+         * worked example (`shop`), or is the one `example` module that exists only to be copied —
+         * see `docs/theory/strategic-ddd.md`'s foundation/shop section.
+         * `.dependency-cruiser.cjs`'s `foundation-cannot-reach-shop` and `nothing-reaches-example`
+         * rules read this, fail-closed: the line is enforced, not aspirational.
          */
-        group: z.enum(['foundation', 'shop']),
+        group: z.enum(['foundation', 'shop', 'example']),
         dependsOn: z.array(z.string()),
         /**
          * Present only on a module that deliberately emits no audit action, holding the reason — the

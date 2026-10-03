@@ -38,7 +38,7 @@ Do not restate the routes or the fields; they live in \`src/modules/${names.keba
 
 ## The pipeline
 
-Scaffolded from [\`feedback\`](./feedback.md)'s admin half: every route sits behind one gate and one
+Scaffolded from the core of the \`example\` module ([the module template](../theory/modules.md#the-module-template)): every route sits behind one gate and one
 permission key.
 
 \`\`\`mermaid

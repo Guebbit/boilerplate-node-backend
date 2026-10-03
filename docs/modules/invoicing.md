@@ -89,9 +89,9 @@ flowchart LR
 
 `issueInvoice` (`services/issue-invoice.ts`) freezes: the order's own lines (title, quantity,
 frozen unit price, frozen VAT rate, frozen rate type), the VAT breakdown `orderTaxBreakdown`
-computes from them, the order's own `shippingAddress` as the Art. 226 billing address (this shop
-collects no separate billing address — the ship-to address is the only customer address a checkout
-ever records), the seller's own identity (`config.ts`), and the order's own frozen
+computes from them, the order's own `billingAddress` as the Art. 226 buyer address (every checkout
+order carries one, chosen at checkout — "same as shipping" by default, so a digital-only order,
+which has no ship-to address at all, is still invoiced to someone), the seller's own identity (`config.ts`), and the order's own frozen
 `currency`/`orderNumber`/`locale`.
 `issueCreditNote` (`services/issue-credit-note.ts`) freezes one credit note per REFUND
 (`PAYMENT_REFUNDED` carries `refundId`, this refund's `amount` and `full`). A full refund mirrors the
@@ -134,18 +134,14 @@ first one.
 
 ## Configuration
 
-| Variable                        | Default | Meaning                                                                                                                                           |
-| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_SHOP_VAT_NUMBER`          | —       | The seller's VAT id, printed on the invoice. Optional — a deployment below the registration threshold prints no VAT number rather than a fake one |
-| `NODE_SHOP_LEGAL_NAME`          | —       | The seller's legal name, printed on the invoice — distinct from any storefront brand name                                                         |
-| `NODE_SHOP_STREET`              | —       | The seller's own street address — Art. 226(f) needs the full postal address, not just `orders`' own `NODE_SHOP_COUNTRY`                           |
-| `NODE_SHOP_CITY`                | —       | The seller's own city                                                                                                                             |
-| `NODE_SHOP_ZIP`                 | —       | The seller's own postal code                                                                                                                      |
-| `NODE_EINVOICING_PROVIDER`      | `pdf`   | Which e-invoicing provider issues a document — see above                                                                                          |
-| `NODE_INVOICING_RATE_LIMIT_MAX` | `20`    | Invoice/credit-note renders allowed per window, per ACCOUNT — every hit spawns a Chromium launch                                                  |
+| Variable                        | Default | Meaning                                                                                          |
+| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `NODE_EINVOICING_PROVIDER`      | `pdf`   | Which e-invoicing provider issues a document — see above                                         |
+| `NODE_INVOICING_RATE_LIMIT_MAX` | `20`    | Invoice/credit-note renders allowed per window, per ACCOUNT — every hit spawns a Chromium launch |
 
-Every getter is read fresh per call (`config.ts`), so a correction needs no restart; an empty
-string reads as unset, never as a blank row on the invoice.
+The seller's identity (legal name, VAT number, address) is [`orders`'s](./orders.md#shop-identity):
+the withdrawal notice prints it too, and `orders` cannot import this module. Every getter is read
+fresh per call, so a correction needs no restart.
 
 ## VAT rounding and the net unit price
 

@@ -1,0 +1,178 @@
+name: Mutation wave
+
+# One wave of the weekly sweep. `mutation.yml` calls this once per wave, each after the last.
+#
+# A wave is one matrix of at most 256 shards (GitHub's per-matrix cap). Wave 1 runs the plan;
+# every later wave runs what the previous one could not finish — split smaller if it ran out of
+# time, retried once if it crashed — and then whatever did not fit before.
+#
+# Nothing here is shared with `npm run mutation:full`: same `stryker.json`, sized for a 4-vCPU /
+# 16 GB runner instead of a desktop. See docs/tools/mutation-testing.md#the-github-sweep.
+
+on:
+    workflow_call:
+        inputs:
+            wave:
+                description: Which wave this is, from 1.
+                type: number
+                required: true
+
+permissions:
+    contents: read
+
+env:
+    NODE_VERSION: 24
+
+jobs:
+    plan:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        outputs:
+            shards: ${{ steps.plan.outputs.shards }}
+            count: ${{ steps.plan.outputs.count }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Name the previous wave
+              # Expressions have no arithmetic, and the artifact names below need `wave - 1`.
+              id: previous
+              env:
+                  WAVE: ${{ inputs.wave }}
+              run: echo "wave=$((WAVE - 1))" >> "$GITHUB_OUTPUT"
+
+            - name: Download the previous wave's plan
+              if: inputs.wave > 1
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  name: plan-w${{ steps.previous.outputs.wave }}
+                  path: tmp/mutation-ci/previous
+
+            - name: Download how each of its shards ended
+              # A wave where every job was lost leaves no outcome files at all; the planner reads
+              # "no outcome" as a crash, so an empty download is a real answer, not an error.
+              if: inputs.wave > 1
+              continue-on-error: true
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  pattern: outcome-w${{ steps.previous.outputs.wave }}-*
+                  merge-multiple: true
+                  path: tmp/mutation-ci/outcomes
+
+            - name: Plan this wave
+              id: plan
+              env:
+                  WAVE: ${{ inputs.wave }}
+                  PREVIOUS: ${{ steps.previous.outputs.wave }}
+              run: |
+                  if [ "$WAVE" = 1 ]; then
+                    npx tsx scripts/mutation/ci/cli.ts wave --wave=1 \
+                      --out="tmp/mutation-ci/plan-w$WAVE.json" >> "$GITHUB_OUTPUT"
+                  else
+                    npx tsx scripts/mutation/ci/cli.ts wave --wave="$WAVE" \
+                      --previous="tmp/mutation-ci/previous/plan-w$PREVIOUS.json" \
+                      --outcomes=tmp/mutation-ci/outcomes \
+                      --out="tmp/mutation-ci/plan-w$WAVE.json" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Upload the plan
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: plan-w${{ inputs.wave }}
+                  path: tmp/mutation-ci/plan-w${{ inputs.wave }}.json
+                  retention-days: 30
+
+    shard:
+        needs: plan
+        if: needs.plan.outputs.count != '0'
+        name: ${{ matrix.shard }}
+        runs-on: ubuntu-latest
+        # GitHub's ceiling is 360. Stryker itself is stopped at 330 below, so the job still has time
+        # to record that it ran out of time — which is what gets it split in the next wave.
+        timeout-minutes: 355
+        # A shard that fails is retried by the next wave; the merge job is the verdict.
+        continue-on-error: true
+        strategy:
+            fail-fast: false
+            # Leaves 8 of the free plan's 20 concurrent jobs for `ci.yml` and everything else on the
+            # account — a sweep lasts days, and must not starve them.
+            max-parallel: 12
+            matrix:
+                shard: ${{ fromJson(needs.plan.outputs.shards) }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+            - name: Set up the runner
+              uses: ./.github/actions/mutation-runner
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Download this wave's plan
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  name: plan-w${{ inputs.wave }}
+                  path: tmp/mutation-ci
+
+            - name: Read this shard's files
+              id: args
+              env:
+                  WAVE: ${{ inputs.wave }}
+                  SHARD: ${{ matrix.shard }}
+              run: |
+                  npx tsx scripts/mutation/ci/cli.ts shard \
+                    --plan="tmp/mutation-ci/plan-w$WAVE.json" --name="$SHARD" >> "$GITHUB_OUTPUT"
+
+            - name: Mutate
+              id: stryker
+              # One worker, 12 GB heap: at 2 workers × 4 GB, 30 of 80 shards died of "ran out of
+              # memory" before testing a mutant (2026-09-27). One worker halves the speed and ends
+              # that failure; the waves absorb the speed.
+              #
+              # `timeout` stops Stryker at 330 minutes so the step, not GitHub, ends the job: exit
+              # 124 is how the next wave knows to split this shard rather than retry it whole.
+              env:
+                  MUTATE: ${{ steps.args.outputs.mutate }}
+                  MUTATION_SLICE: ${{ steps.args.outputs.slice }}
+                  NODE_OPTIONS: --max-old-space-size=12288 --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
+              run: |
+                  set +e
+                  timeout --kill-after=2m 330m npx stryker run tmp/stryker.ci.json \
+                    --mutate "$MUTATE" --concurrency 1 --dryRunTimeoutMinutes 90
+                  code=$?
+                  echo "exit=$code" >> "$GITHUB_OUTPUT"
+                  if [ "$code" = 124 ] || [ "$code" = 137 ]; then
+                    echo "::warning::Out of time after 330 minutes — the next wave runs this shard in smaller pieces."
+                  fi
+                  exit "$code"
+
+            - name: Record how it ended
+              id: outcome
+              if: always()
+              env:
+                  SHARD: ${{ matrix.shard }}
+                  EXIT: ${{ steps.stryker.outputs.exit || '1' }}
+              run: |
+                  npx tsx scripts/mutation/ci/cli.ts outcome \
+                    --name="$SHARD" --exit="$EXIT" --out=tmp/mutation-ci/outcome >> "$GITHUB_OUTPUT"
+
+            - name: Upload the outcome
+              if: always()
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: outcome-${{ matrix.shard }}
+                  path: tmp/mutation-ci/outcome/
+                  retention-days: 30
+
+            - name: Upload the report
+              if: always() && steps.outcome.outputs.status == 'reported'
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: shard-${{ matrix.shard }}
+                  path: tmp/reports/mutation/
+                  retention-days: 30

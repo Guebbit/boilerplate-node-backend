@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
     title: antibot — module contract
-    version: '1.0.0'
+    version: '0.1.0'
 
 x-error-codes:
     ANTIBOT_NO_CHALLENGE: { status: 404, description: 'No challenge is currently active for this session.' }

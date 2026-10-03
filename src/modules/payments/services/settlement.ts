@@ -14,7 +14,6 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { emitDomainEvent } from '@kernel/events';
 import { OrderStatus } from '@types';
 import type { PaymentStatus, AuthContext } from '@types';
 import {
@@ -24,7 +23,6 @@ import {
     mailBuyer,
     paymentSucceededEmail
 } from '@modules/orders';
-import { PAYMENT_FAILED } from '../events';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -37,7 +35,7 @@ import { CONFIRMABLE_PAYMENT_STATUSES, SETTLEABLE_PAYMENT_STATUSES } from '../do
 import type { PaymentDocument } from '../model';
 import { callerScope } from './scope';
 import { performRefund } from './refunds';
-import { announcePaymentSucceeded } from './announce';
+import { announcePaymentSucceeded, recordDecline } from './announce';
 import { notPayable } from './errors';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -106,18 +104,10 @@ export const settlePayment = (
             });
 
     if (state.status === 'declined')
-        return paymentRepository
-            .updateStatusIfIn(orderId, SETTLEABLE_PAYMENT_STATUSES, 'declined', extra)
-            .then((updated) => {
-                // Only when THIS call actually moved the write — a redelivered decline that lost
-                // its race must not tell `webhooks` the attempt happened twice.
-                if (updated)
-                    void emitDomainEvent(PAYMENT_FAILED, {
-                        paymentId: String(updated._id),
-                        orderId
-                    });
-                return { payment: updated ?? payment, orderLost: false };
-            });
+        return recordDecline(orderId, extra).then((updated) => ({
+            payment: updated ?? payment,
+            orderLost: false
+        }));
 
     // The order's move IS the gate (module rule 2), and it is conditional, so exactly one of two
     // racing settlements gets past it. `markPaid` is `orders`' own conditional write — this
@@ -128,7 +118,10 @@ export const settlePayment = (
     // only `{ orderId }`, carries no stock figure that ordering could make stale, and nothing else
     // in this application listens. Reorder the two (commit, then report) if a future listener
     // ever needs to read committed stock in reaction to this event.
-    return orderService.markPaid(orderId).then(async () => {
+    // A card settling the order is how it was paid, whatever checkout chose: the order page shows
+    // its payment method beside "Paid, card ending …", and the two must agree.
+    const paidBy = payment.method === 'card' ? 'card' : undefined;
+    return orderService.markPaid(orderId, paidBy).then(async () => {
         // `pendingEffects: ['commit']` lands in the SAME write as the status move — the durable
         // note that the stock commit below is still owed, for `effects.ts#retryPendingEffects` to
         // find if this call dies before either branch below clears it.

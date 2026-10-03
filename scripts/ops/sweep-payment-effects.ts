@@ -25,7 +25,7 @@
  *
  * See: docs/reference/ops.md
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { paymentService } from '@modules/payments';
 import { runScript } from '../run-script';

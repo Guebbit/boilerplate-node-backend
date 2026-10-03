@@ -1,6 +1,6 @@
 /**
  * @module
- * The `blank` scenario: harness infrastructure only — the access model, the four named accounts,
+ * The `blank` scenario: harness infrastructure only — the access model, the named accounts,
  * and the fallback locale a product a SPEC creates still needs active. No catalogue, no orders,
  * no carts: nothing here is shop-shaped. Behaviour e2e specs that create what they assert restore
  * into this instead of `shop`.
@@ -16,7 +16,7 @@ import { runInWaves } from './waves';
  * Seed `blank`. Read by `scenarios/index.ts`'s `SCENARIOS` registry; never called directly.
  *
  * Roles and the shop membership first — nothing can resolve a caller until a shop exists to be a
- * member of — then the four named accounts alongside every `shopModules` entry marked `baseline`
+ * member of — then the named accounts alongside every `shopModules` entry marked `baseline`
  * (`locales`, today), concurrently: neither reads the other's write. Reading the baseline set off
  * `shop-modules.ts` rather than listing it by hand here is what keeps `blank` in step with `shop`
  * without either scenario importing the other.

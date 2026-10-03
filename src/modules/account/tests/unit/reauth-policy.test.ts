@@ -1,0 +1,65 @@
+/**
+ * The two pure rules step-up adds: what a re-minted session claims (`amrAfterReauth`) and the boot
+ * refusal for a provider with no way to mail its accounts a code (`oauthConfig`'s check). The HTTP
+ * behaviour is in `contract/reauth.contract.test.ts`.
+ */
+import { assertConfigIn } from '@infrastructure/config/define';
+import { amrAfterReauth } from '../../services/reauth';
+import { oauthConfig } from '../../oauth/config';
+
+describe('amrAfterReauth', () => {
+    it('adds the method just proved to what the session already had', () => {
+        expect(amrAfterReauth(['google'], 'email')).toEqual(['google', 'email']);
+    });
+
+    it('keeps a second factor the login proved', () => {
+        expect(amrAfterReauth(['pwd', 'otp'], 'password')).toEqual(['pwd', 'otp']);
+    });
+
+    it('does not repeat a value', () => {
+        expect(amrAfterReauth(['pwd', 'email'], 'email')).toEqual(['pwd', 'email']);
+    });
+});
+
+/** A production environment with Google enabled; each case changes what mail can do. */
+const withGoogle = (mail: Record<string, string>): Record<string, string> => ({
+    NODE_ENV: 'production',
+    NODE_OAUTH_GOOGLE_CLIENT_ID: 'id',
+    NODE_OAUTH_GOOGLE_CLIENT_SECRET: 'secret',
+    ...mail
+});
+
+/** The refusal message `assertConfigIn` throws, or undefined when the boot is accepted. */
+const refusal = (environment: Record<string, string>): string | undefined => {
+    try {
+        assertConfigIn([oauthConfig.slice], environment);
+        return undefined;
+    } catch (error) {
+        return (error as Error).message;
+    }
+};
+
+describe('an enabled OAuth provider needs deliverable mail', () => {
+    it.each([
+        ['log transport', { NODE_MAIL_TRANSPORT: 'log' }],
+        ['smtp with no host', { NODE_MAIL_TRANSPORT: 'smtp' }]
+    ])('refuses to boot in production with %s', (_name, mail) => {
+        expect(refusal(withGoogle(mail))).toMatch(/cannot be delivered/);
+    });
+
+    it('accepts smtp with a host', () => {
+        expect(
+            refusal(withGoogle({ NODE_MAIL_TRANSPORT: 'smtp', NODE_SMTP_HOST: 'smtp.example.com' }))
+        ).toBeUndefined();
+    });
+
+    it('accepts any mail setup when no provider is enabled', () => {
+        expect(refusal({ NODE_ENV: 'production', NODE_MAIL_TRANSPORT: 'log' })).toBeUndefined();
+    });
+
+    it.each(['development', 'test'])('does not apply in %s', (nodeEnvironment) => {
+        expect(
+            refusal({ ...withGoogle({ NODE_MAIL_TRANSPORT: 'log' }), NODE_ENV: nodeEnvironment })
+        ).toBeUndefined();
+    });
+});

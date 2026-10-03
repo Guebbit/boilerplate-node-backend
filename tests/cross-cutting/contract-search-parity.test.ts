@@ -93,10 +93,18 @@ describe('a search accepts the same filters in both spellings', () => {
     // Discovered by walking `x-alias-of`, so a new pair is covered without editing this file —
     // and a regex that stopped matching would make every case below vacuous.
     it('found every search pair', () => {
-        // Route prefix and owning module share a name for every search pair.
-        const expected = ['feedback', 'orders', 'products', 'users']
-            .filter((module) => isDeployed(module))
-            .map((module) => `/${module}/search`);
+        // Owning module and route prefix, which share a name for every pair bar `example`: its
+        // collection path is the plural `/examples`, like `/products`.
+        const owners: [module: string, prefix: string][] = [
+            ['example', 'examples'],
+            ['feedback', 'feedback'],
+            ['orders', 'orders'],
+            ['products', 'products'],
+            ['users', 'users']
+        ];
+        const expected = owners
+            .filter(([module]) => isDeployed(module))
+            .map(([, prefix]) => `/${prefix}/search`);
 
         expect(searchPairs.map(({ searchRoute }) => searchRoute).toSorted()).toEqual(expected);
     });

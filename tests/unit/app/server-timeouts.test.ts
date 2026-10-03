@@ -9,22 +9,13 @@
 
 import type { Server } from 'node:http';
 import { applyServerTimeouts } from '@app/security';
+import { setEnvironment } from '@tests/environment';
 
 /** Just the three fields `applyServerTimeouts` writes, seeded with Node's own defaults. */
 const serverStub = () =>
     ({ headersTimeout: 60_000, requestTimeout: 300_000, keepAliveTimeout: 5000 }) as Server;
 
 describe('applyServerTimeouts', () => {
-    const overridden = [
-        'NODE_HTTP_HEADERS_TIMEOUT_MS',
-        'NODE_HTTP_REQUEST_TIMEOUT_MS',
-        'NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS'
-    ] as const;
-
-    afterEach(() => {
-        for (const key of overridden) delete process.env[key];
-    });
-
     it('bounds header receipt well below the 60s Node would otherwise allow', () => {
         const server = serverStub();
 
@@ -52,9 +43,9 @@ describe('applyServerTimeouts', () => {
     });
 
     it('takes each bound from the environment when a deployment sets one', () => {
-        process.env.NODE_HTTP_HEADERS_TIMEOUT_MS = '3000';
-        process.env.NODE_HTTP_REQUEST_TIMEOUT_MS = '9000';
-        process.env.NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS = '72000';
+        setEnvironment({ NODE_HTTP_HEADERS_TIMEOUT_MS: '3000' });
+        setEnvironment({ NODE_HTTP_REQUEST_TIMEOUT_MS: '9000' });
+        setEnvironment({ NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS: '72000' });
         const server = serverStub();
 
         applyServerTimeouts(server);
@@ -65,15 +56,14 @@ describe('applyServerTimeouts', () => {
         expect(server.keepAliveTimeout).toBe(72_000);
     });
 
-    it('ignores an unusable value rather than disabling the bound it names', () => {
-        // `0` would mean "no timeout" if it were honoured — the one value that must not pass.
-        process.env.NODE_HTTP_HEADERS_TIMEOUT_MS = '0';
-        process.env.NODE_HTTP_REQUEST_TIMEOUT_MS = 'soon';
-        const server = serverStub();
+    it.each([
+        ['0', 'NODE_HTTP_HEADERS_TIMEOUT_MS'],
+        ['soon', 'NODE_HTTP_REQUEST_TIMEOUT_MS']
+    ])('refuses %p rather than disabling the bound %s names', (value, variable) => {
+        // `0` would mean "no timeout" if it were honoured — the one value that must not pass. It
+        // is refused outright (at boot, by the gate), not quietly replaced by the default.
+        setEnvironment({ [variable]: value });
 
-        applyServerTimeouts(server);
-
-        expect(server.headersTimeout).toBe(15_000);
-        expect(server.requestTimeout).toBe(120_000);
+        expect(() => applyServerTimeouts(serverStub())).toThrow(new RegExp(variable));
     });
 });

@@ -46,15 +46,11 @@ replica set's keyFile, `mongo-rs-init` initiates the set, `setup` runs `db:sync`
 `access:bootstrap` once that succeeds, then `app`/`cron` start.
 
 **A fresh stack has an organisation but no admin** — every signup is a `customer`, on purpose (a
-race to be first is a known vulnerability pattern). Sign up through the app once, then:
-
-```bash
-docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml \
-    exec app npm run access:grant -- you@example.com admin
-```
+race to be first is a known vulnerability pattern). Sign up through the app once, then the
+technician gives that account the `admin` role by writing its membership into the database by hand.
 
 Verified end to end on this exact sequence: signup, the verification email arriving (a local
-Mailpit stood in for real SMTP), `access:grant`, login, and a real checkout — all against a stack
+Mailpit stood in for real SMTP), the hand-written admin grant, login, and a real checkout — all against a stack
 that started from nothing.
 
 ## Why the database is a replica set of one
@@ -201,7 +197,7 @@ This is why silo maps onto Kubernetes cleanly: the model does not change, only t
 | separate stacks can't reach each other | **NetworkPolicy**                                                                             |
 | secrets in an untracked `.env`         | **Sealed Secrets** or **External Secrets Operator** — per-client secrets that can live in git |
 | Traefik's ACME resolver                | **cert-manager**                                                                              |
-| the app's `GET /` healthcheck          | a **liveness probe** — already there                                                          |
+| the app's `GET /livez` healthcheck     | a **liveness probe** — already there; `GET /readyz` is the **readiness probe**                |
 | the one-shot `setup` service           | a **Job**, or a pre-upgrade Helm hook                                                         |
 | the `mongo-data` volume                | **StatefulSet** + **PersistentVolumeClaim**                                                   |
 

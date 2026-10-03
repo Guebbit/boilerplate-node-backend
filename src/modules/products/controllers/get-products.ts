@@ -68,7 +68,7 @@ export const getProducts = createSearchController({
     runSearch: (parsed, request) =>
         productService.searchViewed(
             parsed,
-            productService.callerScope(request.authContext),
+            productService.callerScope(request.caller),
             callerContextOf(request)
         )
 });

@@ -57,7 +57,7 @@ export interface RateLimitBudget {
     /**
      * Requests this budget never applies to at all — distinct from `skipSuccessfulRequests`,
      * which still counts the request, just not against the budget. Only the global brake uses
-     * this, to exempt `GET /readyz`: an orchestrator's health probe must never see a 429, and a
+     * this, to exempt `GET /livez` and `GET /readyz`: an orchestrator's health probe must never see a 429, and a
      * probe interval is fixed and cheap, so there is no abuse case to bound.
      */
     skip?: (request: Request) => boolean;
@@ -76,7 +76,7 @@ export interface RateLimitBudget {
     requestPropertyName?: string;
 
     /**
-     * Why this budget's env var is deliberately NOT raised in `tests/support/setup.ts`, when it
+     * Why this budget's env var is deliberately NOT raised in `tests/support/setup-environment.ts`, when it
      * isn't. Absent means `tests/cross-cutting/rate-limit-budgets.test.ts` requires it raised;
      * present is that test's exemption, and the reason it prints on failure.
      */

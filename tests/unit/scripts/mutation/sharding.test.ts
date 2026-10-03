@@ -1,9 +1,9 @@
 /**
- * `scripts/mutation/sharding.ts` — the weekly full-sweep matrix, built by line count.
+ * `scripts/mutation/sharding.ts` — the local full sweep's shards, built by line count.
  *
  * Driven against synthetic file lists, never a real directory walk: that half
- * (`scripts/mutation/shard-plan.ts`) is a thin, untested CLI wrapper, same split as
- * `check-baseline.ts` over `baseline.ts` in this same directory.
+ * (`scripts/mutation/mutate-scope.ts`) has its own test, same split as `check-baseline.ts` over
+ * `baseline.ts` in this same directory.
  */
 import { TARGET_LINES_PER_SHARD, packIntoShards } from '../../../../scripts/mutation/sharding';
 
@@ -24,7 +24,7 @@ describe('packIntoShards', () => {
         );
     });
 
-    it('takes an explicit target over the CI-derived default', () => {
+    it('takes an explicit target over the default', () => {
         const input = Array.from({ length: 10 }, (_, index) => ({
             file: `file-${index}.ts`,
             lines: 500

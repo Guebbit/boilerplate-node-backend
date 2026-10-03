@@ -38,7 +38,25 @@ export const SEED_PRODUCT_IDS = {
     dogBedPremium: '65dcdec2b18ad5e4bd597f0f',
     bundleInactive: '6622c88a5123b1e286f440f8',
     barebones: '67f0a1c2d3e4b5a6c7d8e9f0',
-    puppyCourseDigital: '70f0a1c2d3e4b5a6c7d8e9f1'
+    puppyCourseDigital: '70f0a1c2d3e4b5a6c7d8e9f1',
+    bowlLowStock: '70f0a1c2d3e4b5a6c7d8e9f3',
+    bowlNoWithdrawal: '70f0a1c2d3e4b5a6c7d8e9f4',
+    catTreeHeavy: '70f0a1c2d3e4b5a6c7d8e9f2'
+} as const;
+
+/**
+ * The default address entry each staff persona that can check out keeps, by persona. The operator
+ * is absent: it holds no shop role, so it has no cart and no address book to seed.
+ *
+ * Pinned (unlike the admin's and the customer's entries) because each is a declared guarantee, and
+ * a guarantee names one row id.
+ */
+export const SEED_STAFF_ADDRESS_IDS = {
+    manager: '65df1a2b3c4d5e6f7a8b9c30',
+    warehouse: '65df1a2b3c4d5e6f7a8b9c31',
+    support: '65df1a2b3c4d5e6f7a8b9c32',
+    editor: '65df1a2b3c4d5e6f7a8b9c33',
+    moderator: '65df1a2b3c4d5e6f7a8b9c34'
 } as const;
 
 /**
@@ -49,8 +67,8 @@ export const SEED_PRODUCT_IDS = {
  * equal in both directions, so a guarantee declared and never pinned fails the suite, and so does
  * a subject left behind after the module that wanted it was deleted.
  *
- * Only `products` appears: every other guarantee names a row the flows produce, and those ids
- * exist only once a process has actually run them.
+ * Only `products` and `addresses` appear: every other guarantee names a row the flows produce, and
+ * those ids exist only once a process has actually run them.
  */
 export const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
     'product.softDeleted': SEED_PRODUCT_IDS.heaterSoftDeleted,
@@ -59,7 +77,15 @@ export const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
     'product.barebones': SEED_PRODUCT_IDS.barebones,
     'product.inStock': SEED_PRODUCT_IDS.dogBedPremium,
     'product.rich': SEED_PRODUCT_IDS.dogFoodStandard,
-    'product.digital': SEED_PRODUCT_IDS.puppyCourseDigital
+    'product.digital': SEED_PRODUCT_IDS.puppyCourseDigital,
+    'product.lowStock': SEED_PRODUCT_IDS.bowlLowStock,
+    'product.noWithdrawal': SEED_PRODUCT_IDS.bowlNoWithdrawal,
+    'product.heavy': SEED_PRODUCT_IDS.catTreeHeavy,
+    'address.managerDefault': SEED_STAFF_ADDRESS_IDS.manager,
+    'address.warehouseDefault': SEED_STAFF_ADDRESS_IDS.warehouse,
+    'address.supportDefault': SEED_STAFF_ADDRESS_IDS.support,
+    'address.editorDefault': SEED_STAFF_ADDRESS_IDS.editor,
+    'address.moderatorDefault': SEED_STAFF_ADDRESS_IDS.moderator
 };
 
 /**

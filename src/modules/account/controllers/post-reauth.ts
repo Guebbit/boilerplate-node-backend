@@ -10,24 +10,24 @@ import { ReauthBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { ReauthRequest, AuthTokens } from '@types';
-import { accountService } from '../services';
+import { accountService, amrAfterReauth } from '../services';
 import { reissueSession } from '../session/session';
 import { authReauthTotal } from '../metrics';
 import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/reauth — re-proves the caller's password and re-mints their session with a fresh
- * `auth_time`, without ending it. Reuses `issueSession`, the same tail
- * `postLogin` and `postPasswordChange` end with — this is the third caller that proves it was
- * worth pulling out.
+ * POST /account/reauth — re-proves the caller (a password, or the code mailed to an account with
+ * none) and re-mints their session with a fresh `auth_time`, without ending it. Reuses
+ * `issueSession`, the same tail `postLogin` and `postPasswordChange` end with. The new session
+ * keeps every `amr` value the old one proved and adds this method's.
  */
 export const postReauth = (
     request: Request<unknown, unknown, ReauthRequest>,
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
+    const { id, amr } = request.authContext!;
 
     const parseResult = ReauthBody.safeParse(request.body);
     if (!parseResult.success) {
@@ -36,7 +36,7 @@ export const postReauth = (
     }
 
     return accountService
-        .reauth(id, parseResult.data.password, callerContextOf(request))
+        .reauth(id, parseResult.data, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) {
                 authReauthTotal.inc({ status: 'failure' });
@@ -51,7 +51,12 @@ export const postReauth = (
              * must propagate to the outer `.catch` and answer 500 — a 200 with no token would
              * claim the challenge was cleared when it was not.
              */
-            return reissueSession(request, response, id).then((token) => {
+            return reissueSession(
+                request,
+                response,
+                id,
+                amrAfterReauth(amr, parseResult.data.method)
+            ).then((token) => {
                 authReauthTotal.inc({ status: 'success' });
                 successResponse<AuthTokens>(response, { token }, 200, t('account.reauth.success'));
             });

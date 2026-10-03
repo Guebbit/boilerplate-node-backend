@@ -25,6 +25,16 @@ describe('projectReturnStatus', () => {
         expect(projectReturnStatus([ret('declined', [['a', 2]])], ordered)).toBeUndefined();
     });
 
+    it('ignores a return with no lines — nothing was expected back', () => {
+        expect(projectReturnStatus([ret('closed', [])], ordered)).toBeUndefined();
+    });
+
+    it('does not let a return with no lines change what the others say', () => {
+        expect(projectReturnStatus([ret('closed', []), ret('closed', [['a', 2]])], ordered)).toBe(
+            'partially_returned'
+        );
+    });
+
     it('shows a request awaiting staff before anything else', () => {
         expect(
             projectReturnStatus(

@@ -10,6 +10,7 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
 import { webhookDeliveryRepository, webhookSubscriptionRepository } from '../../repository';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
@@ -107,26 +108,20 @@ describe('POST /webhooks/subscriptions', () => {
     });
 
     it('422s once the subscription cap is reached', async () => {
-        const originalCap = process.env.NODE_WEBHOOK_SUBSCRIPTION_CAP;
-        process.env.NODE_WEBHOOK_SUBSCRIPTION_CAP = '1';
-        try {
-            const { bearer } = await authenticateAsRole('manager');
-            const first = await api()
-                .post('/webhooks/subscriptions')
-                .set('Authorization', bearer)
-                .send(subscriptionBody());
-            expect(first.status).toBe(201);
+        setEnvironment({ NODE_WEBHOOK_SUBSCRIPTION_CAP: '1' });
+        const { bearer } = await authenticateAsRole('manager');
+        const first = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
+        expect(first.status).toBe(201);
 
-            const second = await api()
-                .post('/webhooks/subscriptions')
-                .set('Authorization', bearer)
-                .send(subscriptionBody());
+        const second = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
 
-            expect(second.status).toBe(422);
-        } finally {
-            if (originalCap === undefined) delete process.env.NODE_WEBHOOK_SUBSCRIPTION_CAP;
-            else process.env.NODE_WEBHOOK_SUBSCRIPTION_CAP = originalCap;
-        }
+        expect(second.status).toBe(422);
     });
 });
 
@@ -439,7 +434,7 @@ describe('POST /webhooks/deliveries/:id/replay', () => {
 });
 
 describe('GET /webhooks/events', () => {
-    it('serves the ten-event public catalogue', async () => {
+    it('serves the eleven-event public catalogue', async () => {
         const { bearer } = await authenticateAsRole('manager');
 
         const response = await api().get('/webhooks/events').set('Authorization', bearer);
@@ -449,6 +444,7 @@ describe('GET /webhooks/events', () => {
             (response.body.data as { name: string }[]).map((event) => event.name).toSorted()
         ).toEqual(
             [
+                'example.published',
                 'order.cancelled',
                 'order.created',
                 'order.paid',
@@ -475,7 +471,7 @@ const resolvesToPrivateAddress = () => jest.mocked(resolve4).mockResolvedValueOn
 
 describe('a private target is refused at create and update (WM-D13)', () => {
     afterEach(() => {
-        delete process.env.NODE_WEBHOOK_DEMO_SINK_URL;
+        setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: undefined });
     });
 
     it('422s a create whose host resolves to a private address, naming the url field', async () => {
@@ -532,7 +528,7 @@ describe('a private target is refused at create and update (WM-D13)', () => {
 
     it('lets the configured demo sink through, private address and all', async () => {
         const { bearer } = await authenticateAsRole('manager');
-        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'https://sink.internal/';
+        setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: 'https://sink.internal/' });
         resolvesToPrivateAddress();
 
         const response = await api()

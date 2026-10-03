@@ -1,6 +1,5 @@
 /**
- * Every `translatables` manifest entry names a real Mongoose collection and real fields on it —
- * the shape `module-permissions.test.ts` already uses for permission keys.
+ * Every `translatables` manifest entry names a real Mongoose collection and real fields on it.
  *
  * A stale entry here is invisible until a translation write actually happens: nothing else reads
  * `collection`/`fields` before the write path does, so a typo or a renamed field would otherwise

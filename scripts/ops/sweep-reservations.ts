@@ -15,7 +15,7 @@
  * Removal:   owned by `inventory` — deletes with the module, along with the
  *            `sweep:reservations` npm script and its `docker/crontab` line.
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { bootI18n } from '@infrastructure/i18n';

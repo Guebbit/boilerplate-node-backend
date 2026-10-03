@@ -30,6 +30,17 @@ const replaceOnce = (content: string, search: string, replace: string, label: st
     return content.replace(search, () => replace);
 };
 
+/**
+ * Delete every match of `pattern` from `content`.
+ * @throws {Error} when nothing matches — the file this script expected has changed shape
+ */
+const removeOnce = (content: string, pattern: RegExp, label: string): string => {
+    if (!pattern.test(content))
+        throw new Error(`[demo-remove] expected shape not found in ${label}: ${String(pattern)}`);
+    // `test` on a global pattern advances `lastIndex`; `replace` resets it, so the call below is safe.
+    return content.replace(pattern, '');
+};
+
 /** Files deleted outright — entirely the shop catalogue's own demo data, nothing else reads them. */
 const SHOP_ONLY_FILES = [
     'scenarios/products.ts',
@@ -162,11 +173,10 @@ export const stripScenarioIndex = (repoRoot: string): RemovalNote => {
         '',
         label
     );
-    content = replaceOnce(content, "import { SHOP_SUBJECTS } from './subjects';\n", '', label);
     content = replaceOnce(
         content,
         '    shop: { seed: seedShop, drive: driveShopHistory, subjects: SHOP_SUBJECTS },\n    blank: { seed: seedBlank, subjects: {} }',
-        '    shop: { seed: seedShop, subjects: {} },\n    blank: { seed: seedBlank, subjects: {} }',
+        '    shop: { seed: seedShop, subjects: SHOP_SUBJECTS },\n    blank: { seed: seedBlank, subjects: {} }',
         label
     );
     content = replaceOnce(
@@ -190,8 +200,35 @@ export const stripScenarioIndex = (repoRoot: string): RemovalNote => {
     );
     content = replaceOnce(
         content,
-        '    return seed()\n        .then(() => (drive && app ? withLoopbackServer(app, drive) : undefined))\n        .then((history) =>\n            history\n                ? backdateHistory(history.ages).then(() => ({ ...subjects, ...history.subjects }))\n                : subjects\n        );',
-        '    return seed()\n        .then(() => (drive && app ? withLoopbackServer(app, drive) : {}))\n        .then((extra) => ({ ...subjects, ...extra }));',
+        [
+            '    return (',
+            '        seed()',
+            '            // The flows are a script: they can solve no human challenge, so the provider is off while they run.',
+            '            .then(() =>',
+            '                drive && app',
+            '                    ? withoutHumanChallenge(() => withLoopbackServer(app, drive))',
+            '                    : undefined',
+            '            )',
+            '            .then((history) =>',
+            '                history',
+            '                    ? backdateHistory(history.ages).then(() => ({',
+            '                          ...subjects,',
+            '                          ...history.subjects',
+            '                      }))',
+            '                    : subjects',
+            '            )',
+            '    );'
+        ].join('\n'),
+        [
+            '    return (',
+            '        seed()',
+            '            // The flows are a script: they can solve no human challenge, so the provider is off while they run.',
+            '            .then(() =>',
+            '                drive && app ? withoutHumanChallenge(() => withLoopbackServer(app, drive)) : {}',
+            '            )',
+            '            .then((extra) => ({ ...subjects, ...extra }))',
+            '    );'
+        ].join('\n'),
         label
     );
 
@@ -202,55 +239,52 @@ export const stripScenarioIndex = (repoRoot: string): RemovalNote => {
     };
 };
 
+/**
+ * Empty `scenarios/jobs.ts`: its one job (`reap-orders`) runs the orders module's sweep, so it
+ * leaves with `orders`. The file and its `/__test/jobs/:name` route stay — a later module's job
+ * is added to the same map — and the route answers 404 for every name.
+ */
+export const stripDemoJobs = (repoRoot: string): RemovalNote => {
+    const file = path.join(repoRoot, 'scenarios', 'jobs.ts');
+    const label = 'scenarios/jobs.ts';
+    let content = readFileSync(file, 'utf8');
+
+    content = replaceOnce(
+        content,
+        "import { orderService } from '@modules/orders';\n\n",
+        '',
+        label
+    );
+    content = replaceOnce(
+        content,
+        "new Map([\n    // `reap:orders` — scrubs the PII of orders past their retention window.\n    ['reap-orders', () => orderService.anonymizeDueOrders()]\n]);",
+        'new Map();',
+        label
+    );
+
+    writeFileSync(file, content);
+    return { file: label, detail: 'dropped the reap-orders job' };
+};
+
 /** Remove the catalogue-only exports from `scenarios/subjects.ts`, keeping the admin/user pair. */
 export const stripSubjects = (repoRoot: string): RemovalNote => {
     const file = path.join(repoRoot, 'scenarios', 'subjects.ts');
     const label = 'scenarios/subjects.ts';
     let content = readFileSync(file, 'utf8');
 
+    // Matched by shape, not by text: the id table and the pinned-subject map grow a row per
+    // guarantee, so an exact-text anchor would drift with every one.
+    content = removeOnce(
+        content,
+        /\/\*\*(?:(?!\*\/)[\s\S])*?\*\/\nexport const SEED_PRODUCT_IDS = \{[\s\S]*?\n\} as const;\n\n/,
+        label
+    );
+    content = removeOnce(content, /^ {4}'product\.[^']*': SEED_PRODUCT_IDS\.\w+,?\n/gm, label);
+    // Only the address pins stay in `SHOP_SUBJECTS`: the `addresses` module is foundation.
     content = replaceOnce(
         content,
-        `/**
- * The catalogue ids, named by what each row is for.
- *
- * \`scenarios/products.ts\`, \`./wishlist\` and \`./flows/shop-history.ts\` read these instead of
- * repeating a hex string. Each name states the row's product and the branch it exists to
- * exercise, so intent like "only visible products are saved" is checkable by eye where a raw id
- * would just be a claim in a comment.
- */
-export const SEED_PRODUCT_IDS = {
-    dogFoodStandard: '65dc8a99604c307b702b5ccc',
-    heaterSoftDeleted: '65dc8ad8604c307b702b5cd4',
-    scratchPostOutOfStock: '65dc9be92f2794d1c16741e1',
-    dogBedPremium: '65dcdec2b18ad5e4bd597f0f',
-    bundleInactive: '6622c88a5123b1e286f440f8',
-    barebones: '67f0a1c2d3e4b5a6c7d8e9f0',
-    puppyCourseDigital: '70f0a1c2d3e4b5a6c7d8e9f1'
-} as const;
-
-/**
- * The \`shop\` scenario's PINNED subjects: one row id per guarantee a module declares in its own
- * \`module.ts\` (\`AppModule.scenario\`).
- *
- * The answer to the manifest's question. \`tests/integration/scenarios/shop.test.ts\` holds the two
- * equal in both directions, so a guarantee declared and never pinned fails the suite, and so does
- * a subject left behind after the module that wanted it was deleted.
- *
- * Only \`products\` appears: every other guarantee names a row the flows produce, and those ids
- * exist only once a process has actually run them.
- */
-export const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
-    'product.softDeleted': SEED_PRODUCT_IDS.heaterSoftDeleted,
-    'product.inactive': SEED_PRODUCT_IDS.bundleInactive,
-    'product.outOfStock': SEED_PRODUCT_IDS.scratchPostOutOfStock,
-    'product.barebones': SEED_PRODUCT_IDS.barebones,
-    'product.inStock': SEED_PRODUCT_IDS.dogBedPremium,
-    'product.rich': SEED_PRODUCT_IDS.dogFoodStandard,
-    'product.digital': SEED_PRODUCT_IDS.puppyCourseDigital
-};
-
-/**`,
-        '/**',
+        'Only `products` and `addresses` appear',
+        'Only `addresses` appears',
         label
     );
     content = replaceOnce(
@@ -272,7 +306,10 @@ export const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
     );
 
     writeFileSync(file, content);
-    return { file: label, detail: 'removed SEED_PRODUCT_IDS, SHOP_SUBJECTS and SUBJECTS.product' };
+    return {
+        file: label,
+        detail: 'removed SEED_PRODUCT_IDS, the product pins and SUBJECTS.product'
+    };
 };
 
 /**

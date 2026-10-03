@@ -29,6 +29,7 @@ import * as tokens from './tokens';
 import * as tokenCleanup from './token-cleanup';
 import * as oauth from './oauth';
 import * as twoFactor from './two-factor';
+import * as reauth from './reauth';
 
 /*
  * Published by name as well as on the namespace, for the callers that import a single function
@@ -37,6 +38,7 @@ import * as twoFactor from './two-factor';
  * reaching for a name not listed here copies the logic instead of adding the export it needed.
  */
 export { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from './authentication';
+export { amrAfterReauth } from './reauth';
 export { passwordChangeWithCurrent, updateProfile } from './profile';
 export {
     sendVerificationEmail,
@@ -71,11 +73,14 @@ export const accountService = {
     sessionRevoke: authentication.sessionRevoke,
     logoutCurrentSession: authentication.logoutCurrentSession,
     refreshAccessToken: authentication.refreshAccessToken,
-    reauth: authentication.reauth,
+    reauth: reauth.reauth,
+    reauthMethods: reauth.reauthMethods,
+    sendReauthCode: reauth.sendReauthCode,
     validatePasswordChange: profile.validatePasswordChange,
     passwordChange: profile.passwordChange,
     passwordChangeWithCurrent: profile.passwordChangeWithCurrent,
     passwordResetChange: profile.passwordResetChange,
+    completePasswordReset: profile.completePasswordReset,
     updateProfile: profile.updateProfile,
     cancelPendingEmailChange: profile.cancelPendingEmailChange,
     getOwnProfile: profile.getOwnProfile,
@@ -83,6 +88,7 @@ export const accountService = {
     sendVerificationEmail: verification.sendVerificationEmail,
     requestEmailVerification: verification.requestEmailVerification,
     requestEmailVerificationFor: verification.requestEmailVerificationFor,
+    resendPendingEmailVerificationFor: verification.resendPendingEmailVerificationFor,
     completeEmailVerification: verification.completeEmailVerification,
     completeEmailChange: verification.completeEmailChange,
     findLiveToken: tokens.findLiveToken,
@@ -103,6 +109,7 @@ export const twoFactorService = {
     buildLoginChallenge: twoFactor.buildLoginChallenge,
     twoFactorStatus: twoFactor.twoFactorStatus,
     setupTwoFactorMethod: twoFactor.setupTwoFactorMethod,
+    sendMethodCode: twoFactor.sendMethodCode,
     confirmTwoFactorMethod: twoFactor.confirmTwoFactorMethod,
     removeTwoFactorMethod: twoFactor.removeTwoFactorMethod,
     disableTwoFactor: twoFactor.disableTwoFactor,

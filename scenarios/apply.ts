@@ -13,6 +13,7 @@
  * Refuses production:        a boot-time seeder that can drop or overwrite one is a footgun.
  * Refuses a public password: outside development/test, where a fixed demo login is the point.
  * Refuses a non-empty one:   unless `--reset`. Driving a checkout twice makes two orders.
+ * `--reset` also:             deletes the rate-limit counters, so spent budgets do not outlive the data.
  * Plain-text passwords:      the model's pre-save hook hashes them; a hash written by hand here
  *                            would drift from that hook, its plaintext unrecoverable.
  *
@@ -21,28 +22,42 @@
  *   npm run scenario:apply:reset [scenario]    # empty it first
  *   npm run scenario:apply -- --describe-to=x  # also write the accounts and subjects to `x`
  */
-import 'dotenv/config';
-import { writeFile } from 'node:fs/promises';
+import '@infrastructure/config/dotenv';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { currentEnvironment, installEnvironment } from '@infrastructure/config/store';
 import { emptyDatabase, isDatabaseEmpty } from '@infrastructure/runtime/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
+import {
+    clearRateLimitCounters,
+    rateLimitRedisUrl
+} from '@infrastructure/http/middlewares/rate-limit-store';
+import { isRelaxedEnvironment, nodeEnvironment } from '@infrastructure/runtime/config';
 import { runScript } from '../scripts/run-script';
 import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/index';
-import { hasFallbackSeedPassword, seedCredentials } from '@scenarios/accounts';
+import { seedCredentials } from '@scenarios/accounts';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from '@scenarios/rate-limits';
+
+/**
+ * The limiter's Redis as the DEPLOYMENT configured it, read before {@link SCRIPTED_RATE_LIMITS}
+ * below switches the limiter to in-memory counting for this process. `--reset` clears the counters
+ * there, since a reseed leaves the same keys behind (same ids, same email hash, same address).
+ */
+const deploymentRateLimitRedisUrl = rateLimitRedisUrl();
 
 /*
  * OVERRIDES `.env`, which is the whole point: a deployment's budgets are sized for a person, and
  * this makes several hundred requests from one address in seconds. Left alone, the auth rung
  * refuses the shop owner's very first login and the build dies on a 429 that names none of this.
  *
- * Safe because of the production gate below — and because `buildRateLimiter` reads `process.env`
- * once, when the middleware is wired up during the dynamic `import('../src/app')` below, never
+ * Safe because of the production gate below — and because `buildRateLimiter` reads the
+ * environment once, when the middleware is wired up during the dynamic `import('../src/app')` below, never
  * per request. Setting these here, before that import ever runs, binds only the app this process
  * is about to boot, for as long as the seed takes. `dotenv/config` above has already run and
  * never overwrites a key that is present.
  */
-Object.assign(process.env, SCRIPTED_RATE_LIMITS);
+installEnvironment(SCRIPTED_RATE_LIMITS);
 
 /*
  * A seed PLACES orders, and every one of them wants to email a confirmation — to addresses this
@@ -53,14 +68,28 @@ Object.assign(process.env, SCRIPTED_RATE_LIMITS);
  * Overridden rather than defaulted, same as the budgets above: `.env` naming a real mail server
  * is exactly the case this protects against.
  */
-process.env.NODE_MAIL_TRANSPORT = 'log';
+installEnvironment({ NODE_MAIL_TRANSPORT: 'log' });
+
+/*
+ * The broker off for this process, so an email job runs INLINE through the `log` transport above.
+ * With a broker reachable the job is published instead, and whichever consumer is listening —
+ * a live backend, with its real SMTP transport — sends the seed's several dozen mails to the
+ * fictional recipients, which also fills a live e2e run's mailbox after it was emptied.
+ */
+installEnvironment({ NODE_RABBITMQ_ENABLED: '0' });
 
 /*
  * Applied only where nothing is set, unlike the budgets above: a deployment that names its own
  * beneficiary keeps it, and one that names none still gets a shop whose `order.awaitingTransfer`
  * guarantee can hold.
  */
-for (const [key, value] of Object.entries(DEMO_BANK_TRANSFER)) process.env[key] ??= value;
+installEnvironment(
+    Object.fromEntries(
+        Object.entries(DEMO_BANK_TRANSFER).filter(
+            ([key]) => currentEnvironment()[key] === undefined
+        )
+    )
+);
 
 /** `--reset`: empty the database before building, rather than refusing a non-empty one. */
 const reset = process.argv.includes('--reset');
@@ -93,12 +122,6 @@ const bootAppInProcess = () =>
 
 /** Boots the app, refuses the unsafe cases, then builds and applies the named scenario. */
 async function seed() {
-    /* A boot-time seeder that can drop or overwrite a production database is a footgun. */
-    if (process.env.NODE_ENV === 'production') {
-        logger.warn('scenario:apply refused to run: NODE_ENV is production.');
-        return;
-    }
-
     if (scenarioArgument !== undefined && !isScenarioName(scenarioArgument)) {
         logger.warn(`scenario:apply refused to run: unknown scenario "${scenarioArgument}".`);
         return;
@@ -106,28 +129,20 @@ async function seed() {
 
     const scenarioName = scenarioArgument ?? DEFAULT_SCENARIO;
 
-    /*
-     * Outside development/test, a still-public password is the one thing this refuses: a
-     * reachable staging database seeded with `root@root.it` / `Demo-Admin1!` hands out both the
-     * shop owner and the platform operator to anyone who reads this repo. Development and test
-     * are exempt because that is the whole point of a fixed, documented demo login — `npm run
-     * demo` and CI both run there, and neither is reachable by anyone this refusal protects
-     * against.
-     */
-    const isDevelopmentOrTest =
-        process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
-    if (!isDevelopmentOrTest && hasFallbackSeedPassword()) {
-        logger.warn(
-            'scenario:apply refused to run: a seed account is still using its public fallback password outside development/test. Set every NODE_SEED_*_PASSWORD first.'
-        );
-        return;
-    }
-
     const app = await bootAppInProcess();
 
     if (reset) {
         await emptyDatabase();
         logger.info('Database emptied.');
+
+        /*
+         * Fails open like the cache clear below: an unreachable Redis means no counters to spend
+         * either. SCAN + DEL under the limiter's own prefix — never FLUSHALL.
+         */
+        const counters = await clearRateLimitCounters(deploymentRateLimitRedisUrl);
+        if (counters.reachable)
+            logger.info(`Rate-limit counters cleared: ${counters.deleted} keys removed.`);
+        else logger.warn('Rate-limit counters NOT cleared: Redis is unreachable.');
     } else if (!(await isDatabaseEmpty())) {
         /*
          * Warn and succeed, never throw: the compose `app` command is
@@ -167,6 +182,9 @@ async function seed() {
         );
 
     if (describeTo) {
+        // A checkout that has never run the suite has no `reports/e2e/` yet, and `writeFile` does
+        // not make parents. `recursive` also makes an existing directory a no-op.
+        await mkdir(path.dirname(describeTo), { recursive: true });
         await writeFile(
             describeTo,
             JSON.stringify({ scenario: scenarioName, accounts: seedCredentials, subjects }, null, 2)
@@ -193,7 +211,23 @@ async function seed() {
  * truncated. Every other `runScript` caller (`scripts/db/`, `scripts/ops/`) never imports `src/app.ts` and so
  * never hits this hook, which is why `run-script.ts` itself stays on `process.exitCode`.
  */
-// `undefined`: the demo seeder, not a `docker/crontab` job — see `run-script.ts`.
-void runScript(undefined, seed, () => app?.stop() ?? Promise.resolve()).then(() =>
-    process.exit(process.exitCode ?? 0)
-);
+/*
+ * A boot-time seeder that can drop or overwrite a real database is a footgun, and its accounts
+ * carry public passwords (`root@root.it` / `Demo-Admin1!` hands out the shop owner and the
+ * platform operator to anyone who reads this repo). So it runs only where `NODE_ENV` says
+ * `development` or `test`: an unset value, `staging` and `production` all refuse.
+ *
+ * Checked BEFORE `runScript`, whose own environment gate would otherwise answer a deployment's
+ * missing variables and hide the reason this script refuses.
+ */
+if (isRelaxedEnvironment()) {
+    // `undefined`: the demo seeder, not a `docker/crontab` job — see `run-script.ts`.
+    void runScript(undefined, seed, () => app?.stop() ?? Promise.resolve()).then(() =>
+        process.exit(process.exitCode ?? 0)
+    );
+} else {
+    logger.warn(
+        `scenario:apply refused to run: NODE_ENV is ${nodeEnvironment() || 'unset'}, not development or test.`
+    );
+    process.exit(0);
+}

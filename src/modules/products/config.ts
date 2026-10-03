@@ -1,63 +1,70 @@
 /**
  * @module
  * The two VAT rates a deployment charges, read per call rather than captured at import — the
- * pattern `inventory/config.ts` sets, so a rate change takes effect on the next resolve instead
- * of the next restart.
+ * pattern `inventory/config.ts` sets, so a test can vary a rate per case. A rate change reaches
+ * production with a restart, like every environment variable.
  *
  * Owned by `products` because `resolveTaxRate` (`./tax`) is the only reader: a product's tax
  * class resolving to a rate is an invariant of the catalogue. `orders` freezes whatever that
  * returns onto a line; it never reads a rate itself.
  */
 
-import { environmentDecimal, parseEnvironmentDecimal } from '@infrastructure/runtime/environment';
+import { defineConfig } from '@infrastructure/config/define';
+import { decimal, text } from '@infrastructure/config/fields';
+
+/**
+ * The two VAT rates and the catalogue's currency.
+ *
+ * A rate is valid only inside `[0, 1)` — 1 (100%) or more is certainly a typo. Both are required
+ * at boot; the defaults here are for `NODE_ENV=test`, which skips that check — the demo profile
+ * does not: it sets both rates itself, the same as any other deployment must (SK-08).
+ *
+ * The currency is read directly rather than through `@modules/orders`'s own `shopCurrency` —
+ * `orders` already depends on `products` for VAT, and the reverse import would close a module
+ * cycle `.dependency-cruiser.modules.cjs` refuses outright. Same variable, same default, so a
+ * deployment sets it once and both readers agree.
+ */
+export const productsConfig = defineConfig({
+    name: 'products',
+    shape: {
+        NODE_VAT_RATE_DEFAULT: decimal({
+            default: 0.22,
+            min: 0,
+            lessThan: 1,
+            required: { minLength: 1 },
+            describe: 'The VAT rate of a product with no tax class (0.22 is 22%).'
+        }),
+        NODE_VAT_RATE_REDUCED: decimal({
+            default: 0.1,
+            min: 0,
+            lessThan: 1,
+            required: { minLength: 1 },
+            describe: 'The VAT rate of a product whose tax class is `reduced`.'
+        }),
+        NODE_DEFAULT_CURRENCY: text({
+            default: 'EUR',
+            describe: 'The one ISO-4217 currency this shop trades in.'
+        })
+    }
+});
 
 /**
  * The VAT rate applied to a product with no `taxClass` — the shop's default, and every product's
- * fallback. Required at boot ({@link invalidVatRateConfig} range-checks it); the fallback here is
- * for `NODE_ENV=test`, which skips that gate — the demo profile does not: it sets both VAT rates
- * itself, the same as any other deployment must (SK-08).
- * @returns the configured decimal rate (0.22 for 22%), or `0.22` when unset
+ * fallback.
+ * @returns the configured decimal rate (0.22 for 22%)
  */
-export const vatRateDefault = (): number => environmentDecimal('NODE_VAT_RATE_DEFAULT', 0.22);
+export const vatRateDefault = (): number => productsConfig().NODE_VAT_RATE_DEFAULT;
 
 /**
  * The VAT rate applied to a product whose `taxClass` is `reduced` — books, food, medicine and
  * similar, depending on the deployment's own jurisdiction.
- * @returns the configured decimal rate (0.1 for 10%), or `0.1` when unset
+ * @returns the configured decimal rate (0.1 for 10%)
  */
-export const vatRateReduced = (): number => environmentDecimal('NODE_VAT_RATE_REDUCED', 0.1);
+export const vatRateReduced = (): number => productsConfig().NODE_VAT_RATE_REDUCED;
 
 /**
- * A decimal rate is valid VAT config only inside `[0, 1)` — 1 (100%) or more is certainly a typo.
- * Parsed through {@link parseEnvironmentDecimal}, the same parser {@link vatRateDefault} and
- * {@link vatRateReduced} read the variable through — a looser check here (a bare `Number(raw)`
- * accepts `.5`, `1e-1`, and a whitespace-only string, none of which the reader treats as set)
- * would pass a value that then silently resolves to the fallback rate instead.
- */
-const isValidVatRate = (raw: string): boolean => {
-    const parsed = parseEnvironmentDecimal(raw);
-    return parsed !== undefined && parsed >= 0 && parsed < 1;
-};
-
-/**
- * This module's `customCheck`. The manifest's `requiredConfig` only catches an EMPTY
- * `NODE_VAT_RATE_DEFAULT`/`_REDUCED`; this catches one set to something that isn't a rate at all,
- * `2.2` or `abc`, which would otherwise reach {@link vatRateDefault} and silently misprice every
- * invoice. Only flags a variable that IS set — an absent one is already named by the declarative
- * check, and naming it twice would just be confusing.
- * @returns the offending variable names; empty when both are unset or parse as a rate in `[0, 1)`
- */
-export const invalidVatRateConfig = (): string[] =>
-    ['NODE_VAT_RATE_DEFAULT', 'NODE_VAT_RATE_REDUCED'].filter((key) => {
-        const raw = process.env[key];
-        return !!raw && !isValidVatRate(raw);
-    });
-
-/**
- * The one ISO-4217 currency this deployment trades in, read directly rather than through
- * `@modules/orders`'s own `shopCurrency` — `orders` already depends on `products` for VAT, and the
- * reverse import would close a module cycle `.dependency-cruiser.modules.cjs` refuses outright.
- * Same env var, same default, so a deployment sets it once and both readers agree.
+ * The one ISO-4217 currency this deployment trades in — see {@link productsConfig} for why this
+ * module reads it directly.
  * @returns the configured ISO-4217 currency code
  */
-export const productCurrency = (): string => process.env.NODE_DEFAULT_CURRENCY ?? 'EUR';
+export const productCurrency = (): string => productsConfig().NODE_DEFAULT_CURRENCY;

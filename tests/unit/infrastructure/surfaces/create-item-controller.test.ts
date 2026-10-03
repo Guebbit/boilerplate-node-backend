@@ -3,12 +3,8 @@
  * generated operation NAME: the default (`get<Entity>Item`) every existing caller relies on, and
  * the `handlerSuffix` override (`get<Entity><Suffix>`) `get-product-admin.ts` uses to avoid
  * colliding with `getProductItem` on the same entity. The name is observed through the log line
- * `rejectDatabaseError` writes, not `handler.name` — `namedHandler`'s computed-key rename only
- * fires for a function LITERAL written at that property position, not for a reference passed in
- * as an argument, so `handler.name` is `''` for every controller this factory (or its siblings)
- * builds, regardless of `handlerSuffix`; that is a pre-existing, unrelated gap. Also pins the
- * found/not-found round trip, since a naming change is only safe if the response behaviour it
- * wraps is untouched.
+ * `rejectDatabaseError` writes. Also pins the found/not-found round trip, since a naming change
+ * is only safe if the response behaviour it wraps is untouched.
  */
 import { asStub } from '@tests/stub';
 import type { Request, Response } from 'express';

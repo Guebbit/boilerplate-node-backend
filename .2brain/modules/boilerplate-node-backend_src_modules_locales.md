@@ -5,59 +5,55 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/locales/
-files: 40
-updated: 2026-09-27T16:20:44.957780+00:00
+files: 43
+updated: 2026-10-01T14:28:13.236676+00:00
 ---
 
 # src/modules/locales/
 
 ## Purpose
 
-The locales module owns all internationalization (i18n) concerns for the platform: registering languages, managing per-tenant translation entries, and reading/writing translations on translatable entities. It enforces a strict two-tier architecture — a **deployed** tier (static filesystem dictionaries the API itself can serve copy from) and a **dynamic** tier (database rows that external clients can edit and download) — so that a database outage degrades gracefully rather than breaking the API's own copy resolution.
+The locales module provides the full internationalization (i18n) service for the platform: registering languages, managing per-tenant translation entries, and storing translations for translatable entities. It exposes two distinct data tiers—a static, filesystem-backed API dictionary and a dynamic, database-backed tier for client-editable overrides—and enforces the boundary between them so that a database outage degrades gracefully.
 
 ## Key parts
 
-- **Data layer** — `model.ts` defines the three Mongoose collections (languages, locale entries, entity translations), their indexes, and derivation helpers. `repository.ts` encapsulates every DB query and enforces the invariant that each entry write bumps the language's `revision` counter to signal clients to re-fetch.
-- **Service layer** (`services/`) — `languages.ts`, `entries.ts`, and `translations.ts` hold the business logic for language CRUD, per-entry operations, and plan-then-apply entity translations respectively. Supporting services split out `capabilities.ts` (merged manifest), `messages.ts` (read paths for copy), `keys.ts` (validation and tree-building), `overlay.ts` (post-write cache refresh), and `translatables.ts` (entity-type registry injected from outside the module).
-- **HTTP layer** — `routes.ts` wires every endpoint under `/locales` with per-route auth and Redis cache tags. `controllers/` contains thin adapters (one file per route group) that extract params, validate bodies, delegate to `localeService`, and shape responses.
-- **Module plumbing** — `module.ts` declares the manifest and installs two kernel ports on boot. `audit.ts` registers the four write-action identifiers. `tenants.ts` reads the tenant keyspace configuration from environment variables. `index.ts` is the barrel that sibling modules must import through.
-- **Contract & tests** — `openapi.yaml` pins the REST contract and the two-tier boundary. `tests/` covers unit (pure logic), integration (real MongoDB writes), and API-contract (schema conformance) levels.
+- **Model & persistence** — `model.ts` defines the Mongoose schemas, indexes, and validation helpers for the three collections (languages, locale entries, entity translations). `repository.ts` wraps every database query and enforces the invariant that each entry-write bumps the language `revision` counter to signal clients to re-fetch.
+- **Service layer** — `services/languages.ts` (language CRUD + cascade), `services/entries.ts` (per-key translation CRUD), `services/translations.ts` (entity-translation plan-then-apply writes), `services/messages.ts` (read paths that expand rows into nested trees), `services/capabilities.ts` (merges both tiers into a stable locale manifest), `services/overlay.ts` (post-write overlay refresh), `services/keys.ts` (key validation + tree builder), and `services/translatables.ts` (externally-injected entity-type registry). `services/index.ts` bundles them all into a single `localeService` export.
+- **HTTP layer** — `routes.ts` mounts the Express router at `/locales`, applying per-route auth and cache-invalidation middleware. The `controllers/` folder holds thin adapters (one file per endpoint family) that extract params, validate bodies, delegate to `localeService`, and shape responses.
+- **Module wiring** — `module.ts` declares the module manifest and installs the two kernel ports (locale-override provider, translation port) at boot. `index.ts` is the barrel that enforces the rule that sibling modules may only import through this file. `tenants.ts` defines the tenant keyspace as environment-derived configuration. `audit.ts` declares the audit-action identifiers emitted on admin writes.
+- **Contracts & tests** — `openapi.yaml` documents the REST surface and encodes the two-tier boundary. `tests/` covers unit (schema contracts, router invariants, pure service logic), integration (repository writes, model serialization, translation round-trips), and contract (API shape vs. spec, tier-boundary semantics) levels.
 
 ## How it connects
 
-- **`src/kernel/`** — `module.ts` registers with the kernel and, in its `onRegistered` callback, installs two ports: a locale-override provider and a translation port. The `translatables.ts` registry exists specifically because the kernel's translation port mediates the circular-dependency wall between modules.
-- **`src/modules/products/`** — Products declares itself as a translatable entity; the locales `translatables` registry is populated externally (by the kernel or a bootstrap step) with that declaration. The translations service then writes derived-index columns back onto the products collection. Integration tests exercise this round-trip.
-- **`src/infrastructure/http/`** — Controllers and routes rely on the shared HTTP infrastructure for middleware (authorization, Redis cache invalidation) and response-envelope helpers.
-- **`src/infrastructure/`** — The routes apply Redis cache tags and invalidation inline, coupling write paths to the infrastructure cache layer.
+- **`src/modules/products/`** — The translations service writes a derived index column on product documents when an entity's translation is upserted, and `translatables.ts` registers the `products` entity type as a valid translation target. The integration tests in `translations.test.ts` verify this cross-module write path.
+- **`src/infrastructure/http/`** — Controllers and `routes.ts` build on the shared Express infrastructure (routing, middleware, response envelopes) provided by this layer.
+- **`src/infrastructure/adapters/`** — `repository.ts` issues its MongoDB queries through the persistence adapter defined here, isolating the module from driver specifics.
+- **`src/`** — The module lives under the application source tree and participates in the kernel's module-registration lifecycle; `index.ts` is the only import surface other modules under `src/` may use.
 
 ## Where to start
 
-Read **`openapi.yaml`** first — it states the full endpoint surface, the two-tier split, and every request/response shape in one file. Then open **`model.ts`** to see the three collections, their indexes, and the `deriveBaseLanguage` hook, which together define the data the endpoints read and write. Together they give a newcomer the shape of the system before touching any controller or service code.
+Read `model.ts` first—it is the single source of truth for the three collections' shapes, indexes, and the `baseLanguage` derivation hook, and everything else (services, repository, controllers) is organized around it. Then open `services/languages.ts` to see the primary CRUD flow, how cascade deletes work, and where the fallback-locale guard lives; from there the rest of the service layer and the thin controllers become straightforward to follow.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_locales["src/modules/locales/"]
-    m_scenarios["scenarios/<br/>26 files"]
-    m_src["src/<br/>19 files"]
-    m_src_infrastructure["src/infrastructure/<br/>44 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>23 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>19 files"]
-    m_src_kernel["src/kernel/<br/>11 files"]
-    m_src_modules_account["src/modules/account/<br/>68 files"]
-    m_src_modules_products["src/modules/products/<br/>39 files"]
+    m_scenarios["scenarios/<br/>30 files"]
+    m_src["src/<br/>48 files"]
+    m_src_infrastructure["src/infrastructure/<br/>58 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
+    m_src_modules_products["src/modules/products/<br/>51 files"]
     m_src_modules_locales --- m_scenarios
     m_src_modules_locales --- m_src
     m_src_modules_locales --- m_src_infrastructure
     m_src_modules_locales --- m_src_infrastructure_adapters
     m_src_modules_locales --- m_src_infrastructure_http
-    m_src_modules_locales --- m_src_kernel
-    m_src_modules_locales --- m_src_modules_account
     m_src_modules_locales --- m_src_modules_products
     style m_src_modules_locales stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_kernel|src/kernel/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]]
 
 ## Files
 - `src/modules/locales/audit.ts` — Declares the set of audit-action identifiers that the locales module emits when an admin performs a write operation (create, update, delete, import). These strings are the sole historical record of locale/translation changes—reads are deliberately not audited. The file also augments the app-wide `AuditActionMap` so TypeScript recognizes these values as valid audit actions.
@@ -77,6 +73,7 @@ flowchart LR
 - `src/modules/locales/model.ts` — Defines the Mongoose schemas, models, document types, and shared validation helpers for the three collections behind the i18n OVERRIDE tier: registered languages, per-tenant dictionary entries, and per-entity translations. This file is the single source of truth for shape, indexes, and derivation logic; nothing here is awaited on the request path — `t()` resolves via a boot/timer/after-write overlay.
 - `src/modules/locales/module.ts` — Module manifest and boot-time wiring for the **locales** module. It declares the module's identity (name, base path, routes, permissions, locale files, personal-data level) and defines the single `onRegistered` callback that the kernel invokes once all enabled modules are known. That callback is where the module's two kernel ports (locale-override provider and translation port) are actually installed.
 - `src/modules/locales/openapi.yaml` — OpenAPI 3.0.3 contract for the **locales** module. It documents the REST surface for managing languages and translation entries, and — more importantly — encodes the architectural split between two tiers of locale data (deployed API dictionary vs. client-editable database rows) so that every consumer knows which capability a given endpoint actually provides.
+- `src/modules/locales/presenters.ts`
 - `src/modules/locales/repository.ts` — Encapsulates all database queries for the three locales collections (languages, locale entries, translations) and enforces one structural invariant: every write path to `localeentries` goes through a function in this file that also bumps the language's `revision` counter, so no service can mutate an entry without signaling clients to re-fetch.
 - `src/modules/locales/routes.ts` — Express router mounted at `/locales` that wires every locale and translation endpoint to its controller. It splits the surface into a small set of public GET reads (open to unauthenticated clients) and a larger set of admin-gated writes, applying per-route authorization middleware and Redis cache invalidation inline rather than via a shared `router.use`.
 - `src/modules/locales/services/capabilities.ts` — Builds the locale manifest for a deployment: which languages are available and what each can do. Merges two tiers — statically deployed language files and dynamically registered database rows — into a single, stable `LocaleCapability[]` without conflating their sources. Also exposes the access-control scope that gates which rows a caller may read.
@@ -90,6 +87,8 @@ flowchart LR
 - `src/modules/locales/services/translations.ts` — Service layer that reads and writes translation data for translatable entities. It enforces a strict **plan-then-apply** pattern: a batch of locale slots is fully validated (field names, locale existence, fallback-locale delete guard) before any single write executes, so a malformed slot can never leave a partial edit. It is generic across whatever the `translatables` registry declares and never touches an entity's own collection except through the derived-index-column write.
 - `src/modules/locales/tenants.ts` — Defines the set of tenants (translation keyspaces) this deployment serves. A tenant is one consumer of the translation service, identified by the `(language, tenant, key)` tuple so that two tenants can share a key while meaning unrelated strings. The tenant list is **configuration** (read from environment variables at call time), not data — no rows are stored or managed in a database.
 - `src/modules/locales/tests/contract/api.contract.test.ts` — Contract tests for the `/locales` API surface. They assert that responses satisfy the `openapi.yaml` spec (shape) and pin the semantic boundary between two tiers of locale data: **deployed** (static files the API can serve copy from) and **dynamic** (rows in the database that a client can download but the API cannot answer in). The tests exist so that collapsing or blurring that boundary fails here rather than in a downstream client.
+- `src/modules/locales/tests/contract/support.ts`
+- `src/modules/locales/tests/contract/translations.contract.test.ts`
 - `src/modules/locales/tests/factories.ts` — Test-persistence layer for locale fixtures. It wraps the pure builder (`makeLocale`) from the production factories module with a single `repository.create` call so that integration tests get a real row in the test database without repeating that two-step pattern.
 - `src/modules/locales/tests/integration/model.test.ts` — Integration tests that pin the serialization contract of the locale and locale-entry Mongoose models against a real database. They verify that neither `_id` nor `__v` leaks on either response path (hydrated `toJSON` or `.lean()` list), that schema defaults are populated on write, and that the `baseLanguage` derivation hook behaves correctly regardless of caller input. These assertions exist because 95 schemas in `openapi.yaml` are `additionalProperties: false`, so a leaked internal field would break every client.
 - `src/modules/locales/tests/integration/repository.test.ts` — Integration tests for the locales module's write paths, executed against a real MongoDB instance. They verify behaviors that an in-memory fake would satisfy by construction: the revision counter advancing per write, cascading deletes across two collections, and `importEntries` side-effects on rows not included in the payload. No HTTP or auth is involved.

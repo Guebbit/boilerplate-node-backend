@@ -12,8 +12,9 @@
  * is deliberately left for whoever builds the first one, rather than guessed at here.
  */
 
-import { environmentChoice } from '@infrastructure/runtime/environment';
-import { createProviderRegistry } from '@infrastructure/runtime/provider-registry';
+import { createProviderRegistry, requireProvider } from '@infrastructure/runtime/provider-registry';
+import { defineConfig, probe } from '@infrastructure/config/define';
+import { invoicingConfig } from '../config';
 import { pdfEInvoicingProvider } from './pdf';
 import type { InvoiceLine, InvoiceParty, InvoiceSeller } from '../model';
 import type { OrderTaxSummaryRow } from '@types';
@@ -86,8 +87,20 @@ export const registerEInvoicingProvider = (name: string, provider: EInvoicingPro
  * @throws {Error} when the variable names an implementation this build does not have
  */
 export const resolveEInvoicingProvider = (): EInvoicingProvider => {
-    const name = environmentChoice('NODE_EINVOICING_PROVIDER', registry.names(), 'pdf');
-    // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are names
-    // the registry holds by construction, a guarantee the compiler cannot follow across the call.
-    return registry.resolve(name)!;
+    return requireProvider(
+        registry,
+        'NODE_EINVOICING_PROVIDER',
+        invoicingConfig().NODE_EINVOICING_PROVIDER
+    );
 };
+
+/**
+ * Boot probe for `NODE_EINVOICING_PROVIDER`: a typo would otherwise throw on the first invoice. A
+ * shape-less slice, because the resolver imports the config and the config therefore cannot
+ * import the resolver.
+ */
+export const invoicingProviderProbe = defineConfig({
+    name: 'invoicing-provider',
+    shape: {},
+    check: () => probe(resolveEInvoicingProvider)
+});

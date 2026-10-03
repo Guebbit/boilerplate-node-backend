@@ -54,8 +54,9 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 | `complete`                        | the gate: build + lint + both spec lints + prettier:check + every contract check + tests                                                      | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
 | `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                                                            | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
 | `test:cluster`                    | boots `src/cluster.ts` with real forked workers and asserts one rate-limit budget across them; needs a Redis                                  | [Cluster Testing](./cluster-testing.md)                                                                                                                             |
+| `test:broker`                     | runs the queue adapter against a real RabbitMQ: topology, retry, parking, priority, prefetch, reconnect; needs a broker or a container engine | [Broker Testing](./broker-testing.md)                                                                                                                               |
 | `complete:light`                  | the fast subset pre-commit runs for now: every static check + the unit and cross-cutting suites; nothing that needs `mongod`, no `docs:build` | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
-| `complete:manual`                 | what the gate cannot run for you: `test:prism` and `test:cluster`, which bind real ports                                                      | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
+| `complete:manual`                 | what the gate cannot run for you: `test:prism`, `test:cluster` and `test:broker`, which bind real ports                                       | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
 | `bench` / `bench:search`          | autocannon against a RUNNING server; reports latency numbers, has no pass/fail — which is why it is not `test:`                               | [Load Testing](./load-testing.md)                                                                                                                                   |
 | `bench:orders`                    | measure                                                                                                                                       | the same, against `/orders` — the endpoint that embeds snapshots and derives totals                                                                                 | [Quick Start](./testing-quickstart.md) |
 | `bench:inventory`                 | measure                                                                                                                                       | the same, against `/inventory/levels`                                                                                                                               | [Quick Start](./testing-quickstart.md) |
@@ -150,13 +151,13 @@ the order book by driving the real checkout, payment and shipping endpoints, so 
 the same database would give the shop a second history. It skips a database that already holds
 anything and says so; `scenario:apply:reset` is how you rebuild on purpose.
 
-| Script                 | Job                                                         | Read more                         |
-| ---------------------- | ----------------------------------------------------------- | --------------------------------- |
-| `db:sync`              | make every index match the schemas; `-- --check` plans only | [Data](../reference/data.md)      |
-| `scenario:apply`       | build the demo dataset (skipped if anything is present)     | [Demo profile](./demo-profile.md) |
-| `scenario:apply:reset` | empty the database, then build it                           | [Demo profile](./demo-profile.md) |
-| `db:cache:clear`       | drop every cached response under the app's prefix           | [Redis cache](./redis-cache.md)   |
-| `db:bootstrap`         | `db:sync` followed by `scenario:apply`                      | runs on container boot            |
+| Script                 | Job                                                           | Read more                         |
+| ---------------------- | ------------------------------------------------------------- | --------------------------------- |
+| `db:sync`              | make every index match the schemas; `-- --check` plans only   | [Data](../reference/data.md)      |
+| `scenario:apply`       | build the demo dataset (skipped if anything is present)       | [Demo profile](./demo-profile.md) |
+| `scenario:apply:reset` | empty the database and the rate-limit counters, then build it | [Demo profile](./demo-profile.md) |
+| `db:cache:clear`       | drop every cached response under the app's prefix             | [Redis cache](./redis-cache.md)   |
+| `db:bootstrap`         | `db:sync` followed by `scenario:apply`                        | runs on container boot            |
 
 `scenario:apply` calls `db:cache:clear`'s logic itself after building. Run the
 script by hand after editing the database another way (`mongosh`, a GUI) — those writes never

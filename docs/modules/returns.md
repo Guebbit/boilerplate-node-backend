@@ -6,7 +6,7 @@ stands. A withdrawal is one of these.
 **Depends on** — [`orders`](./orders.md) (the order a return is about, its owner, and the cancel a
 withdrawal before dispatch becomes), [`inventory`](./inventory.md) (received goods back on sale),
 [`payments`](./payments.md) (the refund, and `payment.refunded` closing the return) and
-[`delivery`](./delivery.md) (the return address, and the delivery a withdrawal refunds).
+[`delivery`](./delivery.md) (the delivery a withdrawal refunds).
 **Breaks if you change** — `orders`' `OrderActions.withdraw`/`withdrawUntil` (the button reads them)
 and `cancelById`'s `withdrawal` option; `payments`' `refundForReturn` and the `returnId` on a refund.
 :::
@@ -68,7 +68,8 @@ Three objects, each owned once:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> approved: withdrawal — a right, nothing to decide
+    [*] --> closed: withdrawal before dispatch — the order was cancelled, nothing comes back
+    [*] --> approved: withdrawal after dispatch — a right, nothing to decide
     [*] --> requested: any other reason
     requested --> approved: staff approve
     requested --> declined: staff decline, with a reason
@@ -78,30 +79,50 @@ stateDiagram-v2
 
 Every move is one conditional write from the statuses that may precede it
 (`src/modules/returns/domain/lifecycle.ts`), so two staff members deciding the same request race in
-the database and exactly one wins — the loser is told it was already decided (409).
+the database and exactly one wins — the loser is told it was already decided (409). The one move
+that is not conditional is the first: a withdrawal before dispatch is written `closed` at birth.
 
 ## The withdrawal button
 
 The button is **server-driven**: `OrderActions.withdraw` says whether to show it and
 `OrderActions.withdrawUntil` says until when. `OrderActions`' own description states the doctrine — a
 client must not re-implement the lifecycle, because "a second copy in a separately deployed client is
-how the two come to disagree". The frontend never counts the 14 days. The clock itself is
+how the two come to disagree". The frontend never counts the days. The clock itself is
 [`orders`'](./orders.md#the-withdrawal-window).
 
-What the call does depends on where the goods are:
+The call always answers one thing: **201 and a `Return`** (the Stripe and GitHub rule: one resource
+per endpoint). Where the goods are decides what that record is:
 
 ```mermaid
 flowchart TD
     A["POST /returns — reason: withdrawal"] --> B{"order status"}
     B -- "pending · paid · processing" --> C["orders' cancel<br/><i>refund in full · stock released</i>"]
-    C --> D["Art. 11a acknowledgement mailed<br/><i>200 — the cancelled Order</i>"]
-    B -- "shipped · delivered" --> E["a Return row, born approved<br/><i>201 + Location</i>"]
-    E --> F["acknowledgement mailed<br/><i>with date and time</i>"]
+    C --> D["a Return, born closed<br/><i>no lines · refundAmount = the order, or 0 if unpaid</i>"]
+    D --> G["acknowledgement mailed<br/><i>201 + Location</i>"]
+    B -- "shipped · delivered" --> E["a Return, born approved<br/><i>lines coming back</i>"]
+    E --> F["acknowledgement mailed<br/><i>201 + Location, with date and time</i>"]
 ```
 
-- **Before dispatch there is no Return.** The order is still in the shop's hands, so `orders`' cancel
-  already does everything — refund in full, release the stock hold. Only the acknowledgement email is
-  new. Shopify and Medusa both keep Return for fulfilled items only.
+- **Before dispatch the Return is a record, not a flow.** The order is still in the shop's hands, so
+  `orders`' cancel already does everything — refund in full, release the stock hold. The Return
+  written beside it is **closed at birth** (`reason: withdrawal`, `decidedAt` and `closedAt` now, no
+  `lines` because no goods are expected, `refundAmount` the whole order — zero when nothing was
+  paid). It exists so every withdrawal has its own dated record (Art. 11a(3) asks the trader to
+  acknowledge the date, time and content), and so `GET /returns?orderId=` answers "what happened to
+  my withdrawal" the same way whatever the order's state. The client reloads the order from
+  `Return.orderId`.
+- **The money does not move through the Return.** The cancel's own refund runs as for any cancel
+  (`ORDER_REFUND_OWED`, retried by the order's pending-effect sweep), so its `payment.refunded`
+  carries no `returnId`, and `returns` does not close anything on it: the Return was closed already.
+  The credit note follows that event as usual.
+- **Events:** the order's own `order.cancelled` first, then `return.requested` and `return.closed`
+  back to back. A subscriber to `return.closed` therefore also hears about withdrawals that never
+  had goods.
+- **One mail from this module:** the acknowledgement, with no postage line and no address (nothing
+  is posted). `return-closed` is for a return whose goods came back, so it is never sent here. Any
+  notice about the money is the refund's, which belongs to `payments`, not to this module.
+- An order's `returnStatus` stays `none`: a Return with no lines holds no goods, and
+  `projectReturnStatus` ignores it.
 - **Only the buyer may do it**, an operator included: the right is the consumer's.
 - **The acknowledgement** carries the order, the exact date and time (UTC, spelled out), and who
   pays the postage — Art. 14(1) permits the consumer to bear it only if told beforehand, so the
@@ -137,8 +158,13 @@ so changing the product later cannot rewrite what a customer was sold.
   return that leaves them behind is never a "full" return, so delivery is not refunded with it.
 
 **Digital content** (Art. 16(m): the right is lost once delivery starts, with the consumer's express
-consent) is not modelled: there is no consent step at checkout. A shop selling digital content
-should treat the consent as its own terms-and-conditions text until one is built.
+consent) is not modelled: there is no consent step at checkout, and `noWithdrawal` is **not** the
+switch for it. Until one is built, the full withdrawal period is the lawful default (Art. 14(4)(b)).
+
+- Accepting the terms, or a pre-ticked box, is not express consent (Commission guidance on Directive
+  2011/83/EU), so a clause in the shop's own terms-and-conditions text does not replace the step.
+- The step belongs with digital downloads: a marker on the product, the consent, a stamp for when
+  supply began, and the Art. 8(7)(b) confirmation.
 
 ## The statuses beside the order's own
 
@@ -229,12 +255,12 @@ decision of whether the return was owed.
 
 ## Configuration
 
-| Variable                      | Default    | Meaning                                                                                         |
-| ----------------------------- | ---------- | ----------------------------------------------------------------------------------------------- |
-| `NODE_RETURN_POSTAGE_PAYER`   | `consumer` | Who pays to send the goods back: `consumer` or `shop`. Frozen on each return; drives the notice |
-| `NODE_RETURNS_RATE_LIMIT_MAX` | `20`       | Returns opened per window, per account                                                          |
+| Variable                      | Default | Meaning                                |
+| ----------------------------- | ------- | -------------------------------------- |
+| `NODE_RETURNS_RATE_LIMIT_MAX` | `20`    | Returns opened per window, per account |
 
-The return address is [`delivery`'s](./delivery.md#the-return-address) (`NODE_RETURN_ADDRESS_*`).
+The return address (`NODE_RETURN_ADDRESS_*`) and who pays postage (`NODE_RETURN_POSTAGE_PAYER`) are
+[`orders`'s](./orders.md#shop-identity). The postage payer is frozen on each return when it opens.
 
 ## Related pages
 

@@ -17,6 +17,7 @@ import { feedbackAuditActions } from '@modules/feedback/audit';
 import { FeedbackRequestStatus } from '@types';
 import { asReject, asSuccess } from '@tests/response';
 import { MISSING_ID } from '@tests/ids';
+import { setEnvironment } from '@tests/environment';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -56,15 +57,9 @@ setupTestDb();
  * without this the honeypot tests below would pass for the wrong reason (nothing configured to
  * notify, rather than the honeypot suppressing the notification).
  */
-const originalNotifyEmail = process.env.NODE_CONTACT_NOTIFY_EMAIL;
-beforeAll(() => {
-    process.env.NODE_CONTACT_NOTIFY_EMAIL = 'admin@example.com';
+beforeEach(() => {
+    setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: 'admin@example.com' });
 });
-afterAll(() => {
-    if (originalNotifyEmail === undefined) delete process.env.NODE_CONTACT_NOTIFY_EMAIL;
-    else process.env.NODE_CONTACT_NOTIFY_EMAIL = originalNotifyEmail;
-});
-
 afterEach(() => jest.clearAllMocks());
 
 /** A valid creation payload; overrides let each test vary one field at a time. */
@@ -156,16 +151,9 @@ describe('create — honeypot', () => {
 });
 
 describe('create — disposable-email policy', () => {
-    const originalPolicy = process.env.NODE_ANTIBOT_EMAIL_POLICY;
-
-    afterEach(() => {
-        if (originalPolicy === undefined) delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
-        else process.env.NODE_ANTIBOT_EMAIL_POLICY = originalPolicy;
-    });
-
     // Every anti-automation rung must be provably off by default.
     it('is off by default — a known disposable domain still notifies as normal', async () => {
-        delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
+        setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: undefined });
 
         const feedback = await create(makePayload({ email: 'someone@mailinator.com' }));
 
@@ -174,7 +162,7 @@ describe('create — disposable-email policy', () => {
     });
 
     it('files a disposable-domain submission as spam, same as the honeypot, with a 201-shaped result', async () => {
-        process.env.NODE_ANTIBOT_EMAIL_POLICY = 'disposable';
+        setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: 'disposable' });
 
         const feedback = await create(makePayload({ email: 'someone@mailinator.com' }));
 

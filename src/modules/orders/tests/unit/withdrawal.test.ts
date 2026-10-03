@@ -14,15 +14,22 @@ import {
 const NOW = new Date('2026-03-10T12:00:00Z');
 
 describe('withdrawUntilFrom', () => {
-    it('counts whole days from the start', () => {
+    it('does not count the event day, and ends with the last hour of the 14th day after it', () => {
         expect(withdrawUntilFrom(new Date('2026-03-01T10:00:00Z'), 14).toISOString()).toBe(
-            '2026-03-15T10:00:00.000Z'
+            '2026-03-15T23:59:59.999Z'
         );
+    });
+
+    it('is the same instant whatever time of day the event happened', () => {
+        const morning = withdrawUntilFrom(new Date('2026-03-01T00:00:00Z'), 14);
+        const night = withdrawUntilFrom(new Date('2026-03-01T23:59:59Z'), 14);
+
+        expect(night.getTime()).toBe(morning.getTime());
     });
 
     it('is exact across a month boundary', () => {
         expect(withdrawUntilFrom(new Date('2026-01-25T00:00:00Z'), 14).toISOString()).toBe(
-            '2026-02-08T00:00:00.000Z'
+            '2026-02-08T23:59:59.999Z'
         );
     });
 });

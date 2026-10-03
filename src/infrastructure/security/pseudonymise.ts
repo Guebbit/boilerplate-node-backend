@@ -12,6 +12,7 @@
  */
 
 import { createHmac, hkdfSync } from 'node:crypto';
+import { pseudonymConfig } from './config';
 
 /**
  * What a digest is used for. A closed list so a new purpose is a deliberate edit, and so one
@@ -21,7 +22,7 @@ export type PseudonymPurpose = 'log' | 'rate-limit' | 'idempotency';
 
 /**
  * Non-secret root outside production, where `NODE_PSEUDONYM_KEY` is not required
- * (`required-config.ts`): a dev or test digest still needs to be stable, and a machine with this
+ * (`security/config.ts`): a dev or test digest still needs to be stable, and a machine with this
  * source tree has nothing to protect.
  */
 const DEV_PSEUDONYM_KEY = 'dev-pseudonym-key';
@@ -39,7 +40,7 @@ const subkeys = new Map<string, Map<PseudonymPurpose, Buffer>>();
  * @param purpose - what the digest is for
  */
 const subkeyFor = (purpose: PseudonymPurpose): Buffer => {
-    const root = process.env.NODE_PSEUDONYM_KEY || DEV_PSEUDONYM_KEY;
+    const root = pseudonymConfig().NODE_PSEUDONYM_KEY ?? DEV_PSEUDONYM_KEY;
     const forRoot = subkeys.get(root) ?? new Map<PseudonymPurpose, Buffer>();
     subkeys.set(root, forRoot);
 

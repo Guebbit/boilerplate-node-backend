@@ -17,6 +17,7 @@ import {
 } from '@infrastructure/observability/tracer';
 import { t } from '@infrastructure/i18n';
 import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
+import { isTestEnvironment } from '@infrastructure/runtime/config';
 
 /**
  * A client error thrown by a library that follows the `http-errors` contract.
@@ -179,7 +180,7 @@ export const installErrorHandling = (app: Express): void => {
     // No handler under a test runner, for either process-level event: registering one for
     // `unhandledRejection` swallows it into an audit line instead of letting Jest's own handler
     // pin the rejection on the test that caused it, same reasoning as `uncaughtException` below.
-    if (process.env.NODE_ENV === 'test') return;
+    if (isTestEnvironment()) return;
 
     /*
      * Process-level error handlers — audit unhandled rejections/exceptions

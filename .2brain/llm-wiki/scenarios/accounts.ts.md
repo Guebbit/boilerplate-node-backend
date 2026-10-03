@@ -1,7 +1,7 @@
 ---
 source: scenarios/accounts.ts
-sha256: fa4d0982d614d77f1121d9f299b12936aa5190a01c08b06e354e9eea8ff7af76
-generated_at: 2026-09-23T17:16:29.426353+00:00
+sha256: e5a19d1069a215871a2cbd7d38a7adf17d089d75c4962b7efe6b4c725ba92bcf
+generated_at: 2026-10-01T12:19:53.284418+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the four demo seed accounts (admin, user, editor, moderator): their fixed ObjectIds, login credentials, and the role assignments that place them into the access model. Every other scenario file imports the IDs from here so they share a single source of truth for "who exists." It also exposes the `seedAccessModel` function that both the shop and blank scenarios call to materialize those accounts in a fresh database.
+Single source of truth for every seed account in the demo/test environment: their fixed ObjectIds, login credentials (email + plaintext password), and the role assignments that place them into the access model. All other scenario files import IDs from here rather than hardcoding them, so changing an account's identity or credentials is a one-file edit.
 
 ## Key elements
 
-- **`SEED_ADMIN_ID`, `SEED_USER_ID`, `SEED_EDITOR_ID`, `SEED_MODERATOR_ID`** – Fixed 24-char ObjectId strings. Changing them breaks the paired frontend's e2e login and any committed test fixtures.
-- **`SEED_*_EMAIL` / `SEED_*_PASSWORD`** – Plaintext credentials. Each password reads from a `NODE_SEED_*_PASSWORD` env var, falling back to a committed demo string.
-- **`seedCredentials`** – Convenience object mapping role name → `{ email, password }` for the four accounts.
-- **`hasFallbackSeedPassword()`** – Returns `true` if _any_ account is still on its public fallback password. `scenarios/apply.ts` uses this to refuse running outside development/test.
-- **`seedAccessModel()`** – Calls `bootstrapAccessModel('The Demo Shop')`, then assigns roles: admin gets `tenant/admin` **and** `platform/operator`; user gets `tenant/customer`; editor gets `tenant/editor`; moderator gets `tenant/moderator`.
+- **`SEED_*_ID` constants** – Fixed 24-char hex ObjectIds for 12 accounts: 4 demo (admin, user, editor, moderator), 4 persona (unverified, two-factor, pending-email, banned), and 4 staff (manager, warehouse, support, operator).
+- **`SEED_*_EMAIL` / `SEED_*_PASSWORD` constants** – Login email (hardcoded) and password (read via `seedPasswordsConfig()` from `scenarios/config.ts`). Passwords are plaintext; the schema's pre-save hook hashes them.
+- **`SEED_TWO_FACTOR_BACKUP_CODES`** – Five 10-char hex backup codes, published in the clear so an e2e journey can consume one. Stored in the DB only as digests.
+- **`SEED_PENDING_EMAIL_TARGET`** – The new-address email the pending-email persona has requested but not yet confirmed (used by `scenarios/addresses.ts`).
+- **`seedPersonaCredentials` / `seedStaffCredentials` / `seedCredentials`** – Grouped `{ email, password }` (plus `backupCodes` for two-factor) objects keyed by human-readable name, for convenient lookup in specs.
+- **`seedAccessModel()`** – Bootstraps the "The Demo Shop" tenant via `bootstrapAccessModel`, then assigns each account its role(s) via `assignRole`. Called by both `seedShop` and `seedBlank`.
 
 ## Relationships
 
-- **`src/modules/access/index.ts`** – Imports `assignRole` and `bootstrapAccessModel`; the only external dependency of this file.
-- **`scenarios/apply.ts`** – Calls `hasFallbackSeedPassword()` as a gate before seeding; the primary consumer of the safety check.
-- **`scenarios/blank.ts`** – Calls `seedAccessModel()` to create the same four accounts in a blank-profile database.
-- **`scenarios/index.ts`** – Aggregates/exports the scenario modules, including this one.
-- **Other scenario files (`addresses.ts`, `subjects.ts`, `users.ts`, `wishlist.ts`, `flows/shop-history.ts`)** – Import the `SEED_*_ID` constants to reference specific accounts in their test flows.
-- **`src/app/demo.ts`** – Demo app entry point; consumes `seedCredentials` for its login form.
-- **`tests/integration/scenarios/apply.test.ts`, `tests/integration/scenarios/shop.test.ts`** – Integration tests that exercise the seed accounts and role assignments.
+- **`scenarios/config.ts`** – Provides `seedPasswordsConfig()`, which reads `NODE_SEED_*_PASSWORD` env vars to supply every password constant in this file.
+- **`src/modules/access/index.ts`** – Exports `assignRole` and `bootstrapAccessModel`, the two functions `seedAccessModel` calls to build the tenant and wire up role memberships.
+- **`scenarios/users.ts`** – Consumes the IDs exported here to build the actual user document rows that get inserted into the database.
+- **`scenarios/blank.ts`** – Calls `seedAccessModel()` as part of its blank-scenario seeding (alongside `seedShop` in `scenarios/apply.ts`).
+- **`scenarios/apply.ts`** – The apply scenario that invokes `seedAccessModel`; it guards against running outside development/test.
+- **`scenarios/addresses.ts`** – Uses `SEED_PENDING_EMAIL_TARGET` to model the unconfirmed address-change journey.
+- **`tests/integration/access.test.ts`** – Exercises the role assignments produced by `seedAccessModel`.
+- **`tests/integration/scenarios/apply.test.ts`** – Integration-tests the full apply flow, which depends on the credentials and roles defined here.
 
 ## Notes
 
-- **Passwords are intentionally plaintext in source.** The Mongoose pre-save hook on the User schema hashes them on first write; the stored values must remain readable here because the frontend's e2e harness types them into a login form.
-- **Env var names encode the role, not the "slot".** e.g. `NODE_SEED_ADMIN_PASSWORD` corresponds to the `admin` role the account actually holds, matching the paired frontend's own `.env` naming. Do not rename to match the variable prefix pattern (`NODE_SEED_USER_PASSWORD` → the _user_ slot).
-- **`root` holds two memberships by design** (tenant admin + platform operator). This is the only account with a `platform`-scoped role and exists to demonstrate the platform/tenant split in a single login.
-- **The ObjectIds are real and date-stamped** (leading bytes ≈ Feb 2024). They are not generated at runtime; treat them as immutable identifiers.
+- **Passwords are intentionally plaintext in this file.** The schema's pre-save hook hashes them on write. Do not "fix" this to store a hash.
+- **IDs are fixed ObjectIds, not generated.** The demo admin and user IDs encode a February 2024 timestamp in their leading bytes; the persona/staff IDs are sequential. Regenerating them will break any external reference (frontend e2e, paired `.env` files).
+- **Env-var override contract:** each `NODE_SEED_*_PASSWORD` must match the identically-named variable in the paired frontend's `.env`. Changing the name here without updating the frontend breaks login.
+- **`seedAccessModel` gives `SEED_ADMIN_ID` two memberships** (tenant `admin` + platform `operator`) while `SEED_OPERATOR_ID` gets only the platform role (no shop). This asymmetry is deliberate: the admin account demonstrates the dual-hat behaviour, the operator demonstrates a pure-platform actor.
+- **`seedCredentials` is a flat merge** of the four demo accounts, all four persona accounts, and all four staff accounts — 12 entries total. Use the grouped objects (`seedPersonaCredentials`, `seedStaffCredentials`) when you need only a subset.

@@ -534,6 +534,58 @@ keys:
       scope: platform
       description: Read health, metrics overview and the operational audit.
 
+    # -- examples ------------------------------------------------------------------------------
+    # `self` is the caller's own rows (the condition rides into the query), `any` is everyone's.
+    # An admin holds both; delete this file with the module and its keys leave with it.
+    - key: examples.self.read
+      module: example
+      subject: Example
+      action: read
+      scope: tenant
+      description: Read the caller's own examples, drafts included.
+      conditions:
+          userId: $caller.id
+    - key: examples.self.create
+      module: example
+      subject: Example
+      action: create
+      scope: tenant
+      description: Write a new example of one's own.
+    - key: examples.self.update
+      module: example
+      subject: Example
+      action: update
+      scope: tenant
+      description: Edit the caller's own examples, and move them through draft, published and archived.
+      conditions:
+          userId: $caller.id
+    - key: examples.self.delete
+      module: example
+      subject: Example
+      action: delete
+      scope: tenant
+      description: Remove the caller's own examples.
+      conditions:
+          userId: $caller.id
+    - key: examples.any.read
+      module: example
+      subject: Example
+      action: read
+      scope: tenant
+      description: Read every example, whoever owns it.
+    - key: examples.any.update
+      module: example
+      subject: Example
+      action: update
+      scope: tenant
+      description: Edit any example, whoever owns it.
+    - key: examples.any.delete
+      module: example
+      subject: Example
+      action: delete
+      scope: tenant
+      description: Remove any example, whoever owns it.
+
 # WHY THERE IS NO WILDCARD OF ANY KIND ANY MORE
 #
 # The per-family `manage` key used to expand, unconditionally, to every action its family declared

@@ -21,6 +21,7 @@ flowchart LR
     account["account"]
     api_keys["api-keys"]
     cart["cart"]
+    example["example"]
     orders["orders"]
     payments["payments"]
     webhooks["webhooks"]
@@ -28,6 +29,7 @@ flowchart LR
     account --> users
     api_keys --> users
     cart --> users
+    example --> users
     orders --> users
     payments --> users
     webhooks --> users
@@ -39,8 +41,8 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class payments,webhooks supporting;
-    class access,account,api_keys generic;
+    class payments supporting;
+    class access,account,api_keys,example,webhooks generic;
     class users centre;
 ```
 
@@ -101,6 +103,11 @@ Only the hard path **discharges an Art. 17 erasure request**. The audit trail sa
 so explicitly: a soft delete emits `admin.user.soft_deleted`, a hard one `admin.user.erased` — two
 actions rather than one `admin.user.deleted`, so "was this request actually closed out" is
 answerable from the log alone, not from remembering which flag an admin clicked.
+
+A module's erase hook may hand back work to run once the transaction has committed (`AfterErase`):
+anything that is not a database write, so a rollback could not undo it. `orders` uses it to cancel
+the account's never-paid orders, see [When the account is erased](./orders.md#when-the-account-is-erased).
+A failing step is logged and never turns a committed erasure into an error.
 
 ## Libraries
 

@@ -40,9 +40,9 @@
  *
  * See: docs/reference/ops.md
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { accountConfig } from '@modules/account/config';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { bootI18n, getDefaultLocale } from '@infrastructure/i18n';
@@ -91,7 +91,7 @@ const warn = (user: UserDocument): Promise<void> => {
 };
 
 const main = async (): Promise<void> => {
-    const inactiveDays = environmentNumber('NODE_INACTIVE_ACCOUNT_DAYS', 0);
+    const inactiveDays = accountConfig().NODE_INACTIVE_ACCOUNT_DAYS;
     if (inactiveDays <= 0) {
         logger.info({
             message: 'Inactive-account reaper disabled (NODE_INACTIVE_ACCOUNT_DAYS <= 0).'

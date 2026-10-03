@@ -38,6 +38,35 @@
             "deadline": "We'll hold your order until {{payBy}}.",
             "link-label": "View your order and receipt"
         },
+        "email-withdrawal": {
+            "heading": "Right of withdrawal",
+            "right": "You have the right to withdraw from this contract within {{days}} days without giving any reason.",
+            "period-goods": "The withdrawal period will expire after {{days}} days from the day on which you acquire, or a third party other than the carrier and indicated by you acquires, physical possession of the goods.",
+            "period-digital": "The withdrawal period will expire after {{days}} days from the day of the conclusion of the contract.",
+            "how": "To exercise the right of withdrawal, you must inform us ({{- trader}}) of your decision to withdraw from this contract by an unequivocal statement (e.g. a letter sent by post, fax or e-mail). You may use the model withdrawal form below, but it is not obligatory.",
+            "online": "You can also exercise your right of withdrawal online at {{- url}}. If you use this online feature, we will send you an acknowledgement of receipt of the withdrawal on a durable medium (e.g. by email), including its content and the date and time of its submission, without undue delay.",
+            "deadline": "To meet the withdrawal deadline, it is sufficient for you to send your communication concerning your exercise of the right of withdrawal before the withdrawal period has expired.",
+            "effects-heading": "Effects of withdrawal",
+            "effects": "If you withdraw from this contract, we shall reimburse to you all payments received from you, including the costs of delivery (with the exception of the supplementary costs resulting from your choice of a type of delivery other than the least expensive type of standard delivery offered by us), without undue delay and in any event not later than {{refundDays}} days from the day on which we are informed about your decision to withdraw from this contract. We will carry out such reimbursement using the same means of payment as you used for the initial transaction, unless you have expressly agreed otherwise; in any event, you will not incur any fees as a result of such reimbursement.",
+            "withhold": "We may withhold reimbursement until we have received the goods back or you have supplied evidence of having sent back the goods, whichever is the earliest.",
+            "send-back": "You shall send back the goods or hand them over to {{- recipient}}, without undue delay and in any event not later than {{returnDays}} days from the day on which you communicate your withdrawal from this contract to us. The deadline is met if you send back the goods before the period of {{returnDays}} days has expired.",
+            "postage-shop": "We will bear the cost of returning the goods.",
+            "postage-consumer": "You will have to bear the direct cost of returning the goods.",
+            "diminished": "You are only liable for any diminished value of the goods resulting from the handling other than what is necessary to establish the nature, characteristics and functioning of the goods.",
+            "excluded": "No right of withdrawal: {{- titles}}.",
+            "none": "There is no right of withdrawal for this order: everything in it is excluded from it (Art. 16 of Directive 2011/83/EU).",
+            "trader": "{{- name}}, {{- address}}, telephone {{- phone}}, e-mail {{- email}}",
+            "form-heading": "Model withdrawal form",
+            "form-intro": "(complete and return this form only if you wish to withdraw from the contract)",
+            "form-to": "To {{- trader}}:",
+            "form-notice": "I/We (*) hereby give notice that I/We (*) withdraw from my/our (*) contract of sale of the following goods (*)/for the provision of the following service (*),",
+            "form-ordered": "Ordered on (*)/received on (*),",
+            "form-name": "Name of consumer(s),",
+            "form-address": "Address of consumer(s),",
+            "form-signature": "Signature of consumer(s) (only if this form is notified on paper),",
+            "form-date": "Date",
+            "form-delete": "(*) Delete as appropriate."
+        },
         "email-transfer-expired": {
             "subject": "Your order was cancelled — no transfer received",
             "meta-title": "Order cancelled",
@@ -49,6 +78,23 @@
             "meta-title": "Order cancelled",
             "greeting": "Hello!",
             "body": "We didn't receive your payment in time, so this order has been cancelled and its items released."
+        },
+        "email-cancelled": {
+            "subject": "Your order was cancelled",
+            "meta-title": "Order cancelled",
+            "greeting": "Hello, {{name}}!",
+            "body": "Your order {{order}} has been cancelled.",
+            "refund-paid": "{{amount}} is being returned to the payment method you used. How long it takes to show up depends on your bank or card issuer.",
+            "refund-none": "No refund was issued with this cancellation. If you think that is a mistake, please contact us.",
+            "refund-unpaid": "You had not paid for this order, so nothing was charged."
+        },
+        "email-refunded": {
+            "subject": "Your refund has been issued",
+            "meta-title": "Refund issued",
+            "greeting": "Hello, {{name}}!",
+            "body": "We have refunded {{amount}} for your order {{order}}.",
+            "detail-full": "That is everything you paid for this order.",
+            "detail-partial": "That is part of what you paid; the rest of the payment stays with the order. How long it takes to show up depends on your bank or card issuer."
         },
         "email-product-unavailable": {
             "subject": "Your order was cancelled — an item is no longer available",

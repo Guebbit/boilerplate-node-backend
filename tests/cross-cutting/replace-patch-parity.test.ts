@@ -78,6 +78,7 @@ describe('Replace/Update schema parity', () => {
         const known: Record<string, string> = {
             Account: 'account',
             Address: 'addresses',
+            Example: 'example',
             FeedbackRequestStatus: 'feedback',
             Locale: 'locales',
             OrderById: 'orders',

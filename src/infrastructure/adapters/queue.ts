@@ -39,7 +39,9 @@ import {
     type DependencyStatus
 } from '@infrastructure/adapters/managed-connection';
 import { WORKER_CHANNELS } from '@types';
-import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
+import { queueConfig } from '@infrastructure/adapters/config';
+import { currentEnvironment } from '@infrastructure/config/store';
+import { isTestEnvironment } from '@infrastructure/runtime/config';
 import { settleWithin } from '@infrastructure/runtime/settle';
 import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
 
@@ -53,17 +55,16 @@ import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metric
  * Returns `undefined` when nothing is configured — the signal that the queue is off.
  */
 const getAmqpUrl = (): string | undefined => {
-    if (process.env.NODE_RABBITMQ_URL) return process.env.NODE_RABBITMQ_URL;
+    const config = queueConfig();
+    if (config.NODE_RABBITMQ_URL) return config.NODE_RABBITMQ_URL;
     // The port is the required fragment: without it there is nothing to assemble, so queue is off.
-    if (!process.env.NODE_RABBITMQ_PORT) return;
+    if (!config.NODE_RABBITMQ_PORT) return;
 
-    const host = process.env.NODE_RABBITMQ_HOST ?? '127.0.0.1';
-    const port = process.env.NODE_RABBITMQ_PORT;
     // Encoded: a generated password routinely holds `@`, `/` or `#`, each of which would
     // otherwise end the userinfo part of the URL early.
-    const user = encodeURIComponent(process.env.NODE_RABBITMQ_USER ?? 'guest');
-    const pass = encodeURIComponent(process.env.NODE_RABBITMQ_PASS ?? 'guest');
-    return `amqp://${user}:${pass}@${host}:${port}`;
+    const user = encodeURIComponent(config.NODE_RABBITMQ_USER);
+    const pass = encodeURIComponent(config.NODE_RABBITMQ_PASS);
+    return `amqp://${user}:${pass}@${config.NODE_RABBITMQ_HOST}:${String(config.NODE_RABBITMQ_PORT)}`;
 };
 
 /**
@@ -73,7 +74,7 @@ const getAmqpUrl = (): string | undefined => {
  * payload — see `enqueueEmail`, which sends inline rather than constructing a job envelope.
  */
 export const isQueueEnabled = (): boolean =>
-    Boolean(getAmqpUrl()) && environmentFlag('NODE_RABBITMQ_ENABLED', true);
+    Boolean(getAmqpUrl()) && queueConfig().NODE_RABBITMQ_ENABLED;
 
 // ─── Connection state ─────────────────────────────────────────────────────────
 
@@ -196,7 +197,7 @@ const setupChannel = async (model: ChannelModel): Promise<void> => {
  */
 const RECOVERY_OPTIONS = {
     setup: setupChannel,
-    ...(process.env.NODE_ENV === 'test' ? { maxRetries: 0 } : {})
+    ...(isTestEnvironment() ? { maxRetries: 0 } : {})
 };
 
 /**
@@ -261,10 +262,58 @@ export const queueState = (): DependencyStatus => {
 };
 
 /**
+ * A broker URL as safe to log: scheme, host, port and vhost, never the userinfo.
+ *
+ * @param url - the AMQP URL the connection will use
+ * @returns e.g. `amqp://rabbitmq:5672/shop`, or a placeholder when the URL does not parse
+ */
+export const redactedBrokerTarget = (url: string): string => {
+    // WHATWG URL: `.host` is `hostname:port` (port omitted when it is the scheme default), and
+    // userinfo lives in `.username`/`.password`, which are simply not read here.
+    // https://nodejs.org/api/url.html#class-url
+    if (!URL.canParse(url)) return '(unparseable URL)';
+    const { protocol, host, pathname } = new URL(url);
+    return `${protocol}//${host}${pathname === '/' ? '' : pathname}`;
+};
+
+/**
+ * Says at boot which broker this process will dial, and warns when `NODE_RABBITMQ_URL` is hiding
+ * host or port settings.
+ *
+ * Why it exists: the URL wins over the fragments, and a stale URL in a `.env` shadows a host and
+ * port that look correct. The queue then points at a broker nobody started, with no error.
+ */
+const announceBroker = (): void => {
+    const environment = currentEnvironment();
+    const url = getAmqpUrl();
+
+    if (
+        (environment.NODE_RABBITMQ_URL ?? '') !== '' &&
+        ((environment.NODE_RABBITMQ_HOST ?? '') !== '' ||
+            (environment.NODE_RABBITMQ_PORT ?? '') !== '')
+    ) {
+        logger.warn({
+            message:
+                'queue: NODE_RABBITMQ_URL is set together with NODE_RABBITMQ_HOST/NODE_RABBITMQ_PORT. ' +
+                'The URL wins and the host and port are ignored; unset one of them.'
+        });
+    }
+
+    if (!url || !queueConfig().NODE_RABBITMQ_ENABLED) return;
+
+    logger.info({
+        message: `queue: connecting to ${redactedBrokerTarget(url)} (from ${
+            queueConfig().NODE_RABBITMQ_URL ? 'NODE_RABBITMQ_URL' : 'NODE_RABBITMQ_HOST/_PORT'
+        })`
+    });
+};
+
+/**
  * Warm up RabbitMQ during app startup — pays the handshake cost at boot instead of on the first
  * user request. Never blocks on it: see {@link ensureConnecting}.
  */
 export const startQueue = (): Promise<void> => {
+    announceBroker();
     ensureConnecting();
     return Promise.resolve();
 };
@@ -429,7 +478,7 @@ export const parkedCounts = (): Promise<{ name: string; parked: number }[]> => {
  * {@link deadLetterQueueOf}. A consumer that needs a different number declares it on its own
  * `ConsumeOptions`, next to its handler — not a second environment variable.
  */
-const defaultMaxAttempts = (): number => environmentNumber('NODE_QUEUE_MAX_ATTEMPTS', 5, 1);
+const defaultMaxAttempts = (): number => queueConfig().NODE_QUEUE_MAX_ATTEMPTS;
 
 /**
  * Deployment-wide default: how long a failed job waits in {@link retryQueueOf} before RabbitMQ
@@ -438,8 +487,7 @@ const defaultMaxAttempts = (): number => environmentNumber('NODE_QUEUE_MAX_ATTEM
  * 5s message queued behind a 10-hour one would otherwise wait 10 hours, since a queue only expires
  * from the head.
  */
-const defaultRetryDelaySeconds = (): number =>
-    environmentNumber('NODE_QUEUE_RETRY_DELAY_SECONDS', 30, 1);
+const defaultRetryDelaySeconds = (): number => queueConfig().NODE_QUEUE_RETRY_DELAY_SECONDS;
 
 /**
  * The two job-priority levels every work queue supports, named rather than passed as raw numbers
@@ -471,6 +519,9 @@ const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 4, high: 8 };
  *         parks it once those retry cycles have used up its attempts.
  * Why 3:  RabbitMQ 4's default is 20 — too many chances for a message that kills the process on
  *         contact. https://www.rabbitmq.com/docs/quorum-queues#delivery-limit
+ * Gap:     the retry-cycle hop above does NOT hold on a real broker — the dead-letter reason is
+ *         `delivery_limit`, not `rejected`, so RabbitMQ drops the message when the TTL sends it
+ *         back. Proven by `tests/broker`; see docs/tools/broker-testing.md#known-gap-a-crashed-consumer-s-job-is-dropped
  */
 const QUORUM_DELIVERY_LIMIT = 3;
 

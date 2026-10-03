@@ -48,6 +48,10 @@ interface ProductType {
     blurb: string;
     /** Pre-tier price, in whole currency units. */
     basePrice: number;
+    /** Shipping weight in grams — what the delivery methods' weight ranges are checked against. */
+    weight: number;
+    /** VAT treatment other than the shop's standard rate, when this line has one. */
+    tax?: Pick<FillerProduct, 'taxClass' | 'rateType'>;
     /** The Italian catalogue's counterpart — `name` is gender-neutral in how {@link TIERS}
      * combines it in a title, `blurb` completes "...proprietari di {animali}: {blurb}.". */
     it: { name: string; blurb: string };
@@ -60,6 +64,7 @@ const PRODUCT_TYPES: ProductType[] = [
         slug: 'bed',
         blurb: 'a supportive resting surface designed for daily use',
         basePrice: 60,
+        weight: 2500,
         it: {
             name: 'Cuccia',
             blurb: 'una superficie di riposo di supporto pensata per un uso quotidiano'
@@ -70,6 +75,7 @@ const PRODUCT_TYPES: ProductType[] = [
         slug: 'carrier',
         blurb: 'a secure enclosure for transport and travel',
         basePrice: 70,
+        weight: 3200,
         it: {
             name: 'Trasportino',
             blurb: 'un alloggiamento sicuro per il trasporto e i viaggi'
@@ -80,6 +86,8 @@ const PRODUCT_TYPES: ProductType[] = [
         slug: 'feeding-bowl',
         blurb: 'a stable, easy-to-clean feeding solution',
         basePrice: 15,
+        weight: 400,
+        tax: { taxClass: 'zero', rateType: 'zero-rated' },
         it: {
             name: 'Ciotola per Alimenti',
             blurb: "una soluzione per l'alimentazione stabile e facile da pulire"
@@ -90,6 +98,8 @@ const PRODUCT_TYPES: ProductType[] = [
         slug: 'water-dispenser',
         blurb: 'a leak-resistant system for a constant water supply',
         basePrice: 20,
+        weight: 700,
+        tax: { taxClass: 'zero', rateType: 'exempt' },
         it: {
             name: "Erogatore d'Acqua",
             blurb: "un sistema resistente alle perdite per un rifornimento d'acqua costante"
@@ -100,6 +110,7 @@ const PRODUCT_TYPES: ProductType[] = [
         slug: 'grooming-kit',
         blurb: 'a set of tools for routine coat and nail care',
         basePrice: 25,
+        weight: 350,
         it: {
             name: 'Kit per la Toelettatura',
             blurb: 'un set di strumenti per la cura quotidiana del pelo e delle unghie'
@@ -110,6 +121,7 @@ const PRODUCT_TYPES: ProductType[] = [
         slug: 'enrichment-toy',
         blurb: 'an interactive item that supports natural behaviour',
         basePrice: 12,
+        weight: 150,
         it: {
             name: 'Giocattolo Interattivo',
             blurb: 'un accessorio interattivo che favorisce i comportamenti naturali'
@@ -120,6 +132,8 @@ const PRODUCT_TYPES: ProductType[] = [
         slug: 'health-supplement',
         blurb: 'a formulation intended to support everyday wellbeing',
         basePrice: 18,
+        weight: 300,
+        tax: { taxClass: 'reduced' },
         it: {
             name: 'Integratore per la Salute',
             blurb: 'una formulazione pensata per il benessere quotidiano'
@@ -195,6 +209,14 @@ export interface FillerProduct {
     openingStock: number;
     categories: string[];
     tags: string[];
+    /** Grams; absent on a digital row, which ships nothing. */
+    weight?: number;
+    /** `reduced` or `zero`; absent means the shop's standard rate. */
+    taxClass?: 'reduced' | 'zero';
+    /** Why the rate is zero — meaningful only with `taxClass: 'zero'`. */
+    rateType?: 'zero-rated' | 'exempt';
+    /** `false` marks a digital good. Absent means physical. */
+    requiresShipping?: false;
     /** Both locales' copy for the write surface's translation batch (see `./products`). `en` is
      * built from the same template call as the flat `title`/`description` above, so the two can
      * never drift apart. */
@@ -202,13 +224,14 @@ export interface FillerProduct {
 }
 
 /**
- * Every animal × product-type × tier combination — {@link ANIMALS}`.length` ×
+ * The animal × product-type × tier grid, every combination: {@link ANIMALS}`.length` ×
  * {@link PRODUCT_TYPES}`.length` × {@link TIERS}`.length` rows, each active and non-deleted, and
  * each stocked by an opening receipt once the flows run. The soft-deleted, inactive and
  * out-of-stock states live on the six named rows in `./products`, so a filler row is never
- * mistaken for one of them.
+ * mistaken for one of them. Each carries a shipping weight, and a product type's `tax` gives its
+ * rows a reduced or zero VAT class.
  */
-export const FILLER_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalIndex) =>
+const GRID_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalIndex) =>
     PRODUCT_TYPES.flatMap((type, typeIndex) =>
         TIERS.map((tier, tierIndex) => {
             const en: FillerCopy = {
@@ -227,11 +250,47 @@ export const FILLER_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalI
                 openingStock: Math.max(5, 60 - tierIndex * 15 - typeIndex * 3 + animalIndex * 2),
                 categories: [animal.slug],
                 tags: [type.slug, tier.slug],
+                weight: type.weight + tierIndex * 100,
+                ...type.tax,
                 translations: { en, it }
             };
         })
     )
 );
+
+/**
+ * Two downloadable guides — the only digital goods besides the hand-written course, and the
+ * filler rows a VAT or shipping journey can point at for "nothing to ship". Appended AFTER the
+ * grid so every grid row keeps its index, and with it its id and its picture.
+ */
+const DIGITAL_GUIDES: FillerProduct[] = [
+    { animal: 'Dog', slug: 'dogs', it: { animal: 'del Cane', word: 'cane' } },
+    { animal: 'Cat', slug: 'cats', it: { animal: 'del Gatto', word: 'gatto' } }
+].map(({ animal, slug, it }): FillerProduct => {
+    const en: FillerCopy = {
+        title: `${animal} Care Guide (PDF)`,
+        description: `A downloadable guide to everyday ${animal.toLowerCase()} care, delivered as a PDF.`
+    };
+
+    return {
+        ...en,
+        price: 9,
+        openingStock: 100,
+        categories: [slug],
+        tags: ['digital', 'guide'],
+        requiresShipping: false,
+        translations: {
+            en,
+            it: {
+                title: `Guida alla Cura ${it.animal} (PDF)`,
+                description: `Una guida scaricabile alla cura quotidiana del ${it.word}, in formato PDF.`
+            }
+        }
+    };
+});
+
+/** Every filler row: the animal × type × tier grid, then the digital guides. */
+export const FILLER_PRODUCTS: FillerProduct[] = [...GRID_PRODUCTS, ...DIGITAL_GUIDES];
 
 /**
  * A stable 24-hex id for filler row `index` — never `new Types.ObjectId()`, whose default is

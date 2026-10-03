@@ -10,6 +10,7 @@
 
 import { createHmac } from 'node:crypto';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
+import { paymentWebhookSecret } from '../config';
 
 /** Where the signature travels. Lower-case: Node normalises incoming header names. */
 export const WEBHOOK_SIGNATURE_HEADER = 'x-payment-signature';
@@ -41,7 +42,7 @@ export class WebhookRejected extends Error {
  *   caller, which is worse than authenticating none.
  */
 const secret = (): string => {
-    const value = process.env.NODE_PAYMENT_WEBHOOK_SECRET ?? '';
+    const value = paymentWebhookSecret() ?? '';
     if (!value) throw new Error('NODE_PAYMENT_WEBHOOK_SECRET is not set');
     return value;
 };

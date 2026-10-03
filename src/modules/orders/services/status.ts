@@ -8,11 +8,11 @@
  * See `docs/theory/tactical-ddd.md` §1 "Who writes the status".
  */
 
-import { emitDomainEvent } from '@kernel/events';
+import { announceInTransaction } from '@kernel/outbox';
 import { OrderStatus } from '@types';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
-import { ORDER_STATUS_CHANGED } from '../events';
+import { statusChangedEvent } from './announce';
 import {
     statusesLeadingTo,
     withdrawUntilFrom,
@@ -41,10 +41,11 @@ import { withdrawalPeriodDays } from '../config';
  */
 const markSystemMove = (orderId: string, to: OrderStatus): Promise<OrderDocument | null> => {
     const [from] = statusesLeadingTo(to, 'system');
-    return orderRepository.updateStatusIfIn(orderId, [from], to).then((updated) => {
-        if (updated) void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from, to });
-        return updated;
-    });
+    return announceInTransaction(
+        (session) =>
+            orderRepository.updateStatusIfIn(orderId, [from], to, undefined, undefined, session),
+        () => statusChangedEvent(orderId, from, to)
+    );
 };
 
 /**
@@ -57,15 +58,20 @@ const markSystemMove = (orderId: string, to: OrderStatus): Promise<OrderDocument
  * `ORDER_STATUS_CHANGED` event emitted below to issue the order's invoice — see
  * `docs/modules/invoicing.md`.
  * @param orderId - the order the payment was for
+ * @param paymentMethod - `card` when the provider took the money: the order then says so, even if
+ *   checkout chose bank transfer (a customer who changed their mind). Offline money leaves the
+ *   checkout choice alone — the payment row carries the recorded method
  * @returns the order as it now stands, or `null` if it could no longer be paid
  */
-export const markPaid = (orderId: string): Promise<OrderDocument | null> => {
+export const markPaid = (
+    orderId: string,
+    paymentMethod?: 'card'
+): Promise<OrderDocument | null> => {
     const [from] = statusesLeadingTo(OrderStatus.paid, 'system');
-    return orderRepository.markPaid(orderId, from).then((updated) => {
-        if (updated)
-            void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from, to: OrderStatus.paid });
-        return updated;
-    });
+    return announceInTransaction(
+        (session) => orderRepository.markPaid(orderId, from, paymentMethod, session),
+        () => statusChangedEvent(orderId, from, OrderStatus.paid)
+    );
 };
 
 /**
@@ -101,15 +107,10 @@ const markArrived = (
     from: OrderStatus,
     withdrawUntil: Date
 ): Promise<OrderDocument | null> =>
-    orderRepository.markDelivered(orderId, from, withdrawUntil).then((updated) => {
-        if (updated)
-            void emitDomainEvent(ORDER_STATUS_CHANGED, {
-                orderId,
-                from,
-                to: OrderStatus.delivered
-            });
-        return updated;
-    });
+    announceInTransaction(
+        (session) => orderRepository.markDelivered(orderId, from, withdrawUntil, session),
+        () => statusChangedEvent(orderId, from, OrderStatus.delivered)
+    );
 
 /**
  * Report that a parcel arrived. `delivery`'s delivery door calls this only after it has recorded
@@ -149,7 +150,7 @@ export const markFulfilled = (orderId: string): Promise<OrderDocument | null> =>
     orderRepository.findById(orderId).then((order) => {
         if (!order) return null;
         // Digital content: the period runs from the conclusion of the contract, not from the
-        // moment staff marked it fulfilled (Art. 9(2)(a)) — `paidAt` is that moment here.
+        // moment staff marked it fulfilled (Art. 9(2)(c)) — `paidAt` is that moment here.
         const start = order.paidAt ?? new Date();
         return markArrived(
             orderId,

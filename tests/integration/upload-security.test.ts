@@ -5,6 +5,7 @@ import { api, authenticateAs } from '@tests/http';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { maxUploadBytes } from '@infrastructure/http/middlewares/upload';
+import { currentEnvironment } from '@infrastructure/config/store';
 
 /**
  * What actually reaches the disk.
@@ -22,7 +23,7 @@ import { maxUploadBytes } from '@infrastructure/http/middlewares/upload';
 
 // `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
 // runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
-const UPLOAD_DIRECTORY = path.resolve(process.env.NODE_PUBLIC_PATH!, 'images');
+const UPLOAD_DIRECTORY = path.resolve(currentEnvironment().NODE_PUBLIC_PATH!, 'images');
 
 /**
  * A genuinely decodable PNG, not merely a magic-byte header.

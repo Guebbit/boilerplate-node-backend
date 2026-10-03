@@ -7,27 +7,19 @@
 
 import { frontendLink } from '@infrastructure/http/frontend-link';
 import { resetSupportedLocales } from '@infrastructure/i18n';
+import { overrideEnvironment } from '@infrastructure/config/store';
 
 const TOKEN = 'a1b2c3d4e5f6';
 
-/** Restores whichever env vars a test overrode, and drops the locale-list cache they may affect. */
+/** Runs `run` with the given overrides, then puts them back and drops the locale-list cache they may affect. */
 const withEnv = (overrides: Record<string, string | undefined>, run: () => void): void => {
-    const originals = Object.fromEntries(
-        Object.keys(overrides).map((key) => [key, process.env[key]])
-    );
-    for (const [key, value] of Object.entries(overrides)) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-    }
+    const restore = overrideEnvironment(overrides);
     resetSupportedLocales();
 
     try {
         run();
     } finally {
-        for (const [key, value] of Object.entries(originals)) {
-            if (value === undefined) delete process.env[key];
-            else process.env[key] = value;
-        }
+        restore();
         resetSupportedLocales();
     }
 };

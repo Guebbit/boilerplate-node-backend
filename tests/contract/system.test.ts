@@ -8,6 +8,7 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { markServerListening } from '@infrastructure/runtime/readiness';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
@@ -17,6 +18,14 @@ describe('GET /', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('ok');
+    });
+});
+
+describe('GET /livez', () => {
+    it('matches the contract (200, empty body)', async () => {
+        const response = await api().get('/livez');
+
+        expect(response.status).toBe(200);
     });
 });
 
@@ -41,13 +50,13 @@ describe('GET /readyz', () => {
 
 describe('GET /.well-known/security.txt', () => {
     afterEach(() => {
-        delete process.env.NODE_SECURITY_CONTACT;
-        delete process.env.NODE_SECURITY_EXPIRES;
+        setEnvironment({ NODE_SECURITY_CONTACT: undefined });
+        setEnvironment({ NODE_SECURITY_EXPIRES: undefined });
     });
 
     it('matches the contract when configured (200, text/plain)', async () => {
-        process.env.NODE_SECURITY_CONTACT = 'https://example.test/advisories/new';
-        process.env.NODE_SECURITY_EXPIRES = '2099-01-01T00:00:00Z';
+        setEnvironment({ NODE_SECURITY_CONTACT: 'https://example.test/advisories/new' });
+        setEnvironment({ NODE_SECURITY_EXPIRES: '2099-01-01T00:00:00Z' });
 
         const response = await api().get('/.well-known/security.txt');
 

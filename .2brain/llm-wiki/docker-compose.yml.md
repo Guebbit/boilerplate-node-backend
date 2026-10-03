@@ -1,31 +1,37 @@
 ---
 source: docker-compose.yml
-sha256: 929bd07dc2248a9fa249a298112622a5867b8cd41e4bc58ab2276d0062bde417
-generated_at: 2026-09-27T13:47:18.975702+00:00
+sha256: 32c5fa97efbe80ce2e789da32b10aa28665dcd9789458933d2723f623b5f1105
+generated_at: 2026-10-01T12:18:01.701391+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # docker-compose.yml
 
 ## Purpose
-Defines the local multi-container development stack (app, database, Redis, RabbitMQ, scheduler, observability, and optional analytics services) for a Node.js application. It encapsulates build context, service wiring, runtime environment, volume layout, health checks, and a logging-driver anchor so that a single `compose up` yields a fully populated, observable, browsable environment without manual setup.
+
+Defines the full local development stack in a single file: the Node.js API (`app`), its backing services (MongoDB, Redis, RabbitMQ), an external cron scheduler (supercronic), and opt-in observability/analytics profiles. A single `compose up` yields a populated, health-checked, log-forwarded environment with seeded demo data — no separate setup scripts needed.
 
 ## Key elements
-- **`x-logging` anchor** — YAML anchor (`&container-logging`) that pins the container log driver to `json-file` (overridable via `CONTAINER_LOG_DRIVER`). Required because Promtail tails log files; Podman's default `journald` driver writes no file, silently breaking Loki ingestion.
-- **`services.app`** — The Node.js API container. Built from `docker/Dockerfile`, bound to `${NODE_HOST:-127.0.0.1}:${NODE_PORT:-3000}`, with `restart: unless-stopped`. Carries all runtime env vars (Mongo/Redis/RabbitMQ URLs, clustering, rate-limit buckets, OTel endpoint, Loki/Umami/Faro health URLs, analytics provider config). Command runs `npm run db:bootstrap` (idempotent sync + one-shot seeder) then starts the dev server in cluster or single-process mode.
-- **`services.app.volumes`** — Bind-mounts `.` → `/app:Z` for hot-reload; anonymous volume isolates `/app/node_modules` from the host.
-- **`services.app.depends_on`** — `database` gated on `service_healthy` (Mongo must accept connections before `db:bootstrap` runs); `redis` and `rabbitmq` gated on `service_started`.
-- **`services.app.healthcheck`** — Uses `node -e` with built-in `fetch` (the alpine image ships no `curl`). 2-min interval, 5 s timeout, 3 retries, 30 s start period.
-- **Scheduler service** (supercronic) — External cron via `docker/crontab` bind-mounted at `/app/crontab`; uses the same image as `app`. `replicas: 1` plus a Mongo lease (`src/infrastructure/persistence/lease.ts`) provide mutual exclusion. Shape mirrors a Kubernetes `CronJob` or systemd timer.
-- **Rate-limit env vars** (`NODE_RATE_LIMIT_MAX`, `NODE_AUTH_RATE_LIMIT_MAX`, `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX`) — Defaults match `.env`; declared here so a live E2E run can override them from the shell without editing `.env`. Credential buckets are intentionally decoupled from the global bucket.
+
+- **`x-logging` anchor** — Shared log-driver setting (`json-file` by default, overridable via `CONTAINER_LOG_DRIVER`). Applied to every service so Promtail's file-tail glob always matches.
+- **`app` service** — The primary Node.js API container.
+  - Builds from `docker/Dockerfile`; binds the host project directory at `/app` for hot reload.
+  - `command` runs `npm run db:bootstrap` (sync + seeder) then starts the server (cluster or single-process depending on `NODE_ENABLE_CLUSTERING`).
+  - `healthcheck` uses `node -e "fetch(...)"` against `/livez` (no curl in the alpine base image).
+  - `depends_on` gates on `database` health before booting.
+  - Environment block exposes every runtime knob as `${VAR:-default}` so a shell override (e.g. for E2E rate-limit bumps) takes precedence over `.env`.
+- **Scheduler service (supercronic)** — Reads a bind-mounted `docker/crontab`; runs `scripts/ops/reap-*` / `sweep:*` jobs on schedule. Uses the same image as `app`. Enforces single-instance via `replicas: 1` plus a Mongo lease. *(Definition truncated in source.)*
+- **Referenced services** — `database`, `redis`, `rabbitmq`, `umami`, and observability/analytics containers are declared further down (truncated) and are the targets of the `depends_on` and `NODE_*_URL` env vars above.
 
 ## Relationships
-- **`github/workflows/ci.yml`** — The CI workflow drives this compose stack for integration/E2E test runs. It relies on the same `compose:restart` script and the shell-overridable rate-limit / cluster-worker variables declared here to raise budgets for a single-address test suite without touching `.env`. The healthcheck and `depends_on` ordering in this file are what CI polls before asserting the API is ready.
+
+- **`github/workflows/ci.yml`** — CI starts this compose stack (via `npm run compose:up` / `compose:restart`) to drive the frontend E2E suite. The file's inline comments document the exact shell overrides CI is expected to pass (`NODE_RATE_LIMIT_MAX`, `NODE_AUTH_RATE_LIMIT_MAX`, `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX`) to avoid 429 responses during a full-suite run from a single IP. The CI job is the primary consumer of the `app` service's published port and healthcheck.
 
 ## Notes
-- **Logging driver is not optional.** Every service must inherit the `x-logging` anchor; omitting it on any one service makes that service invisible to Promtail with no error surfaced anywhere.
-- **`NODE_ENV` is hard-pinned to `development`.** The seeder refuses to run in production, but this pin also gates the one seeder check it *does* refuse. Changing it here changes bootstrap behavior, not just env labels.
-- **Mongo connection is intentionally absent from the `environment` block.** It comes from `.env` (`NODE_MONGODB_HOST` / `NODE_DB_URI`). Adding it here would shadow `.env` and block external URIs.
-- **Loki/Umami/Faro URLs in `NODE_LOKI_HOST` etc. use `localhost`, while `NODE_UMAMI_INGEST_HOST` uses the service name.** The former are declarative (reported to a browser via `/observability/health`); the latter is dialled from inside the compose network where `localhost` is the app's own container.
-- **The seeder is non-idempotent** — it builds order history by driving real checkouts and skips if the database already contains data. `scenario:apply:reset` is the intended way to rebuild.
-- **`NODE_ENABLE_CLUSTERING=0` is the default** (one process). On many-core machines this prevents dozens of Node workers during a solo dev session; set to `1` for load testing.
+
+- **Podman vs. Docker logging:** Podman's default driver is `journald` (no file output). If `CONTAINER_LOG_DRIVER` is unset on a Podman host, Promtail tails a non-existent path and Loki silently stays empty. The anchor exists specifically to prevent this.
+- **Seeder is not idempotent** — it builds demo orders by driving real checkouts, then skips (exit 0) if any data already exists. `scenario:apply:reset` is the explicit rebuild path. It also refuses to run when `NODE_ENV=production`.
+- **Do not redeclare `NODE_MONGODB_HOST` in the `environment` block.** An entry there shadows `.env`, making an external Mongo URI impossible to set without editing the compose file.
+- **Two Umami hosts, different contexts:** `NODE_UMAMI_HOST` is a host-facing URL for browser health reporting (uses `localhost`); `NODE_UMAMI_INGEST_HOST` is the in-network service URL the API dials (uses the `umami` hostname). Swapping them breaks one or the other silently.
+- **Rate-limit env vars are deliberately overridable from the shell** for E2E runs; their defaults match `.env`, so a plain `up` is unaffected.
+- The file content provided is truncated; services beyond the scheduler (database, redis, rabbitmq, umami, observability, analytics, and any top-level `volumes:` / `networks:` sections) are not visible here.

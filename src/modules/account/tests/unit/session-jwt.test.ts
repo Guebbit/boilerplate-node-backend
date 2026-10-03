@@ -46,6 +46,7 @@ import {
     recordRefreshTokenUse
 } from '@modules/account/session/jwt';
 import { userService, TokenType } from '@modules/users';
+import { setEnvironment } from '@tests/environment';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
@@ -87,11 +88,11 @@ beforeEach(() => {
     // `clearAllMocks` keeps the implementation while wiping only the call log — so a rejection
     // set in one case leaks into the next and fails it with the wrong error.
     jest.resetAllMocks();
-    process.env.NODE_TOKEN_ACCESS = 'access-secret';
-    process.env.NODE_TOKEN_REFRESH = 'refresh-secret';
-    process.env.NODE_TOKEN_ACCESS_TIME = '900';
-    process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '3600';
-    process.env.NODE_TOKEN_REFRESH_TIME_LONG = '2592000';
+    setEnvironment({ NODE_TOKEN_ACCESS: 'access-secret' });
+    setEnvironment({ NODE_TOKEN_REFRESH: 'refresh-secret' });
+    setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
+    setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
+    setEnvironment({ NODE_TOKEN_REFRESH_TIME_LONG: '2592000' });
 });
 
 describe('verifyAccessToken', () => {
@@ -218,13 +219,13 @@ describe('the signing-key ring', () => {
         const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
         mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
 
-        process.env.NODE_TOKEN_REFRESH = 'new-refresh-secret,refresh-secret';
+        setEnvironment({ NODE_TOKEN_REFRESH: 'new-refresh-secret,refresh-secret' });
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
     });
 
     it("signs new tokens with the ring's first entry once one is prepended", async () => {
-        process.env.NODE_TOKEN_REFRESH = 'new-refresh-secret,refresh-secret';
+        setEnvironment({ NODE_TOKEN_REFRESH: 'new-refresh-secret,refresh-secret' });
         const user = userDouble();
         findByIdReturning(user);
 
@@ -239,7 +240,7 @@ describe('the signing-key ring', () => {
         // kid is a retired key presented as current — 401, "log in again", never a crash.
         const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
 
-        process.env.NODE_TOKEN_REFRESH = 'new-refresh-secret';
+        setEnvironment({ NODE_TOKEN_REFRESH: 'new-refresh-secret' });
 
         await expect(verifyRefreshToken(token)).rejects.toThrow();
         expect(mockedUsers.findByTokenValue).not.toHaveBeenCalled();

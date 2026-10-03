@@ -66,3 +66,16 @@ describe('mfaChallengeLimiter and mfaSendLimiter', () => {
         expect(budget('mfa-challenge').windowMs).not.toBe('shared');
     });
 });
+
+describe('the signed-in code-delivery budget', () => {
+    it('is keyed on the account and windowed over an hour, not the challenge lifetime', () => {
+        expect(budget('mfa-account-send').keyedBy).toBe('the authenticated account');
+        expect(budget('mfa-account-send').windowMs).toBe(3_600_000);
+    });
+
+    it('sits above the per-challenge delivery budget: an account has no challenge to spend', () => {
+        expect(budget('mfa-account-send').defaultMax).toBeGreaterThanOrEqual(
+            budget('mfa-send').defaultMax
+        );
+    });
+});

@@ -7,18 +7,17 @@
  * error, a non-2xx response — resolves to a {@link WebhookDeliveryResult} with `success: false` and
  * a human-readable `.error`, so a worker can always write a delivery-log row, never crash on one.
  *
- * Built on `node:http`/`node:https` rather than a client library: the two properties this delivery
- * cannot do without — a custom `lookup` (DNS pinning, from `@infrastructure/adapters/ssrf-guard`)
- * and no automatic redirect following — are exactly the two both give directly. A 3xx response is
- * read as a failed delivery below; it is never followed, which is what makes "refuse redirects
- * entirely" (`ssrf-guard.ts`'s documented split) actually true rather than aspirational.
+ * Built on `node:https` rather than a client library: the two properties this delivery cannot do
+ * without — a custom `lookup` (DNS pinning, from `@infrastructure/adapters/ssrf-guard`) and no
+ * automatic redirect following — are exactly the two it gives directly. A 3xx response is read as
+ * a failed delivery below; it is never followed, which is what makes "refuse redirects entirely"
+ * (`ssrf-guard.ts`'s documented split) actually true rather than aspirational.
  *
- * `node:http` only ever runs for `ssrf-guard.ts`'s one exempted development/test demo host —
- * every other target already failed the `https:` check before a request module is even chosen.
+ * Always TLS: `ssrf-guard.ts` refuses every non-`https:` URL, the demo host included.
  */
 
 import { request as httpsRequest } from 'node:https';
-import { request as httpRequest, type IncomingMessage } from 'node:http';
+import type { IncomingMessage } from 'node:http';
 import {
     resolveSafeOutboundTarget,
     SsrfRefusedError,
@@ -41,8 +40,8 @@ export interface WebhookDeliveryAttempt {
     payload: unknown;
     /** Overrides {@link DEFAULT_TIMEOUT_MS}. */
     timeoutMs?: number;
-    /** Passed straight through to `ssrf-guard.ts`'s `resolveSafeOutboundTarget`. */
-    allowedInsecureHost?: string;
+    /** Passed straight through to `ssrf-guard.ts`'s `resolveSafeOutboundTarget` as its exempt host. */
+    allowedPrivateHost?: string;
 }
 
 /** What happened, in the shape a delivery-log row is written from. */
@@ -66,21 +65,20 @@ interface RawResponse {
  * POST the signed body to a pinned target.
  *
  * node:https — https.request(options, callback): https://nodejs.org/api/https.html#httpsrequestoptions-callback
- * (node:http's `request` takes the identical options shape for everything used here)
  *  - `lookup`: DNS pinning from `ssrf-guard.ts` — the connection is made to the address that was
  *    already validated, not to whatever a second resolution would answer.
  *  - `hostname` stays the ORIGINAL host (not the pinned IP): TLS SNI and certificate hostname
  *    verification must check against the name the operator configured, only the IP the socket
- *    connects to is pinned. Irrelevant to a plain `http:` request, but harmless to still pass.
+ *    connects to is pinned.
  *  - `signal`: the hard total timeout, created once in {@link deliverWebhook} and shared with the
  *    DNS resolution before this — `request.destroy()` fires on abort, surfaced below as the
  *    request's `error` event with `err.name === 'AbortError'`.
  *  - No redirect handling: this call answers with whatever status the endpoint sent, 3xx included,
  *    and `deliverWebhook` below treats 3xx as a failure rather than a location to chase.
  *
- * `url.protocol` decides `node:http` vs `node:https` — `ssrf-guard.ts` has already refused
- * every `http:` target except its one exempted demo host, so this never opens a plaintext
- * connection anywhere else.
+ * Trust is Node's own store: the system roots, plus whatever `NODE_EXTRA_CA_CERTS` added at process
+ * start. Only the development/demo scripts set that (the demo sink's test CA); no `ca` option
+ * is passed here, so nothing in this file can widen it.
  *
  * @param target - the pinned, already-validated destination from `resolveSafeOutboundTarget`
  * @param url - the parsed subscription URL, for the scheme/path/query/port `lookup` cannot supply
@@ -97,12 +95,10 @@ const postSignedPayload = (
     signal: AbortSignal
 ): Promise<RawResponse> =>
     new Promise((resolve, reject) => {
-        const isPlainHttp = url.protocol === 'http:';
-        const request = isPlainHttp ? httpRequest : httpsRequest;
-        const outgoingRequest = request(
+        const outgoingRequest = httpsRequest(
             {
                 hostname: target.hostname,
-                port: url.port ? Number(url.port) : isPlainHttp ? 80 : 443,
+                port: url.port ? Number(url.port) : 443,
                 path: `${url.pathname}${url.search}`,
                 method: 'POST',
                 lookup: target.lookup,
@@ -165,7 +161,7 @@ export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<Webhook
     // `signal` parameter docblock for why the resolver needs it too.
     const signal = AbortSignal.timeout(timeoutMs);
 
-    return resolveSafeOutboundTarget(attempt.url, attempt.allowedInsecureHost, signal)
+    return resolveSafeOutboundTarget(attempt.url, attempt.allowedPrivateHost, signal)
         .then((target) => {
             const body = JSON.stringify(attempt.payload);
             const { headers } = signWebhookPayload({

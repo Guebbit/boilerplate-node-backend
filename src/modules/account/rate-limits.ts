@@ -23,7 +23,9 @@ import {
     KEYED_BY_ADDRESS,
     KEYED_BY_ADDRESS_BLOCK,
     KEYED_BY_SUBMITTED_EMAIL,
-    KEYED_BY_CHALLENGE
+    KEYED_BY_CHALLENGE,
+    KEYED_BY_AUTHENTICATED_ACCOUNT,
+    accountIdOf
 } from '@infrastructure/http/middlewares/rate-limit';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import { MFA_CHALLENGE_DELIVERED_TTL_MS } from './services/two-factor';
@@ -318,7 +320,7 @@ const MFA_CHALLENGE_BUDGET: RateLimitBudget = {
         'distributed attacker rotating IPs is still capped per challenge.',
     audited: true,
     keyGenerator: challengeKey,
-    // Deliberately NOT raised in `tests/support/setup.ts` — see that file for why.
+    // Deliberately NOT raised in `tests/support/setup-environment.ts` — see that file for why.
     testExemption:
         'two-factor.test.ts\'s "kills the challenge after too many wrong attempts" case fires 6 ' +
         "concurrent guesses at ONE challenge specifically to prove this budget's tight production " +
@@ -352,6 +354,58 @@ const MFA_SEND_BUDGET: RateLimitBudget = {
 /** The budget for `POST /account/login/2fa/send` — see {@link MFA_SEND_BUDGET}. */
 export const mfaSendLimiter: RequestHandler = buildRateLimiter(MFA_SEND_BUDGET);
 
+/** Window of the signed-in code budgets: an hour, so a burst cannot be waited out in minutes. */
+const ACCOUNT_CODE_WINDOW_MS = 3_600_000;
+
+/**
+ * Codes delivered to a SIGNED-IN account so it can prove a factor (`POST /account/2fa/methods/
+ * {method}/send`) or pass step-up (`POST /account/reauth/methods/{method}/send`) — one budget for
+ * both, since both spend the same mailbox. Keyed on the account, not the challenge: there is no challenge here, and an
+ * address key would let one stolen session mail the owner from many places. The per-code cooldown
+ * still paces a single button; this caps the total one account's mailbox can be made to receive.
+ */
+const ACCOUNT_CODE_SEND_BUDGET: RateLimitBudget = {
+    name: 'MFA code deliveries — per account',
+    namespace: 'mfa-account-send',
+    environmentVariable: 'NODE_MFA_ACCOUNT_SEND_MAX',
+    defaultMax: 5,
+    windowMs: ACCOUNT_CODE_WINDOW_MS,
+    keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
+    bounds: 'Deliveries to a signed-in account (`POST /account/2fa/methods/{method}/send`, `POST /account/reauth/methods/{method}/send`).',
+    audited: true,
+    keyGenerator: accountIdOf
+};
+
+/** The budget for both signed-in code sends — see {@link ACCOUNT_CODE_SEND_BUDGET}. */
+export const accountCodeSendLimiter: RequestHandler = buildRateLimiter(ACCOUNT_CODE_SEND_BUDGET);
+
+/**
+ * WRONG codes a signed-in account may type into the calls that change its own second factors.
+ * Those calls take a TOTP or backup code from a session that already passed fresh auth, so a
+ * stolen session plus password would otherwise guess six digits behind the global brake alone.
+ *
+ * Failures only: a right code spends nothing, so changing factors is never itself rationed.
+ * Keyed on the account, like the delivery budget above: an address key would reset per IP.
+ */
+const ACCOUNT_CODE_GUESS_BUDGET: RateLimitBudget = {
+    name: 'Two-factor code guesses — per account',
+    namespace: 'mfa-account-guess',
+    environmentVariable: 'NODE_MFA_ACCOUNT_GUESS_MAX',
+    defaultMax: 5,
+    windowMs: ACCOUNT_CODE_WINDOW_MS,
+    keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
+    bounds:
+        'Wrong codes a signed-in account types to change its factors (`DELETE /account/2fa`, ' +
+        '`POST /account/2fa/methods/{method}/setup`, `DELETE /account/2fa/methods/{method}`, ' +
+        '`POST /account/2fa/backup-codes`).',
+    audited: true,
+    keyGenerator: accountIdOf,
+    skipSuccessfulRequests: true
+};
+
+/** The budget for the factor-changing calls — see {@link ACCOUNT_CODE_GUESS_BUDGET}. */
+export const accountCodeGuessLimiter: RequestHandler = buildRateLimiter(ACCOUNT_CODE_GUESS_BUDGET);
+
 /** This module's declared budgets — listed on `./module.ts`'s `rateLimits`. */
 export const accountRateLimits: readonly RateLimitBudget[] = [
     CREDENTIAL_IDENTITY_BUDGET,
@@ -365,5 +419,7 @@ export const accountRateLimits: readonly RateLimitBudget[] = [
     RESET_ADDRESS_BUDGET,
     RESET_BLOCK_BUDGET,
     MFA_CHALLENGE_BUDGET,
-    MFA_SEND_BUDGET
+    MFA_SEND_BUDGET,
+    ACCOUNT_CODE_SEND_BUDGET,
+    ACCOUNT_CODE_GUESS_BUDGET
 ];

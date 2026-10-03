@@ -98,9 +98,15 @@ const enrollTotp = async (bearer: string) => {
     return { secret, backupCodes: (confirm.body.data.backupCodes ?? []) as string[] };
 };
 
-/** Enrolls and confirms the email factor, reading the code back out of the outbox. */
-const enrollEmail = async (bearer: string) => {
-    await api().post('/account/2fa/methods/email/setup').set('Authorization', bearer).send();
+/**
+ * Enrolls and confirms the email factor, reading the code back out of the outbox. `proof` is a
+ * code from a factor already armed — a second factor needs one.
+ */
+const enrollEmail = async (bearer: string, proof?: string) => {
+    await api()
+        .post('/account/2fa/methods/email/setup')
+        .set('Authorization', bearer)
+        .send(proof ? { code: proof } : {});
 
     const confirm = await api()
         .post('/account/2fa/methods/email/confirm')
@@ -181,6 +187,291 @@ describe('status', () => {
             ['email']
         );
         expect(response.body.data.backupCodesRemaining).toBe(10);
+    });
+});
+
+describe('status while an enrollment is pending', () => {
+    it('does not list a method that was never confirmed as armed, nor offer it as a method to add', async () => {
+        const { bearer } = await authenticateVerified();
+        await api().post('/account/2fa/methods/totp/setup').set('Authorization', bearer).send();
+
+        const response = await api().get('/account/2fa').set('Authorization', bearer).send();
+
+        expect(response.body.data.enabled).toBe(false);
+        expect(response.body.data.methods).toEqual([]);
+        expect((response.body.data.available as { method: string }[]).map((m) => m.method)).toEqual(
+            expect.arrayContaining(['totp'])
+        );
+    });
+
+    it('reports a replaced email factor as disarmed too: a replace disarms it before its new code is proved', async () => {
+        const { bearer } = await authenticateVerified();
+        const { backupCodes } = await enrollEmail(bearer);
+        await api()
+            .post('/account/2fa/methods/email/setup')
+            .set('Authorization', bearer)
+            .send({ code: backupCodes[0] });
+
+        const response = await api().get('/account/2fa').set('Authorization', bearer).send();
+
+        expect(response.body.data.enabled).toBe(false);
+        expect(response.body.data.methods).toEqual([]);
+        expect((response.body.data.available as { method: string }[]).map((m) => m.method)).toEqual(
+            expect.arrayContaining(['email'])
+        );
+    });
+
+    it('reports a replaced device factor as disarmed, since the replace disarms it before its new code is proved', async () => {
+        const { bearer } = await authenticateVerified();
+        const { backupCodes } = await enrollTotp(bearer);
+        await api()
+            .post('/account/2fa/methods/totp/setup')
+            .set('Authorization', bearer)
+            .send({ code: backupCodes[0] });
+
+        const response = await api().get('/account/2fa').set('Authorization', bearer).send();
+
+        expect(response.body.data.enabled).toBe(false);
+        expect(response.body.data.methods).toEqual([]);
+    });
+});
+
+/** Every mail queued with this template, oldest first. */
+const mailsOf = (template: string) => mockOutbox.filter((mail) => mail.template === template);
+
+describe('changing factors once one is armed', () => {
+    it('needs no code for the FIRST factor: a fresh password is all there is to prove', async () => {
+        const { bearer } = await authenticateVerified();
+
+        const response = await api()
+            .post('/account/2fa/methods/totp/setup')
+            .set('Authorization', bearer)
+            .send();
+
+        expect(response.status).toBe(200);
+    });
+
+    it('refuses a second method without a code, and leaves the armed one armed', async () => {
+        const { bearer } = await authenticateVerified();
+        await enrollTotp(bearer);
+
+        const response = await api()
+            .post('/account/2fa/methods/email/setup')
+            .set('Authorization', bearer)
+            .send();
+
+        expect(response.status).toBe(422);
+        expect(mailsOf('account.two-factor-code')).toEqual([]);
+    });
+
+    it('refuses a replace without a code, and the factor being replaced stays armed', async () => {
+        const { bearer } = await authenticateVerified();
+        await enrollTotp(bearer);
+
+        const response = await api()
+            .post('/account/2fa/methods/totp/setup')
+            .set('Authorization', bearer)
+            .send();
+        const status = await api().get('/account/2fa').set('Authorization', bearer).send();
+
+        expect(response.status).toBe(422);
+        expect(status.body.data.enabled).toBe(true);
+        expect((status.body.data.methods as { method: string }[]).map((m) => m.method)).toEqual([
+            'totp'
+        ]);
+    });
+
+    it('refuses a wrong code the same way, and disarms nothing', async () => {
+        const { bearer } = await authenticateVerified();
+        await enrollTotp(bearer);
+
+        const response = await api()
+            .post('/account/2fa/methods/totp/setup')
+            .set('Authorization', bearer)
+            .send({ code: '000000' });
+        const status = await api().get('/account/2fa').set('Authorization', bearer).send();
+
+        expect(response.status).toBe(422);
+        expect(status.body.data.enabled).toBe(true);
+    });
+
+    it('accepts an unused backup code, which is the lost-phone route, and spends it', async () => {
+        const { bearer } = await authenticateVerified();
+        const { backupCodes } = await enrollTotp(bearer);
+
+        const response = await api()
+            .post('/account/2fa/methods/totp/setup')
+            .set('Authorization', bearer)
+            .send({ code: backupCodes[0] });
+        const status = await api().get('/account/2fa').set('Authorization', bearer).send();
+
+        expect(response.status).toBe(200);
+        expect(status.body.data.backupCodesRemaining).toBe(9);
+    });
+
+    it('lets an email-only account replace its email with a code sent to it first', async () => {
+        const { bearer } = await authenticateVerified();
+        await enrollEmail(bearer);
+        mockOutbox.length = 0;
+
+        const sent = await api()
+            .post('/account/2fa/methods/email/send')
+            .set('Authorization', bearer)
+            .send();
+        const proof = mailedCode();
+        const response = await api()
+            .post('/account/2fa/methods/email/setup')
+            .set('Authorization', bearer)
+            .send({ code: proof });
+
+        expect(sent.status).toBe(200);
+        expect(response.status).toBe(200);
+        // One mail to prove, a second carrying the NEW code.
+        expect(mailsOf('account.two-factor-code')).toHaveLength(2);
+    });
+});
+
+describe('sending a code to a signed-in account', () => {
+    it('requires a live session', async () => {
+        const response = await api().post('/account/2fa/methods/email/send').send();
+
+        expect(response.status).toBe(401);
+    });
+
+    it('answers 404 for a method this deployment does not run', async () => {
+        const { bearer } = await authenticateVerified();
+
+        const response = await api()
+            .post('/account/2fa/methods/carrier-pigeon/send')
+            .set('Authorization', bearer)
+            .send();
+
+        expect(response.status).toBe(404);
+    });
+
+    it('refuses a method the account has not armed, and mails nothing', async () => {
+        const { bearer } = await authenticateVerified();
+
+        const response = await api()
+            .post('/account/2fa/methods/email/send')
+            .set('Authorization', bearer)
+            .send();
+
+        expect(response.status).toBe(422);
+        expect(mailsOf('account.two-factor-code')).toEqual([]);
+    });
+
+    it('refuses a method that does not deliver', async () => {
+        const { bearer } = await authenticateVerified();
+        await enrollTotp(bearer);
+
+        const response = await api()
+            .post('/account/2fa/methods/totp/send')
+            .set('Authorization', bearer)
+            .send();
+
+        expect(response.status).toBe(422);
+    });
+
+    it('mails a code to the account, masked in the answer, and a code that then proves the caller', async () => {
+        const { bearer } = await authenticateVerified();
+        const { backupCodes } = await enrollEmail(bearer);
+        mockOutbox.length = 0;
+
+        const response = await api()
+            .post('/account/2fa/methods/email/send')
+            .set('Authorization', bearer)
+            .send();
+        const regenerate = await api()
+            .post('/account/2fa/backup-codes')
+            .set('Authorization', bearer)
+            .send({ code: mailedCode() });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.sentTo).toBe('a***a@example.com');
+        expect(mailsOf('account.two-factor-code')).toHaveLength(1);
+        expect(regenerate.status).toBe(200);
+        expect(regenerate.body.data.backupCodes).not.toEqual(backupCodes);
+    });
+
+    it('refuses a second send inside the cooldown, and mails once', async () => {
+        const { bearer } = await authenticateVerified();
+        await enrollEmail(bearer);
+        mockOutbox.length = 0;
+        await api().post('/account/2fa/methods/email/send').set('Authorization', bearer).send();
+
+        const second = await api()
+            .post('/account/2fa/methods/email/send')
+            .set('Authorization', bearer)
+            .send();
+
+        expect(second.status).toBe(429);
+        expect(second.body.errors[0].details.retryAfter).toBeGreaterThan(0);
+        expect(mailsOf('account.two-factor-code')).toHaveLength(1);
+    });
+});
+
+describe('telling the account holder their factors changed', () => {
+    it('mails once when a factor is armed', async () => {
+        const { bearer } = await authenticateVerified();
+
+        await enrollTotp(bearer);
+
+        expect(mailsOf('account.two-factor-changed')).toHaveLength(1);
+        expect(mailsOf('account.two-factor-changed')[0]?.data.body).toContain('totp');
+    });
+
+    it('mails a removal, naming the factor, when another stays armed', async () => {
+        const { bearer } = await authenticateVerified();
+        const { secret, backupCodes } = await enrollTotp(bearer);
+        await enrollEmail(bearer, backupCodes[0]);
+        mockOutbox.length = 0;
+
+        await api()
+            .delete('/account/2fa/methods/email')
+            .set('Authorization', bearer)
+            .send({ code: await codeFor(secret, 1) });
+
+        const [mail] = mailsOf('account.two-factor-changed');
+        expect(mail?.data.body).toContain('removed');
+        expect(mail?.data.body).toContain('email');
+    });
+
+    it('mails that 2FA is off when the last factor is removed', async () => {
+        const { bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        mockOutbox.length = 0;
+
+        await api()
+            .delete('/account/2fa/methods/totp')
+            .set('Authorization', bearer)
+            .send({ code: await codeFor(secret, 1) });
+
+        expect(mailsOf('account.two-factor-changed')).toHaveLength(1);
+        expect(mailsOf('account.two-factor-changed')[0]?.data.body).toContain('turned off');
+    });
+
+    it('mails that 2FA is off when every factor is disabled at once', async () => {
+        const { bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        mockOutbox.length = 0;
+
+        await api()
+            .delete('/account/2fa')
+            .set('Authorization', bearer)
+            .send({ code: await codeFor(secret, 1) });
+
+        expect(mailsOf('account.two-factor-changed')[0]?.data.body).toContain('turned off');
+    });
+
+    it('mails nothing for a refused change', async () => {
+        const { bearer } = await authenticateVerified();
+        await enrollTotp(bearer);
+        mockOutbox.length = 0;
+
+        await api().delete('/account/2fa').set('Authorization', bearer).send({ code: '000000' });
+
+        expect(mailsOf('account.two-factor-changed')).toEqual([]);
     });
 });
 
@@ -324,7 +615,7 @@ describe('enrolling the email factor', () => {
     it('mints no second set of backup codes for a second factor', async () => {
         const { bearer } = await authenticateVerified();
         const { backupCodes: first } = await enrollTotp(bearer);
-        const { backupCodes: second } = await enrollEmail(bearer);
+        const { backupCodes: second } = await enrollEmail(bearer, first[0]);
 
         expect(first).toHaveLength(10);
         // They recover the ACCOUNT, not the method — a second factor re-issuing them would
@@ -616,7 +907,9 @@ describe('logging in with the email factor', () => {
             .send({ challenge: login.body.data.challenge, method: 'email' });
 
         expect(response.status).toBe(422);
-        expect(mockOutbox).toEqual([]);
+        expect(mockOutbox.filter(({ template }) => template === 'account.two-factor-code')).toEqual(
+            []
+        );
     });
 
     it('refuses to send against a forged challenge', async () => {
@@ -697,8 +990,8 @@ describe('logging in with the email factor', () => {
 describe('several factors at once', () => {
     it('offers both, device first, and accepts either', async () => {
         const { user, bearer } = await authenticateVerified();
-        const { secret } = await enrollTotp(bearer);
-        await enrollEmail(bearer);
+        const { secret, backupCodes } = await enrollTotp(bearer);
+        await enrollEmail(bearer, backupCodes[0]);
 
         const login = await startLogin(user.email);
         expect((login.body.data.methods as { method: string }[]).map((m) => m.method)).toEqual([
@@ -717,8 +1010,8 @@ describe('several factors at once', () => {
 
     it('removing one leaves the other armed, and login still challenges', async () => {
         const { user, bearer } = await authenticateVerified();
-        const { secret } = await enrollTotp(bearer);
-        await enrollEmail(bearer);
+        const { secret, backupCodes } = await enrollTotp(bearer);
+        await enrollEmail(bearer, backupCodes[0]);
 
         const removal = await api()
             .delete('/account/2fa/methods/email')
@@ -754,13 +1047,22 @@ describe('several factors at once', () => {
 
     it('accepts a code from the OTHER armed factor when removing one', async () => {
         const { bearer } = await authenticateVerified();
-        await enrollTotp(bearer);
-        await enrollEmail(bearer);
+        const { backupCodes } = await enrollTotp(bearer);
+        await enrollEmail(bearer, backupCodes[0]);
         mockOutbox.length = 0;
 
         // Proving the email factor to remove the authenticator: any armed factor proves the
         // account, which is what the removal is really guarding.
-        await api().post('/account/2fa/methods/email/setup').set('Authorization', bearer).send();
+        const sent = await api()
+            .post('/account/2fa/methods/email/send')
+            .set('Authorization', bearer)
+            .send();
+        expect(sent.status).toBe(200);
+        const proof = mailedCode();
+        await api()
+            .post('/account/2fa/methods/email/setup')
+            .set('Authorization', bearer)
+            .send({ code: proof });
         const emailCode = mailedCode();
         await api()
             .post('/account/2fa/methods/email/confirm')
@@ -799,8 +1101,8 @@ describe('disabling 2FA', () => {
 
     it('turns 2FA off on the right code, and login stops challenging', async () => {
         const { user, bearer } = await authenticateVerified();
-        const { secret } = await enrollTotp(bearer);
-        await enrollEmail(bearer);
+        const { secret, backupCodes } = await enrollTotp(bearer);
+        await enrollEmail(bearer, backupCodes[0]);
 
         const disable = await api()
             .delete('/account/2fa')
@@ -881,8 +1183,8 @@ describe('regenerating backup codes', () => {
 describe('admin-assisted recovery', () => {
     it('strips every second factor with no code, and login stops challenging', async () => {
         const { user, bearer } = await authenticateVerified();
-        await enrollTotp(bearer);
-        await enrollEmail(bearer);
+        const { backupCodes } = await enrollTotp(bearer);
+        await enrollEmail(bearer, backupCodes[0]);
         const { bearer: adminBearer } = await authenticateAs('admin');
 
         const recovery = await api()

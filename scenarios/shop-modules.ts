@@ -11,6 +11,7 @@ import type { SeedOutcome } from '@scenarios/seed';
 import type { WaveEntry } from './waves';
 import type { Caller } from './flows/client';
 import { seedAddressBooksCollection } from './addresses';
+import { seedExampleCollection } from './examples';
 import { driveLocaleEntryEdit, seedLocalesCollection } from './locales';
 import { seedProductsCollection } from './products';
 import { seedUsersCollection } from './users';
@@ -54,6 +55,7 @@ export interface ShopModuleEntry {
  */
 export const shopModules = {
     addresses: { seed: seedAddressBooksCollection },
+    example: { seed: seedExampleCollection },
     locales: {
         seed: seedLocalesCollection,
         baseline: true,

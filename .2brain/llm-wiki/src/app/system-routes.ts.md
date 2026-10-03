@@ -1,7 +1,7 @@
 ---
 source: src/app/system-routes.ts
-sha256: f21fab7d0dfeb78db3fc5983375fc014acbd11439da4f86f587c58904c4d3031
-generated_at: 2026-09-27T14:03:19.088497+00:00
+sha256: d0595aeca36c833f358b5fe180947b10fb8dec3aa8924d3e98f9b5d74ca2b807
+generated_at: 2026-10-01T12:45:37.315810+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines two system-level Express routes — a root ping and a Kubernetes readiness probe — that report process health rather than domain state. It is deliberately placed in `src/app/` (not `src/modules/`) so these endpoints have no business-logic owner.
+Express router for process-level routes (root ping, liveness, readiness, `security.txt`) that serve the runtime itself rather than any business domain. It lives at the app level instead of in `src/modules` because it belongs to no single feature.
 
 ## Key elements
 
-- **`router`** (exported `express.Router`) — the route collection, mounted at `/` by the app entry point.
-- **`GET /`** — public ping; responds with `{ status: 'ok' }` and HTTP 200 via `successResponse`.
-- **`GET /readyz`** — readiness probe; returns a bare `200` or `503` with an **empty body**, based on `isServerReady()`.
+- **`router`** (exported) — the Express `Router` instance; mounted at `/` by `app/routes.ts`.
+- **`GET /`** — client-facing public ping; returns `{ status: "ok" }` via `successResponse`. Used by the frontend's API-down banner.
+- **`GET /livez`** — liveness probe. Always returns `200` with an empty body. Intentionally performs no I/O and checks no dependencies.
+- **`GET /readyz`** — readiness probe. Returns `200` or `503` (empty body) based on `isServerReady()`. Designed for the orchestrator's load-balancer poll.
+- **`GET /.well-known/security.txt`** — RFC 9116 disclosure contact. Returns `text/plain` body from `buildSecurityTxt()`; calls `next()` (→ ordinary 404 envelope) when the required env vars are unset.
 
 ## Relationships
 
-- **`src/app/routes.ts`** — imports `router` from this file and mounts it at the `/` path.
-- **`src/infrastructure/http/response.ts`** — provides the `successResponse` helper used by the ping route.
-- **`src/infrastructure/runtime/readiness.ts`** — provides `isServerReady()` which the `/readyz` route calls to decide 200 vs 503.
+- **`src/app/routes.ts`** — imports and mounts this router at `/`.
+- **`src/app/config.ts`** — provides `securityTxtSettings()`, read on every `security.txt` request.
+- **`src/app/security-txt.ts`** — provides `buildSecurityTxt()` which assembles the response body (or `undefined`).
+- **`src/infrastructure/http/response.ts`** — provides `successResponse()` for the root ping envelope.
+- **`src/infrastructure/runtime/readiness.ts`** — provides `isServerReady()`, the single gate for `/readyz`.
 
 ## Notes
 
-- `/readyz` intentionally skips the standard JSON envelope. The comment explains the contract: an orchestrator's probe reads only the status code, and omitting the body avoids allocating a response on an endpoint polled every few seconds for the container's entire lifetime.
-- Both handlers ignore the incoming request object (`_request`), indicating neither depends on query params, headers, or body.
+- `/livez` deliberately never touches a dependency: a container restart cannot recover a downed database, so the probe must stay cheap and side-effect-free.
+- `/readyz` (and `/livez`) return an **empty body** on purpose—orchestrators poll every few seconds for the container's lifetime and read only the status code; the JSON envelope would be pure overhead.
+- `/.well-known/security.txt` is a real Express route, **not** a static file, because `express.static` is configured with `dotfiles: 'ignore'`, which would 404 any `.well-known` path.
+- The root `/` is the **client-facing** ping (frontend banner), not an orchestrator probe; don't conflate it with `/livez`.
+- A 404 on `security.txt` is signalled by calling `next()`, falling through to the standard 404 envelope mounted after this router in `routes.ts`.

@@ -9,6 +9,7 @@
  */
 
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
+import { setEnvironment } from '@tests/environment';
 
 /** The DNS lookup rung 2's `mx` policy makes — mocked, so no case reaches a real resolver. */
 const mockedResolveMx = jest.fn();
@@ -31,38 +32,25 @@ jest.mock('node:dns/promises', () => {
     };
 });
 
-/** Sets an env var back to its original value, or deletes it if there wasn't one. */
-const restoreEnv = (key: string, value: string | undefined) => {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-};
-
 describe('checkEmailPolicy', () => {
-    const originalPolicy = process.env.NODE_ANTIBOT_EMAIL_POLICY;
-    const originalDenylist = process.env.NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA;
-    const originalAllowlist = process.env.NODE_ANTIBOT_EMAIL_ALLOWLIST;
-
     beforeEach(() => {
         // Any un-configured call is a bug: only the `mx` tests below should ever reach this.
         mockedResolveMx.mockRejectedValue(new Error('resolveMx should not have been called'));
     });
 
     afterEach(() => {
-        restoreEnv('NODE_ANTIBOT_EMAIL_POLICY', originalPolicy);
-        restoreEnv('NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA', originalDenylist);
-        restoreEnv('NODE_ANTIBOT_EMAIL_ALLOWLIST', originalAllowlist);
         mockedResolveMx.mockReset();
     });
 
     // Every rung must be provably off by default.
     it('is off by default — a known disposable domain still passes', async () => {
-        delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
+        setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: undefined });
 
         await expect(checkEmailPolicy('someone@mailinator.com')).resolves.toBe('ok');
     });
 
     it('throws on an unrecognised policy name, rather than silently allowing everything', async () => {
-        process.env.NODE_ANTIBOT_EMAIL_POLICY = 'strict';
+        setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: 'strict' });
 
         await expect(checkEmailPolicy('someone@example.com')).rejects.toThrow(
             /NODE_ANTIBOT_EMAIL_POLICY/
@@ -71,7 +59,7 @@ describe('checkEmailPolicy', () => {
 
     describe('policy: disposable', () => {
         beforeEach(() => {
-            process.env.NODE_ANTIBOT_EMAIL_POLICY = 'disposable';
+            setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: 'disposable' });
         });
 
         it('refuses a domain on the shipped blocklist', async () => {
@@ -83,13 +71,13 @@ describe('checkEmailPolicy', () => {
         });
 
         it('allows a blocklisted domain added to the allowlist override', async () => {
-            process.env.NODE_ANTIBOT_EMAIL_ALLOWLIST = 'mailinator.com';
+            setEnvironment({ NODE_ANTIBOT_EMAIL_ALLOWLIST: 'mailinator.com' });
 
             await expect(checkEmailPolicy('someone@mailinator.com')).resolves.toBe('ok');
         });
 
         it('refuses a domain added via the extra-denylist override alone', async () => {
-            process.env.NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA = 'throwaway.example';
+            setEnvironment({ NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA: 'throwaway.example' });
 
             await expect(checkEmailPolicy('someone@throwaway.example')).resolves.toBe('refused');
         });
@@ -105,7 +93,7 @@ describe('checkEmailPolicy', () => {
 
     describe('policy: mx', () => {
         beforeEach(() => {
-            process.env.NODE_ANTIBOT_EMAIL_POLICY = 'mx';
+            setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: 'mx' });
         });
 
         it('refuses a known disposable domain without ever consulting DNS', async () => {

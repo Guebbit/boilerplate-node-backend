@@ -10,43 +10,24 @@ import {
     SEED_USER_EMAIL,
     SEED_ADMIN_PASSWORD,
     SEED_USER_PASSWORD,
+    SEED_TWO_FACTOR_BACKUP_CODES,
     seedCredentials
 } from '@scenarios/accounts';
-
-/** Every seed password override var, restored after each `hasFallbackSeedPassword` case. */
-const ALL_PASSWORD_KEYS = [
-    'NODE_SEED_ADMIN_PASSWORD',
-    'NODE_SEED_USER_PASSWORD',
-    'NODE_SEED_EDITOR_PASSWORD',
-    'NODE_SEED_MODERATOR_PASSWORD'
-] as const;
+import { setEnvironment } from '@tests/environment';
 
 /** What every password-setting endpoint enforces, reduced to a yes/no. */
 const satisfiesPolicy = (password: string): boolean =>
     zodUserSchema.pick({ password: true }).safeParse({ password }).success;
 
-/** The two override vars, saved so a case that sets one restores whatever was there. */
-const ORIGINAL = {
-    admin: process.env.NODE_SEED_ADMIN_PASSWORD,
-    user: process.env.NODE_SEED_USER_PASSWORD
-};
-
 /** Reloads the module with the two vars set as given, so the constants re-evaluate. */
 const reloadWith = async (admin: string | undefined, user: string | undefined) => {
-    if (admin === undefined) delete process.env.NODE_SEED_ADMIN_PASSWORD;
-    else process.env.NODE_SEED_ADMIN_PASSWORD = admin;
-    if (user === undefined) delete process.env.NODE_SEED_USER_PASSWORD;
-    else process.env.NODE_SEED_USER_PASSWORD = user;
+    setEnvironment({ NODE_SEED_ADMIN_PASSWORD: admin, NODE_SEED_USER_PASSWORD: user });
 
     jest.resetModules();
     return import('@scenarios/accounts');
 };
 
 afterEach(() => {
-    if (ORIGINAL.admin === undefined) delete process.env.NODE_SEED_ADMIN_PASSWORD;
-    else process.env.NODE_SEED_ADMIN_PASSWORD = ORIGINAL.admin;
-    if (ORIGINAL.user === undefined) delete process.env.NODE_SEED_USER_PASSWORD;
-    else process.env.NODE_SEED_USER_PASSWORD = ORIGINAL.user;
     jest.resetModules();
 });
 
@@ -110,62 +91,33 @@ describe('seedCredentials', () => {
         });
     });
 
+    it('publishes the four personas, each with a login the policy accepts', () => {
+        expect(Object.keys(seedCredentials)).toEqual(
+            expect.arrayContaining(['unverified', 'twoFactor', 'pendingEmail', 'banned'])
+        );
+        for (const persona of ['unverified', 'twoFactor', 'pendingEmail', 'banned'] as const)
+            expect(satisfiesPolicy(seedCredentials[persona].password)).toBe(true);
+    });
+
+    it('publishes the four staff accounts, each with a login the policy accepts', () => {
+        for (const staff of ['manager', 'warehouse', 'support', 'operator'] as const)
+            expect(satisfiesPolicy(seedCredentials[staff].password)).toBe(true);
+        expect(seedCredentials.operator.email).toBe('operator@example.com');
+    });
+
+    it('publishes the two-factor persona’s backup codes beside its login', () => {
+        expect(seedCredentials.twoFactor.backupCodes).toEqual(SEED_TWO_FACTOR_BACKUP_CODES);
+    });
+
+    it('gives every account its own address', () => {
+        const emails = Object.values(seedCredentials).map((login) => login.email);
+        expect(new Set(emails).size).toBe(emails.length);
+    });
+
     it('carries the overridden password, not the fallback', async () => {
         const seeds = await reloadWith('Env-Admin1!', 'Env-User1!');
 
         expect(seeds.seedCredentials.admin.password).toBe('Env-Admin1!');
         expect(seeds.seedCredentials.user.password).toBe('Env-User1!');
-    });
-});
-
-describe('hasFallbackSeedPassword', () => {
-    const original = new Map(ALL_PASSWORD_KEYS.map((key) => [key, process.env[key]]));
-
-    /** Reloads with all four override vars set as given, so every fallback re-evaluates. */
-    const reloadAllWith = async (
-        overrides: Partial<Record<(typeof ALL_PASSWORD_KEYS)[number], string>>
-    ) => {
-        for (const key of ALL_PASSWORD_KEYS) {
-            const value = overrides[key];
-            if (value === undefined) delete process.env[key];
-            else process.env[key] = value;
-        }
-        jest.resetModules();
-        return import('@scenarios/accounts');
-    };
-
-    afterEach(() => {
-        for (const [key, value] of original)
-            if (value === undefined) delete process.env[key];
-            else process.env[key] = value;
-        jest.resetModules();
-    });
-
-    it('is true when every account is still its committed fallback', async () => {
-        const seeds = await reloadAllWith({});
-
-        expect(seeds.hasFallbackSeedPassword()).toBe(true);
-    });
-
-    it('is true when even one account was never overridden', async () => {
-        const seeds = await reloadAllWith({
-            NODE_SEED_ADMIN_PASSWORD: 'Env-Admin1!',
-            NODE_SEED_USER_PASSWORD: 'Env-User1!',
-            NODE_SEED_EDITOR_PASSWORD: 'Env-Editor1!'
-            // Moderator left at its fallback on purpose — this is the case this function exists for.
-        });
-
-        expect(seeds.hasFallbackSeedPassword()).toBe(true);
-    });
-
-    it('is false once every account has its own password', async () => {
-        const seeds = await reloadAllWith({
-            NODE_SEED_ADMIN_PASSWORD: 'Env-Admin1!',
-            NODE_SEED_USER_PASSWORD: 'Env-User1!',
-            NODE_SEED_EDITOR_PASSWORD: 'Env-Editor1!',
-            NODE_SEED_MODERATOR_PASSWORD: 'Env-Moderator1!'
-        });
-
-        expect(seeds.hasFallbackSeedPassword()).toBe(false);
     });
 });

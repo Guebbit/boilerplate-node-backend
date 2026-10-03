@@ -22,6 +22,7 @@ import { registerCheckoutModules } from '@tests/checkout-modules';
 import type { ResponseSuccess } from '@infrastructure/http/response';
 import type { Payment } from '@types';
 import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
@@ -80,21 +81,16 @@ const touch = (paymentId: string, updatedAt: Date): Promise<unknown> =>
         .exec();
 
 describe('payments — reapAbandonedPayments (reap-payments sweep)', () => {
-    const originalRetention = process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS;
-
     beforeEach(() => {
         registerCheckoutModules([paymentsModule]);
     });
 
     afterEach(() => {
         resetDomainEvents();
-        if (originalRetention === undefined)
-            delete process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS;
-        else process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS = originalRetention;
     });
 
     it('deletes an attempt that never settled, once it is past the window', async () => {
-        process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS = '7';
+        setEnvironment({ NODE_PAYMENT_ABANDONED_RETENTION_DAYS: '7' });
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
@@ -108,7 +104,7 @@ describe('payments — reapAbandonedPayments (reap-payments sweep)', () => {
     });
 
     it('leaves an attempt alone while it is still within the window', async () => {
-        process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS = '7';
+        setEnvironment({ NODE_PAYMENT_ABANDONED_RETENTION_DAYS: '7' });
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
@@ -122,7 +118,7 @@ describe('payments — reapAbandonedPayments (reap-payments sweep)', () => {
     });
 
     it('never deletes a payment that succeeded, no matter how old', async () => {
-        process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS = '7';
+        setEnvironment({ NODE_PAYMENT_ABANDONED_RETENTION_DAYS: '7' });
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);

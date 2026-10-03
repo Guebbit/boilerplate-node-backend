@@ -3,8 +3,8 @@
  * The user's `tokens` array, owned in one place: every non-password flow (reset, verification,
  * delete confirmation, refresh sessions) is an entry in it, "live" is defined once here.
  * {@link findLiveToken}/{@link spendLiveToken} stay separate for `two-factor.ts`, which does other
- * work between finding a challenge and spending it; {@link redeemLiveToken} composes both for the
- * four confirm controllers that don't — a refusal never says why.
+ * work between finding a token and spending it (a login challenge, a password reset);
+ * {@link redeemLiveToken} composes both for the confirm controllers that don't — a refusal never says why.
  */
 
 import type { Session } from '@types';
@@ -72,9 +72,9 @@ export const spendLiveToken = (user: UserDocument, token: string): Promise<boole
 
 /**
  * {@link findLiveToken} then {@link spendLiveToken}, for a confirm controller that has no work of
- * its own to do between the two. `post-reset-confirm` is one of these too: its new-password check
- * is pure (no user, no database) and runs before this is ever called, so a typo in the password
- * never touches — and never burns — the link.
+ * its own to do between the two. The password reset is not one of these: its breach check needs
+ * the found user and must run before the spend, so `completePasswordReset` does the two halves
+ * itself.
  * @param type - which kind of token the link claims to carry
  * @param token - the token value from the link the user followed
  * @returns the holder, once THIS request's spend removed the entry — `undefined` for every kind of

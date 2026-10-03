@@ -9,8 +9,9 @@
  * webhook. See `docs/modules/payments.md` for why that is not negotiable.
  */
 
-import { environmentChoice } from '@infrastructure/runtime/environment';
-import { createProviderRegistry } from '@infrastructure/runtime/provider-registry';
+import { createProviderRegistry, requireProvider } from '@infrastructure/runtime/provider-registry';
+import { defineConfig, probe } from '@infrastructure/config/define';
+import { paymentsConfig } from '../config';
 import { fakePaymentProvider } from './fake';
 
 /** Re-exported from `./errors` — see there for why it isn't declared in this file. */
@@ -179,10 +180,11 @@ export const registerPaymentProvider = (name: string, provider: PaymentProvider)
  *   to `fake` would turn a deployment's typo into an order marked paid that nobody was charged for
  */
 export const resolvePaymentProvider = (): PaymentProvider => {
-    const name = environmentChoice('NODE_PAYMENT_PROVIDER', registry.names(), 'fake');
-    // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are names
-    // the registry holds by construction, a guarantee the compiler cannot follow across the call.
-    return registry.resolve(name)!;
+    return requireProvider(
+        registry,
+        'NODE_PAYMENT_PROVIDER',
+        paymentsConfig().NODE_PAYMENT_PROVIDER
+    );
 };
 
 /**
@@ -202,3 +204,14 @@ export const providerNamed = (name: string): PaymentProvider => {
     if (!provider) throw new Error(`Unknown payment provider: ${name}`);
     return provider;
 };
+
+/**
+ * Boot probe for `NODE_PAYMENT_PROVIDER`: a typo would otherwise throw on the first payment, in the
+ * middle of a checkout. A shape-less slice, because the resolver imports the config and the
+ * config therefore cannot import the resolver.
+ */
+export const paymentProviderProbe = defineConfig({
+    name: 'payments-provider',
+    shape: {},
+    check: () => probe(resolvePaymentProvider)
+});

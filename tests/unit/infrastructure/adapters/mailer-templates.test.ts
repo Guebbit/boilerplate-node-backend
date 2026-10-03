@@ -25,16 +25,21 @@ import {
     deleteConfirmEmail,
     inactivityWarningEmail,
     twoFactorCodeEmail,
-    emailChangeNoticeEmail
+    reauthCodeEmail,
+    emailChangeNoticeEmail,
+    twoFactorChangedEmail
 } from '@modules/account/emails';
 import { contactRequestEmail } from '@modules/feedback/emails';
+import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
     paymentSucceededEmail,
     bankTransferInstructionsEmail,
     bankTransferExpiredEmail,
     cardHoldExpiredEmail,
-    productUnavailableCancelledEmail
+    productUnavailableCancelledEmail,
+    orderCancelledEmail,
+    refundIssuedEmail
 } from '@modules/orders/emails';
 import { buildDocumentView } from '@modules/invoicing/emails';
 import { shipmentShippedEmail } from '@modules/delivery/emails';
@@ -86,7 +91,9 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'account.delete-confirm': deleteConfirmEmail(locale, 'Ada'),
     'account.inactivity-warning': inactivityWarningEmail(locale, 'Ada', 30),
     'account.two-factor-code': twoFactorCodeEmail(locale, 'Ada', '492013', 10),
+    'account.reauth-code': reauthCodeEmail(locale, 'Ada', '492013', 10),
     'account.email-change-notice': emailChangeNoticeEmail(locale, 'Ada', 'new@example.com'),
+    'account.two-factor-changed': twoFactorChangedEmail(locale, 'Ada', 'enrolled', 'email'),
     'orders.order-confirm': orderConfirmEmail(
         locale,
         'Ada',
@@ -121,6 +128,23 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'orders.order-product-unavailable': productUnavailableCancelledEmail(locale, [
         { title: 'Boiled sweets' }
     ]),
+    'orders.order-cancelled': orderCancelledEmail(
+        locale,
+        'Ada',
+        {
+            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+            paidAt: new Date('2026-09-19T12:00:00.000Z')
+        },
+        '2026-000041',
+        true
+    ),
+    'orders.order-refunded': refundIssuedEmail(
+        locale,
+        'Ada',
+        '2026-000041',
+        { amount: 7, currency: 'EUR' },
+        true
+    ),
     'delivery.shipment-shipped': shipmentShippedEmail(locale, 'Ada', 'TRK-0000TEST'),
     'returns.notice': returnNoticeEmail('withdrawal-acknowledged', locale, 'Ada', {
         orderRef: '2026-000041',
@@ -128,6 +152,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         at: new Date('2026-08-06T10:30:00Z')
     }),
     'webhooks.subscription-disabled': subscriptionDisabledEmail(locale, 'https://example.com/hook'),
+    'example.published': examplePublishedEmail(locale, 'Ada', 'A title'),
     'feedback.contact': contactRequestEmail(locale, {
         name: 'Ada',
         email: 'ada@example.com',

@@ -74,7 +74,8 @@ this middleware owns, and decides whether the request is even a candidate for th
   only — the wire always says `no-store`, since a shared cache holding a POST response could
   answer a later POST from it, including a real write on some other route.
 - A cacheable GET gets `max-age`/`stale-*` (a shared cache in front of this server is what absorbs
-  a guest-scope stampede), or `no-cache` when the route asked for `browserRevalidate` instead.
+  a guest-scope stampede), or `no-cache` when the route asked for `browserRevalidate` instead (`GET /products/:id` does: the
+  page shows a stock count, and inventory clears the `products` tag on every stock write).
 - `cacheScope === undefined` — this caller sees more than the shared answer, per
   [the scope-key rule above](#no-caching-depends-on-who-is-asking) — answers `private, no-cache`
   regardless of `browserRevalidate`: `serveOrArm` is about to bypass Redis for this same request,
@@ -273,7 +274,7 @@ Two mitigations, because neither is sufficient alone:
 |                                | What it does                                                                                                                                                                       | Limit                                                             |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | `npm run db:cache:clear`       | Deletes every key under `NODE_REDIS_CACHE_PREFIX` (`SCAN` + `DEL`, never `FLUSHALL`, so a shared Redis is safe). `scenario:apply` calls it automatically when it created something | Opt-in — only covers writers that remember                        |
-| `NODE_REDIS_CACHE_DEV_TTL_MAX` | Clamps every route's TTL when `NODE_ENV !== 'production'`, default `30`s                                                                                                           | Dev only, and it shortens the stale window rather than closing it |
+| `NODE_REDIS_CACHE_DEV_TTL_MAX` | Clamps every route's TTL in development/test only, default `30`s                                                                                                                   | Dev only, and it shortens the stale window rather than closing it |
 
 The TTL cap is the one that matters for writers nobody anticipated: it bounds _every_ out-of-band
 write to seconds instead of the route's declared hour. Set it to `0` to opt out and use the

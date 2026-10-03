@@ -4,17 +4,11 @@
 
 import { createHash, createHmac } from 'node:crypto';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
+import { setEnvironment } from '@tests/environment';
 
 describe('pseudonymise', () => {
-    const original = process.env.NODE_PSEUDONYM_KEY;
-
     beforeEach(() => {
-        process.env.NODE_PSEUDONYM_KEY = 'a-root-secret-for-tests';
-    });
-
-    afterAll(() => {
-        if (original === undefined) delete process.env.NODE_PSEUDONYM_KEY;
-        else process.env.NODE_PSEUDONYM_KEY = original;
+        setEnvironment({ NODE_PSEUDONYM_KEY: 'a-root-secret-for-tests' });
     });
 
     it('is stable and returns a full 64-hex HMAC-SHA256 digest', () => {
@@ -38,7 +32,7 @@ describe('pseudonymise', () => {
 
     it('differs under a different root secret', () => {
         const before = pseudonymise('rate-limit', 'x');
-        process.env.NODE_PSEUDONYM_KEY = 'another-root-secret';
+        setEnvironment({ NODE_PSEUDONYM_KEY: 'another-root-secret' });
         expect(pseudonymise('rate-limit', 'x')).not.toBe(before);
     });
 
@@ -51,7 +45,7 @@ describe('pseudonymise', () => {
     });
 
     it('falls back to a stable dev key when the root is unset', () => {
-        delete process.env.NODE_PSEUDONYM_KEY;
+        setEnvironment({ NODE_PSEUDONYM_KEY: undefined });
         expect(pseudonymise('log', 'x')).toBe(pseudonymise('log', 'x'));
     });
 });

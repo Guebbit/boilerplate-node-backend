@@ -12,6 +12,7 @@ import puppeteer from 'puppeteer-core';
 // Page-geometry options for `page.pdf()` (format, margins, landscape, printBackground, ...).
 import type { PDFOptions } from 'puppeteer-core';
 import { settleWithin } from '@infrastructure/runtime/settle';
+import { pdfConfig } from '@infrastructure/adapters/config';
 
 /** A4 portrait — the default for invoices. Override per call when a document needs otherwise. */
 const DEFAULT_PDF_OPTIONS: PDFOptions = { format: 'A4' };
@@ -19,13 +20,13 @@ const DEFAULT_PDF_OPTIONS: PDFOptions = { format: 'A4' };
 /**
  * Shared Puppeteer launch options for PDF rendering.
  *
- * A function rather than a constant so `process.env` is read at call time — which keeps tests
+ * A function rather than a constant so the configuration is read at call time — which keeps tests
  * able to point the path elsewhere after this module has been imported.
  */
 const launchOptions = () => ({
     // Path to the Chromium binary. Must be set (or match the fallback) because puppeteer-core
     // ships no browser of its own; the fallback is the Alpine/Debian package location.
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH ?? '/usr/bin/chromium-browser',
+    executablePath: pdfConfig().PUPPETEER_EXECUTABLE_PATH,
     args: [
         // Chromium's sandbox needs kernel privileges most containers do not grant, so it fails
         // to launch without this. Safe *only* because the HTML rendered here is our own

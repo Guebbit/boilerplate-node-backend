@@ -21,7 +21,8 @@ import {
 import { bodyRecordOf } from '@infrastructure/http/request';
 import { logger } from '@infrastructure/adapters/logger';
 import { cacheRequestsTotal } from '@infrastructure/observability/metrics-cache';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
+import { responseCacheConfig } from '@infrastructure/http/config';
 
 /**
  * Enough to replay an HTTP response verbatim, plus the refresh-ahead soft expiry.
@@ -53,21 +54,12 @@ const STALE_IF_ERROR_SECONDS = 300;
 /**
  * Longest TTL allowed outside production, in seconds — the bound on how long a write that bypassed
  * the API (a seed, a one-off script under `scripts/ops/`, a `mongosh` session) can keep serving a stale
- * answer. Production is
- * never clamped, because there the API is the only writer. `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts
- * out.
+ * answer. Production is never clamped, because there the API is the only writer.
+ * `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts out.
  *
  * See: docs/tools/redis-cache.md#writes-that-bypass-the-api
  */
-const DEFAULT_DEV_TTL_MAX_SECONDS = 30;
-
-/**
- * Reads `NODE_REDIS_CACHE_DEV_TTL_MAX`, falling back to {@link DEFAULT_DEV_TTL_MAX_SECONDS}.
- * `min: 0` — `0` is a legal value here (see {@link resolveCacheTtl}, "no cap"), so only a
- * negative or non-numeric value is the config typo that falls back.
- */
-const getDevelopmentTtlMax = (): number =>
-    environmentNumber('NODE_REDIS_CACHE_DEV_TTL_MAX', DEFAULT_DEV_TTL_MAX_SECONDS, 0);
+const getDevelopmentTtlMax = (): number => responseCacheConfig().NODE_REDIS_CACHE_DEV_TTL_MAX;
 
 /**
  * Clamp a route's declared TTL to the development ceiling.
@@ -80,7 +72,7 @@ const getDevelopmentTtlMax = (): number =>
  * @returns the TTL to use, capped outside production
  */
 export const resolveCacheTtl = (seconds: number): number => {
-    if (process.env.NODE_ENV === 'production') return seconds;
+    if (!isRelaxedEnvironment()) return seconds;
 
     const max = getDevelopmentTtlMax();
     if (max <= 0) return seconds;
@@ -88,18 +80,12 @@ export const resolveCacheTtl = (seconds: number): number => {
 };
 
 /**
- * Largest response body this cache will store, in bytes.
- *
- * A cache turns a cheap request into long-lived server state: the key includes the full URL, so an
- * unauthenticated caller can mint an entry per query string and keep every one resident. Bounding
- * the ENTRY is what stops that being an amplifier.
- *
- * See: docs/tools/redis-cache.md#entry-size-is-bounded
- */
-const DEFAULT_MAX_CACHED_BYTES = 256 * 1024;
-
-/**
  * Serialize a response for storage, or refuse it for being too large.
+ *
+ * The ceiling is `NODE_REDIS_CACHE_MAX_BYTES`. A cache turns a cheap request into long-lived server
+ * state: the key includes the full URL, so an unauthenticated caller can mint an entry per query
+ * string and keep every one resident. Bounding the ENTRY is what stops that being an amplifier.
+ * See: docs/tools/redis-cache.md#entry-size-is-bounded
  *
  * Serialized once, here, so the size check measures exactly what would be written rather than an
  * estimate of it. Skipping is not a failure: the caller still gets its response, it just will not
@@ -111,11 +97,7 @@ const DEFAULT_MAX_CACHED_BYTES = 256 * 1024;
  */
 const serializeCachedResponse = (key: string, value: CachedResponse): string | undefined => {
     const payload = JSON.stringify(value);
-    const maxCachedBytes = environmentNumber(
-        'NODE_REDIS_CACHE_MAX_BYTES',
-        DEFAULT_MAX_CACHED_BYTES,
-        1
-    );
+    const maxCachedBytes = responseCacheConfig().NODE_REDIS_CACHE_MAX_BYTES;
     if (Buffer.byteLength(payload) <= maxCachedBytes) return payload;
 
     // Logged rather than silent: an endpoint that never caches is worth noticing, and the

@@ -1,7 +1,7 @@
 /**
  * @module
- * Order CRUD — the write half of `src/modules/orders/services/crud.ts` (`getById`, `create`,
- * `update`, `updateById`, `remove`, `removeById`); `service-search.test.ts` covers the
+ * Order CRUD — the write half of `src/modules/orders/services/{read,crud,remove}.ts` (`getById`,
+ * `create`, `update`, `updateById`, `remove`, `removeById`); `service-search.test.ts` covers the
  * read/aggregation half (`search`). Two behaviours carry real weight: `create` stores a product
  * snapshot, not a
  * reference, so repricing later cannot rewrite what a customer was charged; and `getById`'s

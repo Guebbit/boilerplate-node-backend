@@ -19,6 +19,8 @@ import {
     subSchema,
     typeOf
 } from '@tests/schema';
+import { setEnvironment } from '@tests/environment';
+import { currentEnvironment } from '@infrastructure/config/store';
 
 describe('userSchema — what a user must carry', () => {
     it('requires an address and a name, but not a password — an OAuth-only signup has none', () => {
@@ -65,7 +67,9 @@ describe('userSchema — what a user must carry', () => {
     });
 
     it('gives a new user the configured locale and no avatar', () => {
-        expect(defaultOf(userSchema, 'locale')).toBe(process.env.NODE_DEFAULT_LOCALE ?? 'en');
+        expect(defaultOf(userSchema, 'locale')).toBe(
+            currentEnvironment().NODE_DEFAULT_LOCALE ?? 'en'
+        );
         // A default here would put a placeholder in the database; the client draws its own.
         expect(defaultOf(userSchema, 'imageUrl')).toBeUndefined();
     });
@@ -78,19 +82,13 @@ describe('userSchema — what a user must carry', () => {
     it.each([['NODE_DEFAULT_LOCALE', 'locale', 'it']])(
         'prefers %s over the built-in fallback',
         async (variable, path, configured) => {
-            const original = process.env[variable];
-            process.env[variable] = configured;
+            setEnvironment({ [variable]: configured });
 
-            try {
-                await jest.isolateModulesAsync(async () => {
-                    const reloaded = await import('@modules/users/model');
+            await jest.isolateModulesAsync(async () => {
+                const reloaded = await import('@modules/users/model');
 
-                    expect(defaultOf(reloaded.userSchema, path)).toBe(configured);
-                });
-            } finally {
-                if (original === undefined) delete process.env[variable];
-                else process.env[variable] = original;
-            }
+                expect(defaultOf(reloaded.userSchema, path)).toBe(configured);
+            });
         }
     );
 

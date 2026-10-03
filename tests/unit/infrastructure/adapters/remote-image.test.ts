@@ -16,6 +16,7 @@ import { imageStore } from '@infrastructure/adapters/image-store';
 import { rehostRemoteImage } from '@infrastructure/adapters/remote-image';
 import { resolveSafeOutboundTarget } from '@infrastructure/adapters/ssrf-guard';
 import { asStub } from '../../../support/stub';
+import { setEnvironment } from '@tests/environment';
 
 jest.mock('node:https', () => ({ request: jest.fn() }));
 
@@ -62,7 +63,7 @@ const serveResponse = (statusCode: number, chunks: Buffer[]) => {
 };
 
 beforeEach(() => {
-    process.env.NODE_UPLOAD_STAGING_PATH = staging;
+    setEnvironment({ NODE_UPLOAD_STAGING_PATH: staging });
     jest.mocked(resolveSafeOutboundTarget).mockResolvedValue({
         hostname: 'avatars.example.test',
         resolvedAddress: '203.0.113.9',
@@ -78,7 +79,7 @@ afterEach(() => {
 });
 
 afterAll(() => {
-    delete process.env.NODE_UPLOAD_STAGING_PATH;
+    setEnvironment({ NODE_UPLOAD_STAGING_PATH: undefined });
     rmSync(staging, { recursive: true, force: true });
 });
 

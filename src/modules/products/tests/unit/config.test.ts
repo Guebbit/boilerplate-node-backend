@@ -1,18 +1,18 @@
 /**
  * The catalogue's own boot gate: the two VAT rates, declared on this module's manifest and
- * range-checked by its `customCheck`.
+ * range-checked by its slice check.
  *
- * Driven through `assertRequiredConfig` rather than by calling `invalidVatRateConfig` directly —
+ * Driven through `assertModuleConfig` rather than by calling `invalidVatRateConfig` directly —
  * the manifest wiring is half of what makes the check run at all, and a test that skipped it
- * would still pass with `customCheck` unset.
+ * would still pass with slice check unset.
  *
  * Every case sets `NODE_ENV` away from `test` first: the gate short-circuits under the test
  * environment, so a suite that left it alone would assert nothing.
  */
-import { assertRequiredConfig } from '@kernel/required-config';
+import { assertModuleConfig } from '@kernel/module-config';
 import { vatRateDefault, vatRateReduced } from '../../config';
 import productsModule from '../../module';
-import { withoutEnvironmentInThisFile } from '@tests/environment';
+import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
 /** Every variable this gate reads, cleared before each case and put back after the file. */
 const TOUCHED = ['NODE_ENV', 'NODE_URL', 'NODE_VAT_RATE_DEFAULT', 'NODE_VAT_RATE_REDUCED'] as const;
@@ -21,19 +21,19 @@ withoutEnvironmentInThisFile(TOUCHED);
 
 /** A deployment that satisfies every check, for a case to break one thing in. */
 const configure = (): void => {
-    process.env.NODE_ENV = 'development';
-    process.env.NODE_URL = 'https://api.example.com/';
-    process.env.NODE_VAT_RATE_DEFAULT = '0.22';
-    process.env.NODE_VAT_RATE_REDUCED = '0.1';
+    setEnvironment({ NODE_ENV: 'development' });
+    setEnvironment({ NODE_URL: 'https://api.example.com/' });
+    setEnvironment({ NODE_VAT_RATE_DEFAULT: '0.22' });
+    setEnvironment({ NODE_VAT_RATE_REDUCED: '0.1' });
 };
 
 describe('the VAT rate boot gate', () => {
     it('refuses to boot with neither rate set', () => {
         configure();
-        delete process.env.NODE_VAT_RATE_DEFAULT;
-        delete process.env.NODE_VAT_RATE_REDUCED;
+        setEnvironment({ NODE_VAT_RATE_DEFAULT: undefined });
+        setEnvironment({ NODE_VAT_RATE_REDUCED: undefined });
 
-        expect(() => assertRequiredConfig([productsModule])).toThrow(
+        expect(() => assertModuleConfig([productsModule], [])).toThrow(
             /NODE_VAT_RATE_DEFAULT.*NODE_VAT_RATE_REDUCED|NODE_VAT_RATE_REDUCED.*NODE_VAT_RATE_DEFAULT/
         );
     });
@@ -49,38 +49,38 @@ describe('the VAT rate boot gate', () => {
         'refuses a rate that does not parse into [0, 1) (%s)',
         (rate) => {
             configure();
-            process.env.NODE_VAT_RATE_DEFAULT = rate;
+            setEnvironment({ NODE_VAT_RATE_DEFAULT: rate });
 
-            expect(() => assertRequiredConfig([productsModule])).toThrow(/NODE_VAT_RATE_DEFAULT/);
+            expect(() => assertModuleConfig([productsModule], [])).toThrow(/NODE_VAT_RATE_DEFAULT/);
         }
     );
 
     it('accepts a rate of exactly 0 — a shop that charges no VAT at all', () => {
         configure();
-        process.env.NODE_VAT_RATE_DEFAULT = '0';
+        setEnvironment({ NODE_VAT_RATE_DEFAULT: '0' });
 
-        expect(() => assertRequiredConfig([productsModule])).not.toThrow();
+        expect(() => assertModuleConfig([productsModule], [])).not.toThrow();
     });
 
     it('accepts a fully configured catalogue', () => {
         configure();
 
-        expect(() => assertRequiredConfig([productsModule])).not.toThrow();
+        expect(() => assertModuleConfig([productsModule], [])).not.toThrow();
     });
 });
 
 describe('reading the rates', () => {
-    it('reads each rate per call, so a change needs no restart', () => {
+    it('reads each rate per call, so an override applies to the next read', () => {
         configure();
-        process.env.NODE_VAT_RATE_DEFAULT = '0.05';
+        setEnvironment({ NODE_VAT_RATE_DEFAULT: '0.05' });
 
         expect(vatRateDefault()).toBe(0.05);
     });
 
     it('falls back for the test environment and the demo profile, which skip the gate', () => {
         configure();
-        delete process.env.NODE_VAT_RATE_DEFAULT;
-        delete process.env.NODE_VAT_RATE_REDUCED;
+        setEnvironment({ NODE_VAT_RATE_DEFAULT: undefined });
+        setEnvironment({ NODE_VAT_RATE_REDUCED: undefined });
 
         expect(vatRateDefault()).toBe(0.22);
         expect(vatRateReduced()).toBe(0.1);

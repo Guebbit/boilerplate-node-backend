@@ -16,7 +16,7 @@ import type { ProductDocument } from '../../model';
 import type { Caller } from '@types';
 import { resetDomainEvents } from '@kernel/events';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
+import { callerAs, testCallerContext } from '@tests/callers';
 import { registerTranslationPort, type TranslationPort } from '@kernel/translation';
 
 /**
@@ -63,8 +63,8 @@ afterEach(() => {
 /* The three callers every visibility rule answers for. `guest` and `logged` differ by identity
  * alone, so a rule that starts distinguishing them fails a case rather than passing silently. */
 const GUEST: Caller | undefined = undefined;
-const LOGGED = asCustomer('507f1f77bcf86cd799439011');
-const ADMIN = asAdmin('507f1f77bcf86cd799439012');
+const LOGGED = callerAs('customer', '507f1f77bcf86cd799439011');
+const ADMIN = callerAs('admin', '507f1f77bcf86cd799439012');
 
 const titlesOf = (items: { title: string }[]): string[] => items.map(({ title }) => title);
 
@@ -305,6 +305,18 @@ describe('productService.search', () => {
         const result = await productService.search({}, productService.callerScope(ADMIN));
 
         expect(titlesOf(result.items).toSorted()).toEqual(['Active', 'Inactive']);
+    });
+
+    it('shows the warehouse the inactive rows too, so the stock form can pick a draft', async () => {
+        await createProduct({ title: 'Active', active: true });
+        await createProduct({ title: 'Draft', active: false });
+
+        const result = await productService.search(
+            {},
+            productService.callerScope(callerAs('warehouse', '507f1f77bcf86cd799439013'))
+        );
+
+        expect(titlesOf(result.items).toSorted()).toEqual(['Active', 'Draft']);
     });
 
     it('filters by text (searches title and description)', async () => {

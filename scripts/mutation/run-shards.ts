@@ -74,7 +74,7 @@ const shardLines = numberArgument('--shard-lines') ?? TARGET_LINES_PER_SHARD;
  */
 const reportRoot = path.join(SHARD_ROOT, String(shardLines));
 
-/** The shards, bin-packed by line count — the same plan `shard-plan.ts` hands the weekly matrix. */
+/** The shards, bin-packed by line count — `sharding.ts`. */
 const shards = packIntoShards(scopeWithLines(), shardLines);
 
 /** A shard is recorded when its copied report exists; that file is the unit of banked credit. */

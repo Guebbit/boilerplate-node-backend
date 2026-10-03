@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
     title: orders — module contract
-    version: '2.0.0'
+    version: '0.1.0'
 
 x-error-codes:
     ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock.' }

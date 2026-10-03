@@ -8,7 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironment, setEnvironment } from '@tests/environment';
 import { observePort } from '@tests/ports';
 import {
     createProduct,
@@ -592,7 +592,7 @@ describe('listLevels', () => {
     });
 
     it('narrows to what needs ordering when asked', async () => {
-        process.env.NODE_LOW_STOCK_THRESHOLD = '5';
+        setEnvironment({ NODE_LOW_STOCK_THRESHOLD: '5' });
         await createProduct({ title: 'Low', onHand: 2 });
         await createProduct({ title: 'Fine', onHand: 500 });
 
@@ -602,7 +602,7 @@ describe('listLevels', () => {
         // The total follows the filter, not the collection — otherwise the board would report
         // two pages of scarce products and render one row.
         expect(result.meta.totalItems).toBe(1);
-        delete process.env.NODE_LOW_STOCK_THRESHOLD;
+        setEnvironment({ NODE_LOW_STOCK_THRESHOLD: undefined });
     });
 
     it('deliberately disagrees with the metrics gauge over an inactive product', async () => {
@@ -610,7 +610,7 @@ describe('listLevels', () => {
         // reader (the stock board) counts the WHOLE catalogue, an admin restocking needs to see
         // an inactive product too. `products_low_stock_total` (`lowStockCount`) counts PUBLIC
         // products only. "The two numbers will not match, and should not."
-        process.env.NODE_LOW_STOCK_THRESHOLD = '5';
+        setEnvironment({ NODE_LOW_STOCK_THRESHOLD: '5' });
         await createProduct({ active: true, onHand: 2, reserved: 0 });
         await createProduct({ active: true, onHand: 40, reserved: 40 });
         const hidden = await createProduct({ active: false, onHand: 1, reserved: 0 });
@@ -621,7 +621,7 @@ describe('listLevels', () => {
         expect(board.meta.totalItems).toBe(3);
         expect(gauge).toBe(2);
         expect(board.items.map((level) => level.productId)).toContain(String(hidden._id));
-        delete process.env.NODE_LOW_STOCK_THRESHOLD;
+        setEnvironment({ NODE_LOW_STOCK_THRESHOLD: undefined });
     });
 
     it('pages rather than reading the whole catalogue', async () => {

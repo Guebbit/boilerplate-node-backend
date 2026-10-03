@@ -42,28 +42,22 @@ HTTP adapter layer for every account endpoint. Each file is a thin Express handl
 ```mermaid
 flowchart LR
     m_src_modules_account_controllers["src/modules/account/controllers/"]
-    m_src["src/<br/>19 files"]
-    m_src_infrastructure["src/infrastructure/<br/>44 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>23 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>19 files"]
-    m_src_kernel["src/kernel/<br/>11 files"]
-    m_src_modules["src/modules/<br/>15 files"]
-    m_src_modules_account["src/modules/account/<br/>68 files"]
-    m_src_modules_account_services["src/modules/account/services/<br/>11 files"]
-    m_src_modules_users["src/modules/users/<br/>33 files"]
+    m_src["src/<br/>48 files"]
+    m_src_infrastructure["src/infrastructure/<br/>58 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
+    m_src_modules_account["src/modules/account/<br/>81 files"]
+    m_src_modules_users["src/modules/users/<br/>48 files"]
     m_src_modules_account_controllers --- m_src
     m_src_modules_account_controllers --- m_src_infrastructure
     m_src_modules_account_controllers --- m_src_infrastructure_adapters
     m_src_modules_account_controllers --- m_src_infrastructure_http
-    m_src_modules_account_controllers --- m_src_kernel
-    m_src_modules_account_controllers --- m_src_modules
     m_src_modules_account_controllers --- m_src_modules_account
-    m_src_modules_account_controllers --- m_src_modules_account_services
     m_src_modules_account_controllers --- m_src_modules_users
     style m_src_modules_account_controllers stroke-width:3px
 ```
 
-[[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_kernel|src/kernel/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_services|src/modules/account/services/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
+[[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
 
 ## Files
 - `src/modules/account/controllers/cancel-pending-email.ts` — Thin HTTP adapter for `DELETE /account/pending-email`. It extracts the authenticated user ID and caller context from the request, delegates to `accountService.cancelPendingEmailChange`, and maps the service result (or a refusal) to an HTTP response.

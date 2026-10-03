@@ -55,7 +55,7 @@ describe('GET /delivery/methods', () => {
     it('lists the configured ship-to countries', async () => {
         const response = await api().get('/delivery/methods');
 
-        // `tests/support/setup.ts` sets `NODE_SHOP_COUNTRY=IT`; `NODE_SHIP_TO_COUNTRIES` is unset.
+        // `tests/support/setup-environment.ts` sets `NODE_SHOP_COUNTRY=IT`; `NODE_SHIP_TO_COUNTRIES` is unset.
         expect(response.body.data.shipToCountries).toEqual(['IT']);
     });
 

@@ -18,6 +18,8 @@ import {
     passwordCheckLimiter,
     mfaChallengeLimiter,
     mfaSendLimiter,
+    accountCodeSendLimiter,
+    accountCodeGuessLimiter,
     loginChallengeGate
 } from './rate-limits';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
@@ -35,6 +37,7 @@ import { upload } from '@infrastructure/http/middlewares/upload';
 import { getAccount } from './controllers/get-account';
 import { replaceAccount, updateAccount } from './controllers/update-account';
 import { cancelPendingEmail } from './controllers/cancel-pending-email';
+import { postPendingEmailResend } from './controllers/post-pending-email-resend';
 import { postLogin } from './controllers/post-login';
 import { postSignup } from './controllers/post-signup';
 import { postResetRequest } from './controllers/post-reset-request';
@@ -42,11 +45,14 @@ import { postResetConfirm } from './controllers/post-reset-confirm';
 import { postPasswordChange } from './controllers/post-password-change';
 import { postPasswordCheck } from './controllers/post-password-check';
 import { postReauth } from './controllers/post-reauth';
+import { getReauthMethods } from './controllers/get-reauth-methods';
+import { postReauthMethodSend } from './controllers/post-reauth-method-send';
 import { postLoginTwoFactor } from './controllers/post-login-2fa';
 import { postLoginTwoFactorSend } from './controllers/post-login-2fa-send';
 import { get2fa } from './controllers/get-2fa';
 import { post2faSetup } from './controllers/post-2fa-setup';
 import { post2faConfirm } from './controllers/post-2fa-confirm';
+import { post2faMethodSend } from './controllers/post-2fa-method-send';
 import { delete2faMethod } from './controllers/delete-2fa-method';
 import { delete2fa } from './controllers/delete-2fa';
 import { post2faBackupCodes } from './controllers/post-2fa-backup-codes';
@@ -135,6 +141,12 @@ router.patch(
 // gate: it only discards a change, the same trust level as reading the profile that shows it.
 router.delete('/pending-email', isAuth, cancelPendingEmail);
 
+// POST /account/pending-email/resend — mail the pending address a fresh link (requires auth). No
+// fresh-auth gate: the address was already asked for under one, and nothing about the account
+// changes. `credentialLimiters` and the service's cooldown are `/verify-request`'s, for the same
+// reason: each success publishes mail. `isAuth` runs first so the identity budget is per account.
+router.post('/pending-email/resend', isAuth, credentialLimiters, postPendingEmailResend);
+
 // DELETE /account — request account deletion (requires auth). Critical: destruction.
 router.delete('/', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), deleteAccountRequest);
 
@@ -171,8 +183,18 @@ router.post('/password', isAuth, credentialLimiters, postPasswordChange);
 // block. Address-keyed directly instead, like `submissionLimiter`.
 router.post('/password/check', passwordCheckLimiter, postPasswordCheck);
 
-// POST /account/reauth — step-up: re-prove the password, refresh auth_time (requires auth)
+// GET /account/reauth — which methods this account can step up with. Plain `isAuth`: a stale
+// session has to be able to ask, or it could never learn how to get fresh.
+router.get('/reauth', isAuth, getReauthMethods);
+
+// POST /account/reauth — step-up: re-prove a password or a mailed code, refresh auth_time
+// (requires auth)
 router.post('/reauth', isAuth, credentialLimiters, postReauth);
+
+// POST /account/reauth/methods/:method/send — mail the step-up code to an account with no
+// password. No fresh-auth guard (it is what earns one); the delivery budget is the 2FA send's,
+// since both spend the same mailbox.
+router.post('/reauth/methods/:method/send', isAuth, accountCodeSendLimiter, postReauthMethodSend);
 
 /*
  * GET /account/abilities — the rules the server enforces, for a client to render from.
@@ -244,7 +266,14 @@ router.get('/2fa', isAuth, get2fa);
 
 // DELETE /account/2fa — drop every factor. Critical fresh auth AND a valid code in the body:
 // disabling from a stolen-but-fresh session is otherwise the cheapest way around the feature.
-router.delete('/2fa', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), delete2fa);
+// `accountCodeGuessLimiter` on this and the three other code-taking calls below caps the guessing.
+router.delete(
+    '/2fa',
+    isAuth,
+    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    accountCodeGuessLimiter,
+    delete2fa
+);
 
 // POST /account/2fa/methods/:method/setup — start (or restart) one method's enrollment. Critical
 // tier: a restart disarms a factor that was already working.
@@ -252,7 +281,19 @@ router.post(
     '/2fa/methods/:method/setup',
     isAuth,
     requireFreshAuth(REAUTH_TIME_CRITICAL),
+    accountCodeGuessLimiter,
     post2faSetup
+);
+
+// POST /account/2fa/methods/:method/send — mail a signed-in caller a code for an ARMED delivered
+// method, so an email-only account can prove itself before changing its factors. Critical tier,
+// like the calls it serves, and its own per-account delivery budget (mail is what it spends).
+router.post(
+    '/2fa/methods/:method/send',
+    isAuth,
+    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    accountCodeSendLimiter,
+    post2faMethodSend
 );
 
 // POST /account/2fa/methods/:method/confirm — arm the pending method. Critical, same reasoning.
@@ -269,6 +310,7 @@ router.delete(
     '/2fa/methods/:method',
     isAuth,
     requireFreshAuth(REAUTH_TIME_CRITICAL),
+    accountCodeGuessLimiter,
     delete2faMethod
 );
 
@@ -279,6 +321,7 @@ router.post(
     '/2fa/backup-codes',
     isAuth,
     requireFreshAuth(REAUTH_TIME_CRITICAL),
+    accountCodeGuessLimiter,
     post2faBackupCodes
 );
 

@@ -6,12 +6,12 @@
 
 import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentNumber } from '@infrastructure/runtime/environment';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { ExportPayment, Refund } from '@types';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
+import { abandonedPaymentRetentionDays } from '../config';
 
 /**
  * DDD-D6's `personalData.erase` hook. Unsets `userId` on every payment this account made; the
@@ -98,7 +98,7 @@ export const findOwnPaymentsForExport = (userId: string): Promise<ExportPayment[
  * @returns how many abandoned payment attempts were deleted
  */
 export const reapAbandonedPayments = (): Promise<number> => {
-    const retentionDays = environmentNumber('NODE_PAYMENT_ABANDONED_RETENTION_DAYS', 30, 1);
+    const retentionDays = abandonedPaymentRetentionDays();
     const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
 
     return paymentRepository.deleteAbandonedBefore(cutoff).then((deleted) => {

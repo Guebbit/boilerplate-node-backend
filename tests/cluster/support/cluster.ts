@@ -154,8 +154,8 @@ const startCluster = ({
                 env: {
                     ...process.env,
                     /*
-                     * NOT `test`: `assertRequiredConfig` (`kernel/required-config.ts`) skips its
-                     * own checks under `NODE_ENV=test`, and this suite wants them run for real
+                     * NOT `test`: `assertModuleConfig` (`kernel/module-config.ts`) skips its
+                     * presence checks under `NODE_ENV=test`, and this suite wants them run for real
                      * against the secrets set below.
                      */
                     NODE_ENV: 'development',
@@ -165,11 +165,11 @@ const startCluster = ({
                     NODE_TOKEN_ACCESS: 'cluster-suite-access-secret',
                     NODE_TOKEN_REFRESH: 'cluster-suite-refresh-secret',
                     /*
-                     * `NODE_ENV: 'development'` above means `assertRequiredConfig` runs for real —
+                     * `NODE_ENV: 'development'` above means `assertModuleConfig` runs for real —
                      * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local
                      * `.env` (via `dotenv/config` in `src/app.ts`) supplies these on a dev machine;
                      * CI has none, so the child refuses to boot without them
-                     * (`src/kernel/required-config.ts`).
+                     * (`src/kernel/module-config.ts`).
                      */
                     NODE_URL: `http://127.0.0.1:${String(port)}`,
                     NODE_TOTP_ENCRYPTION_KEY: 'cluster-suite-totp-encryption-key',

@@ -39,9 +39,11 @@ other page in this section is one of those boxes, opened up.
 
 ## What the shop sells
 
-132 products — a pet-supply retailer. Six are hand-picked, each there to show the shop behaving
-differently; the other 126 are a combinatorial grid (six animals × seven product types × three
-quality tiers) so lists, pagination and the category filters have enough real rows to work with:
+134 products — a pet-supply retailer. Six are hand-picked, each there to show the shop behaving
+differently; the other 128 are a combinatorial grid (six animals × seven product types × three
+quality tiers) plus two downloadable guides, so lists, pagination and the category filters have
+enough real rows to work with. The grid carries shipping weights, and three of its product types
+have a VAT treatment of their own (supplements reduced, bowls zero-rated, dispensers exempt):
 
 | Product                                              | Price | In stock | Why it exists                                      |
 | ---------------------------------------------------- | ----- | -------- | -------------------------------------------------- |
@@ -51,10 +53,10 @@ quality tiers) so lists, pagination and the category filters have enough real ro
 | Universal Small Animal Water Bottle                  | €9    | 100      | has only a name and a price, nothing else          |
 | 150W Ceramic Heat Emitter                            | €55   | 12       | **deleted** — proves a deleted product disappears  |
 | Rabbit Starter Bundle — Hutch, Feeder & Water Bottle | €96   | 18       | **switched off** — visible to staff, not to buyers |
-| _...126 more_                                        | —     | —        | a generated catalogue, e.g. "Premium Bird Carrier" |
+| _...128 more_                                        | —     | —        | a generated catalogue, e.g. "Premium Bird Carrier" |
 
-So a visitor sees **130** products (the four ordinary ones above, plus all 126 generated).
-Staff see all 132. That difference is deliberate and it is explained on
+So a visitor sees **132** products (the four ordinary ones above, plus all 128 generated).
+Staff see all 134. That difference is deliberate and it is explained on
 [the shop manager's page](./manager.md).
 
 ## The people in it
@@ -114,18 +116,18 @@ Reads published products, the dictionary the shop is rendered in, and the delive
 The roles above after the evaluator has had them, the `guest` baseline folded in. This is
 what a route guard and a listing actually answer.
 
-| Role         | products | cart | orders | payments | inventory | delivery | returns   | feedback | locales | core | users | account | audit-logs | webhooks | api-keys | observability |
-| ------------ | -------- | ---- | ------ | -------- | --------- | -------- | --------- | -------- | ------- | ---- | ----- | ------- | ---------- | -------- | -------- | ------------- |
-| `guest`      | r        | —    | —      | —        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             |
-| `unverified` | r        | —    | r      | r        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             |
-| `customer`   | r        | x    | r      | r        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             |
-| `manager`    | RCUD     | x    | RCUD   | r        | R         | RSTART   | RURECEIVE | R        | RCUD    | RU   | R     | —       | R          | RCUD     | —        | —             |
-| `warehouse`  | r        | x    | R      | —        | RC        | RUSTART  | RRECEIVE  | —        | r       | —    | —     | —       | —          | —        | —        | —             |
-| `support`    | r        | x    | R      | R        | —         | R        | RU        | RUD      | r       | —    | RU    | —       | R          | —        | —        | —             |
-| `editor`     | RCUD     | x    | —      | —        | —         | R        | —         | —        | RCUD    | RU   | —     | —       | —          | —        | —        | —             |
-| `moderator`  | r        | x    | RCUD   | RCU      | —         | R        | RU        | —        | r       | —    | RCUD  | —       | R          | —        | —        | —             |
-| `admin`      | RCUD     | x    | RCUDO  | RCU      | RCS       | RUSTART  | RURECEIVE | RUD      | RCUD    | RU   | RCUD  | D       | R          | RCUD     | RCD      | —             |
-| `operator`   | —        | —    | —      | —        | —         | —        | —         | —        | —       | —    | —     | —       | —          | —        | —        | R             |
+| Role         | products | cart | orders | payments | inventory | delivery | returns   | feedback | locales | core | users | account | audit-logs | webhooks | api-keys | observability | example |
+| ------------ | -------- | ---- | ------ | -------- | --------- | -------- | --------- | -------- | ------- | ---- | ----- | ------- | ---------- | -------- | -------- | ------------- | ------- |
+| `guest`      | r        | —    | —      | —        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             | —       |
+| `unverified` | r        | —    | r      | r        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             | rcud    |
+| `customer`   | r        | x    | r      | r        | —         | R        | —         | —        | r       | —    | —     | —       | —          | —        | —        | —             | rcud    |
+| `manager`    | RCUD     | x    | RCUD   | r        | R         | RSTART   | RURECEIVE | R        | RCUD    | RU   | R     | —       | R          | RCUD     | —        | —             | rcud    |
+| `warehouse`  | R        | x    | R      | —        | RC        | RUSTART  | RRECEIVE  | —        | r       | —    | —     | —       | —          | —        | —        | —             | rcud    |
+| `support`    | r        | x    | R      | R        | —         | R        | RU        | RUD      | r       | —    | RU    | —       | R          | —        | —        | —             | rcud    |
+| `editor`     | RCUD     | x    | —      | —        | —         | R        | —         | —        | RCUD    | RU   | —     | —       | —          | —        | —        | —             | rcud    |
+| `moderator`  | r        | x    | RCUD   | RCU      | —         | R        | RU        | —        | r       | —    | RCUD  | —       | R          | —        | —        | —             | rcud    |
+| `admin`      | RCUD     | x    | RCUDO  | RCU      | RCS       | RUSTART  | RURECEIVE | RUD      | RCUD    | RU   | RCUD  | D       | R          | RCUD     | RCD      | —             | RcUD    |
+| `operator`   | —        | —    | —      | —        | —         | —        | —         | —        | —       | —    | —     | —       | —          | —        | —        | R             | —       |
 
 UPPERCASE — the `any`-breadth key, every row · lowercase — `self`, the caller’s own · `r` read · `c` create · `u` update · `d` delete · `x` checkout · `s` sweep · `o` override · — nothing
 

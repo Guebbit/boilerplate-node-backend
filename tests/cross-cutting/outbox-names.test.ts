@@ -149,30 +149,39 @@ it('publishes the set the pair agreed on', () => {
      * boilerplate-php-laravel-backend: the admin "create a user, let them set their own password"
      * flow, the inactive-account reaper and the email second factor only exist on this backend so
      * far — and neither does the pending-email-change notice, nor bank transfer, which the PHP
-     * twin has no equivalent feature for at all. `webhooks.subscription-disabled` is the same
+     * twin has no equivalent feature for at all. `example.published` is Node-only until the twin builds its `example` module. `webhooks.subscription-disabled` is the same
      * story: the PHP twin has no webhook module yet. `returns.notice` is the same story: the PHP twin has no returns module yet. `orders.order-product-unavailable` (a hard
      * delete or a deactivation cancelling a pending order) is likewise Node-only so far. So are
      * `orders.order-paid` (E5: a payment settling to `succeeded` now mails the buyer) and
      * `orders.order-card-expired` (E5: a `card` hold's own expiry notice, the twin of
-     * `orders.order-transfer-expired` for the other payment method) — both new here. The other
-     * eight are the agreed, mirrored set.
+     * `orders.order-transfer-expired` for the other payment method) — both new here. So is
+     * `account.two-factor-changed`, the notice that a second factor was added, replaced or removed. So is
+     * `account.reauth-code`, the step-up code an account with no password passes with. So are
+     * `orders.order-cancelled` (a person's cancel, saying what became of the money) and
+     * `orders.order-refunded` (money back outside a return) — new here, appended to the message
+     * for the twin's session. The other eight are the agreed, mirrored set.
      */
     const agreedByPair = [
         'account.delete-confirm',
         'account.delete-request',
         'account.email-change-notice',
         'account.inactivity-warning',
+        'account.reauth-code',
         'account.reset-confirm',
         'account.reset-request',
         'account.setup-request',
+        'account.two-factor-changed',
         'account.two-factor-code',
         'account.verify-request',
         'delivery.shipment-shipped',
+        'example.published',
         'feedback.contact',
+        'orders.order-cancelled',
         'orders.order-card-expired',
         'orders.order-confirm',
         'orders.order-paid',
         'orders.order-product-unavailable',
+        'orders.order-refunded',
         'orders.order-transfer-expired',
         'orders.order-transfer-instructions',
         'returns.notice',

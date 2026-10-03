@@ -29,6 +29,7 @@ import {
     t
 } from '@infrastructure/i18n';
 import enTranslation from '../../../../src/locales/en.json';
+import { setEnvironment } from '@tests/environment';
 
 describe('locale overrides', () => {
     beforeEach(async () => {
@@ -141,8 +142,6 @@ describe('locale overrides', () => {
  * somewhere else.
  */
 describe('the override refresh interval', () => {
-    const ORIGINAL_REFRESH_MS = process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS;
-
     beforeEach(() => {
         jest.useFakeTimers();
     });
@@ -151,32 +150,34 @@ describe('the override refresh interval', () => {
         stopLocaleOverrideRefresh();
         jest.useRealTimers();
         registerLocaleOverrideProvider(undefined);
-        if (ORIGINAL_REFRESH_MS === undefined) delete process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS;
-        else process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS = ORIGINAL_REFRESH_MS;
     });
 
     it('reads the configured period', () => {
-        process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS = '5000';
+        setEnvironment({ NODE_LOCALE_OVERRIDE_REFRESH_MS: '5000' });
 
         expect(getOverrideRefreshMs()).toBe(5000);
     });
 
-    // A zero or negative period would be a busy loop, and a typo'd one is not a reason to hammer
-    // Mongo — both fall back to the minute rather than being taken literally.
-    it.each([
-        ['unset', undefined],
-        ['0', '0'],
-        ['-1', '-1'],
-        ['nonsense', 'soon']
-    ])('falls back to a minute when the period is %s', (_label, value) => {
-        if (value === undefined) delete process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS;
-        else process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS = value;
+    it('falls back to a minute when the period is unset', () => {
+        setEnvironment({ NODE_LOCALE_OVERRIDE_REFRESH_MS: undefined });
 
         expect(getOverrideRefreshMs()).toBe(60_000);
     });
 
+    // A zero or negative period would be a busy loop, and a typo'd one is not a reason to hammer
+    // Mongo — each is refused outright rather than taken literally or quietly replaced.
+    it.each([
+        ['0', '0'],
+        ['-1', '-1'],
+        ['nonsense', 'soon']
+    ])('refuses a period of %s', (_label, value) => {
+        setEnvironment({ NODE_LOCALE_OVERRIDE_REFRESH_MS: value });
+
+        expect(() => getOverrideRefreshMs()).toThrow(/NODE_LOCALE_OVERRIDE_REFRESH_MS/);
+    });
+
     it('re-reads the overrides once per period', () => {
-        process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS = '1000';
+        setEnvironment({ NODE_LOCALE_OVERRIDE_REFRESH_MS: '1000' });
         const provider = jest.fn(() => Promise.resolve({}));
         registerLocaleOverrideProvider(provider);
 
@@ -189,7 +190,7 @@ describe('the override refresh interval', () => {
     // Called from the boot sequence, which a test may run more than once in-process. A second
     // timer would double every worker's read rate against Mongo for the life of the process.
     it('runs one timer however many times it is started', () => {
-        process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS = '1000';
+        setEnvironment({ NODE_LOCALE_OVERRIDE_REFRESH_MS: '1000' });
         const provider = jest.fn(() => Promise.resolve({}));
         registerLocaleOverrideProvider(provider);
 
@@ -201,7 +202,7 @@ describe('the override refresh interval', () => {
     });
 
     it('stops re-reading once stopped, and can be started again', () => {
-        process.env.NODE_LOCALE_OVERRIDE_REFRESH_MS = '1000';
+        setEnvironment({ NODE_LOCALE_OVERRIDE_REFRESH_MS: '1000' });
         const provider = jest.fn(() => Promise.resolve({}));
         registerLocaleOverrideProvider(provider);
 

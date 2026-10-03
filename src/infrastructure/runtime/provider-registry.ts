@@ -7,7 +7,7 @@
  * Resolution POLICY stays with the caller, on purpose: whether an unknown name throws (antibot,
  * analytics, payments — a typo must not silently downgrade a security control) or resolves to
  * `undefined` (OAuth, where "not configured" is routine) differs per port. This registry only
- * stores and looks up; `environmentChoice` or a plain `resolve()` call is what expresses that
+ * stores and looks up; {@link requireProvider} or a plain `resolve()` call is what expresses that
  * difference, one caller at a time.
  */
 
@@ -54,4 +54,27 @@ export const createProviderRegistry = <T>(initial: Record<string, T> = {}): Prov
         names: () => [...providers.keys()],
         resolve: (name) => providers.get(name)
     };
+};
+
+/**
+ * The implementation a selector variable names, or a refusal that lists what this build has.
+ *
+ * For a port where an unknown name is a typo that must not silently downgrade a control
+ * (antibot, analytics, payments): the variable's slice reads the name, this resolves it, and the
+ * app tier probes it at boot so the typo fails there instead of on the first request.
+ *
+ * @param registry - the port's registry
+ * @param variable - the selector's environment variable, for the message
+ * @param name - the configured name
+ * @throws {Error} when nothing is registered under `name`
+ */
+export const requireProvider = <T>(
+    registry: ProviderRegistry<T>,
+    variable: string,
+    name: string
+): T => {
+    const provider = registry.resolve(name);
+    if (provider === undefined)
+        throw new Error(`Unknown ${variable}: "${name}". Allowed: ${registry.names().join(', ')}.`);
+    return provider;
 };

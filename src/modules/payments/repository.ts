@@ -114,7 +114,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         orderId: string,
         from: readonly PaymentStatus[],
         to: PaymentStatus,
-        extra?: Partial<PaymentDocument>
+        extra?: Partial<PaymentDocument>,
+        session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     clearPendingEffects: (orderId: string) => Promise<void>;
     clearPendingEffectsOnce: (orderId: string, session: ClientSession) => Promise<boolean>;
@@ -131,7 +132,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     settleRefund: (
         paymentId: string,
         refundId: string,
-        fields: { providerRefundRef?: string; refundedByHand?: true }
+        fields: { providerRefundRef?: string; refundedByHand?: true },
+        session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     failRefund: (
         paymentId: string,
@@ -236,14 +238,15 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
 
     /**
      * The status-machine primitive, same shape as the order repository's: the `$in` rides in
-     * the filter so exactly one of two racing writes matches.
+     * the filter so exactly one of two racing writes matches. `session` joins the write to the
+     * caller's transaction — the outbox row announcing the move rides in the same one.
      */
-    updateStatusIfIn: (orderId, from, to, extra = {}) =>
+    updateStatusIfIn: (orderId, from, to, extra = {}, session) =>
         paymentModel
             .findOneAndUpdate(
                 { orderId: toObjectId(orderId), status: { $in: [...from] } },
                 { $set: { status: to, ...extra } },
-                { returnDocument: 'after' }
+                { returnDocument: 'after', ...(session ? { session } : {}) }
             )
             .exec(),
 
@@ -378,9 +381,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * @param refundId - the refund record inside it
      * @param fields - the provider's refund id when there was one, and `refundedByHand` for money
      *   an operator returned outside the application
+     * @param session - the caller's transaction, when the settlement is announced through the outbox
      * @returns the payment as it now stands, or `null` if that refund was not open
      */
-    settleRefund: (paymentId, refundId, fields) =>
+    settleRefund: (paymentId, refundId, fields, session) =>
         paymentModel
             .findOneAndUpdate(
                 {
@@ -403,7 +407,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     },
                     $unset: { 'refunds.$.lastError': 1 }
                 },
-                { returnDocument: 'after' }
+                { returnDocument: 'after', ...(session ? { session } : {}) }
             )
             .exec(),
 

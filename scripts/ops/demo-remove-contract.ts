@@ -37,8 +37,8 @@ export const stripAccountExportSchema = (repoRoot: string): RemovalNote => {
     };
 
     mustReplace(
-        '                    exportedAt,\n                    profile,\n                    roles,\n                    addresses,\n                    orders,\n                    payments,\n                    shipments,\n                    cart,\n                    wishlist,\n                    sessions,\n                    auditLog,\n                    apiKeys,\n                    invoicing,\n                    returns\n                ]',
-        '                    exportedAt,\n                    profile,\n                    roles,\n                    addresses,\n                    sessions,\n                    auditLog,\n                    apiKeys\n                ]'
+        '                    exportedAt,\n                    profile,\n                    roles,\n                    addresses,\n                    orders,\n                    payments,\n                    shipments,\n                    cart,\n                    wishlist,\n                    sessions,\n                    auditLog,\n                    apiKeys,\n                    invoicing,\n                    returns,\n                    examples\n                ]',
+        '                    exportedAt,\n                    profile,\n                    roles,\n                    addresses,\n                    sessions,\n                    auditLog,\n                    apiKeys,\n                    examples\n                ]'
     );
     mustReplace(
         "                orders:\n                    type: array\n                    items:\n                        $ref: '#/components/schemas/Order'\n",

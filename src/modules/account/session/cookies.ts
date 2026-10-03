@@ -7,18 +7,19 @@
  */
 
 import type { Response } from 'express';
+import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
 /**
  * Flags shared by every cookie this module treats as a credential — `createRefreshCookie`,
  * `destroyRefreshCookie`, and (via `../oauth/state.ts` and `../oauth/mfa-redirect.ts`) the
  * OAuth state/verifier/MFA-challenge cookies: unreadable from script (`httpOnly`), HTTPS-only
- * once in production (`secure`), confined to same-site navigation (`sameSite: 'lax'`), and sent
+ * outside development and test (`secure`), confined to same-site navigation (`sameSite: 'lax'`), and sent
  * on every path this app serves (`path: '/'`) since the endpoint that sets one is rarely the
  * endpoint that reads or clears it. A function, not a constant, so each call reads `NODE_ENV`
  * fresh rather than freezing it at import time.
  */
 export const secureCookieOptions = () => ({
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: !isRelaxedEnvironment(),
     sameSite: 'lax' as const,
     path: '/'
 });

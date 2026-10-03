@@ -15,6 +15,7 @@ import {
     createLoggedCookie,
     destroyLoggedCookie
 } from '@modules/account/session/cookies';
+import { setEnvironment } from '@tests/environment';
 
 /** Captures the (name, value, options) triples the module hands to Express. */
 const makeResponse = () =>
@@ -28,23 +29,11 @@ const makeResponse = () =>
         clearCookie: jest.fn()
     });
 
-const originalNodeEnvironment = process.env.NODE_ENV;
-const originalShort = process.env.NODE_TOKEN_REFRESH_TIME_SHORT;
-const originalAccess = process.env.NODE_TOKEN_ACCESS_TIME;
-
 beforeEach(() => {
     // Real values, so the maxAge assertions exercise the actual token-config wiring rather than
     // a mock that would agree with anything.
-    process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '3600';
-    process.env.NODE_TOKEN_ACCESS_TIME = '900';
-});
-
-afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnvironment;
-    if (originalShort === undefined) delete process.env.NODE_TOKEN_REFRESH_TIME_SHORT;
-    else process.env.NODE_TOKEN_REFRESH_TIME_SHORT = originalShort;
-    if (originalAccess === undefined) delete process.env.NODE_TOKEN_ACCESS_TIME;
-    else process.env.NODE_TOKEN_ACCESS_TIME = originalAccess;
+    setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
+    setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
 });
 
 describe('createRefreshCookie', () => {
@@ -63,7 +52,7 @@ describe('createRefreshCookie', () => {
     });
 
     it('marks the cookie secure in production', () => {
-        process.env.NODE_ENV = 'production';
+        setEnvironment({ NODE_ENV: 'production' });
         const response = makeResponse();
 
         createRefreshCookie(response, 'token');
@@ -71,8 +60,17 @@ describe('createRefreshCookie', () => {
         expect(response.cookie.mock.calls[0][2].secure).toBe(true);
     });
 
-    it('leaves the cookie non-secure outside production, so local HTTP still works', () => {
-        process.env.NODE_ENV = 'development';
+    it('marks the cookie secure when NODE_ENV is unset, like any server', () => {
+        setEnvironment({ NODE_ENV: undefined });
+        const response = makeResponse();
+
+        createRefreshCookie(response, 'token');
+
+        expect(response.cookie.mock.calls[0][2].secure).toBe(true);
+    });
+
+    it('leaves the cookie non-secure in development, so local HTTP still works', () => {
+        setEnvironment({ NODE_ENV: 'development' });
         const response = makeResponse();
 
         createRefreshCookie(response, 'token');
@@ -117,7 +115,7 @@ describe('destroyRefreshCookie', () => {
     });
 
     it('matches the production secure flag when clearing', () => {
-        process.env.NODE_ENV = 'production';
+        setEnvironment({ NODE_ENV: 'production' });
         const response = makeResponse();
 
         destroyRefreshCookie(response);

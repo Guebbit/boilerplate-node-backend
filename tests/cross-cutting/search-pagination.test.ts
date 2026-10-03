@@ -11,15 +11,9 @@
  * request. Clamping here as well would mean advertising a limit that was never applied.
  */
 import { normalizePagination } from '@infrastructure/persistence/search';
+import { setEnvironment } from '@tests/environment';
 
 describe('normalizePagination', () => {
-    const originalPageSize = process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
-
-    afterEach(() => {
-        if (originalPageSize === undefined) delete process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
-        else process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE = originalPageSize;
-    });
-
     it('coerces string parameters to numbers and derives skip', () => {
         expect(normalizePagination({ page: '3', pageSize: '25' })).toEqual({
             page: 3,
@@ -29,13 +23,13 @@ describe('normalizePagination', () => {
     });
 
     it('defaults to page 1 with ten per page when nothing was asked for', () => {
-        delete process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
+        setEnvironment({ NODE_SETTINGS_PAGINATION_PAGE_SIZE: undefined });
 
         expect(normalizePagination()).toEqual({ page: 1, pageSize: 10, skip: 0 });
     });
 
     it('treats empty and zero values as absent rather than as 0', () => {
-        delete process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
+        setEnvironment({ NODE_SETTINGS_PAGINATION_PAGE_SIZE: undefined });
 
         expect(normalizePagination({ page: '', pageSize: 0 })).toEqual({
             page: 1,
@@ -60,27 +54,28 @@ describe('normalizePagination', () => {
     // The env value is the one number that never passes through a request schema, so it keeps
     // its bound: a typo in deployment config must not hand every search the whole collection.
     it('still bounds the env page size, which no schema validates', () => {
-        process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE = '5000';
+        setEnvironment({ NODE_SETTINGS_PAGINATION_PAGE_SIZE: '5000' });
 
         expect(normalizePagination().pageSize).toBe(100);
     });
 
     it('falls back to the env page size when the caller gives none', () => {
-        process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE = '15';
+        setEnvironment({ NODE_SETTINGS_PAGINATION_PAGE_SIZE: '15' });
 
         expect(normalizePagination({ page: 1 }).pageSize).toBe(15);
     });
 
     it('prefers an explicit page size over the env fallback', () => {
-        process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE = '15';
+        setEnvironment({ NODE_SETTINGS_PAGINATION_PAGE_SIZE: '15' });
 
         expect(normalizePagination({ pageSize: 50 }).pageSize).toBe(50);
     });
 
-    // A typo in deployment config must not silently disable paging.
-    it('ignores a non-numeric env page size', () => {
-        process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE = 'not-a-number';
+    // A typo in deployment config must not silently disable paging, nor be quietly replaced: the
+    // boot gate refuses it, and a read that slips past the gate throws the same error.
+    it('refuses a non-numeric env page size', () => {
+        setEnvironment({ NODE_SETTINGS_PAGINATION_PAGE_SIZE: 'not-a-number' });
 
-        expect(normalizePagination().pageSize).toBe(10);
+        expect(() => normalizePagination()).toThrow(/NODE_SETTINGS_PAGINATION_PAGE_SIZE/);
     });
 });

@@ -17,8 +17,8 @@ import { buildObservabilityHealth } from '../services/health';
  * GET /observability/health
  *
  * The DETAILED, authenticated readiness view — every backing service, telemetry wiring, process
- * resources, per-job outcomes. `GET /readyz` is the binary, unauthenticated probe an orchestrator
- * actually calls, and `GET /` is liveness — three different endpoints on purpose, because an
+ * resources, per-job outcomes. `GET /readyz` is the binary, unauthenticated probe a load balancer
+ * calls, and `GET /livez` is liveness — three different endpoints on purpose, because an
  * orchestrator restarts on liveness and restarting this process would not bring a downed Redis back.
  */
 export const getObservabilityHealth = (_request: Request, response: Response) =>

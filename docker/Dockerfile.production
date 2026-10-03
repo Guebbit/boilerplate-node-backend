@@ -142,7 +142,7 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 #   scripts/run-script.ts   the entry-point wrapper every script in scripts/db/ and scripts/ops/
 #                 imports as a sibling — has to ship alongside them or their `tsx` run fails to
 #                 resolve it
-#   scripts/db/   the deploy-time scripts — `db:sync`, `access:bootstrap`, `access:grant`.
+#   scripts/db/   the deploy-time scripts — `db:sync`, `access:bootstrap`.
 #                 Named file by file, not as a directory, so the image carries only what it runs
 #   scripts/ops/  the scheduled `reap:*` jobs, run by a cron container against this image
 #   public/   express.static root — CSS, favicon, and the committed seed images
@@ -152,8 +152,7 @@ COPY --from=build --chown=node:node /app/shared ./shared
 COPY --from=build --chown=node:node /app/scripts/run-script.ts ./scripts/
 COPY --from=build --chown=node:node /app/scripts/db/index-sync.ts \
     /app/scripts/db/sync-indexes.ts /app/scripts/db/cache-clear.ts \
-    /app/scripts/db/bootstrap-access.ts /app/scripts/db/grant-access.ts \
-    /app/scripts/db/access-grant.ts ./scripts/db/
+    /app/scripts/db/bootstrap-access.ts ./scripts/db/
 COPY --from=build --chown=node:node /app/scripts/ops ./scripts/ops
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/tsconfig.json ./
@@ -178,14 +177,15 @@ USER node
 # app actually binds comes from NODE_PORT, which is why compose passes the same value to both.
 EXPOSE 3000
 
-# `GET /` is the health endpoint — `app/system-routes.ts` answers `{ data: { status: 'ok' } }`, and
-# `tests/integration/app-health.test.ts` is what keeps that true.
+# The web process's own check, and only its: `GET /livez` (`app/system-routes.ts`) — liveness, never
+# a dependency, so a Mongo blip cannot restart a healthy container. A container that runs something
+# else (`cron`, `setup`) declares its own check or disables this one in compose.
+# See docs/tools/health-checks.md.
 #
-# `start-period` is generous because the first request has to wait for the Mongo connection and the
-# OTel SDK; without it an orchestrator restarts a container that was merely still starting, forever.
+# `start-period` covers the OTel SDK and the listen; the check itself never waits on Mongo.
 # Node's own fetch is used rather than curl or wget, so this adds nothing to the image.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-    CMD node -e "fetch('http://127.0.0.1:'+(process.env.NODE_PORT||3000)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.NODE_PORT||3000)+'/livez').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["dumb-init", "--"]
 

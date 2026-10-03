@@ -12,7 +12,7 @@ import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { callerContextOf } from '@infrastructure/http/request';
-import { cookieOf } from '@kernel/cookies';
+import { cookieOf } from '@infrastructure/http/cookies';
 import { resolveOAuthProvider } from '../oauth/providers';
 import {
     stateMatches,

@@ -107,7 +107,11 @@ const finalizeUndeliverable = (
 ): Promise<WebhookDeliveryDocument | null> =>
     webhookDeliveryRepository.applyOutcome(String(delivery._id), requireLeaseToken(delivery), {
         status: 'exhausted',
-        error
+        // No attempt was made, so nothing from an earlier one describes this outcome.
+        responseCode: undefined,
+        durationMs: undefined,
+        error,
+        nextAttemptAt: undefined
     });
 
 /** Record a successful attempt: the row succeeds, and the subscription's failure streak resets. */
@@ -123,7 +127,8 @@ const recordSuccess = (
             status: 'succeeded',
             responseCode,
             durationMs,
-            error: undefined
+            error: undefined,
+            nextAttemptAt: undefined
         })
         .then((saved) =>
             saved
@@ -154,7 +159,8 @@ const recordExhaustion = (
             status: 'exhausted',
             responseCode,
             durationMs,
-            error
+            error,
+            nextAttemptAt: undefined
         })
         .then((saved) => {
             if (!saved) return null;
@@ -245,7 +251,7 @@ export const attemptDelivery = (
         },
         // `undefined` outside development/test, or with no sink configured — see the SSRF
         // guard's own docblock for what this one exemption does and does not relax.
-        allowedInsecureHost: getWebhookDemoAllowedHost()
+        allowedPrivateHost: getWebhookDemoAllowedHost()
     }).then((result) =>
         result.success
             ? recordSuccess(delivery, result.statusCode, result.durationMs)

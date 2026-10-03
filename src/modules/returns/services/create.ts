@@ -1,13 +1,14 @@
 /**
  * @module
- * Opening a return — and the withdrawal button, which is this same call. Two very different things
- * can follow, and which one is decided by where the goods are:
+ * Opening a return — and the withdrawal button, which is this same call. It always answers with a
+ * `Return`; where the goods are decides what that record is:
  *
- * - Before dispatch there is no return. The order is still in the shop's hands, so a withdrawal is
- *   `orders`' own cancel — which already refunds in full and releases the stock hold — plus the
- *   Art. 11a acknowledgement email. One refund path, no half-empty return rows.
- * - Once the goods have shipped there is something to send back: a return is written, with the
- *   lines and quantities coming back, and staff see it.
+ * - Before dispatch the order is still in the shop's hands, so a withdrawal is `orders`' own cancel
+ *   — which already refunds in full and releases the stock hold — plus a `Return` written closed at
+ *   birth: no lines (no goods are expected back), the refund owed, the Art. 11a acknowledgement
+ *   mailed. One refund path; the record is the dated proof of the withdrawal.
+ * - Once the goods have shipped there is something to send back: a return is written open, with
+ *   the lines and quantities coming back, and staff see it.
  *
  * See: docs/modules/returns.md#the-withdrawal-button
  */
@@ -20,18 +21,19 @@ import { emitDomainEvent } from '@kernel/events';
 import {
     orderService,
     orderCurrency,
+    orderTotal,
     isBeforeDispatch,
-    isExcludedFromWithdrawal
+    isExcludedFromWithdrawal,
+    returnAddress,
+    returnPostagePayer
 } from '@modules/orders';
-import { returnAddress } from '@modules/delivery';
 import type { OrderDocument } from '@modules/orders';
-import type { AuthContext, CallerContext, Order } from '@types';
+import type { AuthContext, CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
-import { returnPostagePayer } from '../config';
 import { returnsAuditActions } from '../audit';
-import { RETURN_REQUESTED } from '../events';
+import { RETURN_CLOSED, RETURN_REQUESTED } from '../events';
 import {
     type ReturnReason,
     QUANTITY_HOLDING_RETURN_STATUSES,
@@ -52,11 +54,10 @@ export interface CreateReturnInput {
     lines?: RequestedLine[];
 }
 
-/** What {@link createReturn} answers with — three different outcomes, not one shape. */
+/** What {@link createReturn} answers with: a refusal, or the return that was written. */
 export type CreateReturnOutcome =
     | { kind: 'refused'; reject: ResponseReject }
-    | { kind: 'created'; created: ReturnDocument }
-    | { kind: 'cancelled'; order: Order };
+    | { kind: 'created'; created: ReturnDocument };
 
 /** A refusal, wrapped as an outcome. */
 const refused = (reject: ResponseReject): CreateReturnOutcome => ({ kind: 'refused', reject });
@@ -108,7 +109,88 @@ const ownOrder = (orderId: string, authContext: AuthContext): Promise<OrderDocum
         .then((order) => (order && String(order.userId) === authContext.id ? order : undefined));
 
 /**
- * A withdrawal before dispatch: cancel the order, refund it in full, acknowledge the withdrawal.
+ * What a withdrawal before dispatch hands back: the whole order, if anything was paid. An order
+ * nobody paid for owes nothing — the cancel releases its hold and that is all.
+ * @param order - the order being withdrawn from
+ */
+const refundOwedOn = (order: OrderDocument): number =>
+    order.paidAt
+        ? orderTotal({
+              items: order.items,
+              shippingCost: order.shippingCost,
+              currency: orderCurrency(order)
+          })
+        : 0;
+
+/**
+ * The facts a new return leaves behind, whatever shape it has: the audit row, and the event
+ * `webhooks` fans out.
+ * @param order - the order the return is about
+ * @param created - the return just written
+ * @param context - for audit
+ */
+const recordOpened = (
+    order: OrderDocument,
+    created: ReturnDocument,
+    context: CallerContext
+): void => {
+    recordAudit(context, {
+        action: returnsAuditActions.RETURN_REQUESTED,
+        outcome: 'success',
+        target_type: 'return',
+        target_id: String(created._id),
+        metadata: { orderId: String(order._id), reason: created.reason }
+    });
+    void emitDomainEvent(RETURN_REQUESTED, {
+        returnId: String(created._id),
+        orderId: String(order._id),
+        reason: created.reason
+    });
+};
+
+/**
+ * Write the record of a withdrawal the cancel already settled: closed at birth, no lines (nothing
+ * is coming back), the full refund owed. The cancel's own pending-refund marker and the payment
+ * sweep carry the money; this row is the dated proof of what the customer asked for.
+ *
+ * @param order - the order that was withdrawn from
+ * @param context - for audit
+ */
+const writeWithdrawalRecord = (
+    order: OrderDocument,
+    context: CallerContext
+): Promise<ReturnDocument> => {
+    const now = new Date();
+    return returnRepository
+        .create({
+            orderId: order._id,
+            ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
+            currency: orderCurrency(order),
+            status: 'closed',
+            reason: 'withdrawal',
+            lines: [],
+            returnPostage: returnPostagePayer(),
+            decidedAt: now,
+            closedAt: now,
+            refundAmount: refundOwedOn(order)
+        })
+        .then((created) => {
+            recordOpened(order, created, context);
+            void emitDomainEvent(RETURN_CLOSED, {
+                returnId: String(created._id),
+                orderId: String(order._id),
+                refundAmount: created.refundAmount ?? 0,
+                currency: created.currency
+            });
+            return created;
+        });
+};
+
+/**
+ * A withdrawal before dispatch: cancel the order, refund it in full, record the withdrawal as a
+ * return closed at birth, and acknowledge it. Exactly one mail goes out about the withdrawal — the
+ * acknowledgement, with no postage line since no goods are expected; `return-closed` is for a
+ * return whose goods came back.
  *
  * @param order - the order being withdrawn from
  * @param authContext - the buyer
@@ -124,12 +206,11 @@ const withdrawBeforeDispatch = (
         .then((cancelled) => {
             if (!cancelled.success) return refused(cancelled);
 
-            return mailReturnNotice('withdrawal-acknowledged', order, {
-                returnPostage: returnPostagePayer(),
-                at: new Date()
-            })
-                .then(() => orderService.withActions(cancelled.data, authContext))
-                .then((body): CreateReturnOutcome => ({ kind: 'cancelled', order: body }));
+            return writeWithdrawalRecord(order, context).then((created) =>
+                mailReturnNotice('withdrawal-acknowledged', order, {
+                    at: created.createdAt ?? new Date()
+                }).then((): CreateReturnOutcome => ({ kind: 'created', created }))
+            );
         });
 
 /**
@@ -190,27 +271,19 @@ const writeReturn = (
 };
 
 /**
- * Everything opening a return unlocks: the audit row, the acknowledgement mail, and the fact for
- * `webhooks`. The mail is the Art. 11a acknowledgement for a withdrawal, and a plain "received" for
- * any other reason.
+ * Everything opening a return unlocks: the acknowledgement mail — the Art. 11a one for a
+ * withdrawal, a plain "received" for any other reason — after the order's return status is
+ * brought in step.
+ * @param order - the order the goods came from
+ * @param created - the return just written
+ * @param context - for audit
  */
 const announceOpened = (
     order: OrderDocument,
     created: ReturnDocument,
     context: CallerContext
 ): Promise<CreateReturnOutcome> => {
-    recordAudit(context, {
-        action: returnsAuditActions.RETURN_REQUESTED,
-        outcome: 'success',
-        target_type: 'return',
-        target_id: String(created._id),
-        metadata: { orderId: String(order._id), reason: created.reason }
-    });
-    void emitDomainEvent(RETURN_REQUESTED, {
-        returnId: String(created._id),
-        orderId: String(order._id),
-        reason: created.reason
-    });
+    recordOpened(order, created, context);
 
     return syncReturnStatus(String(order._id))
         .then(() =>
@@ -222,9 +295,7 @@ const announceOpened = (
                     at: created.createdAt ?? new Date(),
                     // A withdrawal is approved from the start, so the customer is told where to send the
                     // goods in the same mail; any other reason hears it once staff approve.
-                    ...(created.reason === 'withdrawal' && returnAddress()
-                        ? { returnAddress: returnAddress() }
-                        : {})
+                    ...(created.reason === 'withdrawal' ? { returnAddress: returnAddress() } : {})
                 }
             )
         )
@@ -237,8 +308,8 @@ const announceOpened = (
  * @param input - the customer's request
  * @param authContext - the buyer; only they may exercise the right
  * @param context - for audit
- * @returns the outcome: refused, a return written, or (a withdrawal before dispatch) the order
- *   cancelled
+ * @returns the outcome: refused, or the return written — open for goods on their way back, closed
+ *   at birth for a withdrawal before dispatch
  */
 export const createReturn = (
     input: CreateReturnInput,

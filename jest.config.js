@@ -162,12 +162,14 @@ module.exports = {
     /*
      * `tests/cluster` runs under `jest.config.cluster.js` instead: those tests spawn `src/cluster.ts`
      * as a child process and boot their own Mongo and Redis, so none of this file's setup applies.
+     * `tests/broker` runs under `jest.config.broker.js`: it needs a real RabbitMQ and no database.
      */
     testPathIgnorePatterns: [
         '/node_modules/',
         '<rootDir>/tmp/',
         '<rootDir>/.claude/worktrees/',
-        '<rootDir>/tests/cluster/'
+        '<rootDir>/tests/cluster/',
+        '<rootDir>/tests/broker/'
     ],
     modulePathIgnorePatterns: ['<rootDir>/tmp/', '<rootDir>/.claude/worktrees/'],
     collectCoverageFrom: [
@@ -287,7 +289,11 @@ module.exports = {
     globalTeardown: '<rootDir>/tests/support/global-teardown.ts',
     setupFiles: ['<rootDir>/tests/support/setup.ts'],
     // Redirects every file the code under test writes into a per-test-file sandbox.
-    setupFilesAfterEnv: ['<rootDir>/tests/support/setup-file-sandbox.ts'],
+    setupFilesAfterEnv: [
+        '<rootDir>/tests/support/setup-file-sandbox.ts',
+        // After the sandbox, which it marks: every case then starts from that environment.
+        '<rootDir>/tests/support/setup-environment-reset.ts'
+    ],
     testTimeout: 30_000,
     transform: {
         '^.+\\.tsx?$': [

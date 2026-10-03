@@ -3,6 +3,7 @@ import supertest from 'supertest';
 import cookieParser from 'cookie-parser';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
 
@@ -78,15 +79,9 @@ describe('GET /observability/events', () => {
     });
 });
 
-describe('GET /observability/metrics', () => {
-    const withToken = async (
-        token: string | undefined,
-        run: (app: express.Express) => Promise<void>
-    ) => {
-        const original = process.env.NODE_METRICS_TOKEN;
-        if (token === undefined) delete process.env.NODE_METRICS_TOKEN;
-        else process.env.NODE_METRICS_TOKEN = token;
-
+/** Runs `run` against a metrics route guarded with `token` as the configured scrape credential. */
+const withToken = (token: string | undefined, run: (app: express.Express) => Promise<void>) =>
+    withEnvironmentOverrides({ NODE_METRICS_TOKEN: token }, async () => {
         const { isMetricsScraper } = await import('@modules/observability/metrics-scraper');
         const guarded = express();
         guarded.use(cookieParser());
@@ -94,14 +89,10 @@ describe('GET /observability/metrics', () => {
             response.send('# HELP up\n');
         });
 
-        try {
-            await run(guarded);
-        } finally {
-            if (original === undefined) delete process.env.NODE_METRICS_TOKEN;
-            else process.env.NODE_METRICS_TOKEN = original;
-        }
-    };
+        await run(guarded);
+    });
 
+describe('GET /observability/metrics', () => {
     it('accepts the configured scrape token', async () => {
         await withToken('secret-token', async (guarded) => {
             const response = await supertest(guarded)

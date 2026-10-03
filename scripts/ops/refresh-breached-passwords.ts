@@ -16,7 +16,7 @@
  *
  * See: docs/theory/defences/authentication.md
  */
-import 'dotenv/config';
+import '@infrastructure/config/dotenv';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';

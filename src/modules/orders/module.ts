@@ -23,11 +23,12 @@ import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { PRODUCT_DELETED } from '@modules/products';
 import { router } from './routes';
-import { cancelById, cancelPendingOrdersHolding, detachUserId, findOwnOrders } from './services';
+import { cancelById, cancelPendingOrdersHolding, eraseUserOrders, findOwnOrders } from './services';
 // Also registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
 // ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
 // module's own barrel — see CLAUDE.md's module-barrel rule.
 import { ORDER_CANCELLED, ORDER_CREATED, ORDER_STATUS_CHANGED } from './events';
+import { ordersConfig } from './config';
 
 /**
  * DDD-D4: this module's public (webhook-visible) events — `webhooks/services/publish.ts`
@@ -66,23 +67,18 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
 export default {
     name: 'orders',
     basePath: '/orders',
-    /**
-     * The permission keys this module introduces. Deleting the module deletes them:
-     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
-     * whose module is gone, and a module claiming one the file does not attribute to it.
-     */
     routes: router,
     publicEvents,
-    // The invoice prints the shop's own jurisdiction, and an invoice with no country on it is not
-    // one. The other two identity fields (`./config`) are genuinely optional, so neither is here.
-    requiredConfig: [{ key: 'NODE_SHOP_COUNTRY', minLength: 1 }],
+    // Jurisdiction, currency, bank transfer and the order link: see `./config`.
+    config: [ordersConfig.slice],
     personalData: [
         {
             section: 'orders',
             collect: (subject) => findOwnOrders(subject.userId),
             // DDD-D6: detach, never delete — the order survives the account, inside the same
-            // hard-delete transaction. See `detachUserId`.
-            erase: detachUserId
+            // hard-delete transaction. A never-paid order is also cancelled, after the commit.
+            // See `eraseUserOrders`.
+            erase: eraseUserOrders
         }
     ],
     /*
@@ -121,8 +117,18 @@ export default {
         shop: [
             'order.ownerPending',
             'order.paid',
+            'order.paidExpress',
             'order.shipped',
             'order.delivered',
+            // One delivered order per withdrawal state, aged from the period: open (1 day back),
+            // last day (exactly `period` days back, closes at the end of today UTC), closed.
+            'order.withdrawal-open',
+            'order.withdrawal-last-day',
+            'order.withdrawal-closed',
+            // Delivered today, so the withdrawal window is still open; `order.delivered` is weeks past it.
+            'order.deliveredRecent',
+            // Delivered at the start of the shop's history, so its withdrawal window is long closed.
+            'order.deliveredLongAgo',
             'order.cancelled',
             'order.softDeleted',
             'order.paidOffline',

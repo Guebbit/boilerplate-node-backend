@@ -80,6 +80,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "cancelling a pending change to the caller's own profile"
     },
+    'account POST /pending-email/resend': {
+        requiresAuth: true,
+        reason: "re-sending the link for a pending change to the caller's own profile"
+    },
     'account DELETE /': {
         requiresAuth: true,
         reason: "requesting deletion of the caller's own account"
@@ -114,7 +118,11 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     },
     'account POST /reauth': {
         requiresAuth: true,
-        reason: "re-proving the caller's own password to refresh their session's freshness"
+        reason: "re-proving the caller's own password or mailed code to refresh their session's freshness"
+    },
+    'account POST /reauth/methods/:method/send': {
+        requiresAuth: true,
+        reason: "mailing the caller's own account the code that lets it pass step-up"
     },
     'account POST /export': {
         requiresAuth: true,
@@ -131,6 +139,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     'account POST /2fa/methods/:method/setup': {
         requiresAuth: true,
         reason: "enrolling a second factor on the caller's own account"
+    },
+    'account POST /2fa/methods/:method/send': {
+        requiresAuth: true,
+        reason: "mailing the caller's own account a code to prove an armed factor"
     },
     'account POST /2fa/methods/:method/confirm': {
         requiresAuth: true,

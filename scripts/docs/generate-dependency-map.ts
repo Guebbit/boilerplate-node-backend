@@ -51,6 +51,7 @@ const SCAN_FILES = [
     'orval.config.ts',
     'jest.config.js',
     'jest.config.cluster.js',
+    'jest.config.broker.js',
     '.dependency-cruiser.cjs'
 ];
 

@@ -18,28 +18,17 @@ import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { productRepository } from './repository';
 import { checkProductTranslationFields } from './model';
-import { invalidVatRateConfig } from './config';
+import { productsConfig } from './config';
 import './events';
 
 /** This module's manifest entry: routes, its VAT config gate, locales, the image target and the translatable fields. */
 export default {
     name: 'products',
     basePath: '/products',
-    /**
-     * The permission keys this module introduces. Deleting the module deletes them:
-     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
-     * whose module is gone, and a module claiming one the file does not attribute to it.
-     */
     routes: router,
     // The catalogue resolves a product's tax class into a rate, so the rates are this module's
     // config — `orders` only freezes the number `resolveTaxRate` hands it.
-    requiredConfig: [
-        { key: 'NODE_VAT_RATE_DEFAULT', minLength: 1 },
-        { key: 'NODE_VAT_RATE_REDUCED', minLength: 1 }
-    ],
-    // `requiredConfig` catches an EMPTY rate; only a range check catches `2.2` or `abc`, which
-    // would otherwise misprice every invoice silently. See `./config`.
-    customCheck: invalidVatRateConfig,
+    config: [productsConfig.slice],
     locales: path.join(__dirname, 'locales'),
     imageTargets: { products: { writeback: productRepository.writebackImage } },
     /*
@@ -54,6 +43,7 @@ export default {
             cacheTag: 'products',
             exists: productRepository.existsById,
             writeDerived: productRepository.writeTranslatedFields,
+            markEdited: productRepository.markEdited,
             checkFields: checkProductTranslationFields
         }
     },
@@ -65,6 +55,12 @@ export default {
      * is what a detail page and a product form have to render to be worth auditing. `digital` is
      * the one row `requiresShipping: false` — E16's "digital = never shipped" needs a real product
      * to check `orders`/`delivery`'s digital-only branches against.
+     * `lowStock` holds exactly one unit and is on no seeded order: the subject of the last-unit
+     * race, where one checkout's hold leaves nothing for the next shopper.
+     * `noWithdrawal` is a physical, made-to-order row (EU Art. 16(c)): every order line freezes the
+     * flag, and `returns` refuses those lines.
+     * `heavy` is 12 kg: past express's 5 kg ceiling, inside standard's — the subject of the
+     * shipping-weight refusal.
      * `scenarios/subjects.ts` pins the row behind each, and
      * `tests/integration/scenarios/shop.test.ts` checks each really has the property.
      */
@@ -76,7 +72,10 @@ export default {
             'product.barebones',
             'product.inStock',
             'product.rich',
-            'product.digital'
+            'product.digital',
+            'product.lowStock',
+            'product.noWithdrawal',
+            'product.heavy'
         ]
     },
     // The catalogue — nothing here is scoped to a person. An order's line embeds its own frozen

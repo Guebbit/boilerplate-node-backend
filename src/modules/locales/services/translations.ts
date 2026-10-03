@@ -315,6 +315,8 @@ const applyTranslationBatch = async (
     const translatedBy = context?.caller.id ?? undefined;
     // Writes the rows AND the derived index column — see `writePlannedTranslations`'s docblock.
     await writePlannedTranslations(entityType, entityId, fallbackLocale, planned, translatedBy);
+    // Rows outside the document changed, so the document's own tag must move with them.
+    await target.markEdited(entityId);
 
     await invalidateCacheTagsLogged([target.cacheTag]);
 

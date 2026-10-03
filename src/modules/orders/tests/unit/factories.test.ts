@@ -53,7 +53,13 @@ describe('makeOrder — identity and defaults', () => {
     it('omits the optional fields, leaving the schema to default them', () => {
         const order = makeOrder();
 
-        for (const field of ['shippingMethod', 'shippingAddress', 'notes', 'deletedAt'])
+        for (const field of [
+            'shippingMethod',
+            'shippingAddress',
+            'billingAddress',
+            'notes',
+            'deletedAt'
+        ])
             expect(Object.hasOwn(order, field)).toBe(false);
     });
 

@@ -167,7 +167,7 @@ export interface OrderDocument
      * recomputed afterwards. Internal only: never on the wire (see `applyOrderTransform`'s `omit`).
      *
      * The proxy every cross-module read uses instead of asking `invoicing` whether an invoice
-     * exists — `services/scope.ts#withActions`' `actions.invoice`, and `services/crud.ts#remove`'s
+     * exists — `services/scope.ts#withActions`' `actions.invoice`, and `services/remove.ts#remove`'s
      * no-hard-delete-once-invoiced guard both read this rather than importing that module, keeping
      * `orders` free of a dependency on the module that depends on it. An invoice is issued at this
      * same instant (`invoicing`'s own `ORDER_STATUS_CHANGED` listener), so the two normally agree;
@@ -250,6 +250,23 @@ export interface OrderStatusOverride {
  * (`./repository`).
  */
 export type OrderModel = Model<OrderDocument>;
+
+/**
+ * The embedded address both `shippingAddress` and `billingAddress` use — a frozen copy of a book
+ * entry. `_id: false` because the shared `OrderAddress` contract schema is
+ * `additionalProperties: false`.
+ */
+const orderAddressSchema = new Schema(
+    {
+        fullName: { type: String, required: true },
+        street: { type: String, required: true },
+        city: { type: String, required: true },
+        zip: { type: String, required: true },
+        country: { type: String, required: true },
+        phone: { type: String }
+    },
+    { _id: false }
+);
 
 /**
  * Schema for the product snapshot embedded on an order line — `openapi.root.yaml`'s
@@ -376,8 +393,9 @@ export const orderSchema = new Schema<OrderDocument>(
         },
         /*
          * The customer's checkout choice — a preference, not a lock: a card payment still
-         * settles normally regardless of this value. Absent on orders placed before this
-         * existed, and on order creation that isn't a checkout.
+         * settles normally regardless of this value, and then rewrites it to `card`, so the
+         * field ends up saying how the order was actually paid. Absent on orders placed before
+         * this existed, and on order creation that isn't a checkout.
          */
         paymentMethod: {
             type: String,
@@ -432,21 +450,19 @@ export const orderSchema = new Schema<OrderDocument>(
         /*
          * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in
          * `items`: an order keeps where it was going, not what the address book says today.
-         * Absent on orders that predate the book and on checkouts by users who keep none;
-         * `_id: false` because the shared `OrderAddress` schema is `additionalProperties: false`.
+         * Present only when a line ships to an address: absent on an all-digital order, a pickup,
+         * and orders that predate the book.
          */
         shippingAddress: {
-            type: new Schema(
-                {
-                    fullName: { type: String, required: true },
-                    street: { type: String, required: true },
-                    city: { type: String, required: true },
-                    zip: { type: String, required: true },
-                    country: { type: String, required: true },
-                    phone: { type: String }
-                },
-                { _id: false }
-            )
+            type: orderAddressSchema
+        },
+        /*
+         * Who the order is invoiced to — a snapshot like `shippingAddress`, and the one the invoice
+         * reads (`invoicing/services/issue-invoice.ts`). Present on every order a checkout places;
+         * absent on an admin-created order (no checkout) and on one placed before this field.
+         */
+        billingAddress: {
+            type: orderAddressSchema
         },
         /*
          * Set when an order is soft-deleted. Orders carry no `active` flag, so unlike a product

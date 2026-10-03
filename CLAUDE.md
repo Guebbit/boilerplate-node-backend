@@ -77,8 +77,10 @@ Rules of thumb:
 - **Write it down in the same change.** A new dependency gets its group and purpose in
   `scripts/docs/dependency-groups.ts`; `npm run regenerate` rebuilds the page. A library only one
   module imports is that module's: its page under `docs/modules/` says why it was chosen. A new
-  module gets its page, plus a `## Libraries` section if it brings one. Removing a module removes
-  what it owned.
+  module gets its page, plus a `## Libraries` section if it brings one. The one exception is
+  `example` (`group: example`): it has no page by design, because it exists only to be copied and
+  its files carry their own headers. `docs/theory/modules.md#the-module-template` is where it is
+  explained, so do not "fix" the missing page. Removing a module removes what it owned.
 
 ## Module barrels
 
@@ -110,6 +112,12 @@ and emails, plus `export type *` from its model. See `docs/theory/strategic-ddd.
   paths, dual-write transitions) unless the user explicitly asks for it. Replace, don't shim.
 - MUST NOT leave deprecated code in place — no `@deprecated` tag kept "for later." When a change
   supersedes something, remove it in the same change.
+- MUST NOT build guardrails for administrators against their own choices: no repair commands, no
+  boot warnings, no refusals for a lock-out or a misconfiguration (removing the last
+  administrator, an odd role set-up).
+  - The repair is the technician editing the database by hand.
+  - Guard only what would break the app's consistency: a dangling reference, a broken invariant,
+    money or stock that no longer adds up.
 
 ## Async and error handling
 

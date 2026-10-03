@@ -8,6 +8,7 @@ import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
 import { localeService } from '@modules/locales/services';
 import { productRepository } from '@modules/products/repository';
+import { currentEnvironment } from '@infrastructure/config/store';
 
 /**
  * Writing a product through the MULTIPART body, which is the only way to send one with an image.
@@ -28,7 +29,7 @@ import { productRepository } from '@modules/products/repository';
 
 // `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
 // runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
-const UPLOAD_DIRECTORY = path.resolve(process.env.NODE_PUBLIC_PATH!, 'images');
+const UPLOAD_DIRECTORY = path.resolve(currentEnvironment().NODE_PUBLIC_PATH!, 'images');
 
 /**
  * A genuinely decodable PNG, not merely a magic-byte header — see the matching fixture in
@@ -66,7 +67,8 @@ beforeAll(() => {
             fields: ['title', 'description'],
             cacheTag: 'products',
             exists: productRepository.existsById,
-            writeDerived: productRepository.writeTranslatedFields
+            writeDerived: productRepository.writeTranslatedFields,
+            markEdited: productRepository.markEdited
         }
     });
 });

@@ -2,7 +2,7 @@
  * @module
  * Contract tests for /returns over real HTTP — every response is judged against the spec
  * automatically (`@tests/contract`). Pins that each contract branch is reached: the 201 with its
- * `Location`, the 200 that is a cancelled order rather than a return, the staff decisions, and the
+ * `Location`, the withdrawal before dispatch that is a closed return, the staff decisions, and the
  * refusals a client acts on.
  */
 
@@ -46,7 +46,7 @@ describe('POST /returns', () => {
         });
     });
 
-    it('cancels the order for a withdrawal before dispatch: 200 with the Order, not a Return', async () => {
+    it('cancels the order for a withdrawal before dispatch: 201, Location, and a return born closed', async () => {
         const { bearer, orderId } = await customerWithOrder(OrderStatus.paid);
 
         const response = await api()
@@ -54,9 +54,37 @@ describe('POST /returns', () => {
             .set('Authorization', bearer)
             .send({ orderId, reason: 'withdrawal' });
 
-        expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ id: orderId, status: 'cancelled' });
-        expect(response.body.data.actions.withdraw).toBe(false);
+        expect(response.status).toBe(201);
+        expect(response.headers.location).toBe(`/returns/${String(response.body.data.id)}`);
+        expect(response.body.data).toMatchObject({
+            status: 'closed',
+            reason: 'withdrawal',
+            orderId,
+            lines: []
+        });
+        expect(response.body.data.actions).toEqual({
+            approve: false,
+            decline: false,
+            receive: false
+        });
+
+        const order = await api().get(`/orders/${orderId}`).set('Authorization', bearer);
+        expect(order.body.data).toMatchObject({ status: 'cancelled' });
+        expect(order.body.data.actions.withdraw).toBe(false);
+    });
+
+    it('lists the withdrawal on the order afterwards, which is how the order page shows it', async () => {
+        const { bearer, orderId } = await customerWithOrder(OrderStatus.processing);
+        await api()
+            .post('/returns')
+            .set('Authorization', bearer)
+            .send({ orderId, reason: 'withdrawal' });
+
+        const list = await api().get('/returns').query({ orderId }).set('Authorization', bearer);
+
+        expect(list.status).toBe(200);
+        expect(list.body.data.items).toHaveLength(1);
+        expect(list.body.data.items[0]).toMatchObject({ status: 'closed', reason: 'withdrawal' });
     });
 
     it('refuses more units than the order held with 422 RETURN_LINES_INVALID', async () => {

@@ -100,13 +100,44 @@ Three scheduled jobs, all nightly via `docker/crontab`: `npm run reap:orders` re
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
 `NODE_ORDER_PII_RETENTION_DAYS` has passed from the order's OWN `createdAt`, counted from account
 erasure or that date, whichever is later — amounts, line items and dates survive, only the person
-is gone. An admin can still hard-delete an UNPAID order outright (`services/crud.ts`'s `remove`) —
+is gone. An admin can still hard-delete an UNPAID order outright (`services/remove.ts`'s `remove`) —
 this reap is what protects the far more common case, the order nobody ever deletes. A paid order
 refuses a hard delete instead, once and for as long as `paidAt` is stamped: `invoicing` freezes a
 legal document from that same transition, and it must survive the order it was issued for. `npm run
 sweep:order-effects` re-announces `order.refund_owed` for a refund the event bus's one delivery
 attempt did not carry through. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the
 full mechanism.
+
+## When the account is erased
+
+A hard delete of an account runs `orders`' `personalData.erase` hook inside the erasure
+transaction. Two things happen to the account's orders, by whether the buyer ever paid:
+
+| Order                                           | What erasure does                                                                      |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Paid (`paidAt` set), in any status              | Detached (`userId` unset) and scheduled for scrubbing, nothing else: it is the invoice |
+| Never paid (`paidAt` unset) and still `pending` | Detached, due for scrubbing at once, **and cancelled**                                 |
+
+```mermaid
+sequenceDiagram
+    participant U as users (hard delete)
+    participant O as orders (erase hook)
+    participant S as cancelById (the sweep's path)
+    U->>O: erase(userId, session)
+    O->>O: read the never-paid pending ids, then detach
+    O-->>U: a cancel to run after the commit
+    U->>U: commit the transaction
+    U->>S: cancel each order as the system
+    S->>S: release the stock hold
+    S->>S: order.cancelled, so payments cancels the open intent
+```
+
+The cancel is the one the reservation sweep takes when a hold times out, so it releases the hold
+and, through `order.cancelled`, cancels the payment intent. It runs after the commit because it
+moves stock and talks to a provider, neither of which a rolled-back erasure could undo. It sends
+no mail: the address belongs to an account that no longer exists. A failed cancel is logged and
+never undoes the erasure; the sweep still cancels it when the hold times out (up to 168 hours for
+a bank transfer), which is the late case that already existed.
 
 ## Creating an order
 
@@ -120,6 +151,19 @@ Everything caller-specific — payment-method validation, the open-transfer cap,
 address or method, cart pre-flight and clearing — stays with the caller; `placeOrder` only takes
 what it needs to hold and write. See [Checkout](./cart-checkout.md#the-sequence) for the storefront
 path in full.
+
+Two frozen addresses ride on the order, both snapshots like the lines (an order keeps where it went
+and whom it was billed to, not what the address book says today):
+
+| Field             | Present when                                                | Read by                                |
+| ----------------- | ----------------------------------------------------------- | -------------------------------------- |
+| `shippingAddress` | a line ships to an address (not digital-only, not a pickup) | the warehouse, the order page          |
+| `billingAddress`  | every checkout order                                        | the invoice (Art. 226), the order page |
+
+The split is Shopify's: a digital-only order is invoiced to someone but ships nowhere, so it freezes
+no shipping address. Billing is "same as shipping" unless the buyer names another entry
+([how checkout resolves it](./cart-checkout.md#the-sequence)); the admin's `POST /orders` runs no
+checkout and carries neither. The retention scrub anonymises both.
 
 `POST /orders` is the OTHER caller — the admin path — and it is deliberately minimal, because it
 exists for manual corrections, not as a second sales channel:
@@ -210,7 +254,7 @@ and `GET /orders/{id}/credit-notes` by sharing this module's `/orders` basePath 
 
 The only trace of that relationship here is `paidAt` (`model.ts`), stamped by `services/status.ts`'s
 `markPaid` in the same write that moves an order to `paid` — the proxy `services/scope.ts`'s
-`actions.invoice` flag and `services/crud.ts`'s hard-delete refusal both read, so neither has to ask
+`actions.invoice` flag and `services/remove.ts`'s hard-delete refusal both read, so neither has to ask
 `invoicing` whether the freeze actually landed.
 
 The placed-order email carries no invoice: nothing is invoiced yet at that point, whatever the
@@ -225,15 +269,32 @@ owns is the clock and the button:
 ```mermaid
 flowchart LR
     paid["paid<br/><i>right exists, no end yet</i>"] --> shipped["shipped<br/><i>still no end</i>"]
-    shipped -- "markDelivered(deliveredAt)" --> goods["delivered<br/><i>withdrawUntil = deliveredAt + 14d</i>"]
-    paid -- "markFulfilled (digital)" --> digital["delivered<br/><i>withdrawUntil = paidAt + 14d</i>"]
+    shipped -- "markDelivered(deliveredAt)" --> goods["delivered<br/><i>withdrawUntil = end of day (deliveredAt + the period)</i>"]
+    paid -- "markFulfilled (digital)" --> digital["delivered<br/><i>withdrawUntil = end of day (paidAt + the period)</i>"]
 ```
 
 - **`withdrawUntil` is frozen, never recomputed** — the same "freeze the fact at the moment it
   happens" rule `shippingCost` and `currency` follow, so a config change cannot move a promise
   already made. Goods count from delivery (Art. 9(2)(b)); digital content from the conclusion of the
-  contract (Art. 9(2)(a)), which is `paidAt` here. `delivery` reports the timestamp through
+  contract (Art. 9(2)(c)), which is `paidAt` here. `delivery` reports the timestamp through
   `markDelivered(orderId, deliveredAt)`; `orders` cannot read `delivery`'s own.
+- **The window ends with the last hour of its last day.** The day of the event is not counted and
+  the last day of the period is counted whole (CRD recital 41 → Regulation 1182/71 Art. 3(1),
+  3(2)(c)), in UTC.
+- **No weekend or holiday roll-over is computed.** Art. 3(4) moves a deadline that lands on one to
+  the next working day; closing early would be illegal, offering more never is. So the period is
+  long enough that the move cannot matter:
+
+    |                                                                    | days |
+    | ------------------------------------------------------------------ | ---- |
+    | the legal period                                                   | 14   |
+    | longest weekend + holiday run in any EU country (Denmark's Easter) | +5   |
+    | UTC day counting                                                   | +1   |
+    | needed                                                             | 20   |
+    | minimum, a day to spare                                            | 21   |
+
+    The default is 30, a common return window.
+
 - **Before either has happened the window has no end** — the right exists from the moment the
   contract is concluded, so `withdrawUntil` is absent, not far in the future.
 - **The button is server-driven.** `OrderActions.withdraw` is true for the order's own buyer (not an
@@ -242,20 +303,91 @@ flowchart LR
 - An admin override into `delivered` starts the clock at the override, since no delivery timestamp
   exists for it.
 
+## Cancel and refund mails
+
+Every cancel and every refund leaves one written trace, and each has exactly one mail:
+
+| What happened                                      | The mail                                                                      | Template                                                     |
+| -------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| The customer, or staff, cancelled                  | what the cancel did to their money: going back, no refund, or nothing charged | `orders.order-cancelled`                                     |
+| The reservation sweep cancelled (a hold timed out) | the expiry notice for the payment method                                      | `orders.order-transfer-expired`, `orders.order-card-expired` |
+| A product on the order was removed                 | the product-unavailable notice                                                | `orders.order-product-unavailable`                           |
+| The customer withdrew before dispatch              | `returns`' withdrawal acknowledgement                                         | `returns.notice`                                             |
+| The account was erased                             | none: the address belongs to an account that no longer exists                 |                                                              |
+| Money went back outside a return                   | the amount, and whether it was everything                                     | `orders.order-refunded`                                      |
+| Money went back for a return                       | `returns`' closing notice                                                     | `returns.notice`                                             |
+
+```mermaid
+flowchart TD
+    cancel["cancelById succeeds"] --> person{"a person cancelled,<br/>not a withdrawal?"}
+    person -- yes --> cancelled["orders.order-cancelled"]
+    person -- no --> own["its own mail, or none"]
+    cancel --> owed{"refund owed?"}
+    owed -- yes --> refund["payments settles the refund"]
+    refund --> ret{"for a return?"}
+    ret -- no --> refunded["orders.order-refunded"]
+    ret -- yes --> closed["returns' closing notice"]
+```
+
+The cancelled mail is sent when the cancel happens, so it says what is being returned. The refunded
+mail is sent when `payments` settles the refund, so it only ever says what already went back. A paid
+cancel therefore sends both, a few moments apart. A refund the provider refused sends nothing: no
+money moved.
+
+## Shop identity
+
+`orders` owns who the shop is, because `invoicing`, `delivery` and `returns` all import `orders` and
+`orders` may not import them back. One slice (`config.ts`), three getters:
+
+| Getter                 | Returns                                                                      | Read by                                   |
+| ---------------------- | ---------------------------------------------------------------------------- | ----------------------------------------- |
+| `shopIdentity()`       | legal name, VAT number (if set), address, country, email, phone              | `invoicing` (the seller block), the email |
+| `returnAddress()`      | the configured return address, or the legal address when it is not fully set | `delivery`, `returns`, the email          |
+| `returnPostagePayer()` | `consumer` (default) or `shop`                                               | `returns`, the email                      |
+
+Everything but the VAT number and the return address is required at boot, so a getter never answers
+`undefined`. A partly-set return address counts as none.
+
+### What the placed-order emails carry
+
+Both placed-order emails, the confirmation and the bank-transfer instructions that replace it, end
+with the same partial (`templates/partials/orders.withdrawal-notice.ejs`). The text goes in the body,
+not behind a link: a web page is not a durable medium (CJEU C-49/11). `withdrawalNotice()` in
+`emails.ts` builds it from the official Annex I wording, and picks one of three cases:
+
+| Case    | When                                 | What it says                                                      |
+| ------- | ------------------------------------ | ----------------------------------------------------------------- |
+| goods   | a withdrawable line ships            | Annex I(A), period from receipt, where goods go, who pays postage |
+| digital | every withdrawable line is digital   | Annex I(A), period from the contract; no return paragraphs        |
+| none    | every line is excluded under Art. 16 | only the Art. 6(1)(k) sentence: no instructions, no form          |
+
+The "online" sentence is Annex I(A) note 3 as Directive 2023/2673 rewrote it, because the shop has a
+withdrawal function (Art. 11a): it points at the order page and promises the acknowledgement on a
+durable medium. The Italian is the Official Journal's text, copied, not translated.
+
+Lines excluded under Art. 16 are named when others are not. The model form (Annex I(B)) has its "To"
+row filled with the shop. The refund and return legs always say 14 days, the statutory figure, even
+when the shop offers a longer withdrawal period.
+
 ## Configuration
 
-| Variable                      | Default             | Meaning                                                                                                                                                                                          |
-| ----------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NODE_SHOP_COUNTRY`           | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it                          |
-| `NODE_SHIP_TO_COUNTRIES`      | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
-| `NODE_WITHDRAWAL_PERIOD_DAYS` | `14`                | Days a consumer has to withdraw. 14 is the legal minimum, so a smaller value is refused at read; a shop may offer longer                                                                         |
+| Variable                                                           | Default             | Meaning                                                                                                                                                                                          |
+| ------------------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_SHOP_COUNTRY`                                                | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; its slice (`config.ts`) refuses to start without it                                  |
+| `NODE_SHOP_LEGAL_NAME`                                             | —                   | The shop's legal name. Required. Printed on invoices and in the withdrawal notice                                                                                                                |
+| `NODE_SHOP_STREET`, `_CITY`, `_ZIP`                                | —                   | The shop's postal address. Required                                                                                                                                                              |
+| `NODE_SHOP_EMAIL`                                                  | —                   | Where a customer writes to (checked as an email). Required. Not the no-reply sender                                                                                                              |
+| `NODE_SHOP_PHONE`                                                  | —                   | The shop's telephone number. Required                                                                                                                                                            |
+| `NODE_SHOP_VAT_NUMBER`                                             | —                   | VAT identification number. Optional: a shop below the registration threshold prints none                                                                                                         |
+| `NODE_RETURN_ADDRESS_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY` | —                   | Where returned goods go. Optional; street, city, zip and country must all be set, or the shop's own address is used                                                                              |
+| `NODE_RETURN_POSTAGE_PAYER`                                        | `consumer`          | Who pays to send the goods back: `consumer` or `shop`. Said in the order email, frozen on each return                                                                                            |
+| `NODE_SHIP_TO_COUNTRIES`                                           | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
+| `NODE_WITHDRAWAL_PERIOD_DAYS`                                      | `14`                | Days a consumer has to withdraw. 14 is the legal minimum, so a smaller value is refused at read; a shop may offer longer                                                                         |
 
-The seller's own legal identity for invoicing (VAT number, legal name, street address) is
-[`invoicing`'s own configuration](./invoicing.md#configuration), not this module's — `orders` keeps
-only `NODE_SHOP_COUNTRY`, since it is also the checkout/VAT-jurisdiction fact above. Both are read
-fresh per call (`config.ts`), so a correction needs no restart. The VAT RATES charged against an
-order line are a different thing with a different owner — see [products](./products.md#configuration); this
-module only freezes onto the order the rate `products` hands it at checkout.
+The VAT RATES charged against an order line are a different thing with a different owner — see
+[products](./products.md#configuration); this module only freezes onto the order the rate `products`
+hands it at checkout. Every getter asks its slice (`config.ts`) per call, and the slice parses once per process, so a
+correction takes effect on restart.
 
 ## Related pages
 

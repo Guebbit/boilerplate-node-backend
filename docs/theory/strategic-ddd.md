@@ -191,15 +191,16 @@ lands and nothing points back at it; it is not a claim that the label is enforce
 
 Subdomain distillation (§4) asks "how much modelling effort does this deserve". A second, separate
 question asks "does this module ship with every deployment, or is it the demo shop's own worked
-example" — `module.yaml#group`, `foundation | shop`.
+example" — `module.yaml#group`, `foundation | shop | example`.
 
 The two axes are independent: `access` is `generic` (§4) AND `foundation` (this section);
 `payments` is `supporting` AND `shop`. Neither implies the other.
 
-| Group        | Meaning                                                                            |
-| ------------ | ---------------------------------------------------------------------------------- |
-| `foundation` | ships with every deployment, whatever the next project turns this boilerplate into |
-| `shop`       | the demo e-commerce domain's own worked example — deletable on its own             |
+| Group        | Meaning                                                                                                   |
+| ------------ | --------------------------------------------------------------------------------------------------------- |
+| `foundation` | ships with every deployment, whatever the next project turns this boilerplate into                        |
+| `shop`       | the demo e-commerce domain's own worked example — deletable on its own                                    |
+| `example`    | the one module that exists only to be copied; see [the module template](./modules.md#the-module-template) |
 
 Unlike `subdomain`, this line is **enforced, not aspirational**:
 `.dependency-cruiser.cjs`'s `foundation-cannot-reach-shop` rule fails closed on a `foundation`
@@ -207,7 +208,10 @@ module importing a `shop` one, the same way `module-coupling-<name>` fails close
 undeclared sibling import. `webhooks` is labelled `foundation`: delivery, retries and signing are
 generic, and each module declares its own public events on its manifest (`publicEvents`,
 `kernel/registry.ts`'s `resolvePublicEvents`), so `webhooks` subscribes to whatever is registered
-instead of importing `orders`/`payments` event constants directly.
+instead of importing `orders`/`payments` event constants directly. The `example` group has two
+rules of its own: `nothing-reaches-example` (no other module may reach it, so deleting it breaks
+nothing) and `example-cannot-reach-shop` (it uses the foundation and nothing of the demo shop, so
+`demo:remove` leaves it).
 
 This is also the axis a CI job measures "is the demo shop removable" against: deleting every
 `group: shop` folder and seeing what still compiles and passes is a checked experiment now, not a

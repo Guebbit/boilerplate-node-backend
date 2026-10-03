@@ -180,17 +180,21 @@ describe('recordDelivery', () => {
         expect(shipment!.deliveredAt).toBeInstanceOf(Date);
     });
 
-    it("freezes the order's withdrawal deadline 14 days after the very instant it stamps the parcel", async () => {
+    it("freezes the order's withdrawal deadline at the end of the 30th day after the delivery day", async () => {
         const { order } = await shippedOrderFor();
 
         await recordDelivery(String(order._id), testCallerContext);
 
         const shipment = await shipmentRepository.findByOrderId(String(order._id));
         const stored = await orderService.getById(String(order._id));
-        const fourteenDays = 14 * 24 * 60 * 60 * 1000;
-        expect(stored!.withdrawUntil!.getTime() - shipment!.deliveredAt!.getTime()).toBe(
-            fourteenDays
-        );
+        const deliveredOn = shipment!.deliveredAt!;
+        const endOfDeliveryDay =
+            Date.UTC(
+                deliveredOn.getUTCFullYear(),
+                deliveredOn.getUTCMonth(),
+                deliveredOn.getUTCDate() + 1
+            ) - 1;
+        expect(stored!.withdrawUntil!.getTime()).toBe(endOfDeliveryDay + 30 * 24 * 60 * 60 * 1000);
     });
 
     it('refuses an order that has not shipped', async () => {

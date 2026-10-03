@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { deleteFile, moveFile, toPosixPath } from '@infrastructure/adapters/filesystem';
 import type { ReencodableImageMime } from '@infrastructure/adapters/image';
+import { imageConfig } from '@infrastructure/adapters/config';
 
 /**
  * The seam between an upload and wherever bytes actually live. One implementation ships today —
@@ -113,7 +114,7 @@ export const IMAGES_SEGMENT = 'images';
 const THUMBNAIL_VERSION = 'v1';
 
 /** The directory `express.static` serves at the site root — where a promoted image finally lands. */
-export const publicRoot = () => path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public');
+export const publicRoot = () => path.resolve(imageConfig().NODE_PUBLIC_PATH);
 
 /**
  * Where a quarantined upload lives between the request that staged it and the job that digests it.
@@ -124,8 +125,7 @@ export const publicRoot = () => path.resolve(process.env.NODE_PUBLIC_PATH ?? 'pu
  * is a local-dev convenience only: a real deployment always sets `NODE_QUARANTINE_PATH` to its own
  * mounted volume, so the durability guarantee comes from that mount, never from this default.
  */
-export const quarantineRoot = () =>
-    path.resolve(process.env.NODE_QUARANTINE_PATH ?? path.join('tmp', 'quarantine'));
+export const quarantineRoot = () => path.resolve(imageConfig().NODE_QUARANTINE_PATH);
 
 /** The directory holding one image's thumbnail derivatives. */
 export const thumbnailsDirectory = (root: string) =>

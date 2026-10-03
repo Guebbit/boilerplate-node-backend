@@ -4,8 +4,8 @@
  * `resolveSpooled` is the security-relevant half: a queue message carries a `key` a producer
  * chose, and this is the only place that key becomes a filesystem path. A key shaped like a
  * traversal (`../../etc/passwd`) or an absolute path must resolve to `undefined`, never to a path
- * outside the spool root — the same reasoning `orders/services/invoice.ts`'s `ORDER_ID_PATTERN`
- * and `image-store.ts`'s `resolveUnderPublicRoot` already hold for their own stores.
+ * outside the spool root — the same reasoning `image-store.ts`'s `resolveUnderPublicRoot` already
+ * holds for its own store.
  */
 
 import { mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
@@ -17,19 +17,17 @@ import {
     resolveSpooled,
     spoolAttachment
 } from '@infrastructure/adapters/mail-spool';
+import { setEnvironment } from '@tests/environment';
 
 let spoolRoot: string;
-const originalSpoolPath = process.env.NODE_MAIL_SPOOL_PATH;
 
 beforeEach(async () => {
     spoolRoot = await mkdtemp(path.join(tmpdir(), 'mail-spool-test-'));
-    process.env.NODE_MAIL_SPOOL_PATH = spoolRoot;
+    setEnvironment({ NODE_MAIL_SPOOL_PATH: spoolRoot });
 });
 
 afterEach(async () => {
     await rm(spoolRoot, { recursive: true, force: true });
-    if (originalSpoolPath === undefined) delete process.env.NODE_MAIL_SPOOL_PATH;
-    else process.env.NODE_MAIL_SPOOL_PATH = originalSpoolPath;
 });
 
 describe('spoolAttachment', () => {

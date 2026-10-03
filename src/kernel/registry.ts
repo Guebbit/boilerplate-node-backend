@@ -12,32 +12,10 @@
 import type { Router } from 'express';
 import type { ZodType } from 'zod';
 import type { ClientSession } from 'mongoose';
-import { assertRequiredConfig, type NonModuleChecks } from '@kernel/required-config';
+import { assertModuleConfig } from '@kernel/module-config';
+import type { ConfigSlice } from '@infrastructure/config/define';
 import { markDomainEventsWired } from '@kernel/events';
 import type { RateLimitBudget } from '@types';
-
-/**
- * One environment variable a module cannot run without. Declared on
- * the manifest rather than asserted inside the module itself: only the app tier can refuse to
- * boot, and collecting every module's list in one place ({@link registerModules}) reports every
- * offending variable at once, not one restart per mistake.
- */
-export interface RequiredConfig {
-    /** The env var name. */
-    key: string;
-    /** The shortest acceptable value — catches an empty or drastically truncated secret. */
-    minLength: number;
-    /**
-     * The `.env-example` placeholder this value must never still equal in a real deployment.
-     * Omitted where the shipped value is a legitimate local one rather than a stand-in.
-     */
-    placeholder?: string;
-    /**
-     * Check only under `NODE_ENV=production`. For a variable whose code-side default is correct
-     * for a developer and certainly wrong for a deployment.
-     */
-    productionOnly?: boolean;
-}
 
 /**
  * A module's writeback for the image digest pipeline — how the worker (or the no-broker inline
@@ -149,6 +127,14 @@ export interface TranslatableTarget {
     writeDerived: (entityId: string, fields: Record<string, string | null>) => Promise<void>;
 
     /**
+     * Stamps this entity's own document as edited, so its version (the `ETag`) moves. A translation
+     * edit changes rows OUTSIDE the document, and {@link writeDerived} only runs when the fallback
+     * locale changed — without this, an editor holding the old tag could still replace the
+     * translations another editor just wrote. Supplied by the OWNING module, like the rest.
+     */
+    markEdited: (entityId: string) => Promise<void>;
+
+    /**
      * The OWNING module's own rules for a locale's field values — the same ones its own write
      * door applies — so the generic translator's door cannot land a value the entity itself would
      * refuse (a product title under its minimum). Optional: a target with no rules beyond the
@@ -245,9 +231,28 @@ export interface PersonalDataSection {
      * Optional, unlike {@link collect}: a section with nothing here is folded into the erasing
      * module's own row (there is no second collection to touch), not a gap — `resolvePersonalDataErasers`
      * skips it rather than calling a no-op.
+     *
+     * May resolve to an {@link AfterErase}: work that must wait for the commit, because it is
+     * not a database write that can roll back (a hold released, a payment intent cancelled).
      */
-    erase?: (userId: string, session: ClientSession) => Promise<void>;
+    erase?: PersonalDataEraser;
 }
+
+/**
+ * Work a module's {@link PersonalDataSection.erase} defers until the erasure transaction has
+ * committed. Runs only on a commit, never on a rollback; a failure is logged by the caller and
+ * never undoes an erasure that already happened.
+ */
+export type AfterErase = () => Promise<void>;
+
+/**
+ * One module's erase hook, resolved and ready to call inside a hard delete's transaction.
+ * Resolves to its {@link AfterErase}, if it has one.
+ */
+export type PersonalDataEraser = (
+    userId: string,
+    session: ClientSession
+) => Promise<AfterErase | undefined> | Promise<void>;
 
 /**
  * Everything a module declares about itself.
@@ -356,31 +361,15 @@ export interface AppModule {
     rawBodyPaths?: readonly string[];
 
     /**
-     * Env vars this module cannot run without — see {@link RequiredConfig}. Most modules have
-     * none; a module declares one when it owns a secret, a boot-required identity field or a
-     * config value nothing else could catch before the first request that needs it.
+     * This module's slices of the environment — what it reads, how each value is checked, and what
+     * it cannot run without. Collected by {@link registerModules} (with every rate-limit budget in
+     * {@link rateLimits}) into one boot gate that reports every mistake at once, so a typo is
+     * refused at boot, never on the first request that reads it. Most modules that read a
+     * variable declare one; deleting the module deletes its gate.
+     *
+     * See: docs/tools/configuration.md
      */
-    requiredConfig?: readonly RequiredConfig[];
-
-    /**
-     * A boot-time check {@link RequiredConfig} cannot express — cross-field validation, or
-     * parsing a value through a library. Returns the offending variable names; an empty array
-     * means nothing is wrong. Collected into the same failure `assertRequiredConfig` throws
-     * (`@kernel/required-config`), so a module-owned check is reported the same way a
-     * declarative one is: named alongside every other mistake, not thrown from deep inside the
-     * module on the first request that needs the value.
-     */
-    customCheck?: () => string[];
-
-    /**
-     * Env vars that must be ABSENT under `NODE_ENV=production` — the opposite of
-     * {@link requiredConfig}, and reported with its own wording (`assertRequiredConfig`'s "set,
-     * which must never happen here" rather than `customCheck`'s "missing, too short, or still
-     * placeholder"). Most modules have none; a module declares one for a value that only makes
-     * sense in a non-production profile — a demo/test fixture endpoint, a relaxed guard — where
-     * being SET in production is itself the mistake, regardless of what it is set to.
-     */
-    forbiddenInProduction?: readonly string[];
+    config?: readonly ConfigSlice[];
 
     /**
      * The states this module GUARANTEES a named scenario offers, keyed by scenario name (currently
@@ -545,7 +534,7 @@ export const resolvePersonalDataSections = (
  */
 export const resolvePersonalDataErasers = (
     appModules: readonly AppModule[]
-): readonly ((userId: string, session: ClientSession) => Promise<void>)[] =>
+): readonly PersonalDataEraser[] =>
     appModules.flatMap((appModule) =>
         appModule.personalData === 'none'
             ? []
@@ -576,15 +565,15 @@ export const resolveRateLimits = (appModules: AppModule[]): readonly RateLimitBu
  * asserted first, for the same "before the first route" reason.
  *
  * @param appModules - the enabled module list
- * @param nonModuleChecks - passed straight through to {@link assertRequiredConfig} — this file
- *   must stay free of any `src/app`/`src/modules/*` import, so the caller assembles it
- * @throws when {@link assertRequiredConfig} refuses to boot
+ * @param appSlices - the configuration that belongs to no module — this file must stay free of any
+ *   `src/app`/`src/modules/*` import, so the caller assembles it
+ * @throws when {@link assertModuleConfig} refuses to boot
  */
 export const registerModules = (
     appModules: AppModule[],
-    nonModuleChecks?: NonModuleChecks
+    appSlices: readonly ConfigSlice[] = []
 ): void => {
-    assertRequiredConfig(appModules, nonModuleChecks);
+    assertModuleConfig(appModules, appSlices);
     for (const appModule of appModules) appModule.subscribe?.();
     for (const appModule of appModules) appModule.onRegistered?.(appModules);
     markDomainEventsWired();

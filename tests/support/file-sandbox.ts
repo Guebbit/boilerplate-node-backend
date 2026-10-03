@@ -12,10 +12,12 @@
  *           these files was written or cleaned up.
  *
  * Relative imports only: `globalSetup` and `globalTeardown` load this outside `moduleNameMapper`.
+ * The sandbox is an override, not a `process.env` write: the config store reads `process.env` once.
  */
 
 import { readdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { currentEnvironment, overrideEnvironment } from '../../src/infrastructure/config/store';
 import { REPO_ROOT } from './paths';
 
 /** The variable `global-setup.ts` hands this jest instance's sandbox root through to the workers. */
@@ -64,7 +66,7 @@ export const sandboxDirectory = (root: string, testPath: string): string =>
  *   pollution this module exists to prevent
  */
 const sandboxRoot = (): string => {
-    const root = process.env[FILE_SANDBOX_ROOT_VARIABLE];
+    const root = currentEnvironment()[FILE_SANDBOX_ROOT_VARIABLE];
     if (!root)
         throw new Error(`${FILE_SANDBOX_ROOT_VARIABLE} is unset: run jest with its globalSetup`);
     return root;
@@ -83,8 +85,14 @@ export const applyFileSandbox = (testPath: string | undefined): void => {
     if (!testPath) throw new Error('jest reported no test path: cannot choose a file sandbox');
 
     const directory = sandboxDirectory(sandboxRoot(), testPath);
-    for (const [variable, segment] of Object.entries(SANDBOXED_VARIABLES))
-        process.env[variable] = path.join(directory, segment);
+    overrideEnvironment(
+        Object.fromEntries(
+            Object.entries(SANDBOXED_VARIABLES).map(([variable, segment]) => [
+                variable,
+                path.join(directory, segment)
+            ])
+        )
+    );
 };
 
 /**
@@ -98,7 +106,7 @@ export const applyFileSandbox = (testPath: string | undefined): void => {
 export const emptyFileSandbox = async (): Promise<void> => {
     const root = path.resolve(sandboxRoot());
     const directories = Object.keys(SANDBOXED_VARIABLES).map((variable) => {
-        const directory = path.resolve(process.env[variable] ?? '');
+        const directory = path.resolve(currentEnvironment()[variable] ?? '');
         if (!directory.startsWith(root + path.sep))
             throw new Error(`${variable} is outside the file sandbox: ${directory}`);
         return directory;

@@ -6,6 +6,7 @@
 import { Types } from 'mongoose';
 import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
+import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import { productService } from '@modules/products';
 import { StockMovementReason } from '@types';
 import { counterDeltaFor } from '../domain';
@@ -13,6 +14,10 @@ import { stockLevelRepository, stockMovementRepository } from '../repository';
 
 /**
  * Bring the catalogue's synced copy of one product's counters into step with the ledger's.
+ *
+ * Also clears the `products` response-cache tag: `GET /products/:id` and the lists carry
+ * `available`, so a stock write that left them cached would keep showing the old count. Every stock
+ * write — receipt, adjustment, hold, release, both sweeps, a return's restock — ends here.
  *
  * Never fails the caller: the transition it follows already committed, and the next transition on
  * this product corrects the cache regardless.
@@ -24,6 +29,7 @@ export const syncStockCache = async (productId: string): Promise<void> => {
     if (level)
         await productService
             .syncStockCache(productId, { onHand: level.onHand, reserved: level.reserved })
+            .then(() => invalidateCacheTagsLogged(['products']))
             .catch((error: unknown) => {
                 // Stryker disable all
                 logger.error({

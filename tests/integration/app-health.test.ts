@@ -14,6 +14,7 @@ import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { markServerListening, markServerDraining } from '@infrastructure/runtime/readiness';
+import { currentEnvironment } from '@infrastructure/config/store';
 
 setupTestDb();
 
@@ -54,6 +55,19 @@ describe('System routes', () => {
     });
 });
 
+describe('GET /livez', () => {
+    // Runs before `GET /readyz`'s cases below, so the process is still booting here: the property
+    // that defines liveness is that it does not care.
+    it('answers 200 with an empty body while /readyz still answers 503', async () => {
+        const ready = await api().get('/readyz');
+        const live = await api().get('/livez');
+
+        expect(ready.status).toBe(503);
+        expect(live.status).toBe(200);
+        expect(live.text).toBe('');
+    });
+});
+
 describe('GET /readyz', () => {
     // `src/app.ts`'s auto-start is skipped under `NODE_ENV=test` (see `tests/support/http.ts`'s
     // own docblock), so this process never calls `markServerListening` on its own — every case
@@ -84,6 +98,12 @@ describe('GET /readyz', () => {
 
         expect(response.status).toBe(503);
     });
+
+    it('leaves /livez at 200 while draining: a shutdown is not a reason to restart', async () => {
+        const response = await api().get('/livez');
+
+        expect(response.status).toBe(200);
+    });
 });
 
 describe('Observability routes', () => {
@@ -92,7 +112,7 @@ describe('Observability routes', () => {
         // a session. See `isMetricsScraper`.
         const response = await api()
             .get('/observability/metrics')
-            .set('Authorization', `Bearer ${process.env.NODE_METRICS_TOKEN ?? ''}`);
+            .set('Authorization', `Bearer ${currentEnvironment().NODE_METRICS_TOKEN ?? ''}`);
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('text/plain');
