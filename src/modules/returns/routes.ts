@@ -27,6 +27,7 @@ import { postReturnReceive } from './controllers/post-return-receive';
 /** Express router for returns. */
 export const router = Router();
 
+// Everything below needs a signed-in user: `getAuth` resolves the session, `isAuth` refuses none.
 router.use(getAuth, isAuth);
 
 // GET /returns — staff see all, anyone else their own orders'. `privateNoCache`: a per-caller answer.
@@ -38,8 +39,10 @@ router.post('/', returnsWriteLimiter, idempotencyKey, postReturn);
 // GET /returns/:id — one return, scoped in the service.
 router.get('/:id', privateNoCache, getReturnById);
 
-// POST /returns/:id/approve and /decline — staff decide a `requested` return.
+// POST /returns/:id/approve — staff accept a `requested` return.
 router.post('/:id/approve', requirePermission('returns.any.update'), postReturnApprove);
+
+// POST /returns/:id/decline — staff refuse a `requested` return.
 router.post('/:id/decline', requirePermission('returns.any.update'), postReturnDecline);
 
 // POST /returns/:id/receive — the goods arrived. `returns.any.receive` carries `stepUp: critical` in
