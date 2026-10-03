@@ -613,8 +613,12 @@ jobs:
         # No Mongo/Redis service container is needed: this suite uses mongodb-memory-server against
         # the setup action's preinstalled `mongod`, and the cache adapter treats an unreachable Redis
         # as a miss.
+        #
+        # 45 minutes: the suite runs in band, one file at a time, and on this runner it takes
+        # about 25-30 (tests/contract/request-contract.test.ts alone is ~7.5), twice what the
+        # same files take on a developer machine. A 20-minute budget cancelled it mid-run.
         runs-on: ubuntu-latest
-        timeout-minutes: 20
+        timeout-minutes: 45
         permissions:
             contents: read
         steps:
@@ -722,8 +726,12 @@ jobs:
         # It duplicates every other job here on purpose, the same reasoning `build` already
         # documents for overlapping `typecheck`: they answer WHICH thing broke, this one answers
         # whether the container lane still works AT ALL.
+        #
+        # 120 minutes: `npm run complete` is every other job's work in one container, one suite
+        # after another, with two jest workers. Measured on this runner: the static checks take 3
+        # minutes, unit 17, cross-cutting 3 and integration ~16, before contract and fuzz.
         runs-on: ubuntu-latest
-        timeout-minutes: 60
+        timeout-minutes: 120
         permissions:
             contents: read
         steps:
