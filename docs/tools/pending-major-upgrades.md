@@ -1,41 +1,25 @@
 # Pending Major Upgrades
 
-Three majors are deliberately not taken yet: `nodemailer` 10, `dotenv` 18 and `typescript` 7.
+Two majors are deliberately not taken yet: `dotenv` 18 and `typescript` 7.
 Each row below says what breaks, what it costs, and when to move. Measured 2026-09-30 by installing
 the candidate over a clean checkout, type-checking, and running the affected suites — nothing was
 merged.
 
 ```mermaid
 flowchart LR
-    NM["nodemailer 9 → 10"] -->|"3 type errors, no runtime change"| NMW["take it once the patch releases stop"]
     DE["dotenv 17 → 18"] -->|"nothing gained"| DEW["skip; or drop it for process.loadEnvFile"]
     TS["typescript 6 → 7"] -->|"tsc works, the JS API is gone"| TSW["blocked by typescript-eslint and ts-jest"]
 
-    classDef go fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef skip fill:#fef9c3,stroke:#ca8a04,color:#111827;
     classDef block fill:#fee2e2,stroke:#dc2626,color:#111827;
-    class NMW go;
     class DEW skip;
     class TSW block;
 ```
 
-| Package      | Now      | Latest    | Verdict                                | Effort |
-| ------------ | -------- | --------- | -------------------------------------- | ------ |
-| `nodemailer` | `9.1.1`  | `10.0.13` | **Take it**, after the releases settle | S      |
-| `dotenv`     | `17.3.1` | `18.0.4`  | **Skip**, or replace with Node itself  | S      |
-| `typescript` | `6.0.3`  | `7.0.2`   | **Wait** for 7.1 and the tools above   | M–L    |
-
-## nodemailer 10
-
-| Question        | Answer                                                                                                                                                           |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Breaking change | Node 20 or newer (this repo requires `^24`). The package is now written in TypeScript with ESM and CommonJS builds.                                              |
-| Types           | It ships its own declarations, so `@types/nodemailer` is redundant once it is taken.                                                                             |
-| What broke here | `SentMessageInfo` now requires `envelope`. Three spots stop type-checking: `mailer.ts` (two) and `email.worker.test.ts` (three stub returns).                    |
-| Runtime         | The four suites that `jest.mock('nodemailer')` still pass (98 tests). The mock replaces the module, so the new dual build never loads under Jest.                |
-| Risk            | Low for behaviour. The churn is the risk: thirteen patch releases in four weeks, most of them linear-time rewrites of the address and MIME parsers.              |
-| Recommendation  | Take it once a fortnight passes with no release. Then: bump, drop `@types/nodemailer`, widen the three stubs to the full `SentMessageInfo`, run `mailer` suites. |
-| Effort          | S — under an hour, plus one live send through `NODE_MAIL_TRANSPORT=smtp` against Mailpit.                                                                        |
+| Package      | Now      | Latest   | Verdict                               | Effort |
+| ------------ | -------- | -------- | ------------------------------------- | ------ |
+| `dotenv`     | `17.3.1` | `18.0.4` | **Skip**, or replace with Node itself | S      |
+| `typescript` | `6.0.3`  | `7.0.2`  | **Wait** for 7.1 and the tools above  | M–L    |
 
 ## dotenv 18
 

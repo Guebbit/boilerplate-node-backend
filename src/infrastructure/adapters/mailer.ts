@@ -214,14 +214,14 @@ export const sendTemplatedEmail = (
     request: EmailJobPayload['request'],
     templateName: string,
     data: Data
-): Promise<SentMessageInfo> => {
+): Promise<void> => {
     const { attachments = [], ...envelope } = request;
 
     // The outbox keeps the message where `GET /__test/emails` can read it, and renders nothing:
     // the paired suite asserts on the template NAME and the data, never on the HTML.
     if (resolveMailTransport() === 'outbox') {
         recordDemoEmail(request, templateName, data);
-        return Promise.resolve({ messageId: 'demo-outbox' });
+        return Promise.resolve();
     }
 
     // Wrap the entire email operation in an OTel span to track latency and failures.
@@ -274,12 +274,11 @@ export const sendTemplatedEmail = (
                             : {})
                     })
                 )
-                .then((info: { messageId: string }) => {
+                .then((info) => {
                     // `messageId` is the SMTP server's identifier — the handle you need to trace
                     // a specific email through mail-server logs or a provider dashboard.
                     // Stryker disable next-line all
                     logger.info({ message: 'Message sent.', messageId: info.messageId });
-                    return info;
                 })
             // No .catch(): a rejection propagates so `withSpan` can mark the span as errored
             // and the caller (or the queue worker's nack path) can react.
