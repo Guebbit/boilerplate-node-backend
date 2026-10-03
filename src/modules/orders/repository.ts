@@ -191,12 +191,14 @@ const updateStatusIfIn = (
  *   `statusesLeadingTo`
  * @param paymentMethod - how it was actually paid, when that is a fact the order should keep
  *   (a card settling a bank-transfer order); absent leaves the checkout choice as it was
+ * @param session - joins the write to the caller's transaction, so its outbox row rides with it
  * @returns the order as it now stands, or `null` if it was not in `from`
  */
 const markPaid = (
     id: string,
     from: OrderStatus,
-    paymentMethod?: 'card'
+    paymentMethod?: 'card',
+    session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
@@ -208,7 +210,7 @@ const markPaid = (
                     ...(paymentMethod ? { paymentMethod } : {})
                 }
             },
-            { returnDocument: 'after' }
+            { returnDocument: 'after', session }
         )
         .exec();
 
@@ -220,18 +222,20 @@ const markPaid = (
  * @param id - the order that arrived
  * @param from - the status this move must currently be in
  * @param withdrawUntil - the last instant a withdrawal is valid
+ * @param session - joins the write to the caller's transaction, so its outbox row rides with it
  * @returns the order as it now stands, or `null` if it was not in `from`
  */
 const markDelivered = (
     id: string,
     from: OrderStatus,
-    withdrawUntil: Date
+    withdrawUntil: Date,
+    session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
             { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
             { $set: { status: OrderStatus.delivered, withdrawUntil } },
-            { returnDocument: 'after' }
+            { returnDocument: 'after', session }
         )
         .exec();
 
@@ -281,6 +285,7 @@ const setProjection = (
  * @param entry - the override-history entry to append
  * @param withdrawUntil - the withdrawal deadline to freeze in the same write, for a move into
  *   `delivered`; absent for every other destination
+ * @param session - joins the write to the caller's transaction, so its outbox row rides with it
  * @returns the order as it now stands, or `null` if `id`'s current status was not in `from`
  */
 const applyStatusOverride = (
@@ -288,7 +293,8 @@ const applyStatusOverride = (
     from: readonly OrderStatus[],
     to: OrderStatus,
     entry: OrderStatusOverride,
-    withdrawUntil?: Date
+    withdrawUntil?: Date,
+    session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
@@ -297,7 +303,7 @@ const applyStatusOverride = (
                 $set: { status: to, ...(withdrawUntil ? { withdrawUntil } : {}) },
                 $push: { statusOverrides: entry }
             },
-            { returnDocument: 'after' }
+            { returnDocument: 'after', session }
         )
         .exec();
 
@@ -601,7 +607,8 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     markPaid: (
         id: string,
         from: OrderStatus,
-        paymentMethod?: 'card'
+        paymentMethod?: 'card',
+        session?: ClientSession
     ) => Promise<OrderDocument | null>;
     setProjection: (
         id: string,
@@ -610,14 +617,16 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     markDelivered: (
         id: string,
         from: OrderStatus,
-        withdrawUntil: Date
+        withdrawUntil: Date,
+        session?: ClientSession
     ) => Promise<OrderDocument | null>;
     applyStatusOverride: (
         id: string,
         from: readonly OrderStatus[],
         to: OrderStatus,
         entry: OrderStatusOverride,
-        withdrawUntil?: Date
+        withdrawUntil?: Date,
+        session?: ClientSession
     ) => Promise<OrderDocument | null>;
     findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
     findPendingByProductId: (productId: string) => Promise<OrderDocument[]>;

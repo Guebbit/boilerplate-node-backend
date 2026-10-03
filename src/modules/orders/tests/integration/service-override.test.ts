@@ -10,10 +10,14 @@ import { callerContextAs } from '@tests/callers';
 import { seedOrder, readOrder } from '@modules/orders/tests/factories';
 import { overrideStatus, forceMove } from '../../services/override';
 import { ORDER_STATUS_CHANGED } from '../../events';
-import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { OrderStatus } from '@types';
 
 setupTestDb();
+
+// The outbox relay only delivers in a process whose modules are subscribed.
+beforeEach(() => markDomainEventsWired());
 
 afterEach(() => resetDomainEvents());
 
@@ -36,6 +40,7 @@ describe('overrideStatus', () => {
         // No `override` flag — no listener reads it (`webhooks` filters on `to` alone); a
         // status-only override and a forced delivery-door one are not distinguished in the event,
         // which never needed to tell them apart.
+        await settleOutboxNudges();
         expect(events).toEqual([
             {
                 orderId: String(order._id),

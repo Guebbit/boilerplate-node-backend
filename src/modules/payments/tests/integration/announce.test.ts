@@ -71,7 +71,7 @@ describe('a settlement that completes', () => {
         await payFor(String(order._id), user);
         await settleOutboxNudges();
 
-        const rows = await outboxEventModel.find().lean();
+        const rows = await outboxEventModel.find({ name: PAYMENT_SUCCEEDED }).lean();
         expect(rows).toHaveLength(1);
         expect(rows[0]).toMatchObject({
             name: 'payment.succeeded',
@@ -93,7 +93,7 @@ describe('a settlement that completes', () => {
         // The marker is already gone: this caller is not the one that discharged it.
         expect(await announcePaymentSucceeded(String(payment._id), String(order._id))).toBe(false);
 
-        expect(await outboxEventModel.countDocuments()).toBe(1);
+        expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(1);
     });
 });
 
@@ -107,11 +107,11 @@ describe('a settlement that dies after charging', () => {
             await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
 
             // The money moved, but the settlement never reached its announcement.
-            expect(await outboxEventModel.countDocuments()).toBe(0);
+            expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
             expect(heard).toEqual([]);
 
             expect(await retryPendingEffects()).toBe(1);
-            expect(await outboxEventModel.countDocuments()).toBe(1);
+            expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(1);
             await settleOutboxNudges();
             await relayOutbox();
 
@@ -170,7 +170,7 @@ describe('a declined payment', () => {
         expect((await paymentRepository.findByOrderId(orderId))!.status).toBe(
             'requires_confirmation'
         );
-        expect(await outboxEventModel.countDocuments()).toBe(0);
+        expect(await outboxEventModel.countDocuments({ name: PAYMENT_FAILED })).toBe(0);
     });
 
     it('announces nothing for a decline that lost its race', async () => {
@@ -179,6 +179,6 @@ describe('a declined payment', () => {
 
         expect(await recordDecline(orderId, {})).toBeNull();
 
-        expect(await outboxEventModel.countDocuments()).toBe(0);
+        expect(await outboxEventModel.countDocuments({ name: PAYMENT_FAILED })).toBe(0);
     });
 });

@@ -20,10 +20,14 @@ import {
 import { orderService } from '../../services';
 import { orderModel } from '../../model';
 import { ORDER_STATUS_CHANGED } from '../../events';
-import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { OrderStatus } from '@types';
 
 setupTestDb();
+
+// The outbox relay only delivers in a process whose modules are subscribed.
+beforeEach(() => markDomainEventsWired());
 
 afterEach(() => resetDomainEvents());
 
@@ -40,6 +44,7 @@ describe('markPaid', () => {
         // flag and `services/crud.ts`'s hard-delete refusal both read this.
         expect(updated?.paidAt).toBeInstanceOf(Date);
         await expect(readOrder(String(order._id))).resolves.toHaveProperty('status', 'paid');
+        await settleOutboxNudges();
         expect(events).toEqual([
             { orderId: String(order._id), from: OrderStatus.pending, to: OrderStatus.paid }
         ]);
@@ -55,6 +60,7 @@ describe('markPaid', () => {
             const updated = await markPaid(String(order._id));
 
             expect(updated).toBeNull();
+            await settleOutboxNudges();
             expect(events).toEqual([]);
         }
     );
@@ -69,6 +75,7 @@ describe('markProcessing', () => {
         const updated = await markProcessing(String(order._id));
 
         expect(updated?.status).toBe(OrderStatus.processing);
+        await settleOutboxNudges();
         expect(events).toEqual([
             { orderId: String(order._id), from: OrderStatus.paid, to: OrderStatus.processing }
         ]);
@@ -100,6 +107,7 @@ describe('markShipped', () => {
         const updated = await markShipped(String(order._id));
 
         expect(updated?.status).toBe(OrderStatus.shipped);
+        await settleOutboxNudges();
         expect(events).toEqual([
             { orderId: String(order._id), from: OrderStatus.processing, to: OrderStatus.shipped }
         ]);
@@ -123,6 +131,7 @@ describe('markDelivered', () => {
         const updated = await markDelivered(String(order._id), new Date());
 
         expect(updated?.status).toBe(OrderStatus.delivered);
+        await settleOutboxNudges();
         expect(events).toEqual([
             { orderId: String(order._id), from: OrderStatus.shipped, to: OrderStatus.delivered }
         ]);
@@ -166,6 +175,7 @@ describe('markFulfilled', () => {
         const updated = await markFulfilled(String(order._id));
 
         expect(updated?.status).toBe(OrderStatus.delivered);
+        await settleOutboxNudges();
         expect(events).toEqual([
             { orderId: String(order._id), from: OrderStatus.processing, to: OrderStatus.delivered }
         ]);
@@ -220,6 +230,7 @@ describe('two callers racing the same move', () => {
 
         // Exactly one of the two racing calls sees the document it moved.
         expect([first, second].filter(Boolean)).toHaveLength(1);
+        await settleOutboxNudges();
         expect(events).toHaveLength(1);
     });
 });

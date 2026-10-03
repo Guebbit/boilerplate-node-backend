@@ -51,13 +51,17 @@ no-op — see [Consumers](#writing-a-consumer).
 
 ## Where the code is
 
-| Piece                                     | File                                                   |
-| ----------------------------------------- | ------------------------------------------------------ |
-| Model, `enqueueOutboxEvent`, relay, nudge | `src/kernel/outbox.ts`                                 |
-| `meta.eventId` on the bus                 | `src/kernel/events.ts` (`DomainEventMeta`)             |
-| Backstop relay, every minute              | `scripts/ops/sweep-outbox.ts` (`npm run sweep:outbox`) |
-| Counters                                  | `src/infrastructure/observability/metrics-outbox.ts`   |
-| First user: `payment.succeeded`           | `src/modules/payments/services/announce.ts`            |
+| Piece                                     | File                                                     |
+| ----------------------------------------- | -------------------------------------------------------- |
+| Model, `enqueueOutboxEvent`, relay, nudge | `src/kernel/outbox.ts`                                   |
+| `meta.eventId` on the bus                 | `src/kernel/events.ts` (`DomainEventMeta`)               |
+| Backstop relay, every minute              | `scripts/ops/sweep-outbox.ts` (`npm run sweep:outbox`)   |
+| Counters                                  | `src/infrastructure/observability/metrics-outbox.ts`     |
+| One write + its event, atomically         | `announceInTransaction` in `src/kernel/outbox.ts`        |
+| `payment.succeeded`, `payment.failed`     | `src/modules/payments/services/announce.ts`              |
+| `payment.refunded`                        | `src/modules/payments/services/refunds.ts`               |
+| `order.created`, `order.status_changed`   | `src/modules/orders/services/{place,status,override}.ts` |
+| `order.cancelled`                         | `src/modules/orders/services/cancel.ts`                  |
 
 No new queue, no new dependency. The relay hands rows to the same in-process bus every module
 already subscribes to, so no AsyncAPI channel is involved: nothing here crosses a process boundary
@@ -72,6 +76,16 @@ await withTransaction((session) =>
         .then(() => enqueueOutboxEvent('thing.happened', { id }, id, session))
 );
 nudgeOutbox(); // AFTER the commit, never inside it
+```
+
+For the common shape — one conditional write, one event about it — `announceInTransaction` does the
+transaction, the "only if the write landed" check and the nudge:
+
+```ts
+announceInTransaction(
+    (session) => repository.markThing(id, session), // null when the conditional write lost a race
+    (thing) => ({ name: 'thing.happened', payload: { id }, aggregateId: id })
+);
 ```
 
 Rules of thumb:
@@ -146,5 +160,9 @@ mark rows published with nobody listening.
   commit out of order are ordered by when they wrote, not when they committed.
 - **Same-process consumers.** The relay dispatches on the in-process bus. A consumer in another
   service needs a queue in front, as `webhooks` has — see [RabbitMQ](./rabbitmq.md).
-- **One event so far.** `payment.failed`, `payment.refunded` and `order.*` still emit fire-and-forget.
-  Moving one is a `withTransaction` + `enqueueOutboxEvent` at its call site.
+- **`order.refund_owed` stays on the in-process bus, on purpose.** It already has its own durable
+  record, the order's `pendingEffects` marker, which `retryPendingEffects` sweeps; and its handlers'
+  answer is what discharges that marker. An outbox row would be a second copy of the same promise.
+- **Delivery is after the response.** Every event above is published by the relay, not inside the
+  request, so a listener sees it milliseconds later and a test that asserts the effect awaits
+  `settleOutboxNudges()` first.

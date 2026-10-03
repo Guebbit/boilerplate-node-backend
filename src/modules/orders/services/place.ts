@@ -18,14 +18,14 @@ import { Types } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
 import { logger } from '@infrastructure/adapters/logger';
 import { inventoryService, type StockShortfall } from '@modules/inventory';
-import { emitDomainEvent } from '@kernel/events';
+import { announceInTransaction } from '@kernel/outbox';
 import type { OrderDocument, OrderDocumentItem } from '../model';
 import { checkOrderLines } from '../domain/rules';
 import { buildReference } from '../domain/transfer-reference';
 import { freezeOrderLines } from './snapshot';
 import { allocateOrderNumber } from './order-numbering';
 import { orderRepository } from '../repository';
-import { ORDER_CREATED } from '../events';
+import { createdEvent } from './announce';
 import { shopCurrency } from '../config';
 // `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
 // follows for its own writes.
@@ -150,7 +150,7 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
         // instead of leaving it standing with no order and no number spent on it.
         const orderNumber = await allocateOrderNumber();
 
-        const order = await orderRepository.create({
+        const orderData = {
             _id: orderId,
             userId: toObjectId(input.userId),
             email: input.email,
@@ -174,15 +174,17 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
             // The conditional spreads above widen to a plain index signature, which `create`'s
             // typed input cannot narrow back on its own; every field it can carry is optional or
             // spread in.
-        } as Partial<OrderDocument>);
+        } as Partial<OrderDocument>;
 
-        // Emitted here rather than left to `recordCreated`: this is the one function that writes a
+        // Announced here rather than left to `recordCreated`: this is the one function that writes a
         // new order, so a future caller of it cannot forget to announce one the way a caller of
         // `recordCreated` could — `webhooks` needs this fact regardless of which door placed the
-        // order. Fire-and-forget, like `recordCreated`'s other
-        // emits: a slow or failing listener must not delay the response this function's callers are
-        // already sending.
-        void emitDomainEvent(ORDER_CREATED, { orderId: String(order._id) });
+        // order. The outbox row commits with the order itself, and is delivered after the response
+        // path has moved on: a slow or failing listener never delays this function's callers.
+        const order = await announceInTransaction(
+            (session) => orderRepository.create(orderData, session),
+            (written) => createdEvent(String(written._id))
+        );
 
         return { ok: true, order };
     } catch (error) {

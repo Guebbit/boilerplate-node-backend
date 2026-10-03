@@ -355,17 +355,17 @@ export interface OutboxAnnouncement<TEventName extends DomainEventName> {
  * @returns what `write` returned
  */
 export const announceInTransaction = <TWritten, TEventName extends DomainEventName>(
-    write: (session: ClientSession) => Promise<TWritten | null>,
-    announce: (written: TWritten) => OutboxAnnouncement<TEventName>
-): Promise<TWritten | null> =>
+    write: (session: ClientSession) => Promise<TWritten>,
+    announce: (written: NonNullable<TWritten>) => OutboxAnnouncement<TEventName>
+): Promise<TWritten> =>
     withTransaction((session) =>
         write(session).then((written) => {
-            if (written === null) return null;
+            if (written === null || written === undefined) return written;
             const { name, payload, aggregateId } = announce(written);
             return enqueueOutboxEvent(name, payload, aggregateId, session).then(() => written);
         })
     ).then((written) => {
-        if (written !== null) nudgeOutbox();
+        if (written !== null && written !== undefined) nudgeOutbox();
         return written;
     });
 

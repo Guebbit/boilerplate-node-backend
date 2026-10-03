@@ -12,8 +12,10 @@ import type { OrderStatus } from '@types';
 declare module '@kernel/events' {
     interface DomainEventMap {
         /**
-         * A cancel went through; stock is already back on the shelf. Emitted AFTER the write, since
-         * the `$in` guard already guarantees at-most-once.
+         * A cancel went through; stock is already back on the shelf. Written to the transactional
+         * outbox in the cancel's own transaction (`./services/cancel.ts`), so it exists exactly when
+         * the cancel does — the `$in` guard makes the write at-most-once, the relay makes delivery
+         * at-least-once: a listener dedupes on `meta.eventId`.
          *
          * `refund` carries the policy with the fact rather than letting the listener infer it: a
          * customer cancelling is owed their money, an operator cancelling may not be.
@@ -37,6 +39,9 @@ declare module '@kernel/events' {
          * Listeners filter on `to`; the event doesn't know or care who moved it or through which
          * door, only that it moved. Webhooks fire either way — a subscriber cares that the status
          * changed, not by which door.
+         *
+         * Written to the transactional outbox in the transaction of the status write itself
+         * (`./services/announce.ts`): at-least-once, so a listener dedupes on `meta.eventId`.
          */
         'order.status_changed': {
             orderId: string;
@@ -48,7 +53,8 @@ declare module '@kernel/events' {
          * A new order was written — emitted by `services/place.ts`'s `placeOrder`, the one
          * function that writes a new order, so this fires exactly once per order regardless of
          * which caller (the admin create, the storefront checkout) reached it. `webhooks` is the
-         * listener that needs this fact as an event rather than as audit/analytics noise.
+         * listener that needs this fact as an event rather than as audit/analytics noise. Written to
+         * the transactional outbox with the order itself, so a placed order is always announced.
          */
         'order.created': { orderId: string };
     }
