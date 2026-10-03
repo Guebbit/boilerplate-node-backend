@@ -276,7 +276,7 @@ flowchart LR
 - **`withdrawUntil` is frozen, never recomputed** — the same "freeze the fact at the moment it
   happens" rule `shippingCost` and `currency` follow, so a config change cannot move a promise
   already made. Goods count from delivery (Art. 9(2)(b)); digital content from the conclusion of the
-  contract (Art. 9(2)(a)), which is `paidAt` here. `delivery` reports the timestamp through
+  contract (Art. 9(2)(c)), which is `paidAt` here. `delivery` reports the timestamp through
   `markDelivered(orderId, deliveredAt)`; `orders` cannot read `delivery`'s own.
 - **The window ends with the last hour of its last day.** The day of the event is not counted and
   the last day of the period is counted whole (CRD recital 41 → Regulation 1182/71 Art. 3(1),

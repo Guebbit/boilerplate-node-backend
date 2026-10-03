@@ -93,9 +93,9 @@ flowchart LR
     class V,G,SU,CH done;
 ```
 
-::: warning The two entries are not held to the same bar
-The OAuth callback does not consult `twoFactorEnabledAt` — see
-[OAuth](./account-oauth.md#two-consequences-worth-naming).
+::: tip Both entries owe the second factor
+The OAuth callback checks `twoFactorEnabledAt` like the password login does and issues the same
+challenge — see [OAuth](./account-oauth.md#two-consequences-worth-naming).
 :::
 
 ## Proving an address {#proving-an-address}

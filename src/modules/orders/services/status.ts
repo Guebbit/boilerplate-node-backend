@@ -155,7 +155,7 @@ export const markFulfilled = (orderId: string): Promise<OrderDocument | null> =>
     orderRepository.findById(orderId).then((order) => {
         if (!order) return null;
         // Digital content: the period runs from the conclusion of the contract, not from the
-        // moment staff marked it fulfilled (Art. 9(2)(a)) — `paidAt` is that moment here.
+        // moment staff marked it fulfilled (Art. 9(2)(c)) — `paidAt` is that moment here.
         const start = order.paidAt ?? new Date();
         return markArrived(
             orderId,

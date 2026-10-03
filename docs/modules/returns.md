@@ -158,8 +158,13 @@ so changing the product later cannot rewrite what a customer was sold.
   return that leaves them behind is never a "full" return, so delivery is not refunded with it.
 
 **Digital content** (Art. 16(m): the right is lost once delivery starts, with the consumer's express
-consent) is not modelled: there is no consent step at checkout. A shop selling digital content
-should treat the consent as its own terms-and-conditions text until one is built.
+consent) is not modelled: there is no consent step at checkout, and `noWithdrawal` is **not** the
+switch for it. Until one is built, the full withdrawal period is the lawful default (Art. 14(4)(b)).
+
+- Accepting the terms, or a pre-ticked box, is not express consent (Commission guidance on Directive
+  2011/83/EU), so a clause in the shop's own terms-and-conditions text does not replace the step.
+- The step belongs with digital downloads: a marker on the product, the consent, a stamp for when
+  supply began, and the Art. 8(7)(b) confirmation.
 
 ## The statuses beside the order's own
 
