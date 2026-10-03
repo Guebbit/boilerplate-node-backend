@@ -10,7 +10,7 @@
 
 import { logger } from '@infrastructure/adapters/logger';
 import type { ResolvedCredential } from '@kernel/authentication';
-import { keysInScope, assembleCaller } from '@kernel/permissions';
+import { keysInScope, assembleCaller, levelOfRoles } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
 import { rolesOf } from '@modules/access';
 import { userService } from '@modules/users';
@@ -42,7 +42,13 @@ const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
         return rolesOf(apiKey.createdByUserId, apiKey.tenant).then((roles) => {
             const permissions = keysInScope(roles.tenant, 'tenant');
 
-            return assembleCaller(apiKey.createdByUserId, apiKey.tenant, 'tenant', permissions);
+            return assembleCaller(
+                apiKey.createdByUserId,
+                apiKey.tenant,
+                'tenant',
+                permissions,
+                levelOfRoles(roles)
+            );
         });
     });
 
@@ -87,7 +93,10 @@ export const fromBearerToken = (token: string): Promise<ResolvedCredential | und
                     apiKey.createdByUserId,
                     apiKey.tenant,
                     'tenant',
-                    permissions
+                    permissions,
+                    // A key acts at its minter's level. A minter who is gone holds no keys, so
+                    // the fallback is never what lets anything through.
+                    currentCaller?.level ?? 'user'
                 ),
                 credentialId: displayIdOf(apiKey.publicPrefix)
             };

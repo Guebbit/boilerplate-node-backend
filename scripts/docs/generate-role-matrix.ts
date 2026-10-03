@@ -26,7 +26,8 @@ import {
     PERMISSION_KEYS,
     PRESET_ROLES,
     permissionsOfRole,
-    isUnrestricted
+    isUnrestricted,
+    levelOfRole
 } from '@kernel/permissions';
 import { heldKeys } from '@kernel/ability';
 import { applyMarkerBlocks } from './marker-block';
@@ -81,9 +82,11 @@ const callerFor = (name: string, scope: AuthorizationScope): Caller => {
 
     // Never `system` — this generates the DOCUMENTED role matrix, and `system` is not a role a
     // deployment assigns or a reader looks up by name.
+    const level = levelOfRole(name);
+
     return scope === 'platform'
-        ? { id, tenantId: null, scope, permissions, unrestricted, system: false }
-        : { id, tenantId: 'generated', scope, permissions, unrestricted, system: false };
+        ? { id, tenantId: null, scope, permissions, unrestricted, system: false, level }
+        : { id, tenantId: 'generated', scope, permissions, unrestricted, system: false, level };
 };
 
 /** One-letter action codes, so a ten-column table still fits a page. */

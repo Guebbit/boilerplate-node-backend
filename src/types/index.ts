@@ -19,6 +19,7 @@ export type {
     Caller,
     CallerContext,
     PlatformCaller,
+    RoleLevel,
     TenantCaller,
     TenantCallerContext
 } from './auth-context';

@@ -26,6 +26,7 @@ import type {
     Caller,
     CallerContext,
     PlatformCaller,
+    RoleLevel,
     TenantCaller
 } from '@types';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -106,6 +107,13 @@ export interface PermissionKey {
      * a plain `string` here breaks that ordering cycle.
      */
     deniedCode?: string;
+    /**
+     * Held by the shopper roles only, so it does not count towards "holds every declared key".
+     * `admin` is unrestricted because it lists every tenant key by name; staff and administrators
+     * do not shop, and without this flag the two basket keys they lack would make `admin` a
+     * restricted role and switch off the conditions-free rules unrestricted callers get.
+     */
+    shopperOnly?: boolean;
 }
 
 /** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `keys` list. */
@@ -118,7 +126,8 @@ const permissionKeySchema = z.object({
     description: z.string(),
     stepUp: stepUpTierSchema.optional(),
     conditions: z.record(z.string(), z.unknown()).optional(),
-    deniedCode: z.string().optional()
+    deniedCode: z.string().optional(),
+    shopperOnly: z.boolean().optional()
 }) satisfies z.ZodType<PermissionKey>;
 
 /** A role the seeders create, and the keys it holds. Roles are data; the keys they name are not. */
@@ -128,6 +137,11 @@ export interface PresetRole {
     title: string;
     description: string;
     permissions: readonly string[];
+    /**
+     * Where the role ranks: `admin`, `staff` or `user`. Required on every role, so a new one
+     * cannot be added without deciding it. A person holding two roles counts at the higher.
+     */
+    level: RoleLevel;
     /**
      * Whether self-service signup (or an OAuth signup a provider already vouches for) may assign
      * this role automatically. Exactly one declared role may carry it — see
@@ -141,6 +155,9 @@ export interface PresetRole {
     promotesTo?: string;
 }
 
+/** The three levels a role may carry, as a runtime array to validate the shared YAML against {@link RoleLevel}. */
+const ROLE_LEVELS = ['admin', 'staff', 'user'] as const satisfies readonly RoleLevel[];
+
 /** Runtime shape for one entry of `shared/authorization-roles.yaml`'s `roles` list. */
 const presetRoleSchema = z.object({
     name: z.string(),
@@ -148,6 +165,7 @@ const presetRoleSchema = z.object({
     title: z.string(),
     description: z.string(),
     permissions: z.array(z.string()),
+    level: z.enum(ROLE_LEVELS),
     signupDefault: z.boolean().optional(),
     promotesTo: z.string().optional()
 }) satisfies z.ZodType<PresetRole>;
@@ -172,6 +190,7 @@ export const rolesDocumentSchema = z.object({
     anonymous: z.object({
         name: z.string(),
         scope: z.enum(AUTHORIZATION_SCOPES),
+        level: z.enum(ROLE_LEVELS),
         permissions: z.array(z.string())
     })
 });
@@ -292,7 +311,7 @@ const byKey = new Map(PERMISSION_KEYS.map((entry) => [entry.key, entry]));
  * `shared/authorization-roles.yaml` carries no `title`/`description`, so this is the true shared
  * shape rather than a cast pretending it does.
  */
-export type RoleLookup = Pick<PresetRole, 'name' | 'scope' | 'permissions'>;
+export type RoleLookup = Pick<PresetRole, 'name' | 'scope' | 'permissions' | 'level'>;
 
 /** Every preset role plus `anonymous`, indexed by name for {@link findRole}'s O(1) lookup. */
 const byRoleName = new Map<string, RoleLookup>(
@@ -309,6 +328,44 @@ const byRoleName = new Map<string, RoleLookup>(
  * simply hasn't heard of yet.
  */
 export const findRole = (name: string): RoleLookup | undefined => byRoleName.get(name);
+
+/** Each level's rank, so "strictly below" is one comparison. */
+const LEVEL_RANK: Record<RoleLevel, number> = { user: 0, staff: 1, admin: 2 };
+
+/**
+ * The level of one role, `user` for no role at all — and for a name nothing declares, so a
+ * mistyped role ranks lowest rather than highest.
+ *
+ * @param name - a role name, or `null`/`undefined` for no membership
+ */
+export const levelOfRole = (name: string | null | undefined): RoleLevel =>
+    (name ? findRole(name)?.level : undefined) ?? 'user';
+
+/**
+ * The level of a person from the roles they hold: the higher of the two, since someone running a
+ * shop AND the installation ranks at whichever is greater. The seeded root (`admin` + `operator`)
+ * is admin either way.
+ *
+ * @param roles - the tenant and platform role names, as `AuthContext.roles` carries them
+ */
+export const levelOfRoles = (roles: {
+    tenant: string | null;
+    platform: string | null;
+}): RoleLevel => {
+    const tenant = levelOfRole(roles.tenant);
+    const platform = levelOfRole(roles.platform);
+
+    return LEVEL_RANK[platform] > LEVEL_RANK[tenant] ? platform : tenant;
+};
+
+/**
+ * Is `owner` strictly below `caller` — the one comparison the rank rule makes.
+ *
+ * @param owner - the level of the person whose thing is being touched
+ * @param caller - the level of the person touching it
+ */
+export const isBelowLevel = (owner: RoleLevel, caller: RoleLevel): boolean =>
+    LEVEL_RANK[owner] < LEVEL_RANK[caller];
 
 /**
  * The keys a role holds.
@@ -355,7 +412,8 @@ export const anonymousCaller = (): Caller => {
         scope: 'tenant',
         permissions: ANONYMOUS_ROLE.permissions,
         unrestricted: holdsEveryDeclaredKey('tenant', ANONYMOUS_ROLE.permissions),
-        system: false
+        system: false,
+        level: ANONYMOUS_ROLE.level
     };
 };
 
@@ -446,12 +504,14 @@ const SYSTEM_ACTOR_ID = 'system';
  * @param tenantId - the shop this caller acts in, or `null` for a platform caller
  * @param scope - which of the two worlds this caller acts in
  * @param permissions - every key this caller currently holds in `scope`
+ * @param level - the person's {@link levelOfRoles}, across both scopes
  */
 export const assembleCaller = (
     id: string | null | undefined,
     tenantId: string | null,
     scope: AuthorizationScope,
-    permissions: readonly string[]
+    permissions: readonly string[],
+    level: RoleLevel
 ): Caller =>
     // `tenantId` and `scope` are correlated by every caller of this function (`null` only ever
     // paired with 'platform', a shop id only ever paired with 'tenant') — a correlation runtime
@@ -462,7 +522,8 @@ export const assembleCaller = (
         scope,
         permissions,
         unrestricted: holdsEveryDeclaredKey(scope, permissions),
-        system: id === SYSTEM_ACTOR_ID
+        system: id === SYSTEM_ACTOR_ID,
+        level
     }) as Caller;
 
 /**
@@ -487,7 +548,7 @@ export function callerInScope(context: AuthContext, scope: AuthorizationScope): 
         scope === 'platform' ? context.roles.platform : context.roles.tenant,
         scope
     );
-    return assembleCaller(context.id, tenantId, scope, permissions);
+    return assembleCaller(context.id, tenantId, scope, permissions, levelOfRoles(context.roles));
 }
 
 /**
@@ -505,14 +566,16 @@ export const callerForSubject = (context: AuthContext, subject: string): Caller 
     callerInScope(context, scopeOfSubject(subject));
 
 /**
- * Every key declared in one scope — the set a caller must hold entirely to count as unrestricted,
- * now that no single wildcard token stands in for it. Computed once: `PERMISSION_KEYS` is fixed
- * for the process's lifetime.
+ * Every key declared in one scope bar the `shopperOnly` ones — the set a caller must hold entirely
+ * to count as unrestricted, now that no single wildcard token stands in for it. Computed once:
+ * `PERMISSION_KEYS` is fixed for the process's lifetime.
  */
 const declaredKeysOfScope = new Map<AuthorizationScope, readonly string[]>(
     AUTHORIZATION_SCOPES.map((scope) => [
         scope,
-        PERMISSION_KEYS.filter((entry) => entry.scope === scope).map((entry) => entry.key)
+        PERMISSION_KEYS.filter((entry) => entry.scope === scope && !entry.shopperOnly).map(
+            (entry) => entry.key
+        )
     ])
 );
 

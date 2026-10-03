@@ -45,7 +45,8 @@ const contextFor = (userId: string, permissions: readonly string[]): TenantCalle
         scope: 'tenant',
         permissions,
         unrestricted: false,
-        system: false
+        system: false,
+        level: 'admin'
     },
     analyticsConsent: false
 });
@@ -108,6 +109,8 @@ describe('the credential-resolve path — re-floored at every use, not just at m
 
         const beforeDemotion = await resolveCredential(minted.data.secret);
         expect(beforeDemotion?.caller.permissions).toContain('apikeys.any.read');
+        // A key acts at its minter's level — what the rank rule compares.
+        expect(beforeDemotion?.caller.level).toBe('admin');
 
         // `customer` holds none of the api-keys keys — the demotion this test is about.
         await assignRole(userId, TEST_TENANT_ID, 'tenant', 'customer');
@@ -116,6 +119,8 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         // Still a real, resolvable credential (not revoked, not expired) — just holding nothing
         // now, which is the point: the DOCUMENT never changed, only what it re-floors against did.
         expect(afterDemotion?.caller.permissions).not.toContain('apikeys.any.read');
+        // ...and its level follows the minter down, so a demoted admin's key no longer outranks.
+        expect(afterDemotion?.caller.level).toBe('user');
     });
 
     it('carries the credential id for the audit trail, display-shaped, never the secret', async () => {

@@ -17,7 +17,15 @@ keys:
       subject: User
       action: update
       scope: tenant
-      description: Change someone else's account, including clearing their second factor.
+      description: >-
+          Change someone else's profile: username, image, locale, phone, website, and the role
+          (within the keys the caller holds). Never a credential, and never `active`.
+    - key: users.any.ban
+      module: users
+      subject: User
+      action: ban
+      scope: tenant
+      description: Deactivate someone else's account, or lift the deactivation.
     - key: users.any.delete
       module: users
       subject: User

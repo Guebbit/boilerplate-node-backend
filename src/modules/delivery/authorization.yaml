@@ -1,11 +1,5 @@
 keys:
     # -- delivery ------------------------------------------------------------------------------
-    - key: delivery.any.read
-      module: delivery
-      subject: Shipment
-      action: read
-      scope: tenant
-      description: Read shipping methods and a shipment's progress.
     - key: delivery.any.update
       module: delivery
       subject: Shipment

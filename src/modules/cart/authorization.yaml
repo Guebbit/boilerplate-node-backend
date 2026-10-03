@@ -4,10 +4,21 @@ keys:
     # own thing. This one exception is not about the basket's CONTENTS (still keyless: add, remove,
     # set quantity) but about spending it, which is a fact about the ACCOUNT — an unproven address
     # must not be able to place an order — and a fact about the account belongs on a key, not a
-    # route mount. `checkout`, not `create` on `Order`: `orders.any.create` already means "raise an
+    # route mount. `cart.self.update` is the coarser fact: whether this account shops at all. Customers
+    # and unverified accounts do; staff and administrators never hold it, so no route behind it
+    # (the basket, a reorder, a checkout) is theirs to reach. `shopperOnly` keeps both out of the
+    # definition of "holds every declared key", or `admin` would stop being unrestricted.
+    # `checkout`, not `create` on `Order`: `orders.any.create` already means "raise an
     # order on someone else's behalf", and reusing it here would be the identical CASL tuple,
     # indistinguishable once packed for the browser. `self` because this is the one key that is
     # genuinely about the caller's own basket — see docs/theory/authorization.md.
+    - key: cart.self.update
+      module: cart
+      subject: Cart
+      action: update
+      scope: tenant
+      description: Use a basket at all — add to it, change it, reorder into it. Held by shoppers only.
+      shopperOnly: true
     - key: cart.self.checkout
       module: cart
       subject: Cart
@@ -18,3 +29,4 @@ keys:
       # customer refused THIS key is being told to confirm their email, not that they lack
       # permission in the abstract. `t('generic.error-<deniedCode, kebab-cased>')`.
       deniedCode: EMAIL_NOT_VERIFIED
+      shopperOnly: true

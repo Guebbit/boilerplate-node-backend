@@ -36,8 +36,8 @@ version: 1
 # shop needs them apart: a support agent may update a user and may not delete one, a warehouse
 # operator may adjust stock and may not delete a product.
 #
-# `checkout`, `sweep`, `override`, `start` and `receive` are the five additions beyond CASL's own
-# CRUD vocabulary, and all five follow the same rule: a verb is added only when CRUD cannot say the
+# `checkout`, `sweep`, `override`, `start`, `receive` and `ban` are the six additions beyond CASL's
+# own CRUD vocabulary, and all six follow the same rule: a verb is added only when CRUD cannot say the
 # thing, never when CRUD is merely inconvenient, and the reason is recorded on the key itself.
 #   - `checkout` is `cart.self.checkout`'s action, and nowhere else. CRUD has no verb for "spend
 #     the basket": `create` on `Cart` collided with `orders.any.create` (raising an order on
@@ -53,6 +53,9 @@ version: 1
 #   - `receive` is `returns.any.receive`'s action, and nowhere else. It records that returned goods
 #     arrived, which puts the units back on sale and pays the customer back — `update` on `Return`
 #     is the decision to approve it, a narrower hand than the one that holds the parcel.
+#   - `ban` is `users.any.ban`'s action, and nowhere else. Deactivating an account locks a person
+#     out, which is a wider hand than correcting their profile — `update` on `User` would give a
+#     support agent the first by granting the second.
 #
 # THIS LIST IS THE ONE HOME of the vocabulary: `npm run gen:api` turns it into
 # `api/permission-actions.ts` (and the frontend's copy), so no code types it a second time.
@@ -66,6 +69,7 @@ actions:
     - override
     - start
     - receive
+    - ban
 
 # The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
 scopes:
@@ -126,8 +130,9 @@ scopes:
 # Modules absent from this list have no keys, and that is a decision rather than an omission:
 # `wishlist` and `account` are *your own things*. What you may do with them follows from being
 # signed in, not from a role, and giving them keys would invite a role that grants access to
-# someone else's basket. `cart` is nearly the same — its one exception is `cart.self.checkout`
-# below, a fact about the ACCOUNT (has this address been proven?) rather than about the basket's
+# someone else's basket. `cart` is nearly the same — its exceptions are `cart.self.update` and
+# `cart.self.checkout` below: whether the account shops at all (staff and administrators do not),
+# and a fact about the ACCOUNT (has this address been proven?) rather than about the basket's
 # contents, which stay keyless.
 keys:
     # -- products ------------------------------------------------------------------------------
@@ -170,10 +175,21 @@ keys:
     # own thing. This one exception is not about the basket's CONTENTS (still keyless: add, remove,
     # set quantity) but about spending it, which is a fact about the ACCOUNT — an unproven address
     # must not be able to place an order — and a fact about the account belongs on a key, not a
-    # route mount. `checkout`, not `create` on `Order`: `orders.any.create` already means "raise an
+    # route mount. `cart.self.update` is the coarser fact: whether this account shops at all. Customers
+    # and unverified accounts do; staff and administrators never hold it, so no route behind it
+    # (the basket, a reorder, a checkout) is theirs to reach. `shopperOnly` keeps both out of the
+    # definition of "holds every declared key", or `admin` would stop being unrestricted.
+    # `checkout`, not `create` on `Order`: `orders.any.create` already means "raise an
     # order on someone else's behalf", and reusing it here would be the identical CASL tuple,
     # indistinguishable once packed for the browser. `self` because this is the one key that is
     # genuinely about the caller's own basket — see docs/theory/authorization.md.
+    - key: cart.self.update
+      module: cart
+      subject: Cart
+      action: update
+      scope: tenant
+      description: Use a basket at all — add to it, change it, reorder into it. Held by shoppers only.
+      shopperOnly: true
     - key: cart.self.checkout
       module: cart
       subject: Cart
@@ -184,6 +200,7 @@ keys:
       # customer refused THIS key is being told to confirm their email, not that they lack
       # permission in the abstract. `t('generic.error-<deniedCode, kebab-cased>')`.
       deniedCode: EMAIL_NOT_VERIFIED
+      shopperOnly: true
 
     # -- orders --------------------------------------------------------------------------------
     - key: orders.self.read
@@ -290,12 +307,6 @@ keys:
       description: Clear expired reservation holds. The expiry tick, not a role's own tool.
 
     # -- delivery ------------------------------------------------------------------------------
-    - key: delivery.any.read
-      module: delivery
-      subject: Shipment
-      action: read
-      scope: tenant
-      description: Read shipping methods and a shipment's progress.
     - key: delivery.any.update
       module: delivery
       subject: Shipment
@@ -442,7 +453,15 @@ keys:
       subject: User
       action: update
       scope: tenant
-      description: Change someone else's account, including clearing their second factor.
+      description: >-
+          Change someone else's profile: username, image, locale, phone, website, and the role
+          (within the keys the caller holds). Never a credential, and never `active`.
+    - key: users.any.ban
+      module: users
+      subject: User
+      action: ban
+      scope: tenant
+      description: Deactivate someone else's account, or lift the deactivation.
     - key: users.any.delete
       module: users
       subject: User
