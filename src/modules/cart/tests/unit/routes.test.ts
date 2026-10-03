@@ -1,7 +1,8 @@
 /**
  * @module
- * The cart route table. Every route is authenticated at the router level, and only `/checkout` is
- * keyed — `cart.self.checkout`, an unproven address must not be able to spend, see
+ * The cart route table. Every route is authenticated at the router level and needs
+ * `cart.self.update` (shoppers only: staff and administrators own no basket); `/checkout` also
+ * needs `cart.self.checkout`, since an unproven address must not be able to spend, see
  * `shared/authorization-keys.yaml`. Mostly guards ORDER: `/summary`, `/checkout`,
  * `/reorder/:orderId`, `/all` and `/shipping-method` compete with `/:productId`, and Express takes
  * the first match — declared the other way round, `DELETE /cart/all` becomes a product lookup for
@@ -47,6 +48,17 @@ describe('cart routes — what is mounted', () => {
 describe('cart routes — authorization', () => {
     it.each(ALL)('%s requires a logged-in caller', (signature) => {
         expect(guardsOn(router, signature)).toContain('isAuth');
+    });
+});
+
+describe('cart routes — who shops', () => {
+    // The key is mounted once, router-wide, so a route added later inherits it instead of having
+    // to remember it.
+    it.each(ALL)('%s needs the shopper key, and only after a session is proven', (signature) => {
+        const guards = guardsOn(router, signature);
+
+        expect(guards).toContain('requirePermissionGuard');
+        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
     });
 });
 

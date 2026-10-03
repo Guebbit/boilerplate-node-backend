@@ -10,7 +10,7 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { withEnvironment, withoutEnvironment } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -121,6 +121,40 @@ describe('POST /cart', () => {
             .send({ productId: String(hidden._id), quantity: 1 });
 
         expect(response.status).toBe(404);
+    });
+});
+
+/**
+ * Staff and administrators do not shop: `cart.self.update` is held by the shopper roles only, so
+ * the basket answers 403 to a role that is not one — and a shopper, verified or not, still uses it.
+ */
+describe('POST /cart — who may shop', () => {
+    it.each(['manager', 'warehouse', 'support', 'editor', 'moderator', 'admin'])(
+        'refuses a %s with a 403',
+        async (role) => {
+            const { bearer } = await authenticateAsRole(role);
+            const product = await createProduct();
+
+            const response = await api()
+                .post('/cart')
+                .set('Authorization', bearer)
+                .send({ productId: String(product._id), quantity: 1 });
+
+            expect(response.status).toBe(403);
+            expect(response.body.errors[0].code).toBe('FORBIDDEN');
+        }
+    );
+
+    it.each(['customer', 'unverified'])('lets a %s add to the basket', async (role) => {
+        const { bearer } = await authenticateAsRole(role);
+        const product = await createProduct();
+
+        const response = await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 1 });
+
+        expect(response.status).toBe(201);
     });
 });
 
