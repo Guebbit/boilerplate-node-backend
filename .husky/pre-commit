@@ -1,4 +1,4 @@
-# TEMPORARY (2026-09-28, until the HANDOFF.md queue is done): the LIGHT gate, `complete:light`.
+# The LIGHT gate, `complete:light`.
 # It keeps every static check (type-check, lint, both spec lints, format, the contract-bundle, docs and
 # cross-repo checks) plus the unit and cross-cutting suites — nothing that starts `mongod`.
 #
@@ -8,8 +8,6 @@
 # - `test:integration`, `test:contract` and `test:fuzz` — the database and HTTP layers, fuzz being
 #   most of the full gate's minutes;
 # - `docs:build`.
-#
-# Restoring the full gate: revert the commit that introduced this block.
 #
 # `check:spec-identity` SKIPS rather than fails when the paired frontend is not on disk, so a
 # half-cloned pair can still commit. It stays fatal under CI, where a missing sibling means the
