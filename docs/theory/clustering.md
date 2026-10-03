@@ -2,7 +2,7 @@
 
 This page explains how the app boots, scales across CPU cores, and shuts down cleanly.
 The relevant files are `src/cluster.ts` (process supervisor), `src/app.ts` (`createApp()`: the
-HTTP app + its `boot`/`start`/`stop` lifecycle, SK-D2) and `src/serve.ts` (calls `start()`, wires
+HTTP app + its `boot`/`start`/`stop` lifecycle) and `src/serve.ts` (calls `start()`, wires
 `stop()` to the process signals — the file a worker, or `dev:docker`, actually runs).
 
 ## Why a primary + workers
@@ -70,7 +70,7 @@ sequenceDiagram
 ```
 
 Each worker's shutdown sequence lives in `createApp()`'s `stop` (`src/app.ts`, wired to the
-process signals by `src/serve.ts` — see SK-D2):
+process signals by `src/serve.ts`):
 
 1. Close the HTTP server (no new connections; in-flight requests drain).
 2. `stopCache()` — disconnect Redis if it was started.

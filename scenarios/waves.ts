@@ -4,7 +4,7 @@
  * seeds `products` after `locales` without a hand-written "this one goes first" special case that
  * has to be edited every time a dependency appears or its target goes away. A name in `after` that
  * is not itself a key of the set is simply not there to wait for — the property that lets a
- * dependency survive its target's deletion (LOCALES_OPTIONAL_0925 step 4).
+ * dependency survive its target's deletion (deleting `locales` needs no edit to `products`' entry).
  */
 
 /** One named step: what it does, and which other steps of the SAME set must settle first. */

@@ -230,8 +230,8 @@ describe('the override refresh interval', () => {
 describe('isLocaleOverrideAvailable', () => {
     afterEach(() => registerLocaleOverrideProvider(undefined));
 
-    // `app.ts` asks this before starting the refresh timer at all (LOCALES_OPTIONAL_0925 step
-    // 3f) — a timer polling a provider that will never exist is a leak of intent.
+    // `app.ts` asks this before starting the refresh timer at all — a timer polling a provider
+    // that will never exist is a leak of intent.
     it('is false with no provider registered, true once one is', () => {
         expect(isLocaleOverrideAvailable()).toBe(false);
 

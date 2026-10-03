@@ -1,11 +1,10 @@
 /**
  * @module
- * `products` with the `locales` module absent — LOCALES_OPTIONAL_0925 step 3c. No
- * `registerModules` call in this file installs a translation port, and `registerTranslationPort`
- * is reset explicitly rather than relying on module isolation, so this suite proves the same
- * behaviour a deployment sees when `locales` is genuinely uninstalled: the fallback language
- * still writes and reads, and any other language 422s rather than the 500 a missing port used to
- * throw before `kernel/translation.ts`'s fallback (LOCALES_OPTIONAL step 3a).
+ * `products` with the `locales` module absent. No `registerModules` call in this file installs a
+ * translation port, and `registerTranslationPort` is reset explicitly rather than relying on
+ * module isolation, so this suite proves the same behaviour a deployment sees when `locales` is
+ * genuinely uninstalled: the fallback language still writes and reads, and any other language
+ * 422s rather than a 500 from a missing port — `kernel/translation.ts`'s fallback answers it.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
