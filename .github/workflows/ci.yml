@@ -17,7 +17,7 @@ name: CI
 #                     it. api/ and src/types/asyncapi.generated.ts are no longer committed — see
 #                     `postinstall` in package.json — so there is nothing left to go stale for
 #                     them to check.
-#   - correctness     typecheck, build, test-unit, test-integration, test-contract, cluster
+#   - correctness     typecheck, build, test-unit, test-integration, test-contract, cluster, broker
 #   - architecture    dependency-graph, docs
 #   - container       container-gate — the same correctness gate again, but inside the image
 #                     `docker/Dockerfile` actually ships, with no services and no network
@@ -348,6 +348,43 @@ jobs:
               env:
                   NODE_TEST_REDIS_URL: redis://127.0.0.1:6379
               run: npm run test:cluster
+
+    broker:
+        # The queue adapter against a real RabbitMQ — `queue.test.ts` mocks amqplib, so only this
+        # shows what the broker does with the arguments. Not in `complete`: it needs a broker.
+        # `complete:manual` is the local equivalent.
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+        services:
+            rabbitmq:
+                # rabbitmq:4-management — the management plugin is what the suite reads queue
+                # arguments back through and closes a connection with.
+                image: rabbitmq@sha256:6ec83ef56205ce7cc6f8a762f28fdeeab50f52e8f79becbac5a3a4c7293a379a
+                ports:
+                    - 5672:5672
+                    - 15672:15672
+                options: >-
+                    --health-cmd "rabbitmq-diagnostics -q ping"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 20
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: The queue adapter against a real broker
+              # The service container above is already listening, so the suite uses it instead of
+              # starting its own — see tests/broker/support/rabbitmq.ts.
+              env:
+                  NODE_TEST_RABBITMQ_URL: amqp://guest:guest@127.0.0.1:5672
+              run: npm run test:broker
 
     dependency-graph:
         # The two questions ESLint cannot answer, because it sees one file's imports and no
@@ -753,6 +790,7 @@ jobs:
             - typecheck
             - build
             - cluster
+            - broker
             - dependency-graph
             - docs
             - test-unit
