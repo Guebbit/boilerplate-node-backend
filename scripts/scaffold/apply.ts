@@ -34,6 +34,7 @@ const takenSchemaNames = (root: string): Set<string> => {
         .map((folder) => path.join(modules, folder, 'openapi.yaml'))
         .filter((file) => existsSync(file))
         .flatMap((file) => {
+            // `yaml`'s YAML 1.2 loader (`null` for an empty file); the `as` narrows its `any`.
             const document = parseYaml(readFileSync(file, 'utf8')) as FragmentShape | null;
             return Object.keys(document?.components?.schemas ?? {});
         });

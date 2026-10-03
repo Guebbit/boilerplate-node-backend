@@ -90,6 +90,7 @@ const appendMissingTags = (document: Document, fragments: readonly ModuleFragmen
     const declared = new Set<string>();
     if (isSeq(tags))
         for (const item of tags.items) {
+            // `yaml` node API: `isMap` guards a mapping node, `.get(key)` reads one entry's value.
             const name = isMap(item) ? item.get('name') : undefined;
             if (typeof name === 'string') declared.add(name);
         }
@@ -155,6 +156,8 @@ export const readModuleFragments = (
         .filter((name) => existsSync(path.join(modulesRoot, name, 'openapi.yaml')));
 
     return orderSections(preferredOrder, present).map((section) => {
+        // `parseDocument` keeps the YAML node tree; `.toJS()` converts it to plain objects.
+        // https://eemeli.org/yaml/#yaml-parsedocument
         const parsed = parseDocument(
             readFileSync(path.join(modulesRoot, section, 'openapi.yaml'), 'utf8')
         ).toJS() as FragmentDocument;

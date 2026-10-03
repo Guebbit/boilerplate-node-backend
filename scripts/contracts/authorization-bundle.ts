@@ -94,6 +94,7 @@ const fragmentKeysBlock = (section: string): string => {
     if (!existsSync(file)) throw new Error(`[authorization] missing fragment: ${file}`);
 
     const raw = readFileSync(file, 'utf8');
+    // `yaml`'s YAML 1.2 loader; the `as` narrows its `any` to the fragment's known shape.
     const parsed = parseYaml(raw) as FragmentDocument;
     const owner = section === 'core' ? 'core' : section;
     const misattributed = parsed.keys.filter((key) => key.module !== owner);

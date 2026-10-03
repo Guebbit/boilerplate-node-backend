@@ -54,6 +54,8 @@ Promise.all(
                 `\n${file} ${invalid ? 'has governance issues and is INVALID' : 'is valid'}.`
             );
             if (diagnostics.length > 0) {
+                // Spectral's `stylish` formatter: one grouped, human-readable report. `failSeverity` is
+                // the severity at which a diagnostic counts as failing in that report (errors only).
                 console.log(stylish(diagnostics, { failSeverity: DiagnosticSeverity.Error }));
             }
             return invalid;

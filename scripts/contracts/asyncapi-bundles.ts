@@ -166,6 +166,7 @@ const mergeInto = (
     section: string,
     source: unknown
 ): void => {
+    // `yaml`'s `isMap`: type guard for a YAML mapping node (as opposed to a scalar or sequence).
     if (!isMap(source)) return;
 
     const existing = target.getIn(keyPath, true);

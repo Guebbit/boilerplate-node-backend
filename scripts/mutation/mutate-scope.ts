@@ -46,6 +46,7 @@ export const isMutable = (file: string, patterns: string[] = mutatePatterns()): 
         .filter((pattern) => pattern.startsWith('!'))
         .map((pattern) => pattern.slice(1));
 
+    // minimatch(path, glob): true when the path matches the glob. https://github.com/isaacs/minimatch
     return (
         include.some((pattern) => minimatch(file, pattern)) &&
         exclude.every((pattern) => !minimatch(file, pattern))

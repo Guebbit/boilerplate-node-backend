@@ -308,6 +308,7 @@ const withIfMatch = (operation: Operation): void => {
  * @throws Error if a marker names a method the path item does not declare, or one that is neither read nor write
  */
 export const withVersionedResources = (bundled: string): string => {
+    // `yaml`'s YAML 1.2 loader; typed `unknown` until a guard narrows it.
     const parsed: unknown = parseYaml(bundled);
     if (!isBundledDocument(parsed))
         throw new Error('[openapi] the bundled document did not parse to an object.');
@@ -328,6 +329,8 @@ export const withVersionedResources = (bundled: string): string => {
         }
     }
 
+    // `lineWidth: 0` turns off line folding, so long descriptions stay one line and diffs stay small.
+    // https://eemeli.org/yaml/#tostring-options
     return stringifyYaml(parsed, { lineWidth: 0 });
 };
 
@@ -355,6 +358,7 @@ const collectErrorCodes = (): Record<string, ErrorCodeEntry> => {
     const collected: Record<string, ErrorCodeEntry> = {};
 
     const collectFrom = (file: string, owner: string): void => {
+        // `yaml`'s YAML 1.2 loader; the `as` narrows its `any` to the one key read here.
         const parsed = parseYaml(readFileSync(file, 'utf8')) as FragmentWithErrorCodes;
         for (const [code, entry] of Object.entries(parsed['x-error-codes'] ?? {})) {
             if (!isErrorCodeEntry(entry))
@@ -394,6 +398,7 @@ export const withErrorCodes = (
     bundled: string,
     errorCodes: Record<string, ErrorCodeEntry>
 ): string => {
+    // `yaml`'s YAML 1.2 loader; typed `unknown` until a guard narrows it.
     const parsed: unknown = parseYaml(bundled);
     if (!isBundledDocument(parsed))
         throw new Error('[openapi] the bundled document did not parse to an object.');
@@ -407,6 +412,8 @@ export const withErrorCodes = (
     const codes = Object.keys(errorCodes).toSorted();
     document_['x-error-codes'] = Object.fromEntries(codes.map((code) => [code, errorCodes[code]]));
 
+    // `yaml`'s `stringify`; `lineWidth: 0` turns off line folding, so diffs stay small.
+    // https://eemeli.org/yaml/#tostring-options
     return stringifyYaml(document_, { lineWidth: 0 });
 };
 
@@ -454,6 +461,8 @@ export const withModuleStamps = (bundled: string, moduleByPath: Record<string, s
         }
     }
 
+    // `yaml`'s `stringify`; `lineWidth: 0` turns off line folding, so diffs stay small.
+    // https://eemeli.org/yaml/#tostring-options
     return stringifyYaml(document_, { lineWidth: 0 });
 };
 
