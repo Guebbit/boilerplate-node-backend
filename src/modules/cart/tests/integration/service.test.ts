@@ -1326,11 +1326,11 @@ describe('productRemoveFromCartsById', () => {
     });
 
     /*
-     * A repository failure used to be caught INSIDE this function and turned into a resolved
-     * `ResponseReject` — a shape nothing ever read, since this function is only ever a domain-event
+     * A repository failure must not be caught INSIDE this function and turned into a resolved
+     * `ResponseReject` — a shape nothing ever reads, since this function is only ever a domain-event
      * handler (see the module docblock), never an HTTP response. `emitDomainEvent` only notices a
-     * handler failing through a REJECTED promise; swallowing it here meant a genuine write failure
-     * came back as `settled: true` and was never logged.
+     * handler failing through a REJECTED promise; swallowing it here would make a genuine write failure
+     * come back as `settled: true` and never be logged.
      */
     it('propagates a repository failure, so the event bus sees and logs it', async () => {
         registerModules([cartModule]);

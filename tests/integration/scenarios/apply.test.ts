@@ -85,7 +85,7 @@ interface ApplyResult {
  *
  * Through `URL`, not string concatenation: the shared server is a replica set, so its
  * uri carries a `?replicaSet=` query string, and appending a db name onto the end of that
- * (rather than into the path, before it) used to silently fold into the query value instead of
+ * (rather than into the path, before it) silently folds into the query value instead of
  * naming a database — replaced by garbage, not by anything spec-walk or a type could catch.
  */
 const freshDbUri = (): string => {

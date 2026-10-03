@@ -8,8 +8,8 @@ import { handleUncaughtError } from '@app/error-handling';
  * a root-level suite rather than moving into any one module.
  *
  * `src/modules/account/tests/integration/auth-hardening.test.ts` covers the other hardening
- * property this file used to carry — the credential-endpoint rate limiter and the antibot
- * challenge gate — which genuinely belongs to the account module instead.
+ * property, the credential-endpoint rate limiter and the antibot challenge gate, which
+ * genuinely belongs to the account module instead.
  */
 
 /**

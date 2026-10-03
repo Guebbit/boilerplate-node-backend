@@ -1001,7 +1001,7 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
 
     /*
      * The mongoose `email` schema's own `match` — the backstop behind the Zod-validated
-     * route, see `users/model.ts` — used to reject a plus-tag and an 8+ character TLD, both real
+     * route, see `users/model.ts` — must accept a plus-tag and an 8+ character TLD, both real
      * shapes an inbox can hold. Signup is the first place either would ever reach it.
      */
     it('accepts a plus-tag address with a long TLD', async () => {

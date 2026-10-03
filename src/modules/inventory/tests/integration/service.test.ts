@@ -214,8 +214,8 @@ describe('reserveForOrder', () => {
     });
 
     /*
-     * A throw mid-loop (not a refusal) used to leave the hold naming a line whose counters
-     * never moved. A later release then read that line's quantity off the hold and subtracted it
+     * A throw mid-loop (not a refusal) must not leave the hold naming a line whose counters
+     * never moved: a later release would read that line's quantity off the hold and subtract it
      * from whatever the counter actually held — here, another order's own reservation.
      */
     it('gives back only what it actually took when a later line throws, and steals nothing from another hold', async () => {

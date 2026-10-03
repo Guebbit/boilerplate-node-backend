@@ -152,8 +152,8 @@ describe('googleOAuthProvider.exchangeCode', () => {
 
     /*
      * `decode(idToken, { json: true })` returns `unknown`, cast to `GoogleIdTokenClaims` — a
-     * check the compiler cannot make good on. A token missing `sub` used to carry
-     * `providerId: undefined` straight through, the same collision GitHub's own missing-`id` case
+     * check the compiler cannot make good on. A token missing `sub` must not carry
+     * `providerId: undefined` through: that is the same collision GitHub's own missing-`id` case
      * has, every such token sharing one bogus identity row.
      */
     it('rejects a token with no subject, rather than minting an undefined providerId', async () => {

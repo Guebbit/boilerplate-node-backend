@@ -1,7 +1,7 @@
 /**
  * The genericity claim, asserted: a module folder plus its line in `src/modules.ts` is everything
  * a new module needs. A throwaway `widgets` module is written into a scratch tree, and every
- * table that used to be edited by hand for a new module is asked whether it now includes it.
+ * table a new module would otherwise need a hand edit in is asked whether it includes it.
  *
  * Only the pieces that read a module tree are driven here; the ones that read the registry are
  * driven with a virtual registry. The real repo's own guard tests are what fail for a real module.
