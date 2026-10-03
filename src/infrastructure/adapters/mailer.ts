@@ -61,8 +61,8 @@ export type MailTransport = 'smtp' | 'log' | 'outbox';
  * One safety rail sits ABOVE the setting: a test run must never open a socket whatever the
  * environment says, or the suite delivers real mail using the real credentials `dotenv` just
  * loaded. The demo profile's own guarantee — its outbox IS its control surface
- * (`GET /__test/emails`), so nothing may quietly empty it — is no longer this adapter's job
- * (SK-08): `scenarios/run-server.ts` forces `NODE_MAIL_TRANSPORT=outbox` itself, the same
+ * (`GET /__test/emails`), so nothing may quietly empty it — is not this adapter's job:
+ * `scenarios/run-server.ts` forces `NODE_MAIL_TRANSPORT=outbox` itself, the same
  * unconditional override it already uses to force Redis and RabbitMQ off, so this reads it back
  * through the ordinary setting below rather than through a second, demo-aware branch.
  *

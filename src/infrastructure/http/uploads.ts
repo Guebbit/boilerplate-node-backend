@@ -38,8 +38,8 @@ export interface RequestImage {
     /**
      * The thumbnail url to persist alongside {@link imageUrl} — set together with it in the
      * inline case, the pending-thumbnail placeholder together with the placeholder `imageUrl`, and
-     * `undefined` when nothing was uploaded (a body-supplied `imageUrl` has no thumbnail: there is
-     * nothing here to derive one from).
+     * `undefined` when nothing was uploaded: a body `imageUrl` is either `null` (remove) or
+     * dropped, so there is never a url to derive a thumbnail from.
      */
     thumbnailUrl: string | undefined;
     /**
@@ -51,8 +51,8 @@ export interface RequestImage {
     /**
      * Remove whatever THIS request's upload left behind — quarantine file if still pending, or
      * the promoted image and thumbnail if digested inline — on a path about to answer an error.
-     * Never keyed on a body-supplied {@link imageUrl}: deleting that would destroy a file this
-     * request didn't create. No-op when nothing was uploaded.
+     * Never keyed on anything the body named: deleting that would destroy a file this request
+     * didn't create. No-op when nothing was uploaded.
      */
     deleteUpload: () => Promise<boolean>;
 }

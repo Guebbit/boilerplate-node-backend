@@ -1,6 +1,6 @@
 /**
  * @module
- * Which file an EJS template name resolves to (SK-15) — split out of `mailer.ts` on purpose, with
+ * Which file an EJS template name resolves to — split out of `mailer.ts` on purpose, with
  * no `ejs`/`nodemailer` import of its own: `tests/support/setup.ts` calls
  * {@link registerTemplateDirectories} from jest's `setupFiles`, which runs BEFORE a test file's
  * own `jest.mock('nodemailer', …)` is even hoisted. Importing `mailer.ts` there — pulling in a

@@ -18,7 +18,7 @@ import type { RungVerdict } from '../antibot-verdict';
  * The challenge shape a self-hosted provider hands the client verbatim — this port's own
  * vocabulary for it, structurally identical to `modules/antibot`'s `AntibotChallenge` schema but
  * declared here rather than imported from `@types`. Infrastructure must not type-check against a
- * schema only one module owns (SK-01); the module's controller passes this straight to
+ * schema only one module owns; the module's controller passes this straight to
  * `successResponse<AntibotChallenge>` with no cast, since the two shapes agree field for field.
  */
 export interface IssuedChallenge {

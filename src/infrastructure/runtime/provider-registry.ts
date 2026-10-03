@@ -2,7 +2,7 @@
  * @module
  * A named table of interchangeable implementations behind one seam. Antibot, analytics, payments
  * and OAuth each kept their own hand-written `PROVIDERS` map with the same shape — name in,
- * implementation out — so this is that shape, written once (SK-04).
+ * implementation out — so this is that shape, written once.
  *
  * Resolution POLICY stays with the caller, on purpose: whether an unknown name throws (antibot,
  * analytics, payments — a typo must not silently downgrade a security control) or resolves to

@@ -22,12 +22,18 @@ import { imageConfig } from '@infrastructure/adapters/config';
 export type ReencodableImageMime = 'image/png' | 'image/jpeg' | 'image/webp';
 
 /*
- * `registerWorkers()` runs in every cluster fork, so without these two calls a multi-core
- * deployment runs N forks × sharp's own thread pool × libvips's own cache. `concurrency(1)` caps
- * libvips to one thread per fork; `cache(false)` disables its repeated-operation cache, which a
- * one-shot digest never benefits from.
+ * Sharp: cap libvips to one thread per process.
+ * `registerWorkers()` runs in every cluster fork, so without it a multi-core deployment runs
+ * N forks × sharp's own thread pool.
+ * https://sharp.pixelplumbing.com/api-utility#concurrency
  */
 sharp.concurrency(1);
+
+/*
+ * Sharp: turn off libvips's repeated-operation cache, which a one-shot digest never benefits
+ * from, and which would otherwise sit in every fork's memory.
+ * https://sharp.pixelplumbing.com/api-utility#cache
+ */
 sharp.cache(false);
 
 /**

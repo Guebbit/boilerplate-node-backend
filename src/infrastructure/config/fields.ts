@@ -219,6 +219,8 @@ export function decimal(
 ): Field<number | undefined> {
     const label = rangeLabel('decimal', options);
     return build(
+        // Zod: regex gate on the raw string, then parse, then the range check on the number.
+        // `.pipe` hands the transformed value to the next schema. https://zod.dev/api#pipes
         z
             .string()
             .regex(DECIMAL, label)
@@ -315,6 +317,7 @@ export function text(options: TextOptions & { default?: string } = {}): Field<st
         if (options.lower) return value.toLowerCase();
         return options.upper ? value.toUpperCase() : value;
     };
+    // Zod: `.transform` maps the validated string through `normalise`. https://zod.dev/api#transform
     return build(z.string().transform(normalise), 'text', options);
 }
 

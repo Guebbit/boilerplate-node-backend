@@ -256,8 +256,8 @@ export interface Repository<TDocument extends Document, TWire> {
     /**
      * Remove a single document.
      *
-     * @param session - DDD-D6: joins the delete to the caller's own transaction. Omitted by
-     * every pre-existing caller, which stays exactly as fast and as non-transactional as before.
+     * @param session - joins the delete to the caller's own transaction. Omitted, the delete
+     * runs on its own, outside any transaction.
      */
     deleteOne: (document: TDocument, session?: ClientSession) => Promise<void>;
     /** Filter → count → page → normalize, per the declared search spec. Answers wire rows, not documents. */

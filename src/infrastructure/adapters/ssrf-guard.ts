@@ -25,8 +25,13 @@ export type SsrfRefusalReason =
 
 /** A URL this guard will not open a connection to, and the specific reason it refused. */
 export class SsrfRefusedError extends Error {
+    /** The specific check that refused the URL. */
     readonly reason: SsrfRefusalReason;
 
+    /**
+     * @param reason - which check refused
+     * @param message - human-readable detail for logs
+     */
     constructor(reason: SsrfRefusalReason, message: string) {
         super(message);
         this.name = 'SsrfRefusedError';

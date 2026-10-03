@@ -184,7 +184,7 @@ export const { connection } = mongoose;
  * a write made without it is not part of the transaction and will not roll back with the rest.
  * https://mongoosejs.com/docs/transactions.html
  *
- * Requires a replica set (DDD-D2): a standalone `mongod` refuses `startTransaction()` outright.
+ * Requires a replica set: a standalone `mongod` refuses `startTransaction()` outright.
  * Every entry point that reaches this — the server, every cron script, `mongodb-memory-server`'s
  * test double — runs one; see `scenarios/support/ephemeral-mongod.ts` and `docker-compose.yml`.
  *

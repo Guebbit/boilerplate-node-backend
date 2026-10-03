@@ -62,7 +62,7 @@ export interface AuditEvent {
     /**
      * Privilege level at the time of the action, so a later role change cannot rewrite history.
      * `system` is `SYSTEM_ACTOR` — a background job, never a real account — kept apart from
-     * `admin` so the trail can tell "an operator did this" from "a sweep did" (B21).
+     * `admin` so the trail can tell "an operator did this" from "a sweep did".
      */
     actor_role: 'admin' | 'user' | 'anonymous' | 'system';
     /**
@@ -213,7 +213,7 @@ const resolveActorRole = (context: CallerContext): AuditEvent['actor_role'] => {
     // No caller id at all: an unauthenticated request. Still audited — failed logins and
     // blocked access attempts are exactly the events worth keeping.
     if (!context.caller.id) return 'anonymous';
-    // Checked before `unrestricted`: `SYSTEM_ACTOR` is unrestricted too (B21), and without this
+    // Checked before `unrestricted`: `SYSTEM_ACTOR` is unrestricted too, and without this
     // check first every background job would read as an admin's own action.
     if (context.caller.system) return 'system';
     return context.caller.unrestricted ? 'admin' : 'user';

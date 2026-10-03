@@ -20,7 +20,7 @@ import { pseudonymise } from '../security/pseudonymise';
 export type LogFields = Record<string, unknown>;
 
 /**
- * The logging port every other tier depends on instead of winston directly (SK-04). Narrow on
+ * The logging port every other tier depends on instead of winston directly. Narrow on
  * purpose: it states exactly the five calls this codebase makes — `logger.info('text')`,
  * `logger.error('text', error)`, `logger.error({ message, ...meta })`, `logger.log(level, ...)` —
  * so a project swapping winston for another library only has to satisfy this, not winston's own,
@@ -146,7 +146,7 @@ export const resolvePersonalFieldMode = (): PersonalFieldMode =>
  * Truncated to 12 hex characters (48 bits): a LOG CORRELATION aid, not a security boundary the
  * way a password hash is — nobody needs 256 bits of collision resistance to notice "same user,
  * three log lines". `hmac:` prefixed, not `sha256:` — the algorithm name alone can't tell a
- * reader (or downstream parser) whether the digest was keyed, and this one only ever is (PL-35).
+ * reader (or downstream parser) whether the digest was keyed, and this one only ever is.
  */
 const applyPersonalFieldMode = (value: string): string => {
     const mode = resolvePersonalFieldMode();
