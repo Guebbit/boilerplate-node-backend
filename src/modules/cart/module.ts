@@ -35,7 +35,7 @@ export default {
                 cartGet(subject.userId).then((lines) =>
                     lines.map(({ productId, quantity }) => ({ productId, quantity }))
                 ),
-            // DDD-D6: joins the caller's own hard-delete transaction — see `cartDeleteByUserId`.
+            // Joins the caller's own hard-delete transaction — see `cartDeleteByUserId`.
             erase: cartDeleteByUserId
         }
     ],

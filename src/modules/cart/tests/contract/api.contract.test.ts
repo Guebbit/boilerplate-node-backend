@@ -73,7 +73,7 @@ describe('POST /cart', () => {
         expect(response.body.data.summary.totalQuantity).toBe(3);
     });
 
-    // WM-D6: "add to cart" GROWS a line already there (Shopify, commercetools) — the same button
+    // "Add to cart" GROWS a line already there (Shopify, commercetools) — the same button
     // pressed twice makes two — and answers 200, because nothing was created.
     it('grows an existing line, answering 200 with no Location', async () => {
         const { bearer, product } = await authenticateWithCart(2);
@@ -371,7 +371,7 @@ describe('GET /cart/summary', () => {
         expect(response.body.data.itemsCount).toBe(1);
     });
 
-    // FA37: `currency` is now required on the summary, empty cart included — the automatic
+    // `currency` is now required on the summary, empty cart included — the automatic
     // contract check already enforces this; asserted directly too, since a required-but-empty
     // string would still satisfy the schema.
     it('always carries the shop currency, even on an empty cart', async () => {
@@ -391,7 +391,7 @@ describe('POST /cart/checkout', () => {
             .send({ shippingMethodId: 'pickup' });
         const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
-        // WM-D14: `data` is the created order itself, as `POST /orders` answers it — not a
+        // `data` is the created order itself, as `POST /orders` answers it — not a
         // wrapper — and `Location` names it.
         expect(response.status).toBe(201);
         expect(response.body.data.items).toHaveLength(1);
@@ -400,7 +400,7 @@ describe('POST /cart/checkout', () => {
     });
 
     /*
-     * B19: before the checkout route carried `idempotencyKey`, a retry after a lost response saw
+     * Before the checkout route carried `idempotencyKey`, a retry after a lost response saw
      * the (by-then-empty) cart and answered `CART_EMPTY` instead of the order the first attempt
      * actually placed — the buyer's own cart write cost them the order. The stock read pins the
      * other half: a replayed request must not reserve the basket a second time.
@@ -444,7 +444,7 @@ describe('POST /cart/checkout', () => {
     });
 
     /*
-     * B3: the controller cast `request.body` instead of parsing it against the contract, so
+     * The controller cast `request.body` instead of parsing it against the contract, so
      * `notes` — a field the contract has always declared — never reached the order.
      */
     it('wires notes through to the order', async () => {
@@ -498,7 +498,7 @@ describe('POST /cart/checkout', () => {
         expect(response.body.errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
     });
 
-    // E12: `NODE_SHIP_TO_COUNTRIES` defaults to the shop's own country alone (`IT` in tests) — a
+    // `NODE_SHIP_TO_COUNTRIES` defaults to the shop's own country alone (`IT` in tests) — a
     // courier method resolving to an address outside it is refused before anything is written.
     it('matches the error contract for an address outside the configured ship-to list', async () => {
         const { bearer } = await authenticateWithCart();

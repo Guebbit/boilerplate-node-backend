@@ -249,7 +249,7 @@ describe('cartGetForBadge', () => {
 });
 
 /*
- * FA-D6/B3: `shipping.options` is priced through the same `priceShipping`/`methodFitsWeight`
+ * `shipping.options` is priced through the same `priceShipping`/`methodFitsWeight`
  * checkout itself uses, not a copy — these cases exercise the live pricing and the "still fits"
  * check a stored choice is re-derived against on every read, not just at the moment it was set.
  */
@@ -1326,7 +1326,7 @@ describe('productRemoveFromCartsById', () => {
     });
 
     /*
-     * B11: a repository failure used to be caught INSIDE this function and turned into a resolved
+     * A repository failure used to be caught INSIDE this function and turned into a resolved
      * `ResponseReject` — a shape nothing ever read, since this function is only ever a domain-event
      * handler (see the module docblock), never an HTTP response. `emitDomainEvent` only notices a
      * handler failing through a REJECTED promise; swallowing it here meant a genuine write failure

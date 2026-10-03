@@ -1,6 +1,6 @@
 /**
  * @module
- * B4 — every write a shopper can make to their own cart bumps `__v`, not only checkout's own
+ * Every write a shopper can make to their own cart bumps `__v`, not only checkout's own
  * clear. `services/checkout.ts` reads `__v` once and later empties the cart conditionally on that
  * read (`repository.ts`'s `clearLinesIfUnchanged`) — a write that skipped the bump would be
  * invisible to that guard, so a line added or removed mid-checkout could be silently dropped
@@ -27,7 +27,7 @@ setupTestDb();
 const versionOf = (userId: string): Promise<number | undefined> =>
     cartRepository.findByUserId(userId).then((cart) => cart?.__v);
 
-describe('cart version increments on every write that changes it (B4)', () => {
+describe('cart version increments on every write that changes it', () => {
     it('starts already bumped on the write that creates the cart', async () => {
         const user = await createUser();
         const product = await createProduct();

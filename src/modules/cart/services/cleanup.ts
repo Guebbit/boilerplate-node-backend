@@ -2,7 +2,7 @@
  * @module
  * Cleanup entry points — what OTHER modules call when something they own disappears.
  *
- * Neither is reachable from a cart route. `cartDeleteByUserId` is DDD-D6's `personalData.erase`
+ * Neither is reachable from a cart route. `cartDeleteByUserId` is the `personalData.erase`
  * hook (`../module.ts`'s manifest), called inside the caller's own hard-delete transaction —
  * never a domain event, so a throw here aborts that transaction rather than being logged and
  * skipped. `productRemoveFromCartsById` stays a domain-event handler (`../module.ts`'s
