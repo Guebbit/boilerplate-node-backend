@@ -130,7 +130,7 @@ const planSlot = (
         return { locale, kind: 'upsert', fields: value.fields, origin: value.origin ?? 'human' };
     };
 
-    // D-LO5: the fallback locale can't be deleted or deactivated, so writing it never needs the
+    // The fallback locale can't be deleted or deactivated, so writing it never needs the
     // `locales` collection lookup — this is what still stores fallback-language content once
     // `locales` is uninstalled entirely (`kernel/translation.ts`'s own fallback path).
     if (locale === fallbackLocale) return Promise.resolve(planFields());

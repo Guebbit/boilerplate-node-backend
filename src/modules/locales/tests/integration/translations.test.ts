@@ -139,7 +139,7 @@ describe('upsertEntityTranslations', () => {
         expect(result.status).toBe(422);
     });
 
-    it('writes the fallback locale even with no locale row for it (D-LO5)', async () => {
+    it('writes the fallback locale even with no locale row for it', async () => {
         const product = await createProduct();
 
         // The fallback can't be deleted or deactivated, so writing it needs no `locales` row at

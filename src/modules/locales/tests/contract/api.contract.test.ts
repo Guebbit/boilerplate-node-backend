@@ -729,7 +729,7 @@ const seedTwoKeys = async (bearer: string) => {
  * semantic most likely implemented backwards, and either half alone passes against a build that
  * ignores the distinction. Together they cannot.
  */
-describe('the tenant is the path (WM-D11)', () => {
+describe('the tenant is the path', () => {
     it('sends the created entry Location, addressed by its id', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);

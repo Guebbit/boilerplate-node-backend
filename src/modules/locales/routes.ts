@@ -78,6 +78,7 @@ router.get('/:locale', publicLocaleCache, getLocaleDictionary);
  * Everything past here is an admin write on the dynamic tier — or, in one case, the read that
  * feeds the screen those writes are made from.
  */
+// POST /locales — add a language.
 router.post(
     '/',
     getAuth,
@@ -86,7 +87,7 @@ router.post(
     invalidateCache(['locales']),
     createLocale
 );
-// PUT /locales/:locale (replace) and PATCH /locales/:locale (merge).
+// PUT /locales/:locale — replace the language.
 router.put(
     '/:locale',
     getAuth,
@@ -95,6 +96,8 @@ router.put(
     invalidateCache(['locales']),
     replaceLocale
 );
+
+// PATCH /locales/:locale — merge the fields sent.
 router.patch(
     '/:locale',
     getAuth,
@@ -103,6 +106,8 @@ router.patch(
     invalidateCache(['locales']),
     updateLocale
 );
+
+// DELETE /locales/:locale — remove a language (the fallback one cannot be removed).
 router.delete(
     '/:locale',
     getAuth,
@@ -132,6 +137,8 @@ router.get(
     requirePermission('locales.any.update'),
     getTenantLocaleEntries
 );
+
+// POST /locales/:locale/tenants/:tenant/entries — add one entry to the tenant's slice.
 router.post(
     '/:locale/tenants/:tenant/entries',
     getAuth,
@@ -140,7 +147,8 @@ router.post(
     invalidateCache(['locales']),
     createLocaleEntry
 );
-// PUT replaces, PATCH merges.
+
+// PUT /locales/:locale/tenants/:tenant/entries — replace the tenant's whole slice.
 router.put(
     '/:locale/tenants/:tenant/entries',
     getAuth,
@@ -149,6 +157,8 @@ router.put(
     invalidateCache(['locales']),
     replaceLocaleEntries
 );
+
+// PATCH /locales/:locale/tenants/:tenant/entries — merge the entries sent.
 router.patch(
     '/:locale/tenants/:tenant/entries',
     getAuth,
@@ -158,6 +168,7 @@ router.patch(
     mergeLocaleEntries
 );
 
+// PUT /locales/:locale/entries/:entryId — change one entry.
 router.put(
     '/:locale/entries/:entryId',
     getAuth,
@@ -166,6 +177,8 @@ router.put(
     invalidateCache(['locales']),
     updateLocaleEntry
 );
+
+// DELETE /locales/:locale/entries/:entryId — remove one entry.
 router.delete(
     '/:locale/entries/:entryId',
     getAuth,
@@ -197,6 +210,8 @@ router.put(
     requirePermission('translations.any.update'),
     replaceEntityTranslations
 );
+
+// PATCH /locales/translations/:entityType/:id — merge the languages sent.
 router.patch(
     '/translations/:entityType/:id',
     getAuth,
