@@ -111,13 +111,18 @@ paths:
     /observability/audit:
         get:
             tags: [Observability]
-            summary: Recent audit events
+            summary: Recent incidents from the audit trail
             description: |
-                Returns the most recent audit events, newest first, from the persisted audit trail.
-                Events include auth flows, admin CRUD actions, and security blocks.
+                Returns the most recent INCIDENT events, newest first, from the persisted audit trail:
+                security refusals (`security.*`), failed sign-ins, a failed second factor or OAuth
+                sign-in, a replayed refresh token, worker failures, and a webhook subscription
+                disabled for failing. Never what a shop's customers did (orders, payments, accounts,
+                successful sign-ins): that is a shop admin's `GET /audit`.
+                Every `ip` is a keyed digest (`hmac:` and 12 hex characters), comparable across rows
+                but not readable.
                 Entries are retained for a deployment-configured period (90 days by default) and expire after.
-                `meta.totalItems` counts every event matching the filters, not just the returned page.
-                Requires admin role.
+                `meta.totalItems` counts every incident matching the filters, not just the returned page.
+                Requires the platform operator's observability key.
             operationId: getObservabilityAuditLogs
             security:
                 - bearerAuth: []

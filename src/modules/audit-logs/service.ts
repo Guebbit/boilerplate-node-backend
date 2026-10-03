@@ -16,6 +16,7 @@ import type { AuditEntryItem } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { auditSinkFailuresTotal } from './metrics';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
+import { pseudonymise } from '@infrastructure/security/pseudonymise';
 
 /**
  * Store an emitted audit entry. This is the {@link AuditSink} implementation that
@@ -60,6 +61,70 @@ export const search = (filters: AuditLogSearchFilters): Promise<PaginatedResult<
     auditLogRepository.search(filters, auditLogRepository.sinceScope(filters.since), AUDIT_SORT);
 
 /**
+ * The platform operator's rows, an explicit allow-list: the incidents an installation's operator
+ * needs to see, and nothing that names what a shop's customers did. Prefixes alone are wrong —
+ * failed logins live under `auth.*`, and `system.user.*` carries customer ids — so each entry
+ * below is a decision.
+ *
+ * - `security.*`: unauthorized, forbidden, a rate limit hit, a step-up demanded;
+ * - `worker.*`: the background workers' own failures;
+ * - `auth.login` only when it FAILED, and the three other signs of an attack on a credential:
+ *   a failed second factor, a failed OAuth sign-in, a refresh token replayed;
+ * - a webhook subscription disabled for failing.
+ *
+ * Everything else — orders, payments, products, successful sign-ins — stays on the admin's
+ * `GET /audit`.
+ */
+const INCIDENT_SCOPE: Record<string, unknown> = {
+    $or: [
+        { action: { $regex: /^(?:security|worker)\./ } },
+        { action: 'auth.login', outcome: 'failure' },
+        {
+            action: {
+                $in: [
+                    'auth.two_factor.challenge_failed',
+                    'auth.oauth.failed',
+                    'auth.refresh_token.reuse_detected',
+                    'system.webhook_subscription.auto_disabled'
+                ]
+            }
+        }
+    ]
+};
+
+/**
+ * An address the operator can correlate but not read: the same keyed, truncated digest the log
+ * pipeline writes, so "this address, three incidents" still works across `GET /observability/audit`
+ * and the log lines, and the address itself never leaves.
+ *
+ * @param ip - the stored address
+ */
+const pseudonymisedIp = (ip: string): string => `hmac:${pseudonymise('log', ip).slice(0, 12)}`;
+
+/**
+ * `GET /observability/audit`: the operator's page — {@link INCIDENT_SCOPE} only, every address
+ * pseudonymised. `meta.totalItems` counts the incidents matching the filters, not the page.
+ *
+ * @param filters - the operator's own filters, ANDed with the allow-list
+ */
+export const searchIncidents = (
+    filters: AuditLogSearchFilters
+): Promise<PaginatedResult<AuditEntryItem>> =>
+    auditLogRepository
+        .search(
+            filters,
+            { $and: [INCIDENT_SCOPE, auditLogRepository.sinceScope(filters.since)] },
+            AUDIT_SORT
+        )
+        .then((page) => ({
+            ...page,
+            items: page.items.map((item) => ({
+                ...item,
+                ...(item.ip === undefined ? {} : { ip: pseudonymisedIp(item.ip) })
+            }))
+        }));
+
+/**
  * Every audit entry recorded against this account, actor-only — for the account's own data
  * export. An actor's own rows only: an export that read past the caller would be the exact leak
  * Art. 15 exists to prevent. Unpaginated on purpose: an export is a one-time full answer, not a
@@ -76,8 +141,12 @@ export const findOwnAuditEntries = (userId: string): Promise<AuditEntryItem[]> =
         MAX_CONFIGURED_PAGE_SIZE
     );
 
-/** The module's barrel export — `record` is registered as the audit sink, `search` serves the dashboard. */
+/**
+ * The module's barrel export — `record` is registered as the audit sink, `search` serves a
+ * shop's own staff and `searchIncidents` the platform operator.
+ */
 export const auditLogService = {
     record,
-    search
+    search,
+    searchIncidents
 };
