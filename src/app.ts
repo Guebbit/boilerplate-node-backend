@@ -135,7 +135,7 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
                 bootI18n(enabledModuleLocales())
             )
             .then(() => {
-                // Same reasoning, for a module's own EJS templates (SK-15) — before the first
+                // Same reasoning, for a module's own EJS templates — before the first
                 // request or queue job that could resolve a template name against them.
                 registerTemplateDirectories(enabledModuleTemplateDirectories());
             })
@@ -215,7 +215,7 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
     const securityTxtProblem = securityTxtWarning(securityTxtSettings());
     if (securityTxtProblem) logger.warn({ message: securityTxtProblem });
 
-    // LOCALES_OPTIONAL_0925 D-LO1: `locales` being absent is a supported deployment shape, not a
+    // `locales` being absent is a supported deployment shape, not a
     // misconfiguration — this is the one line that says so, once, rather than a reader inferring it
     // from an admin screen that quietly has nothing to show.
     if (!isTranslationAvailable())

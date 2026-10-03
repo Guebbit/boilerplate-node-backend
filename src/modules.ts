@@ -70,7 +70,7 @@ export const enabledModuleLocales = (): string[] =>
 
 /**
  * Every enabled module's own template directory, in registry order — what
- * `registerTemplateDirectories` needs to know which EJS templates this build can render (SK-15).
+ * `registerTemplateDirectories` needs to know which EJS templates this build can render.
  * A module carries its own copy or none; this is the one place that turns the registry into the
  * flat list `mailer.ts` takes, the same shape {@link enabledModuleLocales} gives `bootI18n`.
  * @returns the template directories to register, one per module that ships one
