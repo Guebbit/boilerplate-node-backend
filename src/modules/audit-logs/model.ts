@@ -132,8 +132,14 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
  * a single-field index is walked in either direction, so a second one differing only in sort
  * order would be maintained on every write and answer nothing the first cannot.
  */
+// Mongoose `index(fields, options)`: 1 ascending, -1 descending.
+// https://mongoosejs.com/docs/guide.html#indexes
+// "What this actor did" — `GET /audit`'s `actor` filter.
 auditLogSchema.index({ actor_user_id: 1, timestamp: -1 });
+
+// "Every time this action ran" — `GET /audit`'s `action` filter.
 auditLogSchema.index({ action: 1, timestamp: -1 });
+
 // "What happened to this row" — the question `GET /audit`'s `target` filter answers.
 auditLogSchema.index({ target_id: 1, timestamp: -1 });
 
