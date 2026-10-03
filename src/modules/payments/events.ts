@@ -23,6 +23,10 @@ declare module '@kernel/events' {
          * The provider declined the method. Retryable with another method (see
          * `CONFIRMABLE_PAYMENT_STATUSES`), so this can fire more than once for the same order —
          * each attempt is its own fact, same as `paymentsAuditActions.PAYMENT_FAILED`.
+         *
+         * Delivered through the transactional outbox (`./services/announce.ts`'s `recordDecline`),
+         * written with the `declined` status move: at-least-once, so a listener dedupes on
+         * `meta.eventId`.
          */
         'payment.failed': { paymentId: string; orderId: string };
 

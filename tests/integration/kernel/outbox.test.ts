@@ -1,3 +1,5 @@
+import mongoose from 'mongoose';
+import type { ClientSession } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { withTransaction } from '@infrastructure/runtime/database';
@@ -8,6 +10,7 @@ import {
     type DomainEventMeta
 } from '@kernel/events';
 import {
+    announceInTransaction,
     enqueueOutboxEvent,
     nudgeOutbox,
     outboxEventModel,
@@ -221,6 +224,66 @@ describe('a relay that dies mid-dispatch', () => {
         await Promise.all([relayOutbox(), relayOutbox()]);
 
         expect(seen.map(({ n }) => n).toSorted()).toEqual([1, 2, 3]);
+    });
+});
+
+/** A state change stand-in: one document in a collection the test can read back. */
+const marks = (): Promise<number> => mongoose.connection.collection('marks').countDocuments();
+
+/** The write: inserts a mark in the session, answers what it wrote. */
+const insertMark = (session: ClientSession): Promise<{ n: number }> =>
+    mongoose.connection
+        .collection('marks')
+        .insertOne({ n: 1 }, { session })
+        .then(() => ({ n: 1 }));
+
+/** The announcement for what the write returned. */
+const announce = ({ n }: { n: number }) => ({
+    name: 'test.outbox' as const,
+    payload: { n },
+    aggregateId: 'agg-1'
+});
+
+describe('announceInTransaction', () => {
+    it('commits the change and its event together, then delivers the event', async () => {
+        subscribe();
+
+        const written = await announceInTransaction(insertMark, announce);
+        await settleOutboxNudges();
+
+        expect(written).toEqual({ n: 1 });
+        expect(await marks()).toBe(1);
+        expect(seen.map(({ n }) => n)).toEqual([1]);
+    });
+
+    it('writes no event when the conditional write matched nothing', async () => {
+        const written = await announceInTransaction(() => Promise.resolve(null), announce);
+
+        expect(written).toBeNull();
+        expect(await outboxEventModel.countDocuments()).toBe(0);
+    });
+
+    it('rolls the change back when the event cannot be written', async () => {
+        await expect(
+            announceInTransaction(insertMark, () => {
+                throw new Error('cannot build the event');
+            })
+        ).rejects.toThrow('cannot build the event');
+
+        expect(await marks()).toBe(0);
+        expect(await outboxEventModel.countDocuments()).toBe(0);
+    });
+
+    it('writes no event when the change itself fails', async () => {
+        await expect(
+            announceInTransaction(async (session) => {
+                await insertMark(session);
+                throw new Error('boom');
+            }, announce)
+        ).rejects.toThrow('boom');
+
+        expect(await marks()).toBe(0);
+        expect(await outboxEventModel.countDocuments()).toBe(0);
     });
 });
 

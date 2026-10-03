@@ -33,6 +33,7 @@ import {
     type DomainEventName
 } from './events';
 import { outboxConfig } from '@kernel/config';
+import { withTransaction } from '@infrastructure/runtime/database';
 
 /** Where an outbox row is in its life. `dead` is terminal and needs an operator. */
 export type OutboxStatus = 'pending' | 'published' | 'dead';
@@ -331,6 +332,42 @@ export const nudgeOutbox = (): void => {
     nudges.add(pass);
     void pass.finally(() => nudges.delete(pass));
 };
+
+/** The outbox row an {@link announceInTransaction} write asks for. */
+export interface OutboxAnnouncement<TEventName extends DomainEventName> {
+    /** The domain event's name. */
+    name: TEventName;
+    /** The event's payload. */
+    payload: DomainEventMap[TEventName];
+    /** What the event is about; per-aggregate ordering keys on it. */
+    aggregateId: string;
+}
+
+/**
+ * One state change and the event announcing it, committed together or not at all.
+ *
+ * `write` runs inside a transaction and returns what it wrote, or `null` when its conditional
+ * write matched nothing (a lost race). Only a write that landed is announced, so an event exists
+ * exactly when the change it describes does. The relay is nudged after the commit, never inside.
+ *
+ * @param write - the state change; pass `session` to every write that belongs to it
+ * @param announce - builds the event from what `write` returned
+ * @returns what `write` returned
+ */
+export const announceInTransaction = <TWritten, TEventName extends DomainEventName>(
+    write: (session: ClientSession) => Promise<TWritten | null>,
+    announce: (written: TWritten) => OutboxAnnouncement<TEventName>
+): Promise<TWritten | null> =>
+    withTransaction((session) =>
+        write(session).then((written) => {
+            if (written === null) return null;
+            const { name, payload, aggregateId } = announce(written);
+            return enqueueOutboxEvent(name, payload, aggregateId, session).then(() => written);
+        })
+    ).then((written) => {
+        if (written !== null) nudgeOutbox();
+        return written;
+    });
 
 /**
  * Wait for every nudged pass to finish. For graceful shutdown, and for a test that needs the

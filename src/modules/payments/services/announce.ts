@@ -2,7 +2,8 @@
  * @module
  * Announcing a settled payment. `PAYMENT_SUCCEEDED` goes through the transactional outbox, so it
  * is durable from the moment the settlement's last owed effect is discharged — a crash after the
- * money moved can no longer leave subscribers never hearing about it.
+ * money moved can no longer leave subscribers never hearing about it. `PAYMENT_FAILED` rides the
+ * same outbox, written with the `declined` status move itself.
  *
  * Reached from two places that must agree: `./settlement.ts` (the normal path) and `./effects.ts`
  * (the sweep that finishes a settlement which died after charging).
@@ -11,8 +12,10 @@
  */
 
 import { withTransaction } from '@infrastructure/runtime/database';
-import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
-import { PAYMENT_SUCCEEDED } from '../events';
+import { announceInTransaction, enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
+import { PAYMENT_FAILED, PAYMENT_SUCCEEDED } from '../events';
+import { SETTLEABLE_PAYMENT_STATUSES } from '../domain';
+import type { PaymentDocument } from '../model';
 import { paymentRepository } from '../repository';
 
 /**
@@ -47,3 +50,34 @@ export const announcePaymentSucceeded = (paymentId: string, orderId: string): Pr
         if (announced) nudgeOutbox();
         return announced;
     });
+
+/**
+ * Move a payment to `declined` and announce `payment.failed`, atomically.
+ *
+ * The event row commits with the status write or not at all, so a decline that landed is always
+ * announced and one that lost its race never is — a redelivered decline must not tell `webhooks`
+ * the attempt happened twice.
+ *
+ * @param orderId - the order whose payment the provider declined
+ * @param extra - the fields recorded beside the status (the provider's own reference, last error)
+ * @returns the payment as it now stands, or `null` when another call already moved it
+ */
+export const recordDecline = (
+    orderId: string,
+    extra: Partial<PaymentDocument>
+): Promise<PaymentDocument | null> =>
+    announceInTransaction(
+        (session) =>
+            paymentRepository.updateStatusIfIn(
+                orderId,
+                SETTLEABLE_PAYMENT_STATUSES,
+                'declined',
+                extra,
+                session
+            ),
+        (declined) => ({
+            name: PAYMENT_FAILED,
+            payload: { paymentId: String(declined._id), orderId },
+            aggregateId: orderId
+        })
+    );
