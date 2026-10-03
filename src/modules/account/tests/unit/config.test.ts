@@ -4,7 +4,7 @@
  * here, not in infrastructure.
  */
 import { accountFrontendLink } from '@modules/account/config';
-import { withoutEnvironmentInThisFile } from '@tests/environment';
+import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
 withoutEnvironmentInThisFile([
     'NODE_FRONTEND_URL',
@@ -52,7 +52,7 @@ describe('accountFrontendLink — the default template per kind', () => {
 
 describe('accountFrontendLink — per-kind override', () => {
     it("lets a deployment override one kind's template without touching the others", () => {
-        process.env.NODE_FRONTEND_LINK_RESET = 'change-password?t={token}';
+        setEnvironment({ NODE_FRONTEND_LINK_RESET: 'change-password?t={token}' });
 
         expect(accountFrontendLink('reset', { locale: 'en', token: TOKEN })).toBe(
             `http://localhost:8080/en/change-password?t=${TOKEN}`

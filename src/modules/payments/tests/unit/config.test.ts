@@ -9,12 +9,13 @@ import {
     validateBankTransferConfig,
     validateStripeSecretKey
 } from '../../config';
-import { withoutEnvironmentInThisFile, withEnvironment } from '@tests/environment';
+import { currentEnvironment } from '@infrastructure/config/store';
+import { withoutEnvironmentInThisFile, withEnvironment, setEnvironment } from '@tests/environment';
 
 /** Sets both variables `bankTransferEnabled()` requires. */
 const configureBankTransfer = () => {
-    process.env.NODE_BANK_TRANSFER_BENEFICIARY = 'Guebbit Shop';
-    process.env.NODE_BANK_TRANSFER_IBAN = 'DE89370400440532013000';
+    setEnvironment({ NODE_BANK_TRANSFER_BENEFICIARY: 'Guebbit Shop' });
+    setEnvironment({ NODE_BANK_TRANSFER_IBAN: 'DE89370400440532013000' });
 };
 
 /**
@@ -50,7 +51,7 @@ describe('listPaymentMethods', () => {
 
     it('reflects a non-default hold length', () => {
         configureBankTransfer();
-        process.env.NODE_BANK_TRANSFER_HOLD_HOURS = '48';
+        setEnvironment({ NODE_BANK_TRANSFER_HOLD_HOURS: '48' });
         expect(listPaymentMethods()).toEqual([
             { id: 'card' },
             { id: 'bank_transfer', holdHours: 48 }
@@ -69,38 +70,40 @@ describe('validateBankTransferConfig', () => {
     });
 
     it('refuses an IBAN with no beneficiary', () => {
-        process.env.NODE_BANK_TRANSFER_IBAN = 'DE89370400440532013000';
+        setEnvironment({ NODE_BANK_TRANSFER_IBAN: 'DE89370400440532013000' });
         expect(validateBankTransferConfig()).toEqual(['NODE_BANK_TRANSFER_BENEFICIARY']);
     });
 
     it('refuses a malformed IBAN', () => {
-        process.env.NODE_BANK_TRANSFER_BENEFICIARY = 'Guebbit Shop';
-        process.env.NODE_BANK_TRANSFER_IBAN = 'not-an-iban';
+        setEnvironment({ NODE_BANK_TRANSFER_BENEFICIARY: 'Guebbit Shop' });
+        setEnvironment({ NODE_BANK_TRANSFER_IBAN: 'not-an-iban' });
         expect(validateBankTransferConfig()).toEqual(['NODE_BANK_TRANSFER_IBAN']);
     });
 
     it('accepts an IBAN typed with spaces, same as ibantools does', () => {
-        process.env.NODE_BANK_TRANSFER_BENEFICIARY = 'Guebbit Shop';
-        process.env.NODE_BANK_TRANSFER_IBAN = 'DE89 3704 0044 0532 0130 00';
+        setEnvironment({ NODE_BANK_TRANSFER_BENEFICIARY: 'Guebbit Shop' });
+        setEnvironment({ NODE_BANK_TRANSFER_IBAN: 'DE89 3704 0044 0532 0130 00' });
         expect(validateBankTransferConfig()).toEqual([]);
     });
 
     it('refuses a malformed BIC', () => {
         configureBankTransfer();
-        process.env.NODE_BANK_TRANSFER_BIC = 'not-a-bic';
+        setEnvironment({ NODE_BANK_TRANSFER_BIC: 'not-a-bic' });
         expect(validateBankTransferConfig()).toEqual(['NODE_BANK_TRANSFER_BIC']);
     });
 
     it('accepts a valid BIC', () => {
         configureBankTransfer();
-        process.env.NODE_BANK_TRANSFER_BIC = 'COBADEFFXXX';
+        setEnvironment({ NODE_BANK_TRANSFER_BIC: 'COBADEFFXXX' });
         expect(validateBankTransferConfig()).toEqual([]);
     });
 });
 
 /** `validateStripeSecretKey` against the environment this case set up. */
-const stripeProblems = (): string[] =>
-    validateStripeSecretKey(process.env.NODE_STRIPE_SECRET_KEY, process.env);
+const stripeProblems = (): string[] => {
+    const environment = currentEnvironment();
+    return validateStripeSecretKey(environment.NODE_STRIPE_SECRET_KEY, environment);
+};
 
 describe('validateStripeSecretKey', () => {
     it('reports nothing when no key is configured', () => {
@@ -108,39 +111,34 @@ describe('validateStripeSecretKey', () => {
     });
 
     it('reports nothing for a test-mode key outside production', () => {
-        process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
+        setEnvironment({ NODE_STRIPE_SECRET_KEY: 'sk_test_abc123' });
         expect(stripeProblems()).toEqual([]);
     });
 
     it('reports nothing for a live key in production', () =>
         withEnvironment('NODE_ENV', 'production', () => {
-            process.env.NODE_STRIPE_SECRET_KEY = 'sk_live_abc123';
+            setEnvironment({ NODE_STRIPE_SECRET_KEY: 'sk_live_abc123' });
             expect(stripeProblems()).toEqual([]);
             return Promise.resolve();
         }));
 
     it('refuses a test-mode key when NODE_ENV is staging, like production', () =>
         withEnvironment('NODE_ENV', 'staging', () => {
-            process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
+            setEnvironment({ NODE_STRIPE_SECRET_KEY: 'sk_test_abc123' });
             expect(stripeProblems()).toEqual(['NODE_STRIPE_SECRET_KEY']);
             return Promise.resolve();
         }));
 
     it('refuses a test-mode key when NODE_ENV is unset', () => {
-        const original = process.env.NODE_ENV;
-        delete process.env.NODE_ENV;
-        process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
+        setEnvironment({ NODE_ENV: undefined });
+        setEnvironment({ NODE_STRIPE_SECRET_KEY: 'sk_test_abc123' });
 
-        try {
-            expect(stripeProblems()).toEqual(['NODE_STRIPE_SECRET_KEY']);
-        } finally {
-            if (original !== undefined) process.env.NODE_ENV = original;
-        }
+        expect(stripeProblems()).toEqual(['NODE_STRIPE_SECRET_KEY']);
     });
 
     it('refuses a test-mode key in production', () =>
         withEnvironment('NODE_ENV', 'production', () => {
-            process.env.NODE_STRIPE_SECRET_KEY = 'sk_test_abc123';
+            setEnvironment({ NODE_STRIPE_SECRET_KEY: 'sk_test_abc123' });
             expect(stripeProblems()).toEqual(['NODE_STRIPE_SECRET_KEY']);
             return Promise.resolve();
         }));

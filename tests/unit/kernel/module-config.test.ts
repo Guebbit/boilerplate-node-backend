@@ -16,7 +16,7 @@
 import { assertModuleConfig, configSlicesOf } from '@kernel/module-config';
 import { defineConfig } from '@infrastructure/config/define';
 import { secret, text } from '@infrastructure/config/fields';
-import { withoutEnvironmentInThisFile } from '@tests/environment';
+import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 import type { AppModule } from '@kernel/registry';
 import type { RateLimitBudget } from '@types';
 
@@ -24,7 +24,7 @@ withoutEnvironmentInThisFile(['NODE_ENV', 'SECRET', 'SECRET_TWO', 'CALLER_OWNED'
 
 /** A deployment away from the test short-circuit, for a case to break one thing in. */
 const configure = (): void => {
-    process.env.NODE_ENV = 'development';
+    setEnvironment({ NODE_ENV: 'development' });
 };
 
 /**
@@ -48,7 +48,7 @@ const moduleRequiring = (name: string, variable: string, minLength: number): App
 describe('module-declared slices', () => {
     it('names a variable still set to its shipped placeholder', () => {
         configure();
-        process.env.SECRET = 'change-me';
+        setEnvironment({ SECRET: 'change-me' });
 
         expect(() => assertModuleConfig([moduleRequiring('demo', 'SECRET', 1)], [])).toThrow(
             /SECRET/
@@ -58,7 +58,7 @@ describe('module-declared slices', () => {
     it('names every offender at once, not just the first', () => {
         // The whole point of collecting before throwing: N mistakes must cost one restart, not N.
         configure();
-        process.env.SECRET = '';
+        setEnvironment({ SECRET: '' });
 
         expect(() =>
             assertModuleConfig(
@@ -76,7 +76,7 @@ describe('module-declared slices', () => {
         // secrets. A second entry left as the placeholder must refuse to boot even though the
         // JOINED value is long and does not itself equal the placeholder.
         configure();
-        process.env.SECRET = 'a-real-secret-value,change-me';
+        setEnvironment({ SECRET: 'a-real-secret-value,change-me' });
 
         expect(() => assertModuleConfig([moduleRequiring('demo', 'SECRET', 16)], [])).toThrow(
             /SECRET/
@@ -85,21 +85,21 @@ describe('module-declared slices', () => {
 
     it('accepts a ring whose every member individually clears minLength and placeholder', () => {
         configure();
-        process.env.SECRET = 'a-real-secret-value,another-real-secret-value';
+        setEnvironment({ SECRET: 'a-real-secret-value,another-real-secret-value' });
 
         expect(() => assertModuleConfig([moduleRequiring('demo', 'SECRET', 16)], [])).not.toThrow();
     });
 
     it('reads a trailing comma as a typo, not as an empty member', () => {
         configure();
-        process.env.SECRET = 'a-real-secret-value,';
+        setEnvironment({ SECRET: 'a-real-secret-value,' });
 
         expect(() => assertModuleConfig([moduleRequiring('demo', 'SECRET', 16)], [])).not.toThrow();
     });
 
     it('still refuses a value that is nothing but commas', () => {
         configure();
-        process.env.SECRET = ',,';
+        setEnvironment({ SECRET: ',,' });
 
         expect(() => assertModuleConfig([moduleRequiring('demo', 'SECRET', 16)], [])).toThrow(
             /SECRET/
@@ -108,10 +108,10 @@ describe('module-declared slices', () => {
 
     it('a minLength-0 variable may stay unset, but not be the placeholder', () => {
         configure();
-        delete process.env.SECRET;
+        setEnvironment({ SECRET: undefined });
         expect(() => assertModuleConfig([moduleRequiring('demo', 'SECRET', 0)], [])).not.toThrow();
 
-        process.env.SECRET = 'change-me';
+        setEnvironment({ SECRET: 'change-me' });
         expect(() => assertModuleConfig([moduleRequiring('demo', 'SECRET', 0)], [])).toThrow(
             /SECRET/
         );
@@ -120,7 +120,7 @@ describe('module-declared slices', () => {
 
 describe('the environment that skips the presence rules', () => {
     it('passes under NODE_ENV=test even with everything unset', () => {
-        process.env.NODE_ENV = 'test';
+        setEnvironment({ NODE_ENV: 'test' });
 
         expect(() => assertModuleConfig([moduleRequiring('demo', 'SECRET', 16)], [])).not.toThrow();
     });
@@ -145,27 +145,27 @@ describe('forbiddenOutsideRelaxed — forbidden, not required', () => {
 
     it('accepts it set outside production', () => {
         configure();
-        process.env.SECRET = 'a-real-secret-value';
+        setEnvironment({ SECRET: 'a-real-secret-value' });
 
         expect(() => assertModuleConfig(modules, [])).not.toThrow();
     });
 
     it('refuses to boot in production with it set', () => {
-        process.env.NODE_ENV = 'production';
-        process.env.SECRET = 'a-real-secret-value';
+        setEnvironment({ NODE_ENV: 'production' });
+        setEnvironment({ SECRET: 'a-real-secret-value' });
 
         expect(() => assertModuleConfig(modules, [])).toThrow(/SECRET/);
     });
 
     it('refuses to boot with NODE_ENV unset and it set: only development/test relax the rule', () => {
-        delete process.env.NODE_ENV;
-        process.env.SECRET = 'a-real-secret-value';
+        setEnvironment({ NODE_ENV: undefined });
+        setEnvironment({ SECRET: 'a-real-secret-value' });
 
         expect(() => assertModuleConfig(modules, [])).toThrow(/SECRET/);
     });
 
     it('accepts production with it unset', () => {
-        process.env.NODE_ENV = 'production';
+        setEnvironment({ NODE_ENV: 'production' });
 
         expect(() => assertModuleConfig(modules, [])).not.toThrow();
     });
@@ -186,7 +186,7 @@ const failing = (name: string, message: string): AppModule => ({
 describe('appSlices — what a caller other than a module contributes', () => {
     it('folds a caller-declared slice into the same refusal as a module’s', () => {
         configure();
-        delete process.env.CALLER_OWNED;
+        setEnvironment({ CALLER_OWNED: undefined });
         const callerSlice = defineConfig({
             name: 'caller',
             shape: { CALLER_OWNED: text({ required: { minLength: 1 } }) }
@@ -228,8 +228,8 @@ describe('a module’s rate-limit budgets', () => {
     });
 
     it('refuses a ceiling that is not a whole number, even under NODE_ENV=test', () => {
-        process.env.NODE_ENV = 'test';
-        process.env.BUDGET_MAX = '20/min';
+        setEnvironment({ NODE_ENV: 'test' });
+        setEnvironment({ BUDGET_MAX: '20/min' });
 
         expect(() => assertModuleConfig([appModule], [])).toThrow(/BUDGET_MAX/);
     });

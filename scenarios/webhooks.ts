@@ -29,6 +29,7 @@
 
 import { Types } from 'mongoose';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { webhooksConfig } from '@modules/webhooks/config';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { encryptRingSecret } from '@modules/webhooks/secrets';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
@@ -60,7 +61,7 @@ export const WEBHOOK_DEMO_SECRET =
  * Seeds nothing when `NODE_WEBHOOK_DEMO_SINK_URL` is unset, the default.
  */
 export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
-    const sinkBaseUrl = process.env.NODE_WEBHOOK_DEMO_SINK_URL;
+    const sinkBaseUrl = webhooksConfig().NODE_WEBHOOK_DEMO_SINK_URL;
     if (!sinkBaseUrl) return Promise.resolve([]);
 
     // `id`/`ciphertext` only — `createdAt` is the ring entry's own subdocument timestamp

@@ -11,6 +11,7 @@ import {
     isRelaxedIn
 } from '@infrastructure/config/define';
 import { flag, int, secret, text } from '@infrastructure/config/fields';
+import { resetEnvironment, setEnvironment } from '@tests/environment';
 
 /** A slice covering one field of each rule kind. */
 const slice = defineConfig({
@@ -52,20 +53,16 @@ describe('isRelaxedIn', () => {
 });
 
 describe('the accessor', () => {
-    const original = { ...process.env };
-
     afterEach(() => {
-        for (const key of Object.keys(process.env))
-            if (key.startsWith('NODE_SAMPLE_')) delete process.env[key];
-        Object.assign(process.env, original);
+        resetEnvironment();
     });
 
     it('returns typed values with defaults filled in', () => {
         expect(slice()).toMatchObject({ NODE_SAMPLE_LIMIT: 10, NODE_SAMPLE_ON: true });
     });
 
-    it('sees a changed variable on the next call', () => {
-        process.env.NODE_SAMPLE_LIMIT = '25';
+    it('sees an override on the next call', () => {
+        setEnvironment({ NODE_SAMPLE_LIMIT: '25' });
 
         expect(slice().NODE_SAMPLE_LIMIT).toBe(25);
     });
@@ -79,7 +76,7 @@ describe('the accessor', () => {
     });
 
     it('throws a ConfigError naming the variable when a value is refused', () => {
-        process.env.NODE_SAMPLE_LIMIT = '5mb';
+        setEnvironment({ NODE_SAMPLE_LIMIT: '5mb' });
 
         expect(() => slice()).toThrow(ConfigError);
         expect(() => slice()).toThrow(
@@ -92,7 +89,7 @@ describe('the accessor', () => {
             name: 'secrets',
             shape: { NODE_SAMPLE_SECRET_NUMBER: { ...int(), sensitive: true } }
         });
-        process.env.NODE_SAMPLE_SECRET_NUMBER = 'hunter2';
+        setEnvironment({ NODE_SAMPLE_SECRET_NUMBER: 'hunter2' });
 
         expect(() => secretSlice()).toThrow(/expected whole number/);
         expect(() => secretSlice()).not.toThrow(/hunter2/);

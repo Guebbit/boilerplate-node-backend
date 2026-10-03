@@ -12,7 +12,7 @@
  * environment, so a suite that left it alone would assert nothing.
  */
 import { assertModuleConfig } from '@kernel/module-config';
-import { withoutEnvironmentInThisFile } from '@tests/environment';
+import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 import { logger } from '@infrastructure/adapters/logger';
 import webhooksModule from '../../module';
 
@@ -31,15 +31,15 @@ withoutEnvironmentInThisFile(TOUCHED);
 
 /** A deployment that satisfies every check, for a case to break one thing in. */
 const configure = (): void => {
-    process.env.NODE_ENV = 'development';
-    process.env.NODE_URL = 'https://api.example.com/';
-    process.env.NODE_WEBHOOK_SECRET_ENCRYPTION_KEY = 'a-real-32-byte-webhook-secret-key!!';
+    setEnvironment({ NODE_ENV: 'development' });
+    setEnvironment({ NODE_URL: 'https://api.example.com/' });
+    setEnvironment({ NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'a-real-32-byte-webhook-secret-key!!' });
 };
 
 describe('the secret-ring encryption key', () => {
     it('refuses to boot with it unset', () => {
         configure();
-        delete process.env.NODE_WEBHOOK_SECRET_ENCRYPTION_KEY;
+        setEnvironment({ NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: undefined });
 
         expect(() => assertModuleConfig([webhooksModule], [])).toThrow(
             /NODE_WEBHOOK_SECRET_ENCRYPTION_KEY/
@@ -48,7 +48,9 @@ describe('the secret-ring encryption key', () => {
 
     it('refuses to boot still set to the shipped placeholder', () => {
         configure();
-        process.env.NODE_WEBHOOK_SECRET_ENCRYPTION_KEY = 'your-webhook-secret-encryption-key-here';
+        setEnvironment({
+            NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'your-webhook-secret-encryption-key-here'
+        });
 
         expect(() => assertModuleConfig([webhooksModule], [])).toThrow(
             /NODE_WEBHOOK_SECRET_ENCRYPTION_KEY/
@@ -65,16 +67,16 @@ describe('the secret-ring encryption key', () => {
 describe('the demo-sink exemption', () => {
     it('accepts it set outside production', () => {
         configure();
-        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'https://webhook-tester-tls:8443';
+        setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: 'https://webhook-tester-tls:8443' });
 
         expect(() => assertModuleConfig([webhooksModule], [])).not.toThrow();
     });
 
     it('refuses to boot in production with it set', () => {
         configure();
-        process.env.NODE_ENV = 'production';
-        process.env.NODE_CORS_ORIGIN = 'https://example.com';
-        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'https://webhook-tester-tls:8443';
+        setEnvironment({ NODE_ENV: 'production' });
+        setEnvironment({ NODE_CORS_ORIGIN: 'https://example.com' });
+        setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: 'https://webhook-tester-tls:8443' });
 
         expect(() => assertModuleConfig([webhooksModule], [])).toThrow(
             /NODE_WEBHOOK_DEMO_SINK_URL/
@@ -83,9 +85,9 @@ describe('the demo-sink exemption', () => {
 
     it('refuses to boot with NODE_ENV unset and it set, since only development/test may use it', () => {
         configure();
-        delete process.env.NODE_ENV;
-        process.env.NODE_CORS_ORIGIN = 'https://example.com';
-        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'https://webhook-tester-tls:8443';
+        setEnvironment({ NODE_ENV: undefined });
+        setEnvironment({ NODE_CORS_ORIGIN: 'https://example.com' });
+        setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: 'https://webhook-tester-tls:8443' });
 
         expect(() => assertModuleConfig([webhooksModule], [])).toThrow(
             /NODE_WEBHOOK_DEMO_SINK_URL/
@@ -94,8 +96,8 @@ describe('the demo-sink exemption', () => {
 
     it('accepts production with it unset', () => {
         configure();
-        process.env.NODE_ENV = 'production';
-        process.env.NODE_CORS_ORIGIN = 'https://example.com';
+        setEnvironment({ NODE_ENV: 'production' });
+        setEnvironment({ NODE_CORS_ORIGIN: 'https://example.com' });
 
         expect(() => assertModuleConfig([webhooksModule], [])).not.toThrow();
     });
@@ -104,8 +106,8 @@ describe('the demo-sink exemption', () => {
 describe('the boot warning', () => {
     it('says deliveries wait for the sweep when no broker is configured', () => {
         const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
-        delete process.env.NODE_RABBITMQ_URL;
-        delete process.env.NODE_RABBITMQ_PORT;
+        setEnvironment({ NODE_RABBITMQ_URL: undefined });
+        setEnvironment({ NODE_RABBITMQ_PORT: undefined });
 
         webhooksModule.onRegistered([]);
 
@@ -117,7 +119,7 @@ describe('the boot warning', () => {
 
     it('stays quiet when a broker is configured', () => {
         const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
-        process.env.NODE_RABBITMQ_URL = 'amqp://broker.example.com';
+        setEnvironment({ NODE_RABBITMQ_URL: 'amqp://broker.example.com' });
 
         webhooksModule.onRegistered([]);
 

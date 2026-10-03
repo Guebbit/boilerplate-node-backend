@@ -19,21 +19,11 @@ import {
     leftoverFiles,
     sandboxDirectory
 } from '@tests/file-sandbox';
-
-/** The settings the sandbox owns, saved so this file can restore its own sandbox afterwards. */
-const OWNED_VARIABLES = [
-    FILE_SANDBOX_ROOT_VARIABLE,
-    'NODE_PUBLIC_PATH',
-    'NODE_QUARANTINE_PATH',
-    'NODE_UPLOAD_STAGING_PATH',
-    'NODE_MAIL_SPOOL_PATH'
-] as const;
+import { currentEnvironment } from '@infrastructure/config/store';
+import { setEnvironment } from '@tests/environment';
 
 /** A test file path as jest would report it, inside the repository. */
 const TEST_PATH = path.join(__dirname, '..', '..', 'integration', 'uploads.test.ts');
-
-/** The environment this file itself was started with. */
-const original = Object.fromEntries(OWNED_VARIABLES.map((name) => [name, process.env[name]]));
 
 /** A scratch sandbox root, recreated per test. */
 let root: string;
@@ -50,12 +40,11 @@ const touch = async (file: string): Promise<void> => {
 
 beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), 'file-sandbox-test-'));
-    process.env[FILE_SANDBOX_ROOT_VARIABLE] = root;
+    setEnvironment({ [FILE_SANDBOX_ROOT_VARIABLE]: root });
 });
 
 afterEach(async () => {
     await rm(root, { recursive: true, force: true });
-    for (const name of OWNED_VARIABLES) process.env[name] = original[name];
 });
 
 describe('sandboxDirectory', () => {
@@ -68,19 +57,19 @@ describe('sandboxDirectory', () => {
 
 describe('applyFileSandbox', () => {
     it('points every file-writing setting into the test file’s own sandbox', () => {
-        process.env.NODE_PUBLIC_PATH = 'public';
+        setEnvironment({ NODE_PUBLIC_PATH: 'public' });
 
         applyFileSandbox(TEST_PATH);
 
         const directory = sandboxDirectory(root, TEST_PATH);
-        expect(process.env.NODE_PUBLIC_PATH).toBe(path.join(directory, 'public'));
-        expect(process.env.NODE_QUARANTINE_PATH).toBe(path.join(directory, 'quarantine'));
-        expect(process.env.NODE_UPLOAD_STAGING_PATH).toBe(path.join(directory, 'uploads'));
-        expect(process.env.NODE_MAIL_SPOOL_PATH).toBe(path.join(directory, 'mail-spool'));
+        expect(currentEnvironment().NODE_PUBLIC_PATH).toBe(path.join(directory, 'public'));
+        expect(currentEnvironment().NODE_QUARANTINE_PATH).toBe(path.join(directory, 'quarantine'));
+        expect(currentEnvironment().NODE_UPLOAD_STAGING_PATH).toBe(path.join(directory, 'uploads'));
+        expect(currentEnvironment().NODE_MAIL_SPOOL_PATH).toBe(path.join(directory, 'mail-spool'));
     });
 
     it('refuses to run without a sandbox root, rather than fall back to real directories', () => {
-        delete process.env[FILE_SANDBOX_ROOT_VARIABLE];
+        setEnvironment({ [FILE_SANDBOX_ROOT_VARIABLE]: undefined });
 
         expect(() => applyFileSandbox(TEST_PATH)).toThrow(FILE_SANDBOX_ROOT_VARIABLE);
     });
@@ -94,10 +83,16 @@ describe('emptyFileSandbox', () => {
     it('deletes every file the test file wrote, in all four directories', async () => {
         applyFileSandbox(TEST_PATH);
         const written = [
-            path.join(process.env.NODE_PUBLIC_PATH ?? '', 'images', 'thumbs', 'v1', 'a.webp'),
-            path.join(process.env.NODE_QUARANTINE_PATH ?? '', 'a.png'),
-            path.join(process.env.NODE_UPLOAD_STAGING_PATH ?? '', 'a.png'),
-            path.join(process.env.NODE_MAIL_SPOOL_PATH ?? '', 'a.pdf')
+            path.join(
+                currentEnvironment().NODE_PUBLIC_PATH ?? '',
+                'images',
+                'thumbs',
+                'v1',
+                'a.webp'
+            ),
+            path.join(currentEnvironment().NODE_QUARANTINE_PATH ?? '', 'a.png'),
+            path.join(currentEnvironment().NODE_UPLOAD_STAGING_PATH ?? '', 'a.png'),
+            path.join(currentEnvironment().NODE_MAIL_SPOOL_PATH ?? '', 'a.pdf')
         ];
         await Promise.all(written.map((file) => touch(file)));
 
@@ -112,7 +107,7 @@ describe('emptyFileSandbox', () => {
         const outside = await mkdtemp(path.join(tmpdir(), 'file-sandbox-outside-'));
         const precious = path.join(outside, 'images', 'keep.png');
         await touch(precious);
-        process.env.NODE_PUBLIC_PATH = outside;
+        setEnvironment({ NODE_PUBLIC_PATH: outside });
 
         await expect(emptyFileSandbox()).rejects.toThrow('NODE_PUBLIC_PATH is outside');
         expect(existsSync(precious)).toBe(true);
