@@ -35,7 +35,7 @@ const withTokens = () =>
         ]
     });
 
-describe('email is case-insensitive (B5)', () => {
+describe('email is case-insensitive', () => {
     it('stores a mixed-case address lowercased', async () => {
         const user = await createUser({ email: 'Ada@Example.com' });
 

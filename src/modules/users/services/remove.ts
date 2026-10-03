@@ -25,7 +25,7 @@ import { personalDataErasers } from '../erasure-registry';
 import { usersAuditActions } from '../audit';
 
 /**
- * Runs every registered `personalData.erase` hook (DDD-D6) and then deletes the user document
+ * Runs every registered `personalData.erase` hook and then deletes the user document
  * itself, all inside `session`'s transaction — cart cleanup, address-book erasure and the rest
  * either all happen or none do, and a crash mid-cascade no longer leaves a half-erased account.
  *
@@ -75,8 +75,8 @@ const runAfterErase = (userId: string, deferred: readonly AfterErase[]): Promise
  * `revokeAllOf`, not a single tenant-scoped `revokeRole`: an account can hold a platform seat
  * alongside its tenant one, and either row surviving the user it points at is an erasure gap.
  * `revokeAllOf` stays outside the transaction below: membership lives in `access`'s own
- * collection, and DDD-D6 scoped the cascade to the six modules that hold personal data, not to
- * every write a hard delete makes. Only the hard path touches either, since a soft delete is a
+ * collection, and the cascade is scoped to the modules that hold personal data, not to every
+ * write a hard delete makes. Only the hard path touches either, since a soft delete is a
  * restore waiting to happen.
  *
  * @param context - who did this. Absent for a caller with no request behind it that also has no

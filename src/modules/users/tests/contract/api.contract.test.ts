@@ -210,7 +210,7 @@ describe('POST /users', () => {
 describe('PUT /users/{id}', () => {
     // A PUT body IS the new resource (RFC 9110 §9.3.4) — every omitted optional field is
     // cleared, not left alone. `password` and `imageUrl` are the exceptions: the first keeps its
-    // own flow, the second belongs to an upload (WM-D5), so both are left out of this body and
+    // own flow, the second belongs to an upload, so both are left out of this body and
     // both survive it.
     it('replaces every writable field, clearing every omitted optional one', async () => {
         const { bearer } = await authenticateAs('admin');

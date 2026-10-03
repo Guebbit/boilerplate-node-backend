@@ -1,6 +1,6 @@
 /**
  * @module
- * DDD-D6: the `personalData.erase` registry, as this module sees it: supplied once at boot,
+ * The `personalData.erase` registry, as this module sees it: supplied once at boot,
  * never assembled here. `users` cannot import `src/modules/*` to collect every module's manifest
  * entry itself — the same wall `@modules/account/services/personal-data-registry.ts` is built
  * around — so `./module.ts`'s `onRegistered` hook builds the list with

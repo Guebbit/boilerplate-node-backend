@@ -1,9 +1,9 @@
 /**
  * @module
  * `userService.findByOAuthIdentity` — the case-1 lookup `account/services/oauth.ts` runs first, on
- * every callback. B24: it used to match on `oauthAccounts` alone, so an account deactivated or
- * soft-deleted after linking a provider still resolved here and walked straight into a session.
- * Filtered the same way `findForLogin` already is.
+ * every callback. Filtered the same way `findForLogin` is: matching on `oauthAccounts` alone would
+ * let an account deactivated or soft-deleted after linking a provider resolve here and walk
+ * straight into a session.
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, userRepository } from '@modules/users/tests/factories';

@@ -49,7 +49,7 @@ router.delete('/', requirePermission('users.any.delete'), deleteUsers);
 // GET /users/:id — never Redis-cached, same reasoning as the search routes above.
 router.get('/:id', requirePermission('users.any.read'), privateNoCache, getUserItem);
 
-// PUT /users/:id (replace) and PATCH /users/:id (merge)
+// PUT /users/:id — replace the user.
 router.put(
     '/:id',
     requirePermission('users.any.update'),
@@ -57,6 +57,8 @@ router.put(
     upload.image(),
     replaceUser
 );
+
+// PATCH /users/:id — merge the fields sent.
 router.patch(
     '/:id',
     requirePermission('users.any.update'),

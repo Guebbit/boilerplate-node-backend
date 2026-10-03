@@ -415,7 +415,7 @@ describe('userService.create', () => {
         expect(await userRepository.findOne({ email: 'never-created@example.com' })).toBeNull();
     });
 
-    // B25: this ran on `update` already, but never on `create` — an admin could hand a brand-new
+    // This ran on `update` already, but never on `create` — an admin could hand a brand-new
     // account a password already on every breach list, the exact exposure the update path closes.
     it('rejects a breached password with 422, and creates no user row', async () => {
         const result = await userService.create(
@@ -444,7 +444,7 @@ describe('userService.create', () => {
             // `password` is `required: true` at the Mongoose layer (see `./model`) regardless of
             // what the contract allows, so a create with no password still has to write SOMETHING.
             // `sendSetupEmail: true` is what makes an absent password valid input at all — see the
-            // rejection case below (T13).
+            // rejection case below.
             const user = await expectCreated(
                 {
                     email: 'no-password@example.com',
@@ -459,7 +459,7 @@ describe('userService.create', () => {
             expect(stored?.password).not.toBe('');
         });
 
-        it('is refused with 422 when there is neither a password nor a way to set one (T13)', async () => {
+        it('is refused with 422 when there is neither a password nor a way to set one', async () => {
             // Previously enforced only in the controller (`create-user.ts`) — a caller reaching
             // `userService.create` directly could still produce an account nobody can ever log
             // into. The invariant now lives where every caller has to cross it.
@@ -618,7 +618,7 @@ describe('userService.updateById', () => {
     });
 
     /*
-     * B21: `data.imageUrl !== undefined` is never a safe "was a new image uploaded" check — an
+     * `data.imageUrl !== undefined` is never a safe "was a new image uploaded" check — an
      * empty string reaching the service must keep the stored avatar, the same as an absent one.
      */
     it('keeps the avatar when an update carries an empty-string imageUrl', async () => {
@@ -840,7 +840,7 @@ describe('userService.removeById', () => {
         expect((result as ResponseReject).status).toBe(409);
     });
 
-    // B11: the admin-facing audit relocated from `createDeleteController`/
+    // The admin-facing audit relocated from `createDeleteController`/
     // `createRestoreController` into this service, matching every other module's write path.
     // These three pin that the same rows still land, from the new layer.
     it('audits ADMIN_USER_SOFT_DELETED for an admin-context soft delete', async () => {
@@ -971,7 +971,7 @@ describe('userService.remove', () => {
         expect(await userRepository.findById(id)).toBeNull();
     });
 
-    // T6: a hard delete with no audit context (every HTTP-driven caller) must NOT record a
+    // A hard delete with no audit context (every HTTP-driven caller) must NOT record a
     // system row — `createDeleteController`'s own spec already records one, and a second row
     // here would double the audit trail for the exact same delete.
     it('records no audit row when called with no context', async () => {
@@ -983,7 +983,7 @@ describe('userService.remove', () => {
         expect(auditSpy).not.toHaveBeenCalled();
     });
 
-    // T6: the inactivity reaper is the one caller with no request behind it, and passes its own
+    // The inactivity reaper is the one caller with no request behind it, and passes its own
     // system context — this is the row that closes the "reaper writes no audit row" gap.
     it('records SYSTEM_USER_ERASED when hard-deleted with a system audit context', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
@@ -1019,7 +1019,7 @@ describe('userService.remove', () => {
         );
     });
 
-    // DDD-D6: the erasure cascade and the document delete run in one transaction — a failure
+    // The erasure cascade and the document delete run in one transaction — a failure
     // ANYWHERE in it must roll back the whole thing, not leave the user gone with some of the
     // cascade already committed, or the user still there with part of the cascade already run.
     describe('atomicity of the erasure cascade', () => {

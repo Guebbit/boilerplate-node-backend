@@ -22,7 +22,7 @@ import './events';
 import { usersConfig } from './config';
 
 /**
- * DDD-D6: resolves every module's `personalData.erase` hook once every module is known, and
+ * Resolves every module's `personalData.erase` hook once every module is known, and
  * hands the list to `./services/remove.ts`'s hard-delete path through `./erasure-registry.ts` — the same
  * pattern `account/module.ts`'s `onRegistered` follows for `personalData` export sections.
  *
