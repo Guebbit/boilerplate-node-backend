@@ -11,7 +11,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { cookieOf } from '@kernel/cookies';
+import { cookieOf } from '@infrastructure/http/cookies';
 import { secureCookieOptions } from '../session/cookies';
 
 /** The MFA challenge cookie — single-attempt, cleared once the challenge is spent. */
