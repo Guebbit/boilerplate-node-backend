@@ -58,6 +58,8 @@ export interface Operation {
     operationId?: string;
     /** Path parameter names, in declaration order. */
     pathParameters: string[];
+    /** Each path parameter's value schema, `$ref` resolved; absent where the spec declares none. */
+    pathParameterSchemas: Record<string, SchemaNode | undefined>;
     /** Query parameters, `$ref`s resolved — the path item's own first, then the operation's. */
     queryParameters: QueryParameter[];
     /** Resolved `application/json` request body schema, when the operation takes one. */
@@ -183,12 +185,18 @@ export const resolveSchema = (
 };
 
 /**
- * The query parameters of one operation, `$ref`s into `components.parameters` resolved.
+ * The parameters of one operation that sit in `location`, `$ref`s into `components.parameters`
+ * resolved.
  *
  * @param declared - the path item's `parameters` followed by the operation's own
  * @param spec - the document the references point into
+ * @param location - `query` or `path`
  */
-const queryParametersOf = (declared: ParameterObject[], spec: SpecDocument): QueryParameter[] =>
+const parametersIn = (
+    declared: ParameterObject[],
+    spec: SpecDocument,
+    location: 'query' | 'path'
+): ParameterObject[] =>
     declared
         .map((parameter) =>
             parameter.$ref
@@ -197,12 +205,20 @@ const queryParametersOf = (declared: ParameterObject[], spec: SpecDocument): Que
                   ]
                 : parameter
         )
-        .filter((parameter): parameter is ParameterObject => parameter?.in === 'query')
-        .map((parameter) => ({
-            name: String(parameter.name),
-            required: parameter.required === true,
-            schema: resolveSchema(parameter.schema, spec)
-        }));
+        .filter((parameter): parameter is ParameterObject => parameter?.in === location);
+
+/**
+ * The query parameters of one operation, `$ref`s into `components.parameters` resolved.
+ *
+ * @param declared - the path item's `parameters` followed by the operation's own
+ * @param spec - the document the references point into
+ */
+const queryParametersOf = (declared: ParameterObject[], spec: SpecDocument): QueryParameter[] =>
+    parametersIn(declared, spec, 'query').map((parameter) => ({
+        name: String(parameter.name),
+        required: parameter.required === true,
+        schema: resolveSchema(parameter.schema, spec)
+    }));
 
 /** One response header as an operation writes it: inline, or a `$ref` into `components.headers`. */
 interface HeaderReference {
@@ -277,18 +293,23 @@ export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => 
                     | undefined
             )?.content;
 
+            const declared = [
+                ...((pathItem.parameters as ParameterObject[] | undefined) ?? []),
+                ...((operation.parameters as ParameterObject[] | undefined) ?? [])
+            ];
+
             operations.push({
                 path: pathName,
                 method,
                 operationId: operation.operationId as string | undefined,
                 pathParameters: [...pathName.matchAll(/{(\w+)}/g)].map(([, name]) => name),
-                queryParameters: queryParametersOf(
-                    [
-                        ...((pathItem.parameters as ParameterObject[] | undefined) ?? []),
-                        ...((operation.parameters as ParameterObject[] | undefined) ?? [])
-                    ],
-                    spec
+                pathParameterSchemas: Object.fromEntries(
+                    parametersIn(declared, spec, 'path').map((parameter) => [
+                        String(parameter.name),
+                        resolveSchema(parameter.schema, spec)
+                    ])
                 ),
+                queryParameters: queryParametersOf(declared, spec),
                 bodySchema: resolveSchema(content?.['application/json']?.schema, spec),
                 mergePatchSchema: resolveSchema(
                     content?.['application/merge-patch+json']?.schema,

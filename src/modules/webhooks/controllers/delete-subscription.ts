@@ -7,7 +7,8 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/http/request';
+import { tenantCallerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { webhooksService } from '../services';
 
@@ -16,10 +17,8 @@ import { webhooksService } from '../services';
  * Permanently removes the subscription. Its delivery log is left in place.
  */
 export const deleteWebhookSubscription = (request: Request<{ id: string }>, response: Response) => {
-    // 'path': this route carries no body — params-only, unlike `write`'s params-then-body.
-    // Already validated as a well-formed ObjectId here, so `removeSubscription` below can never
-    // raise the CastError a malformed one would — no not-found mapping needed on its catch.
-    const id = extractAndValidateId(request, response, 'path');
+    // A malformed id answers as an unknown one, before the database is asked.
+    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
     if (!id) return;
 
     return webhooksService

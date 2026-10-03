@@ -10,20 +10,23 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
-import { catchAsNotFound, refused } from '@infrastructure/http/controller';
+import { catchAs, refused } from '@infrastructure/http/controller';
+import { requireId } from '@infrastructure/http/ids';
 import { feedbackRequestService } from '../service';
 
 /**
  * DELETE /feedback/:id (admin)
- * Permanently removes a feedback ticket. A malformed or unknown id both answer 404 — the same
- * status `createDeleteController` gives its own CastError, rather than the generic 422 the shared
- * database-error interpreter would otherwise answer for a bad ObjectId.
+ * Permanently removes a feedback ticket. A malformed or unknown id both answer 404.
  */
-export const deleteFeedback = (request: Request<{ id: string }>, response: Response) =>
-    feedbackRequestService
-        .remove(request.params.id, callerContextOf(request))
+export const deleteFeedback = (request: Request<{ id: string }>, response: Response) => {
+    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    if (!id) return Promise.resolve();
+
+    return feedbackRequestService
+        .remove(id, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             successResponse(response, undefined, 200, result.message);
         })
-        .catch(catchAsNotFound(response, 'deleteFeedback', 'generic.error-not-found'));
+        .catch(catchAs(response, 'deleteFeedback'));
+};

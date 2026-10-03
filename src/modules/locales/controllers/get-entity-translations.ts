@@ -7,6 +7,8 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs, refused } from '@infrastructure/http/controller';
+import { requireId } from '@infrastructure/http/ids';
+import { t } from '@infrastructure/i18n';
 import { localeService } from '../services';
 
 /**
@@ -16,12 +18,19 @@ import { localeService } from '../services';
 export const getEntityTranslations = (
     request: Request<{ entityType: string; id: string }>,
     response: Response
-) =>
-    localeService
-        .getEntityTranslations(request.params.entityType, request.params.id)
+) => {
+    const { entityType, id: entityId } = request.params;
+    const id = requireId(request, response, {
+        notFound: () => t('locales.error-entity-not-found', { entityType, entityId })
+    });
+    if (!id) return Promise.resolve();
+
+    return localeService
+        .getEntityTranslations(entityType, id)
         .then((result) => {
             if (refused(response, result)) return;
 
             return successResponse(response, result.data);
         })
         .catch(catchAs(response, 'getEntityTranslations'));
+};

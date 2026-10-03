@@ -160,11 +160,10 @@ describe('GET /orders/{id}', () => {
     });
 
     /*
-     * One case per role: both now run the identical query, but the controller's own
-     * `isValidObjectId` pre-check is what actually keeps a malformed id at 404 rather than the
-     * 422 `databaseErrorInterpreter` would otherwise give a `BSONError` — see `get-order-item.ts`.
-     * Both roles need their own case, or a regression that skips the pre-check on either route
-     * has nothing to catch it.
+     * One case per role: both run the identical query, but `requireId` is what keeps a malformed
+     * id at 404 rather than the 422 `databaseErrorInterpreter` would otherwise give a `BSONError`
+     * — see `get-order-item.ts`. Both roles need their own case, or a regression that skips the
+     * check on either route has nothing to catch it.
      */
     it.each([['admin'], ['user']] as const)(
         '404s on a malformed id for a %s caller',

@@ -16,8 +16,7 @@ import {
     type ResponseReject
 } from './response';
 import { rejectDatabaseError } from './errors';
-import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
-import { t } from '@infrastructure/i18n';
+import { malformedIdIssues } from './ids';
 
 /**
  * The operation name printed in a stack trace, an audit/log line and the generated
@@ -102,26 +101,6 @@ export const catchAs =
     };
 
 /**
- * {@link catchAs}'s counterpart for a route where a malformed id and an unknown one answer the
- * SAME 404 — Mongoose turns a badly-shaped id into a `CastError` rather than a miss, and the two
- * look identical from outside, so both get `notFoundKey` instead of the 422
- * `rejectDatabaseError`'s own interpreter would otherwise give a `CastError`.
- *
- * @param response - the express response
- * @param context - developer-facing operation name, recorded in the log line for any OTHER error
- * @param notFoundKey - the i18n key to answer with when the error is a bad ObjectId
- */
-export const catchAsNotFound =
-    (response: Response, context: string, notFoundKey: string) =>
-    (error: unknown): void => {
-        if (isBadObjectId(error)) {
-            rejectResponse(response, 404, [t(notFoundKey)]);
-            return;
-        }
-        rejectDatabaseError(response, context, error);
-    };
-
-/**
  * Answer 422 for a Zod failure.
  *
  * @param response - the express response
@@ -131,8 +110,12 @@ export const rejectValidation = (response: Response, error: ZodError) =>
     rejectResponse(response, 422, validationErrors(error));
 
 /**
- * Parse a request body against its generated schema, answering 422 and returning `undefined` when
- * it does not match.
+ * Parse a request body (or a query) against its generated schema, answering 422 and returning
+ * `undefined` when it does not match.
+ *
+ * An id field the schema declares (the contract's `Id`) that is not this backend's own id is
+ * refused here too, in the same 422 and under the same `details.field`, so a bad id is one more
+ * bad field and never a database error. The path-id half of that rule is `requireId`.
  *
  * RESPONDS as well as extracts — the caller must bail out on `undefined` without touching the
  * response again: `const body = parseBody(...); if (!body) return;`
@@ -148,8 +131,12 @@ export const parseBody = <TSchema extends ZodType>(
     response: Response
 ): TSchema['_output'] | undefined => {
     const parseResult = schema.safeParse(body);
-    if (parseResult.success) return parseResult.data;
+    const refusals = parseResult.success ? [] : validationErrors(parseResult.error);
+    const flagged = new Set(refusals.map((item) => String(item.details?.field)));
+    const malformedIds = malformedIdIssues(schema, body, flagged);
 
-    rejectValidation(response, parseResult.error);
+    if (parseResult.success && malformedIds.length === 0) return parseResult.data;
+
+    rejectResponse(response, 422, [...refusals, ...malformedIds]);
     return undefined;
 };

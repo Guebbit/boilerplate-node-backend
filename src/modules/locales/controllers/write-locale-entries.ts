@@ -25,6 +25,7 @@ import type {
 } from '@types';
 import { successResponse, createdResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { localeService } from '../services';
 import { presentLocaleEntry } from '../presenters';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
@@ -69,16 +70,17 @@ export const updateLocaleEntry = (
     request: Request<{ locale: string; entryId: string }, unknown, UpdateLocaleEntryRequest>,
     response: Response
 ) => {
+    const entryId = requireId(request, response, {
+        notFound: 'locales.error-entry-not-found',
+        name: 'entryId'
+    });
+    if (!entryId) return;
+
     const parseResult = UpdateLocaleEntryBody.safeParse(request.body);
     if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
     return localeService
-        .updateEntry(
-            request.params.locale,
-            request.params.entryId,
-            parseResult.data,
-            callerContextOf(request)
-        )
+        .updateEntry(request.params.locale, entryId, parseResult.data, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

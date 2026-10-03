@@ -17,11 +17,8 @@ import type { Request, Response } from 'express';
 import type { ZodObject, ZodType } from 'zod';
 import { successResponse } from '@infrastructure/http/response';
 import { setEtag, withIfMatch } from '@infrastructure/http/preconditions';
-import {
-    extractAndValidateId,
-    readInput,
-    type RequestInputDeclaration
-} from '@infrastructure/http/request';
+import { readInput, type RequestInputDeclaration } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import {
     catchAs,
     namedHandler,
@@ -31,8 +28,33 @@ import {
     type ServiceResult
 } from '@infrastructure/http/controller';
 
+/**
+ * Where an update's row id comes from: exactly one of the two.
+ *
+ * A path param (`notFoundKey` says what a malformed or unknown one answers), or a value that is
+ * not an id the caller chose (`idFrom`): the caller's own record, a language tag.
+ */
+export type UpdateIdSource =
+    | {
+          /** The i18n key answered when the `:id` matches nothing, or is not an id at all. */
+          notFoundKey: string;
+          /** The path param carrying the id, when it is not `:id` — `'addressId'`. */
+          idParam?: string;
+          idFrom?: never;
+      }
+    | {
+          /** Where the row's id comes from, for a route with no id in its path. */
+          idFrom: (request: Request) => string;
+          notFoundKey?: never;
+          idParam?: never;
+      };
+
 /** What makes one entity's update different from another's. */
-export interface UpdateControllerSpec<TReplace extends ZodObject, TPatch extends ZodObject, TRow> {
+export type UpdateControllerSpec<
+    TReplace extends ZodObject,
+    TPatch extends ZodObject,
+    TRow
+> = UpdateIdSource & {
     /** The entity, lower-case and singular — `'user'`. Names both handlers. */
     entity: string;
     /** The PUT body's schema — every writable field, required ones genuinely required. */
@@ -57,11 +79,6 @@ export interface UpdateControllerSpec<TReplace extends ZodObject, TPatch extends
      */
     present: (row: TRow, request: Request) => unknown;
     /**
-     * Where the row's id comes from when it is not a validated `:id` path param — the caller's own
-     * record, or a differently named param. Omit it for `/x/:id`, which 422s a malformed id.
-     */
-    idFrom?: (request: Request) => string;
-    /**
      * PUT only, after the omitted fields are filled: clear what the schema alone cannot name — the
      * stored keys of a keyed map the body left out (a product's `translations` locales), each set
      * to `null`, the signal a PATCH would have used. Omit it when the resource has no such map.
@@ -74,7 +91,7 @@ export interface UpdateControllerSpec<TReplace extends ZodObject, TPatch extends
      * clears. Omit it for a resource with no such field.
      */
     keptWhenOmitted?: readonly string[];
-}
+};
 
 /**
  * The fields a PUT clears by omitting them: every field whose schema accepts `null`. A field that
@@ -107,26 +124,41 @@ export const fillOmittedWithNull = (
 };
 
 /**
+ * The row id this update acts on, or `undefined` once the refusal has been sent.
+ *
+ * @param source - where the controller's spec says the id comes from
+ * @param request - the incoming request
+ * @param response - the express response, used only on failure
+ */
+const idOf = (source: UpdateIdSource, request: Request, response: Response): string | undefined =>
+    source.idFrom
+        ? source.idFrom(request)
+        : requireId(request, response, { notFound: source.notFoundKey, name: source.idParam });
+
+/**
  * Build a module's update controller: one PUT (replace) handler and one PATCH (merge) handler,
  * sharing everything but which schema validates the body and whether omitted fields are filled.
  *
  * @param spec - the things that differ per entity
  * @returns `{ replace, update }` — two named express handlers over one pipeline
  */
-export const createUpdateController = <TReplace extends ZodObject, TPatch extends ZodObject, TRow>({
-    entity,
-    replaceSchema,
-    patchSchema,
-    input,
-    update,
-    present,
-    idFrom,
-    completeReplace,
-    keptWhenOmitted = []
-}: UpdateControllerSpec<TReplace, TPatch, TRow>): {
+export const createUpdateController = <TReplace extends ZodObject, TPatch extends ZodObject, TRow>(
+    spec: UpdateControllerSpec<TReplace, TPatch, TRow>
+): {
     replace: (request: Request, response: Response) => Promise<void>;
     update: (request: Request, response: Response) => Promise<void>;
 } => {
+    const {
+        entity,
+        replaceSchema,
+        patchSchema,
+        input,
+        update,
+        present,
+        completeReplace,
+        keptWhenOmitted = []
+    } = spec;
+
     // Derived once per controller, not per request — the schema never changes.
     const replaceFills = clearableFields(replaceSchema).filter(
         (field) => !keptWhenOmitted.includes(field)
@@ -145,7 +177,8 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
             complete?: UpdateControllerSpec<TReplace, TPatch, TRow>['completeReplace']
         ) =>
         (request: Request, response: Response): Promise<void> => {
-            const id = idFrom ? idFrom(request) : extractAndValidateId(request, response, 'path');
+            // A malformed path id answers as an unknown one, before the body is even read.
+            const id = idOf(spec, request, response);
             if (!id) return Promise.resolve();
 
             // `create` is `readInput`'s body-only surface: the id was resolved above, and a path

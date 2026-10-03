@@ -10,19 +10,17 @@ import { orderService } from '@modules/orders';
 import { invoicingService } from '../services';
 import { presentCreditNoteSummary } from '../presenter';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { isValidObjectId } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { catchAs } from '@infrastructure/http/controller';
 import type { CreditNoteSummary } from '@types';
 
 /** GET /orders/:id/credit-notes — non-admin callers see only their own order's. */
 export const getOrderCreditNotes = (request: Request<{ id?: string }>, response: Response) => {
-    if (!isValidObjectId(request.params.id)) {
-        rejectResponse(response, 404, [t('orders.not-found')]);
-        return;
-    }
+    const id = requireId(request, response, { notFound: 'orders.not-found' });
+    if (!id) return;
 
     return orderService
-        .getById(request.params.id, orderService.callerScope(request.authContext))
+        .getById(id, orderService.callerScope(request.authContext))
         .then((order) => {
             if (!order) {
                 rejectResponse(response, 404, [t('orders.not-found')]);

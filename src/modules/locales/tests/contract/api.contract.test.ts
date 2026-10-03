@@ -683,7 +683,7 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
         expect(response.status).toBe(404);
     });
 
-    it('422s on a malformed entry id rather than answering 500', async () => {
+    it('404s on a malformed entry id, as for an unknown one, rather than answering 500', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
@@ -692,10 +692,10 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
             .set('Authorization', bearer)
             .send({ value: 'x' });
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(404);
     });
 
-    it('422s on a malformed entry id for the delete route too', async () => {
+    it('404s on a malformed entry id for the delete route too', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
@@ -703,7 +703,7 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
             .delete('/locales/pt/entries/not-an-id')
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(404);
     });
 
     it('403s for a non-admin caller', async () => {

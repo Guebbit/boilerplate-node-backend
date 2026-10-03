@@ -8,7 +8,8 @@ import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { createdResponse, successResponse } from '@infrastructure/http/response';
 import type { CartResponse, UpdateCartItemByIdRequest } from '@types';
-import { requireObjectId, readInput, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -23,14 +24,19 @@ export const putCartItem = (
 ) => {
     const userId = request.authContext!.id;
 
+    // productId is the path segment; the body carries only the quantity. A malformed one answers
+    // as the unknown product the service would have found.
+    const productId = requireId(request, response, {
+        notFound: 'products.not-found',
+        name: 'productId',
+        surface: 'write'
+    });
+    if (!productId) return;
+
     const body = parseBody(UpdateCartItemByIdBody, request.body, response);
     if (!body) return;
 
     const { quantity } = body;
-    // productId is the path segment; the body carries only the quantity.
-    const { productId } = readInput(request, { surface: 'write', ids: ['productId'] });
-
-    if (!requireObjectId(response, productId)) return;
 
     return cartService
         .cartItemUpdateQuantity(userId, productId, quantity, callerContextOf(request))

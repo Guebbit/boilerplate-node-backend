@@ -8,17 +8,18 @@
 
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { callerContextOf, extractAndValidateId } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { readUploadedImage } from '@infrastructure/http/uploads';
 import { t } from '@infrastructure/i18n';
-import { catchAsNotFound, namedHandler, refused } from '@infrastructure/http/controller';
+import { catchAs, namedHandler, refused } from '@infrastructure/http/controller';
 import { exampleService } from '../services';
 
 /** PUT /examples/:id/cover — replace the cover with the uploaded image. */
 export const putExampleCover = namedHandler(
     'putExampleCover',
     (request: Request, response: Response) => {
-        const id = extractAndValidateId(request, response, 'path');
+        const id = requireId(request, response, { notFound: 'example.not-found' });
         if (!id) return Promise.resolve();
 
         const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } =
@@ -41,7 +42,7 @@ export const putExampleCover = namedHandler(
             })
             .catch((error: unknown) =>
                 discard().then(() => {
-                    catchAsNotFound(response, 'putExampleCover', 'example.not-found')(error);
+                    catchAs(response, 'putExampleCover')(error);
                 })
             );
     }

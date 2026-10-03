@@ -11,7 +11,7 @@ import type { CreateOrderRequest } from '@types';
 import { orderService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 import { orderCreatedTotal } from '../metrics';
-import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { respondWithOrder } from './respond';
 
 /** `POST /orders` — create a new order from an explicit payload (admin). */
@@ -19,13 +19,10 @@ export const createOrder = (
     request: Request<unknown, unknown, CreateOrderRequest>,
     response: Response
 ): Promise<void> => {
-    const parseResult = CreateOrderBody.safeParse(request.body);
-    if (!parseResult.success) {
-        rejectValidation(response, parseResult.error);
-        return Promise.resolve();
-    }
+    const body = parseBody(CreateOrderBody, request.body, response);
+    if (!body) return Promise.resolve();
 
-    const { userId, email, items } = parseResult.data;
+    const { userId, email, items } = body;
 
     return orderService
         .create(userId, email, items, callerContextOf(request))

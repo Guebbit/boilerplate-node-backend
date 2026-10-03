@@ -490,6 +490,9 @@ components:
             description: Optional override; server may clamp to a max
         Id:
             type: string
+            minLength: 1
+            maxLength: 64
+            pattern: '^[0-9A-Za-z_-]+$'
             description: Resource identifier
         Text:
             type: string

@@ -6,21 +6,18 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
-import { callerContextOf, isValidObjectId } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { ReceiveReturnBody } from '@api/schemas.zod';
 import type { Return } from '@types';
 import { returnService } from '../services';
 
 /** Handles `POST /returns/:id/receive`. */
 export const postReturnReceive = (request: Request<{ id?: string }>, response: Response) => {
-    const { id } = request.params;
-    if (!isValidObjectId(id)) {
-        rejectResponse(response, 404, [t('returns.not-found')]);
-        return;
-    }
+    const id = requireId(request, response, { notFound: 'returns.not-found' });
+    if (!id) return;
     // The body is optional: receiving with nothing to deduct is the common case.
     const body = parseBody(ReceiveReturnBody, request.body ?? {}, response);
     if (!body) return;

@@ -9,18 +9,25 @@ import type { Request, Response } from 'express';
 import type { Shipment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { ShipOrderBody } from '@api/schemas.zod';
 import { deliveryService } from '../service';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /** Handles `POST /delivery/order/:orderId/ship`. */
 export const postShipOrder = (request: Request<{ orderId?: string }>, response: Response) => {
+    const orderId = requireId(request, response, {
+        notFound: 'delivery.order-not-found',
+        name: 'orderId'
+    });
+    if (!orderId) return;
+
     const body = parseBody(ShipOrderBody, request.body ?? {}, response);
     if (!body) return;
 
     return deliveryService
         .recordShipment(
-            String(request.params.orderId),
+            orderId,
             body.trackingCode,
             callerContextOf(request),
             body.forced,

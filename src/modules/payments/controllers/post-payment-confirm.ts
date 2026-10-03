@@ -16,14 +16,17 @@ import { paymentConfirmTotal } from '../metrics';
 import { paymentService } from '../services';
 import { presentPayment } from '../presenter';
 import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /** Handles `POST /payments/:id/confirm`. */
 export const postPaymentConfirm = (request: Request<{ id?: string }>, response: Response) => {
+    const paymentId = requireId(request, response, { notFound: 'payments.not-found' });
+    if (!paymentId) return;
+
     const body = parseBody(ConfirmPaymentBody, request.body, response);
     if (!body) return;
 
-    const paymentId = String(request.params.id);
     return paymentService
         .confirmPayment(
             paymentId,

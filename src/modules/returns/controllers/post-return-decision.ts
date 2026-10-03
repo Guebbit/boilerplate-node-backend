@@ -5,21 +5,18 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
-import { callerContextOf, isValidObjectId } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { DeclineReturnBody } from '@api/schemas.zod';
 import type { Return } from '@types';
 import { returnService } from '../services';
 
 /** Handles `POST /returns/:id/approve`. */
 export const postReturnApprove = (request: Request<{ id?: string }>, response: Response) => {
-    const { id } = request.params;
-    if (!isValidObjectId(id)) {
-        rejectResponse(response, 404, [t('returns.not-found')]);
-        return;
-    }
+    const id = requireId(request, response, { notFound: 'returns.not-found' });
+    if (!id) return;
     const { authContext } = request;
     // `isAuth` is mounted above this route, so a caller is always present here.
     if (!authContext) return;
@@ -40,11 +37,8 @@ export const postReturnApprove = (request: Request<{ id?: string }>, response: R
 
 /** Handles `POST /returns/:id/decline`. */
 export const postReturnDecline = (request: Request<{ id?: string }>, response: Response) => {
-    const { id } = request.params;
-    if (!isValidObjectId(id)) {
-        rejectResponse(response, 404, [t('returns.not-found')]);
-        return;
-    }
+    const id = requireId(request, response, { notFound: 'returns.not-found' });
+    if (!id) return;
     const body = parseBody(DeclineReturnBody, request.body, response);
     if (!body) return;
     const { authContext } = request;

@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { orderService } from '../services';
 import { rejectResponse } from '@infrastructure/http/response';
-import { isValidObjectId } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { catchAs } from '@infrastructure/http/controller';
 import { setEtag } from '@infrastructure/http/preconditions';
 import { respondWithOrder } from './respond';
@@ -25,13 +25,11 @@ export const getOrderItem = (
     request: Request<{ id?: string }>,
     response: Response
 ): Promise<void> | void => {
-    if (!isValidObjectId(request.params.id)) {
-        rejectResponse(response, 404, [t('orders.not-found')]);
-        return;
-    }
+    const id = requireId(request, response, { notFound: 'orders.not-found' });
+    if (!id) return;
 
     return orderService
-        .getById(request.params.id, orderService.callerScope(request.authContext))
+        .getById(id, orderService.callerScope(request.authContext))
         .then((order) => {
             if (!order) {
                 rejectResponse(response, 404, [t('orders.not-found')]);

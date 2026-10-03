@@ -20,11 +20,9 @@ export const { replace: replaceAddress, update: updateAddress } = createUpdateCo
     entity: 'address',
     replaceSchema: ReplaceAddressBody,
     patchSchema: UpdateAddressBody,
-    // The param is `:addressId`, not the `:id` the factory would validate. No ObjectId check:
-    // `updateEntry` matches entries by a plain string compare, so a malformed id misses every
-    // entry and answers the ordinary 404. `String(...)`: Express types a param as
-    // `string | string[]`, and this one never repeats.
-    idFrom: (request) => String(request.params.addressId),
+    // The param is `:addressId`, not the `:id` the factory reads by default.
+    notFoundKey: 'addresses.not-found',
+    idParam: 'addressId',
     update: (id, changes, request) => addressUpdate(request.authContext!.id, id, changes),
     present: (view) => view
 });

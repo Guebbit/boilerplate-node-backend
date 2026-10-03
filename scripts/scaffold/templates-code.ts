@@ -562,6 +562,7 @@ import { present${names.entity} } from '../presenter';
 export const { replace: replace${names.entity}, update: update${names.entity} } =
     createUpdateController({
         entity: '${names.entityCamel}',
+        notFoundKey: 'generic.error-not-found',
         replaceSchema: Replace${names.entity}Body,
         patchSchema: Update${names.entity}Body,
         update: (id, changes${options.audit ? ', request' : ''}) =>
@@ -582,21 +583,26 @@ export const deleteController = (names: ModuleNames, options: ScaffoldOptions): 
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-${callerImport(options)}import { catchAsNotFound, refused } from '@infrastructure/http/controller';
+${callerImport(options)}import { catchAs, refused } from '@infrastructure/http/controller';
+import { requireId } from '@infrastructure/http/ids';
 import { ${names.entityCamel}Service } from '../service';
 
 /**
  * DELETE ${names.basePath}/:id (admin)
  * A malformed or unknown id both answer 404.
  */
-export const delete${names.entity} = (request: Request<{ id: string }>, response: Response) =>
-    ${names.entityCamel}Service
-        .remove(request.params.id${contextArgument(options)})
+export const delete${names.entity} = (request: Request<{ id: string }>, response: Response) => {
+    const id = requireId(request, response, { notFound: 'generic.error-not-found' });
+    if (!id) return Promise.resolve();
+
+    return ${names.entityCamel}Service
+        .remove(id${contextArgument(options)})
         .then((result) => {
             if (refused(response, result)) return;
             successResponse(response, undefined, 200, result.message);
         })
-        .catch(catchAsNotFound(response, 'delete${names.entity}', 'generic.error-not-found'));
+        .catch(catchAs(response, 'delete${names.entity}'));
+};
 `;
 
 /** The fixture builder. */

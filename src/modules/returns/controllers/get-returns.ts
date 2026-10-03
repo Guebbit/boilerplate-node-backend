@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { catchAs, rejectValidation } from '@infrastructure/http/controller';
+import { catchAs, parseBody } from '@infrastructure/http/controller';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { ListReturnsQueryParams } from '@api/schemas.zod';
 import { returnService } from '../services';
@@ -19,15 +19,15 @@ const listReturnsQuerySchema = ListReturnsQueryParams.extend({
 
 /** Handles `GET /returns`. */
 export const getReturns = (request: Request, response: Response) => {
-    const parsed = listReturnsQuerySchema.safeParse(request.query);
-    if (!parsed.success) return rejectValidation(response, parsed.error);
+    const parsed = parseBody(listReturnsQuerySchema, request.query, response);
+    if (!parsed) return;
 
     const { authContext } = request;
     // `isAuth` is mounted above this route, so a caller is always present here.
     if (!authContext) return;
 
     return returnService
-        .listReturns(parsed.data, authContext)
+        .listReturns(parsed, authContext)
         .then((page) => {
             successResponse(response, page);
         })

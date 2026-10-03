@@ -11,16 +11,10 @@
  * defaulted it to `{}`), so a body-less `DELETE /cart/:productId` is a 500 waiting to happen.
  */
 import { asStub } from '@tests/stub';
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 import { asCustomer } from '../../../support/callers';
 import { callerInScope } from '@kernel/permissions';
-import {
-    callerContextOf,
-    extractAndValidateId,
-    isValidObjectId,
-    parseFormBoolean,
-    readInput
-} from '@infrastructure/http/request';
+import { callerContextOf, parseFormBoolean, readInput } from '@infrastructure/http/request';
 
 /** A valid 24-hex ObjectId, used wherever the format has to pass. */
 const OBJECT_ID = '65dc8a99604c307b702b5ccc';
@@ -53,22 +47,6 @@ const makeRequest = (
                   ? type
                   : false
     });
-
-/** Response stand-in capturing the status/payload `rejectResponse` writes. */
-const makeResponse = () => {
-    const sent: { status?: number; payload?: unknown } = {};
-    const response = asStub<Response>({
-        status(code: number) {
-            sent.status = code;
-            return this;
-        },
-        json(payload: unknown) {
-            sent.payload = payload;
-            return this;
-        }
-    });
-    return { response, sent };
-};
 
 describe('readInput', () => {
     describe('precedence', () => {
@@ -566,22 +544,6 @@ describe('readInput', () => {
     });
 });
 
-describe('isValidObjectId', () => {
-    it('accepts a well-formed ObjectId', () => {
-        expect(isValidObjectId(OBJECT_ID)).toBe(true);
-    });
-
-    it('rejects undefined, empty and malformed values', () => {
-        expect(isValidObjectId(undefined)).toBe(false);
-        expect(isValidObjectId('')).toBe(false);
-        expect(isValidObjectId('not-an-id')).toBe(false);
-    });
-
-    it('rejects a 12-character string, which Mongoose alone would accept', () => {
-        expect(isValidObjectId('abcdefghijkl')).toBe(false);
-    });
-});
-
 describe('parseFormBoolean', () => {
     it.each(['true', '1', 'on', 'yes', ' TRUE '])('reads %p as true', (value) => {
         expect(parseFormBoolean(value)).toBe(true);
@@ -608,38 +570,6 @@ describe('parseFormBoolean', () => {
     it('leaves a non-string value untouched', () => {
         expect(parseFormBoolean(true)).toBe(true);
         expect(parseFormBoolean(undefined)).toBe(undefined);
-    });
-});
-
-describe('extractAndValidateId', () => {
-    it('returns the id from the route param', () => {
-        const { response } = makeResponse();
-        const request = makeRequest({ params: { id: OBJECT_ID } });
-
-        expect(extractAndValidateId(request, response)).toBe(OBJECT_ID);
-    });
-
-    it('falls back to the body when there is no route param', () => {
-        const { response } = makeResponse();
-        const request = makeRequest({ body: { id: OBJECT_ID }, contentType: JSON_TYPE });
-
-        expect(extractAndValidateId(request, response)).toBe(OBJECT_ID);
-    });
-
-    it('answers 422 for a malformed id instead of letting Mongoose throw a 500', () => {
-        const { response, sent } = makeResponse();
-        const request = makeRequest({ params: { id: 'not-an-id' } });
-
-        expect(extractAndValidateId(request, response)).toBeUndefined();
-        expect(sent.status).toBe(422);
-    });
-
-    it('answers 422, not 500, when the request has no body and no param', () => {
-        const { response, sent } = makeResponse();
-        const request = makeRequest();
-
-        expect(extractAndValidateId(request, response)).toBeUndefined();
-        expect(sent.status).toBe(422);
     });
 });
 

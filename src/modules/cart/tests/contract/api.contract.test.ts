@@ -350,7 +350,8 @@ describe('DELETE /cart/{productId}', () => {
 
         const response = await api().delete('/cart/not-an-id').set('Authorization', bearer);
 
-        expect(response.status).toBe(422);
+        // A path id: the same 404 a product that is not in the cart gets.
+        expect(response.status).toBe(404);
     });
 });
 
@@ -778,6 +779,6 @@ describe('POST /cart/reorder/{orderId}', () => {
 
         const response = await api().post('/cart/reorder/not-an-id').set('Authorization', bearer);
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(404);
     });
 });

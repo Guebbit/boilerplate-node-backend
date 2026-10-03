@@ -11,22 +11,18 @@ import { t } from '@infrastructure/i18n';
 import { orderService } from '@modules/orders';
 import { invoicingService } from '../services';
 import { rejectResponse } from '@infrastructure/http/response';
-import { isValidObjectId } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { catchAs } from '@infrastructure/http/controller';
 import { ERROR_CODES } from '@api/error-codes';
 
 /** GET /orders/:id/invoice — the invoice PDF; non-admin callers see only their own order's. */
 export const getOrderInvoice = (request: Request<{ id?: string }>, response: Response) => {
-    // 404 on an unusable id, checked before the query for the reason `get-order-item.ts` (orders)
-    // spells out: a malformed id would otherwise reject as a 422, not the 404 a lookup by id should
-    // give.
-    if (!isValidObjectId(request.params.id)) {
-        rejectResponse(response, 404, [t('orders.not-found')]);
-        return;
-    }
+    // An unusable id answers as the unknown order it is, before the query.
+    const id = requireId(request, response, { notFound: 'orders.not-found' });
+    if (!id) return;
 
     return orderService
-        .getById(request.params.id, orderService.callerScope(request.authContext))
+        .getById(id, orderService.callerScope(request.authContext))
         .then((order) => {
             if (!order) {
                 rejectResponse(response, 404, [t('orders.not-found')]);

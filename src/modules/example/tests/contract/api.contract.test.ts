@@ -18,7 +18,7 @@ import { createExample } from '../factories';
 
 setupTestDb();
 
-/** An id no ObjectId can be built from: the 422 branch of every id-taking route. */
+/** An id no ObjectId can be built from: answered as an unknown id by every id-taking route. */
 const MALFORMED_ID = 'not-an-object-id';
 
 /** A genuinely decodable PNG: an upload is digested inline when there is no broker. */
@@ -104,8 +104,8 @@ describe('GET /examples/published/{id}', () => {
         expect(await statusOf(api().get(`/examples/published/${MISSING_ID}`))).toBe(404);
     });
 
-    it('answers 422, a different answer from 404, for an id no ObjectId can be built from', async () => {
-        expect(await statusOf(api().get(`/examples/published/${MALFORMED_ID}`))).toBe(422);
+    it('answers 404, as for an id nothing holds, for an id no ObjectId can be built from', async () => {
+        expect(await statusOf(api().get(`/examples/published/${MALFORMED_ID}`))).toBe(404);
     });
 });
 
@@ -389,7 +389,7 @@ describe('PUT and PATCH /examples/{id}', () => {
         expect(response.status).toBe(200);
     });
 
-    it('answers 422 for a malformed id', async () => {
+    it('answers 404 for a malformed id, as it does for an unknown one', async () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api()
@@ -397,7 +397,7 @@ describe('PUT and PATCH /examples/{id}', () => {
             .set('Authorization', bearer)
             .send({ title: 'x' });
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(404);
     });
 
     it('answers 401 with no credentials, and 403 without a key', async () => {
@@ -455,10 +455,10 @@ describe('an id no ObjectId can be built from', () => {
         ['GET', (id: string) => api().get(`/examples/${id}`)],
         ['DELETE', (id: string) => api().delete(`/examples/${id}`)],
         ['PUT cover', (id: string) => api().put(`/examples/${id}/cover`)]
-    ] as const)('answers 422 on %s, a different answer from 404', async (_name, send) => {
+    ] as const)('answers 404 on %s, the same as for an id nothing holds', async (_name, send) => {
         const { bearer } = await authenticateAs('user');
 
-        expect(await statusOf(send(MALFORMED_ID).set('Authorization', bearer))).toBe(422);
+        expect(await statusOf(send(MALFORMED_ID).set('Authorization', bearer))).toBe(404);
     });
 });
 

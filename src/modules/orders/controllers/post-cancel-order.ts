@@ -9,6 +9,7 @@ import { orderService } from '../services';
 import type { CancelOrderRequest } from '@types';
 import { CancelOrderByIdBody } from '@api/schemas.zod';
 import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { respondWithOrder } from './respond';
 
@@ -25,6 +26,10 @@ export const postCancelOrder = (
     request: Request<{ id?: string }, unknown, CancelOrderRequest | undefined>,
     response: Response
 ): Promise<void> => {
+    // A malformed id answers as an unknown order, before the body is read.
+    const id = requireId(request, response, { notFound: 'orders.not-found' });
+    if (!id) return Promise.resolve();
+
     // Parsed, not read raw: `refund` decides whether money goes back, and a raw `"false"` is a
     // truthy string. An absent body parses as `{}`, which the schema's default turns into
     // `refund: true`.
@@ -32,12 +37,7 @@ export const postCancelOrder = (
     if (!body) return Promise.resolve();
 
     return orderService
-        .cancelById(
-            String(request.params.id),
-            request.authContext,
-            { refund: body.refund },
-            callerContextOf(request)
-        )
+        .cancelById(id, request.authContext, { refund: body.refund }, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

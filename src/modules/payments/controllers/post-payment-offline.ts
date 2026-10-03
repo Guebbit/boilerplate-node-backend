@@ -14,14 +14,21 @@ import { paymentService } from '../services';
 import { presentPayment } from '../presenter';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 
 /** Handles `POST /payments/order/:orderId/offline`. */
 export const postPaymentOffline = (request: Request<{ orderId?: string }>, response: Response) => {
+    const orderId = requireId(request, response, {
+        notFound: 'payments.order-not-found',
+        name: 'orderId'
+    });
+    if (!orderId) return;
+
     const body = parseBody(RecordOfflinePaymentBody, request.body, response);
     if (!body) return;
 
     return paymentService
-        .recordOfflinePayment(String(request.params.orderId), body, callerContextOf(request))
+        .recordOfflinePayment(orderId, body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             const payment = presentPayment(result.data);

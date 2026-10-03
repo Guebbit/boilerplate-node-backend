@@ -15,11 +15,12 @@ import { MISSING_ID } from '@tests/ids';
 setupTestDb();
 
 /**
- * An id no ObjectId can be built from — the 422 branch.
+ * An id no ObjectId can be built from.
  *
- * `Id` is a plain string in the contract, so every id-taking route makes its own Mongo-shaped
- * check and answers 422 for a malformed one. Each of those is a declared response, and a
- * declared response nothing sends is a contract nobody is holding the API to.
+ * `Id` is a storage-neutral string in the contract, so every id-taking route makes its own
+ * Mongo-shaped check and answers a malformed path id as it answers an unknown one: 404. That is a
+ * declared response, and a declared response nothing sends is a contract nobody is holding the
+ * API to.
  */
 const MALFORMED_ID = 'not-an-object-id';
 
@@ -86,7 +87,7 @@ describe('PUT /wishlist/{productId}', () => {
         const { bearer } = await authenticateAs('user');
         const response = await api().put(`/wishlist/${MALFORMED_ID}`).set('Authorization', bearer);
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(404);
     });
 
     it('matches the error contract for a product that does not exist', async () => {
@@ -124,7 +125,7 @@ describe('DELETE /wishlist/{productId}', () => {
             .delete(`/wishlist/${MALFORMED_ID}`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(404);
     });
 });
 
@@ -160,6 +161,6 @@ describe('POST /wishlist/{productId}/move-to-cart', () => {
             .post(`/wishlist/${MALFORMED_ID}/move-to-cart`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(404);
     });
 });

@@ -18,6 +18,7 @@ import { userService } from '../services';
  */
 export const { replace: replaceUser, update: updateUser } = createUpdateController({
     entity: 'user',
+    notFoundKey: 'users.not-found',
     replaceSchema: ReplaceUserByIdBody,
     patchSchema: UpdateUserByIdBody,
     // The one boolean an edit carrying an avatar (multipart) sends as a string.

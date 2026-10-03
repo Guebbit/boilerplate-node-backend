@@ -5,20 +5,16 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { catchAs, refused } from '@infrastructure/http/controller';
-import { isValidObjectId } from '@infrastructure/http/request';
+import { requireId } from '@infrastructure/http/ids';
 import type { Return } from '@types';
 import { returnService } from '../services';
 
 /** Handles `GET /returns/:id`. */
 export const getReturnById = (request: Request<{ id?: string }>, response: Response) => {
-    const { id } = request.params;
-    if (!isValidObjectId(id)) {
-        rejectResponse(response, 404, [t('returns.not-found')]);
-        return;
-    }
+    const id = requireId(request, response, { notFound: 'returns.not-found' });
+    if (!id) return;
     const { authContext } = request;
     // `isAuth` is mounted above this route, so a caller is always present here.
     if (!authContext) return;

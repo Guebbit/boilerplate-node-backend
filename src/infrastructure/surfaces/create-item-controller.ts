@@ -1,16 +1,18 @@
 /**
  * @module
  * The read-one controller: fetch by path id, 404 with the module's own key when nothing comes
- * back, the SAME 404 when Mongoose rejects the id as a CastError, `rejectDatabaseError` for
- * anything else. Shared rather than left inline because "a malformed id is a 404, not a 500" is
- * a decision about the API's contract, and it should have one landing site.
+ * back or when the id is not an id at all (`requireId`, before the database is asked),
+ * `rejectDatabaseError` for anything else. Shared rather than left inline because "a malformed id
+ * answers as an unknown one" is a decision about the API's contract, and it should have one
+ * landing site.
  */
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { setEtag } from '@infrastructure/http/preconditions';
-import { catchAsNotFound, namedHandler, operationName } from '@infrastructure/http/controller';
+import { catchAs, namedHandler, operationName } from '@infrastructure/http/controller';
+import { requireId } from '@infrastructure/http/ids';
 
 /** What makes one entity's read-one different from another's. */
 export interface ItemControllerSpec {
@@ -53,8 +55,11 @@ export const createItemController = ({
     const operation = operationName('get', entity, handlerSuffix ?? 'Item');
 
     return namedHandler(operation, (request: Request, response: Response) => {
+        const id = requireId(request, response, { notFound: notFoundKey });
+        if (!id) return Promise.resolve();
+
         // The module's own fetch — a miss answers `null`/`undefined`/`void`, never throws.
-        return fetch(String(request.params.id), request)
+        return fetch(id, request)
             .then((item) => {
                 if (!item) {
                     rejectResponse(response, 404, [t(notFoundKey)]);
@@ -64,6 +69,6 @@ export const createItemController = ({
                 setEtag(response, item);
                 successResponse(response, item);
             })
-            .catch(catchAsNotFound(response, operation, notFoundKey));
+            .catch(catchAs(response, operation));
     });
 };

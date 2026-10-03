@@ -13,7 +13,11 @@ import { logger } from '@infrastructure/adapters/logger';
 
 jest.mock('@infrastructure/adapters/logger', () => ({ logger: { error: jest.fn() } }));
 
-const makeRequest = (id: string) => asStub<Request>({ params: { id } });
+/** A well-formed id: the controller refuses anything else before it asks the database. */
+const OBJECT_ID = '65dc8a99604c307b702b5ccc';
+
+const makeRequest = (id: string) =>
+    asStub<Request>({ params: { id }, query: {}, body: undefined, is: () => null });
 
 const makeResponse = () =>
     asStub<Response>({
@@ -30,7 +34,7 @@ describe('createItemController — operation naming', () => {
             notFoundKey: 'widgets.not-found'
         });
 
-        await handler(makeRequest('1'), response);
+        await handler(makeRequest(OBJECT_ID), response);
 
         expect(logger.error).toHaveBeenCalledWith(
             expect.stringContaining('getWidgetItem'),
@@ -47,7 +51,7 @@ describe('createItemController — operation naming', () => {
             handlerSuffix: 'Admin'
         });
 
-        await handler(makeRequest('1'), response);
+        await handler(makeRequest(OBJECT_ID), response);
 
         expect(logger.error).toHaveBeenCalledWith(
             expect.stringContaining('getWidgetAdmin'),
@@ -66,11 +70,11 @@ describe('createItemController — found/not-found round trip, unaffected by han
             handlerSuffix: 'Admin'
         });
 
-        await handler(makeRequest('1'), response);
+        await handler(makeRequest(OBJECT_ID), response);
 
         expect(response.status).toHaveBeenCalledWith(200);
         expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ success: true, data: { id: '1' } })
+            expect.objectContaining({ success: true, data: { id: OBJECT_ID } })
         );
     });
 
@@ -82,10 +86,25 @@ describe('createItemController — found/not-found round trip, unaffected by han
             notFoundKey: 'widgets.not-found'
         });
 
-        await handler(makeRequest('missing'), response);
+        await handler(makeRequest(OBJECT_ID), response);
 
         expect(response.status).toHaveBeenCalledWith(404);
         expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    });
+
+    it('answers a malformed id with the same 404, without asking fetch', async () => {
+        const response = makeResponse();
+        const fetch = jest.fn();
+        const handler = createItemController({
+            entity: 'widget',
+            fetch,
+            notFoundKey: 'widgets.not-found'
+        });
+
+        await handler(makeRequest('not-an-id'), response);
+
+        expect(response.status).toHaveBeenCalledWith(404);
+        expect(fetch).not.toHaveBeenCalled();
     });
 });
 
@@ -104,7 +123,7 @@ describe('createItemController — ETag', () => {
             notFoundKey: 'widgets.not-found'
         });
 
-        await handler(makeRequest('1'), response);
+        await handler(makeRequest(OBJECT_ID), response);
 
         expect(setHeader).toHaveBeenCalledWith('ETag', '"1700000000000"');
     });
