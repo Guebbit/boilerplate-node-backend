@@ -206,7 +206,7 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
         // itself, the same composition `Mail::fake()` does in Laravel.
         registerOAuthProvider('fake', () => fakeOAuthProvider);
 
-        // Import AFTER the environment is shaped. `createApp()` (SK-D2) builds the app; its own
+        // Import AFTER the environment is shaped. `createApp()` builds the app; its own
         // `start()` seeds `shop` (via `restoreScenario`, since `enableDemoProfile()` above turned
         // the demo profile on) before it starts listening.
         const port = currentEnvironment().NODE_PORT ?? '3000';

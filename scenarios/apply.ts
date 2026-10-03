@@ -7,7 +7,7 @@
  * Boots the app in-process:  `shop` LIVES its history by driving the real checkout, payment,
  *                            shipping and refund endpoints (`scenarios/flows/`), which exist only
  *                            behind the real middleware stack. `src/app.ts`'s `createApp()`
- *                            (SK-D2) is called for its `boot()` alone, never `start()` — a
+ *                            is called for its `boot()` alone, never `start()` — a
  *                            container boot runs this BEFORE the server it seeds for, so the
  *                            flows get a loopback listener instead of a bound `NODE_PORT`.
  * Refuses production:        a boot-time seeder that can drop or overwrite one is a footgun.
