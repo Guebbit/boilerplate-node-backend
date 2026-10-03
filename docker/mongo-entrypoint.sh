@@ -22,9 +22,9 @@ fi
 
 # Wire TLS: a self-signed CA minted once, first-boot-only, same pattern as the keyFile above.
 # `docker-compose.production.yml`'s `mongod` command reads $SERVER_PEM as its own identity
-# (`--tlsCertificateKeyFile`) — deliberately WITHOUT `--tlsCAFile` on the server side, so mongod
-# never asks a connecting client for a certificate back (mTLS is a heavier control than this
-# deployment needs; see DB_SECURITY_1_WIRE_TLS.md, Option A vs C). Only the CLIENT side verifies
+# (`--tlsCertificateKeyFile`) and names $CA_CERT as its chain of trust (`--tlsCAFile`, which mongod
+# 8.3 requires), with `--tlsAllowConnectionsWithoutCertificates` so it never demands a certificate
+# back (mTLS is a heavier control than this deployment needs). Only the CLIENT side verifies
 # the server: `NODE_DB_URI`'s `tlsCAFile` and every `mongosh`/`mongodump` invocation below (the
 # healthcheck, `mongo-rs-init`, `docs/tools/backups.md`'s dump command) point at $CA_CERT or the
 # copy this script hands to `mongo-ca-dir` for the containers that never mount this volume.

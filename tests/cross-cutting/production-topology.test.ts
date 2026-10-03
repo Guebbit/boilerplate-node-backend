@@ -157,6 +157,27 @@ describe('production publishes no data port', () => {
     });
 });
 
+describe('the bundled database can boot with wire TLS', () => {
+    /*
+     * mongod 8.3 refuses `--tlsMode requireTLS` without a chain of trust (SERVER-72839), which
+     * `--tlsCertificateKeyFile` alone is not. `--tlsCAFile` supplies it, and
+     * `--tlsAllowConnectionsWithoutCertificates` keeps the TLS one-way, so a client is not
+     * asked for a certificate it does not have.
+     */
+    it('names a CA file and keeps client certificates optional', () => {
+        const { command } = compose.services.database;
+
+        expect(Array.isArray(command)).toBe(true);
+        expect(command).toEqual(
+            expect.arrayContaining([
+                '--tlsCertificateKeyFile',
+                '--tlsCAFile',
+                '--tlsAllowConnectionsWithoutCertificates'
+            ])
+        );
+    });
+});
+
 describe('production runs no debugger', () => {
     /*
      * `--inspect` opens a port that grants arbitrary code execution inside the process, with no

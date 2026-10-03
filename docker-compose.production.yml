@@ -355,13 +355,18 @@ services:
                 # Wire TLS — a keyFile authenticates replica-set members to each other, it does not
                 # encrypt anything on the wire. `mongo-entrypoint.sh` mints `mongo-server.pem`
                 # (self-signed CA by default; see its own comment for bringing a real one instead).
-                # Deliberately NO `--tlsCAFile` here: that would make mongod demand a certificate
-                # BACK from every connecting client (mTLS), a heavier control than this deployment
-                # chose — client-cert auth on top of SCRAM is real but disproportionate here.
+                # `--tlsCAFile` is required: mongod 8.3 refuses TLS without a chain of trust
+                # (SERVER-72839). `--tlsAllowConnectionsWithoutCertificates` keeps it one-way: a
+                # client verifies the server and is never asked for a certificate back (mTLS), a
+                # heavier control than this deployment chose on top of SCRAM.
+                # https://www.mongodb.com/docs/manual/reference/program/mongod/#std-option-mongod.--tlsAllowConnectionsWithoutCertificates
                 '--tlsMode',
                 'requireTLS',
                 '--tlsCertificateKeyFile',
-                '/keyfile-dir/mongo-server.pem'
+                '/keyfile-dir/mongo-server.pem',
+                '--tlsCAFile',
+                '/keyfile-dir/mongo-ca.crt',
+                '--tlsAllowConnectionsWithoutCertificates'
             ]
         environment:
             # Root stays maintenance-only — the app authenticates as MONGO_APP_USER instead
