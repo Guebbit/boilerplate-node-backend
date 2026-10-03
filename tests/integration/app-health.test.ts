@@ -14,6 +14,7 @@ import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { markServerListening, markServerDraining } from '@infrastructure/runtime/readiness';
+import { currentEnvironment } from '@infrastructure/config/store';
 
 setupTestDb();
 
@@ -111,7 +112,7 @@ describe('Observability routes', () => {
         // a session. See `isMetricsScraper`.
         const response = await api()
             .get('/observability/metrics')
-            .set('Authorization', `Bearer ${process.env.NODE_METRICS_TOKEN ?? ''}`);
+            .set('Authorization', `Bearer ${currentEnvironment().NODE_METRICS_TOKEN ?? ''}`);
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('text/plain');
