@@ -271,7 +271,7 @@ describe('GET /products/{id}', () => {
         expect(response.status).toBe(404);
     });
 
-    // FA37: every money-carrying resource carries its own currency — never a hard-coded EUR on
+    // Every money-carrying resource carries its own currency — never a hard-coded EUR on
     // the frontend's side.
     it('reads the live NODE_DEFAULT_CURRENCY, not a fixed default', () =>
         withEnvironment('NODE_DEFAULT_CURRENCY', 'GBP', async () => {

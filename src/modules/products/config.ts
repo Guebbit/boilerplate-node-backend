@@ -17,7 +17,7 @@ import { decimal, text } from '@infrastructure/config/fields';
  *
  * A rate is valid only inside `[0, 1)` — 1 (100%) or more is certainly a typo. Both are required
  * at boot; the defaults here are for `NODE_ENV=test`, which skips that check — the demo profile
- * does not: it sets both rates itself, the same as any other deployment must (SK-08).
+ * does not: it sets both rates itself, the same as any other deployment must.
  *
  * The currency is read directly rather than through `@modules/orders`'s own `shopCurrency` —
  * `orders` already depends on `products` for VAT, and the reverse import would close a module

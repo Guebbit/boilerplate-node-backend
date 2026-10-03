@@ -111,8 +111,8 @@ router.get(
     getProductItem
 );
 
-// PUT /products/:id (replace) and PATCH /products/:id (merge) — admin only. Same two keys as
-// the create door, on both: neither key alone completes either write.
+// PUT /products/:id — replace the product; admin only. Same two keys as the create door:
+// neither key alone completes the write.
 router.put(
     '/:id',
     uploadLimiter,
@@ -123,6 +123,8 @@ router.put(
     upload.image(),
     replaceProduct
 );
+
+// PATCH /products/:id — merge the fields sent; the same two keys as the PUT above.
 router.patch(
     '/:id',
     uploadLimiter,

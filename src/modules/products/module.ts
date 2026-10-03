@@ -53,7 +53,7 @@ export default {
      * Four are the hidden or empty ones; `inStock` and `rich` are the two ORDINARY rows a screen
      * needs a subject for — anything buyable, and one with every optional field populated, which
      * is what a detail page and a product form have to render to be worth auditing. `digital` is
-     * the one row `requiresShipping: false` — E16's "digital = never shipped" needs a real product
+     * the one row `requiresShipping: false` — the "digital = never shipped" rule needs a real product
      * to check `orders`/`delivery`'s digital-only branches against.
      * `lowStock` holds exactly one unit and is on no seeded order: the subject of the last-unit
      * race, where one checkout's hold leaves nothing for the next shopper.
