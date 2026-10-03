@@ -19,6 +19,7 @@ import {
     statusesLeadingTo,
     overridableTargetsFrom,
     isDigitalOnlyOrder,
+    isPayable,
     canWithdraw
 } from '../domain';
 import type { OrderActor } from '../domain';
@@ -171,6 +172,19 @@ const deliveryAndOverrideActions = (
 };
 
 /**
+ * The operator's "record a payment by hand" button: offered while the order can still reach
+ * `paid` and the caller holds the key the offline route asks for. Rank is applied afterwards by
+ * `withinStanding`, like every other operator door.
+ *
+ * @param status - the order's current status
+ * @param authContext - the caller, or `undefined` for no request behind this read
+ */
+const canRecordPayment = (status: OrderStatus, authContext: AuthContext | undefined): boolean =>
+    authContext !== undefined &&
+    isPayable(status) &&
+    holdsKey(callerForSubject(authContext, 'Order'), 'payments.any.create');
+
+/**
  * The withdrawal button, decided here so no client counts days: offered to the order's own buyer
  * while the order is withdrawable and the window, if it has started, is still open. An operator
  * reading someone else's order is not offered it — the right is the consumer's to exercise.
@@ -273,7 +287,9 @@ const withinStanding = (
         transitions: mayMove ? actions.transitions : [],
         cancel: mayMove && actions.cancel,
         // Paying is the buyer's own step; an operator reading the order is never offered it.
-        pay: standing.isBuyer && actions.pay
+        pay: standing.isBuyer && actions.pay,
+        // Recording money by hand is the operator's, and only over a buyer their rank reaches.
+        recordPayment: standing.reaches && actions.recordPayment
     };
 };
 
@@ -300,6 +316,7 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
                             authContext
                         ),
                         ...withdrawalActions(order, authContext),
+                        recordPayment: canRecordPayment(order.status, authContext),
                         // `paidAt` is stamped in the SAME write that moves an order to `paid`
                         // (`repository.ts#markPaid`), so it is a same-module, no-dependency proxy for
                         // "an invoice was issued" — `invoicing` freezes one from the very same

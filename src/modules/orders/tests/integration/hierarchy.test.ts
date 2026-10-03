@@ -116,6 +116,7 @@ const actionsFor = (orderId: string, role: string, callerId: string) =>
         .then(({ actions }) => ({
             cancel: actions?.cancel,
             pay: actions?.pay,
+            recordPayment: actions?.recordPayment,
             transitions: actions?.transitions,
             start: actions?.start,
             override: actions?.override
@@ -169,6 +170,36 @@ describe('what an order offers each caller — what a client renders', () => {
         ]);
 
         expect([onCustomer.start, onStaff.start]).toEqual([true, false]);
+    });
+
+    // The operator's "record money by hand" door: pay is the buyer's, this one is not.
+    it('offers an admin the offline payment on a customer’s unpaid order, and the buyer none', async () => {
+        const order = await orderOf('customer');
+        const buyer = String(order.userId);
+
+        const [byAdmin, byBuyer] = await Promise.all([
+            actionsFor(String(order._id), 'admin', STAFF_ID),
+            actionsFor(String(order._id), 'customer', buyer)
+        ]);
+
+        expect([byAdmin.recordPayment, byAdmin.pay]).toEqual([true, false]);
+        expect([byBuyer.recordPayment, byBuyer.pay]).toEqual([false, true]);
+    });
+
+    it('withholds the offline payment once the order is paid, from a role without the key and over a higher rank', async () => {
+        const paid = await orderOf('customer', OrderStatus.paid);
+        const unpaid = await orderOf('unverified');
+        const staffs = await orderOf('support');
+
+        const [afterPaid, withoutKey, overHigherRank] = await Promise.all([
+            actionsFor(String(paid._id), 'admin', STAFF_ID),
+            actionsFor(String(unpaid._id), 'warehouse', STAFF_ID),
+            actionsFor(String(staffs._id), 'moderator', STAFF_ID)
+        ]);
+
+        expect(afterPaid.recordPayment).toBe(false);
+        expect(withoutKey.recordPayment).toBe(false);
+        expect(overHigherRank.recordPayment).toBe(false);
     });
 });
 
