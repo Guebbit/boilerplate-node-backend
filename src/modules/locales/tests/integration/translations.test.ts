@@ -24,8 +24,8 @@ setupTestDb();
 beforeAll(() => {
     // The real registered target, not a hand-rolled duplicate — `writeDerived` is products' own
     // repository method, and a locales test importing that repository directly is exactly the
-    // hidden cross-module coupling SD-09 removed (`tests/cross-cutting/translatable-targets.test.ts`
-    // resolves the same way).
+    // hidden cross-module coupling `tests/cross-cutting/translatable-targets.test.ts` guards against
+    // (it resolves the same way).
     localeService.setTranslatables(resolveTranslatables(enabledModules));
 });
 
