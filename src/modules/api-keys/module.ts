@@ -38,7 +38,7 @@ export default {
         {
             section: 'apiKeys',
             collect: (subject) => findOwnApiKeys(subject.userId),
-            // DDD-D6: a destroyed account takes its minted credentials with it, inside the same
+            // A destroyed account takes its minted credentials with it, inside the same
             // transaction — the same hook `addresses`, `cart`, `wishlist` and `payments` each
             // declare on their own collection. Without this, an erased user's keys stayed live:
             // the credential resolver refuses them once the user is gone, but the rows themselves

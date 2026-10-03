@@ -63,7 +63,7 @@ export const findOwnApiKeys = (userId: string): Promise<ApiKey[]> =>
     );
 
 /**
- * What a hard account deletion owes this collection — DDD-D6's `personalData.erase` hook (see
+ * What a hard account deletion owes this collection — the `personalData.erase` hook (see
  * `module.ts`'s manifest), joining the caller's own hard-delete transaction.
  */
 export const apiKeysDeleteByUserId = (userId: string, session: ClientSession): Promise<void> =>

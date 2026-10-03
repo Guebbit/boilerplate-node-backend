@@ -189,7 +189,7 @@ describe('a hard-deleted user takes their credentials with them', () => {
         registerModules(enabledModules);
     });
 
-    it('erases every credential the user minted (B25)', async () => {
+    it('erases every credential the user minted', async () => {
         const user = await createRealUser('erased-owner');
         const context = contextFor(String(user._id), ['apikeys.any.read', 'apikeys.any.create']);
         const first = await mint({ name: 'first', permissions: ['apikeys.any.read'] }, context);
@@ -242,7 +242,7 @@ describe('touchLastUsed', () => {
     });
 
     /*
-     * B8: `module.ts`'s `fromBearerToken` fires this fire-and-forget (`void
+     * `module.ts`'s `fromBearerToken` fires this fire-and-forget (`void
      * apiKeyRepository.touchLastUsed(...)`, by design — see the repository's own doc comment) with
      * no `.catch`. A rejection there had nobody left to see it; logged instead, so a failed stamp
      * is visible without costing the resolve it rides on.
