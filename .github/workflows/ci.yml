@@ -584,8 +584,12 @@ jobs:
         # No Mongo/Redis service is started here: today's integration suite only
         # exercises an in-process Express app (see tests/integration/app-health.test.ts).
         # Add service containers here if a future test needs a real database/cache.
+        #
+        # 45 minutes: the suite runs in band, one file at a time, ~2000 cases. Measured on this
+        # runner it takes about 20 minutes, so the budget is the contract job's, which has the
+        # same shape.
         runs-on: ubuntu-latest
-        timeout-minutes: 20
+        timeout-minutes: 45
         permissions:
             contents: read
         steps:
