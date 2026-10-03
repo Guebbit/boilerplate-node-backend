@@ -214,7 +214,7 @@ describe('reserveForOrder', () => {
     });
 
     /*
-     * B15: a throw mid-loop (not a refusal) used to leave the hold naming a line whose counters
+     * A throw mid-loop (not a refusal) used to leave the hold naming a line whose counters
      * never moved. A later release then read that line's quantity off the hold and subtracted it
      * from whatever the counter actually held — here, another order's own reservation.
      */
@@ -341,7 +341,7 @@ describe('commitForOrder', () => {
             expect.objectContaining({
                 action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
                 outcome: 'failure',
-                // B21: SYSTEM_ACTOR's own role now, not admin's.
+                // SYSTEM_ACTOR's own role now, not admin's.
                 actor_role: 'system',
                 actor_user_id: 'system',
                 target_type: 'order',

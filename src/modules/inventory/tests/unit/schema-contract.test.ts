@@ -100,8 +100,8 @@ describe('reservationSchema — the hold', () => {
     });
 
     it('restricts status to the four states and starts every hold held', () => {
-        // `released` and `restocked` are terminal; `committed` can still move to `restocked`
-        // (B2) — a fifth value would be a state no operation handles.
+        // `released` and `restocked` are terminal; `committed` can still move to `restocked`.
+        // A fifth value would be a state no operation handles.
         expect(enumOf(reservationSchema, 'status')).toEqual([
             'held',
             'committed',

@@ -186,7 +186,7 @@ export interface ReservationItem {
 
 /**
  * The four states a hold can be in. `released` and `restocked` are terminal; `committed` can
- * still move to `restocked` if the paid order behind it is later cancelled (B2).
+ * still move to `restocked` if the paid order behind it is later cancelled.
  */
 export type ReservationStatus = 'held' | 'committed' | 'released' | 'restocked';
 

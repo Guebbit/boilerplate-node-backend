@@ -86,7 +86,7 @@ export const commitForOrder = async (orderId: string): Promise<boolean> => {
         // itself be running from a provider webhook with no human behind it. Same fallback
         // `orders/services/cancel.ts` uses for its own no-context case. No `actor_role`/
         // `actor_user_id` override needed either: `buildAuditEvent`'s defaults already read them
-        // off `SYSTEM_ACTOR`'s own caller (B21).
+        // off `SYSTEM_ACTOR`'s own caller.
         { caller: callerForSubject(SYSTEM_ACTOR, 'Order'), analyticsConsent: false },
         {
             action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,

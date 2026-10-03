@@ -416,8 +416,8 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
 
     /**
      * Push a still-`held` hold's deadline out — a card payment gone `processing` can take days to
-     * settle, and the sweep must not cancel an order whose money is still genuinely on its way
-     * (B3). Guarded on `status: 'held'`: a hold already claimed has no deadline left to move.
+     * settle, and the sweep must not cancel an order whose money is still genuinely on its way.
+     * Guarded on `status: 'held'`: a hold already claimed has no deadline left to move.
      *
      * @param orderId - the order whose hold is still open
      * @param expiresAt - the new deadline
