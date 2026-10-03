@@ -64,6 +64,7 @@ const COLLECTION_NAME = 'Ecommerce Demo API';
  * 1. Which module owns which path — read from the OpenAPI fragments, never restated
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
+/** The folders of a collection, in order: one per module, with the paths it owns. */
 const sections = (): Section[] =>
     SECTION_ORDER.map((name) => ({ name, paths: sectionPaths(name) }));
 
@@ -71,6 +72,10 @@ const sections = (): Section[] =>
  * 2. Where the values come from — the shapes are the contract's, the data is the seed's
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * The generator's value table (`ValueSources` from `@guebbit/openapi-runnable-collections`): what
+ * goes into a request body or path where the contract only gives a shape.
+ */
 const values: ValueSources = {
     /*
      * By property name, because that is what makes a generated body USABLE: a request that posts
@@ -249,6 +254,13 @@ const contentFor = (tool: CollectionTool) => (): Promise<string> =>
  * repo; the path is about where a generated file is easiest to find, not about tracking it.
  */
 
+/**
+ * One tool's collection as a generated contract bundle.
+ *
+ * @param tool - which tool's format to render
+ * @param file - the file name at the repo root
+ * @returns the bundle entry the registry builds and checks
+ */
 const collectionBundle = (tool: CollectionTool, file: string): ContractBundle => ({
     name: tool,
     generated: true,
@@ -257,12 +269,15 @@ const collectionBundle = (tool: CollectionTool, file: string): ContractBundle =>
     content: contentFor(tool)
 });
 
+/** The Bruno collection bundle. */
 export const brunoBundle = collectionBundle('bruno', 'contract.bruno.yml');
 
 // Named `.json` after the tool's own export convention, and YAML inside — Insomnia's importer
 // accepts either and keys on the content, not the extension.
 export const insomniaBundle = collectionBundle('insomnia', 'contract.insomnia.json');
 
+/** The Mockoon environment bundle. */
 export const mockoonBundle = collectionBundle('mockoon', 'contract.mockoon.json');
 
+/** The Postman collection bundle. */
 export const postmanBundle = collectionBundle('postman', 'contract.postman.json');

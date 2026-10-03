@@ -14,13 +14,19 @@ import { readFileSync } from 'node:fs';
 import { Parser, DiagnosticSeverity, type Diagnostic } from '@asyncapi/parser';
 import { stylish } from '@stoplight/spectral-formatters';
 
+/** The documents to validate: every CLI argument. */
 const files = process.argv.slice(2);
 
+// Exit 1 with usage when no file was named.
 if (files.length === 0) {
     console.error('Usage: validate-asyncapi.ts <file...>');
     process.exit(1);
 }
 
+/**
+ * AsyncAPI's own parser, with its default Spectral ruleset (`spectral:asyncapi/recommended`).
+ * https://github.com/asyncapi/parser-js#readme
+ */
 const parser = new Parser();
 
 /*

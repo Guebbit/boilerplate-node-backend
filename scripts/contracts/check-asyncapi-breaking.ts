@@ -28,7 +28,9 @@ import { breakingChanges } from './asyncapi-breaking';
 /** The only bundle this gate cares about: the one a webhook subscriber actually reads. */
 const BUNDLE = 'asyncapi.public.yaml';
 
+/** The raw `--base=<ref>` argument, if given. */
 const baseArgument = process.argv.find((argument) => argument.startsWith('--base='));
+/** The git ref to compare against; `origin/main` unless `--base` says otherwise. */
 const base = baseArgument ? baseArgument.slice('--base='.length) : 'origin/main';
 
 /** `BUNDLE` as it stood at `ref`, or undefined when the ref predates the file. */
@@ -50,24 +52,37 @@ const describe = (change: DiffOutputItem): string =>
 /** The leading `MAJOR` segment of an AsyncAPI version string. */
 const majorVersion = (version: string): string => version.split('.', 1)[0] ?? version;
 
+/** The commit where this branch left `base`; `undefined` (so: pass) when git cannot tell. */
 const baseCommit = mergeBase(base, 'asyncapi-breaking');
+
+// Nothing to compare against: exit 0 rather than block the commit.
 if (baseCommit === undefined) process.exit(0);
 
+/** The public bundle as it stood on the base. */
 const before = bundleAt(baseCommit);
+
+/** The public bundle as it is now on disk. */
 const after = readFileSync(path.join(REPO_ROOT, BUNDLE), 'utf8');
 
+// The file is new on this branch: nothing to break yet.
 if (before === undefined) {
     console.log(`[asyncapi-breaking] ${BUNDLE} did not exist at ${base}; nothing to compare.`);
     process.exit(0);
 }
 
+// Byte-identical: skip the parse.
 if (before === after) {
     console.log(`[asyncapi-breaking] ${BUNDLE} is unchanged since ${base}.`);
     process.exit(0);
 }
 
+/**
+ * AsyncAPI's own parser: resolves `$ref`s and gives a version-aware document model.
+ * https://github.com/asyncapi/parser-js
+ */
 const parser = new Parser();
 
+// Parse both bundles, then diff them; `source` names each in parser errors.
 Promise.all([
     parser.parse(before, { source: `${base}:${BUNDLE}` }),
     parser.parse(after, { source: BUNDLE })

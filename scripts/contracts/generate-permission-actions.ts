@@ -33,15 +33,19 @@ const requiredPath = (flag: string): string => {
     process.exit(1);
 };
 
+/** The permission-key YAML to read, from `--in`. */
 const INPUT = requiredPath('--in');
 
+/** The file to generate, from `--out`. */
 const OUTPUT = requiredPath('--out');
 
 /** `--check` compares and reports; without it the file is written. */
 const checkOnly = process.argv.includes('--check');
 
+/** The whole generated file's text. */
 const output = renderPermissionActions(readPermissionActions(readFileSync(INPUT, 'utf8')));
 
+// Write the file, or under `--check` compare it with what is on disk.
 if (!checkOnly) {
     // The `api/` folder may not exist yet: `regenerate` writes this file BEFORE orval creates it.
     mkdirSync(path.dirname(OUTPUT), { recursive: true });

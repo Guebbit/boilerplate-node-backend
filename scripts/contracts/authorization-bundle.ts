@@ -138,9 +138,13 @@ export const assembleAuthorizationKeys = (): string => {
 /** `authorization:bundle` writes the committed file; `--check` only compares against it. */
 const checkOnly = process.argv.includes('--check');
 
+/** The bundle as the fragments say it should read. */
 const assembled = assembleAuthorizationKeys();
+
+/** The bundle as it is on disk now; empty when the file does not exist yet. */
 const committed = existsSync(OUTPUT_FILE) ? readFileSync(OUTPUT_FILE, 'utf8') : '';
 
+// Three outcomes: in sync, drifted under `--check` (fail), or drifted so rewrite it.
 if (assembled === committed) {
     console.info(
         '[authorization] shared/authorization-keys.yaml is up to date with its fragments.'

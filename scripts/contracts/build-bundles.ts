@@ -30,11 +30,18 @@ import {
     type ContractBundle
 } from './bundle-registry';
 
+/** CLI arguments after `node script.ts`. The trailing underscore avoids shadowing `arguments`. */
 const arguments_ = process.argv.slice(2);
+
+/** `--check`: verify the bundles on disk instead of writing them. */
 const checkOnly = arguments_.includes('--check');
+/** Bundle names the caller asked for; none means every bundle. */
 const named = arguments_.filter((argument) => !argument.startsWith('--'));
 
+/** Requested names no bundle answers to. */
 const unknown = named.filter((name) => !findBundle(name));
+
+// Exit 2 (usage error) on a misspelt bundle name, listing the known ones.
 if (unknown.length > 0) {
     console.error(
         `[contracts] unknown bundle(s): ${unknown.join(', ')}\n` +
@@ -43,6 +50,7 @@ if (unknown.length > 0) {
     process.exit(2);
 }
 
+/** A path relative to the repo root, for readable messages. */
 const relative = (file: string): string => path.relative(REPO_ROOT, file);
 
 /** Assemble the given bundles once each, writing only the ones that actually drifted. */
@@ -57,6 +65,7 @@ const bundle = (bundles: readonly ContractBundle[]): Promise<ContractBundle[]> =
         return stale.map(({ item }) => item);
     });
 
+/** Print `message` and exit 1. Typed `never`, so callers need no `return` after it. */
 const fail = (message: string): never => {
     console.error(message);
     process.exit(1);
@@ -136,6 +145,7 @@ const run = async (): Promise<void> => {
     );
 };
 
+// Entry point: any rejection prints the error and exits 1.
 run().catch((error: unknown) => {
     console.error(error);
     process.exit(1);

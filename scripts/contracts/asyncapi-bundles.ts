@@ -39,6 +39,7 @@ type AsyncScope = 'shared' | 'backend';
  */
 const MODULE_ASYNC_ORDER: readonly string[] = ['observability', 'webhooks'];
 
+/** A module's name as the AsyncAPI bundle's section key — just a string, named for readability. */
 type ModuleAsyncSection = string;
 
 /** A fixed section, a module owning a public `asyncapi.yaml`, or `<module>-internal` for a module owning a queue nothing else may reach — all just names. */
@@ -146,6 +147,7 @@ const marker = (sections: readonly AsyncSectionName[]): string =>
         .map((section) => `#          ${path.relative(REPO_ROOT, asyncSectionDocument(section))}\n`)
         .join('');
 
+/** Parse a YAML file into a `yaml` Document, keeping source tokens so comments survive a rewrite. */
 const read = (file: string): Document =>
     parseDocument(readFileSync(file, 'utf8'), { keepSourceTokens: true });
 
@@ -186,8 +188,15 @@ const mergeInto = (
 };
 
 /** One compiled document per scope, so a full run does not re-merge the sections it shares. */
+/** Bundles already built this run, by scope: the second request for one costs nothing. */
 const compiled = new Map<AsyncScope, string>();
 
+/**
+ * Build one scope's bundle text (`full` or `public`) from the root document plus every section.
+ *
+ * @param scope - which bundle to assemble
+ * @returns the bundle's YAML text
+ */
 const compile = (scope: AsyncScope): string => {
     const cached = compiled.get(scope);
     if (cached !== undefined) return cached;
