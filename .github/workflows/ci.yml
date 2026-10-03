@@ -643,13 +643,20 @@ jobs:
         # shard (in-memory Mongo, cache and queue off) — see the frontend's
         # `scripts/e2e/run-shards.ts`. The frontend is checked out at its default branch, the
         # version a merge here would meet.
+        #
+        # Three shards, not the runner's default four: each shard is a Chrome plus a backend plus a
+        # mongod, and four of them on this 4-vCPU runner starved each other — eight specs missed a
+        # 15-second wait that passes in seconds on a developer machine. 75 minutes covers the
+        # longer wall-clock that buys.
         runs-on: ubuntu-latest
-        timeout-minutes: 40
+        timeout-minutes: 75
         permissions:
             contents: read
         env:
             # Where the frontend lands, beside this checkout rather than inside its tree walks.
             FRONTEND_PATH: .frontend
+            # Read by the frontend's `scripts/e2e/run-shards.ts`; the antibot run is one more.
+            E2E_SHARDS: 3
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
