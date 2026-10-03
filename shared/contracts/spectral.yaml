@@ -14,7 +14,7 @@ rules:
         then:
             function: truthy
 
-    # --- operationId naming matches the HTTP verb (FA62) ---
+    # --- operationId naming matches the HTTP verb ---
     #
     # `replace*` means a full, idempotent replace; `update*` means a partial change — but nothing
     # checked that the METHOD agreed, so D17d could (and did) change a verb behind an unchanged

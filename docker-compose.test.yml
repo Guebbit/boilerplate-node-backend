@@ -34,7 +34,7 @@ services:
         # Nothing seeds this either — the gate's suites create the rows they assert on. The demo
         # shop belongs to the dev stack and to `npm run demo`, not here.
         #
-        # DDD-D2: a single-member replica set, same reasoning as `docker-compose.yml`'s `database`
+        # A single-member replica set, same reasoning as `docker-compose.yml`'s `database`
         # service — the gate's own suites use multi-document transactions now. The member host is
         # spelled out as this service's own compose name (`mongo:27017`) for the same reason: left
         # to its own default, `rs.initiate()` would advertise `localhost:27017`, unreachable from

@@ -20,7 +20,7 @@ info:
     contact:
         name: API Team
 
-# Error codes that belong to no module — an HTTP-status-derived default (CT-D5), or a check that
+# Error codes that belong to no module — an HTTP-status-derived default, or a check that
 # runs in front of every route rather than inside one. A module's OWN codes are declared the same
 # way in its own openapi.yaml; the bundler collects every fragment's x-error-codes into one
 # catalogue and publishes it as `errors[].code`'s `examples` — never as an `enum`, so a new code is

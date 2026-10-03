@@ -135,7 +135,7 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 #
 # Each of these is here because something reads it at runtime, not for completeness:
 #   src/      the application, entered at src/cluster.ts — includes each module's own
-#             src/modules/*/templates/ (the EJS email/PDF templates it owns, SK-15)
+#             src/modules/*/templates/ (the EJS email/PDF templates it owns)
 #   api/      orval-generated request/response types and zod schemas, imported as @api/*
 #   shared/   the shared EJS layout partials (`shared/templates/layouts/`, resolved against the
 #             working directory by `adapters/mailer.ts`) and the contract fragments

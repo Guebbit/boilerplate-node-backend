@@ -23,7 +23,7 @@ name: CI
 #                     `docker/Dockerfile` actually ships, with no services and no network
 #   - pair            frontend-e2e — the paired frontend's Cypress suite against this backend
 #   - supply chain    audit
-#   - adoption        demo-strip-measure — report-only, like audit (G-D2)
+#   - adoption        demo-strip-measure — report-only, like audit
 #
 # The slow and hunting suites live elsewhere on a schedule: mutation.yml, fuzz.yml (the deep pass —
 # the shallow one is in `complete`), schemathesis.yml and order-random.yml.
@@ -781,13 +781,13 @@ jobs:
               run: npm audit --omit=dev --audit-level=moderate
 
     demo-strip-measure:
-        # G-D2 step 1: how far "a module is removable" actually is, measured rather than walked by
+        # How far "a module is removable" actually is, measured rather than walked by
         # hand. Applies a removal recipe to a scratch copy — `shop` is the real `demo:remove`,
         # `locales` deletes the optional locales module — then runs regenerate, ts-check, the
         # cross-cutting suite and docs:build against what is left.
         #
         # Deliberately NOT in the `ci` gate's `needs:` below, the same reasoning as `audit`: it is
-        # not green yet (only CT-D3 still blocks the shop recipe, plus the residue tests that
+        # not green yet (the shop recipe still leaves residue tests that
         # `demo:remove` lists for a human), and turning it red would block every PR on work this
         # step only measures. It still runs on every push/PR and shows red on its own square — a
         # punch list, not a gate. Promote it into `needs:` once both recipes are green.

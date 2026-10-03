@@ -44,7 +44,7 @@ roles:
           verify flow promotes the account to `customer` once the address is proven, and an
           operator may promote it to anything else at any time — granting a role is the vouching.
       # `access/service.ts`'s SIGNUP_DEFAULT_ROLE and VERIFIED_CUSTOMER_ROLE read these two flags
-      # rather than hand-typing the role names — DDD-D5. Exactly one role in this file may carry
+      # rather than hand-typing the role names. Exactly one role in this file may carry
       # `signupDefault: true`; `kernel/permissions.ts` throws at boot otherwise.
       signupDefault: true
       promotesTo: customer
@@ -307,7 +307,7 @@ roles:
           - examples.any.update
           - examples.any.delete
 
-    # DDD-D5 part B (bug B21): the principal background/scheduled work runs as — a reservation
+    # The principal background/scheduled work runs as — a reservation
     # sweep, a reaper — never `admin` itself, so an audit row can say "a sweep did this" and never
     # "an admin did this" for a request nobody made. `permissions` is a YAML alias of `admin`'s own
     # list, `&admin_permissions` above: the two can never drift apart by hand, because they are the

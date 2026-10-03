@@ -404,7 +404,7 @@ keys:
     # mistranslation can never become a mischanged price. Unconditional either way, so `any` is
     # its only reading — there is no narrower one to make explicit.
     #
-    # Owned by `core`, not `locales` (LOCALES_OPTIONAL_0925 D-LO2): the subject these keys guard
+    # Owned by `core`, not `locales`: the subject these keys guard
     # is `kernel/translation.ts`'s port, which every module writing translatable content reaches
     # regardless of whether `locales` is installed to answer it. Deleting `locales` deletes its
     # own module and keys; it must not also delete the ability to gate a rewording on this key.

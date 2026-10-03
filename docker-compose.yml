@@ -247,7 +247,7 @@ services:
         # Same
         restart: unless-stopped
 
-        # DDD-D2: a single-member replica set, not a standalone `mongod` — multi-document
+        # A single-member replica set, not a standalone `mongod` — multi-document
         # transactions refuse `startTransaction()` outright on a standalone server. One member
         # costs nothing extra (no real replication, no extra network hop); the healthcheck below
         # initiates it on first boot.

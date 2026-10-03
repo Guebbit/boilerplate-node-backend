@@ -4,11 +4,11 @@ name: Image scan (SBOM + vulnerabilities)
 # `container-gate` in ci.yml proves the image WORKS, this asks what it's carrying.
 #
 # Syft (SBOM) piped into Grype (vulnerabilities) — see docs/tools/deployment-hardening.md,
-# "Supply-chain provenance: SBOM and signing". Not Trivy: ruled out in
-# DECISIONS_0926_2_SECURITY_SCANNING.md (S5) after the March 2026 `trivy-action` supply-chain
-# compromise (CVE-2026-33634, every tag force-pushed to a credential stealer).
+# "Supply-chain provenance: SBOM and signing". Not Trivy: ruled out after
+# the March 2026 `trivy-action` supply-chain compromise (CVE-2026-33634, every tag force-pushed
+# to a credential stealer).
 #
-# A REPORT, not a gate (same doc, S5): `fail-build: false` below, so a new CVE in a base-image
+# A REPORT, not a gate: `fail-build: false` below, so a new CVE in a base-image
 # package cannot block an unrelated merge. Read the uploaded `grype-report` artifact.
 #
 # Deliberately its own workflow rather than a `ci.yml` job: it does not need to run on every PR —

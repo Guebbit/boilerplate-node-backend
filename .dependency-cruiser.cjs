@@ -104,7 +104,7 @@ const moduleCouplingRules = MODULE_NAMES.map((name) => {
 
 /**
  * `{ moduleName: 'foundation' | 'shop' | 'example' }`, read from each module's own `module.yaml#group` —
- * DDD-D1. Fails closed the same way `MODULE_EDGES` does: a module folder with no descriptor, or
+ * Fails closed the same way `MODULE_EDGES` does: a module folder with no descriptor, or
  * whose `group` is missing or spelled wrong, throws naming the offending file rather than quietly
  * leaving the line unenforced for it.
  */
@@ -133,7 +133,7 @@ const DOMAIN_MODULES = MODULE_NAMES.filter((name) =>
 );
 
 /**
- * T11: `domain/` as an ALLOW-list, not a deny-list.
+ * `domain/` as an ALLOW-list, not a deny-list.
  *
  * The two rules this replaces (`domain-cannot-reach-persistence`, `domain-cannot-reach-http`)
  * only named `mongoose`/`mongodb` and `express`/`supertest` — `redis`, `amqplib`, `node:fs`, or
@@ -236,7 +236,7 @@ module.exports = {
         {
             name: 'foundation-cannot-reach-shop',
             comment:
-                "DDD-D1: a `group: foundation` module ships with every deployment; a `group: shop` one is the demo shop's own worked example, deletable on its own (see docs/theory/strategic-ddd.md). The arrow only points one way — a SHOP module reaching another shop module, or a foundation module reaching another foundation module, is untouched by this rule and is `moduleCouplingRules`' concern instead. Relabel the importing module in its own `module.yaml` if the coupling is actually intentional; don't widen this rule to let it through.",
+                "A `group: foundation` module ships with every deployment; a `group: shop` one is the demo shop's own worked example, deletable on its own (see docs/theory/strategic-ddd.md). The arrow only points one way — a SHOP module reaching another shop module, or a foundation module reaching another foundation module, is untouched by this rule and is `moduleCouplingRules`' concern instead. Relabel the importing module in its own `module.yaml` if the coupling is actually intentional; don't widen this rule to let it through.",
             severity: 'error',
             from: {
                 path: `^src/modules/(${FOUNDATION_MODULES.join('|')})/`,
