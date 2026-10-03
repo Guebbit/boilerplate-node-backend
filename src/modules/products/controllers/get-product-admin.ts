@@ -3,8 +3,8 @@
  * Admin read controller — every language a product has, for the editor's form to populate its
  * tabs. Built on `createItemController` with `handlerSuffix: 'Admin'`, since the factory's default
  * (`get<Entity>Item`) would collide with `get-product-item.ts`'s own handler on the same entity.
- * The CastError-to-404 handling this needed — a malformed id and an unknown one look identical
- * from outside — is the factory's own default behaviour, so nothing extra is needed here.
+ * A malformed id and an unknown one answer the same 404 — the factory's own behaviour, so nothing
+ * extra is needed here.
  */
 
 import { productService } from '../services';

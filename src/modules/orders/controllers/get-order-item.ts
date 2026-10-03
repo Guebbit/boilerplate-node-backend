@@ -16,10 +16,8 @@ import { respondWithOrder } from './respond';
 /**
  * GET /orders/:id — single order by path id; non-admin callers see only their own.
  *
- * The id is checked BEFORE the query, unlike other single-item reads that let the query fail and
- * map the error in `.catch`: a malformed id rejects with a `BSONError`, which `.catch`'s
- * `databaseErrorInterpreter` reads as 422 — a shape complaint, not the 404 a lookup by id should
- * give regardless of whether the id merely doesn't exist or was never well-formed to begin with.
+ * The id is checked BEFORE the query (`requireId`): a malformed id and an unknown one answer the
+ * same 404.
  */
 export const getOrderItem = (
     request: Request<{ id?: string }>,

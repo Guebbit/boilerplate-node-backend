@@ -173,8 +173,7 @@ describe('readInput', () => {
             );
         });
 
-        // The rule the two superseded id helpers spelled differently: `extractCustomId` let an
-        // empty param fall through to the body, `extractAndValidateId` did not.
+        // An empty param never outvotes a body that carries a real id.
         it('lets an empty value fall through as if the key were absent', () => {
             const request = makeRequest({
                 params: { id: '' },
