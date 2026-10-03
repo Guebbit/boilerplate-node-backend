@@ -5,7 +5,7 @@
  * a client does — through routing, middleware, auth, serialization and the error handler — which
  * is the only layer where a response can be compared to `openapi.yaml`.
  *
- * `src/app.ts`'s `createApp()` (SK-D2) builds the fully mounted express app synchronously and
+ * `src/app.ts`'s `createApp()` builds the fully mounted express app synchronously and
  * starts no server, no Mongo connection, no Redis and no queue — only calling its own `boot`/
  * `start` would. The database comes from `setupTestDb()` (in-memory Mongo); Redis is genuinely
  * optional, because `getCacheValue` resolves `undefined` on any failure and the request is
