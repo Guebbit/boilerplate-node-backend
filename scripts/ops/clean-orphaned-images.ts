@@ -4,7 +4,7 @@
  * Delete a stored image (and its thumbnail) that no current document references — `npm run
  * clean:orphaned-images`. A manual dev-hygiene tool, not a scheduled job.
  *
- * TF-1: a repeated `npm run demo`/scenario-apply/e2e cycle re-seeds an EPHEMERAL, in-memory
+ * Why it exists: a repeated `npm run demo`/scenario-apply/e2e cycle re-seeds an EPHEMERAL, in-memory
  * Mongo every time, but every upload still lands on the host's persistent `public/images/` —
  * `imageStore.remove()` only runs when a record's OWN update/delete replaces its image, never
  * when the database underneath it is simply thrown away and restarted. Nothing else ever cleans

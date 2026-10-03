@@ -978,7 +978,7 @@ export default tseslint.config(
                             /*
                              * The four files that are a tier each — `app.ts` composes,
                              * `cluster.ts` supervises, `serve.ts` starts what `app.ts` composed
-                             * and wires it to the process signals (SK-D2), `modules.ts` IS the
+                             * and wires it to the process signals, `modules.ts` IS the
                              * registry and is the one caller allowed to import
                              * `@modules/<name>/module`. They have no element (an element
                              * descriptor matches folders), so they are named by the file
