@@ -37,7 +37,7 @@ import { setPersonalDataSections } from './services/personal-data-registry';
  * rather than by the app tier collecting it and handing it in by name.
  *
  * The resolver is registered HERE rather than at import time, so importing this file (a type, a
- * test) no longer installs it — only a module `registerModules` actually runs `onRegistered` for
+ * test) does not install it — only a module `registerModules` actually runs `onRegistered` for
  * does. The resolver itself rejects a bad token and resolves `undefined` for a token whose user is
  * gone — the distinction `requirePermissionViaCookie` turns into 401 versus 403. The resolution
  * logic lives in `./session/resolver.ts`, alongside the rest of the session machinery; this file

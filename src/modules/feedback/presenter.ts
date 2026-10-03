@@ -1,8 +1,8 @@
 /**
  * @module
  * The one place a feedback ticket document becomes the wire shape `openapi.yaml` declares —
- * replacing the identical `.toJSON() as FeedbackRequest` cast that used to sit in both
- * `post-feedback-contact.ts` and `update-feedback-status.ts`.
+ * so `post-feedback-contact.ts` and `update-feedback-status.ts` share one transform instead of
+ * each casting `.toJSON() as FeedbackRequest`.
  */
 
 import type { FeedbackRequest } from '@types';

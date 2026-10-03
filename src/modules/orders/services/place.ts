@@ -127,9 +127,8 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
 
     /*
      * The units are not SOLD here. They stay on the shelf until the payment lands or the hold
-     * ends, so an unpaid order no longer removes stock from the world — same reserve/rollback
-     * shape `crud.ts`'s `create` and `cart`'s checkout each ran on their own before this function
-     * absorbed both.
+     * ends, so an unpaid order never removes stock from the world — the reserve/rollback shape
+     * shared by `crud.ts`'s `create` and `cart`'s checkout.
      */
     const outcome = await inventoryService.reserveForOrder(
         orderId.toHexString(),

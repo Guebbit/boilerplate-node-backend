@@ -80,8 +80,8 @@ const toExportPayment = (payment: Lean<PaymentDocument>): ExportPayment => ({
 });
 
 /**
- * {@link findOwnPayments}, shaped for the account data export — the field mapping `module.ts`
- * used to carry inline, moved beside the read it maps.
+ * {@link findOwnPayments}, shaped for the account data export — the field mapping sits beside the
+ * read it maps, not in `module.ts`.
  *
  * @param userId - the caller's own id
  */

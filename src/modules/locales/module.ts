@@ -27,7 +27,7 @@ import { localesConfig } from './tenants';
  * tier collecting it and handing it in by name.
  *
  * Ports are registered HERE rather than at import time, so importing this file (a type, a test)
- * no longer installs them — only a module `registerModules` actually runs `onRegistered` for does.
+ * does not install them — only a module `registerModules` actually runs `onRegistered` for does.
  *
  * @param modules - every enabled module, this module's own included
  */
