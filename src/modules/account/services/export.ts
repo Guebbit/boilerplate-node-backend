@@ -21,6 +21,7 @@ import {
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { t } from '@infrastructure/i18n';
+import { userService } from '@modules/users';
 import { personalDataSections } from './personal-data-registry';
 import { accountAuditActions } from '../audit';
 
@@ -46,33 +47,37 @@ type AccountExportPayload = Record<string, unknown> & { exportedAt: string };
  *
  * @param userId - the authenticated caller's own id; this never reads anyone else's data
  * @param email - the authenticated caller's own email — the key the `feedback` section (open to
- *   people with no account) matches its rows by, instead of an id
+ *   people with no account) matches its rows by, instead of an id. Handed to the sections with
+ *   whether the account has proved it, since an unproven address is anyone's
  * @param context - for the audit event this call itself is
  */
 export const exportOwnData = (
     userId: string,
     email: string,
     context: CallerContext
-): Promise<ResponseSuccess<AccountExportPayload> | ResponseReject> => {
-    const subject = { userId, email };
-
-    return Promise.all(
-        personalDataSections().map((section) =>
-            section.collect(subject).then((value) => [section.section, value] as const)
+): Promise<ResponseSuccess<AccountExportPayload> | ResponseReject> =>
+    userService
+        .getById(userId)
+        .then((user) => ({ userId, email, emailVerified: Boolean(user?.verifiedAt) }))
+        .then((subject) =>
+            Promise.all(
+                personalDataSections().map((section) =>
+                    section.collect(subject).then((value) => [section.section, value] as const)
+                )
+            )
         )
-    ).then((entries) => {
-        const profile = entries.find(([section]) => section === PROFILE_SECTION)?.[1];
-        if (!profile) return generateReject(404, [t('users.not-found')]);
+        .then((entries) => {
+            const profile = entries.find(([section]) => section === PROFILE_SECTION)?.[1];
+            if (!profile) return generateReject(404, [t('users.not-found')]);
 
-        const payload = Object.fromEntries(
-            entries.filter(([, value]) => value !== undefined)
-        ) as Record<string, unknown>;
+            const payload = Object.fromEntries(
+                entries.filter(([, value]) => value !== undefined)
+            ) as Record<string, unknown>;
 
-        recordAudit(context, {
-            action: accountAuditActions.AUTH_DATA_EXPORTED,
-            outcome: 'success'
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_DATA_EXPORTED,
+                outcome: 'success'
+            });
+
+            return generateSuccess({ ...payload, exportedAt: new Date().toISOString() });
         });
-
-        return generateSuccess({ ...payload, exportedAt: new Date().toISOString() });
-    });
-};

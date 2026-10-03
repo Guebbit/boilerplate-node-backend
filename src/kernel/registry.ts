@@ -204,6 +204,13 @@ export interface PublicEventTarget {
 export interface PersonalDataSubject {
     userId: string;
     email: string;
+    /**
+     * Whether the account has proved it controls `email`. A section that matches rows by address
+     * rather than by id must answer only when this is true: anyone can sign up with a stranger's
+     * address, and an export of what that address once wrote is a disclosure to whoever typed it
+     * (GDPR Art. 12(6) — verify identity before disclosing).
+     */
+    emailVerified: boolean;
 }
 
 /**

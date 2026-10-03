@@ -172,7 +172,11 @@ describe('personal data', () => {
         await createExample({ userId: subject.id, title: 'Out', status: ExampleStatus.published });
         await createExample({ userId: other.id, title: 'Not yours' });
 
-        const exported = await collectPersonalData({ userId: subject.id, email: subject.email });
+        const exported = await collectPersonalData({
+            userId: subject.id,
+            email: subject.email,
+            emailVerified: true
+        });
 
         expect(exported.map((example) => example.title).toSorted()).toEqual(['Draft', 'Out']);
         expect(exported.every((example) => example.ownerName === 'ada')).toBe(true);
@@ -181,7 +185,13 @@ describe('personal data', () => {
     it('exports an empty list, not nothing, for a subject with no examples', async () => {
         const subject = await createUser();
 
-        expect(await collectPersonalData({ userId: subject.id, email: subject.email })).toEqual([]);
+        expect(
+            await collectPersonalData({
+                userId: subject.id,
+                email: subject.email,
+                emailVerified: true
+            })
+        ).toEqual([]);
     });
 
     it('erases only the subject’s rows, and defers deleting the cover files until after commit', async () => {

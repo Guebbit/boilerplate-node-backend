@@ -25,12 +25,13 @@ export default {
     personalData: [
         {
             section: 'feedback',
-            // Matched by email, not id: this form is open to people with no account. `undefined`
-            // (not an empty array) when the flag is off, so `account`'s assembly omits the key
-            // entirely — `feedback` is optional in the contract precisely because most exports
-            // carry none.
+            // Matched by email, not id: this form is open to people with no account — so only for
+            // an account that has PROVED the address, since anyone can sign up with someone
+            // else's. `undefined` (not an empty array) when the flag is off or the address is
+            // unproven, so `account`'s assembly omits the key entirely — `feedback` is optional
+            // in the contract precisely because most exports carry none.
             collect: (subject) =>
-                feedbackConfig().NODE_EXPORT_INCLUDE_FEEDBACK
+                feedbackConfig().NODE_EXPORT_INCLUDE_FEEDBACK && subject.emailVerified
                     ? findOwnTicketsForExport(subject.email)
                     : Promise.resolve(undefined)
         }
