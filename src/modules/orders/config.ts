@@ -357,8 +357,8 @@ export const transferInstructionsFor = (reference: string): OrderTransferInstruc
 /**
  * How long a cancelled order's refund gets before `scripts/ops/sweep-order-effects.ts` retries it.
  * A grace window, not a deadline: the refund normally settles milliseconds after the cancel, and
- * this only has to outlast a slow one. Read per call, like every other getter here, so a change
- * applies to the next sweep tick and a test can vary it per case.
+ * this only has to outlast a slow one. Read per call, like every other getter here, so a test
+ * can vary it per case.
  * @returns the grace window in minutes
  */
 export const orderEffectRetryMinutes = (): number => ordersConfig().NODE_ORDER_EFFECT_RETRY_MINUTES;

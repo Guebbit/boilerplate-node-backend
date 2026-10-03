@@ -122,8 +122,8 @@ money already received is not the race this guard exists to catch.
 | `NODE_VAT_RATE_REDUCED` | `0.1`   | The rate charged on a product whose `taxClass` is `reduced`. Same boot-time range check as the default                                |
 
 Both are read per call from one slice (`config.ts`), which parses a set value through a
-whole-string-decimal grammar and refuses anything outside `[0, 1)` — at boot, and again on every
-read — so a value the gate accepts is never one the reader would then silently fall back on. `resolveTaxRate` (`./tax`) is the one place either rate is resolved for a
+whole-string-decimal grammar and refuses anything outside `[0, 1)` — at boot, and by the slice itself
+on its one parse — so a value the gate accepts is never one the reader would then silently fall back on. `resolveTaxRate` (`./tax`) is the one place either rate is resolved for a
 product; `orders` freezes the result onto an order line at checkout and never reads a rate itself.
 
 The shop's one currency (`NODE_DEFAULT_CURRENCY`, documented under

@@ -70,7 +70,7 @@ describe('the VAT rate boot gate', () => {
 });
 
 describe('reading the rates', () => {
-    it('reads each rate per call, so a change needs no restart', () => {
+    it('reads each rate per call, so an override applies to the next read', () => {
         configure();
         setEnvironment({ NODE_VAT_RATE_DEFAULT: '0.05' });
 

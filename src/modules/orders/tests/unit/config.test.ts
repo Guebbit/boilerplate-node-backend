@@ -88,7 +88,7 @@ describe('the shop jurisdiction boot gate', () => {
 });
 
 describe('reading the jurisdiction', () => {
-    it('reads the field per call, so a correction needs no restart', () => {
+    it('reads the field per call, so an override applies to the next read', () => {
         configure();
         setEnvironment({ NODE_SHOP_COUNTRY: 'FR' });
 

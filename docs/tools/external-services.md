@@ -43,8 +43,8 @@ flowchart TD
 ### PORT — a registry is already there
 
 Four concerns resolve a named provider at runtime. Each registry re-checks configuration on every
-call, so a provider becomes active when its variables are set, with no restart-shaped memoisation
-to go stale.
+call, so a provider is active when its variables are set in the environment the process started
+with (or a test override), and the registry holds no copy of its own to go stale.
 
 | Concern               | Registry                                         | Ships with                                    | What a vendor adds                                                          |
 | --------------------- | ------------------------------------------------ | --------------------------------------------- | --------------------------------------------------------------------------- |
