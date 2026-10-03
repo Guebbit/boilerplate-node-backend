@@ -7,7 +7,7 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/callers';
+import { callerContextAs } from '@tests/callers';
 import { api, authenticateAs } from '@tests/http';
 import { setCookie } from '@tests/cookies';
 import { freezeDate, advanceDate } from '@tests/clock';
@@ -27,7 +27,11 @@ const authenticateWithShipment = async () => {
     const order = await createOrder(user, [toOrderItem(product, 1)], {
         status: OrderStatus.processing
     });
-    await deliveryService.recordShipment(String(order._id), 'TRK-CONTRACT1', testCallerContext);
+    await deliveryService.recordShipment(
+        String(order._id),
+        'TRK-CONTRACT1',
+        callerContextAs('admin')
+    );
     return { bearer, order };
 };
 
@@ -373,7 +377,11 @@ describe('forced ship/deliver demands the same step-up POST /orders/{id}/status-
         const order = await createOrder(owner, [toOrderItem(product, 1)], {
             status: OrderStatus.processing
         });
-        await deliveryService.recordShipment(String(order._id), 'TRK-STEPUP', testCallerContext);
+        await deliveryService.recordShipment(
+            String(order._id),
+            'TRK-STEPUP',
+            callerContextAs('admin')
+        );
 
         const response = await api()
             .post(`/delivery/order/${String(order._id)}/deliver`)

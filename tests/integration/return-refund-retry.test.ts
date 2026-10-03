@@ -9,7 +9,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { withEnvironment } from '@tests/environment';
 import { resetDomainEvents } from '@kernel/events';
-import { asAdmin, asCustomer, testCallerContext } from '@tests/callers';
+import { asAdmin, asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
@@ -70,7 +70,7 @@ describe('a return whose refund the provider refuses', () => {
             const { shirt, orderId, returnId } = await withdrawnOrder();
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
 
-            const result = await receiveReturn(returnId, {}, testCallerContext);
+            const result = await receiveReturn(returnId, {}, callerContextAs('admin'));
 
             // The goods are back either way — a failed refund does not undo the receipt.
             expect(result.success && result.data.status).toBe('received');

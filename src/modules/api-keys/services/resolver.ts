@@ -11,7 +11,7 @@
 import { logger } from '@infrastructure/adapters/logger';
 import type { ResolvedCredential } from '@kernel/authentication';
 import { keysInScope, assembleCaller, levelOfRoles } from '@kernel/permissions';
-import { holdsKey } from '@kernel/ability';
+import { heldKeys } from '@kernel/ability';
 import { rolesOf } from '@modules/access';
 import { userService } from '@modules/users';
 import type { Caller } from '@types';
@@ -26,9 +26,8 @@ import type { ApiKeyDocument } from '../model';
  * `kernel/permissions.ts#keysInScope`'s own caller flooring: never trust a cached list, re-derive
  * from the authoritative source on every check — `keysInScope` itself is what does that
  * derivation, `roles.tenant` and all, so this stays a call rather than a second copy of it.
- * `holdsKey`, not a raw list membership check, is what then reads the result — the CASL ability
- * it builds is what a mint-floor check should ask, the same as any other route guard, rather than
- * this file re-deriving its own answer from the raw list.
+ * `heldKeys` is what then reads the result — the keys the CASL ability was built from, never its
+ * collapsed `can(action, subject)` answer, which cannot tell a `self` key from an `any` one.
  *
  * `findAuthenticatableById` — not `findById` — for the same reason `account/module.ts`'s own
  * resolver uses it: a deactivated or soft-deleted minter must stop granting access on their very
@@ -78,8 +77,12 @@ export const fromBearerToken = (token: string): Promise<ResolvedCredential | und
                 });
             });
 
+            // The literal keys, not CASL's collapsed answer: `orders.self.read` and
+            // `orders.any.read` are both `read` on `Order`, so a minter who is now a customer
+            // would otherwise still pass for the wide read a key was minted with.
+            const minterKeys = currentCaller ? heldKeys(currentCaller) : new Set<string>();
             const held = currentCaller
-                ? apiKey.permissions.filter((key) => holdsKey(currentCaller, key))
+                ? apiKey.permissions.filter((key) => minterKeys.has(key))
                 : [];
 
             // Never fewer than a stranger holds: a read scope compiled from `request.caller` (the

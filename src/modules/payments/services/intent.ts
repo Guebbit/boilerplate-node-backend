@@ -26,6 +26,7 @@ import type { PaymentDocument } from '../model';
 import { presentPayment } from '../presenter';
 import { paymentRepository } from '../repository';
 import { notPayable } from './errors';
+import { buyerOrderScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
@@ -74,7 +75,8 @@ export const resolvePayerId = (orderUserId: string | undefined): Promise<string 
  * intent for the same order is a second thing the customer could pay.
  *
  * @param orderId - the order to pay
- * @param authContext - the caller; the order must be theirs (admins pass, as everywhere)
+ * @param authContext - the caller; the order must be theirs — paying is the buyer's step, so an
+ *   operator's wider read scope does not reach it
  * @returns the payment on the wire, carrying the `clientSecret` the browser finishes against —
  *   the one response that does, since it is never stored and never read back
  */
@@ -84,7 +86,7 @@ export const createIntent = async (
     orderId: string,
     authContext?: AuthContext
 ): Promise<ResponseSuccess<Payment> | ResponseReject> => {
-    const order = await orderService.getById(orderId, orderService.callerScope(authContext));
+    const order = await orderService.getById(orderId, buyerOrderScope(authContext));
     if (!order) return generateReject(404, [t('payments.order-not-found')]);
     // Payable is asked of the order lifecycle rather than compared against a literal here, so
     // this module cannot drift from the owner of the rule — and, unlike a bare `canTransition`

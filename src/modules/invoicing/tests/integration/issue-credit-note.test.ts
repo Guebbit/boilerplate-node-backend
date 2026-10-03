@@ -18,7 +18,7 @@ import { createIntent, confirmPayment, performRefund, paymentService } from '@mo
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
+import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
 import { invoicingRepository } from '../../repository';
 import { issueCreditNote } from '../../services';
 
@@ -114,7 +114,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
     it('mirrors the invoice for a full refund', async () => {
         const { orderId, invoice } = await paidAndInvoiced();
 
-        await paymentService.refundByOrder(orderId, asAdmin(), testCallerContext);
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
         const notes = await waitForNotes(orderId, 1);
 
         expect(notes[0].lines).toHaveLength(invoice.lines.length);
@@ -126,8 +126,12 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
     it('issues one credit note per partial refund, each for its own amount', async () => {
         const { orderId, invoice } = await paidAndInvoiced();
 
-        await paymentService.refundByOrder(orderId, asAdmin(), testCallerContext, { amount: 20 });
-        await paymentService.refundByOrder(orderId, asAdmin(), testCallerContext, { amount: 5 });
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+            amount: 20
+        });
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+            amount: 5
+        });
         const notes = await waitForNotes(orderId, 2);
 
         expect(notes.map((note) => note.grandTotal)).toEqual([20, 5]);
@@ -144,7 +148,9 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
 
     it('is idempotent on the refund — a redelivered event issues nothing twice', async () => {
         const { orderId } = await paidAndInvoiced();
-        await paymentService.refundByOrder(orderId, asAdmin(), testCallerContext, { amount: 20 });
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+            amount: 20
+        });
         const [note] = await waitForNotes(orderId, 1);
 
         const again = await issueCreditNote({

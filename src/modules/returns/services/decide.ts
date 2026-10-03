@@ -65,7 +65,8 @@ const notifyDecision = (
     });
 
 /**
- * The shared shape of both decisions: the conditional move, then the audit row and the mail.
+ * The shared shape of both decisions: the rank rule, the conditional move, then the audit row and
+ * the mail.
  *
  * @param id - the return being decided
  * @param to - `approved` or `declined`
@@ -78,36 +79,76 @@ const decide = (
     stamp: ReturnStamp,
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
-    returnRepository
-        .claimStatus(id, DECIDABLE_RETURN_STATUSES, to, { ...stamp, decidedAt: new Date() })
-        .then((decided) => {
-            if (!decided) return notDecidable(id);
-
-            recordAudit(context, {
-                action:
-                    to === 'approved'
-                        ? returnsAuditActions.ADMIN_RETURN_APPROVED
-                        : returnsAuditActions.ADMIN_RETURN_DECLINED,
-                outcome: 'success',
-                target_type: 'return',
-                target_id: id,
-                metadata: { orderId: String(decided.orderId) }
-            });
-            return syncReturnStatus(String(decided.orderId))
-                .then(() =>
-                    notifyDecision(
-                        decided,
-                        to === 'approved' ? 'return-approved' : 'return-declined'
-                    )
+    outrankedDecision(id, context).then<ResponseSuccess<ReturnDocument> | ResponseReject>(
+        (refusal) =>
+            refusal ??
+            returnRepository
+                .claimStatus(id, DECIDABLE_RETURN_STATUSES, to, {
+                    ...stamp,
+                    decidedAt: new Date()
+                })
+                .then<ResponseSuccess<ReturnDocument> | ResponseReject>((decided) =>
+                    decided ? settleDecision(decided, to, id, context) : notDecidable(id)
                 )
-                .then(() =>
-                    generateSuccess(
-                        decided,
-                        200,
-                        t(to === 'approved' ? 'returns.approved' : 'returns.declined')
-                    )
-                );
-        });
+    );
+
+/**
+ * The rank rule for a decision: the buyer of the order this return belongs to must rank below the
+ * staff member deciding. A return that does not exist has no buyer to outrank — the claim below
+ * answers 404 for it.
+ *
+ * @param id - the return about to be decided
+ * @param context - the staff member
+ */
+const outrankedDecision = (
+    id: string,
+    context: CallerContext
+): Promise<ResponseReject | undefined> =>
+    returnRepository
+        .findById(id)
+        .then((returned) =>
+            returned
+                ? orderService.outrankedOrderRefusal(String(returned.orderId), context)
+                : undefined
+        );
+
+/**
+ * What follows a won claim: the audit row, the order's projection and the customer's mail.
+ *
+ * @param decided - the return as the claim left it
+ * @param to - `approved` or `declined`
+ * @param id - the return
+ * @param context - the staff member, for audit
+ */
+const settleDecision = (
+    decided: ReturnDocument,
+    to: 'approved' | 'declined',
+    id: string,
+    context: CallerContext
+): Promise<ResponseSuccess<ReturnDocument>> => {
+    recordAudit(context, {
+        action:
+            to === 'approved'
+                ? returnsAuditActions.ADMIN_RETURN_APPROVED
+                : returnsAuditActions.ADMIN_RETURN_DECLINED,
+        outcome: 'success',
+        target_type: 'return',
+        target_id: id,
+        metadata: { orderId: String(decided.orderId) }
+    });
+
+    return syncReturnStatus(String(decided.orderId))
+        .then(() =>
+            notifyDecision(decided, to === 'approved' ? 'return-approved' : 'return-declined')
+        )
+        .then(() =>
+            generateSuccess(
+                decided,
+                200,
+                t(to === 'approved' ? 'returns.approved' : 'returns.declined')
+            )
+        );
+};
 
 /**
  * Approve a return request — the customer may now send the goods back.

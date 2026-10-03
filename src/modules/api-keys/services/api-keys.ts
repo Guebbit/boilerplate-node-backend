@@ -18,7 +18,8 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
-import { holdsKey } from '@kernel/ability';
+import { heldKeys } from '@kernel/ability';
+import { outrankedRefusal } from '@modules/access';
 import { findKey } from '@kernel/permissions';
 import type { Caller } from '@types';
 import type { MintApiKeyRequest, ApiKeyCreated, ApiKey } from '@types';
@@ -34,11 +35,12 @@ import { presentApiKey } from '../presenter';
  * Three conditions, all required: the key must be DECLARED (an invented string grants nothing
  * while looking like it does — `assertDeclared`'s own reasoning), TENANT-scoped (a credential is
  * tenant-scoped only, see `docs/tools/security.md#machine-to-machine-credentials`), and actually
- * HELD by the minter right now. `holdsKey`, the same ability-backed check every other route guard
- * in this codebase uses, rather than a raw `permissions.includes` against the minter's own list.
+ * HELD by the minter right now. `heldKeys`, the literal keys the ability was built from: `holdsKey`
+ * collapses `orders.self.read` into `orders.any.read` (both are `read` on `Order`), which would let a
+ * customer mint a key for the wide read.
  */
 const isMintable = (key: string, caller: Caller): boolean =>
-    findKey(key)?.scope === 'tenant' && holdsKey(caller, key);
+    findKey(key)?.scope === 'tenant' && heldKeys(caller).has(key);
 
 /**
  * Every credential this account minted, newest first — for the account's own data export.
@@ -137,7 +139,11 @@ export const mint = (
         });
 };
 
-/** Revoke a credential. Idempotent: revoking an already-revoked key is a no-op success, not a 404. */
+/**
+ * Revoke a credential. Idempotent: revoking an already-revoked key is a no-op success, not a 404.
+ * A key belongs to the person who minted it, so the rank rule applies: revoking an equal's or a
+ * superior's key is `403 OUTRANKED`, revoking one's own is always fine.
+ */
 export const revoke = (
     id: string,
     context: TenantCallerContext
@@ -146,17 +152,20 @@ export const revoke = (
         if (apiKey?.tenant !== context.caller.tenantId)
             return generateReject(404, [t('generic.error-not-found')]);
 
-        if (apiKey.revokedAt) return generateSuccess(undefined);
+        return outrankedRefusal(context, apiKey.createdByUserId, 'api_key', id).then((refusal) => {
+            if (refusal) return refusal;
+            if (apiKey.revokedAt) return generateSuccess(undefined);
 
-        apiKey.revokedAt = new Date();
-        return apiKeyRepository.save(apiKey).then(() => {
-            recordAudit(context, {
-                action: apiKeysAuditActions.ADMIN_API_KEY_REVOKED,
-                outcome: 'success',
-                target_type: 'api_key',
-                target_id: id,
-                metadata: { credential: displayIdOf(apiKey.publicPrefix) }
+            apiKey.revokedAt = new Date();
+            return apiKeyRepository.save(apiKey).then(() => {
+                recordAudit(context, {
+                    action: apiKeysAuditActions.ADMIN_API_KEY_REVOKED,
+                    outcome: 'success',
+                    target_type: 'api_key',
+                    target_id: id,
+                    metadata: { credential: displayIdOf(apiKey.publicPrefix) }
+                });
+                return generateSuccess(undefined);
             });
-            return generateSuccess(undefined);
         });
     });

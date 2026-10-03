@@ -23,7 +23,7 @@ import {
 import { fakePaymentProvider } from '@modules/payments/providers/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
+import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -87,7 +87,7 @@ describe('a refund outside a return mails the buyer', () => {
     it('sends the refund notice to the buyer, naming a partial refund as part of the payment', async () => {
         const { order, orderId } = await paidOrder();
 
-        await refundByOrder(orderId, asAdmin(), testCallerContext, { amount: 30 });
+        await refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
         await waitUntil(() => mailsOf('orders.order-refunded').length > 0);
 
         expect(mailsOf('orders.order-refunded')[0][0].to).toBe(order.email);
@@ -98,7 +98,7 @@ describe('a refund outside a return mails the buyer', () => {
     it('says the refund is everything when the last part goes back', async () => {
         const { orderId } = await paidOrder();
 
-        await refundByOrder(orderId, asAdmin(), testCallerContext, { amount: 100 });
+        await refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 100 });
         await waitUntil(() => mailsOf('orders.order-refunded').length > 0);
 
         expect(dataOf('orders.order-refunded').detail).toContain('everything');
@@ -135,7 +135,7 @@ describe('a refund that must not mail', () => {
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('provider down'));
 
         await expect(
-            refundByOrder(orderId, asAdmin(), testCallerContext, { amount: 30 })
+            refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 })
         ).rejects.toThrow('provider down');
         await settleQuietly();
 

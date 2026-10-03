@@ -64,7 +64,7 @@ export {
     findOwnPaymentsForExport,
     reapAbandonedPayments
 } from './retention';
-export { callerScope } from './scope';
+export { callerScope, payerScope, buyerOrderScope } from './scope';
 export { getOrderByReference } from './lookup';
 export { listPaymentMethods, type PaymentMethodInfo } from '../config';
 

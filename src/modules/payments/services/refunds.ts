@@ -549,24 +549,36 @@ export const refundByOrder = (
     context: CallerContext,
     body: { amount?: number; currency?: string } = {}
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    paymentRepository.findByOrderId(orderId, callerScope(authContext)).then((payment) => {
-        if (!payment) return generateReject(404, [t('payments.not-found')]);
+    // The rank rule first: the buyer must rank below the operator returning their money, and an
+    // operator who may not touch this order is told so before anything about its payment.
+    orderService
+        .outrankedOrderRefusal(orderId, context)
+        .then<ResponseSuccess<PaymentDocument> | ResponseReject>(
+            (outranked) =>
+                outranked ??
+                paymentRepository
+                    .findByOrderId(orderId, callerScope(authContext))
+                    .then((payment) => {
+                        if (!payment) return generateReject(404, [t('payments.not-found')]);
 
-        const invalid = refusalFor(payment, body);
-        if (invalid) return invalid;
+                        const invalid = refusalFor(payment, body);
+                        if (invalid) return invalid;
 
-        return performRefund(orderId, context, { amount: body.amount, reason: 'goodwill' }).then(
-            (refunded) =>
-                refunded
-                    ? generateSuccess(refunded, 200, t('payments.refund-success'))
-                    : generateReject(409, [
-                          {
-                              code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE,
-                              message: t('payments.not-refundable')
-                          }
-                      ])
+                        return performRefund(orderId, context, {
+                            amount: body.amount,
+                            reason: 'goodwill'
+                        }).then((refunded) =>
+                            refunded
+                                ? generateSuccess(refunded, 200, t('payments.refund-success'))
+                                : generateReject(409, [
+                                      {
+                                          code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE,
+                                          message: t('payments.not-refundable')
+                                      }
+                                  ])
+                        );
+                    })
         );
-    });
 
 /**
  * `ORDER_REFUND_OWED`'s listener: give the money back if any was taken.

@@ -10,7 +10,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext, asCustomer } from '@tests/callers';
+import { testCallerContext, asCustomer, callerContextAs } from '@tests/callers';
 import { resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 
@@ -129,7 +129,7 @@ describe('deactivating a product with a pending order against it', () => {
         const result = await recordOfflinePayment(
             orderId,
             { method: 'bank_transfer', reference: 'till-1' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(true);
@@ -204,7 +204,7 @@ describe('admin offline recording on an order whose product is gone', () => {
         const result = await recordOfflinePayment(
             orderId,
             { method: 'bank_transfer', reference: 'till-1' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(true);

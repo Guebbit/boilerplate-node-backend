@@ -23,7 +23,14 @@ import { OrderStatus } from '@types';
 import paymentsModule from '@modules/payments/module';
 import returnsModule from '../../module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { asAdmin, asCustomer, asManager, asRole, testCallerContext } from '@tests/callers';
+import {
+    asAdmin,
+    asCustomer,
+    asManager,
+    asRole,
+    testCallerContext,
+    callerContextAs
+} from '@tests/callers';
 import { asReject } from '@tests/response';
 import {
     approveReturn,
@@ -421,7 +428,7 @@ describe('a return on goods that have shipped', () => {
             testCallerContext
         );
         if (first.kind !== 'created') throw new Error('expected a return');
-        await declineReturn(String(first.created._id), 'Used', testCallerContext);
+        await declineReturn(String(first.created._id), 'Used', callerContextAs('admin'));
 
         const again = await createReturn(
             { orderId, reason: 'defective', lines: twoShirts },
@@ -479,7 +486,7 @@ describe('deciding a request', () => {
         const { returnId } = await requestedReturn();
         mockEnqueueEmail.mockClear();
 
-        const result = await approveReturn(returnId, testCallerContext);
+        const result = await approveReturn(returnId, callerContextAs('admin'));
 
         expect(result.success && result.data.status).toBe('approved');
         expect(result.success && result.data.decidedAt).toBeInstanceOf(Date);
@@ -490,7 +497,7 @@ describe('deciding a request', () => {
         const { returnId } = await requestedReturn();
         mockEnqueueEmail.mockClear();
 
-        const result = await declineReturn(returnId, 'Worn', testCallerContext);
+        const result = await declineReturn(returnId, 'Worn', callerContextAs('admin'));
 
         expect(result.success && result.data).toMatchObject({
             status: 'declined',
@@ -503,8 +510,8 @@ describe('deciding a request', () => {
         const { returnId } = await requestedReturn();
 
         const results = await Promise.all([
-            approveReturn(returnId, testCallerContext),
-            declineReturn(returnId, 'No', testCallerContext)
+            approveReturn(returnId, callerContextAs('admin')),
+            declineReturn(returnId, 'No', callerContextAs('admin'))
         ]);
 
         expect(results.filter((result) => result.success)).toHaveLength(1);
@@ -522,13 +529,17 @@ describe('deciding a request', () => {
         );
         if (outcome.kind !== 'created') throw new Error('expected a return');
 
-        const result = await declineReturn(String(outcome.created._id), 'No', testCallerContext);
+        const result = await declineReturn(
+            String(outcome.created._id),
+            'No',
+            callerContextAs('admin')
+        );
 
         expect(asReject(result).status).toBe(409);
     });
 
     it('answers 404 for a return that does not exist', async () => {
-        const result = await approveReturn('a'.repeat(24), testCallerContext);
+        const result = await approveReturn('a'.repeat(24), callerContextAs('admin'));
 
         expect(asReject(result).status).toBe(404);
     });
@@ -558,7 +569,7 @@ describe('who sees which return', () => {
     it('filters by status for staff', async () => {
         const { returnId } = await requestedReturn();
         await requestedReturn();
-        await approveReturn(returnId, testCallerContext);
+        await approveReturn(returnId, callerContextAs('admin'));
 
         const page = await listReturns({ status: 'approved' }, asManager());
 
@@ -596,7 +607,7 @@ describe('who sees which return', () => {
 
     it('offers the warehouse receive on an approved return, and not approve', async () => {
         const { returnId } = await requestedReturn();
-        await approveReturn(returnId, testCallerContext);
+        await approveReturn(returnId, callerContextAs('admin'));
         const stored = await returnRepository.findById(returnId);
 
         expect(withActions(stored!, asRole('warehouse')).actions).toEqual({

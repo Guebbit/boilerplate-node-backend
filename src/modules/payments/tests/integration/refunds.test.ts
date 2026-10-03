@@ -28,7 +28,7 @@ import { fakePaymentProvider } from '@modules/payments/providers/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';
-import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
+import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
 
 setupTestDb();
 
@@ -65,7 +65,7 @@ const paymentOf = async (orderId: string) => {
 
 /** Refund `amount` of the order's payment as an operator. */
 const refund = (orderId: string, body: { amount?: number; currency?: string } = {}) =>
-    refundByOrder(orderId, asAdmin(), testCallerContext, body);
+    refundByOrder(orderId, asAdmin(), callerContextAs('admin'), body);
 
 describe('a partial refund', () => {
     it('records the refund and keeps the payment succeeded, with the rest still refundable', async () => {
@@ -317,7 +317,7 @@ describe('a partial refund on a payment recorded by hand', () => {
         await recordOfflinePayment(
             orderId,
             { method: 'cash', reference: 'till' },
-            testCallerContext
+            callerContextAs('admin')
         );
         const providerSpy = jest.spyOn(fakePaymentProvider, 'refund');
 

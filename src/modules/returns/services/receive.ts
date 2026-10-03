@@ -168,6 +168,62 @@ const refundAndClose = (
 };
 
 /**
+ * {@link receiveReturn}'s body once the rank rule has cleared the caller: quote, claim and restock,
+ * then refund and close.
+ *
+ * @param id - the return
+ * @param returned - the return as loaded
+ * @param order - the order it belongs to
+ * @param input - what staff enter on receipt
+ * @param context - the staff member
+ */
+const receiveFor = (
+    id: string,
+    returned: ReturnDocument,
+    order: OrderDocument,
+    input: ReceiveReturnInput,
+    context: CallerContext
+): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => {
+    const deduction = input.handlingDeduction ?? 0;
+    const verdict = quote(returned, order, deduction);
+    if (!verdict.ok)
+        return Promise.resolve(
+            generateReject(422, [
+                {
+                    code: ERROR_CODES.RETURN_DEDUCTION_INVALID,
+                    message: t('returns.deduction-too-high')
+                }
+            ])
+        );
+
+    return claimAndRestock(returned, verdict.breakdown, deduction).then((received) => {
+        if (!received) return notReceivable();
+
+        return inventoryService
+            .refreshStockCacheForProducts(received.lines.map(({ productId }) => String(productId)))
+            .then(() => syncReturnStatus(String(received.orderId)))
+            .then(() => {
+                recordAudit(context, {
+                    action: returnsAuditActions.ADMIN_RETURN_RECEIVED,
+                    outcome: 'success',
+                    target_type: 'return',
+                    target_id: id,
+                    metadata: {
+                        orderId: String(received.orderId),
+                        refundAmount: verdict.breakdown.total
+                    }
+                });
+                void emitDomainEvent(RETURN_RECEIVED, {
+                    returnId: id,
+                    orderId: String(received.orderId)
+                });
+                return refundAndClose(received, context);
+            })
+            .then((after) => generateSuccess(after, 200, t('returns.received')));
+    });
+};
+
+/**
  * Record that a return's goods arrived: restock them, pay the customer back, close the return.
  *
  * @param id - the return
@@ -187,42 +243,10 @@ export const receiveReturn = (
         return orderService.getById(String(returned.orderId)).then((order) => {
             if (!order) return generateReject(404, [t('returns.order-not-found')]);
 
-            const deduction = input.handlingDeduction ?? 0;
-            const verdict = quote(returned, order, deduction);
-            if (!verdict.ok)
-                return generateReject(422, [
-                    {
-                        code: ERROR_CODES.RETURN_DEDUCTION_INVALID,
-                        message: t('returns.deduction-too-high')
-                    }
-                ]);
-
-            return claimAndRestock(returned, verdict.breakdown, deduction).then((received) => {
-                if (!received) return notReceivable();
-
-                return inventoryService
-                    .refreshStockCacheForProducts(
-                        received.lines.map(({ productId }) => String(productId))
-                    )
-                    .then(() => syncReturnStatus(String(received.orderId)))
-                    .then(() => {
-                        recordAudit(context, {
-                            action: returnsAuditActions.ADMIN_RETURN_RECEIVED,
-                            outcome: 'success',
-                            target_type: 'return',
-                            target_id: id,
-                            metadata: {
-                                orderId: String(received.orderId),
-                                refundAmount: verdict.breakdown.total
-                            }
-                        });
-                        void emitDomainEvent(RETURN_RECEIVED, {
-                            returnId: id,
-                            orderId: String(received.orderId)
-                        });
-                        return refundAndClose(received, context);
-                    })
-                    .then((after) => generateSuccess(after, 200, t('returns.received')));
-            });
+            // The rank rule: staff receive goods for a customer's return, never an equal's or a
+            // superior's — receiving opens the refund.
+            return orderService
+                .outrankedRefusalFor(order, context)
+                .then((outranked) => outranked ?? receiveFor(id, returned, order, input, context));
         });
     });

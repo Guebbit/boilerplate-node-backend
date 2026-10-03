@@ -10,7 +10,14 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { resetDomainEvents } from '@kernel/events';
-import { callerAs, testCallerContext, asCustomer, asAdmin, TEST_TENANT_ID } from '@tests/callers';
+import {
+    callerAs,
+    testCallerContext,
+    asCustomer,
+    asAdmin,
+    TEST_TENANT_ID,
+    callerContextAs
+} from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
@@ -83,7 +90,7 @@ it('an admin refund fans out a payment.refunded delivery carrying the amount and
 
     const { order } = await paidOrder(20);
 
-    const refunded = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+    const refunded = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
     expect(refunded.success).toBe(true);
     const currency = refunded.success ? refunded.data.currency : undefined;
 

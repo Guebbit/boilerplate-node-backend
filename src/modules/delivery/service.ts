@@ -99,13 +99,21 @@ export const startFulfilment = (
 ): Promise<ResponseSuccess<Order> | ResponseReject> =>
     orderService.getById(orderId).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
-        if (!canTransition(order.status, OrderStatus.processing, 'system')) return notPaid();
 
-        return orderService.markProcessing(orderId).then((moved) => {
-            if (!moved) return notPaid();
+        return orderService.outrankedRefusalFor(order, context).then((outranked) => {
+            if (outranked) return outranked;
+            if (!canTransition(order.status, OrderStatus.processing, 'system')) return notPaid();
 
-            auditOrderEvent(context, orderId, deliveryAuditActions.ADMIN_ORDER_FULFILMENT_STARTED);
-            return orderService.withActions(moved, authContext).then(generateSuccess);
+            return orderService.markProcessing(orderId).then((moved) => {
+                if (!moved) return notPaid();
+
+                auditOrderEvent(
+                    context,
+                    orderId,
+                    deliveryAuditActions.ADMIN_ORDER_FULFILMENT_STARTED
+                );
+                return orderService.withActions(moved, authContext).then(generateSuccess);
+            });
         });
     });
 
@@ -214,14 +222,18 @@ export const fulfillOrder = (
 ): Promise<ResponseSuccess<Order> | ResponseReject> =>
     orderService.getById(orderId).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
-        if (order.status !== OrderStatus.processing) return notProcessing();
-        if (!isDigitalOnlyOrder(order.items)) return notDigitalOnly();
 
-        return orderService.markFulfilled(orderId).then((moved) => {
-            if (!moved) return notProcessing();
+        return orderService.outrankedRefusalFor(order, context).then((outranked) => {
+            if (outranked) return outranked;
+            if (order.status !== OrderStatus.processing) return notProcessing();
+            if (!isDigitalOnlyOrder(order.items)) return notDigitalOnly();
 
-            auditOrderEvent(context, orderId, deliveryAuditActions.ADMIN_ORDER_FULFILLED);
-            return orderService.withActions(moved, authContext).then(generateSuccess);
+            return orderService.markFulfilled(orderId).then((moved) => {
+                if (!moved) return notProcessing();
+
+                auditOrderEvent(context, orderId, deliveryAuditActions.ADMIN_ORDER_FULFILLED);
+                return orderService.withActions(moved, authContext).then(generateSuccess);
+            });
         });
     });
 
@@ -286,32 +298,55 @@ export const recordShipment = (
 
     return orderService.getById(orderId).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
-        // Asked of the order lifecycle rather than a status literal, same reasoning `orders`'
-        // own `isPayable` callers follow: this module cannot drift off the rule's owner.
-        const eligible = forced
-            ? canOverrideTo(order.status, OrderStatus.shipped)
-            : canTransition(order.status, OrderStatus.shipped, 'system');
-        if (!eligible) return notProcessing();
-        // Digital-only refuses outright, forced included: there is genuinely nothing to hand a
-        // carrier, so recording one here would just be `fulfillOrder`'s job done through the
-        // wrong door with a fake parcel behind it.
-        if (isDigitalOnlyOrder(order.items)) return nothingToShip();
 
-        const method = order.shippingMethod ? findShippingMethod(order.shippingMethod) : undefined;
-        if (method?.tracked && !trackingCode)
-            return generateReject(422, [
+        return orderService
+            .outrankedRefusalFor(order, context)
+            .then(
+                (outranked) =>
+                    outranked ?? shipOrder(orderId, order, trackingCode, context, forced, reason)
+            );
+    });
+};
+
+/**
+ * {@link recordShipment}'s body once the rank rule has cleared the caller: the gates, then the
+ * parcel and the order move.
+ */
+const shipOrder = (
+    orderId: string,
+    order: OrderDocument,
+    trackingCode: string | undefined,
+    context: CallerContext,
+    forced: boolean | undefined,
+    reason: string | undefined
+): Promise<ResponseSuccess<Shipment> | ResponseReject> => {
+    // Asked of the order lifecycle rather than a status literal, same reasoning `orders`'
+    // own `isPayable` callers follow: this module cannot drift off the rule's owner.
+    const eligible = forced
+        ? canOverrideTo(order.status, OrderStatus.shipped)
+        : canTransition(order.status, OrderStatus.shipped, 'system');
+    if (!eligible) return Promise.resolve(notProcessing());
+    // Digital-only refuses outright, forced included: there is genuinely nothing to hand a
+    // carrier, so recording one here would just be `fulfillOrder`'s job done through the
+    // wrong door with a fake parcel behind it.
+    if (isDigitalOnlyOrder(order.items)) return Promise.resolve(nothingToShip());
+
+    const method = order.shippingMethod ? findShippingMethod(order.shippingMethod) : undefined;
+    if (method?.tracked && !trackingCode)
+        return Promise.resolve(
+            generateReject(422, [
                 {
                     code: ERROR_CODES.DELIVERY_TRACKING_CODE_REQUIRED,
                     message: t('delivery.tracking-code-required')
                 }
-            ]);
+            ])
+        );
 
-        return shipmentRepository
-            .upsertForOrder(orderId, trackingCode)
-            .then((shipment) =>
-                afterShipmentRecorded(orderId, order, shipment, context, forced, reason)
-            );
-    });
+    return shipmentRepository
+        .upsertForOrder(orderId, trackingCode)
+        .then((shipment) =>
+            afterShipmentRecorded(orderId, order, shipment, context, forced, reason)
+        );
 };
 
 /** The refusal every {@link recordDelivery} gate answers alike — one shape, one place. */
@@ -382,15 +417,19 @@ export const recordDelivery = (
 
     return orderService.getById(orderId).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
-        const eligible = forced
-            ? canOverrideTo(order.status, OrderStatus.delivered)
-            : canTransition(order.status, OrderStatus.delivered, 'system');
-        if (!eligible) return notShipped();
 
-        return shipmentRepository.findByOrderId(orderId).then((shipment) => {
-            if (shipment?.status !== 'shipped') return notShipped();
+        return orderService.outrankedRefusalFor(order, context).then((outranked) => {
+            if (outranked) return outranked;
+            const eligible = forced
+                ? canOverrideTo(order.status, OrderStatus.delivered)
+                : canTransition(order.status, OrderStatus.delivered, 'system');
+            if (!eligible) return notShipped();
 
-            return moveAndStampDelivered(orderId, context, forced, reason);
+            return shipmentRepository.findByOrderId(orderId).then((shipment) => {
+                if (shipment?.status !== 'shipped') return notShipped();
+
+                return moveAndStampDelivered(orderId, context, forced, reason);
+            });
         });
     });
 };

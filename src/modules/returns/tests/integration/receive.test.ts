@@ -24,7 +24,7 @@ import paymentsModule from '@modules/payments/module';
 import invoicingModule from '@modules/invoicing/module';
 import returnsModule from '../../module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { asAdmin, asCustomer, testCallerContext } from '@tests/callers';
+import { asAdmin, asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 import { asReject } from '@tests/response';
 import { approveReturn, createReturn, receiveReturn } from '../../services';
 import { RETURN_CLOSED, RETURN_RECEIVED } from '../../events';
@@ -99,7 +99,7 @@ const approvedReturn = async (
     if (outcome.kind !== 'created') throw new Error('expected a return');
     const id = String(outcome.created._id);
     if (reason !== 'withdrawal') {
-        await approveReturn(id, testCallerContext);
+        await approveReturn(id, callerContextAs('admin'));
     }
     return id;
 };
@@ -130,7 +130,7 @@ describe('the statuses the order shows beside its own', () => {
         const approved = await wireOrder(fixture.orderId);
         expect(approved.returnStatus).toBe('in_progress');
 
-        await receiveReturn(id, {}, testCallerContext);
+        await receiveReturn(id, {}, callerContextAs('admin'));
         const after = await wireOrder(fixture.orderId);
         expect(after.returnStatus).toBe('returned');
         expect(after.paymentStatus).toBe('refunded');
@@ -142,7 +142,7 @@ describe('the statuses the order shows beside its own', () => {
             { productId: String(fixture.mug._id), quantity: 1 }
         ]);
 
-        await receiveReturn(id, {}, testCallerContext);
+        await receiveReturn(id, {}, callerContextAs('admin'));
 
         await waitFor(() =>
             wireOrder(fixture.orderId).then(
@@ -163,7 +163,7 @@ describe('receiving a return', () => {
         onDomainEvent(RETURN_RECEIVED, () => events.push('received'));
         onDomainEvent(RETURN_CLOSED, () => events.push('closed'));
 
-        const result = await receiveReturn(id, {}, testCallerContext);
+        const result = await receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(result.success && result.data).toMatchObject({
             status: 'closed',
@@ -187,7 +187,7 @@ describe('receiving a return', () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture);
 
-        await receiveReturn(id, {}, testCallerContext);
+        await receiveReturn(id, {}, callerContextAs('admin'));
 
         const movements = await inventoryService.listMovements({
             productId: String(fixture.shirt._id)
@@ -207,7 +207,7 @@ describe('receiving a return', () => {
             { productId: String(fixture.mug._id), quantity: 1 }
         ]);
 
-        const result = await receiveReturn(id, {}, testCallerContext);
+        const result = await receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(result.success && result.data.refundAmount).toBe(10);
         const payment = await paymentOf(fixture.orderId);
@@ -220,9 +220,9 @@ describe('receiving a return', () => {
     it('is done once — a second receipt answers 409 and restocks nothing more', async () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture);
-        await receiveReturn(id, {}, testCallerContext);
+        await receiveReturn(id, {}, callerContextAs('admin'));
 
-        const again = await receiveReturn(id, {}, testCallerContext);
+        const again = await receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(asReject(again).status).toBe(409);
         expect(asReject(again).errors[0].code).toBe('RETURN_NOT_RECEIVABLE');
@@ -234,8 +234,8 @@ describe('receiving a return', () => {
         const id = await approvedReturn(fixture);
 
         const results = await Promise.all([
-            receiveReturn(id, {}, testCallerContext),
-            receiveReturn(id, {}, testCallerContext)
+            receiveReturn(id, {}, callerContextAs('admin')),
+            receiveReturn(id, {}, callerContextAs('admin'))
         ]);
 
         expect(results.filter((result) => result.success)).toHaveLength(1);
@@ -251,13 +251,17 @@ describe('receiving a return', () => {
         );
         if (outcome.kind !== 'created') throw new Error('expected a return');
 
-        const result = await receiveReturn(String(outcome.created._id), {}, testCallerContext);
+        const result = await receiveReturn(
+            String(outcome.created._id),
+            {},
+            callerContextAs('admin')
+        );
 
         expect(asReject(result).errors[0].code).toBe('RETURN_NOT_RECEIVABLE');
     });
 
     it('answers 404 for a return that does not exist', async () => {
-        const result = await receiveReturn('a'.repeat(24), {}, testCallerContext);
+        const result = await receiveReturn('a'.repeat(24), {}, callerContextAs('admin'));
 
         expect(asReject(result).status).toBe(404);
     });
@@ -267,7 +271,7 @@ describe('receiving a return', () => {
         const id = await approvedReturn(fixture);
         mockEnqueueEmail.mockClear();
 
-        await receiveReturn(id, {}, testCallerContext);
+        await receiveReturn(id, {}, callerContextAs('admin'));
 
         const mail = mockEnqueueEmail.mock.calls.find(
             ([, template]) => template === 'returns.notice'
@@ -282,7 +286,7 @@ describe('what the customer gets back', () => {
         const fixture = await paidAndDelivered(15, 'express');
         const id = await approvedReturn(fixture);
 
-        const result = await receiveReturn(id, {}, testCallerContext);
+        const result = await receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(result.success && result.data.refundAmount).toBe(75);
     });
@@ -311,7 +315,11 @@ describe('what the customer gets back', () => {
         );
         if (outcome.kind !== 'created') throw new Error('expected a return');
 
-        const result = await receiveReturn(String(outcome.created._id), {}, testCallerContext);
+        const result = await receiveReturn(
+            String(outcome.created._id),
+            {},
+            callerContextAs('admin')
+        );
 
         expect(result.success && result.data.refundAmount).toBe(150);
     });
@@ -320,7 +328,7 @@ describe('what the customer gets back', () => {
         const fixture = await paidAndDelivered(15, 'express');
         const id = await approvedReturn(fixture, 'defective');
 
-        const result = await receiveReturn(id, {}, testCallerContext);
+        const result = await receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(result.success && result.data.refundAmount).toBe(85);
     });
@@ -331,7 +339,7 @@ describe('what the customer gets back', () => {
             { productId: String(fixture.shirt._id), quantity: 1 }
         ]);
 
-        const result = await receiveReturn(id, {}, testCallerContext);
+        const result = await receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(result.success && result.data.refundAmount).toBe(30);
     });
@@ -340,7 +348,11 @@ describe('what the customer gets back', () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture);
 
-        const result = await receiveReturn(id, { handlingDeduction: 12.5 }, testCallerContext);
+        const result = await receiveReturn(
+            id,
+            { handlingDeduction: 12.5 },
+            callerContextAs('admin')
+        );
 
         expect(result.success && result.data).toMatchObject({
             handlingDeduction: 12.5,
@@ -352,7 +364,11 @@ describe('what the customer gets back', () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture);
 
-        const result = await receiveReturn(id, { handlingDeduction: 70.01 }, testCallerContext);
+        const result = await receiveReturn(
+            id,
+            { handlingDeduction: 70.01 },
+            callerContextAs('admin')
+        );
 
         expect(asReject(result).status).toBe(422);
         expect(asReject(result).errors[0].code).toBe('RETURN_DEDUCTION_INVALID');
@@ -363,12 +379,12 @@ describe('what the customer gets back', () => {
 
     it('never refunds more than the payment has left, whatever was refunded on goodwill before', async () => {
         const fixture = await paidAndDelivered();
-        await paymentService.refundByOrder(fixture.orderId, asAdmin(), testCallerContext, {
+        await paymentService.refundByOrder(fixture.orderId, asAdmin(), callerContextAs('admin'), {
             amount: 40
         });
         const id = await approvedReturn(fixture);
 
-        const result = await receiveReturn(id, {}, testCallerContext);
+        const result = await receiveReturn(id, {}, callerContextAs('admin'));
 
         const payment = await paymentOf(fixture.orderId);
         // 70.00 was paid, 40.00 already went back: the return is owed 70.00 but only 30.00 is left.

@@ -94,6 +94,35 @@ describe('mint — the subset boundary', () => {
     });
 });
 
+describe('a self key is not an any key', () => {
+    // `orders.self.read` and `orders.any.read` are both `read` on `Order`: CASL cannot tell them
+    // apart, the literal keys can.
+    it('refuses to mint orders.any.read for a minter who holds only orders.self.read', async () => {
+        const user = await createRealUser('self-minter');
+        const context = contextFor(String(user._id), permissionsOfRole('customer'));
+
+        const result = await mint({ name: 'wide read', permissions: ['orders.any.read'] }, context);
+
+        expect(result.success).toBe(false);
+    });
+
+    it('shrinks a minted orders.any.read to nothing once its minter is a customer', async () => {
+        const user = await createRealUser('wide-then-narrow');
+        const userId = String(user._id);
+        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
+        const minted = await mint(
+            { name: 'wide read', permissions: ['orders.any.read'] },
+            contextFor(userId, permissionsOfRole('admin'))
+        );
+        if (!minted.data) throw new Error('setup failed: mint was refused');
+
+        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'customer');
+
+        const resolved = await resolveCredential(minted.data.secret);
+        expect(resolved?.caller.permissions).not.toContain('orders.any.read');
+    });
+});
+
 describe('the credential-resolve path — re-floored at every use, not just at mint', () => {
     it("shrinks a key's reach the moment its minter is demoted, with the document never touched", async () => {
         const user = await createRealUser('demoted-minter');

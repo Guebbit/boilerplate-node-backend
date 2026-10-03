@@ -3,9 +3,9 @@
  * Erasure detaches a payment from its account rather than deleting it — the
  * payment survives, same as the order it paid for. The cascade half (`personalData.erase` →
  * `detachUserId`) is proved through real module wiring, same as `cart`'s own cascade suite; the
- * `createIntent` case below is the one live path that can still reach a detached order (an admin
- * intent against it), and pins that it records no garbage payer rather than the string
- * `"undefined"`.
+ * offline-payment case below is the one live path that can still reach a detached order (an
+ * operator recording money against it — a customer's intent never can, since no account owns it
+ * any more), and pins that it records no garbage payer rather than the string `"undefined"`.
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
@@ -13,15 +13,20 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { detachOrderUserId } from '@modules/orders/tests/factories';
-import { createIntent, confirmPayment, reapAbandonedPayments } from '@modules/payments/services';
+import {
+    createIntent,
+    confirmPayment,
+    reapAbandonedPayments,
+    recordOfflinePayment
+} from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
-import { paymentModel } from '@modules/payments/model';
+import { paymentModel, type PaymentDocument } from '@modules/payments/model';
 import { userService } from '@modules/users';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import type { ResponseSuccess } from '@infrastructure/http/response';
 import type { Payment } from '@types';
-import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
+import { asCustomer, callerContextAs, testCallerContext } from '@tests/callers';
 import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
@@ -60,16 +65,32 @@ describe('payments — detach on account erasure', () => {
         await expect(paymentRepository.findById(payment.id)).resolves.not.toBeNull();
     });
 
-    it('an admin intent against an already-detached order records no payer, not the string "undefined"', async () => {
+    it('an offline payment against an already-detached order records no payer, not the string "undefined"', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         await detachOrderUserId(String(user._id), new Date(Date.now() + 100_000));
 
-        const intent = await createIntent(String(order._id), asAdmin('admin-caller'));
+        const recorded = await recordOfflinePayment(
+            String(order._id),
+            { method: 'cash' },
+            callerContextAs('admin')
+        );
 
-        const payment = (intent as ResponseSuccess<Payment>).data;
+        const payment = (recorded as ResponseSuccess<PaymentDocument>).data;
         expect(payment.userId).toBeUndefined();
+    });
+
+    it('no customer can open an intent on an order whose account is gone', async () => {
+        const user = await createUser();
+        const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await detachOrderUserId(String(user._id), new Date(Date.now() + 100_000));
+
+        const intent = await createIntent(String(order._id), asCustomer(String(stranger._id)));
+
+        expect(intent.success).toBe(false);
     });
 });
 

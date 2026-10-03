@@ -33,7 +33,7 @@ import { providerNamed, type ProviderPaymentState, type ProviderWebhookEvent } f
 import { claimWebhookEvent, releaseWebhookEvent, paymentRepository } from '../repository';
 import { CONFIRMABLE_PAYMENT_STATUSES, SETTLEABLE_PAYMENT_STATUSES } from '../domain';
 import type { PaymentDocument } from '../model';
-import { callerScope } from './scope';
+import { payerScope } from './scope';
 import { performRefund } from './refunds';
 import { announcePaymentSucceeded, recordDecline } from './announce';
 import { notPayable } from './errors';
@@ -372,7 +372,7 @@ const settleVia = (
     ) => Promise<ResponseReject | null>
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository
-        .findByIdScoped(paymentId, callerScope(authContext))
+        .findByIdScoped(paymentId, payerScope(authContext))
         .then((payment) => {
             if (!payment) return generateReject(404, [t('payments.not-found')]);
             return settleFound(payment, allowed, providerCall, precheck);
@@ -425,7 +425,7 @@ export const syncPayment = (
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository
-        .findByIdScoped(paymentId, callerScope(authContext))
+        .findByIdScoped(paymentId, payerScope(authContext))
         .then((payment) => {
             if (!payment) return generateReject(404, [t('payments.not-found')]);
             // Terminal already: there is nothing the provider could say that this module would

@@ -20,7 +20,7 @@ import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '@modules/de
 import { recordShipment, recordDelivery, getForOrder } from '@modules/delivery/service';
 import { shipmentRepository } from '@modules/delivery/repository';
 import { asReject } from '@tests/response';
-import { asCustomer, testCallerContext } from '@tests/callers';
+import { asCustomer, callerContextAs } from '@tests/callers';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -44,7 +44,7 @@ const processingOrderFor = async () => {
 
 const shippedOrderFor = async () => {
     const { user, order } = await processingOrderFor();
-    await recordShipment(String(order._id), 'TRK-TESTFIXTURE', testCallerContext);
+    await recordShipment(String(order._id), 'TRK-TESTFIXTURE', callerContextAs('admin'));
     return { user, order };
 };
 
@@ -85,7 +85,11 @@ describe('recordShipment', () => {
         mockEnqueueEmail.mockClear();
         const { order } = await processingOrderFor();
 
-        const result = await recordShipment(String(order._id), 'TRK-ABCDEF12', testCallerContext);
+        const result = await recordShipment(
+            String(order._id),
+            'TRK-ABCDEF12',
+            callerContextAs('admin')
+        );
 
         expect(result.success).toBe(true);
         const shipment = await shipmentRepository.findByOrderId(String(order._id));
@@ -106,7 +110,11 @@ describe('recordShipment', () => {
         const { order } = await processingOrderFor();
         jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('lookup unavailable'));
 
-        const result = await recordShipment(String(order._id), 'TRK-FALLBACK1', testCallerContext);
+        const result = await recordShipment(
+            String(order._id),
+            'TRK-FALLBACK1',
+            callerContextAs('admin')
+        );
 
         expect(result.success).toBe(true);
         const shipment = await shipmentRepository.findByOrderId(String(order._id));
@@ -127,9 +135,13 @@ describe('recordShipment', () => {
 
     it('refuses an order that is not processing', async () => {
         const { order } = await processingOrderFor();
-        await recordShipment(String(order._id), 'TRK-FIRST0001', testCallerContext);
+        await recordShipment(String(order._id), 'TRK-FIRST0001', callerContextAs('admin'));
 
-        const result = await recordShipment(String(order._id), 'TRK-SECOND002', testCallerContext);
+        const result = await recordShipment(
+            String(order._id),
+            'TRK-SECOND002',
+            callerContextAs('admin')
+        );
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('ORDER_NOT_PROCESSING');
@@ -143,7 +155,7 @@ describe('recordShipment', () => {
             shippingMethod: 'express'
         });
 
-        const result = await recordShipment(String(order._id), undefined, testCallerContext);
+        const result = await recordShipment(String(order._id), undefined, callerContextAs('admin'));
 
         expect(asReject(result).status).toBe(422);
         expect(asReject(result).errors[0].code).toBe('DELIVERY_TRACKING_CODE_REQUIRED');
@@ -158,7 +170,7 @@ describe('recordShipment', () => {
             shippingMethod: 'standard'
         });
 
-        const result = await recordShipment(String(order._id), undefined, testCallerContext);
+        const result = await recordShipment(String(order._id), undefined, callerContextAs('admin'));
 
         expect(result.success).toBe(true);
         const shipment = await shipmentRepository.findByOrderId(String(order._id));
@@ -170,7 +182,7 @@ describe('recordDelivery', () => {
     it('stamps the parcel and moves the order', async () => {
         const { order } = await shippedOrderFor();
 
-        const result = await recordDelivery(String(order._id), testCallerContext);
+        const result = await recordDelivery(String(order._id), callerContextAs('admin'));
 
         expect(result.success).toBe(true);
         const stored = await orderService.getById(String(order._id));
@@ -183,7 +195,7 @@ describe('recordDelivery', () => {
     it("freezes the order's withdrawal deadline at the end of the 30th day after the delivery day", async () => {
         const { order } = await shippedOrderFor();
 
-        await recordDelivery(String(order._id), testCallerContext);
+        await recordDelivery(String(order._id), callerContextAs('admin'));
 
         const shipment = await shipmentRepository.findByOrderId(String(order._id));
         const stored = await orderService.getById(String(order._id));
@@ -200,7 +212,7 @@ describe('recordDelivery', () => {
     it('refuses an order that has not shipped', async () => {
         const { order } = await processingOrderFor();
 
-        const result = await recordDelivery(String(order._id), testCallerContext);
+        const result = await recordDelivery(String(order._id), callerContextAs('admin'));
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('ORDER_NOT_SHIPPED');
@@ -208,9 +220,9 @@ describe('recordDelivery', () => {
 
     it('refuses a second delivery of the same parcel', async () => {
         const { order } = await shippedOrderFor();
-        await recordDelivery(String(order._id), testCallerContext);
+        await recordDelivery(String(order._id), callerContextAs('admin'));
 
-        const result = await recordDelivery(String(order._id), testCallerContext);
+        const result = await recordDelivery(String(order._id), callerContextAs('admin'));
 
         expect(asReject(result).status).toBe(409);
     });

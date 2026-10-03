@@ -38,7 +38,13 @@ import { FAKE_DECLINE_METHOD, fakePaymentProvider } from '@modules/payments/prov
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';
-import { asCustomer, asAdmin, asModerator, testCallerContext } from '@tests/callers';
+import {
+    asCustomer,
+    asAdmin,
+    asModerator,
+    testCallerContext,
+    callerContextAs
+} from '@tests/callers';
 
 setupTestDb();
 
@@ -190,7 +196,7 @@ describe('confirmPayment', () => {
         await recordOfflinePayment(
             String(order._id),
             { method: 'bank_transfer', reference: 'TRX-JB8' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect((await orderService.getById(String(order._id)))!.paymentMethod).toBe(
@@ -1131,7 +1137,7 @@ describe('refundByOrder', () => {
         // The whole point of the standalone action: a goodwill refund is not a cancellation.
         const { order } = await paidOrder();
 
-        const result = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+        const result = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
 
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -1142,9 +1148,9 @@ describe('refundByOrder', () => {
 
     it('refuses the second attempt with 409 rather than paying twice', async () => {
         const { order } = await paidOrder();
-        await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+        await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
 
-        const result = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+        const result = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(409);
@@ -1155,7 +1161,7 @@ describe('refundByOrder', () => {
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));
 
-        const result = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+        const result = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
 
         expect(asReject(result).status).toBe(409);
     });
@@ -1163,7 +1169,7 @@ describe('refundByOrder', () => {
     it('answers 404 when the order never had a payment', async () => {
         const { order } = await orderFor();
 
-        const result = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+        const result = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
 
         expect(asReject(result).status).toBe(404);
     });
@@ -1172,7 +1178,7 @@ describe('refundByOrder', () => {
         const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
         const { order } = await paidOrder();
 
-        await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+        await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
 
         expect(refundSpy).toHaveBeenCalledTimes(1);
         refundSpy.mockRestore();
@@ -1190,13 +1196,13 @@ describe('refundByOrder', () => {
             .mockRejectedValueOnce(new Error('payment provider unreachable'));
 
         await expect(
-            refundByOrder(String(order._id), asAdmin(), testCallerContext)
+            refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'))
         ).rejects.toThrow('payment provider unreachable');
         expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
             'succeeded'
         );
 
-        const retried = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+        const retried = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
 
         expect(retried.success).toBe(true);
         expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe('refunded');
@@ -1211,7 +1217,7 @@ describe('recordOfflinePayment', () => {
         const result = await recordOfflinePayment(
             String(order._id),
             { method: 'cash', reference: 'till-42' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(true);
@@ -1234,7 +1240,7 @@ describe('recordOfflinePayment', () => {
         const result = await recordOfflinePayment(
             String(order._id),
             { method: 'cash' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(asReject(result).status).toBe(409);
@@ -1243,12 +1249,12 @@ describe('recordOfflinePayment', () => {
 
     it('refuses a second recording once the order is already paid', async () => {
         const { order } = await orderFor();
-        await recordOfflinePayment(String(order._id), { method: 'cash' }, testCallerContext);
+        await recordOfflinePayment(String(order._id), { method: 'cash' }, callerContextAs('admin'));
 
         const result = await recordOfflinePayment(
             String(order._id),
             { method: 'cash' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(asReject(result).status).toBe(409);
@@ -1270,7 +1276,7 @@ describe('recordOfflinePayment', () => {
         const result = await recordOfflinePayment(
             String(order._id),
             { method: 'cash' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(asReject(result).status).toBe(409);
@@ -1298,7 +1304,7 @@ describe('recordOfflinePayment', () => {
         const result = await recordOfflinePayment(
             String(order._id),
             { method: 'bank_transfer', reference: 'TRX-1' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(true);
@@ -1321,7 +1327,7 @@ describe('recordOfflinePayment', () => {
         const result = await recordOfflinePayment(
             String(order._id),
             { method: 'cash', reference: 'till-1' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(true);
@@ -1340,7 +1346,7 @@ describe('recordOfflinePayment', () => {
         const result = await recordOfflinePayment(
             String(order._id),
             { method: 'cash', reference: 'till-2' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(true);
@@ -1355,7 +1361,7 @@ describe('recordOfflinePayment', () => {
         const result = await recordOfflinePayment(
             String(order._id),
             { method: 'cash', receivedAt: new Date(Date.now() + 60_000).toISOString() },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(asReject(result).status).toBe(422);
@@ -1379,7 +1385,7 @@ describe('recordOfflinePayment — refunding it back', () => {
     it('leaves a cancelled offline payment succeeded, for an operator to confirm', async () => {
         const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
         const { user, order } = await orderFor();
-        await recordOfflinePayment(String(order._id), { method: 'cash' }, testCallerContext);
+        await recordOfflinePayment(String(order._id), { method: 'cash' }, callerContextAs('admin'));
 
         const cancelled = await orderService.cancelById(String(order._id), auth(user));
 
@@ -1392,10 +1398,14 @@ describe('recordOfflinePayment — refunding it back', () => {
 
     it('only the admin refund endpoint can set refundedByHand, after that', async () => {
         const { user, order } = await orderFor();
-        await recordOfflinePayment(String(order._id), { method: 'cash' }, testCallerContext);
+        await recordOfflinePayment(String(order._id), { method: 'cash' }, callerContextAs('admin'));
         await orderService.cancelById(String(order._id), auth(user));
 
-        const refunded = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+        const refunded = await refundByOrder(
+            String(order._id),
+            asAdmin(),
+            callerContextAs('admin')
+        );
 
         expect(refunded.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -1478,7 +1488,7 @@ describe('getForOrder — what the caller may do', () => {
         );
 
         const before = await getForOrder(String(order._id), asAdmin());
-        await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+        await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
         const after = await getForOrder(String(order._id), asAdmin());
 
         expect((before as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
