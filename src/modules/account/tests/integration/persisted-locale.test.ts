@@ -8,7 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/callers';
+import { callerContextAs, testCallerContext } from '@tests/callers';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
 import { userService } from '@modules/users';
@@ -61,7 +61,7 @@ describe('a user’s persisted locale', () => {
         const updated = await userService.updateById(
             String(user._id),
             { locale: 'it' },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(updated.success).toBe(true);
@@ -70,9 +70,13 @@ describe('a user’s persisted locale', () => {
 
     it('is left alone by an update that does not mention it', async () => {
         const user = await createUser({ email: 'untouched@example.com' });
-        await userService.updateById(String(user._id), { locale: 'it' }, testCallerContext);
+        await userService.updateById(String(user._id), { locale: 'it' }, callerContextAs('admin'));
 
-        await userService.updateById(String(user._id), { username: 'renamed' }, testCallerContext);
+        await userService.updateById(
+            String(user._id),
+            { username: 'renamed' },
+            callerContextAs('admin')
+        );
 
         const reloaded = await userRepository.findById(String(user._id));
         expect(reloaded!.locale).toBe('it');
@@ -80,7 +84,7 @@ describe('a user’s persisted locale', () => {
 
     it('reaches the client, since it is part of the User contract', async () => {
         const user = await createUser({ email: 'exposed@example.com' });
-        await userService.updateById(String(user._id), { locale: 'it' }, testCallerContext);
+        await userService.updateById(String(user._id), { locale: 'it' }, callerContextAs('admin'));
 
         const reloaded = await userRepository.findById(String(user._id));
 

@@ -130,7 +130,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `feedback`       | `ADMIN_FEEDBACK_DELETED`                    | `admin.feedback.deleted`                    | `feedback`             |
 | `feedback`       | `ADMIN_FEEDBACK_STATUS_UPDATED`             | `admin.feedback.status_updated`             | `feedback`             |
 | `feedback`       | `ADMIN_FEEDBACK_VIEWED`                     | `admin.feedback.viewed`                     | —                      |
-| `infrastructure` | `SECURITY_FORBIDDEN`                        | `security.forbidden`                        | —                      |
+| `infrastructure` | `SECURITY_FORBIDDEN`                        | `security.forbidden`                        | `user`                 |
 | `infrastructure` | `SECURITY_RATE_LIMIT_HIT`                   | `security.rate_limit_hit`                   | —                      |
 | `infrastructure` | `SECURITY_REAUTH_REQUIRED`                  | `security.reauth_required`                  | —                      |
 | `infrastructure` | `SECURITY_UNAUTHORIZED`                     | `security.unauthorized`                     | —                      |

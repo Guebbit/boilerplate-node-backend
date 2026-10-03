@@ -78,6 +78,7 @@ flowchart TD
     invoicing --> orders
     invoicing --> payments
     observability --> audit_logs
+    orders --> access
     orders --> inventory
     orders --> products
     orders --> users
@@ -105,14 +106,14 @@ flowchart TD
 
 |                 | Reaches                                                | Reached by                                                   |
 | --------------- | ------------------------------------------------------ | ------------------------------------------------------------ |
-| `orders`        | inventory, products, users                             | cart, delivery, invoicing, payments, returns                 |
+| `orders`        | access, inventory, products, users                     | cart, delivery, invoicing, payments, returns                 |
 | `users`         | access                                                 | account, api-keys, cart, example, orders, payments, webhooks |
 | `cart`          | addresses, delivery, orders, payments, products, users | wishlist                                                     |
 | `payments`      | inventory, orders, users                               | cart, invoicing, returns                                     |
+| `access`        | —                                                      | account, api-keys, orders, users                             |
 | `inventory`     | products                                               | orders, payments, returns                                    |
 | `products`      | —                                                      | cart, inventory, orders, wishlist                            |
 | `returns`       | delivery, inventory, orders, payments                  | —                                                            |
-| `access`        | —                                                      | account, api-keys, users                                     |
 | `delivery`      | orders                                                 | cart, returns                                                |
 | `account`       | access, users                                          | —                                                            |
 | `api-keys`      | access, users                                          | —                                                            |

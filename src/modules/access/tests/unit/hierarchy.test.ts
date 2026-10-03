@@ -126,14 +126,14 @@ describe('canActOn — the six rows', () => {
     });
 });
 
+/** A context shaped like a key's: the minter's id, at the minter's level. */
+const keyAt = (level: 'user' | 'staff' | 'admin'): CallerContext => {
+    const base = callerContextAs('admin', 'minter');
+
+    return { ...base, caller: { ...base.caller, level } };
+};
+
 describe('canActOn — an API key', () => {
-    /** A context shaped like a key's: the minter's id, at the minter's level. */
-    const keyAt = (level: 'user' | 'staff' | 'admin'): CallerContext => {
-        const base = callerContextAs('admin', 'minter');
-
-        return { ...base, caller: { ...base.caller, level } };
-    };
-
     it('acts at its minter’s level, not above it', async () => {
         hold('owner', 'moderator');
 

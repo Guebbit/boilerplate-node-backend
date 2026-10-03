@@ -1180,35 +1180,22 @@ describe('regenerating backup codes', () => {
     });
 });
 
-describe('admin-assisted recovery', () => {
-    it('strips every second factor with no code, and login stops challenging', async () => {
+describe('no staff path strips a second factor', () => {
+    // A credential is its owner's alone: the route that once cleared a second factor for an
+    // admin is gone, the factor stays armed, and a lost one is a technician's hand edit.
+    it('answers 404 to an admin, leaves the factor armed, and login still challenges', async () => {
         const { user, bearer } = await authenticateVerified();
-        const { backupCodes } = await enrollTotp(bearer);
-        await enrollEmail(bearer, backupCodes[0]);
+        await enrollTotp(bearer);
         const { bearer: adminBearer } = await authenticateAs('admin');
 
-        const recovery = await api()
+        const attempt = await api()
             .delete(`/users/${user._id.toString()}/2fa`)
             .set('Authorization', adminBearer)
             .send();
-        expect(recovery.status).toBe(200);
-
         const login = await startLogin(user.email);
 
-        expect(login.body.data.token).toEqual(expect.any(String));
-        expect(login.body.data.mfaRequired).toBeUndefined();
-    });
-
-    it('is refused to a non-admin', async () => {
-        const { user, bearer } = await authenticateVerified();
-        await enrollTotp(bearer);
-
-        const response = await api()
-            .delete(`/users/${user._id.toString()}/2fa`)
-            .set('Authorization', bearer)
-            .send();
-
-        expect(response.status).toBe(403);
+        expect(attempt.status).toBe(404);
+        expect(login.body.data.mfaRequired).toBe(true);
     });
 });
 
