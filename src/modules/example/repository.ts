@@ -105,8 +105,9 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
             .then(() => undefined),
 
     /**
-     * The `locales` port's `markEdited`: a translation edit is an edit, so `updatedAt` (the ETag)
-     * moves even when no column changed.
+     * The `locales` port's `markEdited`: a translation edit is an edit, so the version (the ETag)
+     * moves even when no column changed. The hand-written `updatedAt` stamp is what the edit
+     * counter reads (`persistence/revision-plugin`).
      *
      * @param id - the example whose translations were just written
      */

@@ -235,7 +235,7 @@ repository's `save`/`deleteOne` are where it is met, so no module writes precond
 ```mermaid
 flowchart LR
     H["If-Match header"] --> W["withIfMatch(request, id)"] --> U["module's update(id, changes)"] --> R["repository.save"]
-    R -->|"tag matches the loaded row<br/>+ fenced on updatedAt"| OK["200 + new ETag"]
+    R -->|"tag matches the loaded row<br/>+ fenced on editRevision"| OK["200 + new ETag"]
     R -->|"stale, or lost the race"| E["PreconditionFailedError → 412"]
 ```
 

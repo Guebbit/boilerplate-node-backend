@@ -208,12 +208,12 @@ sequenceDiagram
     participant B as Editor B
     participant S as API
     A->>S: GET /products/1
-    S-->>A: 200 + ETag "100"
+    S-->>A: 200 + ETag "4"
     B->>S: GET /products/1
-    S-->>B: 200 + ETag "100"
-    A->>S: PATCH /products/1<br/>If-Match: "100"
-    S-->>A: 200 + ETag "200"
-    B->>S: PATCH /products/1<br/>If-Match: "100"
+    S-->>B: 200 + ETag "4"
+    A->>S: PATCH /products/1<br/>If-Match: "4"
+    S-->>A: 200 + ETag "5"
+    B->>S: PATCH /products/1<br/>If-Match: "4"
     S-->>B: 412 PRECONDITION_FAILED — nothing written
     B->>S: GET /products/1 (re-read, reapply, resend)
 ```
@@ -237,22 +237,36 @@ stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declar
 
 ### What the tag is
 
-- **`ETag: "<updatedAt in epoch ms>"`** — strong, quoted, opaque to the client: compare it, never
-  parse it. Every `save()` that changes a row moves `updatedAt` in the same atomic update.
-- **Why `updatedAt` and not Mongoose's `__v`.** `__v` moves only when an *array* changes, so a
-  scalar edit would leave it — and any tag built on it — unchanged. `updatedAt` moves on every edit.
-- **What does NOT move it.** Writes that are not an editor's edit already pass `timestamps: false`:
-  the stock mirror, the image digest, a session token. An admin's form is never invalidated by a
-  customer logging in.
-- **A product edited only through its `translations`** writes rows outside the product document,
-  so the product's `updatedAt` is stamped by the same edit and the tag moves with it. That holds
-  for `PUT`/`PATCH /locales/translations/product/{id}` too, whichever locale it names
-  (`TranslatableTarget.markEdited`).
-- **A user edited only through its `role`** changes the membership, not the user document, so the
-  save stamps `updatedAt` on purpose (`markModified('updatedAt')`): two admins on one tag cannot
-  both change the role.
-- **The orders anonymisation sweep is an edit.** It moves `updatedAt`, so an edit form opened
-  before it cannot put the scrubbed email back.
+- **`ETag: "<editRevision>"`** — strong, quoted, opaque to the client: compare it, never parse it.
+  `editRevision` is an integer stored on the row (never in the representation) that every edit
+  moves by one, in the same atomic update as the edit itself (`$inc`).
+- **Why a counter, and not `updatedAt` or Mongoose's `__v`.** A strong validator must change
+  whenever the representation does (RFC 9110 §8.8.1). Two edits in one millisecond share an
+  `updatedAt` (and the PHP twin's timestamps have whole seconds); `__v` moves only when an *array*
+  changes. A counter incremented by the database cannot repeat: two writers who both read 4 do not
+  both write 5, even with no `If-Match` at all.
+- **One rule says what moves it: the counter moves wherever `updatedAt` moves.** Mongoose's
+  `timestamps` stamps `updatedAt` on every `save()` and query update that is an edit, and the
+  plugin (`persistence/revision-plugin.ts`) adds the `$inc` beside that stamp — through `save()`,
+  `updateOne`, `updateMany` and `findOneAndUpdate`, pipeline updates included. A write that is NOT
+  an editor's edit passes `timestamps: false` and so never touches either: the stock mirror, the
+  image digest, a session token. An admin's form is never invalidated by a customer logging in.
+- **Where the counter lives.** It is the schema's Mongoose version key (`editRevision`, replacing
+  `__v` on the four versioned schemas). It is not called `revision` because `locales` owns a wire
+  field of that name with another meaning. It is stripped from every response and carried beside
+  the shaped object (`carryVersion`) so a presenter can reshape a row without losing its tag.
+- **An edit that changes nothing on the row still moves it, by stamping `updatedAt` by hand.**
+  - A product edited only through its `translations` writes rows outside the product document
+    (`TranslatableTarget.markEdited`, also for `PUT`/`PATCH /locales/translations/product/{id}`,
+    whichever locale it names).
+  - A user edited only through its `role` changes the membership, not the user document
+    (`markModified('updatedAt')`): two admins on one tag cannot both change the role.
+- **The orders anonymisation sweep is an edit.** It stamps `updatedAt`, so the counter moves and
+  an edit form opened before it cannot put the scrubbed email back.
+- **One private Mongoose touch.** `save()` has no public door for "increment, but add no version
+  filter" (`Document#increment()` does both, which would turn every unconditional save into a
+  failure when the row moved), so the plugin sets Mongoose's own `VERSION_INC` bit. A Mongoose
+  upgrade that moves it fails `tests/integration/persistence/revision.test.ts` loudly.
 
 ### What the server does with `If-Match`
 
@@ -267,7 +281,7 @@ stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declar
 
 - **The check and the write are one atomic step for `PUT`/`PATCH`/`DELETE`, hard or soft.** The version the
   service loaded is compared with the header, and the same version becomes part of the update's
-  filter (Mongoose `$where`) — two editors holding the same tag cannot both win. A hard `DELETE`
+  filter (Mongoose `$where`, on `editRevision`) — two editors holding the same tag cannot both win. A hard `DELETE`
   is fenced the same way: Mongoose 9 applies `$where` to a document delete, and a delete that
   removed nothing is a 412.
 - **It lives in the repository, not in each module.** `createUpdateController` and
@@ -305,7 +319,8 @@ stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declar
 | `tests/cross-cutting/replace-patch-parity.test.ts` | a PUT and a PATCH schema declaring different fields |
 | `tests/support/response-contract.ts` | a 201 without its `Location`, a status the operation does not document |
 | `tests/contract/write-methods.test.ts` | an empty string stored, an undeclared type accepted, a `Location` missing or wrong, a 412 the contract does not declare, an `ETag` a versioned 200 forgot |
-| `tests/integration/conditional-writes.test.ts` | a stale `If-Match` that still wrote, two editors on one tag both winning, a translations-only edit that left the tag alone |
+| `tests/integration/conditional-writes.test.ts` | a stale `If-Match` that still wrote, two editors on one tag both winning, a translations-only or role-only edit that left the tag alone, a non-edit write that moved it |
+| `tests/integration/persistence/revision.test.ts` | a counter that repeats under two writers, moves for a non-edit, or misses a form of write (`save`, `updateOne`, `updateMany`, `findOneAndUpdate`, a pipeline) |
 | `tests/unit/scripts/contracts/openapi-bundle.test.ts` | an `x-versioned` marker that did not reach the bundled operation |
 | `tests/contract/request-contract.test.ts` | a body the contract refuses being accepted |
 | `tests/fuzz/endpoints.fuzz.test.ts` | a hostile body answered with a 5xx |

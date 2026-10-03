@@ -6,6 +6,7 @@
  */
 
 import type { Example } from '@types';
+import { carryVersion } from '@infrastructure/persistence/versioning';
 import type { ExampleDocument, ExampleRow } from './model';
 
 /**
@@ -18,10 +19,11 @@ import type { ExampleDocument, ExampleRow } from './model';
  * @param document - the stored example
  * @param ownerName - the owner's display name, read from `users` by the caller
  */
-export const presentExample = (document: ExampleDocument, ownerName: string): Example => ({
-    ...(document.toJSON() as ExampleRow),
-    ownerName
-});
+export const presentExample = (document: ExampleDocument, ownerName: string): Example =>
+    carryVersion(document, {
+        ...(document.toJSON() as ExampleRow),
+        ownerName
+    });
 
 /**
  * A search row (already in wire shape) as the contract's `Example`.
@@ -29,7 +31,8 @@ export const presentExample = (document: ExampleDocument, ownerName: string): Ex
  * @param row - one row of a repository search
  * @param ownerName - the owner's display name
  */
-export const presentExampleRow = (row: ExampleRow, ownerName: string): Example => ({
-    ...row,
-    ownerName
-});
+export const presentExampleRow = (row: ExampleRow, ownerName: string): Example =>
+    carryVersion(row, {
+        ...row,
+        ownerName
+    });

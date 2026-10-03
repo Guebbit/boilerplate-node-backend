@@ -66,7 +66,7 @@ const makeRequest = (
     });
 
 /** The version a stored row was loaded at in the conditional-write cases. */
-const LOADED_AT = new Date('2026-09-30T10:00:00.000Z');
+const LOADED_REVISION = 4;
 
 describe('createUpdateController', () => {
     it('PUT fills an omitted clearable field with null', async () => {
@@ -246,11 +246,11 @@ describe('fillOmittedWithNull', () => {
     });
 });
 
-/** An `update()` that saves a row loaded at {@link LOADED_AT}, the way a service does. */
+/** An `update()` that saves a row loaded at {@link LOADED_REVISION}, the way a service does. */
 const savingUpdate = (write: jest.Mock) =>
     jest.fn(() =>
-        fencedSave({ _id: VALID_ID, updatedAt: LOADED_AT }, write).then(() =>
-            generateSuccess({ title: 'x', updatedAt: LOADED_AT })
+        fencedSave({ _id: VALID_ID, editRevision: LOADED_REVISION }, write).then(() =>
+            generateSuccess({ title: 'x', editRevision: LOADED_REVISION })
         )
     );
 
@@ -276,7 +276,7 @@ describe('createUpdateController — conditional writes', () => {
         const response = makeResponse();
 
         await replace(
-            makeRequest({ title: 'x' }, VALID_ID, false, etagOf(LOADED_AT.getTime())),
+            makeRequest({ title: 'x' }, VALID_ID, false, etagOf(LOADED_REVISION)),
             response
         );
 
@@ -297,11 +297,11 @@ describe('createUpdateController — conditional writes', () => {
 
     it("answers the saved row's new ETag", async () => {
         const response = makeResponse();
-        const saved = generateSuccess({ title: 'x', updatedAt: LOADED_AT });
+        const saved = generateSuccess({ title: 'x', editRevision: LOADED_REVISION });
         const { update: patch } = makeController({ update: jest.fn().mockResolvedValue(saved) });
 
         await patch(makeRequest({ title: 'x' }), response);
 
-        expect(response.setHeader).toHaveBeenCalledWith('ETag', etagOf(LOADED_AT.getTime()));
+        expect(response.setHeader).toHaveBeenCalledWith('ETag', etagOf(LOADED_REVISION));
     });
 });

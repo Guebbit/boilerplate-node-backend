@@ -12,6 +12,7 @@ import type { Document, Model, Types } from 'mongoose';
 import { z } from 'zod';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import { CreateProductBody, ReplaceProductByIdBody, UpdateProductByIdBody } from '@api/schemas.zod';
+import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import type { TranslationFieldIssue } from '@kernel/registry';
 import { availableStock } from './domain/stock';
@@ -333,6 +334,11 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
         timestamps: true
     }
 );
+
+/**
+ * The edit counter behind this resource's `ETag` and `If-Match` — see `@infrastructure/persistence/revision-plugin`.
+ */
+productSchema.plugin(revisionPlugin);
 
 /*
  * Declared here so this file is the one place deciding what's indexed. Named explicitly: Mongo

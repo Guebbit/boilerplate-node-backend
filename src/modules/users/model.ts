@@ -19,6 +19,7 @@ import {
     createUserBodyUsernameMin
 } from '@api/schemas.zod';
 import { type User } from '@types';
+import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
@@ -632,6 +633,11 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         timestamps: true
     }
 );
+
+/**
+ * The edit counter behind this resource's `ETag` and `If-Match` — see `@infrastructure/persistence/revision-plugin`.
+ */
+userSchema.plugin(revisionPlugin);
 
 /*
  * Indexes, declared on the schema so this file is the one place deciding what's indexed. Mongoose

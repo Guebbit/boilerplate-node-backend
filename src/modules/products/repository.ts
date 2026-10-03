@@ -173,8 +173,9 @@ export const productRepository: Repository<ProductDocument, Product> & {
 
     /**
      * The `locales` translation port's `markEdited` — a translation edit is an admin's edit, so the
-     * product's `updatedAt` (its ETag) moves even when no column on the document changed.
-     * Stamped by hand with `timestamps: false`: Mongoose adds no `$set` to an empty update.
+     * product's version (its ETag) moves even when no column on the document changed.
+     * Stamped by hand with `timestamps: false`, since Mongoose adds no `$set` to an empty update;
+     * the stamp is what the edit counter reads (`persistence/revision-plugin`), so it moves too.
      *
      * @param productId - the product whose translations were just written
      */

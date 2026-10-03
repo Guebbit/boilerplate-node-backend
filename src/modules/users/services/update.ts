@@ -155,7 +155,7 @@ const saveWithRole = (
     return grantChecked
         .then(() => {
             // The role lives in the membership, not on this document, so a role-only edit changes
-            // nothing Mongoose would write — and the user's version (its ETag, `updatedAt`) would
+            // nothing Mongoose would write — and the user's version (its ETag, `editRevision`) would
             // stay put while the role moved. Marking the stamp modified makes `save()` move it, and
             // fence the write, so two admins holding the same tag cannot both change the role.
             if (data.role !== undefined) user.markModified('updatedAt');

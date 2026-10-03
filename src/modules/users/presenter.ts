@@ -7,6 +7,7 @@
  */
 
 import type { User } from '@types';
+import { carryVersion } from '@infrastructure/persistence/versioning';
 import { decryptPii } from '@infrastructure/security/pii-encryption';
 import { rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -23,33 +24,36 @@ import type { UserDocument, UserWire } from './model';
  *   this — never off the document, which holds no role of its own. `null` prints as absent, the
  *   same as every other optional field below.
  */
-export const presentUser = (document: UserWire, role: string | null): User => ({
-    id: document.id,
-    email: document.email,
-    username: document.username,
-    ...(role === null ? {} : { role }),
-    ...(document.active === undefined ? {} : { active: document.active }),
-    ...(document.verifiedAt ? { verifiedAt: document.verifiedAt.toISOString() } : {}),
-    ...(document.pendingEmail === undefined ? {} : { pendingEmail: document.pendingEmail }),
-    ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
-    ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
-    ...(document.locale === undefined ? {} : { locale: document.locale }),
-    // Stored encrypted (`./service`'s `update`, under `NODE_PII_ENCRYPTION_KEY`) — this is the
-    // one place a document's `phone` reaches the wire, hydrated or lean/searched alike, so it's
-    // the one place that decrypts it.
-    ...(document.phone === undefined ? {} : { phone: decryptPii(document.phone, 'user phone') }),
-    ...(document.website === undefined ? {} : { website: document.website }),
-    ...(document.analyticsConsent === undefined
-        ? {}
-        : { analyticsConsent: document.analyticsConsent }),
-    ...(document.termsAccepted === undefined ? {} : { termsAccepted: document.termsAccepted }),
-    ...(document.twoFactorEnabledAt
-        ? { twoFactorEnabledAt: document.twoFactorEnabledAt.toISOString() }
-        : {}),
-    ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
-    ...(document.updatedAt ? { updatedAt: document.updatedAt.toISOString() } : {}),
-    ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {})
-});
+export const presentUser = (document: UserWire, role: string | null): User =>
+    carryVersion(document, {
+        id: document.id,
+        email: document.email,
+        username: document.username,
+        ...(role === null ? {} : { role }),
+        ...(document.active === undefined ? {} : { active: document.active }),
+        ...(document.verifiedAt ? { verifiedAt: document.verifiedAt.toISOString() } : {}),
+        ...(document.pendingEmail === undefined ? {} : { pendingEmail: document.pendingEmail }),
+        ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
+        ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
+        ...(document.locale === undefined ? {} : { locale: document.locale }),
+        // Stored encrypted (`./service`'s `update`, under `NODE_PII_ENCRYPTION_KEY`) — this is the
+        // one place a document's `phone` reaches the wire, hydrated or lean/searched alike, so it's
+        // the one place that decrypts it.
+        ...(document.phone === undefined
+            ? {}
+            : { phone: decryptPii(document.phone, 'user phone') }),
+        ...(document.website === undefined ? {} : { website: document.website }),
+        ...(document.analyticsConsent === undefined
+            ? {}
+            : { analyticsConsent: document.analyticsConsent }),
+        ...(document.termsAccepted === undefined ? {} : { termsAccepted: document.termsAccepted }),
+        ...(document.twoFactorEnabledAt
+            ? { twoFactorEnabledAt: document.twoFactorEnabledAt.toISOString() }
+            : {}),
+        ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
+        ...(document.updatedAt ? { updatedAt: document.updatedAt.toISOString() } : {}),
+        ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {})
+    });
 
 /**
  * The contract `User` for an already-loaded document — resolves its CURRENT role fresh from the

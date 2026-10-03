@@ -46,18 +46,18 @@ const makeResponse = (headers: Record<string, string> = {}) => {
 };
 
 describe('setEtag', () => {
-    it('stamps the quoted epoch of updatedAt', () => {
+    it('stamps the quoted edit counter', () => {
         const { response, setHeader } = makeResponse();
 
-        setEtag(response, { updatedAt: new Date(1_700_000_000_000) });
+        setEtag(response, { editRevision: 12 });
 
-        expect(setHeader).toHaveBeenCalledWith('ETag', '"1700000000000"');
+        expect(setHeader).toHaveBeenCalledWith('ETag', '"12"');
     });
 
     it('never answers 304 from it: If-None-Match is dropped from the request', () => {
-        const { response } = makeResponse({ 'if-none-match': '"1700000000000"' });
+        const { response } = makeResponse({ 'if-none-match': '"12"' });
 
-        setEtag(response, { updatedAt: new Date(1_700_000_000_000) });
+        setEtag(response, { editRevision: 12 });
 
         expect(response.req.headers).not.toHaveProperty('if-none-match');
     });
@@ -65,7 +65,7 @@ describe('setEtag', () => {
     it('sends nothing for a row with no version, and leaves If-None-Match alone', () => {
         const { response, setHeader } = makeResponse({ 'if-none-match': '"x"' });
 
-        setEtag(response, { title: 'no timestamps' });
+        setEtag(response, { title: 'no counter', updatedAt: new Date(1_700_000_000_000) });
 
         expect(setHeader).not.toHaveBeenCalled();
         expect(response.req.headers).toHaveProperty('if-none-match');

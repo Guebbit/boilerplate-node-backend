@@ -13,6 +13,7 @@ import type {
     Caller
 } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { carryVersion } from '@infrastructure/persistence/versioning';
 import { accessibleFilterFor } from '@kernel/access/query';
 import { productsAnalyticsEvents } from '../analytics';
 import { presentProduct } from '../presenter';
@@ -113,6 +114,6 @@ export const getAdmin = (id: string): Promise<ProductAdmin | null> =>
                     ...(product.description ? { description: product.description } : {})
                 };
 
-            return { ...presentProduct(product), translations };
+            return carryVersion(product, { ...presentProduct(product), translations });
         });
     });

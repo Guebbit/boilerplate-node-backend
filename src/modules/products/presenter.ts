@@ -6,6 +6,7 @@
  */
 
 import type { Product } from '@types';
+import { carryVersion } from '@infrastructure/persistence/versioning';
 import { availableStock } from './domain/stock';
 import { productCurrency } from './config';
 import type { ProductDocument } from './model';
@@ -13,13 +14,14 @@ import type { ProductDocument } from './model';
 /**
  * Maps a document straight onto the `Product` contract: `id` from the Mongoose getter, `available`
  * derived from the two stock counters (never stored), `currency` read live from
- * `NODE_DEFAULT_CURRENCY`, the three dates ISO-stringified.
+ * `NODE_DEFAULT_CURRENCY`, the three dates ISO-stringified. The row's version is not part of the
+ * contract, so it rides beside the result (`carryVersion`) for the `ETag`.
  */
 export const presentProduct = (document: ProductDocument): Product => {
     const onHand = document.onHand ?? 0;
     const reserved = document.reserved ?? 0;
 
-    return {
+    return carryVersion(document, {
         id: document.id,
         title: document.title,
         price: document.price,
@@ -44,5 +46,5 @@ export const presentProduct = (document: ProductDocument): Product => {
         ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
         ...(document.updatedAt ? { updatedAt: document.updatedAt.toISOString() } : {}),
         ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {})
-    };
+    });
 };
