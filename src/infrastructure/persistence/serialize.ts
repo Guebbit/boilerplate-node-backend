@@ -8,6 +8,8 @@
  */
 
 import type { ToObjectOptions } from 'mongoose';
+import { carryVersion } from './versioning';
+import { EDIT_REVISION } from './revision-plugin';
 
 /** A model's serializer: mutates a plain object into its wire shape and returns it. */
 export type SerializeTransform = (serialized: Record<string, unknown>) => Record<string, unknown>;
@@ -60,6 +62,10 @@ export const applySerialization = (
             delete serialized._id;
         }
         delete serialized.__v;
+        // The edit counter is the row's version, not part of its wire shape: it rides beside the
+        // object (`carryVersion`) so the item and update controllers can still derive the `ETag`.
+        carryVersion(serialized, serialized);
+        Reflect.deleteProperty(serialized, EDIT_REVISION);
 
         // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- stripping the caller-named keys from a plain record is the whole job
         for (const key of omit) delete serialized[key];
@@ -76,7 +82,13 @@ export const applySerialization = (
          * One `as`, not `as unknown as`: Mongoose hands the transform `{ _id, __v? }`, a
          * *narrower* type than the serializer's string-keyed bag — widening it is a single step.
          */
-        transform: (_document, serialized) => transform(serialized)
+        transform: (document, serialized) => {
+            // `versionKey: false` already removed the counter from `serialized`; the document still has it.
+            const revision: unknown = Reflect.get(document, EDIT_REVISION);
+            if (typeof revision === 'number')
+                Object.assign(serialized, { [EDIT_REVISION]: revision });
+            return transform(serialized);
+        }
     });
 
     return transform;

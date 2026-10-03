@@ -16,6 +16,7 @@ import {
     markOrderPaidAt
 } from '@modules/orders/tests/factories';
 import { orderRepository } from '../../repository';
+import { versionOf } from '@infrastructure/persistence/versioning';
 import { orderService } from '@modules/orders/services';
 import { userService } from '@modules/users';
 import { resetDomainEvents } from '@kernel/events';
@@ -269,20 +270,19 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         expect(reloaded!.shippingAddress).toBeUndefined();
     });
 
-    it('moves updatedAt, so an edit form opened before the sweep is refused afterwards', async () => {
+    it('moves the edit counter, so an edit form opened before the sweep is refused afterwards', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
-        const stampOf = (): Promise<number> =>
-            orderRepository
-                .findById(String(order._id))
-                .then((row) => row?.updatedAt?.getTime() ?? 0);
-        const before = await stampOf();
+        const versionOfOrder = (): Promise<number | undefined> =>
+            orderRepository.findById(String(order._id)).then((row) => versionOf(row));
+        const before = await versionOfOrder();
 
         await orderService.anonymizeDueOrders();
 
-        expect(await stampOf()).toBeGreaterThan(before);
+        expect(before).toBeDefined();
+        expect(await versionOfOrder()).toBeGreaterThan(before ?? Infinity);
     });
 
     it('does not touch an order whose anonymizeAfter has not arrived yet', async () => {

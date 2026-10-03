@@ -7,15 +7,18 @@
  * checks and fences it, and the error interpreter that answers 412. A unit test of any one of
  * them cannot say the caller's stale edit actually did not land.
  *
- * Versioned today: products, users, orders and the caller's own account. The version is
- * `updatedAt` (see `src/infrastructure/persistence/versioning.ts`).
+ * Versioned today: products, users, orders and the caller's own account. The version is the row's
+ * `editRevision` counter (see `src/infrastructure/persistence/versioning.ts`).
  */
+import { Types, connection } from 'mongoose';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem, readOrder } from '@modules/orders/tests/factories';
 import { productModel } from '@modules/products/model';
+import { productRepository } from '@modules/products/repository';
+import { TokenType } from '@modules/users';
 import { userModel } from '@modules/users/model';
 import { userRepository } from '@modules/users/repository';
 import {
@@ -36,6 +39,8 @@ beforeAll(() => registerModules([localesModule, productsModule]));
 /** What one versioned resource needs to be driven the same way as the others. */
 interface Resource {
     name: string;
+    /** The collection that holds the row, to read its stored counter. */
+    collection: string;
     /** Seeds a row: the path that writes it, the path that reads it, the caller, and the row's id. */
     seed: () => Promise<{ path: string; readPath: string; bearer: string; id: string }>;
     /** A body the resource accepts on PATCH; `n` makes two edits differ. */
@@ -50,6 +55,7 @@ interface Resource {
 const RESOURCES: Resource[] = [
     {
         name: 'a product',
+        collection: 'products',
         seed: async () => {
             const { bearer } = await authenticateAs('admin');
             const product = await createProduct();
@@ -62,6 +68,7 @@ const RESOURCES: Resource[] = [
     },
     {
         name: 'a user',
+        collection: 'users',
         seed: async () => {
             const { bearer } = await authenticateAs('admin');
             const target = await createUser({ email: 'target@example.com', username: 'target' });
@@ -74,6 +81,7 @@ const RESOURCES: Resource[] = [
     },
     {
         name: 'an order',
+        collection: 'orders',
         seed: async () => {
             const { bearer, user } = await authenticateAs('admin');
             const product = await createProduct();
@@ -87,6 +95,7 @@ const RESOURCES: Resource[] = [
     },
     {
         name: "the caller's own account",
+        collection: 'users',
         seed: async () => {
             const { bearer, user } = await authenticateAs('user');
             return { path: '/account', readPath: '/account', bearer, id: String(user._id) };
@@ -97,6 +106,13 @@ const RESOURCES: Resource[] = [
     }
 ];
 
+/** The counter a row has in the database, straight off the collection. */
+const storedRevision = (collection: string, id: string): Promise<unknown> =>
+    connection
+        .collection(collection)
+        .findOne({ _id: new Types.ObjectId(id) })
+        .then((row) => row?.editRevision);
+
 /** A GET's `ETag` header, asserted present. */
 const etagOf = (response: { headers: Record<string, unknown> }): string => {
     const tag = response.headers.etag;
@@ -105,15 +121,25 @@ const etagOf = (response: { headers: Record<string, unknown> }): string => {
 };
 
 describe.each(RESOURCES)('conditional writes on $name', (resource) => {
-    it('hands out an ETag on the item read, equal to the quoted epoch of updatedAt', async () => {
-        const { readPath, bearer } = await resource.seed();
+    it("hands out an ETag on the item read: the row's stored counter, quoted", async () => {
+        const { readPath, bearer, id } = await resource.seed();
 
         const response = await api().get(readPath).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(etagOf(response)).toBe(
-            `"${new Date(response.body.data.updatedAt as string).getTime().toString()}"`
-        );
+        expect(etagOf(response)).toBe(`"${String(await storedRevision(resource.collection, id))}"`);
+        // The counter is the version, not part of the representation.
+        expect(response.body.data).not.toHaveProperty('editRevision');
+    });
+
+    it('moves the counter by one per edit, whatever the clock says', async () => {
+        const { path, bearer, id } = await resource.seed();
+        const before = Number(await storedRevision(resource.collection, id));
+
+        await api().patch(path).set('Authorization', bearer).send(resource.edit(1)).expect(200);
+        await api().patch(path).set('Authorization', bearer).send(resource.edit(2)).expect(200);
+
+        expect(await storedRevision(resource.collection, id)).toBe(before + 2);
     });
 
     it("writes when If-Match is the tag just read, and answers the row's NEW tag", async () => {
@@ -353,6 +379,78 @@ describe('a user edited only through its role', () => {
     });
 });
 
+describe('two admins changing only a role, both holding one tag', () => {
+    it('lets exactly one through: the role edit is fenced like any other', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({ email: 'target@example.com', username: 'target' });
+        const path = `/users/${String(target._id)}`;
+        const tag = etagOf(await api().get(path).set('Authorization', bearer));
+
+        const responses = await Promise.all(
+            ['support', 'customer'].map((role) =>
+                api().patch(path).set('Authorization', bearer).set('If-Match', tag).send({ role })
+            )
+        );
+
+        expect(responses.map((response) => response.status).toSorted()).toEqual([200, 412]);
+    });
+});
+
+describe('a save is fenced, not only checked', () => {
+    it('does not overwrite a row edited between the load and the save', async () => {
+        const product = await createProduct();
+        const loaded = await productRepository.findById(product.id);
+        if (!loaded) throw new Error('seeded product missing');
+        const tag = etagFor(versionOf(loaded) ?? 0);
+        // Another writer lands after the service loaded the row: its tag is the same until then.
+        await productModel.updateOne({ _id: product.id }, { $set: { tags: ['theirs'] } });
+        loaded.tags = ['mine'];
+
+        await expect(
+            runWithPrecondition({ id: product.id, etags: [tag] }, () =>
+                productRepository.save(loaded)
+            )
+        ).rejects.toBeInstanceOf(PreconditionFailedError);
+
+        const stored = await productModel.findById(product.id);
+        expect(stored?.tags).toEqual(['theirs']);
+    });
+});
+
+describe('writes that are not an edit leave the tag alone', () => {
+    it('lets a product edit through after the stock mirror moved', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/products/${product.id}`;
+        const tag = etagOf(await api().get(path).set('Authorization', bearer));
+
+        await productRepository.syncStockCache(product.id, { onHand: 3, reserved: 1 });
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ tags: ['after-stock'] });
+
+        expect(write.status).toBe(200);
+    });
+
+    it('lets a user edit through after a session token was issued', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({ email: 'target@example.com', username: 'target' });
+        const path = `/users/${String(target._id)}`;
+        const tag = etagOf(await api().get(path).set('Authorization', bearer));
+
+        await target.tokenAdd(TokenType.REFRESH, 60_000, 'a-session-token');
+        const write = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', tag)
+            .send({ username: 'renamed' });
+
+        expect(write.status).toBe(200);
+    });
+});
+
 describe('a hard delete is fenced, not only checked', () => {
     it('keeps a row edited between the load and the delete', async () => {
         const target = await createUser({ email: 'fence@example.com', username: 'fence' });
@@ -360,11 +458,7 @@ describe('a hard delete is fenced, not only checked', () => {
         if (!loaded) throw new Error('seeded user missing');
         const tag = etagFor(versionOf(loaded) ?? 0);
         // Another writer lands after the service loaded the row.
-        await userModel.updateOne(
-            { _id: target._id },
-            { $set: { username: 'moved', updatedAt: new Date(Date.now() + 5000) } },
-            { timestamps: false }
-        );
+        await userModel.updateOne({ _id: target._id }, { $set: { username: 'moved' } });
 
         await expect(
             runWithPrecondition({ id: String(target._id), etags: [tag] }, () =>

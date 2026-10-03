@@ -20,6 +20,7 @@
 
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { t, getCurrentLocale, getFallbackLocale, localeCandidatesFor } from '@infrastructure/i18n';
+import { carryVersion } from '@infrastructure/persistence/versioning';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
@@ -314,6 +315,6 @@ export const applyTranslations = async <T extends Translatable>(
 
     return items.map((item) => {
         const fields = resolved.get(item.id);
-        return fields ? { ...item, ...fields } : item;
+        return fields ? carryVersion(item, { ...item, ...fields }) : item;
     });
 };

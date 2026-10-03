@@ -20,6 +20,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
+import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import {
     bankTransferBeneficiary,
@@ -520,6 +521,11 @@ export const orderSchema = new Schema<OrderDocument>(
         timestamps: true
     }
 );
+
+/**
+ * The edit counter behind this resource's `ETag` and `If-Match` — see `@infrastructure/persistence/revision-plugin`.
+ */
+orderSchema.plugin(revisionPlugin);
 
 /*
  * Indexes, declared on the schema so this is the one place deciding what's indexed. Names are

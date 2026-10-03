@@ -100,12 +100,12 @@ describe('createItemController — ETag', () => {
         });
         const handler = createItemController({
             entity: 'widget',
-            fetch: (id) => Promise.resolve({ id, updatedAt: new Date(1_700_000_000_000) }),
+            fetch: (id) => Promise.resolve({ id, editRevision: 12 }),
             notFoundKey: 'widgets.not-found'
         });
 
         await handler(makeRequest('1'), response);
 
-        expect(setHeader).toHaveBeenCalledWith('ETag', '"1700000000000"');
+        expect(setHeader).toHaveBeenCalledWith('ETag', '"12"');
     });
 });

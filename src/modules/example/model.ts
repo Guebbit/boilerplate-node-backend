@@ -8,6 +8,7 @@
 
 import { model, Schema, type Document, type Model, type Types } from 'mongoose';
 import { ExampleStatus, type Example } from '@types';
+import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
@@ -59,6 +60,11 @@ export const exampleSchema = new Schema<ExampleDocument, ExampleModel>(
     },
     { timestamps: true }
 );
+
+/**
+ * The edit counter behind this resource's `ETag` and `If-Match` — see `@infrastructure/persistence/revision-plugin`.
+ */
+exampleSchema.plugin(revisionPlugin);
 
 // The list screen: one owner's examples, newest first.
 exampleSchema.index({ userId: 1, createdAt: -1 });
