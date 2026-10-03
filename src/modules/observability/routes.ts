@@ -35,11 +35,15 @@ export const router = Router();
  * browser's `EventSource`, which can't set a header and so uses the session cookie; the scrape
  * endpoint is hit by Prometheus, which can't log in and so uses a static credential.
  */
+// GET /observability/events — the live SSE stream, opened by the browser's `EventSource`.
 router.get('/events', requirePermissionViaCookie(OBSERVABILITY_READ_KEY), getObservabilityEvents);
 
+// GET /observability/metrics — the Prometheus scrape, behind the scraper's static credential.
 router.get('/metrics', isMetricsScraper, getObservabilityMetrics);
 
 /* Endpoints a normal API client calls — admin JWT required. */
+
+// GET /observability/health — can this instance serve, and what is missing.
 router.get(
     '/health',
     getAuth,
@@ -47,6 +51,8 @@ router.get(
     requirePermission(OBSERVABILITY_READ_KEY),
     getObservabilityHealth
 );
+
+// GET /observability/metrics/overview — the key operational numbers, as JSON.
 router.get(
     '/metrics/overview',
     getAuth,
@@ -54,6 +60,8 @@ router.get(
     requirePermission(OBSERVABILITY_READ_KEY),
     getObservabilityMetricsOverview
 );
+
+// GET /observability/audit — a page of audit events, filtered.
 router.get(
     '/audit',
     getAuth,
