@@ -77,7 +77,7 @@ periodically", via `scripts/run-script.ts`.
 | Job                              | Schedule (UTC) | Leased | What it does                                                                                                   |
 | -------------------------------- | -------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
 | `npm run reap:quarantine`        | 02:00 nightly  | No     | Deletes quarantined upload files past their retention window.                                                  |
-| `npm run reap:inactive-accounts` | 02:05 nightly  | Yes    | Warns, then soft-, then hard-deletes an account inactive past the threshold. Disabled by default.              |
+| `npm run reap:inactive-accounts` | 02:05 nightly  | Yes    | Warns, then soft-, then hard-deletes a customer account inactive past the threshold. Disabled by default.      |
 | `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed.                                      |
 | `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                                |
 | `npm run sweep:order-effects`    | 02:20 nightly  | No     | Re-announces `ORDER_REFUND_OWED` for a refund the event bus's one delivery attempt did not carry through.      |

@@ -416,15 +416,15 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### account
 
-| Variable                          | Type              | Default                                | Rules | What it does                                                                         |
-| --------------------------------- | ----------------- | -------------------------------------- | ----- | ------------------------------------------------------------------------------------ |
-| `NODE_FRONTEND_LINK_VERIFY`       | text              | `verify-email/confirm?token={token}`   | —     | Template of the email-verification link.                                             |
-| `NODE_FRONTEND_LINK_RESET`        | text              | `password-reset/confirm?token={token}` | —     | Template of the password-reset link.                                                 |
-| `NODE_FRONTEND_LINK_DELETE`       | text              | `account-delete/confirm?token={token}` | —     | Template of the account-deletion link.                                               |
-| `NODE_FRONTEND_LINK_EMAIL_CHANGE` | text              | `email-change/confirm?token={token}`   | —     | Template of the email-change link.                                                   |
-| `NODE_PASSWORD_RESET_TTL_MS`      | whole number >= 1 | `3600000`                              | —     | How long a reset link works. Shorter is safer.                                       |
-| `NODE_INACTIVE_ACCOUNT_DAYS`      | whole number >= 0 | `0`                                    | —     | Days of inactivity before the reaper warns, then deletes, an account. 0 disables it. |
-| `NODE_EMAIL_VERIFY_TTL_MS`        | whole number >= 1 | `86400000`                             | —     | How long a verification link works.                                                  |
+| Variable                          | Type              | Default                                | Rules | What it does                                                                                                                   |
+| --------------------------------- | ----------------- | -------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_FRONTEND_LINK_VERIFY`       | text              | `verify-email/confirm?token={token}`   | —     | Template of the email-verification link.                                                                                       |
+| `NODE_FRONTEND_LINK_RESET`        | text              | `password-reset/confirm?token={token}` | —     | Template of the password-reset link.                                                                                           |
+| `NODE_FRONTEND_LINK_DELETE`       | text              | `account-delete/confirm?token={token}` | —     | Template of the account-deletion link.                                                                                         |
+| `NODE_FRONTEND_LINK_EMAIL_CHANGE` | text              | `email-change/confirm?token={token}`   | —     | Template of the email-change link.                                                                                             |
+| `NODE_PASSWORD_RESET_TTL_MS`      | whole number >= 1 | `3600000`                              | —     | How long a reset link works. Shorter is safer.                                                                                 |
+| `NODE_INACTIVE_ACCOUNT_DAYS`      | whole number >= 0 | `0`                                    | —     | Days of inactivity before the reaper warns, then deletes, a customer account (never staff or an administrator). 0 disables it. |
+| `NODE_EMAIL_VERIFY_TTL_MS`        | whole number >= 1 | `86400000`                             | —     | How long a verification link works.                                                                                            |
 
 ### account-sessions
 

@@ -110,7 +110,7 @@ non-placeholder value before serving EU/EEA traffic; the rest ship safe defaults
 | `NODE_AUDIT_RETENTION_DAYS`          | `90`           | TTL for the queryable `auditlogs` collection                                                                                 |
 | `NODE_FEEDBACK_RETENTION_DAYS`       | `730`          | TTL for `feedbackrequests`                                                                                                   |
 | `NODE_CART_RETENTION_DAYS`           | `365`          | TTL for abandoned carts                                                                                                      |
-| `NODE_INACTIVE_ACCOUNT_DAYS`         | `0` (disabled) | Warn → soft-delete → hard-delete an account with no login                                                                    |
+| `NODE_INACTIVE_ACCOUNT_DAYS`         | `0` (disabled) | Warn → soft-delete → hard-delete a customer account with no login (staff and administrators are never reaped)                |
 | `NODE_ORDER_PII_RETENTION_DAYS`      | `3650`         | Delay before an anonymised order's remaining PII is scrubbed                                                                 |
 | `NODE_EXPORT_INCLUDE_FEEDBACK`       | `false`        | Whether `POST /account/export` guesses at feedback tickets by email                                                          |
 | **`NODE_ANALYTICS_REQUIRE_CONSENT`** | `true`         | Whether analytics capture is gated on `analyticsConsent`. Turning this off is a decision to document, not a default to relax |

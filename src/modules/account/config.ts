@@ -49,7 +49,7 @@ export const accountConfig = defineConfig({
             default: 0,
             min: 0,
             describe:
-                'Days of inactivity before the reaper warns, then deletes, an account. 0 disables it.'
+                'Days of inactivity before the reaper warns, then deletes, a customer account (never staff or an administrator). 0 disables it.'
         }),
         NODE_EMAIL_VERIFY_TTL_MS: int({
             default: 86_400_000,
