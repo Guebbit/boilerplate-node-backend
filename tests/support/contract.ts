@@ -77,12 +77,15 @@ const patchSupertestThen = (): void => {
     };
 };
 
+/** Install the supertest patch once, when this setup file loads. */
 patchSupertestThen();
 
+/** Jest `beforeEach`: start each test with no recorded responses. */
 beforeEach(() => {
     responsesThisTest = [];
 });
 
+/** Jest `afterEach`: every response this test received must match the contract. */
 afterEach(() => {
     for (const response of responsesThisTest) assertResponseMatchesContract(response);
 });

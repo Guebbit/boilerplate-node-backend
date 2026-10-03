@@ -22,6 +22,7 @@ import { sampleForPattern, usesLookaround } from './pattern-samples';
 /** The HTTP methods this walk enumerates — every verb the spec can declare an operation under. */
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
+/** The verbs {@link readSpec}'s path items are scanned for. */
 const METHODS: HttpMethod[] = ['get', 'post', 'put', 'patch', 'delete'];
 
 /** A JSON Schema node, in the subset this repo's spec actually uses. */
@@ -91,6 +92,7 @@ interface ParameterObject {
     schema?: SchemaNode;
 }
 
+/** The slice of the OpenAPI document the walk reads. */
 interface SpecDocument {
     paths: Record<string, Record<string, unknown>>;
     components?: {
@@ -100,8 +102,10 @@ interface SpecDocument {
     };
 }
 
+/** The root bundle on disk, built by `npm run contracts:bundle`. */
 const SPEC_PATH = path.join(__dirname, '..', '..', 'openapi.yaml');
 
+/** The parsed spec once {@link readSpec} has read it. */
 let cached: SpecDocument | undefined;
 
 /** The parsed spec. Read once — it is a 120 KB document and every test file would re-parse it. */

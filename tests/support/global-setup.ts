@@ -141,4 +141,5 @@ const globalSetup = async () => {
     (globalThis as TestGlobals).__testMongoServer = server;
 };
 
+/** Jest `globalSetup`: the module's default export, as the jest config expects. */
 export default globalSetup;

@@ -26,4 +26,5 @@ const globalTeardown = async () => {
     if (leftovers.length > 0) throw new Error(describeLeftovers(leftovers));
 };
 
+/** Jest `globalTeardown`: the module's default export, as the jest config expects. */
 export default globalTeardown;

@@ -12,6 +12,7 @@
 import { markEnvironmentOverrides, resetEnvironmentOverrides } from '@infrastructure/config/store';
 import { restoreProcessEnvironment } from './environment';
 
+/** Snapshot the overrides in place now: the starting point every case is reset to. */
 markEnvironmentOverrides();
 
 /** Jest: runs after every case in the file, in whichever `describe` it sits. */

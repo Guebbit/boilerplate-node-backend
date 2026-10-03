@@ -175,6 +175,11 @@ const mockSearchCache = (
     seconds = 3600
 ) => mockSetCache(seconds, { tags: [entity], keyParameters, keyAs: `${entity}:search` });
 
+/**
+ * Factory for `jest.mock('@infrastructure/http/middlewares/cache', cacheMock)`: every cache
+ * factory becomes a labelled pass-through, so a route test can assert which cache a route mounts
+ * without a real store.
+ */
 export const cacheMock = () => ({
     // Spread the real module first: `noStore` is exported from here too and is mounted directly
     // rather than through a factory, so it has a name already and must keep working. Replacing

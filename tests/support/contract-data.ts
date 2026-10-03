@@ -57,7 +57,10 @@ const createRandom = (seed: number) => {
     };
 };
 
+/** Whether this process has already picked its seed and printed it. */
 let seeded = false;
+
+/** The shared pseudo-random source; replaced once, by {@link ensureSeeded}. */
 let random = createRandom(0);
 
 /** `RANDOM_DATA_SEED` when set to a finite number, otherwise a fresh value. */
@@ -67,6 +70,7 @@ export const resolveContractDataSeed = (): number => {
     return Number.isFinite(parsed) ? parsed : Math.floor(Math.random() * 1e9);
 };
 
+/** Pick the seed on first use and print it, so a failing run can be reproduced. */
 const ensureSeeded = (): void => {
     if (seeded) return;
     const seed = resolveContractDataSeed();
@@ -76,15 +80,21 @@ const ensureSeeded = (): void => {
     console.log(`[contract-data] seed=${seed} (rerun with RANDOM_DATA_SEED=${seed} to reproduce)`);
 };
 
+/** A whole number in `[min, max]`, both ends included. */
 const randomInt = (min: number, max: number): number =>
     min + Math.floor(random() * (max - min + 1));
 
+/** Characters {@link randomAlpha} draws from. */
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
+
+/** Characters {@link randomHex} draws from. */
 const HEX_ALPHABET = '0123456789abcdef';
 
+/** `length` random lowercase letters. */
 const randomAlpha = (length: number): string =>
     Array.from({ length }, () => ALPHABET[randomInt(0, ALPHABET.length - 1)]).join('');
 
+/** `length` random hex digits. */
 const randomHex = (length: number): string =>
     Array.from({ length }, () => HEX_ALPHABET[randomInt(0, HEX_ALPHABET.length - 1)]).join('');
 
@@ -96,6 +106,7 @@ const randomWords = (): string =>
 
 // ─── zod v4 introspection ───────────────────────────────────────────────────────
 
+/** The slice of a Zod v4 check definition this generator reads. */
 interface ZodCheckDef {
     check: string;
     minimum?: number;
@@ -105,6 +116,7 @@ interface ZodCheckDef {
     pattern?: RegExp;
 }
 
+/** The slice of a Zod v4 schema definition this generator reads; the rest is ignored. */
 interface ZodDef {
     type: string;
     shape?: Record<string, ZodType>;
@@ -118,8 +130,10 @@ interface ZodDef {
     options?: ZodType[];
 }
 
+/** Zod keeps a schema's definition under the internal `_zod.def`; this is the one place that reaches it. */
 const defOf = (schema: ZodType): ZodDef => asStub<{ _zod: { def: ZodDef } }>(schema)._zod.def;
 
+/** The checks (min length, pattern, ...) attached to a schema, unwrapped from Zod's wrapper. */
 const checksOf = (def: ZodDef): ZodCheckDef[] => (def.checks ?? []).map((check) => check._zod.def);
 
 /**
@@ -153,6 +167,7 @@ const unwrapField = (schema: ZodType): ZodType => {
  * wrong: a plus-tag (RFC 5321 mailbox extension), an 8+ character TLD (`.photography`, not just
  * `.com`), and a subdomain. One is picked per call, same PRNG as everything else here.
  */
+/** The address shapes the generator rotates through: plain, plus-tagged, long TLD, subdomain. */
 const EMAIL_SHAPES: (() => string)[] = [
     () => `${randomAlpha(8)}@example.com`,
     () => `${randomAlpha(6)}+${randomAlpha(4)}@example.com`,
@@ -160,6 +175,7 @@ const EMAIL_SHAPES: (() => string)[] = [
     () => `${randomAlpha(8)}@mail.example.com`
 ];
 
+/** A string matching the OpenAPI `format` (email, uuid, date-time, ...), or plain words. */
 const randomStringForFormat = (format?: string): string => {
     switch (format) {
         case 'email': {
@@ -213,6 +229,7 @@ const satisfyPattern = (value: string, checks: ZodCheckDef[]): string => {
     return result;
 };
 
+/** Pad with `x` to the schema's minimum length, or cut to its maximum. */
 const clampStringLength = (value: string, checks: ZodCheckDef[]): string => {
     const minLength = checks.find((check) => check.check === 'min_length')?.minimum;
     const maxLength = checks.find((check) => check.check === 'max_length')?.maximum;
@@ -224,6 +241,7 @@ const clampStringLength = (value: string, checks: ZodCheckDef[]): string => {
     return result;
 };
 
+/** One valid value for `schema`, built from its Zod definition. */
 const buildValue = (schema: ZodType): unknown => {
     const def = defOf(schema);
     switch (def.type) {
@@ -301,12 +319,14 @@ export const validPayload = <T = Record<string, unknown>>(schema: ZodType): T =>
     return buildValue(schema) as T;
 };
 
+/** One way to break a payload: which field, what rule, and the full broken body. */
 export interface InvalidPayloadCase {
     field: string;
     violation: string;
     payload: Record<string, unknown>;
 }
 
+/** Values that break one field's rules (too short, wrong type, ...), each named. */
 const violationsForField = (fieldSchema: ZodType): { violation: string; value: unknown }[] => {
     const def = defOf(unwrapField(fieldSchema));
     const checks = checksOf(def);

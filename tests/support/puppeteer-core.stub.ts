@@ -20,4 +20,5 @@ const launch = (): never => {
     );
 };
 
+/** Mirrors the package's default export shape, so `import puppeteer from 'puppeteer-core'` resolves. */
 export default { launch };
