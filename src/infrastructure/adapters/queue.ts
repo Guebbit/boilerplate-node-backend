@@ -519,6 +519,9 @@ const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 4, high: 8 };
  *         parks it once those retry cycles have used up its attempts.
  * Why 3:  RabbitMQ 4's default is 20 — too many chances for a message that kills the process on
  *         contact. https://www.rabbitmq.com/docs/quorum-queues#delivery-limit
+ * Gap:     the retry-cycle hop above does NOT hold on a real broker — the dead-letter reason is
+ *         `delivery_limit`, not `rejected`, so RabbitMQ drops the message when the TTL sends it
+ *         back. Proven by `tests/broker`; see docs/tools/broker-testing.md#known-gap-a-crashed-consumer-s-job-is-dropped
  */
 const QUORUM_DELIVERY_LIMIT = 3;
 

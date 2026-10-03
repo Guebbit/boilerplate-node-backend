@@ -282,6 +282,15 @@ happen in a single process.
 | ---------------------------------- | ------------------------------------------------------------- | ---------------------------------------------- |
 | `tests/cluster/rate-limit.test.ts` | One budget means one budget — across workers, not per worker. | [Cluster Testing](../tools/cluster-testing.md) |
 
+## `tests/broker/` — a real RabbitMQ
+
+`queue.test.ts` mocks `amqplib`; these run the adapter against a real broker, so they see what
+RabbitMQ does with the arguments the unit suite only asserts we pass.
+
+| File                                | What it asserts                                                                                                                                                                     | Read next                                    |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `tests/broker/queue-broker.test.ts` | The topology declares on RabbitMQ 4; retry, parking, priority, prefetch and reconnect behave as documented; a consumer that dies past the delivery limit loses its job (known gap). | [Broker Testing](../tools/broker-testing.md) |
+
 ## `tests/contract/` and `tests/fuzz/`
 
 | File                                      | What it guarantees                                                                                                                                                                     | Read next                                                          |

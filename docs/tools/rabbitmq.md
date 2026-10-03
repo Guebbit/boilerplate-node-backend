@@ -261,8 +261,15 @@ flowchart LR
 | `x-overflow`             | `reject-publish` | work, retry              | `at-least-once` requires it — the alternative default, `drop-head`, would silently discard the oldest queued message instead.                                                                 |
 
 When `x-delivery-limit` is reached, the work queue dead-letters the message through the SAME
-target a `nack` already uses (`<queue>.retry`) — a crash-redelivered message re-enters the
-ordinary retry cycle instead of a second, parallel one.
+target a `nack` already uses (`<queue>.retry`).
+
+> **Known gap — such a message is lost.** The design says it then re-enters the ordinary retry
+> cycle. A real broker does not allow that: its dead-letter reason is `delivery_limit`, not
+> `rejected`, and RabbitMQ discards a message that returns to a queue already in its `x-death`
+> when no step of the cycle was a rejection. The job is gone after one TTL, never parked. The
+> flowchart's `x-delivery-limit` edge is therefore the intended path, not the observed one — see
+> [Broker testing](./broker-testing.md#known-gap-a-crashed-consumer-s-job-is-dropped), whose
+> `KNOWN GAP` case documents it and must flip when the adapter is fixed.
 
 See [RabbitMQ: Quorum Queues](https://www.rabbitmq.com/docs/quorum-queues) and
 [Upgrading an existing broker](#retries-and-parking) above — a queue TYPE cannot change in place

@@ -2,39 +2,23 @@
  * A Redis the cluster suite can count in.
  *
  * ── Why not testcontainers ────────────────────────────────────────────────────────────────────
- * It is the obvious dependency for this and it was not taken. Testcontainers talks to a Docker
- * socket, and this repo is podman-first — `.env-example` spells the engine as
- * `${CONTAINER_ENGINE:-podman}` and `docs/tools/docker-and-podman.md` explains the two places they
- * differ. Making testcontainers work here means exporting a podman socket as `DOCKER_HOST` on
- * every machine and in CI: a new dependency AND a workaround for it. Starting a container with the
- * engine the repo already names is thirty lines and no dependency.
+ * See `tests/support/container-engine.ts`: the engine the repo already names starts the container,
+ * with no new dependency.
  *
  * ── The env override comes first ──────────────────────────────────────────────────────────────
  * `NODE_TEST_REDIS_URL` wins when it is set, which is how CI runs this: a service container is
  * already listening, and starting a second one inside the job would be slower and no more real.
  */
 
-import { execFile, execFileSync } from 'node:child_process';
 import net from 'node:net';
-import { randomUUID } from 'node:crypto';
+import { containerEngine, containerEngineAvailable, startContainer } from '@tests/container-engine';
 
-const ENGINE = process.env.CONTAINER_ENGINE ?? 'podman';
 const IMAGE = process.env.NODE_TEST_REDIS_IMAGE ?? 'docker.io/library/redis:7-alpine';
 
 export interface TestRedis {
     url: string;
     stop: () => Promise<void>;
 }
-
-const freePort = (): Promise<number> =>
-    new Promise((resolve, reject) => {
-        const probe = net.createServer();
-        probe.on('error', reject);
-        probe.listen(0, () => {
-            const { port } = probe.address() as net.AddressInfo;
-            probe.close(() => resolve(port));
-        });
-    });
 
 /** Resolves when Redis answers `PING`, or rejects once `timeoutMs` has passed. */
 const waitForPong = (port: number, timeoutMs: number): Promise<void> => {
@@ -60,16 +44,6 @@ const waitForPong = (port: number, timeoutMs: number): Promise<void> => {
     return attempt();
 };
 
-/** Whether a container engine is on PATH and answering. */
-export const containerEngineAvailable = (): boolean => {
-    try {
-        execFileSync(ENGINE, ['info'], { stdio: 'ignore' });
-        return true;
-    } catch {
-        return false;
-    }
-};
-
 /**
  * A Redis to count in, and the way to stop it.
  *
@@ -83,37 +57,21 @@ export const startRedis = (): Promise<TestRedis> => {
     if (!containerEngineAvailable())
         return Promise.reject(
             new Error(
-                `No ${ENGINE} found on PATH. Set NODE_TEST_REDIS_URL to an already-listening Redis ` +
+                `No ${containerEngine} found on PATH. Set NODE_TEST_REDIS_URL to an already-listening Redis ` +
                     '— the only option inside a container, which cannot start its own — or make a ' +
                     'container engine available (CONTAINER_ENGINE, default podman).'
             )
         );
 
-    const name = `node-backend-cluster-redis-${randomUUID().slice(0, 8)}`;
-
-    return freePort()
-        .then(
-            (port) =>
-                new Promise<number>((resolve, reject) => {
-                    execFile(
-                        ENGINE,
-                        ['run', '-d', '--rm', '--name', name, '-p', `${String(port)}:6379`, IMAGE],
-                        // Typed rather than narrowed: node hands back `Error | null`, so the
-                        // rejection reason is already an Error and needs no coercion.
-                        (error: Error | null) => {
-                            if (error) reject(error);
-                            else resolve(port);
-                        }
-                    );
-                })
-        )
-        .then((port) =>
-            waitForPong(port, 60_000).then(() => ({
-                url: `redis://127.0.0.1:${String(port)}`,
-                stop: () =>
-                    new Promise<void>((resolve) => {
-                        execFile(ENGINE, ['rm', '-f', name], () => resolve());
-                    })
-            }))
-        );
+    return startContainer({
+        image: IMAGE,
+        namePrefix: 'node-backend-cluster-redis',
+        ports: [6379]
+    }).then(({ hostPorts, stop }) => {
+        const [port] = hostPorts;
+        return waitForPong(port, 60_000).then(() => ({
+            url: `redis://127.0.0.1:${String(port)}`,
+            stop
+        }));
+    });
 };
