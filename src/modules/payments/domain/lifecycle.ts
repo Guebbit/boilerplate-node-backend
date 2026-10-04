@@ -16,7 +16,7 @@
  * See: docs/theory/tactical-ddd.md
  */
 
-import type { PaymentStatus } from '@types';
+import { RefundStatus, type PaymentStatus } from '@types';
 
 /**
  * The statuses `confirmPayment` may run from — a fresh intent, or one the provider previously
@@ -44,3 +44,13 @@ export const SETTLEABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
 
 /** The only status money can come back from: it has to have arrived first. */
 export const REFUNDABLE_PAYMENT_STATUS: PaymentStatus = 'succeeded';
+
+/**
+ * The refund statuses that are still open: `pending` while the provider is being asked, `failed`
+ * because the sweep retries it with the same key. `succeeded` is absent — that is what lets a
+ * settle or a fail write land only once.
+ */
+export const OPEN_REFUND_STATUSES: readonly RefundStatus[] = [
+    RefundStatus.pending,
+    RefundStatus.failed
+];

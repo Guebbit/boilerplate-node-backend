@@ -10,7 +10,7 @@ import type { ClientSession } from 'mongoose';
 import { paymentModel, paymentWebhookEventModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod } from '@types';
 import type { PaymentDocument, RefundRecord } from './model';
-import { CONFIRMABLE_PAYMENT_STATUSES } from './domain';
+import { CONFIRMABLE_PAYMENT_STATUSES, OPEN_REFUND_STATUSES } from './domain';
 import {
     createRepository,
     toObjectId,
@@ -392,7 +392,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     refunds: {
                         $elemMatch: {
                             _id: toObjectId(refundId),
-                            status: { $in: ['pending', 'failed'] }
+                            status: { $in: OPEN_REFUND_STATUSES }
                         }
                     }
                 },
@@ -428,7 +428,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     refunds: {
                         $elemMatch: {
                             _id: toObjectId(refundId),
-                            status: { $in: ['pending', 'failed'] }
+                            status: { $in: OPEN_REFUND_STATUSES }
                         }
                     }
                 },
@@ -448,7 +448,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     findWithOpenRefunds: (updatedBefore: Date, limit: number) =>
         paymentModel
             .find({
-                refunds: { $elemMatch: { status: { $in: ['pending', 'failed'] } } },
+                refunds: { $elemMatch: { status: { $in: OPEN_REFUND_STATUSES } } },
                 updatedAt: { $lte: updatedBefore }
             })
             .sort({ updatedAt: 1 })

@@ -11,13 +11,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { PaymentStatus, PaymentMethod } from '@types';
-
-/** Why money went back — the vocabulary `RefundReason` in the contract publishes. */
-export type RefundReason = 'cancellation' | 'goodwill' | 'return';
-
-/** Where one refund attempt stands. `failed` is retryable: the sweep tries the same key again. */
-export type RefundStatus = 'pending' | 'succeeded' | 'failed';
+import { PaymentStatus, PaymentMethod, RefundReason, RefundStatus } from '@types';
 
 /**
  * One attempt to give money back — a record per attempt, the way Stripe keeps a `Refund` per
@@ -127,8 +121,12 @@ const refundSchema = new Schema<RefundRecord>(
     {
         amount: { type: Number, required: true, min: 0 },
         currency: { type: String, required: true },
-        status: { type: String, enum: ['pending', 'succeeded', 'failed'], default: 'pending' },
-        reason: { type: String, enum: ['cancellation', 'goodwill', 'return'], required: true },
+        status: {
+            type: String,
+            enum: Object.values(RefundStatus),
+            default: RefundStatus.pending
+        },
+        reason: { type: String, enum: Object.values(RefundReason), required: true },
         idempotencyKey: { type: String, required: true },
         returnId: { type: String },
         providerRefundRef: { type: String },

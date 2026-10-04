@@ -28,7 +28,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { AuthContext } from '@types';
-import type { CallerContext } from '@types';
+import type { CallerContext, RefundReason } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { DomainEventMap } from '@kernel/events';
 import { announceInTransaction } from '@kernel/outbox';
@@ -47,7 +47,7 @@ import { paymentsAuditActions } from '../audit';
 import { providerNamed } from '../providers';
 import { paymentRepository } from '../repository';
 import { PAYMENT_REFUNDED } from '../events';
-import type { PaymentDocument, RefundRecord, RefundReason } from '../model';
+import type { PaymentDocument, RefundRecord } from '../model';
 import { REFUNDABLE_PAYMENT_STATUS } from '../domain';
 import { callerScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
