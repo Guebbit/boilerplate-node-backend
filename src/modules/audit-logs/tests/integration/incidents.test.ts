@@ -96,6 +96,27 @@ describe('the operator’s audit read — what it withholds', () => {
         expect(await seenByOperator()).toEqual([]);
     });
 
+    // The shop's own rank refusals name an account (`ownerId`) and are the shop admin's business.
+    it('withholds a forbidden row the shop’s rank rule wrote, and keeps every other forbidden', async () => {
+        await Promise.all(
+            ['outranked', 'own', 'own_role', undefined].map((reason, index) =>
+                auditLogRepository.create(
+                    row('security.forbidden', 'failure', {
+                        request_id: `forbidden-${index}`,
+                        metadata: reason === undefined ? undefined : { reason, ownerId: 'owner-1' }
+                    })
+                )
+            )
+        );
+
+        const { items } = await auditLogService.searchIncidents({});
+
+        expect(items.map((item) => item.request_id).toSorted()).toEqual([
+            'forbidden-2',
+            'forbidden-3'
+        ]);
+    });
+
     it('counts only incidents, so a page total never leaks how much else there is', async () => {
         await seed([
             ['order.created', 'success'],

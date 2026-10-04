@@ -61,12 +61,21 @@ export const search = (filters: AuditLogSearchFilters): Promise<PaginatedResult<
     auditLogRepository.search(filters, auditLogRepository.sinceScope(filters.since), AUDIT_SORT);
 
 /**
+ * The `metadata.reason` of a `security.forbidden` row that the shop's own rules wrote
+ * (`@modules/access`'s `outrankedRefusal` and `ownMoneyRefusal`): a staff member refused a thing
+ * that belongs to an equal, a superior or themselves. Shop business, and `ownerId` names an
+ * account, so the operator's view leaves them out; `GET /audit` still shows them.
+ */
+const SHOP_REFUSAL_REASONS: readonly string[] = ['outranked', 'own'];
+
+/**
  * The platform operator's rows, an explicit allow-list: the incidents an installation's operator
  * needs to see, and nothing that names what a shop's customers did. Prefixes alone are wrong —
  * failed logins live under `auth.*`, and `system.user.*` carries customer ids — so each entry
  * below is a decision.
  *
- * - `security.*`: unauthorized, forbidden, a rate limit hit, a step-up demanded;
+ * - `security.*`: unauthorized, forbidden, a rate limit hit, a step-up demanded — except the shop's
+ *   own rank refusals ({@link SHOP_REFUSAL_REASONS}), which are the shop admin's business;
  * - `worker.*`: the background workers' own failures;
  * - `auth.login` only when it FAILED, and the three other signs of an attack on a credential:
  *   a failed second factor, a failed OAuth sign-in, a refresh token replayed;
@@ -76,6 +85,7 @@ export const search = (filters: AuditLogSearchFilters): Promise<PaginatedResult<
  * `GET /audit`.
  */
 const INCIDENT_SCOPE: Record<string, unknown> = {
+    $nor: [{ action: 'security.forbidden', 'metadata.reason': { $in: SHOP_REFUSAL_REASONS } }],
     $or: [
         { action: { $regex: /^(?:security|worker)\./ } },
         { action: 'auth.login', outcome: 'failure' },
