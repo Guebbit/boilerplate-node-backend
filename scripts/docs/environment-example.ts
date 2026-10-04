@@ -22,6 +22,8 @@ export interface DeclaredVariable {
     name: string;
     /** Who sets it when it is not the operator; such a variable has no line in the file. */
     setBy?: string | undefined;
+    /** The variable that reads this one from a file (`NODE_X_FILE`), when it has such a form. */
+    fileForm?: string | undefined;
 }
 
 /** A `NAME=` at the start of a line, optionally behind a single `#` (no space: prose is not one). */
@@ -75,6 +77,11 @@ export const lingeringInExample = (
     declared: readonly DeclaredVariable[],
     readElsewhere: ReadonlySet<string>
 ): EnvironmentExampleEntry[] => {
-    const known = new Set(declared.map(({ name }) => name));
+    // A secret's `_FILE` form is read by the config loader, so a line naming it is not lingering.
+    const known = new Set(
+        declared.flatMap(({ name, fileForm }) =>
+            fileForm === undefined ? [name] : [name, fileForm]
+        )
+    );
     return entries.filter(({ name }) => !known.has(name) && !readElsewhere.has(name));
 };

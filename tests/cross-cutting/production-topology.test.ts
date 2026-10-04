@@ -39,8 +39,12 @@ interface ComposeFile {
             ports?: PortMapping[];
             environment?: Record<string, string> | string[];
             command?: string | string[];
+            entrypoint?: string | string[];
+            secrets?: string[];
+            healthcheck?: { test?: string[] };
         }
     >;
+    secrets?: Record<string, { file: string }>;
 }
 
 /** Narrows what `yaml`'s `parse` hands back to the shape this file reads. */
@@ -215,5 +219,102 @@ describe('the production image installs no lifecycle scripts', () => {
 
         expect(installs.length).toBeGreaterThan(0);
         for (const install of installs) expect(install).toContain('--ignore-scripts');
+    });
+});
+
+/**
+ * Every secret each service mounts, by service name.
+ *
+ * @returns service name to the secret names its `secrets:` lists
+ */
+const mountedSecrets = (): Record<string, string[]> =>
+    Object.fromEntries(
+        Object.entries(compose.services).map(([name, service]) => [name, service.secrets ?? []])
+    );
+
+/**
+ * A service's `environment:` as a name-to-value map, whichever of compose's two spellings it used.
+ *
+ * @param name - the service
+ */
+const environmentOf = (name: string): Record<string, string> => {
+    const { environment } = compose.services[name] ?? {};
+    if (Array.isArray(environment))
+        return Object.fromEntries(
+            environment.map((entry) => [
+                entry.slice(0, entry.indexOf('=')),
+                entry.slice(entry.indexOf('=') + 1)
+            ])
+        );
+    return environment ?? {};
+};
+
+describe('each service gets only its own secrets', () => {
+    /*
+     * The Mongo root account is for creating the app's own user and for starting the replica set.
+     * Code execution in the app must not be able to read it, so only the two containers that do
+     * those jobs mount it. This is the property a shared `env_file:` used to break.
+     */
+    it('mounts the Mongo root password only in database and mongo-rs-init', () => {
+        const holders = Object.entries(mountedSecrets())
+            .filter(([, secrets]) => secrets.includes('mongo_root_password'))
+            .map(([name]) => name);
+
+        expect(holders.toSorted()).toEqual(['database', 'mongo-rs-init']);
+    });
+
+    it('keeps the cache and broker passwords out of the one-shot setup', () => {
+        const { setup } = mountedSecrets();
+
+        expect(setup).not.toContain('redis_password');
+        expect(setup).not.toContain('rabbitmq_password');
+        expect(setup).toContain('mongo_app_password');
+    });
+
+    /*
+     * Every `NODE_X_FILE=/run/secrets/y` must name a secret the same service mounts, or the app
+     * dies at boot on a path that is not there; and every declared secret must be used, or a
+     * file is demanded of the operator for nothing.
+     */
+    it('points every *_FILE variable at a secret its own service mounts', () => {
+        const dangling = Object.keys(compose.services).flatMap((name) =>
+            Object.entries(environmentOf(name))
+                .filter(([variable]) => variable.endsWith('_FILE'))
+                .filter(
+                    ([, value]) =>
+                        !mountedSecrets()[name]?.includes(value.replace('/run/secrets/', ''))
+                )
+                .map(([variable]) => `${name}: ${variable}`)
+        );
+
+        expect(dangling).toEqual([]);
+    });
+
+    it('declares exactly the secrets some service mounts, each under the client directory', () => {
+        const declared = Object.keys(compose.secrets ?? {}).toSorted();
+        const mounted = [...new Set(Object.values(mountedSecrets()).flat())].toSorted();
+
+        // Exact count: a vacuous pass on an empty list would prove nothing.
+        expect(declared).toHaveLength(11);
+        expect(declared).toEqual(mounted);
+        for (const secret of Object.values(compose.secrets ?? {}))
+            expect(secret.file).toMatch(
+                /^\.\/clients\/\$\{COMPOSE_PROJECT_NAME[^}]*\}\/secrets\/[a-z_]+$/
+            );
+    });
+
+    /*
+     * A password on a command line shows in `ps`, in `/proc/<pid>/cmdline` and in `docker inspect`.
+     */
+    it('puts no password on any command line or in any environment variable', () => {
+        const text = Object.entries(compose.services).flatMap(([name, service]) => [
+            `${name}: ${JSON.stringify(service.command ?? '')}`,
+            `${name}: ${JSON.stringify(service.healthcheck?.test ?? '')}`,
+            ...Object.keys(environmentOf(name)).map((variable) => `${name}: ${variable}`)
+        ]);
+
+        expect(text.join('\n')).not.toMatch(
+            /--requirepass|redis-cli.* -a |PASSWORD(?!_FILE)|NODE_RABBITMQ_PASS(?!_FILE)/
+        );
     });
 });

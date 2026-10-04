@@ -44,20 +44,79 @@ it selects `clients/acme/.env` below. Unset, the stack refuses to start rather t
 run a second client on the same host, repeat with a different name and a different `NODE_PORT` —
 nothing is shared between them.
 
-Then edit `clients/acme/.env` and set real values. Rather than a hand-copied list here — which goes
-stale the moment a new secret is added — boot itself tells you what it needs: start the stack with
-the shipped placeholders still in place and it refuses, naming the first one it hit. Generate a
-strong value for each with:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
+Then edit `clients/acme/.env` and set real values. The credentials and keys are **not** in this file
+(see [Secrets](#secrets)); delete their lines from your copy. Rather than a hand-copied list here —
+which goes stale the moment a new setting is added — boot itself tells you what it needs: start the
+stack with the shipped placeholders still in place and it refuses, naming the first one it hit.
 
 `.env-example`'s own `MUST SET` markers (Part A) and its production-only block (Part D6) are the
 complete list; `MONGO_ROOT_USER` defaults to `root`, `MONGO_APP_USER` and `MONGO_DB` default to
-`api`, `RABBITMQ_USER` defaults to `guest`. `MONGO_ROOT_USER`/`MONGO_ROOT_PASSWORD` are
-maintenance-only — the app itself authenticates as `MONGO_APP_USER`, a `readWrite` user scoped to
-`MONGO_DB` and created by `docker/mongo-init.js` the first time the volume is empty.
+`api`, `RABBITMQ_USER` defaults to `guest`. The root account is maintenance-only — the app itself
+authenticates as `MONGO_APP_USER`, a `readWrite` user scoped to `MONGO_DB` and created by
+`docker/mongo-init.js` the first time the volume is empty.
+
+## Secrets
+
+Every credential and key is **one file** under `clients/acme/secrets/`, and compose hands each
+service only the files it needs. A secret in an environment variable shows in `docker inspect` and
+in every child process; a file mounted into one container does neither, and the Mongo root password
+exists in exactly two containers, neither of them the app.
+
+```mermaid
+flowchart LR
+    subgraph files["clients/acme/secrets/"]
+        root["mongo_root_password"]
+        appdb["mongo_app_password"]
+        redis["redis_password"]
+        rabbit["rabbitmq_password"]
+        keys["token_access, token_refresh,<br/>totp / pii / webhook keys,<br/>pseudonym_key, metrics_token"]
+    end
+    root --> database
+    root --> rsinit["mongo-rs-init"]
+    appdb --> database
+    appdb --> app
+    appdb --> cron
+    appdb --> setup
+    redis --> cache
+    redis --> app
+    redis --> cron
+    rabbit --> queue
+    rabbit --> app
+    rabbit --> cron
+    keys --> app
+    keys --> cron
+    keys --> setup
+```
+
+Create them once, before the first `up`. Hex output, because Redis reads its password from a
+whitespace-delimited config line:
+
+```bash
+mkdir -p -m 0700 "clients/acme/secrets"
+for name in mongo_root_password mongo_app_password redis_password rabbitmq_password \
+            token_access token_refresh totp_encryption_key pii_encryption_key \
+            webhook_secret_encryption_key pseudonym_key metrics_token; do
+  openssl rand -hex 32 > "clients/acme/secrets/$name"
+  chmod 0644 "clients/acme/secrets/$name"
+done
+```
+
+- **Modes:** the files are `0644` inside a `0700` directory. Compose ignores `uid`/`mode` for a file
+  secret, and Redis (uid 999) and node (uid 1000) must both read it; the directory is what keeps
+  other host users out.
+- **How the app reads them:** `NODE_TOKEN_ACCESS_FILE=/run/secrets/token_access` and its siblings,
+  set by the compose file. The URLs carry no password; each password file is merged into its URL
+  ([Secrets as files](tools/configuration.md#secrets-as-files)).
+- **Managed Mongo, Redis or RabbitMQ:** compose refuses to start a service whose secret file is
+  missing, so leave the file **empty** (an empty file reads as unset, and the password in your
+  `NODE_DB_URI` / `NODE_REDIS_URL` / `NODE_RABBITMQ_URL` stands), or put the managed password in it
+  and leave it out of the URL.
+- **Optional integrations** (SMTP, payments, OAuth, antibot) stay in `clients/acme/.env`, since a
+  file secret cannot be optional here.
+- **RabbitMQ:** the 4.x image refuses `RABBITMQ_DEFAULT_PASS_FILE`, so the password goes into a
+  config file the broker reads; **Redis** gets it the same way, never on a command line.
+- **Rotating** a Mongo or broker password: [security.md](tools/security.md#database-credential-and-key-rotation);
+  then rewrite the file and recreate the services that mount it.
 
 **Bundled or managed backing services.** `COMPOSE_PROFILES=bundled` (`.env-example`'s default)
 starts the `database`/`cache`/`queue` containers below. Pointing at a managed MongoDB, Redis or

@@ -120,6 +120,11 @@ export const databaseConfig = defineConfig({
         NODE_DB_URI: text({
             describe: 'A full Mongo URI. Wins over the host, port and name below when set.'
         }),
+        NODE_DB_PASSWORD: text({
+            sensitive: true,
+            describe:
+                'Password merged into `NODE_DB_URI`, replacing any it carries (a URI only: the host/port form has no user). Read from `NODE_DB_PASSWORD_FILE` in a deployment, so the URI itself holds no secret.'
+        }),
         NODE_MONGODB_HOST: text({ default: '127.0.0.1', describe: 'Mongo host.' }),
         NODE_MONGODB_PORT: int({ default: 27_017, min: 1, max: 65_535, describe: 'Mongo port.' }),
         NODE_MONGODB_NAME: text({

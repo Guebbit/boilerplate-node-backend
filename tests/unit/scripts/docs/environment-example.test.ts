@@ -56,6 +56,18 @@ describe('missingFromExample', () => {
 describe('lingeringInExample', () => {
     const entries = parseEnvironmentExample(FILE);
 
+    it('lets a secret vouch for its `_FILE` form, and only a secret', () => {
+        const withFiles = parseEnvironmentExample('NODE_KEY_FILE=\nNODE_PORT_FILE=\n');
+
+        expect(
+            lingeringInExample(
+                withFiles,
+                [{ name: 'NODE_KEY', fileForm: 'NODE_KEY_FILE' }, { name: 'NODE_PORT' }],
+                new Set()
+            )
+        ).toEqual([{ name: 'NODE_PORT_FILE', line: 2 }]);
+    });
+
     it('names a variable no slice declares and nothing reads', () => {
         expect(
             lingeringInExample(entries, [{ name: 'NODE_PORT' }], new Set(['NODE_HOST']))

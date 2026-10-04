@@ -5,11 +5,14 @@
  * Reads:       `process.env`, ONCE — the first read freezes a snapshot (parse once).
  * Overrides:   a layer on top of the snapshot. `createApp({ env })` installs one for good; the
  *              test helpers set one for a body and put it back.
+ * Resolves:    `NODE_X_FILE` into `NODE_X` (see `secret-files.ts`), once per rebuild of the merge.
  * Lives on:    `globalThis`, so a `jest.resetModules()` re-import still sees the same state.
  *
  * Everything else asks a slice (`defineConfig`), and a slice asks {@link currentEnvironment}.
  * See: docs/tools/configuration.md
  */
+
+import { resolveSecretFiles } from './secret-files';
 
 /** A set of environment variables, as `process.env` shapes them. */
 export type Environment = Readonly<Record<string, string | undefined>>;
@@ -76,7 +79,9 @@ export const currentEnvironment = (): Environment => {
         if (value === undefined) merged.delete(name);
         else merged.set(name, value);
     }
-    store.merged = Object.freeze(Object.fromEntries(merged));
+    // Secret files are read here, after the overrides, so an override can name one and every slice
+    // sees only the resolved value. Never written back to `process.env`.
+    store.merged = Object.freeze(resolveSecretFiles(Object.fromEntries(merged)));
     store.mergedVersion = store.version;
     return store.merged;
 };

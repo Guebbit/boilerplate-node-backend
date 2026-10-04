@@ -17,6 +17,7 @@ import path from 'node:path';
 import { allConfigSlices } from '../../src/app/config';
 import { enabledModules } from '../../src/modules';
 import { demoSinkConfig, seedPasswordsConfig } from '../../scenarios/config';
+import { fileFormOf } from '@infrastructure/config/secret-files';
 import { REPO_ROOT } from '../git-base';
 import {
     lingeringInExample,
@@ -29,7 +30,12 @@ import {
 /** Every variable any slice declares, the seeder's own included (the app never boots with it). */
 const declaredVariables = (): DeclaredVariable[] =>
     [...allConfigSlices(enabledModules), seedPasswordsConfig.slice, demoSinkConfig.slice].flatMap(
-        (slice) => slice.fields.map(({ name, doc }) => ({ name, setBy: doc.setBy }))
+        (slice) =>
+            slice.fields.map(({ name, doc, sensitive }) => ({
+                name,
+                setBy: doc.setBy,
+                fileForm: sensitive ? fileFormOf(name) : undefined
+            }))
     );
 
 /**

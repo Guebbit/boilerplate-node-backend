@@ -143,6 +143,48 @@ launchers install theirs first.
 Every entry point imports `config/dotenv` instead of `dotenv/config`. It loads `.env` and tells the
 store, so a read that happened earlier (tracing, a launcher) does not freeze a snapshot without it.
 
+## Secrets as files
+
+`NODE_X_FILE=/run/secrets/x` stands in for `NODE_X=<the secret>`. A secret in the environment shows in
+`docker inspect` and in every child process; a file mounted into one container does neither. The
+store resolves it while it builds the merged environment, so every slice, presence rule and
+cross-field check sees the value and nothing downstream knows a file existed.
+
+```mermaid
+flowchart LR
+    Merge["snapshot + overrides"] --> Files["NODE_X_FILE read into NODE_X"]
+    Files --> Urls["password merged into its URL"]
+    Urls --> Slice["slices, presence rules, checks"]
+    Merge -. "never written back" .-> Proc["process.env"]
+```
+
+| Rule                     | Why                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| The file wins            | Both set is a deployment mid-move, not a mistake worth refusing                      |
+| An empty file is unset   | A managed service has no secret to put in a file compose insists on mounting         |
+| A trailing newline goes  | Only the one `echo` or an editor adds; any other whitespace is the secret's          |
+| `NODE_*` only            | `GIT_INDEX_FILE` and friends name a file for another tool, not a secret for this app |
+| Never into `process.env` | That would hand the value to every child process again                               |
+| An unreadable file stops | The error names the variable and path, never a value                                 |
+
+**Connection URLs carry no password.** The URL stays in plain config; each password is its own
+variable, and the loader merges it into the URL, replacing any it carried:
+
+| URL                         | Password                         | Its file form                         |
+| --------------------------- | -------------------------------- | ------------------------------------- |
+| `NODE_DB_URI`               | `NODE_DB_PASSWORD`               | `NODE_DB_PASSWORD_FILE`               |
+| `NODE_REDIS_URL`            | `NODE_REDIS_PASSWORD`            | `NODE_REDIS_PASSWORD_FILE`            |
+| `NODE_RABBITMQ_URL`         | `NODE_RABBITMQ_PASS`             | `NODE_RABBITMQ_PASS_FILE`             |
+| `NODE_RATE_LIMIT_REDIS_URL` | `NODE_RATE_LIMIT_REDIS_PASSWORD` | `NODE_RATE_LIMIT_REDIS_PASSWORD_FILE` |
+
+The merge is a small regular expression, not `URL`: the WHATWG parser refuses a multi-host Mongo
+URI (`mongodb://a:27017,b:27017/db`), which is a normal replica-set string. A password is
+percent-encoded on the way in.
+
+The generated reference below marks every secret that has a file form. `check:env-example` accepts
+a `NODE_X_FILE` line in `.env-example` for any such secret. How the production stack uses this:
+[docs/getting-started-production.md](../getting-started-production.md).
+
 ## In tests
 
 `tests/support/setup-environment.ts` gives every worker a set of `??=` defaults. It is the first
@@ -210,12 +252,13 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### database
 
-| Variable            | Type                  | Default                    | Rules | What it does                                                        |
-| ------------------- | --------------------- | -------------------------- | ----- | ------------------------------------------------------------------- |
-| `NODE_DB_URI`       | text                  | —                          | —     | A full Mongo URI. Wins over the host, port and name below when set. |
-| `NODE_MONGODB_HOST` | text                  | `127.0.0.1`                | —     | Mongo host.                                                         |
-| `NODE_MONGODB_PORT` | whole number 1..65535 | `27017`                    | —     | Mongo port.                                                         |
-| `NODE_MONGODB_NAME` | text                  | `boilerplate-node-backend` | —     | Database name.                                                      |
+| Variable            | Type                  | Default                    | Rules                                            | What it does                                                                                                                                                                                     |
+| ------------------- | --------------------- | -------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_DB_URI`       | text                  | —                          | —                                                | A full Mongo URI. Wins over the host, port and name below when set.                                                                                                                              |
+| `NODE_DB_PASSWORD`  | text                  | —                          | secret: never logged; or `NODE_DB_PASSWORD_FILE` | Password merged into `NODE_DB_URI`, replacing any it carries (a URI only: the host/port form has no user). Read from `NODE_DB_PASSWORD_FILE` in a deployment, so the URI itself holds no secret. |
+| `NODE_MONGODB_HOST` | text                  | `127.0.0.1`                | —                                                | Mongo host.                                                                                                                                                                                      |
+| `NODE_MONGODB_PORT` | whole number 1..65535 | `27017`                    | —                                                | Mongo port.                                                                                                                                                                                      |
+| `NODE_MONGODB_NAME` | text                  | `boilerplate-node-backend` | —                                                | Database name.                                                                                                                                                                                   |
 
 ### tracing
 
@@ -227,15 +270,15 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### pseudonymisation
 
-| Variable             | Type | Default | Rules                                                                                                          | What it does                                                                                            |
-| -------------------- | ---- | ------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `NODE_PSEUDONYM_KEY` | text | —       | required, 16+ characters, never the `.env-example` placeholder, outside development/test; secret: never logged | Root secret for keyed hashes of personal data in logs and fingerprints. Every digest throws without it. |
+| Variable             | Type | Default | Rules                                                                                                                                        | What it does                                                                                            |
+| -------------------- | ---- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `NODE_PSEUDONYM_KEY` | text | —       | required, 16+ characters, never the `.env-example` placeholder, outside development/test; secret: never logged; or `NODE_PSEUDONYM_KEY_FILE` | Root secret for keyed hashes of personal data in logs and fingerprints. Every digest throws without it. |
 
 ### pii-encryption
 
-| Variable                  | Type                                                              | Default | Rules                | What it does                                                            |
-| ------------------------- | ----------------------------------------------------------------- | ------- | -------------------- | ----------------------------------------------------------------------- |
-| `NODE_PII_ENCRYPTION_KEY` | versioned key ring (`version:key`, comma-separated, newest first) | `empty` | secret: never logged | Key ring encrypting personal fields at rest (addresses, phone numbers). |
+| Variable                  | Type                                                              | Default | Rules                                                   | What it does                                                            |
+| ------------------------- | ----------------------------------------------------------------- | ------- | ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `NODE_PII_ENCRYPTION_KEY` | versioned key ring (`version:key`, comma-separated, newest first) | `empty` | secret: never logged; or `NODE_PII_ENCRYPTION_KEY_FILE` | Key ring encrypting personal fields at rest (addresses, phone numbers). |
 
 ### breached-passwords
 
@@ -247,16 +290,16 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### mail
 
-| Variable              | Type                  | Default | Rules                | What it does                                                                                         |
-| --------------------- | --------------------- | ------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
-| `NODE_MAIL_TRANSPORT` | text                  | `smtp`  | —                    | The mail transport. Production has `smtp`; a name this process does not register is refused at boot. |
-| `NODE_SMTP_HOST`      | text                  | —       | —                    | SMTP server. Unset leaves email second factors off.                                                  |
-| `NODE_SMTP_PORT`      | whole number 1..65535 | `587`   | —                    | 587 STARTTLS, 465 implicit TLS, 25 relay.                                                            |
-| `NODE_SMTP_NAME`      | text                  | —       | —                    | Hostname announced in the SMTP EHLO greeting.                                                        |
-| `NODE_SMTP_USER`      | text                  | —       | —                    | SMTP AUTH user.                                                                                      |
-| `NODE_SMTP_PASS`      | text                  | —       | secret: never logged | SMTP AUTH password.                                                                                  |
-| `NODE_SMTP_SENDER`    | text                  | —       | —                    | Default From address, e.g. `Shop <shop@example.com>`.                                                |
-| `NODE_E2E_RUN`        | switch                | `off`   | —                    | Set by `e2e:serve`. Refuses a non-local SMTP host so a live suite cannot mail real people.           |
+| Variable              | Type                  | Default | Rules                                          | What it does                                                                                         |
+| --------------------- | --------------------- | ------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `NODE_MAIL_TRANSPORT` | text                  | `smtp`  | —                                              | The mail transport. Production has `smtp`; a name this process does not register is refused at boot. |
+| `NODE_SMTP_HOST`      | text                  | —       | —                                              | SMTP server. Unset leaves email second factors off.                                                  |
+| `NODE_SMTP_PORT`      | whole number 1..65535 | `587`   | —                                              | 587 STARTTLS, 465 implicit TLS, 25 relay.                                                            |
+| `NODE_SMTP_NAME`      | text                  | —       | —                                              | Hostname announced in the SMTP EHLO greeting.                                                        |
+| `NODE_SMTP_USER`      | text                  | —       | —                                              | SMTP AUTH user.                                                                                      |
+| `NODE_SMTP_PASS`      | text                  | —       | secret: never logged; or `NODE_SMTP_PASS_FILE` | SMTP AUTH password.                                                                                  |
+| `NODE_SMTP_SENDER`    | text                  | —       | —                                              | Default From address, e.g. `Shop <shop@example.com>`.                                                |
+| `NODE_E2E_RUN`        | switch                | `off`   | —                                              | Set by `e2e:serve`. Refuses a non-local SMTP host so a live suite cannot mail real people.           |
 
 ### mail-files
 
@@ -268,26 +311,27 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### queue
 
-| Variable                         | Type                  | Default     | Rules                | What it does                                                                             |
-| -------------------------------- | --------------------- | ----------- | -------------------- | ---------------------------------------------------------------------------------------- |
-| `NODE_RABBITMQ_URL`              | text                  | —           | secret: never logged | A full AMQP URL. Wins over the fragments below.                                          |
-| `NODE_RABBITMQ_HOST`             | text                  | `127.0.0.1` | —                    | Broker host.                                                                             |
-| `NODE_RABBITMQ_PORT`             | whole number 1..65535 | —           | —                    | Broker port. The fragment that switches the queue on: unset (and no URL) means no queue. |
-| `NODE_RABBITMQ_USER`             | text                  | `guest`     | —                    | Broker user (guest works over localhost only).                                           |
-| `NODE_RABBITMQ_PASS`             | text                  | `guest`     | secret: never logged | Broker password.                                                                         |
-| `NODE_RABBITMQ_ENABLED`          | switch                | `on`        | —                    | Kill switch that leaves the URL in place.                                                |
-| `NODE_QUEUE_MAX_ATTEMPTS`        | whole number >= 1     | `5`         | —                    | Deliveries a job gets before it is parked.                                               |
-| `NODE_QUEUE_RETRY_DELAY_SECONDS` | whole number >= 1     | `30`        | —                    | How long a failed job waits before it is redelivered.                                    |
+| Variable                         | Type                  | Default     | Rules                                              | What it does                                                                                                                                           |
+| -------------------------------- | --------------------- | ----------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_RABBITMQ_URL`              | text                  | —           | secret: never logged; or `NODE_RABBITMQ_URL_FILE`  | A full AMQP URL. Wins over the fragments below.                                                                                                        |
+| `NODE_RABBITMQ_HOST`             | text                  | `127.0.0.1` | —                                                  | Broker host.                                                                                                                                           |
+| `NODE_RABBITMQ_PORT`             | whole number 1..65535 | —           | —                                                  | Broker port. The fragment that switches the queue on: unset (and no URL) means no queue.                                                               |
+| `NODE_RABBITMQ_USER`             | text                  | `guest`     | —                                                  | Broker user (guest works over localhost only).                                                                                                         |
+| `NODE_RABBITMQ_PASS`             | text                  | `guest`     | secret: never logged; or `NODE_RABBITMQ_PASS_FILE` | Broker password. Also merged into `NODE_RABBITMQ_URL` when that is set, replacing any it carries. Read from `NODE_RABBITMQ_PASS_FILE` in a deployment. |
+| `NODE_RABBITMQ_ENABLED`          | switch                | `on`        | —                                                  | Kill switch that leaves the URL in place.                                                                                                              |
+| `NODE_QUEUE_MAX_ATTEMPTS`        | whole number >= 1     | `5`         | —                                                  | Deliveries a job gets before it is parked.                                                                                                             |
+| `NODE_QUEUE_RETRY_DELAY_SECONDS` | whole number >= 1     | `30`        | —                                                  | How long a failed job waits before it is redelivered.                                                                                                  |
 
 ### redis
 
-| Variable                   | Type                  | Default                    | Rules                | What it does                                                   |
-| -------------------------- | --------------------- | -------------------------- | -------------------- | -------------------------------------------------------------- |
-| `NODE_REDIS_URL`           | text                  | —                          | secret: never logged | A full Redis URL. Wins over host and port.                     |
-| `NODE_REDIS_HOST`          | text                  | `127.0.0.1`                | —                    | Redis host.                                                    |
-| `NODE_REDIS_PORT`          | whole number 1..65535 | —                          | —                    | Redis port. Unset (and no URL) means no Redis.                 |
-| `NODE_REDIS_CACHE_PREFIX`  | text                  | `boilerplate-node-backend` | —                    | Prefix of every cache key. Staging and production must differ. |
-| `NODE_REDIS_CACHE_ENABLED` | switch                | `on`                       | —                    | Kill switch for the cache that leaves Redis up.                |
+| Variable                   | Type                  | Default                    | Rules                                               | What it does                                                                                                           |
+| -------------------------- | --------------------- | -------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `NODE_REDIS_URL`           | text                  | —                          | secret: never logged; or `NODE_REDIS_URL_FILE`      | A full Redis URL. Wins over host and port.                                                                             |
+| `NODE_REDIS_PASSWORD`      | text                  | —                          | secret: never logged; or `NODE_REDIS_PASSWORD_FILE` | Password merged into `NODE_REDIS_URL`, replacing any it carries. Read from `NODE_REDIS_PASSWORD_FILE` in a deployment. |
+| `NODE_REDIS_HOST`          | text                  | `127.0.0.1`                | —                                                   | Redis host.                                                                                                            |
+| `NODE_REDIS_PORT`          | whole number 1..65535 | —                          | —                                                   | Redis port. Unset (and no URL) means no Redis.                                                                         |
+| `NODE_REDIS_CACHE_PREFIX`  | text                  | `boilerplate-node-backend` | —                                                   | Prefix of every cache key. Staging and production must differ.                                                         |
+| `NODE_REDIS_CACHE_ENABLED` | switch                | `on`                       | —                                                   | Kill switch for the cache that leaves Redis up.                                                                        |
 
 ### images
 
@@ -308,16 +352,16 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### antibot
 
-| Variable                            | Type                       | Default  | Rules                | What it does                                                                   |
-| ----------------------------------- | -------------------------- | -------- | -------------------- | ------------------------------------------------------------------------------ |
-| `NODE_ANTIBOT_PROVIDER`             | text                       | `none`   | —                    | The human-challenge provider: none, turnstile or altcha.                       |
-| `NODE_ANTIBOT_EMAIL_POLICY`         | one of off, disposable, mx | `off`    | —                    | What a signup address must pass: nothing, not-disposable, or has an MX record. |
-| `NODE_ANTIBOT_EMAIL_ALLOWLIST`      | comma-separated list       | `empty`  | —                    | Domains exempt from the email policy.                                          |
-| `NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA` | comma-separated list       | `empty`  | —                    | Domains refused on top of the upstream disposable list.                        |
-| `NODE_ANTIBOT_ALTCHA_SECRET`        | text                       | —        | secret: never logged | HMAC secret for altcha challenges (16+ characters).                            |
-| `NODE_ANTIBOT_ALTCHA_COST`          | whole number >= 1          | `100000` | —                    | Work an altcha challenge takes to solve. Higher taxes bots and visitors alike. |
-| `NODE_ANTIBOT_TURNSTILE_SITE_KEY`   | text                       | —        | —                    | Public Turnstile site key.                                                     |
-| `NODE_ANTIBOT_TURNSTILE_SECRET`     | text                       | —        | secret: never logged | Turnstile secret key.                                                          |
+| Variable                            | Type                       | Default  | Rules                                                         | What it does                                                                   |
+| ----------------------------------- | -------------------------- | -------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `NODE_ANTIBOT_PROVIDER`             | text                       | `none`   | —                                                             | The human-challenge provider: none, turnstile or altcha.                       |
+| `NODE_ANTIBOT_EMAIL_POLICY`         | one of off, disposable, mx | `off`    | —                                                             | What a signup address must pass: nothing, not-disposable, or has an MX record. |
+| `NODE_ANTIBOT_EMAIL_ALLOWLIST`      | comma-separated list       | `empty`  | —                                                             | Domains exempt from the email policy.                                          |
+| `NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA` | comma-separated list       | `empty`  | —                                                             | Domains refused on top of the upstream disposable list.                        |
+| `NODE_ANTIBOT_ALTCHA_SECRET`        | text                       | —        | secret: never logged; or `NODE_ANTIBOT_ALTCHA_SECRET_FILE`    | HMAC secret for altcha challenges (16+ characters).                            |
+| `NODE_ANTIBOT_ALTCHA_COST`          | whole number >= 1          | `100000` | —                                                             | Work an altcha challenge takes to solve. Higher taxes bots and visitors alike. |
+| `NODE_ANTIBOT_TURNSTILE_SITE_KEY`   | text                       | —        | —                                                             | Public Turnstile site key.                                                     |
+| `NODE_ANTIBOT_TURNSTILE_SECRET`     | text                       | —        | secret: never logged; or `NODE_ANTIBOT_TURNSTILE_SECRET_FILE` | Turnstile secret key.                                                          |
 
 ### site
 
@@ -329,12 +373,13 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### rate-limit
 
-| Variable                        | Type              | Default      | Rules                | What it does                                                            |
-| ------------------------------- | ----------------- | ------------ | -------------------- | ----------------------------------------------------------------------- |
-| `NODE_RATE_LIMIT_WINDOW_MS`     | whole number >= 1 | `60000`      | —                    | The window every `shared` budget counts over.                           |
-| `NODE_RATE_LIMIT_REDIS_ENABLED` | switch            | `on`         | —                    | Kill switch: false counts in memory even when a Redis URL is inherited. |
-| `NODE_RATE_LIMIT_REDIS_URL`     | text              | —            | secret: never logged | The limiter’s own Redis. Falls back to the cache’s.                     |
-| `NODE_RATE_LIMIT_REDIS_PREFIX`  | text              | `rate-limit` | —                    | Key namespace of every counter, apart from the cache’s.                 |
+| Variable                         | Type              | Default      | Rules                                                          | What it does                                                                                                                                 |
+| -------------------------------- | ----------------- | ------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_RATE_LIMIT_WINDOW_MS`      | whole number >= 1 | `60000`      | —                                                              | The window every `shared` budget counts over.                                                                                                |
+| `NODE_RATE_LIMIT_REDIS_ENABLED`  | switch            | `on`         | —                                                              | Kill switch: false counts in memory even when a Redis URL is inherited.                                                                      |
+| `NODE_RATE_LIMIT_REDIS_URL`      | text              | —            | secret: never logged; or `NODE_RATE_LIMIT_REDIS_URL_FILE`      | The limiter’s own Redis. Falls back to the cache’s.                                                                                          |
+| `NODE_RATE_LIMIT_REDIS_PASSWORD` | text              | —            | secret: never logged; or `NODE_RATE_LIMIT_REDIS_PASSWORD_FILE` | Password merged into `NODE_RATE_LIMIT_REDIS_URL`, replacing any it carries. Read from `NODE_RATE_LIMIT_REDIS_PASSWORD_FILE` in a deployment. |
+| `NODE_RATE_LIMIT_REDIS_PREFIX`   | text              | `rate-limit` | —                                                              | Key namespace of every counter, apart from the cache’s.                                                                                      |
 
 ### uploads
 
@@ -376,15 +421,15 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### analytics
 
-| Variable                         | Type   | Default | Rules                | What it does                                                                 |
-| -------------------------------- | ------ | ------- | -------------------- | ---------------------------------------------------------------------------- |
-| `NODE_ANALYTICS_PROVIDER`        | text   | `umami` | —                    | Where product events go: umami, posthog or none.                             |
-| `NODE_ANALYTICS_REQUIRE_CONSENT` | switch | `on`    | —                    | Only capture an event when the caller consented (GDPR Art. 25(2) default).   |
-| `NODE_UMAMI_HOST`                | text   | —       | —                    | Umami’s PUBLIC origin, where a browser loads the tracker.                    |
-| `NODE_UMAMI_INGEST_HOST`         | text   | —       | —                    | The address this server dials to send events. Falls back to the public host. |
-| `NODE_UMAMI_WEBSITE_ID`          | text   | —       | —                    | The Umami website id events are attributed to.                               |
-| `NODE_POSTHOG_API_KEY`           | text   | —       | secret: never logged | PostHog write-only project key.                                              |
-| `NODE_POSTHOG_HOST`              | text   | —       | —                    | PostHog host. Explicit: a default would pick a region for you.               |
+| Variable                         | Type   | Default | Rules                                                | What it does                                                                 |
+| -------------------------------- | ------ | ------- | ---------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `NODE_ANALYTICS_PROVIDER`        | text   | `umami` | —                                                    | Where product events go: umami, posthog or none.                             |
+| `NODE_ANALYTICS_REQUIRE_CONSENT` | switch | `on`    | —                                                    | Only capture an event when the caller consented (GDPR Art. 25(2) default).   |
+| `NODE_UMAMI_HOST`                | text   | —       | —                                                    | Umami’s PUBLIC origin, where a browser loads the tracker.                    |
+| `NODE_UMAMI_INGEST_HOST`         | text   | —       | —                                                    | The address this server dials to send events. Falls back to the public host. |
+| `NODE_UMAMI_WEBSITE_ID`          | text   | —       | —                                                    | The Umami website id events are attributed to.                               |
+| `NODE_POSTHOG_API_KEY`           | text   | —       | secret: never logged; or `NODE_POSTHOG_API_KEY_FILE` | PostHog write-only project key.                                              |
+| `NODE_POSTHOG_HOST`              | text   | —       | —                                                    | PostHog host. Explicit: a default would pick a region for you.               |
 
 ### reauthentication
 
@@ -428,26 +473,26 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### account-sessions
 
-| Variable                         | Type                                                              | Default    | Rules                                                                                | What it does                                                                         |
-| -------------------------------- | ----------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `NODE_TOKEN_REFRESH_TIME_SHORT`  | whole number >= 1                                                 | `604800`   | —                                                                                    | Refresh-token lifetime in seconds for a browser-session login.                       |
-| `NODE_TOKEN_REFRESH_TIME_MEDIUM` | whole number >= 1                                                 | `2592000`  | —                                                                                    | Refresh-token lifetime in seconds for the medium “remember me” tier.                 |
-| `NODE_TOKEN_REFRESH_TIME_LONG`   | whole number >= 1                                                 | `31536000` | —                                                                                    | Refresh-token lifetime in seconds for the long “remember me” tier.                   |
-| `NODE_TOKEN_ACCESS_TIME`         | whole number >= 1                                                 | `600`      | —                                                                                    | Access-token lifetime in seconds.                                                    |
-| `NODE_TOKEN_ACCESS`              | key ring (comma-separated, newest first)                          | `empty`    | required, 16+ characters, never the `.env-example` placeholder; secret: never logged | Access-token signing ring, newest first.                                             |
-| `NODE_TOKEN_REFRESH`             | key ring (comma-separated, newest first)                          | `empty`    | required, 16+ characters, never the `.env-example` placeholder; secret: never logged | Refresh-token signing ring, newest first.                                            |
-| `NODE_TOTP_ENCRYPTION_KEY`       | versioned key ring (`version:key`, comma-separated, newest first) | `empty`    | required, 16+ characters, never the `.env-example` placeholder; secret: never logged | Ring encrypting second-factor material at rest, `version:key`, newest first.         |
-| `NODE_TOKEN_ROTATION_GRACE_MS`   | whole number >= 0                                                 | `10000`    | —                                                                                    | How long a just-rotated refresh token is still honoured (a page-load race).          |
-| `NODE_TOKEN_REUSE_WINDOW_MS`     | whole number >= 1                                                 | `86400000` | —                                                                                    | How long a rotated-away refresh token is remembered, so replaying it reads as theft. |
+| Variable                         | Type                                                              | Default    | Rules                                                                                                                    | What it does                                                                         |
+| -------------------------------- | ----------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `NODE_TOKEN_REFRESH_TIME_SHORT`  | whole number >= 1                                                 | `604800`   | —                                                                                                                        | Refresh-token lifetime in seconds for a browser-session login.                       |
+| `NODE_TOKEN_REFRESH_TIME_MEDIUM` | whole number >= 1                                                 | `2592000`  | —                                                                                                                        | Refresh-token lifetime in seconds for the medium “remember me” tier.                 |
+| `NODE_TOKEN_REFRESH_TIME_LONG`   | whole number >= 1                                                 | `31536000` | —                                                                                                                        | Refresh-token lifetime in seconds for the long “remember me” tier.                   |
+| `NODE_TOKEN_ACCESS_TIME`         | whole number >= 1                                                 | `600`      | —                                                                                                                        | Access-token lifetime in seconds.                                                    |
+| `NODE_TOKEN_ACCESS`              | key ring (comma-separated, newest first)                          | `empty`    | required, 16+ characters, never the `.env-example` placeholder; secret: never logged; or `NODE_TOKEN_ACCESS_FILE`        | Access-token signing ring, newest first.                                             |
+| `NODE_TOKEN_REFRESH`             | key ring (comma-separated, newest first)                          | `empty`    | required, 16+ characters, never the `.env-example` placeholder; secret: never logged; or `NODE_TOKEN_REFRESH_FILE`       | Refresh-token signing ring, newest first.                                            |
+| `NODE_TOTP_ENCRYPTION_KEY`       | versioned key ring (`version:key`, comma-separated, newest first) | `empty`    | required, 16+ characters, never the `.env-example` placeholder; secret: never logged; or `NODE_TOTP_ENCRYPTION_KEY_FILE` | Ring encrypting second-factor material at rest, `version:key`, newest first.         |
+| `NODE_TOKEN_ROTATION_GRACE_MS`   | whole number >= 0                                                 | `10000`    | —                                                                                                                        | How long a just-rotated refresh token is still honoured (a page-load race).          |
+| `NODE_TOKEN_REUSE_WINDOW_MS`     | whole number >= 1                                                 | `86400000` | —                                                                                                                        | How long a rotated-away refresh token is remembered, so replaying it reads as theft. |
 
 ### account-oauth
 
-| Variable                          | Type | Default | Rules                | What it does                |
-| --------------------------------- | ---- | ------- | -------------------- | --------------------------- |
-| `NODE_OAUTH_GOOGLE_CLIENT_ID`     | text | —       | —                    | Google OAuth client id.     |
-| `NODE_OAUTH_GOOGLE_CLIENT_SECRET` | text | —       | secret: never logged | Google OAuth client secret. |
-| `NODE_OAUTH_GITHUB_CLIENT_ID`     | text | —       | —                    | GitHub OAuth client id.     |
-| `NODE_OAUTH_GITHUB_CLIENT_SECRET` | text | —       | secret: never logged | GitHub OAuth client secret. |
+| Variable                          | Type | Default | Rules                                                           | What it does                |
+| --------------------------------- | ---- | ------- | --------------------------------------------------------------- | --------------------------- |
+| `NODE_OAUTH_GOOGLE_CLIENT_ID`     | text | —       | —                                                               | Google OAuth client id.     |
+| `NODE_OAUTH_GOOGLE_CLIENT_SECRET` | text | —       | secret: never logged; or `NODE_OAUTH_GOOGLE_CLIENT_SECRET_FILE` | Google OAuth client secret. |
+| `NODE_OAUTH_GITHUB_CLIENT_ID`     | text | —       | —                                                               | GitHub OAuth client id.     |
+| `NODE_OAUTH_GITHUB_CLIENT_SECRET` | text | —       | secret: never logged; or `NODE_OAUTH_GITHUB_CLIENT_SECRET_FILE` | GitHub OAuth client secret. |
 
 ### audit-logs
 
@@ -498,11 +543,11 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### observability
 
-| Variable                  | Type | Default | Rules                                                                | What it does                                                               |
-| ------------------------- | ---- | ------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `NODE_METRICS_TOKEN`      | text | —       | required, never the `.env-example` placeholder; secret: never logged | Bearer token a Prometheus scraper presents. Unset refuses every scrape.    |
-| `NODE_LOKI_HOST`          | text | —       | —                                                                    | Loki host; reported by the health payload only.                            |
-| `NODE_FARO_COLLECTOR_URL` | text | —       | —                                                                    | Faro collector for browser telemetry; reported by the health payload only. |
+| Variable                  | Type | Default | Rules                                                                                              | What it does                                                               |
+| ------------------------- | ---- | ------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `NODE_METRICS_TOKEN`      | text | —       | required, never the `.env-example` placeholder; secret: never logged; or `NODE_METRICS_TOKEN_FILE` | Bearer token a Prometheus scraper presents. Unset refuses every scrape.    |
+| `NODE_LOKI_HOST`          | text | —       | —                                                                                                  | Loki host; reported by the health payload only.                            |
+| `NODE_FARO_COLLECTOR_URL` | text | —       | —                                                                                                  | Faro collector for browser telemetry; reported by the health payload only. |
 
 ### orders
 
@@ -536,13 +581,13 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### payments
 
-| Variable                                | Type              | Default | Rules                                                                                          | What it does                                                                                                           |
-| --------------------------------------- | ----------------- | ------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `NODE_PAYMENT_PROVIDER`                 | text              | —       | —                                                                                              | The card payment provider a deployment registers. Unset: no card payments, and checkout offers only the other methods. |
-| `NODE_PAYMENT_WEBHOOK_SECRET`           | text              | —       | required, never the `.env-example` placeholder, outside development/test; secret: never logged | The secret the provider signs webhook deliveries with. Unset when no provider is configured; 16+ characters once set.  |
-| `NODE_STRIPE_SECRET_KEY`                | text              | —       | secret: never logged                                                                           | Stripe secret key. A test-mode key refuses boot outside development/test.                                              |
-| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`     | whole number >= 0 | `1`     | —                                                                                              | Age a `pendingEffects` marker must reach before the sweep acts on it.                                                  |
-| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | whole number >= 1 | `30`    | —                                                                                              | Days an abandoned payment attempt is kept before the sweep deletes it.                                                 |
+| Variable                                | Type              | Default | Rules                                                                                                                                 | What it does                                                                                                           |
+| --------------------------------------- | ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_PROVIDER`                 | text              | —       | —                                                                                                                                     | The card payment provider a deployment registers. Unset: no card payments, and checkout offers only the other methods. |
+| `NODE_PAYMENT_WEBHOOK_SECRET`           | text              | —       | required, never the `.env-example` placeholder, outside development/test; secret: never logged; or `NODE_PAYMENT_WEBHOOK_SECRET_FILE` | The secret the provider signs webhook deliveries with. Unset when no provider is configured; 16+ characters once set.  |
+| `NODE_STRIPE_SECRET_KEY`                | text              | —       | secret: never logged; or `NODE_STRIPE_SECRET_KEY_FILE`                                                                                | Stripe secret key. A test-mode key refuses boot outside development/test.                                              |
+| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`     | whole number >= 0 | `1`     | —                                                                                                                                     | Age a `pendingEffects` marker must reach before the sweep acts on it.                                                  |
+| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | whole number >= 1 | `30`    | —                                                                                                                                     | Days an abandoned payment attempt is kept before the sweep deletes it.                                                 |
 
 ### products
 
@@ -553,29 +598,29 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### webhooks
 
-| Variable                               | Type                                                              | Default | Rules                                                                                | What it does                                                              |
-| -------------------------------------- | ----------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`   | versioned key ring (`version:key`, comma-separated, newest first) | `empty` | required, 16+ characters, never the `.env-example` placeholder; secret: never logged | Ring encrypting stored subscription secrets, `version:key`, newest first. |
-| `NODE_WEBHOOK_SUBSCRIPTION_CAP`        | whole number >= 1                                                 | `20`    | —                                                                                    | Subscriptions one tenant may hold — the fan-out guard.                    |
-| `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` | whole number >= 1                                                 | `30`    | —                                                                                    | Days a delivery row is kept. Changing it needs `db:sync`.                 |
+| Variable                               | Type                                                              | Default | Rules                                                                                                                              | What it does                                                              |
+| -------------------------------------- | ----------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`   | versioned key ring (`version:key`, comma-separated, newest first) | `empty` | required, 16+ characters, never the `.env-example` placeholder; secret: never logged; or `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY_FILE` | Ring encrypting stored subscription secrets, `version:key`, newest first. |
+| `NODE_WEBHOOK_SUBSCRIPTION_CAP`        | whole number >= 1                                                 | `20`    | —                                                                                                                                  | Subscriptions one tenant may hold — the fan-out guard.                    |
+| `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` | whole number >= 1                                                 | `30`    | —                                                                                                                                  | Days a delivery row is kept. Changing it needs `db:sync`.                 |
 
 ### scenario-seeds
 
-| Variable                            | Type | Default                | Rules                | What it does                                                                                               |
-| ----------------------------------- | ---- | ---------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `NODE_SEED_ADMIN_PASSWORD`          | text | `Demo-Admin1!`         | secret: never logged | The owner (`admin`) seed account's password. Keep it identical to the paired frontend's own `.env`.        |
-| `NODE_SEED_USER_PASSWORD`           | text | `Demo-User1!`          | secret: never logged | The customer seed account's password. Keep it identical to the paired frontend's own `.env`.               |
-| `NODE_SEED_EDITOR_PASSWORD`         | text | `Demo-Editor1!`        | secret: never logged | The editor seed account's password. Keep it identical to the paired frontend's own `.env`.                 |
-| `NODE_SEED_MODERATOR_PASSWORD`      | text | `Demo-Moderator1!`     | secret: never logged | The moderator seed account's password. Keep it identical to the paired frontend's own `.env`.              |
-| `NODE_SEED_UNVERIFIED_PASSWORD`     | text | `Demo-Unverified1!`    | secret: never logged | The unverified persona seed account's password. Keep it identical to the paired frontend's own `.env`.     |
-| `NODE_SEED_TWO_FACTOR_PASSWORD`     | text | `Demo-TwoFactor1!`     | secret: never logged | The two-factor persona seed account's password. Keep it identical to the paired frontend's own `.env`.     |
-| `NODE_SEED_PENDING_EMAIL_PASSWORD`  | text | `Demo-PendingEmail1!`  | secret: never logged | The pending-email persona seed account's password. Keep it identical to the paired frontend's own `.env`.  |
-| `NODE_SEED_BANNED_PASSWORD`         | text | `Demo-Banned1!`        | secret: never logged | The banned persona seed account's password. Keep it identical to the paired frontend's own `.env`.         |
-| `NODE_SEED_SECOND_SHOPPER_PASSWORD` | text | `Demo-SecondShopper1!` | secret: never logged | The second-shopper persona seed account's password. Keep it identical to the paired frontend's own `.env`. |
-| `NODE_SEED_MANAGER_PASSWORD`        | text | `Demo-Manager1!`       | secret: never logged | The manager seed account's password. Keep it identical to the paired frontend's own `.env`.                |
-| `NODE_SEED_WAREHOUSE_PASSWORD`      | text | `Demo-Warehouse1!`     | secret: never logged | The warehouse seed account's password. Keep it identical to the paired frontend's own `.env`.              |
-| `NODE_SEED_SUPPORT_PASSWORD`        | text | `Demo-Support1!`       | secret: never logged | The support seed account's password. Keep it identical to the paired frontend's own `.env`.                |
-| `NODE_SEED_OPERATOR_PASSWORD`       | text | `Demo-Operator1!`      | secret: never logged | The platform operator seed account's password. Keep it identical to the paired frontend's own `.env`.      |
+| Variable                            | Type | Default                | Rules                                                             | What it does                                                                                               |
+| ----------------------------------- | ---- | ---------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `NODE_SEED_ADMIN_PASSWORD`          | text | `Demo-Admin1!`         | secret: never logged; or `NODE_SEED_ADMIN_PASSWORD_FILE`          | The owner (`admin`) seed account's password. Keep it identical to the paired frontend's own `.env`.        |
+| `NODE_SEED_USER_PASSWORD`           | text | `Demo-User1!`          | secret: never logged; or `NODE_SEED_USER_PASSWORD_FILE`           | The customer seed account's password. Keep it identical to the paired frontend's own `.env`.               |
+| `NODE_SEED_EDITOR_PASSWORD`         | text | `Demo-Editor1!`        | secret: never logged; or `NODE_SEED_EDITOR_PASSWORD_FILE`         | The editor seed account's password. Keep it identical to the paired frontend's own `.env`.                 |
+| `NODE_SEED_MODERATOR_PASSWORD`      | text | `Demo-Moderator1!`     | secret: never logged; or `NODE_SEED_MODERATOR_PASSWORD_FILE`      | The moderator seed account's password. Keep it identical to the paired frontend's own `.env`.              |
+| `NODE_SEED_UNVERIFIED_PASSWORD`     | text | `Demo-Unverified1!`    | secret: never logged; or `NODE_SEED_UNVERIFIED_PASSWORD_FILE`     | The unverified persona seed account's password. Keep it identical to the paired frontend's own `.env`.     |
+| `NODE_SEED_TWO_FACTOR_PASSWORD`     | text | `Demo-TwoFactor1!`     | secret: never logged; or `NODE_SEED_TWO_FACTOR_PASSWORD_FILE`     | The two-factor persona seed account's password. Keep it identical to the paired frontend's own `.env`.     |
+| `NODE_SEED_PENDING_EMAIL_PASSWORD`  | text | `Demo-PendingEmail1!`  | secret: never logged; or `NODE_SEED_PENDING_EMAIL_PASSWORD_FILE`  | The pending-email persona seed account's password. Keep it identical to the paired frontend's own `.env`.  |
+| `NODE_SEED_BANNED_PASSWORD`         | text | `Demo-Banned1!`        | secret: never logged; or `NODE_SEED_BANNED_PASSWORD_FILE`         | The banned persona seed account's password. Keep it identical to the paired frontend's own `.env`.         |
+| `NODE_SEED_SECOND_SHOPPER_PASSWORD` | text | `Demo-SecondShopper1!` | secret: never logged; or `NODE_SEED_SECOND_SHOPPER_PASSWORD_FILE` | The second-shopper persona seed account's password. Keep it identical to the paired frontend's own `.env`. |
+| `NODE_SEED_MANAGER_PASSWORD`        | text | `Demo-Manager1!`       | secret: never logged; or `NODE_SEED_MANAGER_PASSWORD_FILE`        | The manager seed account's password. Keep it identical to the paired frontend's own `.env`.                |
+| `NODE_SEED_WAREHOUSE_PASSWORD`      | text | `Demo-Warehouse1!`     | secret: never logged; or `NODE_SEED_WAREHOUSE_PASSWORD_FILE`      | The warehouse seed account's password. Keep it identical to the paired frontend's own `.env`.              |
+| `NODE_SEED_SUPPORT_PASSWORD`        | text | `Demo-Support1!`       | secret: never logged; or `NODE_SEED_SUPPORT_PASSWORD_FILE`        | The support seed account's password. Keep it identical to the paired frontend's own `.env`.                |
+| `NODE_SEED_OPERATOR_PASSWORD`       | text | `Demo-Operator1!`      | secret: never logged; or `NODE_SEED_OPERATOR_PASSWORD_FILE`       | The platform operator seed account's password. Keep it identical to the paired frontend's own `.env`.      |
 
 ### scenario-webhook-sink
 

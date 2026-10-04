@@ -60,17 +60,19 @@ stack:
             docker compose --env-file clients/acme/.env -f docker-compose.production.yml \
                 exec -T database sh -c 'mongodump --host localhost --port 27017 \
                 --tls --tlsCAFile /keyfile-dir/mongo-ca.crt \
-                -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
+                -u "$MONGO_INITDB_ROOT_USERNAME" -p "$(cat /run/secrets/mongo_root_password)" \
                 --authenticationDatabase admin --oplog --archive --gzip'
         '''
     [acme.schedule]
         schedule = '03:30'
 ```
 
-**No secret touches the host shell.** `$MONGO_INITDB_ROOT_USERNAME`/`$MONGO_INITDB_ROOT_PASSWORD`
-are expanded by the `database` container's own shell, from the environment
-`docker-compose.production.yml` already sets there — the same credentials the container was
-started with, never typed or interpolated on the host.
+**No secret touches the host shell.** `$MONGO_INITDB_ROOT_USERNAME` is expanded by the `database`
+container's own shell from the environment `docker-compose.production.yml` sets there, and the
+password is read from the secret file compose mounts there (`/run/secrets/mongo_root_password`) —
+the same credentials the container was started with, never typed or interpolated on the host. The
+image's `MONGO_INITDB_ROOT_PASSWORD_FILE` is not expanded into a variable for a later `exec`, which
+is why the command reads the file itself.
 
 Install the schedule once, per host, after adding every client's section:
 

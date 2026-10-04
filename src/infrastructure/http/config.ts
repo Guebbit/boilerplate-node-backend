@@ -51,6 +51,11 @@ export const rateLimitConfig = defineConfig({
             sensitive: true,
             describe: 'The limiter’s own Redis. Falls back to the cache’s.'
         }),
+        NODE_RATE_LIMIT_REDIS_PASSWORD: text({
+            sensitive: true,
+            describe:
+                'Password merged into `NODE_RATE_LIMIT_REDIS_URL`, replacing any it carries. Read from `NODE_RATE_LIMIT_REDIS_PASSWORD_FILE` in a deployment.'
+        }),
         NODE_RATE_LIMIT_REDIS_PREFIX: text({
             default: 'rate-limit',
             describe: 'Key namespace of every counter, apart from the cache’s.'

@@ -13,6 +13,15 @@ set -euo pipefail
 # the CA cert `mongo-entrypoint.sh` shares out (`/ca-dir`, mounted read-only on this service).
 TLS_OPTS=(--tls --tlsCAFile /ca-dir/mongo-ca.crt)
 
+# The root password is read from its secret file INSIDE the evaluated script, never passed as
+# `-p`: a command-line argument shows in `ps` and in `/proc/<pid>/cmdline`, a file read does not.
+# Prepended to every `--eval` below that needs the root account. `require` is mongosh's own.
+# https://www.mongodb.com/docs/mongodb-shell/write-scripts/
+AUTHENTICATE='
+    const rootPassword = require("fs").readFileSync("/run/secrets/mongo_root_password", "utf8").trim();
+    db.getSiblingDB("admin").auth(process.env.MONGO_ROOT_USER, rootPassword);
+'
+
 # `ping` needs no auth even under `--keyFile` (implies `--auth`) — same reason the compose
 # healthcheck on `database` can stay unauthenticated. Belt over `depends_on`'s own
 # `service_healthy` gate: podman-compose 1.6 does not check a healthcheck the same way Docker
@@ -24,22 +33,20 @@ done
 # Idempotent: `rs.status()` throws on an uninitiated set ("no replset config has been received"),
 # which is exactly the signal to call `rs.initiate()`. Re-running this script against an
 # already-initiated set is then a no-op, same as every other seeder in this repo.
-mongosh --host database "${TLS_OPTS[@]}" -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" \
-    --authenticationDatabase admin --quiet --eval '
+mongosh --host database "${TLS_OPTS[@]}" --quiet --eval "$AUTHENTICATE
         try {
             rs.status();
-            print("[mongo-rs-init] replica set already initiated");
+            print('[mongo-rs-init] replica set already initiated');
         } catch (e) {
-            rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "database:27017" }] });
-            print("[mongo-rs-init] replica set initiated");
+            rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'database:27017' }] });
+            print('[mongo-rs-init] replica set initiated');
         }
-    '
+    "
 
 # `setup`'s own depends_on trusts this exiting 0 only once the set can actually take writes —
 # `rs.initiate()` returns before election finishes, so `db:sync`/`access:bootstrap` racing this
 # exit would otherwise see a set with no PRIMARY yet.
-until mongosh --host database "${TLS_OPTS[@]}" -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" \
-    --authenticationDatabase admin --quiet --eval 'rs.isMaster().ismaster' 2>/dev/null \
+until mongosh --host database "${TLS_OPTS[@]}" --quiet --eval "$AUTHENTICATE rs.isMaster().ismaster" 2>/dev/null \
     | grep -q true; do
     sleep 1
 done

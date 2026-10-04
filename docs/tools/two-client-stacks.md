@@ -35,6 +35,8 @@ page is the walkthrough and the two demonstrations; the compose files are the so
 ```bash
 mkdir -p clients/acme
 cp .env-example clients/acme/.env   # then set real values
+# and create clients/acme/secrets/, one file per secret:
+# docs/getting-started-production.md#secrets
 export COMPOSE_PROJECT_NAME=acme
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml build app
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d

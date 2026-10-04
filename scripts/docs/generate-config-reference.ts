@@ -19,6 +19,7 @@ import { allConfigSlices } from '../../src/app/config';
 import { enabledModules } from '../../src/modules';
 import { demoSinkConfig, seedPasswordsConfig } from '../../scenarios/config';
 import type { ConfigSlice, FieldInfo } from '@infrastructure/config/define';
+import { fileFormOf } from '@infrastructure/config/secret-files';
 import { applyMarkerBlocks } from './marker-block';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
@@ -54,7 +55,10 @@ const rules = (field: FieldInfo): string => {
         const scope = presence.productionOnly ? ', outside development/test' : '';
         parts.push(`required${length}${placeholder}${scope}`);
     }
-    if (field.sensitive) parts.push('secret: never logged');
+    if (field.sensitive) {
+        const fileForm = fileFormOf(field.name);
+        parts.push(`secret: never logged${fileForm === undefined ? '' : `; or \`${fileForm}\``}`);
+    }
     return parts.length > 0 ? parts.join('; ') : '—';
 };
 

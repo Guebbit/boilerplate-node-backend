@@ -21,7 +21,7 @@ import { redisConfig } from '@infrastructure/adapters/config';
 
 /**
  * The Redis URL this deployment configured: a full `NODE_REDIS_URL` wins, otherwise one assembled
- * from `NODE_REDIS_HOST` and `NODE_REDIS_PORT`.
+ * from `NODE_REDIS_HOST`, `NODE_REDIS_PORT` and `NODE_REDIS_PASSWORD`.
  *
  * `undefined` when neither is set: the signal that Redis was not supplied, for the caller to
  * treat as unconfigured rather than an error.
@@ -31,7 +31,11 @@ export const configuredRedisUrl = (): string | undefined => {
     if (config.NODE_REDIS_URL) return config.NODE_REDIS_URL;
     if (!config.NODE_REDIS_PORT) return undefined;
 
-    return `redis://${config.NODE_REDIS_HOST}:${String(config.NODE_REDIS_PORT)}`;
+    // Encoded: a generated password routinely holds `@`, `/` or `#`, which would end the userinfo early.
+    const login = config.NODE_REDIS_PASSWORD
+        ? `:${encodeURIComponent(config.NODE_REDIS_PASSWORD)}@`
+        : '';
+    return `redis://${login}${config.NODE_REDIS_HOST}:${String(config.NODE_REDIS_PORT)}`;
 };
 
 /**

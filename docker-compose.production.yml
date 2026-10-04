@@ -32,9 +32,33 @@
 # application config.
 #
 # Every client needs its OWN secrets and its OWN NODE_PORT — never copy one client's keys to
-# another. The values that MUST NOT keep their examples: NODE_TOKEN_ACCESS, NODE_TOKEN_REFRESH,
-# NODE_METRICS_TOKEN, and the Mongo/Redis/RabbitMQ credentials below. `clients/` is in
-# `.dockerignore` and `.gitignore` on purpose — mounted at runtime, never baked into the image.
+# another. `clients/` is in `.dockerignore` and `.gitignore` on purpose — mounted at runtime, never
+# baked into the image.
+#
+# ── SECRETS ARE FILES, AND EACH SERVICE GETS ONLY ITS OWN ───────────────────────────────────────
+# The credentials and keys live one per file in `clients/<name>/secrets/` (create the directory
+# 0700, each file 0644: compose ignores `uid`/`mode` for a file secret, and Redis (uid 999) and node
+# (uid 1000) must both read it). They are NOT in the client's `.env`, so `docker inspect` shows
+# none, and a child process of the app inherits none. The app reads them through `NODE_X_FILE`
+# variables (docs/tools/configuration.md#secrets-as-files); the data services read the same files.
+#
+#   mongo_root_password  database, mongo-rs-init    The only place the root account's password exists.
+#   mongo_app_password   database, app, cron, setup
+#   redis_password       cache, app, cron
+#   rabbitmq_password    queue, app, cron
+#   the app's keys       app, cron, setup           token_access, token_refresh, totp_encryption_key,
+#                                                   pii_encryption_key, webhook_secret_encryption_key,
+#                                                   pseudonym_key, metrics_token
+#
+# `cron` and `setup` hold the app's keys although they use few of them: every script validates the
+# whole configuration before it runs, and that gate refuses a missing key.
+#
+# Compose refuses to start a service whose secret file does not exist. On a managed backing service
+# leave its file EMPTY (an empty file reads as unset, so the password inside `NODE_DB_URI` /
+# `NODE_REDIS_URL` / `NODE_RABBITMQ_URL` stands), or put the managed password in the file and leave
+# it out of the URL. Optional integration secrets (SMTP, payments, OAuth, antibot) stay in the
+# client's `.env`, since a file secret cannot be optional here.
+# See: docs/getting-started-production.md#secrets
 #
 # ── BUNDLED OR MANAGED BACKING SERVICES ──────────────────────────────────────────────────────────
 # `database`/`cache`/`queue` below carry `profiles: [bundled]` and start only when
@@ -91,10 +115,9 @@ x-app-env: &app-env
     # propagates either way, this is what keeps the report itself.
     npm_config_cache: '/tmp/.npm'
     # Service hostnames on the compose network, defaulted — not hardcoded — so a client env file
-    # setting these to a managed instance wins outright. The `:?` that guards each password stays
-    # on the bundled service's OWN block below (`database`/`cache`/`queue`), not here: it only
-    # needs to fire when that service is actually part of the deploy, and nesting a `:?` inside a
-    # `:-` default is compose-version-sensitive — see the two-stacks experiment for that.
+    # setting these to a managed instance wins outright. The URLs carry NO password: it arrives as
+    # a secret file and the config loader merges it in (`NODE_DB_PASSWORD_FILE` below, and the
+    # Redis and RabbitMQ twins on the services that dial them).
     # No `?authSource=admin` on Mongo: the app user is created ON `MONGO_DB` itself (see
     # `docker/mongo-init.js`), so the database already in the path is its auth source.
     # `?replicaSet=rs0` matches the bundled `database`'s own one-node set (see `database` and
@@ -102,9 +125,41 @@ x-app-env: &app-env
     # `tls=true&tlsCAFile=...`: `database` requires TLS (`--tlsMode requireTLS`, see its own
     # `command:` below) under a self-signed CA `mongo-entrypoint.sh` mints — `/ca-dir` is the
     # volume that CA's public cert is shared into, mounted read-only on this container too.
-    NODE_DB_URI: '${NODE_DB_URI:-mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:-}@database:27017/${MONGO_DB:-api}?replicaSet=rs0&tls=true&tlsCAFile=/ca-dir/mongo-ca.crt}'
-    NODE_REDIS_URL: '${NODE_REDIS_URL:-redis://:${REDIS_PASSWORD:-}@cache:6379}'
-    NODE_RABBITMQ_URL: '${NODE_RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-}@queue:5672}'
+    NODE_DB_URI: '${NODE_DB_URI:-mongodb://${MONGO_APP_USER:-api}@database:27017/${MONGO_DB:-api}?replicaSet=rs0&tls=true&tlsCAFile=/ca-dir/mongo-ca.crt}'
+    NODE_REDIS_URL: '${NODE_REDIS_URL:-redis://cache:6379}'
+    NODE_RABBITMQ_URL: '${NODE_RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}@queue:5672}'
+    # Every service that runs this image dials Mongo, so every one gets this password.
+    NODE_DB_PASSWORD_FILE: '/run/secrets/mongo_app_password'
+
+# The app's own keys, as `_FILE` variables — merged into `app`, `cron` and `setup`, which all hold
+# the same set of secret files (see the header). Each file is named in `secrets:` below.
+x-app-key-env: &app-key-env
+    NODE_TOKEN_ACCESS_FILE: '/run/secrets/token_access'
+    NODE_TOKEN_REFRESH_FILE: '/run/secrets/token_refresh'
+    NODE_TOTP_ENCRYPTION_KEY_FILE: '/run/secrets/totp_encryption_key'
+    NODE_PII_ENCRYPTION_KEY_FILE: '/run/secrets/pii_encryption_key'
+    NODE_WEBHOOK_SECRET_ENCRYPTION_KEY_FILE: '/run/secrets/webhook_secret_encryption_key'
+    NODE_PSEUDONYM_KEY_FILE: '/run/secrets/pseudonym_key'
+    NODE_METRICS_TOKEN_FILE: '/run/secrets/metrics_token'
+
+# The queue and cache clients: `app` and `cron` reach Redis and RabbitMQ, `setup` (indexes and the
+# shop row, Mongo only) does not, and so is given neither password.
+x-backing-env: &backing-env
+    NODE_REDIS_PASSWORD_FILE: '/run/secrets/redis_password'
+    NODE_RABBITMQ_PASS_FILE: '/run/secrets/rabbitmq_password'
+
+# The secret files `app` and `cron` hold. A YAML anchor on a list, since compose cannot merge two.
+x-service-secrets: &service-secrets
+    - mongo_app_password
+    - redis_password
+    - rabbitmq_password
+    - token_access
+    - token_refresh
+    - totp_encryption_key
+    - pii_encryption_key
+    - webhook_secret_encryption_key
+    - pseudonym_key
+    - metrics_token
 
 services:
     app:
@@ -132,13 +187,15 @@ services:
             - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
 
         environment:
-            <<: *app-env
+            <<: [*app-env, *app-key-env, *backing-env]
             NODE_PORT: '${NODE_PORT:-3000}'
             # One process per container. Scale with `--scale app=N` or with the orchestrator, not
             # with an in-container cluster — see the Dockerfile CMD note.
             NODE_ENABLE_CLUSTERING: '0'
             OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
             NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'
+
+        secrets: *service-secrets
 
         ports:
             # Bound to the loopback interface, NOT to 0.0.0.0. Put a TLS-terminating reverse proxy
@@ -229,8 +286,9 @@ services:
             replicas: 1
         env_file:
             - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
+        secrets: *service-secrets
         environment:
-            <<: *app-env
+            <<: [*app-env, *app-key-env, *backing-env]
             # A dedicated var, not `${NODE_SERVICE_NAME:-api}-cron`: podman-compose 1.6 doubles the
             # suffix when the same base variable is given a different literal suffix in more than
             # one service (verified — `api-cron-cron`), so each derived name gets its own variable.
@@ -298,8 +356,18 @@ services:
         image: '${APP_IMAGE:-boilerplate-api:latest}'
         env_file:
             - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
+        # Mongo and the app's keys only: it never dials Redis or RabbitMQ.
+        secrets:
+            - mongo_app_password
+            - token_access
+            - token_refresh
+            - totp_encryption_key
+            - pii_encryption_key
+            - webhook_secret_encryption_key
+            - pseudonym_key
+            - metrics_token
         environment:
-            <<: *app-env
+            <<: [*app-env, *app-key-env]
             # See `cron`'s own comment: a dedicated var sidesteps podman-compose 1.6's suffix bug.
             NODE_SERVICE_NAME: '${NODE_SETUP_SERVICE_NAME:-api-setup}'
         # Writes to Mongo and nothing else, so it needs no volume beyond the CA cert below — but
@@ -368,15 +436,25 @@ services:
                 '/keyfile-dir/mongo-ca.crt',
                 '--tlsAllowConnectionsWithoutCertificates'
             ]
+        # The ONLY service that holds both Mongo passwords: it creates the root account and, through
+        # `mongo-init.js`, the app's.
+        secrets:
+            - mongo_root_password
+            - mongo_app_password
         environment:
             # Root stays maintenance-only — the app authenticates as MONGO_APP_USER instead
             # (see `NODE_DB_URI` above and `docker/mongo-init.js`), so a leaked connection
             # string can never `dropDatabase` on another database or read `admin.system.users`.
+            # And the root password is never in the app's container at all: only `database` and
+            # `mongo-rs-init` mount it.
             MONGO_INITDB_ROOT_USERNAME: '${MONGO_ROOT_USER:-root}'
-            MONGO_INITDB_ROOT_PASSWORD: '${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in the client env file}'
+            # The official image's own `_FILE` convention. It covers only `MONGO_INITDB_ROOT_*`.
+            # https://hub.docker.com/_/mongo (Environment Variables)
+            MONGO_INITDB_ROOT_PASSWORD_FILE: '/run/secrets/mongo_root_password'
             MONGO_INITDB_DATABASE: '${MONGO_DB:-api}'
             MONGO_APP_USER: '${MONGO_APP_USER:-api}'
-            MONGO_APP_PASSWORD: '${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in the client env file}'
+            # Read by `docker/mongo-init.js`, which creates the app user from it.
+            MONGO_APP_PASSWORD_FILE: '/run/secrets/mongo_app_password'
         volumes:
             - mongo-data:/data/db
             - mongo-keyfile-dir:/keyfile-dir
@@ -393,7 +471,8 @@ services:
         # No `ports:` entry, deliberately. The database is reachable from the compose network and
         # from nowhere else. Reach it for maintenance with
         # `docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml
-        # exec database mongosh -u "$MONGO_ROOT_USER" -p`.
+        # exec database mongosh -u "$MONGO_ROOT_USER" -p` (it prompts; the password is in
+        # `clients/$COMPOSE_PROJECT_NAME/secrets/mongo_root_password`).
         healthcheck:
             # `ping` needs no auth even under `--keyFile` (which implies `--auth`), so this keeps
             # gating readiness the same way it did as a standalone. `--tls --tlsCAFile`: mongod
@@ -425,9 +504,11 @@ services:
         restart: 'no'
         profiles: [bundled]
         entrypoint: ['bash', '/mongo-rs-init.sh']
+        # The only other holder of the root password; the script reads it inside its `--eval`.
+        secrets:
+            - mongo_root_password
         environment:
             MONGO_ROOT_USER: '${MONGO_ROOT_USER:-root}'
-            MONGO_ROOT_PASSWORD: '${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in the client env file}'
         volumes:
             - ./docker/mongo-rs-init.sh:/mongo-rs-init.sh:ro
             # Connects to `database` over the compose network, not the loopback interface the
@@ -445,28 +526,41 @@ services:
         # `--save 60 1` keeps an RDB snapshot so a restart does not cold-start every cache key at
         # once. The cache is not a source of truth: losing it is a latency event, not a data loss.
         #
-        # `--requirepass`: this instance also backs the rate-limit store (see
+        # `requirepass`: this instance also backs the rate-limit store (see
         # `NODE_RATE_LIMIT_REDIS_URL`'s fallback to `NODE_REDIS_URL`), so an unauthenticated
         # reader on the compose network could reset rate-limit budgets or read another user's
         # cached response, not just warm the cache.
-        command:
-            [
-                'redis-server',
-                '--save',
-                '60',
-                '1',
-                '--appendonly',
-                'no',
-                '--requirepass',
-                '${REDIS_PASSWORD:?set REDIS_PASSWORD in the client env file}'
-            ]
+        #
+        # The password goes into a config file written to this container's own `/tmp` at start, NOT
+        # onto the command line (`--requirepass` shows in `ps` and `docker inspect`). `umask 077`,
+        # scoped to that one write, makes the file `0600` from the moment it exists; then it is
+        # handed to `redis`. The
+        # entrypoint is overridden only to run that step first, and then hands over to the image's
+        # own `docker-entrypoint.sh`, which sees `redis-server` as its first argument and drops root
+        # to `redis` as usual. `$$` is compose's escape for a literal `$`.
+        # https://redis.io/docs/latest/operate/oss_and_stack/management/config/
+        secrets:
+            - redis_password
+        entrypoint:
+            - 'sh'
+            - '-c'
+            - >-
+                (umask 077 &&
+                printf 'requirepass %s\n' "$$(cat /run/secrets/redis_password)" > /tmp/redis-auth.conf) &&
+                chown redis:redis /tmp/redis-auth.conf &&
+                exec docker-entrypoint.sh redis-server /tmp/redis-auth.conf --save 60 1 --appendonly no
         volumes:
             - redis-data:/data
         healthcheck:
-            # `-a` + `--no-auth-warning`: same password as `--requirepass` above, silencing
-            # redis-cli's "insecure on the command line" notice — this runs inside the
-            # container, never on a shared shell history.
-            test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD}', '--no-auth-warning', 'ping']
+            # `REDISCLI_AUTH`: redis-cli's own way to take the password from the environment, so
+            # nothing is on its command line. Set for this one command only, read from the secret
+            # file. `grep PONG`: a refused login prints an error and still exits 0.
+            # https://redis.io/docs/latest/operate/rs/references/cli-utilities/redis-cli/
+            test:
+                [
+                    'CMD-SHELL',
+                    'REDISCLI_AUTH="$$(cat /run/secrets/redis_password)" redis-cli --no-auth-warning ping | grep -q PONG'
+                ]
             interval: 10s
             timeout: 3s
             retries: 5
@@ -476,9 +570,24 @@ services:
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
+        # The 4.x image REFUSES `RABBITMQ_DEFAULT_PASS_FILE` ("set but deprecated"), so the password
+        # is written into a config file the broker reads, in this container's own `/etc/rabbitmq`.
+        # The subshell scopes `umask 077` to that one write: left on, it would reach the broker and
+        # the Erlang cookie it creates. Then the file is handed to `rabbitmq` and the image's own
+        # entrypoint takes over (it drops root with `su-exec`). `$$` is compose's escape for `$`.
+        # https://www.rabbitmq.com/docs/configure#config-file
+        secrets:
+            - rabbitmq_password
+        entrypoint:
+            - 'sh'
+            - '-c'
+            - >-
+                (umask 077 &&
+                printf 'default_pass = %s\n' "$$(cat /run/secrets/rabbitmq_password)" > /etc/rabbitmq/conf.d/20-secret.conf) &&
+                chown rabbitmq:rabbitmq /etc/rabbitmq/conf.d/20-secret.conf &&
+                exec docker-entrypoint.sh rabbitmq-server
         environment:
             RABBITMQ_DEFAULT_USER: '${RABBITMQ_USER:-guest}'
-            RABBITMQ_DEFAULT_PASS: '${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in the client env file}'
         volumes:
             - rabbitmq-data:/var/lib/rabbitmq
         healthcheck:
@@ -487,6 +596,33 @@ services:
             timeout: 10s
             retries: 5
             start_period: 30s
+
+# One file per secret, under the client's own directory — see "SECRETS ARE FILES" in the header.
+# `COMPOSE_PROJECT_NAME` selects the client, the same way it selects `env_file:` above.
+# https://docs.docker.com/reference/compose-file/secrets/
+secrets:
+    mongo_root_password:
+        file: ./clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/secrets/mongo_root_password
+    mongo_app_password:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/mongo_app_password
+    redis_password:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/redis_password
+    rabbitmq_password:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/rabbitmq_password
+    token_access:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/token_access
+    token_refresh:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/token_refresh
+    totp_encryption_key:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/totp_encryption_key
+    pii_encryption_key:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/pii_encryption_key
+    webhook_secret_encryption_key:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/webhook_secret_encryption_key
+    pseudonym_key:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/pseudonym_key
+    metrics_token:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/metrics_token
 
 volumes:
     mongo-data:

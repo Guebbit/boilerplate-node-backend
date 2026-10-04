@@ -110,7 +110,8 @@ export const queueConfig = defineConfig({
         NODE_RABBITMQ_PASS: text({
             default: 'guest',
             sensitive: true,
-            describe: 'Broker password.'
+            describe:
+                'Broker password. Also merged into `NODE_RABBITMQ_URL` when that is set, replacing any it carries. Read from `NODE_RABBITMQ_PASS_FILE` in a deployment.'
         }),
         NODE_RABBITMQ_ENABLED: flag({
             default: true,
@@ -136,6 +137,11 @@ export const redisConfig = defineConfig({
         NODE_REDIS_URL: text({
             sensitive: true,
             describe: 'A full Redis URL. Wins over host and port.'
+        }),
+        NODE_REDIS_PASSWORD: text({
+            sensitive: true,
+            describe:
+                'Password merged into `NODE_REDIS_URL`, replacing any it carries. Read from `NODE_REDIS_PASSWORD_FILE` in a deployment.'
         }),
         NODE_REDIS_HOST: text({ default: '127.0.0.1', describe: 'Redis host.' }),
         NODE_REDIS_PORT: int({

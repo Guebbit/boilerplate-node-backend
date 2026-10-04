@@ -59,9 +59,10 @@ Skipping the wait window logs out every session still signed with the entry you 
 Three separate secrets, three separate rotation procedures — none of them automated, all of them
 either a `mongosh` command or an env-var edit plus a deploy.
 
-**`MONGO_APP_PASSWORD` / `MONGO_ROOT_PASSWORD`.** `docker/mongo-init.js` only ever runs against an
-empty data directory, so editing the client env file alone does nothing to an existing volume —
-change the password inside Mongo itself, then update the env file to match:
+**`mongo_app_password` / `mongo_root_password`** (files under `clients/<name>/secrets/`).
+`docker/mongo-init.js` only ever runs against an empty data directory, so editing the file alone
+does nothing to an existing volume — change the password inside Mongo itself, then update the file
+to match:
 
 ```bash
 docker compose --env-file "clients/<name>/.env" -f docker-compose.production.yml \
@@ -70,9 +71,10 @@ docker compose --env-file "clients/<name>/.env" -f docker-compose.production.yml
   '
 ```
 
-Then set the new value in the client env file and redeploy — the running `app`/`cron` containers
-hold the old password in memory until they restart. Rotate `MONGO_ROOT_PASSWORD` the same way
-against the `admin` database, with `db.getSiblingDB("admin").updateUser("<MONGO_ROOT_USER>", ...)`.
+Then write the new value into the secret file and recreate the services that mount it — the running
+`app`/`cron` containers hold the old password in memory until they restart. Rotate
+`mongo_root_password` the same way against the `admin` database, with
+`db.getSiblingDB("admin").updateUser("<MONGO_ROOT_USER>", ...)`.
 
 **`NODE_TOTP_ENCRYPTION_KEY` / `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` / `NODE_PII_ENCRYPTION_KEY`.**
 Each is a **ring**, the same shape as the JWT secrets above but with an explicit version rather
