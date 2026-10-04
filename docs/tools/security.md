@@ -494,6 +494,9 @@ shaped like `submissionLimiter` instead: every request spends the budget, succes
 and hashed like `identityOf`), single address, and address BLOCK — an IPv4 /24, an IPv6 /64.
 `contactLimiters` adds the same two dimensions on top of the pre-existing `submissionLimiter`. The
 block dimension also extends `credentialLimiters` itself, so login gets the same third bucket.
+A dual-stack listener reports an IPv4 caller as `::ffff:a.b.c.d`, so the key is built by unmapping
+FIRST (`ipKeyGenerator`) and masking the IPv4 result to its /24 after; masking before would leave
+every mapped caller in a bucket of one.
 
 Three independent buckets, not one key built from all three fields: varying any single one of
 identity, address or block gets a caller a fresh budget on the other two dimensions, but never on

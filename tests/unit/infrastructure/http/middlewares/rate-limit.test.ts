@@ -15,6 +15,7 @@ import { asStub } from '@tests/stub';
 import { rateLimitConfig } from '@infrastructure/http/config';
 import { withoutEnvironment } from '@tests/environment';
 import {
+    addressBlockOf,
     identityOf,
     DEFAULT_RATE_LIMIT_MAX,
     DEFAULT_API_KEY_RATE_LIMIT_MAX,
@@ -81,6 +82,37 @@ describe("the global budget's skip", () => {
 
     it('does not exempt GET on any other path', () => {
         expect(globalBudget?.skip?.(requestFor('GET', '/products'))).toBe(false);
+    });
+});
+
+/** The block a caller at `ip` is bucketed in. */
+const blockOf = (ip: string | undefined) => addressBlockOf(asStub<Request>({ ip }));
+
+describe('addressBlockOf', () => {
+    // Node listens dual-stack, so on a direct deploy every IPv4 caller is `::ffff:a.b.c.d`. It used
+    // to fall past the /24 mask and get a bucket of its own per address.
+    it('puts an IPv4-mapped caller in its IPv4 /24, the same block as the plain address', () => {
+        expect(blockOf('::ffff:203.0.113.5')).toBe('203.0.113.0/24');
+        expect(blockOf('::ffff:203.0.113.77')).toBe(blockOf('203.0.113.5'));
+        expect(blockOf('203.0.113.5')).toBe('203.0.113.0/24');
+    });
+
+    it('treats the hex spelling of a mapped address the same way', () => {
+        expect(blockOf('::ffff:cb00:7105')).toBe('203.0.113.0/24');
+    });
+
+    it('keeps two IPv4 blocks apart', () => {
+        expect(blockOf('203.0.113.5')).not.toBe(blockOf('203.0.114.5'));
+    });
+
+    it('buckets an IPv6 caller by its /64', () => {
+        expect(blockOf('2001:db8:1:2:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:1:2::/64');
+        expect(blockOf('2001:db8:1:2::1')).toBe(blockOf('2001:db8:1:2:ffff::9'));
+        expect(blockOf('2001:db8:1:3::1')).not.toBe(blockOf('2001:db8:1:2::1'));
+    });
+
+    it('gives a request with no address one stable key instead of throwing', () => {
+        expect(blockOf(undefined)).toBe('unknown');
     });
 });
 

@@ -222,9 +222,14 @@ export const rateLimitInfoOf = (request: Request, property: string): RateLimitIn
  * The caller's address, WIDENED to the block it belongs to: an IPv4 /24, an IPv6 /64. A
  * residential-proxy pool costs about $20 for millions of addresses, and one IPv6 customer is
  * allocated 18 quintillion of them — bucketing on the single address lets either look like an
- * unbounded number of callers. IPv6 grouping reuses `express-rate-limit`'s own subnet helper,
- * `ipKeyGenerator` (the same one its default per-address keying calls internally, at a coarser
- * /56); IPv4 has no library equivalent to reuse, so the /24 mask is hand-rolled.
+ * unbounded number of callers.
+ *
+ * `ipKeyGenerator` runs FIRST because Node listens dual-stack, so a plain IPv4 caller arrives as
+ * `::ffff:a.b.c.d`. The helper unmaps that form (to the bare IPv4 address) and masks a genuine
+ * IPv6 address to its /64. Only then is an IPv4 result masked to its /24 by hand — the library has
+ * no IPv4 block helper. Branching on `isIPv4(ip)` before the helper would send the mapped form
+ * past the mask, one bucket per address.
+ * https://express-rate-limit.mintlify.app/reference/ipv6
  *
  * Shared machinery, same reasoning as {@link identityOf}: reused by every module's own
  * address-block budget, and by any keying function that needs a fallback for a caller supplying
@@ -235,7 +240,9 @@ export const rateLimitInfoOf = (request: Request, property: string): RateLimitIn
 export const addressBlockOf = (request: Request): string => {
     const { ip } = request;
     if (!ip) return 'unknown';
-    return isIPv4(ip) ? `${ip.split('.').slice(0, 3).join('.')}.0/24` : ipKeyGenerator(ip, 64);
+    // 64: the IPv6 prefix length kept. An IPv4 input is returned as is, an `::ffff:` one unmapped.
+    const key = ipKeyGenerator(ip, 64);
+    return isIPv4(key) ? `${key.split('.').slice(0, 3).join('.')}.0/24` : key;
 };
 
 /** This file's own budget: the global browsing brake, mounted in `app/security.ts`. */
