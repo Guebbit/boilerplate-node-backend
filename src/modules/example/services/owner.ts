@@ -7,6 +7,9 @@
 
 import type { Example } from '@types';
 import { t } from '@infrastructure/i18n';
+import type { CallerContext } from '@types';
+import type { ResponseReject } from '@infrastructure/http/response';
+import { outrankedRefusal } from '@modules/access';
 import { userService } from '@modules/users';
 import type { ExampleDocument } from '../model';
 import { presentExample } from '../presenter';
@@ -38,3 +41,21 @@ export const ownerNamesOf = (userIds: string[]): Promise<Map<string, string>> =>
  */
 export const presentWithOwner = (document: ExampleDocument): Promise<Example> =>
     ownerNameOf(String(document.userId)).then((name) => presentExample(document, name));
+
+/**
+ * The rank rule for an example already in hand: `403 OUTRANKED` when its owner ranks at or above
+ * the caller, else `undefined`. The route's key says WHAT a caller may touch; this says WHOSE.
+ *
+ * Copy this into any module whose rows have an owner and whose `any` keys reach other people's:
+ *   - ask it AFTER the scoped read, since the owner is on the row;
+ *   - never for a caller's own row (the rule exempts it) or a row nobody owns.
+ *
+ * See: docs/theory/authorization.md#acting-on-someone-else-s-things
+ * @param example - the example about to be changed
+ * @param context - the caller
+ */
+export const outrankedRefusalFor = (
+    example: ExampleDocument,
+    context: CallerContext
+): Promise<ResponseReject | undefined> =>
+    outrankedRefusal(context, String(example.userId), 'example', String(example._id));

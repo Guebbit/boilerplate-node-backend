@@ -5,16 +5,18 @@
  * owned by a given person.
  *
  * Kept as data in one place so the two suites cannot disagree about which routes the rank rule
- * covers: a new write route on one of the six modules is either a row here or an entry in
+ * covers: a new write route on one of the seven modules is either a row here or an entry in
  * {@link UNOWNED_WRITES}, and the sweep fails until it is.
  */
 
+import sharp from 'sharp';
 import { assignRole } from '@modules/access';
 import { createUser } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { returnModel } from '@modules/returns/model';
+import { createExample } from '@modules/example/tests/factories';
 import { RETURN_POSTAGE_PAYERS } from '@modules/orders';
 
 /** A person the request is aimed at: their account and the tenant role they hold, if any. */
@@ -24,11 +26,21 @@ export interface Owner {
     role: string | null;
 }
 
+/** A file a request carries as `multipart/form-data`, for a route whose handler reads one before the rank rule is asked. */
+export interface HierarchyUpload {
+    /** The form field the route reads. */
+    field: string;
+    /** The file's bytes. */
+    bytes: Buffer;
+}
+
 /** One request, ready to send. */
 export interface HierarchyRequest {
     method: 'put' | 'patch' | 'post' | 'delete';
     url: string;
     body?: Record<string, unknown>;
+    /** Sent instead of `body`, as a multipart file. */
+    upload?: HierarchyUpload;
 }
 
 /** One route the rank rule covers. */
@@ -37,7 +49,7 @@ export interface HierarchyRow {
     route: string;
     /** The key the callers are the holders of: the route's own, or the one that makes a caller an operator. */
     key: string;
-    /** `false` when the route mounts no key of its own (a customer may call it on their own order). */
+    /** `false` when a customer passes the route's own key (it mounts none, or a `self` key they hold). */
     keyed?: boolean;
     /** Builds the resource for `owner` and the request that changes it. */
     prepare: (owner: Owner) => Promise<HierarchyRequest>;
@@ -115,6 +127,37 @@ const onReturn =
         url: `/returns/${String(await returnOf(owner, status).then((r) => r._id))}/${door}`,
         body
     });
+
+/** An example of `owner`'s, in the draft state every example starts in. */
+const exampleOf = (owner: Owner) => createExample({ userId: owner.user.id });
+
+/** A route addressed by an example's id. */
+const onExample =
+    (
+        method: HierarchyRequest['method'],
+        suffix: string,
+        body?: Record<string, unknown>
+    ): HierarchyRow['prepare'] =>
+    async (owner) => ({
+        method,
+        url: `/examples/${String(await exampleOf(owner).then((e) => e._id))}${suffix}`,
+        body
+    });
+
+/** The cover upload: its handler needs a real image before the service, and so the rank rule, runs. */
+const onExampleCover: HierarchyRow['prepare'] = async (owner) => ({
+    method: 'put',
+    url: `/examples/${String(await exampleOf(owner).then((e) => e._id))}/cover`,
+    upload: {
+        field: 'imageUpload',
+        // sharp: build a 4x4 solid PNG in memory — https://sharp.pixelplumbing.com/api-constructor
+        bytes: await sharp({
+            create: { width: 4, height: 4, channels: 3, background: { r: 10, g: 20, b: 30 } }
+        })
+            .png()
+            .toBuffer()
+    }
+});
 
 /** The rows. The route sweep holds this list to the real route table, so count and names matter. */
 export const HIERARCHY_ROWS: readonly HierarchyRow[] = [
@@ -234,11 +277,35 @@ export const HIERARCHY_ROWS: readonly HierarchyRow[] = [
         route: 'returns POST /:id/receive',
         key: 'returns.any.receive',
         prepare: onReturn('receive', 'approved')
+    },
+    {
+        route: 'example PUT /:id',
+        keyed: false,
+        key: 'examples.any.update',
+        prepare: onExample('put', '', { title: 'rank check', body: 'rank check', status: 'draft' })
+    },
+    {
+        route: 'example PATCH /:id',
+        keyed: false,
+        key: 'examples.any.update',
+        prepare: onExample('patch', '', { title: 'rank check' })
+    },
+    {
+        route: 'example DELETE /:id',
+        keyed: false,
+        key: 'examples.any.delete',
+        prepare: onExample('delete', '')
+    },
+    {
+        route: 'example PUT /:id/cover',
+        keyed: false,
+        key: 'examples.any.update',
+        prepare: onExampleCover
     }
 ];
 
 /**
- * The write routes of the six modules that have NO owner for the rule to rank, each with the
+ * The write routes of the seven modules that have NO owner for the rule to rank, each with the
  * reason — a create, a search that is a read in a POST, or a step only the customer takes. The
  * route sweep fails for a write route that is neither a row nor here.
  */
@@ -254,7 +321,9 @@ export const UNOWNED_WRITES: Readonly<Record<string, string>> = {
     'payments POST /:id/sync': 'the payer’s own step, scoped to their own payments in the service',
     'returns POST /': 'the buyer opening a return on their own order',
     'api-keys POST /': 'mints a key for the caller themselves',
-    'api-keys DELETE /:id': 'revoking only reduces access'
+    'api-keys DELETE /:id': 'revoking only reduces access',
+    'example POST /search': 'a read wearing a POST',
+    'example POST /': 'creates an example for the caller themselves'
 };
 
 /** Creates an owner holding `role` in the shop (or nothing, when `role` is `null`). */

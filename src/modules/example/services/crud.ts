@@ -46,7 +46,7 @@ import {
 } from '../domain';
 import type { ExampleDocument } from '../model';
 import { presentExampleRow } from '../presenter';
-import { ownerNamesOf, presentWithOwner } from './owner';
+import { outrankedRefusalFor, ownerNamesOf, presentWithOwner } from './owner';
 import { exampleRepository } from '../repository';
 
 /** Every answer a write gives: the example as the contract shapes it, or the refusal. */
@@ -179,13 +179,56 @@ export const search = (
         );
 
 /**
+ * Write a validated change onto an example already loaded, then audit and announce it.
+ *
+ * @param example - the loaded example, already cleared by the scope and the rank rule
+ * @param changes - the validated body; an omitted field stays as it is
+ * @param context - the caller
+ * @returns 422 for an illegal status move, otherwise the saved example
+ */
+const applyUpdate = (
+    example: ExampleDocument,
+    changes: UpdateExampleRequest,
+    context: CallerContext
+): Promise<ExampleResult> => {
+    const before = example.status;
+    const next = changes.status ?? before;
+    if (!canTransition(before, next))
+        return Promise.resolve(
+            generateReject(422, [t('example.error-transition', { from: before, to: next })])
+        );
+
+    if (changes.title !== undefined) example.title = changes.title.trim();
+    if (changes.body !== undefined) example.body = changes.body.trim();
+    example.status = next;
+    if (shouldStampPublishedAt(next, example.publishedAt)) example.publishedAt = new Date();
+
+    return exampleRepository.save(example).then((saved) => {
+        recordAudit(context, {
+            action: exampleAuditActions.EXAMPLE_UPDATED,
+            outcome: 'success',
+            target_type: 'example',
+            target_id: String(saved._id),
+            metadata: { status: next }
+        });
+        if (!isPublished(before) && isPublished(next)) announcePublished(saved, context);
+        return presentWithOwner(saved).then((shaped) =>
+            generateSuccess(shaped, 200, t('example.updated'))
+        );
+    });
+};
+
+/**
  * Apply a change to an example the caller may edit — PUT and PATCH both end here.
+ *
+ * Two doors, in order: the scope (a row you may not edit is simply not found), then the rank rule
+ * (an `any.update` holder may not edit an equal's or a superior's example).
  *
  * @param id - the example's id
  * @param changes - the validated body; an omitted field stays as it is
  * @param context - the caller
- * @returns 404 when the caller may not edit one by that id, 422 for an illegal status move or an
- *   over-long body, otherwise the saved example
+ * @returns 404 when the caller may not edit one by that id, 403 `OUTRANKED` for an owner at or
+ *   above the caller, 422 for an illegal status move or an over-long body, otherwise the saved example
  */
 export const update = (
     id: string,
@@ -198,38 +241,42 @@ export const update = (
     return exampleRepository.findScoped(id, scopeOf(context, 'update')).then((example) => {
         if (!example) return generateReject(404, [t('example.not-found')]);
 
-        const before = example.status;
-        const next = changes.status ?? before;
-        if (!canTransition(before, next))
-            return generateReject(422, [t('example.error-transition', { from: before, to: next })]);
-
-        if (changes.title !== undefined) example.title = changes.title.trim();
-        if (changes.body !== undefined) example.body = changes.body.trim();
-        example.status = next;
-        if (shouldStampPublishedAt(next, example.publishedAt)) example.publishedAt = new Date();
-
-        return exampleRepository.save(example).then((saved) => {
-            recordAudit(context, {
-                action: exampleAuditActions.EXAMPLE_UPDATED,
-                outcome: 'success',
-                target_type: 'example',
-                target_id: id,
-                metadata: { status: next }
-            });
-            if (!isPublished(before) && isPublished(next)) announcePublished(saved, context);
-            return presentWithOwner(saved).then((shaped) =>
-                generateSuccess(shaped, 200, t('example.updated'))
-            );
-        });
+        return outrankedRefusalFor(example, context).then(
+            (outranked) => outranked ?? applyUpdate(example, changes, context)
+        );
     });
 };
+
+/**
+ * Delete an example already loaded and cleared, its cover image with it, and audit it.
+ *
+ * @param example - the loaded example
+ * @param context - the caller
+ */
+const deleteLoaded = (
+    example: ExampleDocument,
+    context: CallerContext
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+    exampleRepository
+        .deleteOne(example)
+        .then(() => imageStore.remove(example.imageUrl))
+        .then(() => {
+            recordAudit(context, {
+                action: exampleAuditActions.EXAMPLE_DELETED,
+                outcome: 'success',
+                target_type: 'example',
+                target_id: String(example._id)
+            });
+            return generateSuccess(undefined, 200, t('example.deleted'));
+        });
 
 /**
  * Permanently delete an example the caller may delete, and its cover image with it.
  *
  * @param id - the example's id
  * @param context - the caller
- * @returns 404 when the caller may not delete one by that id
+ * @returns 404 when the caller may not delete one by that id, 403 `OUTRANKED` for an owner at or
+ *   above the caller
  */
 export const remove = (
     id: string,
@@ -238,16 +285,7 @@ export const remove = (
     exampleRepository.findScoped(id, scopeOf(context, 'delete')).then((example) => {
         if (!example) return generateReject(404, [t('example.not-found')]);
 
-        return exampleRepository
-            .deleteOne(example)
-            .then(() => imageStore.remove(example.imageUrl))
-            .then(() => {
-                recordAudit(context, {
-                    action: exampleAuditActions.EXAMPLE_DELETED,
-                    outcome: 'success',
-                    target_type: 'example',
-                    target_id: id
-                });
-                return generateSuccess(undefined, 200, t('example.deleted'));
-            });
+        return outrankedRefusalFor(example, context).then(
+            (outranked) => outranked ?? deleteLoaded(example, context)
+        );
     });

@@ -2,4 +2,5 @@ summary: 'The example to copy when starting a new domain: a small note with a dr
 subdomain: generic
 group: example
 dependsOn:
+    - access # the rank rule: an `any` key may not act on an equal's or a superior's example
     - users # the owner's display name, and the address a publish mail goes to

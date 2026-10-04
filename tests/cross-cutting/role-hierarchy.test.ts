@@ -20,6 +20,7 @@
  */
 import { api, authenticateAsRole } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { emptyFileSandbox } from '@tests/file-sandbox';
 import { credentialHolding } from '@tests/credentials';
 import { PRESET_ROLES } from '@kernel/permissions';
 import type { RoleLevel } from '@types';
@@ -32,6 +33,9 @@ import {
 } from '@tests/role-hierarchy-rows';
 
 setupTestDb();
+
+// The cover row stores a real file for every owner the rule lets through.
+afterEach(emptyFileSandbox);
 
 /** Each level's rank — "below" is a comparison of these. */
 const RANK: Record<RoleLevel, number> = { user: 0, staff: 1, admin: 2 };
@@ -58,13 +62,19 @@ const outcomeOf = (response: { status: number; body: unknown }): string => {
 };
 
 /** Sends one prepared request as `bearer`. */
-const send = (bearer: string, { method, url, body }: HierarchyRequest) => {
+const send = (bearer: string, { method, url, body, upload }: HierarchyRequest) => {
     const request = api()[method](url).set('Authorization', bearer);
+    // supertest: `.attach` turns the request into `multipart/form-data` with one file part.
+    const withPayload = upload
+        ? request.attach(upload.field, upload.bytes, {
+              filename: 'rank-check.png',
+              contentType: 'image/png'
+          })
+        : body === undefined
+          ? request
+          : request.send(body);
 
-    return (body === undefined ? request : request.send(body)).set(
-        'Idempotency-Key',
-        `rank-${Math.random().toString(36).slice(2)}`
-    );
+    return withPayload.set('Idempotency-Key', `rank-${Math.random().toString(36).slice(2)}`);
 };
 
 /** The cell's expected answer: lower passes, anything else is outranked. */
@@ -104,7 +114,7 @@ const runRow = async (row: HierarchyRow, callerRole: string) => {
 describe('the rank rule, row by row', () => {
     it('has a row for every route the rule covers', () => {
         // The count is pinned, and the sweep in `tests/cross-cutting/role-hierarchy-routes.test.ts` pins the names.
-        expect(HIERARCHY_ROWS).toHaveLength(23);
+        expect(HIERARCHY_ROWS).toHaveLength(27);
     });
 
     for (const row of HIERARCHY_ROWS) {

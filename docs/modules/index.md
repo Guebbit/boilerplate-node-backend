@@ -73,6 +73,7 @@ flowchart TD
     cart --> products
     cart --> users
     delivery --> orders
+    example --> access
     example --> users
     inventory --> products
     invoicing --> orders
@@ -110,18 +111,18 @@ flowchart TD
 | `users`         | access                                                 | account, api-keys, cart, example, orders, payments, webhooks |
 | `cart`          | addresses, delivery, orders, payments, products, users | wishlist                                                     |
 | `payments`      | inventory, orders, users                               | cart, invoicing, returns                                     |
-| `access`        | —                                                      | account, api-keys, orders, users                             |
+| `access`        | —                                                      | account, api-keys, example, orders, users                    |
 | `inventory`     | products                                               | orders, payments, returns                                    |
 | `products`      | —                                                      | cart, inventory, orders, wishlist                            |
 | `returns`       | delivery, inventory, orders, payments                  | —                                                            |
 | `delivery`      | orders                                                 | cart, returns                                                |
 | `account`       | access, users                                          | —                                                            |
 | `api-keys`      | access, users                                          | —                                                            |
+| `example`       | access, users                                          | —                                                            |
 | `invoicing`     | orders, payments                                       | —                                                            |
 | `wishlist`      | cart, products                                         | —                                                            |
 | `addresses`     | —                                                      | cart                                                         |
 | `audit-logs`    | —                                                      | observability                                                |
-| `example`       | users                                                  | —                                                            |
 | `observability` | audit-logs                                             | —                                                            |
 | `webhooks`      | users                                                  | —                                                            |
 | `antibot`       | —                                                      | —                                                            |

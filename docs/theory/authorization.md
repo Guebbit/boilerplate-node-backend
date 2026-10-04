@@ -185,15 +185,16 @@ flowchart TD
 ```
 
 **Where it is applied.** `canActOn` and `outrankedRefusal` in `@modules/access` answer it; each
-service that writes on a person's behalf asks first, **before** it reads the row, so the refusal
-never depends on the row existing:
+service that writes on a person's behalf asks before it changes anything — before it reads the
+row where the owner is a known id, after the scoped read where the owner is on the row (`example`):
 
-| Writes on | Asked in                                                          |
-| --------- | ----------------------------------------------------------------- |
-| a user    | `users`: edit, delete, restore                                    |
-| an order  | `orders`: cancel, edit, delete, override; `delivery`: start, ship |
-| a payment | `payments`: record by hand, refund                                |
-| a return  | `returns`: decide, receive                                        |
+| Writes on  | Asked in                                                          |
+| ---------- | ----------------------------------------------------------------- |
+| a user     | `users`: edit, delete, restore                                    |
+| an order   | `orders`: cancel, edit, delete, override; `delivery`: start, ship |
+| a payment  | `payments`: record by hand, refund                                |
+| a return   | `returns`: decide, receive                                        |
+| an example | `example`: edit, replace, delete, cover — the pattern to copy     |
 
 Revoking someone else's API key is **not** ranked: it only takes access away, so any administrator
 may revoke a fellow administrator's leaked key (Stripe and GitHub work the same way). Banning a

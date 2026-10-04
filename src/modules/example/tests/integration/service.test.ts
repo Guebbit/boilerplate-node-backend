@@ -70,6 +70,9 @@ const anAdmin = async () => {
     return { user, context: callerContextAs('admin', user.id) };
 };
 
+/** A second administrator, holding the role in the database as the rank rule reads it. */
+const anotherAdmin = () => createUser({ username: 'peer', email: 'peer@example.com' }, 'admin');
+
 describe('create', () => {
     it('writes a trimmed draft owned by the caller, and names the owner', async () => {
         const { user, context } = await aCustomer();
@@ -275,6 +278,17 @@ describe('update', () => {
         asSuccess(await update(String(theirs._id), { title: 'Edited by staff' }, admin));
     });
 
+    it('refuses an administrator editing a fellow administrator’s example, and leaves it untouched', async () => {
+        const peer = await anotherAdmin();
+        const { context: admin } = await anAdmin();
+        const theirs = await createExample({ userId: peer.id, title: 'Theirs' });
+
+        const refused = asReject(await update(String(theirs._id), { title: 'Mine now' }, admin));
+
+        expect(refused.status).toBe(403);
+        expect(await fieldOf(String(theirs._id), 'title')).toBe('Theirs');
+    });
+
     it('answers 404 for an id nothing holds', async () => {
         const { context } = await aCustomer();
 
@@ -411,6 +425,15 @@ describe('remove', () => {
         const theirs = await createExample({ userId: user.id });
 
         expect(asReject(await remove(String(theirs._id), other)).status).toBe(404);
+        expect(await exampleRepository.findById(String(theirs._id))).not.toBeNull();
+    });
+
+    it('refuses an administrator deleting a fellow administrator’s example, and keeps it', async () => {
+        const peer = await anotherAdmin();
+        const { context: admin } = await anAdmin();
+        const theirs = await createExample({ userId: peer.id });
+
+        expect(asReject(await remove(String(theirs._id), admin)).status).toBe(403);
         expect(await exampleRepository.findById(String(theirs._id))).not.toBeNull();
     });
 
