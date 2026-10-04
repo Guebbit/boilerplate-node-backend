@@ -161,7 +161,7 @@ const disableRabbitMQ = () => {
     setEnvironment({ NODE_RABBITMQ_HOST: undefined });
     setEnvironment({ NODE_RABBITMQ_PORT: undefined });
     setEnvironment({ NODE_RABBITMQ_USER: undefined });
-    setEnvironment({ NODE_RABBITMQ_PASS: undefined });
+    setEnvironment({ NODE_RABBITMQ_PASSWORD: undefined });
     setEnvironment({ NODE_RABBITMQ_ENABLED: undefined });
 };
 
@@ -208,7 +208,7 @@ describe('isQueueEnabled()', () => {
         setEnvironment({ NODE_RABBITMQ_URL: undefined });
         setEnvironment({ NODE_RABBITMQ_PORT: '5672' });
         setEnvironment({ NODE_RABBITMQ_USER: 'app' });
-        setEnvironment({ NODE_RABBITMQ_PASS: 'p@ss/w#rd' });
+        setEnvironment({ NODE_RABBITMQ_PASSWORD: 'p@ss/w#rd' });
         await stopQueue();
         mockConnect.mockClear();
 
@@ -219,7 +219,7 @@ describe('isQueueEnabled()', () => {
             expect.anything()
         );
         setEnvironment({ NODE_RABBITMQ_USER: undefined });
-        setEnvironment({ NODE_RABBITMQ_PASS: undefined });
+        setEnvironment({ NODE_RABBITMQ_PASSWORD: undefined });
     });
 });
 
@@ -536,7 +536,7 @@ describe('the boot announcement', () => {
     it('names a broker assembled from host and port', async () => {
         setEnvironment({ NODE_RABBITMQ_HOST: 'broker.internal' });
         setEnvironment({ NODE_RABBITMQ_PORT: '5672' });
-        setEnvironment({ NODE_RABBITMQ_PASS: 's3cret' });
+        setEnvironment({ NODE_RABBITMQ_PASSWORD: 's3cret' });
 
         const messages = await messagesAt('info');
 

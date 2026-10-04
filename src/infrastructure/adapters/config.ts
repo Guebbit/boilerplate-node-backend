@@ -107,11 +107,11 @@ export const queueConfig = defineConfig({
             default: 'guest',
             describe: 'Broker user (guest works over localhost only).'
         }),
-        NODE_RABBITMQ_PASS: text({
+        NODE_RABBITMQ_PASSWORD: text({
             default: 'guest',
             sensitive: true,
             describe:
-                'Broker password. Also merged into `NODE_RABBITMQ_URL` when that is set, replacing any it carries. Read from `NODE_RABBITMQ_PASS_FILE` in a deployment.'
+                'Broker password. Also merged into `NODE_RABBITMQ_URL` when that is set, replacing any it carries. Read from `NODE_RABBITMQ_PASSWORD_FILE` in a deployment.'
         }),
         NODE_RABBITMQ_ENABLED: flag({
             default: true,

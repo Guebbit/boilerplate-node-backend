@@ -167,7 +167,7 @@ x-app-key-env: &app-key-env
 # shop row, Mongo only) does not, and so is given neither password.
 x-backing-env: &backing-env
     NODE_REDIS_PASSWORD_FILE: '/run/secrets/redis_password'
-    NODE_RABBITMQ_PASS_FILE: '/run/secrets/rabbitmq_password'
+    NODE_RABBITMQ_PASSWORD_FILE: '/run/secrets/rabbitmq_password'
 
 # The secret files `app` and `cron` hold. A YAML anchor on a list, since compose cannot merge two.
 x-service-secrets: &service-secrets

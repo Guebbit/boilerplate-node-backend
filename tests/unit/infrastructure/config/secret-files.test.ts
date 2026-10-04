@@ -104,7 +104,7 @@ describe('a password merged into its URL', () => {
     it.each([
         ['NODE_DB_URI', 'NODE_DB_PASSWORD', 'mongodb://api@database:27017/api?tls=true'],
         ['NODE_REDIS_URL', 'NODE_REDIS_PASSWORD', 'redis://cache:6379'],
-        ['NODE_RABBITMQ_URL', 'NODE_RABBITMQ_PASS', 'amqp://guest@queue:5672'],
+        ['NODE_RABBITMQ_URL', 'NODE_RABBITMQ_PASSWORD', 'amqp://guest@queue:5672'],
         ['NODE_RATE_LIMIT_REDIS_URL', 'NODE_RATE_LIMIT_REDIS_PASSWORD', 'redis://limits:6379']
     ])('%s takes %s', (urlName, passwordName, url) => {
         const resolved = resolveSecretFiles({ [urlName]: url, [passwordName]: 'p@ss/w#d' });

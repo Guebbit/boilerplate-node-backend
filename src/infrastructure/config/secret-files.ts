@@ -43,7 +43,7 @@ export const fileFormOf = (name: string): string | undefined =>
 export const URL_PASSWORDS: Readonly<Record<string, string>> = {
     NODE_DB_URI: 'NODE_DB_PASSWORD',
     NODE_REDIS_URL: 'NODE_REDIS_PASSWORD',
-    NODE_RABBITMQ_URL: 'NODE_RABBITMQ_PASS',
+    NODE_RABBITMQ_URL: 'NODE_RABBITMQ_PASSWORD',
     NODE_RATE_LIMIT_REDIS_URL: 'NODE_RATE_LIMIT_REDIS_PASSWORD'
 };
 

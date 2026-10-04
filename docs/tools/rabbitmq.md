@@ -91,14 +91,14 @@ See [Retries and parking](#retries-and-parking) for what happens after the "nack
 
 ## Configuration
 
-| Env var                 | Description                                               |
-| ----------------------- | --------------------------------------------------------- |
-| `NODE_RABBITMQ_URL`     | Full AMQP URI (preferred). Example: `******rabbitmq:5672` |
-| `NODE_RABBITMQ_HOST`    | Hostname fallback when URL is not set.                    |
-| `NODE_RABBITMQ_PORT`    | Port fallback (default `5672`).                           |
-| `NODE_RABBITMQ_USER`    | Username fallback (default `guest`).                      |
-| `NODE_RABBITMQ_PASS`    | Password fallback (default `guest`).                      |
-| `NODE_RABBITMQ_ENABLED` | Set to `0` to disable even if URL is configured.          |
+| Env var                  | Description                                               |
+| ------------------------ | --------------------------------------------------------- |
+| `NODE_RABBITMQ_URL`      | Full AMQP URI (preferred). Example: `******rabbitmq:5672` |
+| `NODE_RABBITMQ_HOST`     | Hostname fallback when URL is not set.                    |
+| `NODE_RABBITMQ_PORT`     | Port fallback (default `5672`).                           |
+| `NODE_RABBITMQ_USER`     | Username fallback (default `guest`).                      |
+| `NODE_RABBITMQ_PASSWORD` | Password fallback (default `guest`).                      |
+| `NODE_RABBITMQ_ENABLED`  | Set to `0` to disable even if URL is configured.          |
 
 When none of the vars are set, all queue operations silently no-op — the rest of the app works normally.
 

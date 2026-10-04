@@ -63,7 +63,7 @@ const getAmqpUrl = (): string | undefined => {
     // Encoded: a generated password routinely holds `@`, `/` or `#`, each of which would
     // otherwise end the userinfo part of the URL early.
     const user = encodeURIComponent(config.NODE_RABBITMQ_USER);
-    const pass = encodeURIComponent(config.NODE_RABBITMQ_PASS);
+    const pass = encodeURIComponent(config.NODE_RABBITMQ_PASSWORD);
     return `amqp://${user}:${pass}@${config.NODE_RABBITMQ_HOST}:${String(config.NODE_RABBITMQ_PORT)}`;
 };
 

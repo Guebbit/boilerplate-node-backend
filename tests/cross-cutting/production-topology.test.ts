@@ -340,8 +340,6 @@ describe('each service gets only its own secrets', () => {
             ...Object.keys(environmentOf(name)).map((variable) => `${name}: ${variable}`)
         ]);
 
-        expect(text.join('\n')).not.toMatch(
-            /--requirepass|redis-cli.* -a |PASSWORD(?!_FILE)|NODE_RABBITMQ_PASS(?!_FILE)/
-        );
+        expect(text.join('\n')).not.toMatch(/--requirepass|redis-cli.* -a |PASSWORD(?!_FILE)/);
     });
 });

@@ -174,7 +174,7 @@ variable, and the loader merges it into the URL, replacing any it carried:
 | --------------------------- | -------------------------------- | ------------------------------------- |
 | `NODE_DB_URI`               | `NODE_DB_PASSWORD`               | `NODE_DB_PASSWORD_FILE`               |
 | `NODE_REDIS_URL`            | `NODE_REDIS_PASSWORD`            | `NODE_REDIS_PASSWORD_FILE`            |
-| `NODE_RABBITMQ_URL`         | `NODE_RABBITMQ_PASS`             | `NODE_RABBITMQ_PASS_FILE`             |
+| `NODE_RABBITMQ_URL`         | `NODE_RABBITMQ_PASSWORD`         | `NODE_RABBITMQ_PASSWORD_FILE`         |
 | `NODE_RATE_LIMIT_REDIS_URL` | `NODE_RATE_LIMIT_REDIS_PASSWORD` | `NODE_RATE_LIMIT_REDIS_PASSWORD_FILE` |
 
 The merge is a small regular expression, not `URL`: the WHATWG parser refuses a multi-host Mongo
@@ -311,16 +311,16 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### queue
 
-| Variable                         | Type                  | Default     | Rules                                              | What it does                                                                                                                                           |
-| -------------------------------- | --------------------- | ----------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NODE_RABBITMQ_URL`              | text                  | —           | secret: never logged; or `NODE_RABBITMQ_URL_FILE`  | A full AMQP URL. Wins over the fragments below.                                                                                                        |
-| `NODE_RABBITMQ_HOST`             | text                  | `127.0.0.1` | —                                                  | Broker host.                                                                                                                                           |
-| `NODE_RABBITMQ_PORT`             | whole number 1..65535 | —           | —                                                  | Broker port. The fragment that switches the queue on: unset (and no URL) means no queue.                                                               |
-| `NODE_RABBITMQ_USER`             | text                  | `guest`     | —                                                  | Broker user (guest works over localhost only).                                                                                                         |
-| `NODE_RABBITMQ_PASS`             | text                  | `guest`     | secret: never logged; or `NODE_RABBITMQ_PASS_FILE` | Broker password. Also merged into `NODE_RABBITMQ_URL` when that is set, replacing any it carries. Read from `NODE_RABBITMQ_PASS_FILE` in a deployment. |
-| `NODE_RABBITMQ_ENABLED`          | switch                | `on`        | —                                                  | Kill switch that leaves the URL in place.                                                                                                              |
-| `NODE_QUEUE_MAX_ATTEMPTS`        | whole number >= 1     | `5`         | —                                                  | Deliveries a job gets before it is parked.                                                                                                             |
-| `NODE_QUEUE_RETRY_DELAY_SECONDS` | whole number >= 1     | `30`        | —                                                  | How long a failed job waits before it is redelivered.                                                                                                  |
+| Variable                         | Type                  | Default     | Rules                                                  | What it does                                                                                                                                               |
+| -------------------------------- | --------------------- | ----------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_RABBITMQ_URL`              | text                  | —           | secret: never logged; or `NODE_RABBITMQ_URL_FILE`      | A full AMQP URL. Wins over the fragments below.                                                                                                            |
+| `NODE_RABBITMQ_HOST`             | text                  | `127.0.0.1` | —                                                      | Broker host.                                                                                                                                               |
+| `NODE_RABBITMQ_PORT`             | whole number 1..65535 | —           | —                                                      | Broker port. The fragment that switches the queue on: unset (and no URL) means no queue.                                                                   |
+| `NODE_RABBITMQ_USER`             | text                  | `guest`     | —                                                      | Broker user (guest works over localhost only).                                                                                                             |
+| `NODE_RABBITMQ_PASSWORD`         | text                  | `guest`     | secret: never logged; or `NODE_RABBITMQ_PASSWORD_FILE` | Broker password. Also merged into `NODE_RABBITMQ_URL` when that is set, replacing any it carries. Read from `NODE_RABBITMQ_PASSWORD_FILE` in a deployment. |
+| `NODE_RABBITMQ_ENABLED`          | switch                | `on`        | —                                                      | Kill switch that leaves the URL in place.                                                                                                                  |
+| `NODE_QUEUE_MAX_ATTEMPTS`        | whole number >= 1     | `5`         | —                                                      | Deliveries a job gets before it is parked.                                                                                                                 |
+| `NODE_QUEUE_RETRY_DELAY_SECONDS` | whole number >= 1     | `30`        | —                                                      | How long a failed job waits before it is redelivered.                                                                                                      |
 
 ### redis
 
