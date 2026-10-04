@@ -296,7 +296,6 @@ roles:
           - users.any.update
           - users.any.ban
           - users.any.delete
-          - tokens.any.delete
           - audit.any.read
           - webhooks.any.read
           - webhooks.any.create

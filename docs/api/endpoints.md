@@ -30,8 +30,9 @@ Endpoints for health checks, metrics, and audit logs. None of these is public. T
 
 JWT-based authentication. Login returns an `accessToken` (short-lived) and a `refreshToken` (long-lived, stored in a cookie). The refresh endpoints issue a new access token without re-authenticating. Password reset is a two-step flow: request sends an email with a signed link, confirm validates it and updates the password. Email verification follows the same two-step shape — signup sends the first link automatically, and `verified` on the `User` is informational only (no endpoint refuses an unverified account).
 
-`DELETE /account/tokens/expired` is the manual handle on a job that also runs on a schedule
-(`services/token-cleanup.ts`); it is here so an operator can force the sweep without waiting.
+Expired tokens are swept by the nightly `reap:expired-tokens` job (`services/token-cleanup.ts`), and a
+login and a refresh prune their own account's. There is no endpoint for it: a manual run is
+`npm run reap:expired-tokens`.
 
 ## Products
 

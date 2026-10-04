@@ -56,9 +56,12 @@ export const sessionRemove = (id: string, sessionId: string) =>
 /** Spend a refresh token by value alone, no user id in the filter — the single-session logout. */
 export const tokenRemoveByValue = (token: string) => userRepository.tokenRemoveByValue(token);
 
-/** Sweep every token past its reuse-detection retention window. */
-export const tokenRemoveExpired = (supersededRetentionMs: number) =>
-    userRepository.tokenRemoveExpired(supersededRetentionMs);
+/**
+ * Sweep every token past its reuse-detection retention window, from every account, or from one
+ * when `userId` is given.
+ */
+export const tokenRemoveExpired = (supersededRetentionMs: number, userId?: string) =>
+    userRepository.tokenRemoveExpired(supersededRetentionMs, userId);
 
 /** Mark a refresh token superseded — the one-time-use half of rotation. */
 export const tokenSupersede = (token: string) => userRepository.tokenSupersede(token);

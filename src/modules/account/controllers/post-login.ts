@@ -7,7 +7,7 @@
 
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { accountService, twoFactorService, runTokenCleanup } from '../services';
+import { accountService, twoFactorService } from '../services';
 import { RefreshTokenExpiryTime } from '../session/config';
 import { issueSession } from '../session/session';
 import { recordLoginFailure, recordLoginSuccess } from '../session/login-observability';
@@ -64,8 +64,8 @@ export const postLogin = (
     }
     const { remember } = tier.data;
 
-    return runTokenCleanup()
-        .then(() => accountService.login(email, password))
+    return accountService
+        .login(email, password)
         .then((result) => {
             if (refused(response, result)) {
                 recordLoginFailure(request);
@@ -74,6 +74,10 @@ export const postLogin = (
 
             const { data } = result;
             const userId = data._id.toString();
+            // Housekeeping for the account that just proved itself — only after authentication, so
+            // an unknown address or a wrong password costs the database nothing here. Awaited
+            // before the new session is written (a prune and a push cannot share one update).
+            const pruned = accountService.pruneOwnExpiredTokens(userId);
 
             /*
              * 2FA branch: the password checked out, but the login is not complete — no
@@ -82,32 +86,35 @@ export const postLogin = (
              * `postLoginTwoFactor` is what finishes it.
              */
             if (data.twoFactorEnabledAt) {
-                return twoFactorService.buildLoginChallenge(data, ['pwd']).then((challenge) => {
-                    successResponse<LoginOutcome>(
-                        response,
-                        challenge,
-                        200,
-                        'Two-factor authentication required'
-                    );
-                });
+                return pruned
+                    .then(() => twoFactorService.buildLoginChallenge(data, ['pwd']))
+                    .then((challenge) => {
+                        successResponse<LoginOutcome>(
+                            response,
+                            challenge,
+                            200,
+                            'Two-factor authentication required'
+                        );
+                    });
             }
 
-            return issueSession(response, userId, remember).then((accessToken) =>
-                // Read fresh from the membership — the document carries no role of its own.
-                isUnrestrictedCaller(userId).then((unrestricted) => {
-                    recordLoginSuccess(request, userId, unrestricted);
-                    successResponse<LoginOutcome>(
-                        response,
-                        { token: accessToken },
-                        200,
-                        'Authentication successful'
-                    );
-                })
-            );
+            return pruned
+                .then(() => issueSession(response, userId, remember))
+                .then((accessToken) =>
+                    // Read fresh from the membership — the document carries no role of its own.
+                    isUnrestrictedCaller(userId).then((unrestricted) => {
+                        recordLoginSuccess(request, userId, unrestricted);
+                        successResponse<LoginOutcome>(
+                            response,
+                            { token: accessToken },
+                            200,
+                            'Authentication successful'
+                        );
+                    })
+                );
         })
         .catch((error: unknown) => {
-            // Covers the token cleanup, the credential check and the three token/cookie steps
-            // after it. A failure in any of them is not a rejected login — the caller may well
+            // Covers the credential check and the token/cookie steps after it. A failure in any of them is not a rejected login — the caller may well
             // have had the right password — so it must not be recorded as one.
             rejectDatabaseError(response, 'postLogin', error);
         });

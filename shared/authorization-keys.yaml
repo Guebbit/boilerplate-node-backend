@@ -472,17 +472,6 @@ keys:
       # the strength of a login that happened this morning.
       stepUp: critical
 
-    # -- account -------------------------------------------------------------------------------
-    # `account` is otherwise keyless on purpose — what you may do to your OWN record follows from
-    # being signed in. This one is the exception because it is not about your own record: it prunes
-    # expired credentials across every account, which is an operational lever.
-    - key: tokens.any.delete
-      module: account
-      subject: AccountToken
-      action: delete
-      scope: tenant
-      description: Remove expired tokens from every account. Operational, not self-service.
-
     # -- audit-logs ----------------------------------------------------------------------------
     - key: audit.any.read
       module: audit-logs

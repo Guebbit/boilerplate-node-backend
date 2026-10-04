@@ -113,7 +113,6 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_REFRESH_TOKEN_REUSE_DETECTED`         | `auth.refresh_token.reuse_detected`         | —                      |
 | `account`        | `AUTH_SESSION_REVOKED`                      | `auth.session.revoked`                      | —                      |
 | `account`        | `AUTH_SIGNED_UP`                            | `auth.signup`                               | —                      |
-| `account`        | `AUTH_TOKEN_EXPIRED_CLEANUP`                | `auth.token.expired_cleanup`                | —                      |
 | `account`        | `AUTH_TOKEN_REFRESHED`                      | `auth.token.refreshed`                      | —                      |
 | `api-keys`       | `ADMIN_API_KEY_MINTED`                      | `admin.api_key.minted`                      | `api_key`              |
 | `api-keys`       | `ADMIN_API_KEY_REVOKED`                     | `admin.api_key.revoked`                     | `api_key`              |

@@ -65,7 +65,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findAuthenticatableByEmail: (email: string) => Promise<UserDocument | null>;
     tokenRemove: (id: string, token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveByValue: (token: string) => Promise<UpdateWriteOpResult>;
-    tokenRemoveExpired: (supersededRetentionMs: number) => Promise<number>;
+    tokenRemoveExpired: (supersededRetentionMs: number, userId?: string) => Promise<number>;
     findByTokenValue: (token: string) => Promise<UserDocument | null>;
     tokenTouch: (token: string) => Promise<UpdateWriteOpResult>;
     tokenSupersede: (token: string) => Promise<boolean>;
@@ -238,8 +238,11 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * @param supersededRetentionMs - `getReuseDetectionWindowMilliseconds()`, passed in rather
      *   than read here: that config belongs to `account` (session policy), and this module may
      *   not import it.
+     * @param userId - narrow the sweep to ONE account (a login or a refresh pruning its own
+     *   entries); omitted, it covers every account, which only the nightly reaper does — an
+     *   unindexed whole-collection `updateMany` has no business on an anonymous request's path.
      */
-    tokenRemoveExpired: (supersededRetentionMs: number) => {
+    tokenRemoveExpired: (supersededRetentionMs: number, userId?: string) => {
         const now = new Date();
         const supersededCutoff = new Date(now.getTime() - supersededRetentionMs);
         const isDue = {
@@ -247,7 +250,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
         };
         return userModel
             .updateMany(
-                { tokens: { $elemMatch: isDue } },
+                { ...(userId ? { _id: toObjectId(userId) } : {}), tokens: { $elemMatch: isDue } },
                 { $pull: { tokens: isDue } },
                 { timestamps: false }
             )

@@ -24,7 +24,7 @@ import {
     rememberOfRefreshToken,
     TokenReuseError
 } from '@modules/account/session/jwt';
-import { runTokenCleanup } from '@modules/account/services';
+import { reapExpiredTokens } from '@modules/account/services';
 import { withEnvironmentOverrides, setEnvironment } from '@tests/environment';
 import { advanceDate, freezeDate } from '@tests/clock';
 import {
@@ -443,7 +443,7 @@ describe('rememberOfRefreshToken', () => {
 /**
  * Rotation's theft detection, end to end against a real document.
  *
- * The bug this block exists for: `runTokenCleanup` ran ahead of the rotation on the very request
+ * The bug this block exists for: the token sweep ran ahead of the rotation on the very request
  * presenting the token, and both read the SAME constant — so the sweep's purge predicate
  * (`supersededAt < now - grace`) was the exact complement of the detection predicate
  * (`supersededMsAgo > grace`). Every token the check would have called theft was already gone,
@@ -501,10 +501,10 @@ describe('rotateRefreshToken reuse detection', () => {
             await rotateRefreshToken(attacked);
             pastGrace();
 
-            // The cleanup the real HTTP path runs FIRST, on every refresh, over every document.
+            // The nightly whole-collection sweep, run between the rotation and the replay.
             // Present here on purpose: a sweep that purged the superseded tombstone before this
             // point would leave rotateRefreshToken nothing to recognise as reuse.
-            await runTokenCleanup();
+            await reapExpiredTokens();
 
             await expect(rotateRefreshToken(attacked)).rejects.toBeInstanceOf(TokenReuseError);
 
@@ -553,7 +553,7 @@ describe('rotateRefreshToken reuse detection', () => {
 
             await rotateRefreshToken(stale);
             pastGrace();
-            await runTokenCleanup();
+            await reapExpiredTokens();
 
             await expect(rotateRefreshToken(stale)).rejects.toThrow('Forbidden');
             await expect(rotateRefreshToken(stale)).rejects.not.toBeInstanceOf(TokenReuseError);
@@ -561,5 +561,73 @@ describe('rotateRefreshToken reuse detection', () => {
             // And the untouched session survives — nothing was revoked.
             await expect(createAccessToken(bystander)).resolves.toEqual(expect.any(String));
         }, RETENTION_FOR_SWEEP_MS);
+    });
+});
+
+/**
+ * A rotation prunes the rotating account's OWN expired tokens: housekeeping on the path that
+ * already loaded the document, instead of a whole-collection sweep on every refresh. It runs after
+ * the lookup and the new token, never before, and it names the account, so nobody else's document
+ * is touched.
+ */
+/** Give the account an entry that expired a second ago. */
+const addExpiredToken = async (userId: string, token: string) => {
+    const doc = await userRepository.findByIdWithCredentials(userId);
+    doc!.tokens.push({
+        type: TokenType.REFRESH,
+        token: hashToken(token),
+        expiration: new Date(Date.now() - 1000)
+    });
+    await userRepository.save(doc!);
+};
+
+/** The digests of every token an account holds. */
+const heldBy = (userId: string) =>
+    userRepository
+        .findByIdWithCredentials(userId)
+        .then((doc) => doc!.tokens.map(({ token }) => token));
+
+describe('rotateRefreshToken housekeeping', () => {
+    const GRACE_MS = 20;
+
+    beforeEach(() => freezeDate());
+
+    afterEach(() => jest.useRealTimers());
+
+    it('drops the rotating account’s expired entries and leaves every other account alone', async () => {
+        const rotating = await createUser({ email: 'rotating@example.com' });
+        const bystander = await createUser({ email: 'bystander@example.com' });
+        await addExpiredToken(String(rotating._id), 'expired-of-rotating');
+        await addExpiredToken(String(bystander._id), 'expired-of-bystander');
+        const live = await createRefreshToken(String(rotating._id), RefreshTokenExpiryTime.SHORT);
+
+        await rotateRefreshToken(live);
+
+        expect(await heldBy(String(rotating._id))).not.toContain(hashToken('expired-of-rotating'));
+        expect(await heldBy(String(bystander._id))).toContain(hashToken('expired-of-bystander'));
+    });
+
+    // The prune runs on the reuse-detection window, so the tombstone a LATER replay must be
+    // recognised against survives the rotation that pruned around it.
+    it('keeps a superseded entry reuse detection still needs', async () => {
+        await withEnvironmentOverrides(
+            {
+                NODE_TOKEN_ROTATION_GRACE_MS: String(GRACE_MS),
+                NODE_TOKEN_REUSE_WINDOW_MS: '60000'
+            },
+            async () => {
+                const user = await createUser();
+                const id = String(user._id);
+                const attacked = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+                const other = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+
+                await rotateRefreshToken(attacked);
+                advanceDate(GRACE_MS * 5);
+                // Another session's rotation prunes this account on its way through.
+                await rotateRefreshToken(other);
+
+                await expect(rotateRefreshToken(attacked)).rejects.toBeInstanceOf(TokenReuseError);
+            }
+        );
     });
 });

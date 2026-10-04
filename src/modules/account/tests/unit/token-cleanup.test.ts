@@ -1,29 +1,28 @@
 /**
  * @module
- * The token-cleanup pre-flight step wired into `postLogin` and `getRefreshToken`. It is a sweep
- * across every user document, so it must not run on a request that cannot possibly succeed — a
- * refresh call with no cookie at all — or every anonymous hit costs a full-table pass. Where it
- * DOES run, it must run BEFORE the credential check, asserted via Jest's `invocationCallOrder`
- * rather than call counts, which can't tell "ran first" from "ran after".
+ * Where the token housekeeping is wired into `postLogin` and `getRefreshToken`. It used to be a
+ * whole-collection sweep ahead of the credential check, which let an anonymous request schedule an
+ * unindexed scan. Now a login prunes only the account it has just AUTHENTICATED, and the refresh
+ * controller runs no sweep at all (the rotation prunes its own account, in `session/jwt.ts`).
+ * Order is asserted via Jest's `invocationCallOrder`, which can tell "ran after" from "ran".
  */
 
 import { asStub } from '@tests/stub';
 import { postLogin } from '@modules/account/controllers/post-login';
 import { getRefreshToken } from '@modules/account/controllers/get-refresh-token';
-import { accountService, runTokenCleanup } from '@modules/account/services';
+import { accountService } from '@modules/account/services';
 import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
 
 /*
  * One `jest.mock` for the whole service folder: a second `jest.mock` of the same path REPLACES
  * the first rather than merging with it, which would leave whichever half came first undefined
- * at call time. `refreshAccessToken` is mocked here too, since `getRefreshToken` now calls it
- * instead of `../session/jwt` directly — this suite tests only that cleanup runs BEFORE it.
+ * at call time.
  */
 jest.mock('@modules/account/services', () => ({
     __esModule: true,
-    runTokenCleanup: jest.fn(),
     accountService: {
         login: jest.fn(),
+        pruneOwnExpiredTokens: jest.fn(),
         refreshAccessToken: jest.fn()
     },
     twoFactorService: {
@@ -43,87 +42,87 @@ jest.mock('@infrastructure/http/response', () => ({
     rejectResponse: jest.fn()
 }));
 
-const mockRunTokenCleanup = runTokenCleanup as jest.MockedFunction<typeof runTokenCleanup>;
 const mockLogin = accountService.login as jest.MockedFunction<typeof accountService.login>;
+const mockPrune = accountService.pruneOwnExpiredTokens as jest.MockedFunction<
+    typeof accountService.pruneOwnExpiredTokens
+>;
 const mockRefreshAccessToken = accountService.refreshAccessToken as jest.MockedFunction<
     typeof accountService.refreshAccessToken
 >;
 
-describe('Auth controllers token cleanup trigger', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-        mockRunTokenCleanup.mockResolvedValue();
+/** A login request body the controller accepts. */
+const loginRequest = () =>
+    asStub<Parameters<typeof postLogin>[0]>({
+        body: { email: 'user@example.com', password: PLAIN_PASSWORD }
     });
 
-    it('runs cleanup before login authentication', async () => {
+describe('login prunes only the account it authenticated', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockPrune.mockResolvedValue();
+    });
+
+    it('prunes nothing when the credentials are refused', async () => {
         mockLogin.mockResolvedValue({
             success: false,
             status: 401,
             message: 'Unauthorized',
-            errors: [
-                {
-                    code: 'UNAUTHORIZED',
-                    message: 'invalid credentials'
-                }
-            ],
+            errors: [{ code: 'UNAUTHORIZED', message: 'invalid credentials' }],
             data: undefined as never
         });
 
-        const request = {
-            body: {
-                email: 'user@example.com',
-                password: PLAIN_PASSWORD
-            }
-        };
-        const response = {} as Parameters<typeof postLogin>[1];
+        await postLogin(loginRequest(), {} as Parameters<typeof postLogin>[1]);
 
-        await postLogin(asStub<Parameters<typeof postLogin>[0]>(request), response);
-
-        expect(mockRunTokenCleanup).toHaveBeenCalledTimes(1);
+        // An unknown address or a wrong password costs the database nothing here.
         expect(mockLogin).toHaveBeenCalledTimes(1);
-        expect(mockRunTokenCleanup.mock.invocationCallOrder[0]).toBeLessThan(
-            mockLogin.mock.invocationCallOrder[0]
-        );
+        expect(mockPrune).not.toHaveBeenCalled();
     });
 
-    it('runs cleanup before refresh-token access token creation', async () => {
+    it('prunes the authenticated account, and only after authenticating', async () => {
+        mockLogin.mockResolvedValue(
+            asStub<Awaited<ReturnType<typeof accountService.login>>>({
+                success: true,
+                status: 200,
+                message: 'ok',
+                // Two-factor on: the branch that returns before a session is minted, so the case
+                // needs no cookie or role machinery to observe the prune.
+                data: { _id: { toString: () => 'account-7' }, twoFactorEnabledAt: new Date() }
+            })
+        );
+
+        await postLogin(loginRequest(), {} as Parameters<typeof postLogin>[1]);
+
+        expect(mockPrune).toHaveBeenCalledTimes(1);
+        expect(mockPrune).toHaveBeenCalledWith('account-7');
+        expect(mockLogin.mock.invocationCallOrder[0]).toBeLessThan(
+            mockPrune.mock.invocationCallOrder[0]
+        );
+    });
+});
+
+describe('the refresh controller runs no sweep of its own', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it.each([
+        ['a refresh cookie', { jwt: 'refresh-token' }],
+        ['no cookie at all', {}]
+    ])('with %s, only the exchange runs', async (_label, cookies) => {
         mockRefreshAccessToken.mockResolvedValue({
             accessToken: 'new-access-token',
             refreshToken: 'new-refresh-token',
             refreshMaxAgeMs: 3_600_000
         });
 
-        const request = {
-            params: {},
-            cookies: {
-                jwt: 'refresh-token'
-            }
-        };
-        const response = {} as Parameters<typeof getRefreshToken>[1];
-
-        await getRefreshToken(asStub<Parameters<typeof getRefreshToken>[0]>(request), response);
-
-        expect(mockRunTokenCleanup).toHaveBeenCalledTimes(1);
-        expect(mockRefreshAccessToken).toHaveBeenCalledWith('refresh-token', expect.anything());
-        expect(mockRunTokenCleanup.mock.invocationCallOrder[0]).toBeLessThan(
-            mockRefreshAccessToken.mock.invocationCallOrder[0]
+        await getRefreshToken(
+            asStub<Parameters<typeof getRefreshToken>[0]>({ params: {}, cookies }),
+            {} as Parameters<typeof getRefreshToken>[1]
         );
-    });
 
-    it('does not run cleanup in refresh flow when refresh token is missing', async () => {
-        mockRefreshAccessToken.mockRejectedValue(new Error('Refresh token missing'));
-
-        const request = {
-            params: {},
-            cookies: {}
-        };
-        const response = {} as Parameters<typeof getRefreshToken>[1];
-
-        await getRefreshToken(asStub<Parameters<typeof getRefreshToken>[0]>(request), response);
-
-        // A sweep of every user document, for a request that cannot succeed. The service is still
-        // called: the missing cookie is a refusal it reports on, not one the controller decides.
-        expect(mockRunTokenCleanup).not.toHaveBeenCalled();
-        expect(mockRefreshAccessToken).toHaveBeenCalledWith(undefined, expect.anything());
+        // The exchange is called either way: a missing cookie is a refusal it reports on. The
+        // pruning is the rotation's, once its own lookup is done.
+        expect(mockRefreshAccessToken).toHaveBeenCalledTimes(1);
+        expect(mockPrune).not.toHaveBeenCalled();
     });
 });

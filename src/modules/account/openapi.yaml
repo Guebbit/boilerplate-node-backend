@@ -894,20 +894,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/tokens/expired:
-        delete:
-            tags: [Auth]
-            summary: Remove expired tokens
-            description: Removes all expired tokens (refresh, password-reset, etc.) from every user record in the database. Restricted to administrators.
-            operationId: deleteExpiredTokens
-            security:
-                - bearerAuth: []
-            responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
     /account/export:
         post:
             tags: [Auth]

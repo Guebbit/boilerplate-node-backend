@@ -45,7 +45,6 @@
         "src/kernel/registry.ts": 82.35,
         "src/modules/account/controllers/delete-account-confirm.ts": 64.1,
         "src/modules/account/controllers/delete-account-request.ts": 72.22,
-        "src/modules/account/controllers/delete-expired-tokens.ts": 0,
         "src/modules/account/controllers/delete-session.ts": 0,
         "src/modules/account/controllers/get-account.ts": 0,
         "src/modules/account/controllers/get-refresh-token.ts": 15.38,

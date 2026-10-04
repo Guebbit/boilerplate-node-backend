@@ -28,7 +28,6 @@ import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import {
     getAuth,
     isAuth,
-    requirePermission,
     requireFreshAuth,
     requireFreshAuthWhen,
     REAUTH_TIME_CRITICAL,
@@ -65,7 +64,6 @@ import { deleteSession } from './controllers/delete-session';
 import { postVerifyRequest } from './controllers/post-verify-request';
 import { postVerifyConfirm } from './controllers/post-verify-confirm';
 import { postEmailChangeConfirm } from './controllers/post-email-change-confirm';
-import { deleteExpiredTokens } from './controllers/delete-expired-tokens';
 import { postAccountExport } from './controllers/post-account-export';
 import { deleteAccountRequest } from './controllers/delete-account-request';
 import { deleteAccountConfirm } from './controllers/delete-account-confirm';
@@ -253,14 +251,6 @@ router.post('/verify-confirm', credentialLimiters, postVerifyConfirm);
 // POST /account/email-change-confirm — spend the emailed `email-change` token; public, same
 // reasoning as verify-confirm. A DIFFERENT token type — see `services/verification.ts`.
 router.post('/email-change-confirm', credentialLimiters, postEmailChangeConfirm);
-
-// DELETE /account/tokens/expired — remove expired tokens from the DB (`tokens.any.delete`)
-router.delete(
-    '/tokens/expired',
-    isAuth,
-    requirePermission('tokens.any.delete'),
-    deleteExpiredTokens
-);
 
 // POST /account/export — the caller's full data export. Sensitive tier: requireFreshAuth is the
 // identity proof here, not a bespoke password check in the body.

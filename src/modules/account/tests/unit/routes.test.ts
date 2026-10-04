@@ -66,7 +66,6 @@ const AUTHENTICATED = [
     'DELETE /sessions/:sessionId',
     'POST /verify-request',
     'POST /pending-email/resend',
-    'DELETE /tokens/expired',
     'POST /export',
     'GET /2fa',
     'DELETE /2fa',
@@ -105,7 +104,6 @@ describe('account routes — what is mounted', () => {
             'POST /verify-request',
             'POST /verify-confirm',
             'POST /email-change-confirm',
-            'DELETE /tokens/expired',
             'POST /export',
             'POST /login/2fa/send',
             'POST /login/2fa',
@@ -154,20 +152,18 @@ describe('account routes — authorization', () => {
         }
     );
 
-    it('guards the token sweep with the shop wildcard, and nothing else', () => {
-        // `DELETE /account/tokens/expired` is maintenance across every account, not self-service.
-        // It is the only keyed route in a module that is otherwise entirely first-person.
+    it('keys no route at all: what you may do to your own record follows from being signed in', () => {
+        // The one exception used to be `DELETE /tokens/expired`, an operational lever across every
+        // account. That sweep is a nightly job now (`reap:expired-tokens`), not a route.
         const keyed = routeSignatures(router).filter((signature) =>
             guardsOn(router, signature).includes('requirePermissionGuard')
         );
 
-        expect(keyed).toEqual(['DELETE /tokens/expired']);
+        expect(keyed).toEqual([]);
     });
 
-    it('demands a session before checking the role on the sweep', () => {
-        const guards = guardsOn(router, 'DELETE /tokens/expired');
-
-        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
+    it('mounts no route that sweeps tokens across accounts', () => {
+        expect(routeSignatures(router)).not.toContain('DELETE /tokens/expired');
     });
 });
 

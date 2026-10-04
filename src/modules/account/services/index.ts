@@ -30,6 +30,7 @@ import * as tokenCleanup from './token-cleanup';
 import * as oauth from './oauth';
 import * as twoFactor from './two-factor';
 import * as reauth from './reauth';
+import { pruneOwnExpiredTokens } from '../session/prune';
 
 /*
  * Published by name as well as on the namespace, for the callers that import a single function
@@ -51,7 +52,8 @@ export {
     VERIFY_RESEND_SECONDS,
     completeEmailChange
 } from './verification';
-export { runTokenCleanup } from './token-cleanup';
+export { reapExpiredTokens } from './token-cleanup';
+export { pruneOwnExpiredTokens } from '../session/prune';
 export { sendAccountMail } from './mail';
 export {
     loginOrCreateFromOAuth,
@@ -99,8 +101,8 @@ export const accountService = {
     spendLiveToken: tokens.spendLiveToken,
     redeemLiveToken: tokens.redeemLiveToken,
     sessionsList: tokens.sessionsList,
-    runTokenCleanup: tokenCleanup.runTokenCleanup,
-    adminTokenCleanup: tokenCleanup.adminTokenCleanup,
+    reapExpiredTokens: tokenCleanup.reapExpiredTokens,
+    pruneOwnExpiredTokens,
     loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,
     recordOAuthFailure: oauth.recordOAuthFailure
 };

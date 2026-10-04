@@ -272,8 +272,9 @@ of rejected — proven under real concurrent load in
 A superseded entry stays in `tokens` — never `$pull`ed immediately — so a later presentation of it
 can still be told apart from noise. `GET /account/sessions` filters these out; they aren't a device
 the account holder should see or be able to revoke on their own. The housekeeping sweep
-(`runTokenCleanup`) removes them eventually, alongside ordinarily expired tokens — see
-`tokenRemoveExpired` in [`users`](./users.md)'s repository.
+(the nightly `reap:expired-tokens` job, plus each account's own prune on a login or a refresh) removes
+them eventually, alongside ordinarily expired tokens — see `tokenRemoveExpired` in
+[`users`](./users.md)'s repository.
 
 How long "eventually" is, is its own setting, and the separation is load-bearing:
 
@@ -284,13 +285,18 @@ How long "eventually" is, is its own setting, and the separation is load-bearing
 
 While the sweep used the grace window as its cutoff, the two were the same value — and its purge
 predicate (`supersededAt < now - grace`) was the exact complement of the detection predicate
-(`supersededMsAgo > grace`). Since `runTokenCleanup` runs ahead of the rotation on the very request
-presenting the token, and sweeps every document rather than one, a stale token was deleted before
-the reuse check could recognise it. The check fell through to "genuinely absent", answered an
-ordinary 401, and revoked nothing. Nothing failed; the defence was simply unreachable.
+(`supersededMsAgo > grace`). A sweep that ran ahead of the rotation on the very request presenting
+the token deleted a stale token before the reuse check could recognise it. The check fell through
+to "genuinely absent", answered an ordinary 401, and revoked nothing. Nothing failed; the defence
+was simply unreachable.
 
-So the sweep now uses the RETENTION window, and `account`'s manifest refuses to boot unless
-retention exceeds grace (the check on `sessionConfig` in `session/config.ts`) — the failure is silent by
+So every sweep uses the RETENTION window, and none runs AHEAD of a rotation: a refresh prunes its own
+account only after the rotation's lookup and the new token are written (`session/prune.ts`),
+and the whole-collection sweep is a nightly job. The sweep also no longer rides on login and refresh
+at all, because an unindexed collection-wide `updateMany` on an anonymous request's path let anyone
+schedule it.
+
+`account`'s manifest refuses to boot unless retention exceeds grace (the check on `sessionConfig` in `session/config.ts`) — the failure is silent by
 nature, so it is made loud at the only moment it can be.
 
 The retention default is a trade, stated plainly: an active client rotates about once per

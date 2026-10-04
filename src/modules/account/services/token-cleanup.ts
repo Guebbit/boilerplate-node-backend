@@ -1,90 +1,25 @@
 /**
  * @module
- * Housekeeping for the `tokens` array: sweeping out entries that have expired. Two triggers, two
- * functions — `runTokenCleanup` is a fire-and-forget pre-flight step login and refresh run on
- * every request and must never fail the request that triggered it; `adminTokenCleanup` is the
- * deliberate admin action behind `DELETE /account/tokens/expired`, which needs an outcome to
- * answer with and is worth its own audit record.
+ * The whole-collection sweep of the `tokens` array, run by the nightly `reap:expired-tokens` job.
+ * A login and a refresh prune only THEIR OWN account's entries (`../session/prune.ts`).
+ *
+ * Why not on every request: the whole-collection `updateMany` is an unindexed scan (`$elemMatch` on
+ * `tokens`), and running it on every login and every refresh let anonymous traffic schedule it.
+ * Nothing needs it promptly: an expired entry is already refused wherever it is read.
  */
 
 import { userService } from '@modules/users';
-import { logger } from '@infrastructure/adapters/logger';
-import {
-    generateSuccess,
-    generateReject,
-    type ResponseSuccess,
-    type ResponseReject
-} from '@infrastructure/http/response';
-import type { CallerContext } from '@types';
-import { recordAudit } from '@infrastructure/observability/audit';
-import { accountAuditActions } from '../audit';
 import { getReuseDetectionWindowMilliseconds } from '../session/config';
 
 /**
- * Run one cleanup cycle: remove every expired token, plus every rotated-away one older than the
- * REUSE-DETECTION window, from every user document.
+ * Remove every expired token, plus every rotated-away one older than the REUSE-DETECTION window,
+ * from every account. Only the nightly reaper calls it.
  *
- * That window, not the rotation grace window. This sweep runs ahead of the rotation on the very
- * request presenting the token, and it is collection-wide, so a stale tombstone from ANY user's
- * refresh could be swept mid-request. Purging on the grace window instead would delete a
- * superseded entry before `rotateRefreshToken` could ever recognise a later replay as reuse — the
+ * That window, not the rotation grace window: purging on the grace window would delete a
+ * superseded entry before `rotateRefreshToken` could recognise a later replay as reuse — the
  * tombstone has to survive at least as long as reuse detection is willing to look for it.
- */
-export const runTokenCleanup = (): Promise<void> => {
-    // Stryker disable next-line all
-    logger.info('Token cleanup: starting expired-token removal');
-    return userService
-        .tokenRemoveExpired(getReuseDetectionWindowMilliseconds())
-        .then((removed) => {
-            // Stryker disable next-line all
-            logger.info(`Token cleanup: completed, ${removed} document(s) pruned`);
-        })
-        .catch((error: unknown) => {
-            /*
-             * Contained on purpose: a pre-flight step on login/refresh must never fail the
-             * request that triggered it. The raw `error`, not a flattened message — `redactFormat`
-             * (`adapters/logger.ts`) serializes an `Error` into `{name, message, stack}` before
-             * JSON output, so passing it whole is what keeps the name and stack in the log line.
-             */
-            // Stryker disable all
-            logger.error({
-                message: 'Token cleanup: failed',
-                error
-            });
-            // Stryker restore all
-        });
-};
-
-/**
- * The admin-triggered cleanup, `DELETE /account/tokens/expired`.
  *
- * Distinct from {@link runTokenCleanup}: that one is a fire-and-forget pre-flight step login and
- * refresh run on every request and reports nothing back — this one is a deliberate admin action
- * that needs the outcome to answer the request with, and is worth its own audit record.
+ * @returns how many account documents were pruned
  */
-export const adminTokenCleanup = (
-    context: CallerContext
-): Promise<ResponseSuccess<{ removed: number }> | ResponseReject> =>
-    userService
-        .tokenRemoveExpired(getReuseDetectionWindowMilliseconds())
-        .then((removed) => {
-            recordAudit(context, {
-                action: accountAuditActions.AUTH_TOKEN_EXPIRED_CLEANUP,
-                outcome: 'success'
-            });
-            return generateSuccess({ removed });
-        })
-        .catch((error: unknown) => {
-            /*
-             * Status decided HERE, not two layers down: `tokenRemoveExpired` reports a count or
-             * throws, and what a failed sweep means to a client is this layer's call. A Mongoose
-             * model has no business choosing an HTTP status.
-             */
-            // Stryker disable all
-            logger.error({
-                message: 'Admin token cleanup failed',
-                error
-            });
-            // Stryker restore all
-            return generateReject(500, []);
-        });
+export const reapExpiredTokens = (): Promise<number> =>
+    userService.tokenRemoveExpired(getReuseDetectionWindowMilliseconds());

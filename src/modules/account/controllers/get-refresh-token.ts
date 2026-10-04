@@ -1,15 +1,12 @@
 /**
  * @module
- * `GET /account/refresh` controller — thin HTTP adapter over `accountService.refreshAccessToken`,
- * with a housekeeping token sweep run ahead of it.
+ * `GET /account/refresh` controller — thin HTTP adapter over `accountService.refreshAccessToken`.
  */
 
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import type { RefreshTokenResponse } from '@types';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { logger } from '@infrastructure/adapters/logger';
-import { accountService, runTokenCleanup } from '../services';
+import { accountService } from '../services';
 import { createRefreshCookie, createLoggedCookie } from '../session/cookies';
 import { authRefreshTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -25,35 +22,25 @@ import { readRefreshCookie } from '@kernel/cookies';
 export const getRefreshToken = (request: Request, response: Response) => {
     const refreshToken = readRefreshCookie(request);
 
-    /*
-     * Cleanup is skipped when there's no cookie: it's a collection-wide sweep, and running it for
-     * a request that can't succeed would let anonymous traffic schedule database work.
-     * `refreshAccessToken` records the absence itself as one of its three outcomes.
-     */
-    return (refreshToken ? runTokenCleanup() : Promise.resolve())
-        .then(() =>
-            accountService
-                .refreshAccessToken(refreshToken, callerContextOf(request))
-                .then(({ accessToken, refreshToken: rotated, refreshMaxAgeMs }) => {
-                    // The rotated value replaces the client's cookie in the SAME response —
-                    // without this the client keeps presenting the now-superseded token, which
-                    // its next refresh has to survive via the grace window rather than needing to.
-                    createRefreshCookie(response, rotated, refreshMaxAgeMs);
-                    createLoggedCookie(response, refreshMaxAgeMs);
-                    authRefreshTotal.inc({ status: 'success' });
-                    successResponse<RefreshTokenResponse>(response, { token: accessToken });
-                })
-                .catch(() => {
-                    authRefreshTotal.inc({ status: 'failure' });
-                    rejectResponse(response, 401);
-                })
-        )
-        .catch((error: unknown) => {
-            // `runTokenCleanup` is housekeeping: it removes expired tokens and has nothing to do with
-            // whether THIS refresh is valid. Without this catch its rejection escapes to the global
-            // handler and a routine maintenance failure answers 500 to a request that was fine.
-            // Stryker disable next-line all
-            logger.error({ message: 'Token cleanup failed during refresh.', error });
-            rejectDatabaseError(response, 'getRefreshToken', error);
-        });
+    // `refreshAccessToken` records an absent cookie itself as one of its three outcomes, and prunes
+    // the rotated account's own expired tokens once the rotation's lookup is done.
+    return (
+        accountService
+            .refreshAccessToken(refreshToken, callerContextOf(request))
+            .then(({ accessToken, refreshToken: rotated, refreshMaxAgeMs }) => {
+                // The rotated value replaces the client's cookie in the SAME response —
+                // without this the client keeps presenting the now-superseded token, which
+                // its next refresh has to survive via the grace window rather than needing to.
+                createRefreshCookie(response, rotated, refreshMaxAgeMs);
+                createLoggedCookie(response, refreshMaxAgeMs);
+                authRefreshTotal.inc({ status: 'success' });
+                successResponse<RefreshTokenResponse>(response, { token: accessToken });
+            })
+            // Every failure of the exchange is the same 401: an unknown, expired, revoked or replayed
+            // token must not be told apart by a client.
+            .catch(() => {
+                authRefreshTotal.inc({ status: 'failure' });
+                rejectResponse(response, 401);
+            })
+    );
 };

@@ -21,6 +21,7 @@ import {
 } from './config';
 import type { RefreshTokenExpiryTime } from './config';
 import { keyId, keyForId } from './key-ring';
+import { pruneOwnExpiredTokens } from './prune';
 
 /**
  * The claims this app puts in every access/refresh JWT. Wire names are OIDC's, so a future
@@ -282,15 +283,23 @@ const reissueRotated = (claims: TokenData, remainingMs: number): Promise<Rotated
 
         const newRefreshToken = signRefreshToken(claims, Math.ceil(remainingMs / 1000));
 
-        return userService
-            .tokenAdd(user, TokenType.REFRESH, remainingMs, newRefreshToken)
-            .then((refreshToken) => recordRefreshTokenUse(refreshToken).then(() => refreshToken))
-            .then((refreshToken) => ({
-                accessToken: signAccessToken(claims),
-                refreshToken,
-                // Only a persistent login keeps a persistent cookie.
-                refreshMaxAgeMs: claims.remember ? remainingMs : undefined
-            }));
+        return (
+            userService
+                .tokenAdd(user, TokenType.REFRESH, remainingMs, newRefreshToken)
+                .then((refreshToken) =>
+                    recordRefreshTokenUse(refreshToken).then(() => refreshToken)
+                )
+                // After the lookup and the new token, never before: the rotation reads the presented
+                // token's entry to tell a benign race from reuse, and a prune ahead of that read could
+                // take the entry with it. Contained: housekeeping cannot fail a valid refresh.
+                .then((refreshToken) => pruneOwnExpiredTokens(user.id).then(() => refreshToken))
+                .then((refreshToken) => ({
+                    accessToken: signAccessToken(claims),
+                    refreshToken,
+                    // Only a persistent login keeps a persistent cookie.
+                    refreshMaxAgeMs: claims.remember ? remainingMs : undefined
+                }))
+        );
     });
 
 /**

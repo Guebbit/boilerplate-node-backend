@@ -42,7 +42,6 @@ export const accountAuditActions = {
     AUTH_LOGGED_OUT: 'auth.logout',
     AUTH_LOGGED_OUT_EVERYWHERE: 'auth.logout_all',
     AUTH_SESSION_REVOKED: 'auth.session.revoked',
-    AUTH_TOKEN_EXPIRED_CLEANUP: 'auth.token.expired_cleanup',
     /** The caller pulled a full copy of their own data. */
     AUTH_DATA_EXPORTED: 'auth.data_export.completed',
     /** One second factor was confirmed and armed — `metadata.method` names which. */
