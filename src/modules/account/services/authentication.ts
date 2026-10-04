@@ -119,6 +119,22 @@ export const PASSWORD_RESET_TOKEN_TYPE = 'password';
 const PASSWORD_RESET_TOKEN_TTL_MS = accountConfig().NODE_PASSWORD_RESET_TTL_MS;
 
 /**
+ * Issue the account's ONE live password-reset token: older ones are pulled first, then the new one
+ * is pushed. Without the pull, every request left another working link behind (5 a minute, about
+ * 300 an hour for a victim), and each stayed valid for its full TTL. Two writes rather than one,
+ * because Mongo refuses `$pull` and `$push` on the same path in one update — the same shape
+ * `sendVerificationEmail` uses. The pull names only this type, so any other token (a refresh
+ * session, an email-change link) is untouched.
+ *
+ * @param user - the account, loaded with its credentials
+ * @returns the plaintext token, for the emailed link only
+ */
+const issueResetToken = (user: UserDocument): Promise<string> =>
+    userService
+        .tokenRemoveAll(user, PASSWORD_RESET_TOKEN_TYPE)
+        .then(() => tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS));
+
+/**
  * Issue a password-reset token and deliver it — or silently do nothing for an unregistered
  * address. The silence is the feature: `POST /account/reset-request` always answers 200, so the
  * response can't be used to enumerate registered addresses. `AUTH_PASSWORD_RESET_REQUESTED` fires
@@ -137,24 +153,22 @@ export const requestPasswordReset = (
         ? userService.findByEmail(email).then((user) => {
               if (!user) return false;
 
-              return tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then(
-                  (token) => {
-                      /*
-                       * The account's own language, so the email matches the rest of what this
-                       * user receives from us rather than the browser that happened to submit the
-                       * form. The copy is finished before the job is published, so the worker
-                       * needs no locale.
-                       */
-                      const mail = resetRequestEmail(
-                          recipientLocale(user.locale, context),
-                          user.username,
-                          token
-                      );
-                      // High priority: a token-bearing link the user is actively waiting on.
-                      void sendAccountMail(user.email, mail);
-                      return true;
-                  }
-              );
+              return issueResetToken(user).then((token) => {
+                  /*
+                   * The account's own language, so the email matches the rest of what this
+                   * user receives from us rather than the browser that happened to submit the
+                   * form. The copy is finished before the job is published, so the worker
+                   * needs no locale.
+                   */
+                  const mail = resetRequestEmail(
+                      recipientLocale(user.locale, context),
+                      user.username,
+                      token
+                  );
+                  // High priority: a token-bearing link the user is actively waiting on.
+                  void sendAccountMail(user.email, mail);
+                  return true;
+              });
           })
         : Promise.resolve(false);
 
@@ -181,7 +195,7 @@ export const requestPasswordReset = (
  * type/TTL; only the mail copy differs, see {@link setupRequestEmail}.
  */
 export const requestAccountSetup = (user: UserDocument): Promise<void> =>
-    tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then((token) => {
+    issueResetToken(user).then((token) => {
         const mail = setupRequestEmail(recipientLocale(user.locale), user.username, token);
         // High priority: a token-bearing link the user is actively waiting on, not a notification.
         void sendAccountMail(user.email, mail);

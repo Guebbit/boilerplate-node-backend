@@ -19,6 +19,7 @@ import {
     passwordChangeWithCurrent,
     updateProfile,
     sendVerificationEmail,
+    PASSWORD_RESET_TOKEN_TYPE,
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
     VERIFY_RESEND_SECONDS,
@@ -917,6 +918,52 @@ describe('requestPasswordReset', () => {
                 outcome: 'success'
             })
         );
+    });
+});
+
+/** The `password` tokens the account holds, by digest. */
+const resetDigests = (userId: string) =>
+    readTokens(userId).then((tokens) =>
+        tokens.filter((token) => token.type === PASSWORD_RESET_TOKEN_TYPE).map(({ token }) => token)
+    );
+
+describe('one live reset link per account', () => {
+    // Every request used to push another working link (5 a minute per address, ~300 an hour),
+    // each valid for its whole TTL.
+    it('replaces the previous link when another is requested, so only the newest works', async () => {
+        const user = await createUser();
+
+        await accountService.requestPasswordReset(user.email, testCallerContext);
+        const first = await resetDigests(user.id);
+        await accountService.requestPasswordReset(user.email, testCallerContext);
+        const second = await resetDigests(user.id);
+
+        expect(first).toHaveLength(1);
+        expect(second).toHaveLength(1);
+        expect(second).not.toEqual(first);
+    });
+
+    it('leaves every other kind of token alone', async () => {
+        const user = await createUser();
+        await user.tokenAdd(TokenType.REFRESH, 60_000, 'keep-this-session');
+
+        await accountService.requestPasswordReset(user.email, testCallerContext);
+        await accountService.requestPasswordReset(user.email, testCallerContext);
+
+        const tokens = await readTokens(user.id);
+        const kept = tokens.filter((token) => token.type !== 'password');
+        expect(kept.map(({ token }) => token)).toEqual([hashToken('keep-this-session')]);
+    });
+
+    it('holds the setup link to the same rule', async () => {
+        const user = await createUser();
+        await user.tokenAdd(PASSWORD_RESET_TOKEN_TYPE, 60_000, 'older-link');
+
+        await accountService.requestAccountSetup(user);
+
+        const digests = await resetDigests(user.id);
+        expect(digests).toHaveLength(1);
+        expect(digests).not.toContain(hashToken('older-link'));
     });
 });
 
