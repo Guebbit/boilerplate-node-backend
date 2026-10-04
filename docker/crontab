@@ -42,7 +42,7 @@
 # outlive — see docs/modules/payments.md#pending-effects.
 # WARNING: owned by the payments module — delete it when removing the module (docs/modules/payments.md)
 */5 * * * * cd /app && npm run sweep:payment-effects
-# Every 5 minutes, well inside the 30-minute card window and the 168-hour bank-transfer one — see
+# Every 5 minutes, well inside the card window and the 168-hour bank-transfer one; drains every due hold — see
 # docs/modules/inventory-reservations.md.
 # WARNING: owned by the inventory module — delete it when removing the module (docs/modules/inventory.md)
 */5 * * * * cd /app && npm run sweep:reservations

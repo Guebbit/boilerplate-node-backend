@@ -547,6 +547,35 @@ describe('runReservationSweep', () => {
         expect(staleHold?.status).toBe('released');
     });
 
+    // One batch per tick was 200 holds every five minutes, so anyone minting holds faster than
+    // that kept stock locked past its window. The sweep keeps reading batches until one is short.
+    it('drains every stale hold, past one batch of 200', async () => {
+        const product = await createProduct({ onHand: 1000 });
+        await withoutWindow(async () => {
+            const orderIds = Array.from({ length: 450 }, () => anOrderId());
+            for (let start = 0; start < orderIds.length; start += 50)
+                await Promise.all(
+                    orderIds
+                        .slice(start, start + 50)
+                        .map((orderId) =>
+                            reserveForOrder(orderId, [
+                                { productId: String(product._id), quantity: 1 }
+                            ])
+                        )
+                );
+        });
+
+        const expired = await runReservationSweep();
+
+        expect(expired).toBe(450);
+        expect(await reservationModel.countDocuments({ status: 'held' })).toBe(0);
+        expect(await countersOf(String(product._id))).toEqual({
+            onHand: 1000,
+            reserved: 0,
+            available: 1000
+        });
+    }, 60_000);
+
     it('is idempotent', async () =>
         withoutWindow(async () => {
             const product = await createProduct({ onHand: 20 });

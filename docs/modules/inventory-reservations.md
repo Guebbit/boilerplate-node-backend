@@ -105,6 +105,11 @@ sweep:reservations` (B3) is the same work, driven every 5 minutes rather than on
 operation is idempotent and cheap, and occasionally something an operator wants to force between
 ticks.
 
+The sweep DRAINS: it reads batches of 200 stale holds until one comes back short (at most 50
+batches, 10,000 holds, per run), so a backlog is gone in one tick instead of leaking out at 40 a
+minute. The scheduled run holds a lease (`sweep:reservations`), since a drain can outlast the
+five-minute tick and two drains would only fight over the same claims.
+
 The `status: 1, expiresAt: 1` index exists for exactly that query, and for nothing else.
 
 When a hold is swept, `inventory.reservation_expired` is published — and

@@ -103,8 +103,10 @@ const main = async (): Promise<void> => {
         return;
     }
 
+    // The lease lives in Mongo, so the connection comes before it.
+    await startJob();
+
     const ran = await withLease('reap:inactive-accounts', LEASE_TTL_MS, async () => {
-        await startJob();
         registerModules(enabledModules);
         await initI18n();
 
