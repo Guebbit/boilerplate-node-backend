@@ -1383,7 +1383,8 @@ components:
                     type: boolean
                     description: >-
                         Whether this order is still awaiting payment — it can reach `paid`, which
-                        only a confirmed charge writes. Not in `transitions`, because no request may
+                        only a confirmed charge writes — and the caller may pay it: the buyer, who
+                        holds the shopper's checkout key (staff and administrators do not). Not in `transitions`, because no request may
                         make that move: a client starts the flow with `POST /payments/intent` and
                         the provider's yes does the rest.
                 recordPayment:

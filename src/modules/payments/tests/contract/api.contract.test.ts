@@ -10,7 +10,7 @@
 import { Types } from 'mongoose';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
@@ -319,6 +319,26 @@ const preparedPayment = async () => {
     const payment = await paymentRepository.findById(paymentId);
     return { bearer, order, paymentId, providerRef: String(payment!.providerRef) };
 };
+
+/**
+ * The card steps are a shopper's: staff and administrators do not shop, and are told so with a plain
+ * 403. `cart.self.checkout` alone would have said "confirm your email" (`deniedCode`), which is
+ * the wrong answer for a caller whose problem is their role, so the shopper key is asked first.
+ */
+describe('the card steps — who may pay', () => {
+    it.each([
+        ['POST /payments/intent', '/payments/intent'],
+        ['POST /payments/{id}/confirm', `/payments/${MISSING_ID}/confirm`],
+        ['POST /payments/{id}/sync', `/payments/${MISSING_ID}/sync`]
+    ])('%s refuses an administrator with a plain FORBIDDEN', async (_step, url) => {
+        const { bearer } = await authenticateAsRole('admin');
+
+        const response = await api().post(url).set('Authorization', bearer).send({});
+
+        expect(response.status).toBe(403);
+        expect(response.body.errors[0].code).toBe('FORBIDDEN');
+    });
+});
 
 describe('POST /payments/webhook', () => {
     it('settles a payment on a signed delivery, with no session of any kind', async () => {

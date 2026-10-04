@@ -8,7 +8,7 @@
  */
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { MISSING_ID } from '@tests/ids';
 
@@ -109,6 +109,28 @@ describe('DELETE /wishlist/{productId}', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(0);
     });
+
+    // The move writes a basket, and only shoppers hold one: staff and administrators may still keep
+    // a wishlist, but cannot fill a basket through it.
+    it.each(['manager', 'moderator', 'admin'])(
+        'refuses a %s, who does not shop, with a 403 and leaves the line saved',
+        async (role) => {
+            const { bearer } = await authenticateAsRole(role);
+            const product = await createProduct();
+            await api()
+                .put(`/wishlist/${String(product._id)}`)
+                .set('Authorization', bearer);
+
+            const response = await api()
+                .post(`/wishlist/${String(product._id)}/move-to-cart`)
+                .set('Authorization', bearer);
+            const wishlist = await api().get('/wishlist').set('Authorization', bearer);
+
+            expect(response.status).toBe(403);
+            expect(response.body.errors[0].code).toBe('FORBIDDEN');
+            expect(wishlist.body.data.items).toHaveLength(1);
+        }
+    );
 
     it('matches the error contract for a product that was never saved', async () => {
         const { bearer } = await authenticateAs('user');

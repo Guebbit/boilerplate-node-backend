@@ -218,6 +218,11 @@ and are flagged `shopperOnly` so that an administrator still counts as holding e
 An order a staff member could place would be one only an administrator may handle, so the demo
 shop's history has none.
 
+Every door into a basket asks the shopper key: the cart routes, a reorder, a wishlist's move into
+the cart (`cart.self.update`), and the three card steps, which ask it _before_ `cart.self.checkout`
+so a staff caller gets a plain `403 FORBIDDEN` rather than the checkout key's "confirm your email".
+An order's `actions.pay` is offered only to a caller who holds the checkout key.
+
 ## Nobody handles their own money
 
 The rank rule frees a person's own things, so alone it would let a customer who is later promoted to

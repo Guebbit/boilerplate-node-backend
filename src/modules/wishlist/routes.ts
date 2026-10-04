@@ -8,7 +8,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { getWishlist } from './controllers/get-wishlist';
 import { putWishlistItem } from './controllers/put-wishlist-item';
 import { deleteWishlistItem } from './controllers/delete-wishlist-item';
@@ -23,8 +23,9 @@ router.use(getAuth, isAuth);
 // GET /wishlist
 router.get('/', getWishlist);
 
-// POST /wishlist/:productId/move-to-cart — must come before the bare /:productId routes
-router.post('/:productId/move-to-cart', postMoveToCart);
+// POST /wishlist/:productId/move-to-cart — must come before the bare /:productId routes.
+// `cart.self.update`: the move writes a basket, and staff and administrators do not shop.
+router.post('/:productId/move-to-cart', requirePermission('cart.self.update'), postMoveToCart);
 
 // PUT /wishlist/:productId — save a product. The URI is the whole statement; repeating it is a no-op.
 router.put('/:productId', putWishlistItem);

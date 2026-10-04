@@ -238,6 +238,17 @@ const canRecordPayment = (status: OrderStatus, authContext: AuthContext | undefi
     holdsKey(callerForSubject(authContext, 'Order'), 'payments.any.create');
 
 /**
+ * Whether the caller may spend a basket at all — the key `POST /payments/intent` and the other card
+ * steps ask. `pay` is offered only to a caller who holds it: staff and administrators do not shop,
+ * and an unproven address is told to confirm it, so neither is offered a step the server refuses.
+ *
+ * @param authContext - the caller, or `undefined` for no request behind this read
+ */
+const holdsCheckout = (authContext: AuthContext | undefined): boolean =>
+    authContext !== undefined &&
+    holdsKey(callerForSubject(authContext, 'Order'), 'cart.self.checkout');
+
+/**
  * The withdrawal button, decided here so no client counts days: offered to the order's own buyer
  * while the order is withdrawable and the window, if it has started, is still open. An operator
  * reading someone else's order is not offered it — the right is the consumer's to exercise.
@@ -388,6 +399,7 @@ const withinStanding = (
 export const withActions = (order: OrderDocument, authContext?: AuthContext): Promise<Order> => {
     const serialized = presentOrder(order);
     const actor = actorOf(authContext);
+    const statusActions = orderActionsFor(order.status, actor);
 
     return Promise.all([resolveCurrentImages([serialized]), standingOn(order, authContext)]).then(
         ([[resolved], standing]) => ({
@@ -395,7 +407,8 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
             actions: {
                 ...withinStanding(
                     {
-                        ...orderActionsFor(order.status, actor),
+                        ...statusActions,
+                        pay: statusActions.pay && holdsCheckout(authContext),
                         ...deliveryAndOverrideActions(
                             order.status,
                             isDigitalOnlyOrder(order.items),

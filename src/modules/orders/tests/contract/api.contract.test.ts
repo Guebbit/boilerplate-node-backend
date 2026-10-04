@@ -203,6 +203,19 @@ describe('POST /orders/{id}/cancel', () => {
         expect(response.body.data.status).toBe('cancelled');
     });
 
+    it('answers 403 OUTRANKED for an operator cancelling an equal’s order', async () => {
+        const peer = await createUser({ email: 'peer@example.com', username: 'peer' }, 'admin');
+        const order = await seedOrderFor(peer);
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/orders/${String(order._id)}/cancel`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+        expect(response.body.errors[0].code).toBe('OUTRANKED');
+    });
+
     it("answers 404 for another user's order — same as an invented id, no existence leak", async () => {
         const { user: owner } = await authenticateAs('user');
         const order = await seedOrderFor(owner);

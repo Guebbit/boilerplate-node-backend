@@ -61,11 +61,16 @@ router.get('/methods', getPaymentMethods);
 // Every route from here down requires authentication — money is somebody's.
 router.use(getAuth, isAuth);
 
+// The three card steps below ask `cart.self.update` BEFORE `cart.self.checkout`. The checkout key's
+// refusal says "confirm your email" (`deniedCode`), which would mislead a staff caller; the shopper
+// key first gives them an honest plain 403.
+
 // POST /payments/intent — freeze an order's price, ready to confirm. idempotencyKey guards a
 // retried freeze the same way it guards every other money-moving write below.
 router.post(
     '/intent',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requirePermission('cart.self.update'),
     requirePermission('cart.self.checkout'),
     idempotencyKey,
     postPaymentIntent
@@ -107,6 +112,7 @@ router.post(
 router.post(
     '/:id/confirm',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requirePermission('cart.self.update'),
     requirePermission('cart.self.checkout'),
     paymentConfirmAttemptLimiter,
     paymentConfirmDeclineLimiter,
@@ -122,6 +128,7 @@ router.post(
 router.post(
     '/:id/sync',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requirePermission('cart.self.update'),
     requirePermission('cart.self.checkout'),
     postPaymentSync
 );

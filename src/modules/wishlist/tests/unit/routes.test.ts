@@ -26,14 +26,14 @@ describe('wishlist routes', () => {
         }
     );
 
-    it('is admin-free by design', () => {
+    it('is admin-free by design, and asks a key only where a basket is written', () => {
         // There is no operator view of someone else's wishlist. If one appears, this fails and
-        // the addition gets looked at.
-        const adminGuarded = routeSignatures(router).filter((signature) =>
+        // the addition gets looked at. The one key is the shopper's, on the move into a basket.
+        const keyGuarded = routeSignatures(router).filter((signature) =>
             guardsOn(router, signature).includes('requirePermissionGuard')
         );
 
-        expect(adminGuarded).toEqual([]);
+        expect(keyGuarded).toEqual(['POST /:productId/move-to-cart']);
     });
 
     it('declares move-to-cart before the bare /:productId route', () => {

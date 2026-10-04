@@ -77,7 +77,12 @@ paths:
         post:
             tags: [Wishlist]
             summary: Move a saved product into the cart
-            description: The wishlist's exit — the saved line becomes one cart line (quantity 1, incremented if the cart already holds the product) and leaves the wishlist. The cart is written before the wishlist line is removed, so a failure part-way leaves the product SAVED rather than lost. Returns the updated wishlist; read the cart for its own new state.
+            description: >-
+                The wishlist's exit — the saved line becomes one cart line (quantity 1, incremented if the cart
+                already holds the product) and leaves the wishlist. The cart is written before the wishlist line
+                is removed, so a failure part-way leaves the product SAVED rather than lost. Needs a basket, so
+                it is a shopper's step: staff and administrators are refused with `403`. Returns the updated
+                wishlist; read the cart for its own new state.
             operationId: moveWishlistItemToCart
             security:
                 - bearerAuth: []
@@ -91,6 +96,9 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/WishlistResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # The move writes a basket, and only shoppers hold a basket: staff and
+                # administrators, who may still keep a wishlist, answer 403.
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Not on the wishlist, or no longer publicly visible. The second of those is the
                 # CART's answer, not this module's: a saved line outlives the catalogue, and
                 # whether a product may be in a basket is decided once, where every caller of the
