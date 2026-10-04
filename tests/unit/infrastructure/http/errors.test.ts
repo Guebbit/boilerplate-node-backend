@@ -19,6 +19,7 @@ import {
 } from '@infrastructure/http/errors';
 import { logger } from '@infrastructure/adapters/logger';
 import { PreconditionFailedError } from '@infrastructure/persistence/versioning';
+import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import type { CastError } from 'mongoose';
 import { ClientClosedError } from 'redis';
 import { makeResponseStub } from '@tests/express';
@@ -390,6 +391,10 @@ describe('isInfrastructureError', () => {
 
     it('recognises a Redis connection failure', () => {
         expect(isInfrastructureError(makeRedisError())).toBe(true);
+    });
+
+    it('reads a full bounded queue as the server being temporarily unable, too', () => {
+        expect(isInfrastructureError(new ServiceBusyError('queue full'))).toBe(true);
     });
 
     it('is false for a request-shape error, and for nothing at all', () => {

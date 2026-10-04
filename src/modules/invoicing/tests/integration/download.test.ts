@@ -6,11 +6,14 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { withEnvironment } from '@tests/environment';
 import { api, authenticateAs } from '@tests/http';
 import { markPaid } from '@modules/orders';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { ServiceBusyError } from '@infrastructure/runtime/busy';
+import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 
 /** A second, distinctly-addressed customer — `authenticateAs('user')` always mints the same
  * default address, which collides the second time one test needs two customers. */
@@ -112,6 +115,52 @@ describe('GET /orders/{id}/invoice', () => {
         const response = await api().get('/orders/not-an-id/invoice').set('Authorization', bearer);
 
         expect(response.status).toBe(404);
+    });
+});
+
+describe('GET /orders/{id}/invoice — when the render queue is full', () => {
+    // Retention 0 so the invoice is rendered on every download (the polling helper below included):
+    // a stored copy would answer without ever reaching the renderer this case makes refuse.
+    it('answers 503 SERVICE_UNAVAILABLE with Retry-After', () =>
+        withEnvironment('NODE_INVOICE_PDF_RETENTION_DAYS', '0', async () => {
+            const { bearer, user } = await authenticateAs('user');
+            const product = await createProduct();
+            const order = await createOrder(user, [toOrderItem(product, 1)]);
+            await markPaid(String(order._id));
+            await waitUntilInvoiced(String(order._id), bearer);
+            jest.mocked(renderHtmlToPdf).mockRejectedValueOnce(new ServiceBusyError('queue full'));
+
+            const response = await api()
+                .get(`/orders/${String(order._id)}/invoice`)
+                .set('Authorization', bearer);
+
+            expect(response.status).toBe(503);
+            expect(response.body.errors[0].code).toBe('SERVICE_UNAVAILABLE');
+            expect(Number(response.headers['retry-after'])).toBeGreaterThanOrEqual(1);
+        }));
+});
+
+describe('GET /orders/{id}/invoice — the stored copy', () => {
+    it('renders once, then answers the second download from the stored file', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await markPaid(String(order._id));
+        // The polling helper downloads (and so renders and stores) until the invoice exists.
+        await waitUntilInvoiced(String(order._id), bearer);
+        jest.mocked(renderHtmlToPdf).mockClear();
+
+        const first = await api()
+            .get(`/orders/${String(order._id)}/invoice`)
+            .set('Authorization', bearer);
+        const second = await api()
+            .get(`/orders/${String(order._id)}/invoice`)
+            .set('Authorization', bearer);
+
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(200);
+        expect(second.body).toEqual(first.body);
+        expect(renderHtmlToPdf).not.toHaveBeenCalled();
     });
 });
 

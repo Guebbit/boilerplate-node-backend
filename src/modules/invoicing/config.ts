@@ -6,7 +6,7 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { text } from '@infrastructure/config/fields';
+import { int, text } from '@infrastructure/config/fields';
 
 /** How the invoice document is issued. */
 export const invoicingConfig = defineConfig({
@@ -16,6 +16,12 @@ export const invoicingConfig = defineConfig({
             default: 'pdf',
             lower: true,
             describe: 'The e-invoicing implementation. Only `pdf` ships.'
+        }),
+        NODE_INVOICE_PDF_RETENTION_DAYS: int({
+            default: 30,
+            min: 0,
+            describe:
+                'Days a rendered invoice or credit-note PDF is kept on disk for the next download. 0 stores nothing: every download renders again.'
         })
     }
 });

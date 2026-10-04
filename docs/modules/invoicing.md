@@ -120,6 +120,36 @@ policy above. Never re-rendered from live config: every render reads the SAME fr
 byte, run through the same EJS template (`src/modules/invoicing/templates/documents/invoicing.document.ejs`) every
 time.
 
+```mermaid
+flowchart TD
+    D["GET …/invoice or …/credit-notes/{id}"] --> S{"stored copy?"}
+    S -- "yes" --> R["stream the file"]
+    S -- "no" --> Q{"render slot free,<br/>or room in the queue (20)?"}
+    Q -- "no" --> B["503 + Retry-After<br/>(nothing started)"]
+    Q -- "yes" --> C["Chromium render<br/>(20 s total, then killed)"]
+    C --> W["write tmp/storage/documents<br/>(temp file + rename)"]
+    W --> R
+```
+
+**Rendered on the first download, then kept.** An invoice nobody opens costs no Chromium and no
+disk. The PDF is written to a private store (`NODE_DOCUMENT_STORE_PATH`, outside the public
+directory) and streamed from there for `NODE_INVOICE_PDF_RETENTION_DAYS` (30); the nightly
+`reap:invoice-pdfs` deletes files past the window by modification time. `0` stores nothing.
+
+- **Not the record.** The frozen invoice data in Mongo is the legal record; the file is a
+  regenerable copy, so it is not backed up. A PDF rendered again after its file was reaped follows
+  the CURRENT template: a template change can change how an old invoice looks, never the numbers.
+- **A store that fails never fails the download:** an unreadable or unwritable file falls back to
+  rendering, with a log line.
+- **Plaintext on disk, accepted in writing:** the file holds personal and financial data and is not
+  encrypted, like the Mongo data files; at-rest protection is the host's
+  ([Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest)).
+- **Bounded renders.** At most two Chromium processes run at once; up to 20 more renders wait; the
+  21st is refused at once with `503` and `Retry-After`, because an unbounded queue is memory and
+  held connections a burst can grow at will. One render has 20 seconds in all (launch, load,
+  print): past it the browser is closed and the slot freed, and a hung Chromium cannot hold every
+  render behind it.
+
 ## The e-invoicing port
 
 `providers/index.ts` declares `EInvoicingProvider`, shaped after `payments/providers` (one
@@ -133,10 +163,12 @@ first one.
 
 ## Configuration
 
-| Variable                        | Default | Meaning                                                                                          |
-| ------------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `NODE_EINVOICING_PROVIDER`      | `pdf`   | Which e-invoicing provider issues a document — see above                                         |
-| `NODE_INVOICING_RATE_LIMIT_MAX` | `20`    | Invoice/credit-note renders allowed per window, per ACCOUNT — every hit spawns a Chromium launch |
+| Variable                          | Default                 | Meaning                                                                                          |
+| --------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------ |
+| `NODE_EINVOICING_PROVIDER`        | `pdf`                   | Which e-invoicing provider issues a document — see above                                         |
+| `NODE_INVOICING_RATE_LIMIT_MAX`   | `20`                    | Invoice/credit-note renders allowed per window, per ACCOUNT — every hit spawns a Chromium launch |
+| `NODE_INVOICE_PDF_RETENTION_DAYS` | `30`                    | Days a rendered PDF is kept for the next download; `0` stores nothing                            |
+| `NODE_DOCUMENT_STORE_PATH`        | `tmp/storage/documents` | Where those PDFs live — private, plaintext, regenerable; mount a volume                          |
 
 The seller's identity (legal name, VAT number, address) is [`orders`'s](./orders.md#shop-identity):
 the withdrawal notice prints it too, and `orders` cannot import this module. Every getter is read

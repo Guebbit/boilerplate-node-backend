@@ -68,6 +68,13 @@ The asymmetry that matters: a value this server must **compare** is hashed; a va
 | Unkeyed hash of a guessable identifier | a dictionary run over a bare `sha256(email)` or a stored request fingerprint (a signup body carries the password); a dump is guessed at hash speed | Every such digest goes through `pseudonymise(purpose, value)`: HMAC-SHA256 under an HKDF subkey per purpose, so a dump without `NODE_PSEUDONYM_KEY` guesses nothing and one purpose's digest is never another's — `infrastructure/security/pseudonymise.ts`. Which purposes exist: [Pseudonymised identifiers](../../tools/security.md#pseudonymised-identifiers)               |
 | Unencrypted at rest                    | no disk or field encryption; backups in plaintext                                                                                                  | Disk-level encryption is the host's. Field-level, the two rows above cover every secret and the PII named above; everything else in Mongo relies on transport (wire TLS) and disk encryption only.                                                                                                                                                                              |
 
+**Files on disk are plaintext, on purpose.** A stored invoice or credit-note PDF
+(`NODE_DOCUMENT_STORE_PATH`) and, once built, a prepared data export sit unencrypted on the host's
+disk, like the Mongo data files: at-rest protection is the host's (disk encryption), not this
+code's. They are kept apart from what that would make worse: private (never under the public
+directory), regenerable (the frozen rows in Mongo are the record, so they are not backed up), and
+reaped after a retention window.
+
 **Why sha256 and not bcrypt for tokens.** A refresh token is 16 random bytes — high-entropy and
 one-time. There is no low-entropy secret to stretch, and bcrypt would add a real per-request cost
 to every token check for no gain against an offline attacker who cannot guess 128 bits anyway. The

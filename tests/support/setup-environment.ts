@@ -10,6 +10,9 @@
  * Every line below is a default (`??=`): a real environment variable wins.
  */
 
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 /**
  * 100x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/infrastructure/http/middlewares/rate-limit.ts, currently 100).
  *
@@ -290,3 +293,11 @@ process.env.NODE_PAYMENT_WEBHOOK_SECRET ??= 'test-payment-webhook-secret';
  * testing the deployment check rather than the factor.
  */
 process.env.NODE_SMTP_HOST ??= 'smtp.test.invalid';
+
+/**
+ * Stored invoice and credit-note PDFs go to the system temp directory, never the working tree: a
+ * suite that downloads an invoice would otherwise leave a file under the repo's `tmp/storage/`.
+ * One directory for the whole run is fine: a stored name carries the document's own Mongo id,
+ * which is different in every test database.
+ */
+process.env.NODE_DOCUMENT_STORE_PATH ??= path.join(tmpdir(), 'node-api-test-documents');

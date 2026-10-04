@@ -10,8 +10,9 @@
 // container images, where the base image installs chromium via the package manager.
 import puppeteer from 'puppeteer-core';
 // Page-geometry options for `page.pdf()` (format, margins, landscape, printBackground, ...).
-import type { PDFOptions } from 'puppeteer-core';
+import type { Browser, PDFOptions } from 'puppeteer-core';
 import { settleWithin } from '@infrastructure/runtime/settle';
+import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import { pdfConfig } from '@infrastructure/adapters/config';
 
 /** A4 portrait — the default for invoices. Override per call when a document needs otherwise. */
@@ -27,6 +28,9 @@ const launchOptions = () => ({
     // Path to the Chromium binary. Must be set (or match the fallback) because puppeteer-core
     // ships no browser of its own; the fallback is the Alpine/Debian package location.
     executablePath: pdfConfig().PUPPETEER_EXECUTABLE_PATH,
+    // Launching alone may not take the whole budget: a Chromium that never starts is a render that
+    // never finishes. https://pptr.dev/api/puppeteer.launchoptions
+    timeout: RENDER_TIMEOUT_MS,
     args: [
         // Chromium's sandbox needs kernel privileges most containers do not grant, so it fails
         // to launch without this. Safe *only* because the HTML rendered here is our own
@@ -43,6 +47,30 @@ const launchOptions = () => ({
  * many, so without this cap a burst of invoice requests can exhaust the container's memory.
  */
 const MAX_CONCURRENT_RENDERS = 2;
+
+/**
+ * How many renders may WAIT for one of those slots. Past it a new render is refused at once
+ * (`ServiceBusyError`, a 503 with `Retry-After`) instead of queueing without limit: an unbounded
+ * queue is memory and latency a burst can grow at will, and every request in it holds a
+ * connection. Twenty is about forty seconds of work at the render timeout below.
+ */
+export const MAX_WAITING_RENDERS = 20;
+
+/**
+ * The longest ONE render (launch, load, print) may take, in ms. A hung Chromium would otherwise
+ * hold a slot, and with it every render behind it, for as long as it likes: puppeteer's own
+ * per-step defaults (30 s each) are not a total. When it runs out the browser is closed and the
+ * slot freed.
+ */
+export const RENDER_TIMEOUT_MS = 20_000;
+
+/** A render took longer than {@link RENDER_TIMEOUT_MS}; its browser was closed. */
+export class RenderTimeoutError extends Error {
+    constructor() {
+        super(`PDF render exceeded ${String(RENDER_TIMEOUT_MS)} ms`);
+        this.name = 'RenderTimeoutError';
+    }
+}
 
 /** Every render started and not yet finished — what {@link settleRenders} waits for. */
 const inFlight = new Set<Promise<Uint8Array>>();
@@ -76,10 +104,17 @@ const releaseSlot = (): void => {
  * Run `task` inside a render slot, and release it however the task ends. A tiny counting
  * semaphore rather than a dependency: its only edge case is releasing on failure.
  *
+ * Refuses BEFORE taking or queueing anything when every slot is busy and {@link MAX_WAITING_RENDERS}
+ * are already waiting: a refused render must not release a slot it never held.
+ *
  * @param task - the render to run
+ * @throws {ServiceBusyError} (as a rejection) when the queue is full
  */
-const withRenderSlot = <T>(task: () => Promise<T>): Promise<T> =>
-    acquireSlot().then(task).finally(releaseSlot);
+const withRenderSlot = <T>(task: () => Promise<T>): Promise<T> => {
+    if (running >= MAX_CONCURRENT_RENDERS && waiting.length >= MAX_WAITING_RENDERS)
+        return Promise.reject(new ServiceBusyError('The PDF render queue is full.'));
+    return acquireSlot().then(task).finally(releaseSlot);
+};
 
 /**
  * Render HTML content to a PDF buffer using headless Chromium.
@@ -128,7 +163,53 @@ export const settleRenders = (timeoutMs: number): Promise<void> =>
  */
 const renderOnce = (html: string, pdfOptions: PDFOptions): Promise<Uint8Array> =>
     // `launch` spawns the Chromium process and connects over the DevTools protocol.
-    puppeteer.launch(launchOptions()).then((browser) =>
+    puppeteer
+        .launch(launchOptions())
+        .then((browser) => withDeadline(browser, printIn(browser, html, pdfOptions)));
+
+/**
+ * Race a render against {@link RENDER_TIMEOUT_MS}, and close the browser however it ends.
+ *
+ * On the deadline the browser is closed at once (which kills the process, hung or not) and the
+ * render rejects with {@link RenderTimeoutError}; the work still pending behind it can only fail
+ * against a closed browser, and the race has already attached a handler to it.
+ *
+ * @param browser - the launched browser this render owns
+ * @param work - the render's own promise
+ */
+const withDeadline = (browser: Browser, work: Promise<Uint8Array>): Promise<Uint8Array> => {
+    let timer: NodeJS.Timeout | undefined;
+    let timedOut = false;
+    const deadline = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+            timedOut = true;
+            // The close of a hung browser may itself reject; the timeout is the answer that matters.
+            void browser.close().catch(() => undefined);
+            reject(new RenderTimeoutError());
+        }, RENDER_TIMEOUT_MS);
+    });
+
+    return (
+        Promise.race([work, deadline])
+            // `finally` is essential: without it a render error would leak the Chromium process,
+            // and repeated failures would exhaust the container's memory. Skipped once the deadline
+            // closed it, so a browser is never closed twice.
+            .finally(() => {
+                clearTimeout(timer);
+                return timedOut ? undefined : browser.close();
+            })
+    );
+};
+
+/**
+ * Open a tab on `browser`, load the HTML and print it.
+ *
+ * @param browser - the launched browser
+ * @param html - the already-rendered HTML to print
+ * @param pdfOptions - `page.pdf()` geometry options
+ */
+const printIn = (browser: Browser, html: string, pdfOptions: PDFOptions): Promise<Uint8Array> =>
+    Promise.resolve(
         browser
             // A fresh tab. Isolated per render, so concurrent calls cannot see each other's DOM.
             .newPage()
@@ -158,7 +239,4 @@ const renderOnce = (html: string, pdfOptions: PDFOptions): Promise<Uint8Array> =
                     // stream it, attach it to an email, or persist it.
                     .then(() => page.pdf(pdfOptions))
             )
-            // `finally` is essential: without it a render error would leak the Chromium process,
-            // and repeated failures would exhaust the container's memory.
-            .finally(() => browser.close())
     );

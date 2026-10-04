@@ -349,9 +349,10 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### pdf
 
-| Variable                    | Type | Default                     | Rules | What it does                                     |
-| --------------------------- | ---- | --------------------------- | ----- | ------------------------------------------------ |
-| `PUPPETEER_EXECUTABLE_PATH` | text | `/usr/bin/chromium-browser` | —     | The Chromium binary (puppeteer-core ships none). |
+| Variable                    | Type | Default                     | Rules | What it does                                                                                                                                                       |
+| --------------------------- | ---- | --------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PUPPETEER_EXECUTABLE_PATH` | text | `/usr/bin/chromium-browser` | —     | The Chromium binary (puppeteer-core ships none).                                                                                                                   |
+| `NODE_DOCUMENT_STORE_PATH`  | text | `tmp/storage/documents`     | —     | Where a rendered invoice or credit-note PDF is kept between downloads. Private, plaintext on disk, regenerable: mount a volume in a deployment, do not back it up. |
 
 ### antibot
 
@@ -538,9 +539,10 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### invoicing
 
-| Variable                   | Type | Default | Rules | What it does                                      |
-| -------------------------- | ---- | ------- | ----- | ------------------------------------------------- |
-| `NODE_EINVOICING_PROVIDER` | text | `pdf`   | —     | The e-invoicing implementation. Only `pdf` ships. |
+| Variable                          | Type              | Default | Rules | What it does                                                                                                                      |
+| --------------------------------- | ----------------- | ------- | ----- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_EINVOICING_PROVIDER`        | text              | `pdf`   | —     | The e-invoicing implementation. Only `pdf` ships.                                                                                 |
+| `NODE_INVOICE_PDF_RETENTION_DAYS` | whole number >= 0 | `30`    | —     | Days a rendered invoice or credit-note PDF is kept on disk for the next download. 0 stores nothing: every download renders again. |
 
 ### locales-tenants
 

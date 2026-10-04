@@ -42,6 +42,9 @@ paths:
                 # `invoicingLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+                # Every render slot is busy and the bounded queue behind them is full: nothing was
+                # started, `Retry-After` says when to ask again. A stored copy never meets this.
+                '503': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ServiceUnavailable' }
 
     /orders/{id}/credit-notes:
         get:
@@ -103,6 +106,8 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+                # See `GET /orders/{id}/invoice`: a full render queue answers 503 with `Retry-After`.
+                '503': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ServiceUnavailable' }
 
 components:
     schemas:

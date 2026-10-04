@@ -29,6 +29,8 @@
 5  2 * * * cd /app && npm run reap:inactive-accounts
 # WARNING: owned by the account module — delete it when removing the module (docs/modules/account.md)
 7  2 * * * cd /app && npm run reap:expired-tokens
+# WARNING: owned by the invoicing module — delete it when removing the module (docs/modules/invoicing.md)
+8  2 * * * cd /app && npm run reap:invoice-pdfs
 # WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
 10 2 * * * cd /app && npm run reap:orders
 # WARNING: owned by the payments module — delete it when removing the module (docs/modules/payments.md)

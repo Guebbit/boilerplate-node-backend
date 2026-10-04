@@ -141,6 +141,12 @@ flowchart LR
 
 `puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable, `GET /orders/{id}/invoice` and `/credit-notes/{creditNoteId}` both answer `500` — see [Hosting](./hosting.md) and `docker/Dockerfile.production`'s own `INSTALL_CHROMIUM` note. The placed-order email carries no invoice at all (nothing is invoiced yet at that point), so it is unaffected either way.
 
+**Renders are bounded, and a finished PDF is kept.** At most two Chromium processes run at once, up
+to 20 more renders wait, and the next is refused with `503` + `Retry-After` instead of queueing
+without limit; one render gets 20 seconds in all, after which its browser is closed and its slot
+freed. An invoice or credit note is rendered on its first download and then read from a private
+directory for `NODE_INVOICE_PDF_RETENTION_DAYS` — see [Invoicing](../modules/invoicing.md#downloading-a-document).
+
 **Shutdown waits for a render in flight.** A caller downloading an invoice or credit note can have
 a process reach its exit mid-render. Exiting there orphans the Chromium it launched, and its
 ~120 MB temporary profile stays on disk. `shutdownInfra` therefore calls `settleRenders`, which

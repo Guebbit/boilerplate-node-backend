@@ -29,7 +29,14 @@ jest.mock('puppeteer-core', () => ({
     }
 }));
 
-import { renderHtmlToPdf, settleRenders } from '@infrastructure/adapters/pdf';
+import {
+    MAX_WAITING_RENDERS,
+    RENDER_TIMEOUT_MS,
+    RenderTimeoutError,
+    renderHtmlToPdf,
+    settleRenders
+} from '@infrastructure/adapters/pdf';
+import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import { setEnvironment } from '@tests/environment';
 
 /** The options object handed to the last `puppeteer.launch` call. */
@@ -230,5 +237,132 @@ describe('settleRenders', () => {
         await settleRenders(5000);
 
         expect(Date.now() - startedAt).toBeLessThan(1000);
+    });
+});
+
+/*
+ * The two bounds on a render: how many may wait, and how long one may take. Without them a burst
+ * of invoice downloads is an unbounded queue, and one hung Chromium holds a slot, and every render
+ * behind it, forever.
+ */
+/** Launches that stay open until released, so render slots stay taken. */
+const pendingLaunches: (() => void)[] = [];
+
+/** Make every `puppeteer.launch` hang until {@link releaseLaunches}. */
+const holdLaunches = (): void => {
+    launch.mockImplementation(
+        () =>
+            new Promise((resolve) => {
+                pendingLaunches.push(() => resolve({ newPage, close }));
+            })
+    );
+};
+
+/** Let every held launch go, and restore the default instant one. */
+const releaseLaunches = (): void => {
+    launch.mockImplementation(() => Promise.resolve({ newPage, close }));
+    for (const release of pendingLaunches.splice(0)) release();
+};
+
+/** One tick, so renders already started have reached their `launch`. */
+const nextTick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+describe('the render bounds', () => {
+    // A case that fails while launches are held would leave its slots taken for every case after
+    // it; releasing here keeps one failure from becoming eight.
+    afterEach(async () => {
+        releaseLaunches();
+        await nextTick();
+    });
+
+    it('refuses a render once every slot is busy and the queue is full, starting nothing', async () => {
+        holdLaunches();
+        // Two renders take the two slots, then MAX_WAITING_RENDERS wait behind them.
+        const queued = Array.from({ length: 2 + MAX_WAITING_RENDERS }, () =>
+            renderHtmlToPdf('<p>x</p>')
+        );
+        await nextTick();
+        launch.mockClear();
+
+        await expect(renderHtmlToPdf('<p>one too many</p>')).rejects.toBeInstanceOf(
+            ServiceBusyError
+        );
+        expect(launch).not.toHaveBeenCalled();
+
+        releaseLaunches();
+        await Promise.all(queued);
+    });
+
+    it('does not hand out a slot to a render it refused: the queue drains cleanly afterwards', async () => {
+        holdLaunches();
+        const queued = Array.from({ length: 2 + MAX_WAITING_RENDERS }, () =>
+            renderHtmlToPdf('<p>x</p>')
+        );
+        await expect(renderHtmlToPdf('<p>refused</p>')).rejects.toBeInstanceOf(ServiceBusyError);
+        releaseLaunches();
+        await Promise.all(queued);
+
+        // Every slot is free again: a fresh render starts at once and finishes.
+        await expect(renderHtmlToPdf('<p>after</p>')).resolves.toBe(pdfBuffer);
+    });
+
+    it('queues up to the bound without refusing', async () => {
+        holdLaunches();
+        const queued = Array.from({ length: 2 + MAX_WAITING_RENDERS }, () =>
+            renderHtmlToPdf('<p>x</p>')
+        );
+
+        releaseLaunches();
+
+        await expect(Promise.all(queued)).resolves.toHaveLength(2 + MAX_WAITING_RENDERS);
+    });
+
+    describe('the total timeout', () => {
+        beforeEach(() => jest.useFakeTimers());
+        afterEach(() => jest.useRealTimers());
+
+        it('closes the browser and rejects when a render runs past it', async () => {
+            close.mockClear();
+            // A print that never answers: the browser is hung.
+            pdf.mockImplementationOnce(() => new Promise(() => undefined));
+
+            const render = renderHtmlToPdf('<p>hung</p>');
+            const outcome = expect(render).rejects.toBeInstanceOf(RenderTimeoutError);
+            await jest.advanceTimersByTimeAsync(RENDER_TIMEOUT_MS + 1);
+
+            await outcome;
+            // Closed once, by the deadline: never twice, which would reject and replace the answer.
+            expect(close).toHaveBeenCalledTimes(1);
+        });
+
+        it('frees the slot, so renders behind a hung one are not held up', async () => {
+            pdf.mockImplementationOnce(() => new Promise(() => undefined));
+            pdf.mockImplementationOnce(() => new Promise(() => undefined));
+            const hung = [renderHtmlToPdf('<p>a</p>'), renderHtmlToPdf('<p>b</p>')];
+            const outcomes = hung.map((render) => expect(render).rejects.toBeDefined());
+            const third = renderHtmlToPdf('<p>c</p>');
+
+            await jest.advanceTimersByTimeAsync(RENDER_TIMEOUT_MS + 1);
+            await Promise.all(outcomes);
+
+            await expect(third).resolves.toBe(pdfBuffer);
+        });
+
+        it('lets a render that finishes in time cancel the deadline', async () => {
+            close.mockClear();
+
+            await expect(renderHtmlToPdf('<p>quick</p>')).resolves.toBe(pdfBuffer);
+            await jest.advanceTimersByTimeAsync(RENDER_TIMEOUT_MS * 2);
+
+            expect(close).toHaveBeenCalledTimes(1);
+        });
+
+        it('hands the launch the same budget, so a browser that never starts is bounded too', async () => {
+            await renderHtmlToPdf('<p>hello</p>');
+
+            expect((launch.mock.calls.at(-1)?.[0] as { timeout: number }).timeout).toBe(
+                RENDER_TIMEOUT_MS
+            );
+        });
     });
 });

@@ -204,6 +204,11 @@ export const pdfConfig = defineConfig({
         PUPPETEER_EXECUTABLE_PATH: text({
             default: '/usr/bin/chromium-browser',
             describe: 'The Chromium binary (puppeteer-core ships none).'
+        }),
+        NODE_DOCUMENT_STORE_PATH: text({
+            default: path.join('tmp', 'storage', 'documents'),
+            describe:
+                'Where a rendered invoice or credit-note PDF is kept between downloads. Private, plaintext on disk, regenerable: mount a volume in a deployment, do not back it up.'
         })
     }
 });

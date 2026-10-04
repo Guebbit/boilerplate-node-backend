@@ -246,7 +246,7 @@ services:
             # gitignored and throwaway — and it is THIS mount that makes each durable here
             # instead, not the folder name.
             #
-            # `tmp/storage/` holds the invoice cache and the MAIL SPOOL — queued outbound mail
+            # `tmp/storage/` holds the stored invoice PDFs and the MAIL SPOOL — queued outbound mail
             # that a restart must not lose, which rules tmpfs out on its own.
             - storage:/app/tmp/storage
             # `tmp/quarantine/` holds uploads awaiting their scan. `reap:quarantine` counts a file

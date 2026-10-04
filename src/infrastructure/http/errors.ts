@@ -15,6 +15,7 @@ import { t } from '@infrastructure/i18n';
 import { isDuplicateKey, isConnectionError } from '@infrastructure/persistence/mongo-errors';
 import { PreconditionFailedError } from '@infrastructure/persistence/versioning';
 import { isRedisConnectionError } from '@infrastructure/adapters/redis';
+import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import { generateReject, rejectResponse } from './response';
 // Type-only — see `response.ts`'s own import for why: this file sits on `contracts:bundle`'s
 // incidental module-load path, which runs before `@api/error-codes` exists.
@@ -33,14 +34,15 @@ import type { Response } from 'express';
 export class ConflictError extends Error {}
 
 /**
- * Whether a failure means an infrastructure dependency (Mongo, Redis) was unreachable, rather
+ * Whether a failure means an infrastructure dependency (Mongo, Redis) was unreachable, or a bounded
+ * queue (the PDF renders) was full, rather
  * than a request the server understood and refused. RFC 9110 §15.6.4: 503 says the SERVER is
  * temporarily broken; every other branch below is about the REQUEST.
  *
  * @param error - whatever the caught rejection actually was
  */
 export const isInfrastructureError = (error: unknown): boolean =>
-    isConnectionError(error) || isRedisConnectionError(error);
+    isConnectionError(error) || isRedisConnectionError(error) || error instanceof ServiceBusyError;
 
 /**
  * Decide what status a driver failure deserves — the request's fault (4xx), a dependency outage
