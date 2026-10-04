@@ -18,12 +18,14 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { addressesDeleteByUserId, addressesGet } from './service';
 import { router } from './routes';
+import { addressesConfig } from './config';
 
 /** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
     name: 'addresses',
     basePath: '/account',
     routes: router,
+    config: [addressesConfig.slice],
     personalData: [
         {
             section: 'addresses',

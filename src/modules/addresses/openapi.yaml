@@ -3,6 +3,9 @@ info:
     title: addresses — module contract
     version: '0.1.0'
 
+x-error-codes:
+    ADDRESS_BOOK_FULL: { status: 409, description: 'The address book already holds `NODE_ADDRESS_BOOK_MAX` entries (20 by default) — remove one before adding another.' }
+
 paths:
     /account/addresses:
         get:
@@ -44,6 +47,8 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/AddressEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # The book is full (`ADDRESS_BOOK_FULL`): one document cannot grow without bound.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 

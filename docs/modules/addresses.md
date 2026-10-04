@@ -88,7 +88,17 @@ The one invariant worth seeing after any write: whenever the book is non-empty, 
 carries `default`. The repository (`repository.ts`), not the schema, maintains it — a
 read-modify-write on the whole array, because "exactly one default" is a property of the list, not
 of any one entry, and no single `$set`/`$pull` can demote the old holder, promote the new one and
-prune a removed entry atomically in one operation.
+prune a removed entry atomically in one operation. The one exception is the **add**: it is a single
+update-pipeline write (`$concatArrays` of the demoted entries and the new one), because it also
+carries the size cap.
+
+**A book holds at most `NODE_ADDRESS_BOOK_MAX` entries** (20). A book is one document and its
+entries are PII-encrypted, so one that grows without bound walks toward the 16 MB document limit
+and breaks its owner's own writes (about 160 posts of 100 kB would do it). The cap is a condition
+in the add's filter (`items.19` must not exist), which mongod evaluates while holding the document,
+so a burst of concurrent adds cannot all see room: exactly the cap is stored and the rest answer
+`409 ADDRESS_BOOK_FULL`. The entry's text goes into the pipeline inside `$literal`, since a string
+starting with `$` is a field path there.
 
 `addressForCheckout(userId, addressId?)` answers three ways, and the distinction between the last
 two is deliberate: `undefined` means the caller keeps no addresses and named none (not required to

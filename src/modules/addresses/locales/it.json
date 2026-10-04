@@ -4,6 +4,7 @@
         "updated": "Indirizzo aggiornato.",
         "default-set": "Indirizzo predefinito aggiornato.",
         "removed": "Indirizzo rimosso.",
-        "not-found": "L'indirizzo richiesto non è stato trovato"
+        "not-found": "L'indirizzo richiesto non è stato trovato",
+        "book-full": "La tua rubrica indirizzi è piena. Rimuovi un indirizzo prima di aggiungerne un altro."
     }
 }

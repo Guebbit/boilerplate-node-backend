@@ -4,7 +4,7 @@
  * the export's own JSDoc below for why.
  */
 
-import type { ClientSession } from 'mongoose';
+import { Types, type ClientSession } from 'mongoose';
 import { addressBookModel, applyAddressBookTransform } from './model';
 import type { AddressBookDocument } from './model';
 import type { AddressInput, UpdateAddressRequest } from '@types';
@@ -17,6 +17,61 @@ import {
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { encryptAddressItem, decryptAddressItem } from './pii';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
+import { addressBookMax } from './config';
+
+/**
+ * What {@link addressBookRepository.addEntry} resolves to when the book already holds
+ * `NODE_ADDRESS_BOOK_MAX` entries — nothing was written.
+ */
+export const ADDRESS_BOOK_FULL = 'address-book-full';
+
+/**
+ * The one-update pipeline that appends an entry and keeps "exactly one default".
+ *
+ * A pipeline (an aggregation-style update), because the default rule spans the whole array: a
+ * claimed default demotes every existing entry, and the first entry of an empty book is the default
+ * whatever it asked — neither fits one `$push`, and splitting them leaves a window with two
+ * defaults. `$ifNull` is what lets the same update run as the INSERT of a first entry.
+ * `$literal` wraps the entry: its fields are user text, and in a pipeline a string starting with `$`
+ * is a field path, so an unwrapped label of `$items` would copy the array into the entry.
+ * https://www.mongodb.com/docs/manual/tutorial/update-documents-with-aggregation-pipeline/
+ *
+ * @param item - the entry to append, encrypted, with its own `_id`
+ * @param claimsDefault - whether the caller asked for the default slot
+ */
+const appendEntryPipeline = (item: Record<string, unknown>, claimsDefault: boolean) => {
+    const existing = { $ifNull: ['$items', []] };
+    const becomesDefault = claimsDefault ? true : { $eq: [{ $size: existing }, 0] };
+
+    return [
+        {
+            $set: {
+                items: {
+                    $concatArrays: [
+                        {
+                            $cond: [
+                                becomesDefault,
+                                {
+                                    $map: {
+                                        input: existing,
+                                        as: 'entry',
+                                        in: { $mergeObjects: ['$$entry', { default: false }] }
+                                    }
+                                },
+                                existing
+                            ]
+                        },
+                        [{ $mergeObjects: [{ $literal: item }, { default: becomesDefault }] }]
+                    ]
+                },
+                // A pipeline upsert has no `$setOnInsert`; `updatedAt` is stamped by Mongoose's own
+                // timestamps stage, `createdAt` is kept once set.
+                createdAt: { $ifNull: ['$createdAt', '$$NOW'] }
+            }
+        }
+    ];
+};
 
 /**
  * Every book this module hands back is decrypted first — `findByUserId` and every write method's
@@ -32,19 +87,24 @@ const decryptBook = (book: AddressBookDocument): AddressBookDocument => {
 };
 
 /**
- * Every write loads the book, edits it in memory and saves — a READ-MODIFY-WRITE, which the cart
- * avoids, because "exactly one default" is an invariant across the WHOLE array and no single
+ * Every write but the add loads the book, edits it in memory and saves — a READ-MODIFY-WRITE, which
+ * the cart avoids, because "exactly one default" is an invariant across the WHOLE array and no single
  * `$set`/`$pull` can demote the old default, promote the new one and prune the removed entry
  * atomically. Nobody edits their book from two devices in the same second the way two tabs race
  * a cart, so mongoose's optimistic versioning on `save()` is protection enough — the loser
- * retries by hand.
+ * retries by hand. The ADD is the exception: it is one pipeline update, because the cap on the
+ * book's size has to hold under a burst of concurrent adds (see `addEntry`).
  *
  * The type is written out because Mongoose's generics are too large for TS to serialize an
  * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 export const addressBookRepository: Repository<AddressBookDocument, Wire<AddressBookDocument>> & {
     findByUserId: (userId: string) => Promise<AddressBookDocument | null>;
-    addEntry: (userId: string, entry: AddressInput) => Promise<AddressBookDocument>;
+    addEntry: (
+        userId: string,
+        entry: AddressInput,
+        attemptsLeft?: number
+    ) => Promise<AddressBookDocument | typeof ADDRESS_BOOK_FULL>;
     updateEntry: (
         userId: string,
         addressId: string,
@@ -83,25 +143,46 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
             .then((book) => (book ? decryptBook(book) : book)),
 
     /**
-     * Append one entry, creating the book if the user has none.
+     * Append one entry, creating the book if the user has none, unless it is full.
      *
      * The default invariant is decided here: the first entry is default regardless of what it
      * asked, a later entry claiming `default: true` demotes the current holder, and a later
-     * entry that claims nothing changes nothing.
+     * entry that claims nothing changes nothing — all inside ONE update ({@link appendEntryPipeline}).
+     *
+     * The cap is in that update's FILTER: `items.<max-1>` must not exist. mongod evaluates it while
+     * holding the document, so a burst of concurrent adds cannot all read "room" and overshoot, the
+     * way a count read beforehand would let them. A filter that misses on an existing book makes
+     * the upsert collide with the unique `userId` index; that duplicate key is told apart from a
+     * first-insert race by one more read.
      */
-    addEntry: async (userId: string, entry: AddressInput) => {
-        const book =
-            (await addressBookModel.findOne({ userId: toObjectId(userId) }).exec()) ??
-            new addressBookModel({ userId: toObjectId(userId), items: [] });
+    addEntry: (userId: string, entry: AddressInput, attemptsLeft = 3) => {
+        const owner = toObjectId(userId);
+        const item = { ...encryptAddressItem(entry), _id: new Types.ObjectId() };
 
-        const wantsDefault = (entry.default ?? false) || book.items.length === 0;
-        if (wantsDefault) for (const item of book.items) item.default = false;
-
-        book.items.push({
-            ...encryptAddressItem(entry),
-            default: wantsDefault
-        });
-        return book.save().then(decryptBook);
+        return addressBookModel
+            .findOneAndUpdate(
+                { userId: owner, [`items.${String(addressBookMax() - 1)}`]: { $exists: false } },
+                appendEntryPipeline(item, entry.default ?? false),
+                // `updatePipeline`: Mongoose refuses an array update without it.
+                // https://mongoosejs.com/docs/api/query.html#Query.prototype.setOptions()
+                { upsert: true, returnDocument: 'after', updatePipeline: true }
+            )
+            .exec()
+            .then(decryptBook)
+            .catch((error: unknown) => {
+                if (!isDuplicateKey(error)) throw error;
+                return addressBookModel
+                    .findOne({ userId: owner })
+                    .exec()
+                    .then((book) => {
+                        if (book && book.items.length >= addressBookMax()) return ADDRESS_BOOK_FULL;
+                        if (attemptsLeft <= 1)
+                            throw new Error('addresses: exhausted retries adding an entry', {
+                                cause: error
+                            });
+                        return addressBookRepository.addEntry(userId, entry, attemptsLeft - 1);
+                    });
+            });
     },
 
     /**

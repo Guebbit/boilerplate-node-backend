@@ -496,6 +496,12 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | `NODE_OAUTH_GITHUB_CLIENT_ID`     | text | —       | —                                                               | GitHub OAuth client id.     |
 | `NODE_OAUTH_GITHUB_CLIENT_SECRET` | text | —       | secret: never logged; or `NODE_OAUTH_GITHUB_CLIENT_SECRET_FILE` | GitHub OAuth client secret. |
 
+### addresses
+
+| Variable                | Type              | Default | Rules | What it does                                                                                                                                                         |
+| ----------------------- | ----------------- | ------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ADDRESS_BOOK_MAX` | whole number >= 1 | `20`    | —     | Entries one account’s address book may hold. A book is one document, so an unbounded one grows toward the 16 MB document limit and breaks that account’s own writes. |
+
 ### audit-logs
 
 | Variable                    | Type              | Default | Rules | What it does                                              |
