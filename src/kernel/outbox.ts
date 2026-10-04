@@ -375,8 +375,12 @@ export const announceInTransaction = <TWritten, TEventName extends DomainEventNa
 /**
  * Wait for every nudged pass to finish. For graceful shutdown, and for a test that needs the
  * event delivered before it asserts.
+ *
+ * Loops until the set is empty: a listener that announces its own event starts a NEW pass while
+ * this waits, and a single snapshot of the set would miss it.
  */
-export const settleOutboxNudges = (): Promise<void> => Promise.all(nudges).then(() => undefined);
+export const settleOutboxNudges = (): Promise<void> =>
+    nudges.size === 0 ? Promise.resolve() : Promise.all(nudges).then(() => settleOutboxNudges());
 
 /**
  * How many rows wait to be published. Reads the database at scrape time, because the writer and

@@ -297,6 +297,30 @@ describe('nudgeOutbox', () => {
 
         expect(seen).toHaveLength(1);
     });
+
+    it('waits for a pass its own listener starts while it waits', async () => {
+        onDomainEvent('test.outbox', ({ n }) => {
+            if (n === 2) {
+                // Slow, so the second pass still holds its claim when the first one ends.
+                return new Promise((resolve) => setTimeout(resolve, 50)).then(() => {
+                    seen.push({ n });
+                });
+            }
+            seen.push({ n });
+            // The first delivery announces a second event, which starts a NEW pass mid-wait.
+            // Stay busy while the new pass claims its row, so this pass ends before that one does.
+            return write(2, 'agg-2').then(() => {
+                nudgeOutbox();
+                return new Promise((resolve) => setTimeout(resolve, 30));
+            });
+        });
+        await write(1);
+
+        nudgeOutbox();
+        await settleOutboxNudges();
+
+        expect(seen.map(({ n }) => n)).toEqual([1, 2]);
+    });
 });
 
 describe('cleanup', () => {
