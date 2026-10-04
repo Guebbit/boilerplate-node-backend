@@ -22,6 +22,7 @@ import {
     accountCodeGuessLimiter,
     loginChallengeGate
 } from './rate-limits';
+import { mailRecipientLimiter } from './mail-budget';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import {
@@ -165,11 +166,24 @@ router.post('/login', credentialLimiters, loginChallengeGate, postLogin);
 // would spend nothing on — see rate-limits.ts. `humanChallengeGate` is rung 3, off by default.
 // JSON only: no upload middleware is mounted, because a stranger writes nothing to the image store
 // before registering — the avatar is a follow-up `PATCH /account` from the signed-in session.
-router.post('/signup', signupLimiters, humanChallengeGate, idempotencyKey, postSignup);
+router.post(
+    '/signup',
+    signupLimiters,
+    mailRecipientLimiter,
+    humanChallengeGate,
+    idempotencyKey,
+    postSignup
+);
 
 // POST /account/reset — request password reset email. `resetRequestLimiters`, same reasoning as
 // signup: this route always answers 200, so only a budget spent by success bounds anything.
-router.post('/reset', resetRequestLimiters, humanChallengeGate, postResetRequest);
+router.post(
+    '/reset',
+    resetRequestLimiters,
+    mailRecipientLimiter,
+    humanChallengeGate,
+    postResetRequest
+);
 
 // POST /account/reset-confirm — complete password reset with token
 router.post('/reset-confirm', credentialLimiters, postResetConfirm);

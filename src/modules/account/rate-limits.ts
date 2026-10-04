@@ -29,6 +29,7 @@ import {
 } from '@infrastructure/http/middlewares/rate-limit';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import { MFA_CHALLENGE_DELIVERED_TTL_MS } from './services/two-factor';
+import { MAIL_RECIPIENT_BUDGET } from './mail-budget';
 
 /**
  * Where express-rate-limit stores the identity limiter's counter on `request` — a distinct name
@@ -408,6 +409,7 @@ export const accountCodeGuessLimiter: RequestHandler = buildRateLimiter(ACCOUNT_
 
 /** This module's declared budgets — listed on `./module.ts`'s `rateLimits`. */
 export const accountRateLimits: readonly RateLimitBudget[] = [
+    MAIL_RECIPIENT_BUDGET,
     CREDENTIAL_IDENTITY_BUDGET,
     CREDENTIAL_ADDRESS_BUDGET,
     CREDENTIAL_BLOCK_BUDGET,

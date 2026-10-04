@@ -17,6 +17,7 @@ import { verifyRequestEmail, recipientLocale } from '../emails';
 import { sendAccountMail } from './mail';
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
 import { cooldownRemaining, resendTooSoon } from '../cooldown';
+import { mailRecipientRefusal } from '../mail-budget';
 import { ERROR_CODES } from '@api/error-codes';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { CallerContext } from '@types';
@@ -189,13 +190,18 @@ export const requestEmailVerificationFor = (
                 wait
             );
 
-        return requestEmailVerification(user, context).then(() =>
-            generateSuccess<EmailVerificationRequested>(
-                { resendAfter: VERIFY_RESEND_SECONDS },
-                200,
-                t('account.verify.email-sent')
-            )
-        );
+        // The recipient is the account's own stored address, so no body names it: charged here.
+        return mailRecipientRefusal(user.email).then((refusal) => {
+            if (refusal) return refusal;
+
+            return requestEmailVerification(user, context).then(() =>
+                generateSuccess<EmailVerificationRequested>(
+                    { resendAfter: VERIFY_RESEND_SECONDS },
+                    200,
+                    t('account.verify.email-sent')
+                )
+            );
+        });
     });
 
 /**
@@ -234,16 +240,21 @@ export const resendPendingEmailVerificationFor = (
                 wait
             );
 
-        return sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE).then(() => {
-            recordAudit(context, {
-                action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT,
-                outcome: 'success'
+        // The recipient is the stored pending address: charged here, not by a middleware.
+        return mailRecipientRefusal(user.pendingEmail).then((refusal) => {
+            if (refusal) return refusal;
+
+            return sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE).then(() => {
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT,
+                    outcome: 'success'
+                });
+                return generateSuccess<EmailVerificationRequested>(
+                    { resendAfter: VERIFY_RESEND_SECONDS },
+                    200,
+                    t('account.email-change.resent')
+                );
             });
-            return generateSuccess<EmailVerificationRequested>(
-                { resendAfter: VERIFY_RESEND_SECONDS },
-                200,
-                t('account.email-change.resent')
-            );
         });
     });
 

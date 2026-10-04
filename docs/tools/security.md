@@ -420,6 +420,7 @@ Every budget above, as declared data (`RateLimitBudget` on the owning module's m
 
 | Budget                                  | Owner            | Env var                                | Default | Window                      | Keyed by                                                                                                                                      | Audited | Redis down |
 | --------------------------------------- | ---------------- | -------------------------------------- | ------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------- |
+| Mail to one mailbox                     | `account`        | `NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX`   | 10      | 86400000ms                  | the recipient mailbox: lowercased, `+tag` dropped, dots dropped for Gmail, pseudonymised                                                      | yes     | memory     |
 | Credential guesses — per account        | `account`        | `NODE_AUTH_RATE_LIMIT_MAX`             | 10      | `NODE_RATE_LIMIT_WINDOW_MS` | the authenticated account when there is one, else the submitted email (normalised and pseudonymised; falls back to address block when absent) | yes     | memory     |
 | Credential guesses — per address        | `account`        | `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX`     | 30      | `NODE_RATE_LIMIT_WINDOW_MS` | address                                                                                                                                       | yes     | memory     |
 | Credential guesses — per address block  | `account`        | `NODE_AUTH_RATE_LIMIT_BLOCK_MAX`       | 100     | `NODE_RATE_LIMIT_WINDOW_MS` | address block (IPv4 /24, IPv6 /64)                                                                                                            | yes     | memory     |
@@ -503,6 +504,25 @@ Three independent buckets, not one key built from all three fields: varying any 
 identity, address or block gets a caller a fresh budget on the other two dimensions, but never on
 all three at once — which is the property that makes a proxy pool, or a pool of freshly-registered
 mailboxes, cost something rather than nothing.
+
+### Mail to one mailbox — the victim's budget
+
+Every budget above bounds a CALLER. A mail bomb is bounded by its VICTIM: signup, password reset,
+email change and both resends can each be pointed at a stranger's address, and `victim+1@x`,
+`victim+2@x`, … each look like a new address to a budget keyed on the submitted string.
+
+**One budget on the canonical mailbox, used by every flow that mails** (`account/mail-budget.ts`):
+
+- **Canonical:** lowercase, the `+tag` dropped, dots dropped for Gmail (and `googlemail.com` read as
+  `gmail.com`) — `canonicalMailbox`. For budgets only: storage and uniqueness are untouched, since
+  `a@x` and `a+shop@x` are legitimately two accounts.
+- **A day, not a minute:** `NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX` (10) per 24 hours, so a slow drip is
+  caught too.
+- **Two doors:** a middleware where the body names the address (signup, reset), and a charge inside
+  the service where the server picks the recipient (verification resend, pending-email resend, an
+  email change to a new address). Both count in one store, so one budget has one tally.
+- **A refused charge sends nothing and saves nothing:** `429`, with `Retry-After`; an email change
+  leaves `pendingEmail` as it was.
 
 ## Why the metrics endpoint has its own credential
 

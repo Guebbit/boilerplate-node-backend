@@ -109,6 +109,12 @@ process.env.NODE_INVOICING_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_CART_LINE_MAX ??= '999';
 
 /**
+ * The per-mailbox mail budget is keyed on the RECIPIENT, and the suites mail the same few seeded
+ * addresses (signup, resend, reset) across many cases; ten a day is a production number.
+ */
+process.env.NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX ??= '1000';
+
+/**
  * `checkoutLimiter` needs the same treatment: keyed on the ACCOUNT, and a contract suite checks
  * out many baskets as the one seeded customer.
  */

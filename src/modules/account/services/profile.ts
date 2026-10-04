@@ -17,6 +17,7 @@ import {
     recipientLocale
 } from '../emails';
 import { sendAccountMail } from './mail';
+import { mailRecipientRefusal } from '../mail-budget';
 import { sendVerificationEmail, markVerified, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
 import { verifyOwnPassword, PASSWORD_RESET_TOKEN_TYPE } from './authentication';
 import { findLiveToken, spendLiveToken } from './tokens';
@@ -513,9 +514,20 @@ const writeProfile = (
     if (emailOutcome.conflict)
         return Promise.resolve(generateReject(409, [t('account.update.email-already-used')]));
 
-    return userService.update(user, fields, context).then((result) => {
-        if (!result.success || !emailOutcome.requested) return result;
-        return notifyEmailChangeRequested(result.data, context).then(() => result);
+    // A genuine change mails the NEW address, which the caller chose: spent against that mailbox's
+    // budget BEFORE anything is saved, so a refused change leaves `pendingEmail` as it was.
+    const budget =
+        emailOutcome.requested && user.pendingEmail
+            ? mailRecipientRefusal(user.pendingEmail)
+            : Promise.resolve(undefined);
+
+    return budget.then((refusal) => {
+        if (refusal) return refusal;
+
+        return userService.update(user, fields, context).then((result) => {
+            if (!result.success || !emailOutcome.requested) return result;
+            return notifyEmailChangeRequested(result.data, context).then(() => result);
+        });
     });
 };
 

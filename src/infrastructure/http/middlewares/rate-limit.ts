@@ -17,7 +17,7 @@
 import { isIPv4 } from 'node:net';
 import type { Request, RequestHandler, Response } from 'express';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
-import type { RateLimitInfo } from 'express-rate-limit';
+import type { RateLimitInfo, Store } from 'express-rate-limit';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
@@ -63,7 +63,7 @@ export const DEFAULT_API_KEY_RATE_LIMIT_MAX = 120;
  * what credential stuffing looks like, and the one signal that arrives before an account is taken.
  * The global brake does not: a port scan would just bury the trail in noise.
  */
-const refuse =
+export const refuseRateLimited =
     (audit: boolean) =>
     (request: Request, response: Response): Response => {
         if (audit)
@@ -126,7 +126,7 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
          * blip is neither an authentication outage nor an open door. Logged once per outage.
          */
         passOnStoreError: budget.onStoreError === 'pass',
-        handler: refuse(budget.audited),
+        handler: refuseRateLimited(budget.audited),
         // `logger` shipped in express-rate-limit 8.5.0. https://github.com/express-rate-limit/express-rate-limit/releases
         logger: limiterLogger,
         limit: budgetLimit(budget),
@@ -138,6 +138,64 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
         ...(budget.requestPropertyName ? { requestPropertyName: budget.requestPropertyName } : {}),
         ...(budget.skip ? { skip: budget.skip } : {})
     });
+
+/**
+ * One store per budget charged by hand, built on first use. A budget charged through
+ * {@link chargeBudget} must count in ONE store whichever door charges it, or an in-process store
+ * would hold a separate tally per door.
+ */
+const chargedStores = new Map<string, Store>();
+
+/**
+ * The store a hand-charged budget counts in, built and initialised once.
+ *
+ * @param budget - the budget whose window and failure policy the store takes
+ */
+const chargedStoreOf = (budget: RateLimitBudget): Store => {
+    const existing = chargedStores.get(budget.namespace);
+    if (existing) return existing;
+
+    const store = rateLimitStore(budget.namespace, budget.onStoreError ?? 'memory');
+    // The one option a store reads, replayed here because no `rateLimit()` instance calls `init`.
+    void store.init?.({
+        windowMs:
+            budget.windowMs === 'shared'
+                ? rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS
+                : budget.windowMs
+    } as Parameters<NonNullable<Store['init']>>[0]);
+    chargedStores.set(budget.namespace, store);
+    return store;
+};
+
+/** What {@link chargeBudget} answers: whether the charge fit, and how long until the window resets. */
+export interface BudgetCharge {
+    /** False once the key has spent the budget; the work it asked for must not run. */
+    allowed: boolean;
+    /** Whole seconds until the key's window resets, at least 1 — for a `Retry-After` header. */
+    retryAfterSeconds: number;
+}
+
+/**
+ * Spend one unit of a budget for `key`, from code that is not an Express route — the way a service
+ * charges a recipient it chose itself. Counts in the same store, window and limit as the budget's
+ * own middleware would, so one budget has one tally.
+ *
+ * @param budget - the declared budget (its limit is `budgetLimit`'s, env override included)
+ * @param key - what is being counted, already pseudonymised if it names a person
+ */
+export const chargeBudget = async (budget: RateLimitBudget, key: string): Promise<BudgetCharge> => {
+    // `await` rather than a chain: a rejection (a `pass` budget's store down) belongs to the caller,
+    // who knows what refusing means for its own door.
+    const { totalHits, resetTime } = await chargedStoreOf(budget).increment(key);
+
+    return {
+        allowed: totalHits <= budgetLimit(budget),
+        retryAfterSeconds: Math.max(
+            1,
+            Math.ceil(((resetTime?.getTime() ?? Date.now()) - Date.now()) / 1000)
+        )
+    };
+};
 
 /**
  * `keyedBy` label for a budget bucketed on the caller's single address — shared so every such

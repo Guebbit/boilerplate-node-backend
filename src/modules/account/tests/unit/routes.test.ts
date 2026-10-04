@@ -262,6 +262,37 @@ describe('account routes — signup and reset rate limiting', () => {
     });
 });
 
+describe('account routes — the per-mailbox mail budget', () => {
+    // The mail goes to whatever address the BODY names, so the budget on that mailbox is what
+    // bounds the victim; it runs after the caller's own budgets and before the challenge gate.
+    it.each([
+        ['POST /signup', 'signup-block'],
+        ['POST /reset', 'reset-block']
+    ])(
+        '%s charges the named mailbox, after its own budgets and before the gate',
+        (signature, lastLabel) => {
+            const chain = chainOf(router, signature);
+
+            expect(chain).toContain('mailRecipientLimiter');
+            expect(chain.indexOf('mailRecipientLimiter')).toBeGreaterThan(chain.indexOf(lastLabel));
+            expect(chain.indexOf('mailRecipientLimiter')).toBeLessThan(
+                chain.indexOf('humanChallengeGate')
+            );
+        }
+    );
+
+    it('mounts it on no other route (the services charge the recipients they choose)', () => {
+        const unexpected = routeSignatures(router).filter(
+            (signature) =>
+                signature !== 'POST /signup' &&
+                signature !== 'POST /reset' &&
+                chainOf(router, signature).includes('mailRecipientLimiter')
+        );
+
+        expect(unexpected).toEqual([]);
+    });
+});
+
 describe('account routes — human-challenge gate (rung 3)', () => {
     it.each([
         ['POST /signup', 'signup-block'],
