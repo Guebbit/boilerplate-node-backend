@@ -83,6 +83,13 @@ const DRAIN_SHARE = 0.5;
 const RENDER_SHARE = 0.25;
 
 /**
+ * Share of the shutdown deadline the caller's own in-flight work (see `shutdownInfra`'s
+ * `settleInFlight`) gets, after the renders. Small on purpose: whatever it waits for is
+ * recoverable, so it must not crowd out the stores' own close.
+ */
+const IN_FLIGHT_SHARE = 0.1;
+
+/**
  * Promisify server.close() — resolves once all connections are drained.
  *
  * `http.Server.close()` stops accepting new connections while letting in-flight requests finish,
@@ -119,8 +126,15 @@ export const closeServer = (server: Server) =>
  * requests were using, and analytics/tracing last since they buffer in memory and must capture
  * the teardown above them. Each step swallows its own failures, so a broken Redis cannot prevent
  * the database from closing.
+ *
+ * @param server - the HTTP server to drain, when there is one
+ * @param settleInFlight - waits for work the layers above started and infrastructure cannot see
+ *   (it may not import them), given the longest it may take in ms; runs before the stores close
  */
-export const shutdownInfra = (server?: Server) =>
+export const shutdownInfra = (
+    server?: Server,
+    settleInFlight?: (timeoutMs: number) => Promise<void>
+) =>
     // `Promise.resolve(server)` starts the chain uniformly whether or not a server was passed
     // (workers and CLI entry points call this without one).
     Promise.resolve(server)
@@ -134,6 +148,9 @@ export const shutdownInfra = (server?: Server) =>
         // Renders already started finish (or time out) before the process can exit: an exit
         // mid-render orphans the Chromium it launched, and its temporary profile with it.
         .then(() => settleRenders(getShutdownTimeoutMs() * RENDER_SHARE))
+        // Work the caller started (event deliveries) finishes before the queue and database go:
+        // cut mid-write, it would log errors against a closed client on every deploy.
+        .then(() => settleInFlight?.(getShutdownTimeoutMs() * IN_FLIGHT_SHARE))
         // The queue before the cache: a job still running would otherwise reopen the cache
         // connection that was just closed under it.
         .then(() => stopQueue())

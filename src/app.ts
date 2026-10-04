@@ -45,6 +45,8 @@ import {
     startLocaleOverrideRefresh
 } from '@infrastructure/i18n';
 import { isTranslationAvailable } from '@kernel/translation';
+import { settleOutboxNudges } from '@kernel/outbox';
+import { settleWithin } from '@infrastructure/runtime/settle';
 
 import { registerModules } from '@kernel/registry';
 import { enabledModules, enabledModuleLocales, enabledModuleTemplateDirectories } from './modules';
@@ -203,7 +205,11 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
     const stop = (): Promise<void> => {
         if (shutdownPromise) return shutdownPromise;
 
-        shutdownPromise = shutdownInfra(activeServer).finally(() => {
+        // Relay passes already started finish first: a lost one is only published a minute later
+        // by the sweep, but one cut mid-write logs errors at every deploy.
+        shutdownPromise = shutdownInfra(activeServer, (timeoutMs) =>
+            settleWithin(new Set([settleOutboxNudges()]), timeoutMs)
+        ).finally(() => {
             activeServer = undefined;
             shutdownPromise = undefined;
         });
