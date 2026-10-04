@@ -70,7 +70,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Set up the runner
               uses: ./.github/actions/mutation-runner
@@ -155,7 +155,7 @@ jobs:
             contents: write
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   # The branch as it is NOW, not as it was when the sweep started days ago: the
                   # baseline commit below lands on top of whatever was pushed meanwhile.
@@ -285,7 +285,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   # `merge-base` needs both sides; a shallow clone has neither.
                   fetch-depth: 0
@@ -335,7 +335,7 @@ jobs:
             issues: write
         steps:
             - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - name: Open or update the weekly-failure issue
               uses: ./.github/actions/notify-failure
               with:
