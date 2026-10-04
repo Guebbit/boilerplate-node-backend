@@ -4,7 +4,7 @@ A reservation is a **promise that units exist**, made before money changes hands
 fixed window.
 
 ::: tip At a glance
-**Window** — `NODE_RESERVATION_TTL_MINUTES`, 30 by default, stamped onto each hold at reserve time.
+**Window** — `NODE_RESERVATION_TTL_MINUTES`, 15 by default, stamped onto each hold at reserve time.
 **Guarantee** — every transition is exactly-once, by conditional claim rather than by lock.
 **Breaks if you change** — the conditional status claim. It is the entire correctness of this module.
 :::
@@ -126,7 +126,7 @@ own stored `expiresAt`, never a constant. See [Payments — Bank transfer](./pay
 **A card payment gone `processing` gets the same week, after the fact (B3).** `extendHoldForOrder`
 pushes a still-`held` hold's `expiresAt` out to `NODE_BANK_TRANSFER_HOLD_HOURS` from now, called by
 `settlePayment` the moment the provider reports `processing` — a SEPA debit, some bank redirects,
-can take days to settle, and the ordinary 30-minute window would let the sweep cancel an order
+can take days to settle, and the ordinary 15-minute window would let the sweep cancel an order
 whose money is still genuinely on its way. `requires_action` gets no such grace: that state means
 the BROWSER has a challenge to answer, not the provider a payment to finish, so the ordinary window
 already fits it. No setting of its own — reusing the bank-transfer window is the whole point: both

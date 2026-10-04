@@ -91,13 +91,16 @@ export const getById = (
 };
 
 /**
- * How many `bank_transfer` orders this account has open right now — the cap checkout enforces
- * before letting a caller take a free week-long hold on more stock than they can be trusted with.
+ * The ids of the orders this account has open and unpaid right now, whatever the payment method —
+ * what checkout's open-order cap counts, and what its refusal points the buyer at. Every one holds
+ * stock (15 minutes by card, a week by bank transfer or a `processing` card), so a cap on them is
+ * what stops one account taking the shelf.
  *
  * @param userId - the caller
+ * @returns the order ids, unordered
  */
-export const countOpenBankTransfers = (userId: string): Promise<number> =>
-    orderRepository.countOpenBankTransfers(userId);
+export const openUnpaidOrderIds = (userId: string): Promise<string[]> =>
+    orderRepository.findOpenUnpaidIdsOf(userId);
 
 /**
  * The order a `bank_transfer` checkout stamped with this RF reference — `payments`' admin lookup,

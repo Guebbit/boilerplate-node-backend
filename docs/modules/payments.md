@@ -99,7 +99,7 @@ Both answer **200**, not an error: the browser has a next step, and a 4xx would 
 feel synchronous.
 
 **`processing` also extends the order's stock hold**, to `NODE_BANK_TRANSFER_HOLD_HOURS` from that
-moment (B3) — a SEPA debit or a bank redirect can take days, and the ordinary 30-minute window
+moment (B3) — a SEPA debit or a bank redirect can take days, and the ordinary 15-minute window
 would let [`inventory`](./inventory-reservations.md)'s reservation sweep cancel an order whose
 money is still on its way. `requires_action` gets no such grace: it means the browser has a
 challenge to answer, not the provider a payment to finish.
@@ -339,11 +339,12 @@ stateDiagram-v2
 - **The hold is longer, and the sweep needs no change to know it.** `cart`'s checkout hands
   `inventoryService.reserveForOrder` an explicit window — `NODE_BANK_TRANSFER_HOLD_HOURS` (default
   168, a week) instead of `NODE_RESERVATION_TTL_MINUTES` — and the same reservation sweep that
-  releases a 30-minute card hold releases this one too, since it only ever reads each hold's own
+  releases a 15-minute card hold releases this one too, since it only ever reads each hold's own
   stored `expiresAt`. See [Inventory Reservations](./inventory-reservations.md#the-sweep).
-- **A week-long hold is free to take, so an account is capped.** `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT`
-  (default 2) counts that account's own `pending` transfer orders; a third checkout is refused with
-  `CART_BANK_TRANSFER_LIMIT` before anything is written.
+- **A week-long hold is free to take, so an account is capped, for every method.**
+  `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` (default 2) counts that account's own unpaid (`pending`)
+  orders, a `processing` card included; a third checkout is refused with `CART_OPEN_ORDER_LIMIT`,
+  naming the open orders, before anything is written.
 - **`transferInstructions` is computed at read time, never frozen onto the order — except its own
   `reference`.** The beneficiary/IBAN/BIC are deployment config, not order-specific data, so every
   response recomputes them from the current environment — a later correction to a typo'd IBAN
@@ -359,7 +360,7 @@ stateDiagram-v2
   [Libraries a module owns](../theory/modules.md#libraries-a-module-owns).
 - **Two emails, and a card timeout gets neither.** Checkout sends the instructions and the deadline
   instead of the ordinary confirmation — there is nothing to confirm yet. The sweep's own expiry
-  sends a second one, but only when `paymentMethod` is `bank_transfer`: a card hold is thirty
+  sends a second one, but only when `paymentMethod` is `bank_transfer`: a card hold is fifteen
   minutes, over before anyone could have opened a confirmation email, so a card timeout stays
   silent exactly as it does today.
 
@@ -455,8 +456,8 @@ flowchart LR
 | `NODE_BANK_TRANSFER_BENEFICIARY`          | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                                     |
 | `NODE_BANK_TRANSFER_IBAN`                 | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                           |
 | `NODE_BANK_TRANSFER_BIC`                  | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                        |
-| `NODE_BANK_TRANSFER_HOLD_HOURS`           | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s thirty minutes                                                                            |
-| `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT` | `2`     | How many `pending` transfer orders one account may have at once, before checkout refuses a new one                                                                                                 |
+| `NODE_BANK_TRANSFER_HOLD_HOURS`           | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                           |
+| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` | `2`     | How many unpaid (`pending`) orders one account may have at once, of any method, before checkout refuses a new one                                                                                  |
 | `NODE_PAYMENT_EFFECT_RETRY_MINUTES`       | `1`     | How old a `pendingEffects` marker must be before `sweep:payment-effects` retries it. See [Pending effects](#pending-effects)                                                                       |
 | `NODE_STRIPE_SECRET_KEY`                  | —       | Only checked at boot, outside development/test (staging included): refuses to start on a `sk_test_` key, since a real deployment silently running test-mode payments is worse than failing to boot |
 

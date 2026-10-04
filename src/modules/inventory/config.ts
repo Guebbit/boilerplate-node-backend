@@ -17,9 +17,10 @@ export const inventoryConfig = defineConfig({
     name: 'inventory',
     shape: {
         NODE_RESERVATION_TTL_MINUTES: int({
-            default: 30,
+            default: 15,
             min: 0,
-            describe: 'Minutes a stock hold survives without payment.'
+            describe:
+                'Minutes a card stock hold survives without payment. Short on purpose: an unpaid hold takes stock from every other buyer.'
         }),
         NODE_LOW_STOCK_THRESHOLD: int({
             default: 5,

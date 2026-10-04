@@ -386,25 +386,12 @@ const addPendingEffect = (orderId: string, effect: OrderPendingEffect): Promise<
         .then(() => undefined);
 
 /**
- * How many of this account's orders are still `pending` on a `bank_transfer` — checkout's
- * open-transfer cap. A week-long hold is otherwise free to take; this is what a third one refuses
- * before it is even written.
+ * The ids of this account's never-paid orders still open — `pending`, with no `paidAt`, whatever
+ * the payment method (a card still `processing` counts). Two readers: checkout's open-order cap, and
+ * an erasure, which has to cancel them, read BEFORE {@link detachUserId} unsets the `userId` that
+ * finds them.
  *
- * @param userId - the caller placing a new transfer order
- * @returns the count of open transfer orders
- */
-const countOpenBankTransfers = (userId: string): Promise<number> =>
-    orderModel.countDocuments({
-        userId: toObjectId(userId),
-        status: OrderStatus.pending,
-        paymentMethod: 'bank_transfer'
-    });
-
-/**
- * The ids of this account's never-paid orders still open — `pending`, with no `paidAt`. What an
- * erasure has to cancel, read BEFORE {@link detachUserId} unsets the `userId` that finds them.
- *
- * @param userId - the account being erased
+ * @param userId - the account being checked or erased
  * @param session - the erasure's transaction, so the read sees what the detach will update
  * @returns the order ids
  */
@@ -635,7 +622,6 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     findPendingByProductId: (productId: string) => Promise<OrderDocument[]>;
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
     addPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<void>;
-    countOpenBankTransfers: (userId: string) => Promise<number>;
     findOpenUnpaidIdsOf: (userId: string, session?: ClientSession) => Promise<string[]>;
     detachUserId: (
         userId: string,
@@ -659,7 +645,6 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     findPendingByProductId,
     clearPendingEffect,
     addPendingEffect,
-    countOpenBankTransfers,
     findOpenUnpaidIdsOf,
     detachUserId,
     scrubDueForAnonymization,

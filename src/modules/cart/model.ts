@@ -61,12 +61,13 @@ export interface CartDocument extends Document {
 export type CartModel = Model<CartDocument>;
 
 /**
- * Ceiling a stored cart line's quantity is held to, regardless of how many writes it took to get
- * there. `AddCartItemRequest`/`UpdateCartItemByIdRequest` in `openapi.yaml` bound one REQUEST
- * to the same number, but only `'add'`-mode writes (`cartRepository.upsertLine`, `./reorder`) can
- * push a line past it across several requests — this is the guard that actually holds the line.
+ * The hard ceiling on a stored cart line's quantity: what the contract (`CartQuantity`) and the
+ * schema allow whatever a shop configures. The shop's own, lower, ceiling is `cartLineMax()`
+ * (`NODE_CART_LINE_MAX`, `./config`), enforced where a line is written and again at checkout; this
+ * one stays a constant because a stored line must stay valid if the knob is later raised and
+ * lowered again.
  */
-export const CART_LINE_MAX = 999;
+export const CART_LINE_HARD_MAX = 999;
 
 /**
  * Schema for a single cart line.
@@ -85,7 +86,7 @@ const cartItemSchema = new Schema(
             type: Number,
             required: true,
             min: 1,
-            max: CART_LINE_MAX
+            max: CART_LINE_HARD_MAX
         }
     },
     { _id: false }

@@ -70,6 +70,13 @@ every cart holding it. Without the index that read scans the collection.
 Field names match the contract's `CartItem` — `{ productId, quantity }` — so a stored line and a
 wire line are the same shape, and there is no mapper between them to keep in sync.
 
+**A line holds at most `NODE_CART_LINE_MAX` units** (default 10, the contract's hard ceiling is 999):
+a `PUT` past it, an add that would push a line past it and a reorder all answer 422
+`CART_QUANTITY_LIMIT` (a reorder clamps instead), and checkout re-checks every line, so a basket
+filled before the ceiling was lowered is refused with the lines named rather than quietly trimmed.
+It is one of three caps on denial of inventory, with `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` and
+`NODE_RESERVATION_TTL_MINUTES` — see [checkout](./cart-checkout.md).
+
 Mongo and not Redis, deliberately: Redis here is cache-only, with no persistence and `allkeys-lru`
 eviction. A cart in Redis would make concurrent writes race-free for nothing, paid for in
 durability — and would turn one indexed query into a hand-maintained secondary index.

@@ -7,11 +7,11 @@ x-error-codes:
     CART_ADDRESS_NOT_APPLICABLE: { status: 409, description: 'Nothing in this checkout ships to an address (all-digital, or a method that ships to none), so a shipping `addressId` cannot apply.' }
     CART_ADDRESS_NOT_FOUND: { status: 404, description: 'The named address does not exist, or does not belong to the caller.' }
     CART_ADDRESS_REQUIRED: { status: 422, description: 'A shipping address is required and none was supplied or found on file.' }
-    CART_BANK_TRANSFER_LIMIT: { status: 409, description: 'This order total exceeds the bank-transfer payment method''s configured ceiling.' }
     CART_BILLING_ADDRESS_REQUIRED: { status: 422, description: 'No billing address could be resolved — none was named, nothing ships, and the address book has no default.' }
     CART_CHANGED: { status: 409, description: 'The cart changed between the request that read it and this write — reload and retry.' }
     CART_EMPTY: { status: 409, description: 'Checkout was attempted on a cart with no lines.' }
     CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines exceed the product''s available stock — see `errors[].details.lines`, one entry per short line with its `productId`, `title` and the `requested` quantity. The number left is not part of the answer: exact stock is for callers who read it (`inventory.any.read`).' }
+    CART_OPEN_ORDER_LIMIT: { status: 409, description: 'The account already holds `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, whatever their payment method — each holds stock. `errors[].details.orderIds` names them: pay one (`POST /payments/intent`) or cancel one (`POST /orders/{id}/cancel`), then check out again.' }
     CART_PAYMENT_METHOD_NOT_AVAILABLE: { status: 409, description: 'The chosen payment method is not enabled for this deployment or this cart.' }
     CART_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line references a product that was deleted or deactivated since it was added.' }
     CART_QUANTITY_LIMIT: { status: 422, description: 'The requested quantity exceeds the per-line limit.' }
@@ -288,8 +288,8 @@ paths:
                 # neither does an all-digital basket — so naming one is a client error, not a
                 # lookup that might resolve), a `paymentMethod` this
                 # deployment does not offer (`CART_PAYMENT_METHOD_NOT_AVAILABLE`), or the caller
-                # already has `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT` transfer orders awaiting
-                # payment (`CART_BANK_TRANSFER_LIMIT`). A stored shipping choice the basket no
+                # already has `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, of any
+                # payment method (`CART_OPEN_ORDER_LIMIT`, naming them in `details.orderIds`). A stored shipping choice the basket no
                 # longer fits (gone digital-only, lost its last physical line, outgrown the method)
                 # is not a refusal here: it reads as no choice, as in `GET /cart`'s `shipping.selected`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }

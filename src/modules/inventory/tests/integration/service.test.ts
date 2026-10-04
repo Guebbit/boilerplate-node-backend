@@ -8,7 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment, setEnvironment } from '@tests/environment';
+import { withEnvironment, withoutEnvironment, setEnvironment } from '@tests/environment';
 import { observePort } from '@tests/ports';
 import {
     createProduct,
@@ -184,6 +184,21 @@ describe('reserveForOrder', () => {
 
             const hold = await reservationRepository.findByOrderId(orderId);
             const expected = before + 45 * 60_000;
+            expect(hold!.expiresAt.getTime()).toBeGreaterThanOrEqual(expected - 5000);
+            expect(hold!.expiresAt.getTime()).toBeLessThanOrEqual(expected + 5000);
+        }));
+
+    // An unpaid hold takes stock from every other buyer, so the shipped window is short.
+    it('holds a card checkout for 15 minutes when nothing configures it', () =>
+        withoutEnvironment(['NODE_RESERVATION_TTL_MINUTES'], async () => {
+            const product = await createProduct({ onHand: 10 });
+            const orderId = anOrderId();
+            const before = Date.now();
+
+            await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 1 }]);
+
+            const hold = await reservationRepository.findByOrderId(orderId);
+            const expected = before + 15 * 60_000;
             expect(hold!.expiresAt.getTime()).toBeGreaterThanOrEqual(expected - 5000);
             expect(hold!.expiresAt.getTime()).toBeLessThanOrEqual(expected + 5000);
         }));

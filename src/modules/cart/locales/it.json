@@ -22,6 +22,6 @@
         "address-not-applicable": "Nulla in questo ordine viene spedito a un indirizzo — rimuovi l'indirizzo di spedizione e riprova.",
         "ship-to-country-not-supported": "Questo negozio non spedisce nel paese dell'indirizzo selezionato.",
         "payment-method-not-available": "Il metodo di pagamento scelto non è offerto da questo negozio.",
-        "bank-transfer-limit": "Hai già troppi ordini in attesa di un bonifico. Completane o annullane uno prima di piazzarne un altro."
+        "open-order-limit": "Hai già ordini non pagati aperti. Paga un ordine (POST /payments/intent) o annullane uno (POST /orders/{id}/cancel) prima di piazzarne un altro."
     }
 }

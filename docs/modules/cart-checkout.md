@@ -26,7 +26,7 @@ and no order exists yet.
 %%{init: {'flowchart': {'nodeSpacing': 26, 'rankSpacing': 40}}}%%
 flowchart TD
     A["1 · load the account<br/><i>users</i>"] --> P["2 · validate the payment method<br/><i>payments — listPaymentMethods</i>"]
-    P --> Q["3 · the open-transfer cap<br/><i>orders — countOpenBankTransfers</i>"]
+    P --> Q["3 · the open-order cap<br/><i>orders — openUnpaidOrderIds</i>"]
     Q --> B["4 · resolve the shipping method<br/>a stored choice the basket no longer fits counts as none<br/><i>cart — effectiveShippingChoice</i>"]
     B --> C["5 · resolve the shipping address,<br/>only when a line ships to one<br/><i>addresses — addressForCheckout</i>"]
     C --> D["6 · join the lines against the catalogue<br/><i>products</i>"]
@@ -95,7 +95,7 @@ possible, and only checkout knows which basket it was clearing.
 | [`delivery`](./delivery.md)   | `published-language` | `findShippingMethod` and `priceShipping` — pure functions. The cart never learns that a shipment record exists.                                                       |
 | [`addresses`](./addresses.md) | `customer-supplier`  | `addressForCheckout` — the addresses this order ships to and is invoiced to. The address CRUD stays behind that module's routes.                                      |
 | [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines and pre-flight availability.                                                                                    |
-| [`orders`](./orders.md)       | `customer-supplier`  | `placeOrder` — the one function every order is written through, admin's own `POST /orders` included — and `countOpenBankTransfers` for the open-transfer cap.         |
+| [`orders`](./orders.md)       | `customer-supplier`  | `placeOrder` — the one function every order is written through, admin's own `POST /orders` included — and `openUnpaidOrderIds` for the open-order cap.                |
 
 ::: tip The basket is mapped, not handed over — inside `placeOrder`, not here
 `inventory` is given product ids and quantities, nothing else — `placeOrder`'s job now, not

@@ -24,7 +24,7 @@ import type { AuthContext } from '@types';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { CART_LINE_MAX } from '../model';
+import { cartLineMax } from '../config';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
@@ -80,7 +80,7 @@ const addLinesToCart = async (userId: string, lines: ReorderLine[]): Promise<voi
 
     for (const line of lines) {
         const already = quantities.get(line.productId) ?? 0;
-        const room = CART_LINE_MAX - already;
+        const room = cartLineMax() - already;
         if (room <= 0) continue;
 
         const added = Math.min(line.quantity, room);
@@ -104,7 +104,7 @@ const addLinesToCart = async (userId: string, lines: ReorderLine[]): Promise<voi
  * Lines are re-resolved against today's catalogue via `findPublicById`, and a vanished/inactive
  * product is SKIPPED, not refused, unlike `./items`' `upsertCartItem` — a total skip answers 409
  * `REORDER_UNAVAILABLE` rather than an empty 200. A line already at (or requesting past)
- * `CART_LINE_MAX` is clamped to what room is left, and skipped outright once none is — the same
+ * `cartLineMax()` is clamped to what room is left, and skipped outright once none is — the same
  * best-effort treatment as an unavailable product, not a refusal. Writes to the cart happen
  * sequentially; see {@link addLinesToCart} for why.
  */

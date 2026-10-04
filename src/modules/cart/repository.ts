@@ -9,7 +9,8 @@
 
 import type { UpdateWriteOpResult, QueryFilter, ClientSession } from 'mongoose';
 import { Types } from 'mongoose';
-import { cartModel, applyCartTransform, CART_LINE_MAX } from './model';
+import { cartModel, applyCartTransform } from './model';
+import { cartLineMax } from './config';
 import type { CartDocument } from './model';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import {
@@ -30,7 +31,7 @@ export interface LineWrite {
 
 /**
  * What {@link upsertLine} resolves to in `'add'` mode when the increment would push a line past
- * {@link CART_LINE_MAX} — there is nothing to return, since nothing was written.
+ * `cartLineMax()` — there is nothing to return, since nothing was written.
  */
 export const QUANTITY_LIMIT = 'quantity-limit';
 
@@ -84,7 +85,7 @@ const unchangedOrPushed = (
  * MongoDB's own guidance for a contended upsert — it converges next pass. `attemptsLeft` only
  * bounds a pathological loop.
  *
- * `'add'` mode carries a second condition IN THE SAME FILTER — `quantity <= CART_LINE_MAX -
+ * `'add'` mode carries a second condition IN THE SAME FILTER — `quantity <= cartLineMax() -
  * quantity` — so a line actually AT the cap can never pass it: that comparison is what the
  * document lock the increment already takes makes atomic, not a read beforehand two concurrent
  * adds could both act on. A filter miss is then ambiguous — no such line yet, or one that no
@@ -101,6 +102,8 @@ const upsertLine = (
 ): Promise<LineWrite | typeof QUANTITY_LIMIT> => {
     const owner = { userId: toObjectId(userId) };
     const line = toObjectId(productId);
+    // Read once per call: the filter and the retry decision below must agree on one ceiling.
+    const lineMax = cartLineMax();
 
     // `$elemMatch`, not two top-level `'items.x'` conditions: MongoDB only guarantees the update's
     // `items.$` binds to the element BOTH conditions matched together when they are joined this
@@ -117,7 +120,7 @@ const upsertLine = (
             : {
                   ...owner,
                   items: {
-                      $elemMatch: { productId: line, quantity: { $lte: CART_LINE_MAX - quantity } }
+                      $elemMatch: { productId: line, quantity: { $lte: lineMax - quantity } }
                   }
               };
 
@@ -150,7 +153,7 @@ const upsertLine = (
 
                         if (currentQuantity === undefined)
                             return pushNewLine(owner, line, quantity);
-                        if (currentQuantity + quantity > CART_LINE_MAX) return QUANTITY_LIMIT;
+                        if (currentQuantity + quantity > lineMax) return QUANTITY_LIMIT;
 
                         // Room exists now, even though the atomic attempt above just missed — read
                         // afterward, so still not the answer itself; only the next attempt's own

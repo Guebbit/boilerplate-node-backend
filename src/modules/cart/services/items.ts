@@ -24,6 +24,7 @@ import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
 import { basketWeight, needsShipping } from '../domain';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
+import { cartLineMax } from '../config';
 import { readCartLines, toCartView, isJoined, type CartLine, type CartView } from './view';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -67,9 +68,10 @@ export const cartGetForView = (userId: string, context: CallerContext): Promise<
  * The envelope's status says whether a line was created (201) or an existing one written (200), so
  * the controller answers the RFC 9110 §9.3.4 status without a second read.
  *
- * `'set'` always fits `CART_LINE_MAX` on its own (the request itself is bounded to it), so only
- * `'add'` — wishlist's move-to-cart, the one caller that reaches this in `'add'` mode — can hit
- * `QUANTITY_LIMIT`.
+ * The per-line ceiling (`cartLineMax()`, `NODE_CART_LINE_MAX`) is enforced here for `'set'` — the
+ * contract only bounds a request to its hard 999, so a shop's lower number is checked before
+ * anything is written — and by the repository's own filter for `'add'`. Both answer 422
+ * `CART_QUANTITY_LIMIT`.
  */
 const upsertCartItem = (
     userId: string,
@@ -79,6 +81,10 @@ const upsertCartItem = (
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
     productService.findPublicById(id).then((product) => {
         if (!product) return generateReject(404, [t('products.not-found')]);
+        if (mode === 'set' && quantity > cartLineMax())
+            return generateReject(422, [
+                { code: ERROR_CODES.CART_QUANTITY_LIMIT, message: t('cart.quantity-limit') }
+            ]);
 
         return cartRepository.upsertLine(userId, id, quantity, mode).then((result) => {
             if (result === QUANTITY_LIMIT)

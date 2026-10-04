@@ -102,6 +102,13 @@ process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_INVOICING_RATE_LIMIT_MAX ??= '1000';
 
 /**
+ * The per-line cart ceiling is raised to the contract's hard 999: the real default (10) is a shop's
+ * own choice, and the suites build baskets of whatever size their case needs. The cases about the
+ * knob itself set their own value.
+ */
+process.env.NODE_CART_LINE_MAX ??= '999';
+
+/**
  * `checkoutLimiter` needs the same treatment: keyed on the ACCOUNT, and a contract suite checks
  * out many baskets as the one seeded customer.
  */

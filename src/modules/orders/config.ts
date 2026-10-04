@@ -96,10 +96,11 @@ export const ordersConfig = defineConfig({
             min: 1,
             describe: 'Hours stock is held for an unpaid transfer order.'
         }),
-        NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT: int({
+        NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: int({
             default: 2,
-            min: 0,
-            describe: 'Pending transfer orders one account may hold at once.'
+            min: 1,
+            describe:
+                'Unpaid (pending) orders one account may hold at once, whatever the payment method. Each holds stock, so this is what stops one account taking the shelf. 2 lets a failed card be retried; a strict shop sets 1.'
         }),
         NODE_ORDER_EFFECT_RETRY_MINUTES: int({
             default: 5,
@@ -317,13 +318,17 @@ export const bankTransferBic = (): string | undefined => ordersConfig().NODE_BAN
 export const bankTransferHoldHours = (): number => ordersConfig().NODE_BANK_TRANSFER_HOLD_HOURS;
 
 /**
- * How many of one account's orders may sit `pending` on a transfer at once. A week-long hold is
- * otherwise free to take — this is what stops one account hoarding stock across many
- * uncompleted orders.
- * @returns the cap on open transfer orders per account
+ * How many of one account's orders may sit unpaid (`pending`) at once, whatever the payment method.
+ * Every one holds stock, for 15 minutes by card and a week by bank transfer or a `processing` card,
+ * so this is what stops one account hoarding the shelf across many uncompleted orders (OWASP
+ * automated threat OAT-021, Denial of Inventory).
+ *
+ * 2 and not 1: a failed card, or a closed 3-D Secure window, leaves a `pending` order until its
+ * hold expires, and with 1 the retry would be refused meanwhile.
+ * @returns the cap on open unpaid orders per account
  */
-export const bankTransferMaxOpenPerAccount = (): number =>
-    ordersConfig().NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT;
+export const maxOpenUnpaidOrdersPerAccount = (): number =>
+    ordersConfig().NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT;
 
 /**
  * Whether this deployment offers `bank_transfer` at all — both the beneficiary and the IBAN must

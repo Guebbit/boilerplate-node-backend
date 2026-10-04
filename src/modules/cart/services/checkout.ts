@@ -7,7 +7,7 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { bankTransferMaxOpenPerAccount, shipToCountries, shopCurrency } from '@modules/orders';
+import { maxOpenUnpaidOrdersPerAccount, shipToCountries, shopCurrency } from '@modules/orders';
 import {
     generateSuccess,
     generateReject,
@@ -31,6 +31,7 @@ import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
+import { cartLineMax } from '../config';
 import {
     evaluateCheckout,
     evaluateShippingRequirement,
@@ -86,10 +87,11 @@ type PreflightOutcome<T> = ({ ok: true } & T) | { ok: false; reject: ResponseRej
  * asked rather than re-checked here, so the two can never disagree about what this deployment
  * offers.
  *
- * The open-transfer cap is checked here too: a week-long `bank_transfer` hold is otherwise free
- * to take, so this is what stops one account hoarding stock across many uncompleted orders.
+ * The open-order cap is checked here too, for EVERY method: each unpaid order holds stock, so this
+ * is what stops one account hoarding the shelf across many uncompleted orders. The refusal names
+ * the open orders, so the buyer can pay or cancel one.
  *
- * @param userId - the caller's id, for the bank-transfer open-hold count
+ * @param userId - the caller's id, for the open-order count
  * @param paymentMethod - the chosen payment method's id, or `undefined` for `card`
  */
 const resolvePaymentMethod = async (
@@ -112,19 +114,18 @@ const resolvePaymentMethod = async (
             ])
         };
 
-    if (paymentMethod === 'bank_transfer') {
-        const openTransfers = await orderService.countOpenBankTransfers(userId);
-        if (openTransfers >= bankTransferMaxOpenPerAccount())
-            return {
-                ok: false,
-                reject: generateReject(409, [
-                    {
-                        code: ERROR_CODES.CART_BANK_TRANSFER_LIMIT,
-                        message: t('cart.bank-transfer-limit')
-                    }
-                ])
-            };
-    }
+    const openOrderIds = await orderService.openUnpaidOrderIds(userId);
+    if (openOrderIds.length >= maxOpenUnpaidOrdersPerAccount())
+        return {
+            ok: false,
+            reject: generateReject(409, [
+                {
+                    code: ERROR_CODES.CART_OPEN_ORDER_LIMIT,
+                    message: t('cart.open-order-limit'),
+                    details: { orderIds: openOrderIds }
+                }
+            ])
+        };
 
     return { ok: true, requestedMethod: paymentMethod, methodInfo };
 };
@@ -401,6 +402,19 @@ const runCheckout = async (
             });
         return buildStockRefusal({ type: 'unavailable', status: 404, lines: verdict.lines });
     }
+
+    // A line filled before the per-line ceiling was lowered: refused here, naming the lines, rather
+    // than quietly trimmed (the buyer decides what to drop).
+    const maxPerLine = cartLineMax();
+    const overLimit = joined.filter((line) => line.quantity > maxPerLine);
+    if (overLimit.length > 0)
+        return generateReject(422, [
+            {
+                code: ERROR_CODES.CART_QUANTITY_LIMIT,
+                message: t('cart.quantity-limit'),
+                details: { max: maxPerLine, productIds: overLimit.map((line) => line.productId) }
+            }
+        ]);
 
     /*
      * The rest of the rule, once shipping applicability itself is settled above: a physical

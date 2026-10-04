@@ -211,7 +211,7 @@ caller. This sweep finds any payment whose marker is past `NODE_PAYMENT_EFFECT_R
 (default 1, the window a normal settlement takes to clear it itself): it repeats the commit when
 the order can still use it — safe, since claiming a hold is exactly-once — or, when the order moved
 on before settlement's own `orderLost` branch could react, marks the refund owed instead, for
-`sweep:order-effects` above to pick up. Runs every 5 minutes, comfortably inside the 30-minute
+`sweep:order-effects` above to pick up. Runs every 5 minutes, comfortably inside the 15-minute
 reservation hold. See [payments](../modules/payments.md#pending-effects).
 
 Log lines are Loki's retention, not Mongo's: `docker/observability/loki.config.yaml` sets

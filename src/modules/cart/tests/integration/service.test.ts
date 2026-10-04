@@ -594,6 +594,88 @@ describe('reorderIntoCart', () => {
     });
 });
 
+/*
+ * The shop's own per-line ceiling (`NODE_CART_LINE_MAX`, default 10). The suite runs with it raised
+ * to the contract's 999 (`tests/support/setup-environment.ts`); these cases set it back to what a
+ * deployment gets, because it is one of the three knobs on denial of inventory.
+ */
+/** Run `body` with the per-line ceiling at the shipped default. */
+const atDefault = (body: () => Promise<void>) => withEnvironment('NODE_CART_LINE_MAX', '10', body);
+
+describe('NODE_CART_LINE_MAX', () => {
+    it('refuses a set past the ceiling, and writes nothing', () =>
+        atDefault(async () => {
+            const user = await createUser();
+            const product = await createProduct();
+
+            const result = await cartItemSetById(user.id, String(product._id), 11);
+
+            expect(asReject(result).status).toBe(422);
+            expect(asReject(result).errors[0].code).toBe('CART_QUANTITY_LIMIT');
+            await expect(storedQuantity(user.id, String(product._id))).resolves.toBeUndefined();
+        }));
+
+    it('accepts a set exactly at the ceiling', () =>
+        atDefault(async () => {
+            const user = await createUser();
+            const product = await createProduct();
+
+            const result = await cartItemSetById(user.id, String(product._id), 10);
+
+            expect(result.success).toBe(true);
+            await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(10);
+        }));
+
+    it('refuses an add that would push a line past the ceiling', () =>
+        atDefault(async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            await cartItemSetById(user.id, String(product._id), 10);
+
+            const result = await cartItemAddById(user.id, String(product._id), 1);
+
+            expect(asReject(result).errors[0].code).toBe('CART_QUANTITY_LIMIT');
+            await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(10);
+        }));
+
+    it('clamps a reordered line to what room the ceiling leaves', () =>
+        atDefault(async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            await cartItemSetById(user.id, String(product._id), 8);
+            const order = await createOrder(user, [toOrderItem(product, 5)]);
+
+            await cartService.reorderIntoCart(
+                asCustomer(user.id),
+                String(order._id),
+                testCallerContext
+            );
+
+            await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(10);
+        }));
+
+    // A basket filled while the ceiling was higher: refused at checkout, naming the lines, never
+    // quietly trimmed (what to drop is the buyer's call).
+    it('refuses a checkout holding a line filled before the ceiling was lowered', async () => {
+        const user = await createUser();
+        await giveUserAnAddress(user.id);
+        const product = await createProduct({ onHand: 100 });
+        await cartItemSetById(user.id, String(product._id), 50);
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+
+        await atDefault(async () => {
+            const result = await orderConfirm(user.id, testCallerContext, undefined);
+
+            expect(asReject(result).status).toBe(422);
+            expect(asReject(result).errors[0]).toMatchObject({
+                code: 'CART_QUANTITY_LIMIT',
+                details: { max: 10, productIds: [String(product._id)] }
+            });
+            await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+        });
+    });
+});
+
 describe('cartItemRemoveById', () => {
     it('removes the targeted line and answers with what is left', async () => {
         const user = await createUser();
@@ -1142,9 +1224,9 @@ describe('orderConfirm — paymentMethod', () => {
 
         const order = await findOrder({ userId: user._id });
         expect(order!.paymentMethod).toBe('card');
-        // NODE_RESERVATION_TTL_MINUTES' default (30) away — a window, not an exact millisecond,
+        // NODE_RESERVATION_TTL_MINUTES' default (15) away — a window, not an exact millisecond,
         // for the same reason the bank_transfer case below allows one.
-        const expected = before + 30 * 60_000;
+        const expected = before + 15 * 60_000;
         expect(order!.payBy).toBeDefined();
         expect(order!.payBy!.getTime()).toBeGreaterThanOrEqual(expected - 5000);
         expect(order!.payBy!.getTime()).toBeLessThanOrEqual(expected + 5000);
@@ -1249,17 +1331,17 @@ describe('orderConfirm — paymentMethod', () => {
             expect(template).toBe('orders.order-transfer-instructions');
         }));
 
-    it('refuses a third open transfer order past the cap', () =>
+    it('refuses a third open order past the cap, naming the open ones', () =>
         withBankTransferConfigured(async () => {
             const user = await createUser();
             await giveUserAnAddress(user.id);
             const product = await createProduct();
-            // Two open transfer orders already on the books — the default cap.
-            await createOrder(user, [toOrderItem(product)], {
+            // Two open orders already on the books — the default cap.
+            const first = await createOrder(user, [toOrderItem(product)], {
                 status: 'pending',
                 paymentMethod: 'bank_transfer'
             });
-            await createOrder(user, [toOrderItem(product)], {
+            const second = await createOrder(user, [toOrderItem(product)], {
                 status: 'pending',
                 paymentMethod: 'bank_transfer'
             });
@@ -1270,10 +1352,72 @@ describe('orderConfirm — paymentMethod', () => {
             });
 
             expect(asReject(result).status).toBe(409);
-            expect(asReject(result).errors[0].code).toBe('CART_BANK_TRANSFER_LIMIT');
+            expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+            // The buyer is told WHICH orders to pay or cancel.
+            expect(asReject(result).errors[0].details).toEqual({
+                orderIds: expect.arrayContaining([String(first._id), String(second._id)])
+            });
             // Refused before anything moved — only the two pre-existing orders are on the books.
             await expect(countOrders({ userId: user._id })).resolves.toBe(2);
         }));
+
+    // The cap used to bind `bank_transfer` alone, so a card order (15 minutes of held stock, or a
+    // week once `processing`) was free to repeat without end.
+    it('holds a card checkout to the same cap', async () => {
+        const user = await createUser();
+        await giveUserAnAddress(user.id);
+        const product = await createProduct();
+        await createOrder(user, [toOrderItem(product)], {
+            status: 'pending',
+            paymentMethod: 'card'
+        });
+        await createOrder(user, [toOrderItem(product)], {
+            status: 'pending',
+            paymentMethod: 'card'
+        });
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
+
+        expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+    });
+
+    it('lets a stricter shop hold an account to a single open order', async () => {
+        await withEnvironment('NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT', '1', async () => {
+            const user = await createUser();
+            await giveUserAnAddress(user.id);
+            const product = await createProduct();
+            await createOrder(user, [toOrderItem(product)], {
+                status: 'pending',
+                paymentMethod: 'card'
+            });
+            await cartItemSetById(user.id, String(product._id), 1);
+
+            const result = await orderConfirm(user.id, testCallerContext, undefined);
+
+            expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+        });
+    });
+
+    it('does not count a cancelled order against the cap', async () => {
+        const user = await createUser();
+        await giveUserAnAddress(user.id);
+        const product = await createProduct();
+        await createOrder(user, [toOrderItem(product)], {
+            status: 'cancelled',
+            paymentMethod: 'card'
+        });
+        await createOrder(user, [toOrderItem(product)], {
+            status: 'cancelled',
+            paymentMethod: 'card'
+        });
+        await cartItemSetById(user.id, String(product._id), 1);
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+
+        const result = await orderConfirm(user.id, testCallerContext, undefined);
+
+        expect(result.success).toBe(true);
+    });
 
     it('does not count a paid transfer order against the cap', () =>
         withBankTransferConfigured(async () => {

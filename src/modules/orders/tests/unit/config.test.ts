@@ -19,7 +19,7 @@ import {
     bankTransferHoldHours,
     bankTransferIban,
     bankTransferIbanFriendly,
-    bankTransferMaxOpenPerAccount,
+    maxOpenUnpaidOrdersPerAccount,
     orderFrontendLink,
     returnAddress,
     returnPostagePayer,
@@ -62,7 +62,7 @@ const TOUCHED = [
     'NODE_BANK_TRANSFER_IBAN',
     'NODE_BANK_TRANSFER_BIC',
     'NODE_BANK_TRANSFER_HOLD_HOURS',
-    'NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT',
+    'NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT',
     'NODE_FRONTEND_LINK_ORDER',
     'NODE_FRONTEND_URL',
     'NODE_WITHDRAWAL_PERIOD_DAYS'
@@ -179,14 +179,20 @@ describe('bankTransferHoldHours', () => {
     });
 });
 
-describe('bankTransferMaxOpenPerAccount', () => {
-    it('defaults to 2', () => {
-        expect(bankTransferMaxOpenPerAccount()).toBe(2);
+describe('maxOpenUnpaidOrdersPerAccount', () => {
+    it('defaults to 2, so a failed card can be retried while its hold runs out', () => {
+        expect(maxOpenUnpaidOrdersPerAccount()).toBe(2);
     });
 
-    it('reads NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT when set', () => {
-        setEnvironment({ NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT: '5' });
-        expect(bankTransferMaxOpenPerAccount()).toBe(5);
+    it('reads NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT when set', () => {
+        setEnvironment({ NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: '5' });
+        expect(maxOpenUnpaidOrdersPerAccount()).toBe(5);
+    });
+
+    // 0 would refuse every checkout: an account must be able to hold at least the order it places.
+    it('refuses a ceiling below 1', () => {
+        setEnvironment({ NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: '0' });
+        expect(() => maxOpenUnpaidOrdersPerAccount()).toThrow();
     });
 });
 

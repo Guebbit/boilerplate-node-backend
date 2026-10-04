@@ -11,7 +11,7 @@
  * is.
  */
 
-import { search, getById, countOpenBankTransfers, getByTransferReference } from './read';
+import { search, getById, openUnpaidOrderIds, getByTransferReference } from './read';
 import { create, recordCreated, update, updateById } from './crud';
 import { remove, removeById, restoreById } from './remove';
 import { placeOrder } from './place';
@@ -52,7 +52,7 @@ import { unavailableLines } from './availability';
 export {
     search,
     getById,
-    countOpenBankTransfers,
+    openUnpaidOrderIds,
     getByTransferReference,
     ownOrderIds,
     findOwnOrders
@@ -102,7 +102,7 @@ export {
     bankTransferHoldHours,
     bankTransferIban,
     bankTransferIbanFriendly,
-    bankTransferMaxOpenPerAccount,
+    maxOpenUnpaidOrdersPerAccount,
     shopCurrency,
     orderCurrency,
     shopCountry,
@@ -133,7 +133,7 @@ export const orderService = {
     placeOrder,
     sendOrderPlacedEmail,
     mailBuyer,
-    countOpenBankTransfers,
+    openUnpaidOrderIds,
     getByTransferReference,
     recordCreated,
     update,
