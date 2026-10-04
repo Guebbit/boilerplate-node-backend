@@ -36,6 +36,7 @@ export const loggingConfig = defineConfig({
     name: 'logging',
     shape: {
         NODE_SERVICE_NAME: text({
+            default: 'api',
             describe: 'The service name stamped on every log line, span and health payload.'
         }),
         NODE_LOG_LEVEL: choice(LOG_LEVELS, {

@@ -126,7 +126,7 @@ export const startTracing = (): void => {
     // traces under "unknown_service", making them impossible to tell apart from other apps.
     const resource = resourceFromAttributes({
         // `service.name` — primary grouping key in every tracing UI.
-        [ATTR_SERVICE_NAME]: loggingConfig().NODE_SERVICE_NAME ?? 'api',
+        [ATTR_SERVICE_NAME]: loggingConfig().NODE_SERVICE_NAME,
         // `service.version` — npm injects `npm_package_version` when started via an npm script,
         // which lets you correlate a latency/error regression with a specific release.
         [ATTR_SERVICE_VERSION]: tracingConfig().npm_package_version ?? '0.0.0'

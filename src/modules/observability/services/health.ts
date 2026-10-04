@@ -33,8 +33,9 @@ export const buildObservabilityHealth = (): Promise<ObservabilityHealth> =>
 
         return {
             status: overallStatus(dependencies),
-            environment: nodeEnvironment() ?? 'development',
-            service: loggingConfig().NODE_SERVICE_NAME ?? 'boilerplate-node-backend',
+            // An unset NODE_ENV is a deployment (see `isRelaxedEnvironment`), so say it is unset.
+            environment: nodeEnvironment() ?? 'unset',
+            service: loggingConfig().NODE_SERVICE_NAME,
             runtimeVersion: process.version,
             uptimeSeconds: snapshot.uptimeSeconds,
             /*

@@ -184,7 +184,7 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 | Variable                   | Type                                                  | Default | Rules | What it does                                                                  |
 | -------------------------- | ----------------------------------------------------- | ------- | ----- | ----------------------------------------------------------------------------- |
-| `NODE_SERVICE_NAME`        | text                                                  | —       | —     | The service name stamped on every log line, span and health payload.          |
+| `NODE_SERVICE_NAME`        | text                                                  | `api`   | —     | The service name stamped on every log line, span and health payload.          |
 | `NODE_LOG_LEVEL`           | one of error, warn, info, http, verbose, debug, silly | —       | —     | Minimum severity logged. Unset: debug on a developer machine, info elsewhere. |
 | `NODE_LOG_PERSONAL_FIELDS` | one of hash, redact, plain                            | `hash`  | —     | How personal fields appear in logs: keyed hash, redacted, or plain.           |
 
