@@ -34,6 +34,8 @@ import {
     fulfillmentStatusOf,
     paymentStatusOf,
     returnStatusOf,
+    STAMPED_PAYMENT_STATUSES,
+    STAMPED_RETURN_STATUSES,
     type StampedPaymentStatus,
     type StampedReturnStatus
 } from './domain/projections';
@@ -434,11 +436,11 @@ export const orderSchema = new Schema<OrderDocument>(
         // Stamped by the owning module, never by `orders` itself — see the interface fields.
         paymentStatus: {
             type: String,
-            enum: ['partially_refunded', 'refunded']
+            enum: [...STAMPED_PAYMENT_STATUSES]
         },
         returnStatus: {
             type: String,
-            enum: ['requested', 'in_progress', 'partially_returned', 'returned']
+            enum: [...STAMPED_RETURN_STATUSES]
         },
         /*
          * ISO-4217, frozen from `shopCurrency()` at the same moment `orderNumber` is minted —
