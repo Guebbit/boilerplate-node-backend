@@ -4,6 +4,7 @@ info:
     version: '0.1.0'
 
 x-error-codes:
+    EMAIL_CHANGE_TOO_SOON: { status: 429, description: 'An email change was already requested for this account in the last minute — carries `details.retryAfter`.' }
     EMAIL_VERIFY_RESEND_TOO_SOON: { status: 429, description: 'A verification email was already sent recently — carries `details.retryAfter`.' }
     TWO_FACTOR_RESEND_TOO_SOON: { status: 429, description: 'A two-factor code was already sent recently — carries `details.retryAfter`.' }
 

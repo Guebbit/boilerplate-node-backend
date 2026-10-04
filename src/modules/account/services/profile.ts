@@ -18,7 +18,14 @@ import {
 } from '../emails';
 import { sendAccountMail } from './mail';
 import { mailRecipientRefusal } from '../mail-budget';
-import { sendVerificationEmail, markVerified, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
+import {
+    sendVerificationEmail,
+    markVerified,
+    resendCooldownRemaining,
+    EMAIL_CHANGE_TOKEN_TYPE
+} from './verification';
+import { resendTooSoon } from '../cooldown';
+import { ERROR_CODES } from '@api/error-codes';
 import { verifyOwnPassword, PASSWORD_RESET_TOKEN_TYPE } from './authentication';
 import { findLiveToken, spendLiveToken } from './tokens';
 import { UpdateAccountBody } from '@api/schemas.zod';
@@ -513,6 +520,22 @@ const writeProfile = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (emailOutcome.conflict)
         return Promise.resolve(generateReject(409, [t('account.update.email-already-used')]));
+
+    // A genuine change mails two addresses, so it is paced like the resend button: one a minute per
+    // account. Answered before the mailbox budget is touched, so a paced request spends nothing.
+    // The caller is signed in and the answer says nothing about any other account, so unlike the
+    // reset request this can be honest about why.
+    const wait = emailOutcome.requested
+        ? resendCooldownRemaining(user, EMAIL_CHANGE_TOKEN_TYPE)
+        : 0;
+    if (wait > 0)
+        return Promise.resolve(
+            resendTooSoon(
+                ERROR_CODES.EMAIL_CHANGE_TOO_SOON,
+                t('account.email-change.too-soon'),
+                wait
+            )
+        );
 
     // A genuine change mails the NEW address, which the caller chose: spent against that mailbox's
     // budget BEFORE anything is saved, so a refused change leaves `pendingEmail` as it was.

@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { getCurrentLocale, t } from '@infrastructure/i18n';
 import { accountConfig } from '../config';
+import { cooldownRemaining } from '../cooldown';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
@@ -119,6 +120,25 @@ export const PASSWORD_RESET_TOKEN_TYPE = 'password';
 const PASSWORD_RESET_TOKEN_TTL_MS = accountConfig().NODE_PASSWORD_RESET_TTL_MS;
 
 /**
+ * Seconds between two reset mails for one account. A second request inside the window is skipped
+ * SILENTLY (see {@link requestPasswordReset}): the same 200, nothing sent.
+ */
+export const RESET_REQUEST_SECONDS = 60;
+
+/**
+ * Whether this account was mailed a reset link inside the last {@link RESET_REQUEST_SECONDS}. The
+ * anchor is the live reset token's own `sentAt`: {@link issueResetToken} keeps exactly one, minted
+ * by the last send.
+ *
+ * @param user - the account, loaded with its credentials
+ */
+const resetRecentlySent = (user: UserDocument): boolean =>
+    cooldownRemaining(
+        user.tokens.find((token) => token.type === PASSWORD_RESET_TOKEN_TYPE)?.sentAt,
+        RESET_REQUEST_SECONDS
+    ) > 0;
+
+/**
  * Issue the account's ONE live password-reset token: older ones are pulled first, then the new one
  * is pushed. Without the pull, every request left another working link behind (5 a minute, about
  * 300 an hour for a victim), and each stayed valid for its full TTL. Two writes rather than one,
@@ -140,6 +160,8 @@ const issueResetToken = (user: UserDocument): Promise<string> =>
  * response can't be used to enumerate registered addresses. `AUTH_PASSWORD_RESET_REQUESTED` fires
  * unconditionally for the same reason — an audit row present only for a real address would leak
  * the same fact the response is built to hide, and a DB failure below still counts as an attempt.
+ * A request within {@link RESET_REQUEST_SECONDS} of the last mail to the same account is skipped
+ * the same way: same 200, no mail, no new token (and `false` for the metric).
  * The boolean return is for the caller's metric only, never a client-visible refusal.
  * Like {@link requestAccountDeletion}, the token value never leaves this file.
  * @returns `true` when a mail was queued, `false` when the address has no account or the lookup failed
@@ -152,6 +174,10 @@ export const requestPasswordReset = (
     const attempt = email
         ? userService.findByEmail(email).then((user) => {
               if (!user) return false;
+              // Paced silently: a 429 here would tell a stranger which addresses have an account,
+              // the one thing this route's uniform 200 exists to hide. Nothing is sent and
+              // nothing is minted, so the link already mailed stays the live one.
+              if (resetRecentlySent(user)) return false;
 
               return issueResetToken(user).then((token) => {
                   /*

@@ -64,6 +64,7 @@
             "success": "Indirizzo email verificato."
         },
         "email-change": {
+            "too-soon": "Una modifica dell'email è appena stata richiesta. Attendi un momento prima di richiederne un'altra.",
             "token-not-found": "Token non valido o scaduto, riprova.",
             "success": "Indirizzo email modificato.",
             "cancelled": "La modifica dell'indirizzo email in sospeso è stata annullata.",

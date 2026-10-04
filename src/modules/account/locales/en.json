@@ -64,6 +64,7 @@
             "success": "Email address verified."
         },
         "email-change": {
+            "too-soon": "An email change was just requested. Please wait a moment before requesting another.",
             "token-not-found": "Invalid or expired token, please try again.",
             "success": "Email address changed.",
             "cancelled": "The pending email change was cancelled.",

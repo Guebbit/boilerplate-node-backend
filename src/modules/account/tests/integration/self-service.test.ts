@@ -20,6 +20,7 @@ import {
     updateProfile,
     sendVerificationEmail,
     PASSWORD_RESET_TOKEN_TYPE,
+    RESET_REQUEST_SECONDS,
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
     VERIFY_RESEND_SECONDS,
@@ -921,6 +922,17 @@ describe('requestPasswordReset', () => {
     });
 });
 
+/**
+ * Moves the live reset token's send time into the past, so the 60 s pacing has run out. Ageing the
+ * recorded send, rather than a fake clock: `sentAt` is what the pacing reads.
+ */
+const ageResetSend = async (userId: string): Promise<void> => {
+    const aged = await userRepository.findByIdWithCredentials(userId);
+    const live = aged!.tokens.find(({ type }) => type === PASSWORD_RESET_TOKEN_TYPE)!;
+    live.sentAt = new Date(live.sentAt!.getTime() - (RESET_REQUEST_SECONDS + 1) * 1000);
+    await userRepository.save(aged!);
+};
+
 /** The `password` tokens the account holds, by digest. */
 const resetDigests = (userId: string) =>
     readTokens(userId).then((tokens) =>
@@ -935,6 +947,7 @@ describe('one live reset link per account', () => {
 
         await accountService.requestPasswordReset(user.email, testCallerContext);
         const first = await resetDigests(user.id);
+        await ageResetSend(user.id);
         await accountService.requestPasswordReset(user.email, testCallerContext);
         const second = await resetDigests(user.id);
 
@@ -948,6 +961,7 @@ describe('one live reset link per account', () => {
         await user.tokenAdd(TokenType.REFRESH, 60_000, 'keep-this-session');
 
         await accountService.requestPasswordReset(user.email, testCallerContext);
+        await ageResetSend(user.id);
         await accountService.requestPasswordReset(user.email, testCallerContext);
 
         const tokens = await readTokens(user.id);
@@ -964,6 +978,97 @@ describe('one live reset link per account', () => {
         const digests = await resetDigests(user.id);
         expect(digests).toHaveLength(1);
         expect(digests).not.toContain(hashToken('older-link'));
+    });
+});
+
+describe('the reset request is paced per account, silently', () => {
+    // A 429 would tell a stranger which addresses have an account — the one thing the uniform 200
+    // exists to hide — so a request inside the window is skipped: same answer, nothing sent.
+    it('mails nothing and mints nothing for a second request inside the window', async () => {
+        const user = await createUser();
+        const first = await accountService.requestPasswordReset(user.email, testCallerContext);
+        const before = await resetDigests(user.id);
+
+        const second = await accountService.requestPasswordReset(user.email, testCallerContext);
+
+        expect(first).toBe(true);
+        expect(second).toBe(false);
+        // The link already mailed is still the live one.
+        expect(await resetDigests(user.id)).toEqual(before);
+    });
+
+    it('still records the attempt in the audit trail, as it does for an unknown address', async () => {
+        const user = await createUser();
+        await accountService.requestPasswordReset(user.email, testCallerContext);
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await accountService.requestPasswordReset(user.email, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED })
+        );
+    });
+
+    it('mails again once the window has passed', async () => {
+        const user = await createUser();
+        await accountService.requestPasswordReset(user.email, testCallerContext);
+        await ageResetSend(user.id);
+
+        await expect(
+            accountService.requestPasswordReset(user.email, testCallerContext)
+        ).resolves.toBe(true);
+    });
+
+    it('paces one account without touching another', async () => {
+        const first = await createUser({ email: 'pace-one@example.com' });
+        const second = await createUser({ email: 'pace-two@example.com' });
+        await accountService.requestPasswordReset(first.email, testCallerContext);
+
+        await expect(
+            accountService.requestPasswordReset(second.email, testCallerContext)
+        ).resolves.toBe(true);
+    });
+});
+
+describe('an email change is paced per account', () => {
+    it('answers 429 EMAIL_CHANGE_TOO_SOON with the countdown, and saves nothing', async () => {
+        const user = await createUser({ email: 'pace-change@example.com', verifiedAt: new Date() });
+        await updateProfile(user.id, { email: 'first-new@example.com' }, testCallerContext);
+
+        const refused = asReject(
+            await updateProfile(user.id, { email: 'second-new@example.com' }, testCallerContext)
+        );
+
+        expect(refused.status).toBe(429);
+        expect(refused.errors[0]).toMatchObject({
+            code: 'EMAIL_CHANGE_TOO_SOON',
+            details: { retryAfter: expect.any(Number) as number }
+        });
+        const stored = await userRepository.findByIdWithCredentials(user.id);
+        expect(stored?.pendingEmail).toBe('first-new@example.com');
+    });
+
+    it('allows another change once the window has passed', async () => {
+        const user = await createUser({ email: 'pace-later@example.com', verifiedAt: new Date() });
+        await updateProfile(user.id, { email: 'one-new@example.com' }, testCallerContext);
+        await ageEmailChangeSend(user.id);
+
+        const result = await updateProfile(
+            user.id,
+            { email: 'two-new@example.com' },
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+    });
+
+    it('does not pace a save that changes no email', async () => {
+        const user = await createUser({ email: 'pace-name@example.com', verifiedAt: new Date() });
+        await updateProfile(user.id, { email: 'pending-new@example.com' }, testCallerContext);
+
+        const result = await updateProfile(user.id, { username: 'renamed' }, testCallerContext);
+
+        expect(result.success).toBe(true);
     });
 });
 

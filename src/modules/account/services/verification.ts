@@ -150,7 +150,7 @@ export const requestEmailVerification = (
  * @param type - which kind of token (and so which button) is asking
  * @returns seconds to wait, or 0 when a send may go ahead
  */
-const resendCooldownRemaining = (
+export const resendCooldownRemaining = (
     user: UserDocument,
     type: VerificationTokenType,
     now: Date = new Date()

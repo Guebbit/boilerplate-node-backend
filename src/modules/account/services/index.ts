@@ -37,7 +37,11 @@ import * as reauth from './reauth';
  * allowed on purpose, same as the module barrel itself (CLAUDE.md's "Module barrels"): a caller
  * reaching for a name not listed here copies the logic instead of adding the export it needed.
  */
-export { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from './authentication';
+export {
+    PASSWORD_RESET_TOKEN_TYPE,
+    RESET_REQUEST_SECONDS,
+    ACCOUNT_DELETE_TOKEN_TYPE
+} from './authentication';
 export { amrAfterReauth } from './reauth';
 export { passwordChangeWithCurrent, updateProfile } from './profile';
 export {

@@ -150,6 +150,14 @@ Three things in that diagram are decisions rather than mechanics:
   read like a takeover alert. It uses `POST /account/verify-request`'s cooldown and budget and
   answers `200 { resendAfter }` like it, so the button counts down from the server's number; when
   nothing is pending it mails nothing and answers `resendAfter` 0.
+- **A new change request is paced, and so is a reset request.** A genuine change to a different
+  address (one that is neither the current nor the already-pending address) is held to one a
+  minute per account, answering `429 EMAIL_CHANGE_TOO_SOON` with `details.retryAfter`, like the
+  resend button. The caller is signed in, so the answer can be honest. A password-reset request is
+  paced the same way but SILENTLY: inside the minute it answers the same `200` and sends nothing,
+  because a `429` would tell a stranger which addresses have an account. Both also spend the
+  recipient's mailbox budget ([security](../tools/security.md#mail-to-one-mailbox-the-victim-s-budget)),
+  which a refused request does not.
 - **Confirming revokes every refresh token.** An email change is the stronger takeover primitive
   of the two, and this is the same treatment a changed password already gets.
 
