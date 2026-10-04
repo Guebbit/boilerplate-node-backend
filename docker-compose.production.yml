@@ -106,6 +106,27 @@ x-hardening: &hardening
     tmpfs:
         - /tmp:mode=1777,size=64m,noexec,nosuid
 
+# ── DATA-SERVICE HARDENING, ONCE ────────────────────────────────────────────────────────────────
+# Merged into `database`, `mongo-rs-init`, `cache` and `queue` with `<<: *data-hardening`. A
+# SEPARATE block from `x-hardening`: those three run our own code and can afford `read_only`, but
+# the official data images start as root, `chown` their data directory and then drop to their own
+# user, so their entrypoints need a few capabilities and a writable root.
+#
+#   cap_drop ALL     start from nothing,
+#   cap_add          and give back only what the official entrypoints use: CHOWN (the data
+#                    directory), SETUID/SETGID (the drop to `mongodb`/`redis`/`rabbitmq`),
+#                    DAC_OVERRIDE and FOWNER (reach files another user owns, as root).
+#   no-new-privileges  a setuid binary in the image still cannot raise privilege.
+#
+# Test-booted for each service (the replica set reached PRIMARY, Redis answered an authenticated
+# ping, RabbitMQ authenticated the user). `read_only` is NOT set on any of them: it would break
+# `mongo-entrypoint.sh`'s `chown` and the config files written to the container's own filesystem.
+# CIS Docker Benchmark 5.3 / 5.25.
+x-data-hardening: &data-hardening
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+
 x-app-env: &app-env
     NODE_ENV: 'production'
     # Every service here starts through `npm`, and every one runs with a read-only root (see
@@ -396,6 +417,7 @@ services:
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
+        <<: *data-hardening
         # A replica set of one, not a standalone: MongoDB's own documented production topology,
         # the only path to a dump consistent across collections while orders keep arriving
         # (`mongodump --oplog`), and the prerequisite for Percona Backup for MongoDB or real PITR
@@ -503,6 +525,7 @@ services:
         image: docker.io/library/mongo:8
         restart: 'no'
         profiles: [bundled]
+        <<: *data-hardening
         entrypoint: ['bash', '/mongo-rs-init.sh']
         # The only other holder of the root password; the script reads it inside its `--eval`.
         secrets:
@@ -523,6 +546,7 @@ services:
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
+        <<: *data-hardening
         # `--save 60 1` keeps an RDB snapshot so a restart does not cold-start every cache key at
         # once. The cache is not a source of truth: losing it is a latency event, not a data loss.
         #
@@ -570,6 +594,7 @@ services:
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
+        <<: *data-hardening
         # The 4.x image REFUSES `RABBITMQ_DEFAULT_PASS_FILE` ("set but deprecated"), so the password
         # is written into a config file the broker reads, in this container's own `/etc/rabbitmq`.
         # The subshell scopes `umask 077` to that one write: left on, it would reach the broker and

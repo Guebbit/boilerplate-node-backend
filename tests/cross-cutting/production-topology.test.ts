@@ -35,6 +35,7 @@ interface ComposeFile {
         {
             read_only?: boolean;
             cap_drop?: string[];
+            cap_add?: string[];
             security_opt?: string[];
             ports?: PortMapping[];
             environment?: Record<string, string> | string[];
@@ -118,6 +119,32 @@ describe('production containers are hardened', () => {
             expect(service).toBeDefined();
             expect(service.read_only).toBe(true);
             expect(service.cap_drop).toEqual(['ALL']);
+            expect(service.security_opt).toContain('no-new-privileges:true');
+        }
+    );
+});
+
+describe('production data services are hardened, within what their entrypoints need', () => {
+    /*
+     * The official images start as root, `chown` their data directory and drop to their own user,
+     * so unlike the three that run our code they cannot be `read_only` or capability-free. They
+     * drop everything and take back only what that sequence uses; a service that keeps the full
+     * default set, or may gain privilege through a setuid binary, is the regression.
+     */
+    it.each(['database', 'mongo-rs-init', 'cache', 'queue'])(
+        '%s drops every capability, adds back only the entrypoint set, and gains no privilege',
+        (name) => {
+            const service = compose.services[name];
+
+            expect(service).toBeDefined();
+            expect(service.cap_drop).toEqual(['ALL']);
+            expect(service.cap_add?.toSorted()).toEqual([
+                'CHOWN',
+                'DAC_OVERRIDE',
+                'FOWNER',
+                'SETGID',
+                'SETUID'
+            ]);
             expect(service.security_opt).toContain('no-new-privileges:true');
         }
     );
