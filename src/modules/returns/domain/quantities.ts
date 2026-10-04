@@ -4,14 +4,8 @@
  * testable without a database.
  */
 
-/** One line of an order, as far as returning it goes. */
-export interface OrderedLine {
-    productId: string;
-    quantity: number;
-}
-
-/** A line a customer asks to send back. */
-export interface RequestedLine {
+/** A product and how many units of it — a line of an order, or a line a customer sends back. */
+export interface ProductQuantity {
     productId: string;
     quantity: number;
 }
@@ -23,8 +17,8 @@ export interface RequestedLine {
  * @returns product id → units still returnable (never negative)
  */
 export const returnableQuantities = (
-    ordered: readonly OrderedLine[],
-    alreadyReturned: readonly RequestedLine[]
+    ordered: readonly ProductQuantity[],
+    alreadyReturned: readonly ProductQuantity[]
 ): Map<string, number> => {
     const remaining = new Map<string, number>();
     for (const { productId, quantity } of ordered)
@@ -36,7 +30,7 @@ export const returnableQuantities = (
 
 /** The verdict {@link checkRequestedLines} returns. */
 export type LinesVerdict =
-    | { ok: true; lines: RequestedLine[] }
+    | { ok: true; lines: ProductQuantity[] }
     | { ok: false; reason: 'nothing-returnable' | 'unknown-product' | 'too-many' };
 
 /**
@@ -50,7 +44,7 @@ export type LinesVerdict =
  */
 export const checkRequestedLines = (
     remaining: ReadonlyMap<string, number>,
-    requested: readonly RequestedLine[] | undefined
+    requested: readonly ProductQuantity[] | undefined
 ): LinesVerdict => {
     if (requested === undefined || requested.length === 0) {
         const lines = [...remaining]

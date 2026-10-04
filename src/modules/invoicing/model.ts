@@ -13,7 +13,7 @@
 
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import type { OrderTaxSummaryRow, RateType } from '@types';
+import { RateType, type OrderTaxSummaryRow } from '@types';
 
 /**
  * One frozen line — a product's title, quantity and the price/rate it was actually sold at. No
@@ -150,7 +150,7 @@ const lineSchema = new Schema<InvoiceLine>(
         quantity: { type: Number, required: true },
         unitPrice: { type: Number, required: true },
         taxRate: { type: Number, required: true, min: 0, max: 1 },
-        rateType: { type: String, enum: ['standard', 'zero-rated', 'exempt'] }
+        rateType: { type: String, enum: Object.values(RateType) }
     },
     { _id: false }
 );

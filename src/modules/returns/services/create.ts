@@ -41,7 +41,7 @@ import {
     initialStatusFor,
     returnableQuantities
 } from '../domain';
-import type { RequestedLine } from '../domain';
+import type { ProductQuantity } from '../domain';
 import { mailReturnNotice } from './notify';
 import { syncReturnStatus } from './projection';
 
@@ -51,7 +51,7 @@ export interface CreateReturnInput {
     reason: ReturnReason;
     note?: string;
     /** Absent means everything on the order that is still left to return. */
-    lines?: RequestedLine[];
+    lines?: ProductQuantity[];
 }
 
 /** What {@link createReturn} answers with: a refusal, or the return that was written. */
@@ -217,7 +217,7 @@ const withdrawBeforeDispatch = (
  * The lines already coming back on an order — what a new return's quantities are checked against.
  * @param orderId - the order
  */
-const alreadyReturned = (orderId: string): Promise<RequestedLine[]> =>
+const alreadyReturned = (orderId: string): Promise<ProductQuantity[]> =>
     returnRepository.findByOrderId(orderId).then((returns) =>
         returns
             .filter(({ status }) => QUANTITY_HOLDING_RETURN_STATUSES.includes(status))
@@ -240,7 +240,7 @@ const alreadyReturned = (orderId: string): Promise<RequestedLine[]> =>
 const writeReturn = (
     order: OrderDocument,
     input: CreateReturnInput,
-    lines: readonly RequestedLine[],
+    lines: readonly ProductQuantity[],
     context: CallerContext
 ): Promise<CreateReturnOutcome> => {
     const byProduct = new Map(order.items.map((item) => [String(item.product._id), item]));

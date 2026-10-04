@@ -17,7 +17,7 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 import type { TranslationFieldIssue } from '@kernel/registry';
 import { availableStock, stockFlags } from './domain/stock';
 import { lowStockThreshold, productCurrency } from './config';
-import type { Product } from '@types';
+import { RateType, TaxClass, type Product } from '@types';
 
 /**
  * A product's stored fields, without Mongoose's document machinery — `Product` from
@@ -224,7 +224,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
          */
         taxClass: {
             type: String,
-            enum: ['reduced', 'zero']
+            enum: Object.values(TaxClass)
         },
         /*
          * WHY `taxClass` is `zero`, when it is — meaningless otherwise. Absent means `standard`,
@@ -233,7 +233,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
          */
         rateType: {
             type: String,
-            enum: ['standard', 'zero-rated', 'exempt']
+            enum: Object.values(RateType)
         },
         /*
          * SH4: an optional, deployment-chosen stock-keeping unit. Uniqueness is `products_sku`

@@ -184,11 +184,14 @@ export interface ReservationItem {
     quantity: number;
 }
 
+/** Every state a hold can be in — the schema's `enum`, and the source of {@link ReservationStatus}. */
+const RESERVATION_STATUSES = ['held', 'committed', 'released', 'restocked'] as const;
+
 /**
  * The four states a hold can be in. `released` and `restocked` are terminal; `committed` can
  * still move to `restocked` if the paid order behind it is later cancelled.
  */
-export type ReservationStatus = 'held' | 'committed' | 'released' | 'restocked';
+export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 
 /**
  * Deliberately not derived from a contract type, because there is none: a reservation is never
@@ -254,7 +257,7 @@ export const reservationSchema = new Schema<ReservationDocument>(
          */
         status: {
             type: String,
-            enum: ['held', 'committed', 'released', 'restocked'] satisfies ReservationStatus[],
+            enum: [...RESERVATION_STATUSES],
             default: 'held',
             required: true
         },

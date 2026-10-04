@@ -40,7 +40,7 @@ import {
     type StampedReturnStatus
 } from './domain/projections';
 import { orderCurrency } from './config';
-import { OrderStatus } from '@types';
+import { OrderStatus, PaymentMethodId, RateType } from '@types';
 import type { Order } from '@types';
 
 /**
@@ -86,6 +86,9 @@ export interface OrderDocumentItem {
     locale: string;
 }
 
+/** Every effect a cancel can still owe — the schema's `enum`, and the source of {@link OrderPendingEffect}. */
+const ORDER_PENDING_EFFECTS = ['refund'] as const;
+
 /**
  * A consequence of a cancel that the cancel itself could not guarantee.
  *
@@ -96,7 +99,7 @@ export interface OrderDocumentItem {
  * has no retry of its own: a refund that throws is lost unless the intent to make it survives the
  * failure.
  */
-export type OrderPendingEffect = 'refund';
+export type OrderPendingEffect = (typeof ORDER_PENDING_EFFECTS)[number];
 
 /**
  * Order Document interface: overrides the generated `Order`'s `userId`/`items`/`status`, and
@@ -228,6 +231,9 @@ export interface OrderDocument
     deletedAt?: Date;
 }
 
+/** The two doors an override goes through — the schema's `enum` for `mode`. */
+const ORDER_OVERRIDE_MODES = ['forced', 'status'] as const;
+
 /** One admin override event, embedded in order-arrival order — never reordered or deleted. */
 export interface OrderStatusOverride {
     /** The order's status immediately before this override. */
@@ -235,7 +241,7 @@ export interface OrderStatusOverride {
     /** The status this override moved the order to. */
     to: OrderStatus;
     /** `'forced'` — a delivery door skipped its normal `from` gate; `'status'` — the status-only door. */
-    mode: 'forced' | 'status';
+    mode: (typeof ORDER_OVERRIDE_MODES)[number];
     /** Required on every override — why the normal path didn't apply. */
     reason: string;
     /**
@@ -317,7 +323,7 @@ const orderLineProductSchema = new Schema(
          * for `rateType` to resolve into, and an invoice needs the category (Z vs E) the order was
          * actually placed under — see `services/snapshot.ts#freezeOrderLines`.
          */
-        rateType: { type: String, enum: ['standard', 'zero-rated', 'exempt'] }
+        rateType: { type: String, enum: Object.values(RateType) }
     },
     { timestamps: true }
 );
@@ -402,7 +408,7 @@ export const orderSchema = new Schema<OrderDocument>(
          */
         paymentMethod: {
             type: String,
-            enum: ['card', 'bank_transfer']
+            enum: Object.values(PaymentMethodId)
         },
         /*
          * When this order's stock hold ends, stamped at checkout from the SAME duration handed
@@ -486,7 +492,7 @@ export const orderSchema = new Schema<OrderDocument>(
          */
         pendingEffects: {
             type: [String],
-            enum: ['refund'],
+            enum: [...ORDER_PENDING_EFFECTS],
             default: undefined
         },
         /*
@@ -507,7 +513,7 @@ export const orderSchema = new Schema<OrderDocument>(
                     {
                         from: { type: String, enum: Object.values(OrderStatus), required: true },
                         to: { type: String, enum: Object.values(OrderStatus), required: true },
-                        mode: { type: String, enum: ['forced', 'status'], required: true },
+                        mode: { type: String, enum: [...ORDER_OVERRIDE_MODES], required: true },
                         reason: { type: String, required: true },
                         actorUserId: { type: String, required: true },
                         at: { type: Date, required: true }

@@ -13,6 +13,8 @@
  * only means more rows share the ones `npm run scenario:images` already fetched.
  */
 
+import type { RateType, TaxClass } from '@types';
+
 /** The image roles `npm run scenario:images` populated under this key — see
  * `./products-images.generated.json`. Fixed at 20 regardless of how large {@link FILLER_PRODUCTS}
  * grows; `./products` cycles through them by index. */
@@ -212,9 +214,9 @@ export interface FillerProduct {
     /** Grams; absent on a digital row, which ships nothing. */
     weight?: number;
     /** `reduced` or `zero`; absent means the shop's standard rate. */
-    taxClass?: 'reduced' | 'zero';
+    taxClass?: TaxClass;
     /** Why the rate is zero — meaningful only with `taxClass: 'zero'`. */
-    rateType?: 'zero-rated' | 'exempt';
+    rateType?: Exclude<RateType, 'standard'>;
     /** `false` marks a digital good. Absent means physical. */
     requiresShipping?: false;
     /** Both locales' copy for the write surface's translation batch (see `./products`). `en` is

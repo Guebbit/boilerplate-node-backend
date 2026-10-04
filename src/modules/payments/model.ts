@@ -110,8 +110,11 @@ export interface PaymentDocument extends Document {
     updatedAt?: Date;
 }
 
+/** Every effect a payment can still owe — the schema's `enum`, and the source of {@link PaymentEffect}. */
+const PAYMENT_EFFECTS = ['commit'] as const;
+
 /** The one effect a `succeeded` write can still owe once it returns — see {@link PaymentDocument.pendingEffects}. */
-export type PaymentEffect = 'commit';
+export type PaymentEffect = (typeof PAYMENT_EFFECTS)[number];
 
 /** Payment Document model type. Queries live in `./repository`, rules in `./service`. */
 export type PaymentModel = Model<PaymentDocument>;
@@ -207,7 +210,7 @@ export const paymentSchema = new Schema<PaymentDocument>(
         },
         pendingEffects: {
             type: [String],
-            enum: ['commit']
+            enum: [...PAYMENT_EFFECTS]
         }
     },
     {
