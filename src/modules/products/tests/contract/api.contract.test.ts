@@ -183,7 +183,7 @@ describe('POST /products/search', () => {
         expect(query.status).toBe(422);
     });
 
-    it('answers a body no key can carry without caching it and without a 500', async () => {
+    it('refuses a body nested past the depth limit, never caching it and never a 500', async () => {
         // 100,000 bytes of `[[[…]]]`: nested deeper than any walker's stack.
         const nested = `{"title":${'['.repeat(49_990)}${']'.repeat(49_990)}}`;
         const response = await api()
@@ -191,9 +191,8 @@ describe('POST /products/search', () => {
             .set('Content-Type', 'application/json')
             .send(nested);
 
-        // A refusal for the wrong shape, never an unhandled RangeError. 4.11's depth limit
-        // narrows this to a 400 once built; until then any 4xx is the contract.
-        expect(response.status).toBeLessThan(500);
+        // The depth guard refuses it before the cache key is ever built.
+        expect(response.status).toBe(400);
     });
 });
 

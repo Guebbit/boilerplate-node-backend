@@ -229,12 +229,11 @@ describe('a body express never parsed', () => {
 
 describe('hostile content in a well-formed body', () => {
     /**
-     * `express.json` has no depth option — `JSON_BODY_LIMIT` is a BYTE cap, so depth is bounded
-     * only by size. That is the honest answer, and it is what this pins: a deeply nested but
-     * small body is accepted and handled, rather than crashing the parser. Asserting an invented
-     * depth limit would be worse than asserting nothing.
+     * `express.json`'s limit is a BYTE cap, so depth was bounded only by size, and a 100 kB body
+     * of `[[[…]]]` made every recursive walker behind it throw `RangeError` (a repeatable 500).
+     * `limitJsonDepth` refuses past 32 levels, right after the parser, with a 400.
      */
-    it('handles a deeply nested body without a server error', async () => {
+    it('refuses a body nested past the depth limit with a 400, not a 500', async () => {
         let nested = '{"email":"a@b.test"}';
         for (let depth = 0; depth < 200; depth += 1) nested = `{"a":${nested}}`;
 
@@ -243,7 +242,49 @@ describe('hostile content in a well-formed body', () => {
             .set('Content-Type', 'application/json')
             .send(nested);
 
+        expect(response.status).toBe(400);
+        expect(response.body.errors[0]).toMatchObject({
+            code: 'BAD_REQUEST',
+            details: { reason: 'body-too-deep', maxDepth: 32 }
+        });
+    });
+
+    it('refuses the 100 kB `[[[…]]]` body that overflowed every recursive walker', async () => {
+        const hostile = `{"title":${'['.repeat(49_990)}${']'.repeat(49_990)}}`;
+
+        for (const route of ['/products/search', '/account/login']) {
+            const response = await api()
+                .post(route)
+                .set('Content-Type', 'application/json')
+                .send(hostile);
+
+            expect(response.status).toBe(400);
+        }
+    });
+
+    it('still accepts a body nested within the limit', async () => {
+        let nested = '{"email":"a@b.test","password":"whatever12"}';
+        for (let depth = 0; depth < 20; depth += 1) nested = `{"a":${nested}}`;
+
+        const response = await api()
+            .post('/account/login')
+            .set('Content-Type', 'application/json')
+            .send(nested);
+
+        expect(response.status).not.toBe(400);
         expect(response.status).toBeLessThan(500);
+    });
+
+    it('also guards an Idempotency-Key request, whose fingerprint walks the body', async () => {
+        const hostile = `{"email":${'['.repeat(49_990)}${']'.repeat(49_990)}}`;
+
+        const response = await api()
+            .post('/account/signup')
+            .set('Content-Type', 'application/json')
+            .set('Idempotency-Key', 'deep-body-1')
+            .send(hostile);
+
+        expect(response.status).toBe(400);
     });
 
     /**

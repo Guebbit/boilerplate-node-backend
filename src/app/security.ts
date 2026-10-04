@@ -18,6 +18,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { rateLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { requireDeclaredContentType } from '@infrastructure/http/middlewares/content-type';
+import { limitJsonDepth } from '@infrastructure/http/middlewares/json-depth';
 import { REQUEST_CONTENT_TYPES } from '@api/request-content-types';
 import { siteConfig } from '@infrastructure/http/config';
 import { appConfig } from './config';
@@ -243,6 +244,10 @@ export const installRequestParsing = (app: Express): void => {
             }
         })
     );
+
+    // Right after the parser: a body nested past the depth limit is refused before any walker
+    // (fingerprint, cache key, schema) can overflow the stack on it.
+    app.use(limitJsonDepth);
 
     // cookie-parser: fills `request.cookies` from the `Cookie` header (no secret: nothing is signed).
     // https://github.com/expressjs/cookie-parser#readme
