@@ -13,7 +13,7 @@ import winston from 'winston';
 // chain (via `scenarios/support/ephemeral-mongo.ts`), which is loaded outside jest's normal
 // module resolution — see that file's own comment. An alias resolves at `tsc`/`eslint` time but
 // fails at jest's globalSetup runtime.
-import { isRelaxedEnvironment, loggingConfig } from '../runtime/config';
+import { isRelaxedEnvironment, loggingConfig, PERSONAL_FIELD_MODES } from '../runtime/config';
 import { pseudonymise } from '../security/pseudonymise';
 
 /** A structured log call's own object form: a `message` plus whatever context goes with it. */
@@ -125,7 +125,7 @@ export const PERSONAL_FIELDS = new Set(['email', 'ip', 'phone', 'street', 'zip',
  * - `redact` — replaced with {@link REDACTED}, same as a credential. No correlation at all.
  * - `plain` — left untouched. For local development, where the log never leaves the machine.
  */
-type PersonalFieldMode = 'hash' | 'redact' | 'plain';
+type PersonalFieldMode = (typeof PERSONAL_FIELD_MODES)[number];
 
 /**
  * Reads `NODE_LOG_PERSONAL_FIELDS`, `hash` when it is unset. An unrecognised value is refused at

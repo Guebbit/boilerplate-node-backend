@@ -23,7 +23,7 @@ import {
 import { ATTR_MESSAGING_SYSTEM } from '@opentelemetry/semantic-conventions/incubating';
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
-import { mailConfig } from '@infrastructure/adapters/config';
+import { mailConfig, type MAIL_TRANSPORTS } from '@infrastructure/adapters/config';
 import { isRelaxedEnvironment, isTestEnvironment } from '@infrastructure/runtime/config';
 import { recordDemoEmail } from '@infrastructure/adapters/demo-outbox';
 import { resolveSpooled, discardSpooled } from '@infrastructure/adapters/mail-spool';
@@ -53,7 +53,7 @@ export {
  * than a condition per caller. No `none`, deliberately — it would differ from `log` only by
  * skipping the render, and the render is where a template bug surfaces.
  */
-export type MailTransport = 'smtp' | 'log' | 'outbox';
+export type MailTransport = (typeof MAIL_TRANSPORTS)[number];
 
 /**
  * Which transport this process uses, resolved per send.
