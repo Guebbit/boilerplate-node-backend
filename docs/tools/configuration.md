@@ -365,11 +365,11 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### site
 
-| Variable            | Type                 | Default                 | Rules                                             | What it does                                                                                              |
-| ------------------- | -------------------- | ----------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `NODE_URL`          | text                 | —                       | required, 1+ characters                           | This API’s public origin. OAuth redirect URIs and security.txt are built from it.                         |
-| `NODE_FRONTEND_URL` | text                 | `http://localhost:8080` | —                                                 | The paired frontend’s origin. Links in mail and the OAuth callback point here.                            |
-| `NODE_CORS_ORIGIN`  | comma-separated list | `empty`                 | required, 1+ characters, outside development/test | Origins allowed to call this API with credentials, comma-separated. Unset allows `http://localhost:8080`. |
+| Variable            | Type                 | Default                 | Rules                                             | What it does                                                                                                                                      |
+| ------------------- | -------------------- | ----------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_URL`          | text                 | —                       | required, 1+ characters                           | This API’s public origin. OAuth redirect URIs and security.txt are built from it.                                                                 |
+| `NODE_FRONTEND_URL` | text                 | `http://localhost:8080` | required, 1+ characters, outside development/test | The paired frontend’s origin. Links in mail and the OAuth callback point here. Unset allows `http://localhost:8080` in development and test only. |
+| `NODE_CORS_ORIGIN`  | comma-separated list | `empty`                 | required, 1+ characters, outside development/test | Origins allowed to call this API with credentials, comma-separated. Unset allows `http://localhost:8080`.                                         |
 
 ### rate-limit
 

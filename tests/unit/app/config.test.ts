@@ -16,6 +16,7 @@ withoutEnvironmentInThisFile([
     'NODE_ENV',
     'NODE_URL',
     'NODE_CORS_ORIGIN',
+    'NODE_FRONTEND_URL',
     'NODE_PSEUDONYM_KEY',
     'NODE_SMTP_HOST',
     'NODE_SMTP_USER',
@@ -87,6 +88,34 @@ describe('application-wide variables', () => {
         }
     );
 
+    it('ignores an unset NODE_FRONTEND_URL outside production', () => {
+        // `productionOnly`: the localhost default is the frontend's own dev origin, right for a
+        // developer, while in a deployment every mailed link would point at it.
+        configure();
+        setEnvironment({ NODE_FRONTEND_URL: undefined });
+
+        expect(assertApp).not.toThrow();
+    });
+
+    it.each(['production', 'staging', undefined])(
+        'refuses to boot with NODE_ENV=%p and no NODE_FRONTEND_URL: the mailed links would be dead',
+        (value) => {
+            configure();
+            setEnvironment({ NODE_ENV: value });
+            setEnvironment({ NODE_FRONTEND_URL: undefined });
+
+            expect(assertApp).toThrow(/NODE_FRONTEND_URL/);
+        }
+    );
+
+    it('boots in production with NODE_FRONTEND_URL set', () => {
+        configure();
+        setEnvironment({ NODE_ENV: 'production' });
+        setEnvironment({ NODE_FRONTEND_URL: 'https://shop.example.com' });
+
+        expect(assertApp).not.toThrow(/NODE_FRONTEND_URL/);
+    });
+
     it('ignores an unset NODE_PSEUDONYM_KEY outside production', () => {
         // `productionOnly`: the logger's own dev fallback key (`adapters/logger.ts`) is right for
         // a developer and certainly wrong for a deployment, so only the deployment is asked.
@@ -150,6 +179,7 @@ describe('the mail guards', () => {
         configure();
         setEnvironment({ NODE_ENV: 'production' });
         setEnvironment({ NODE_CORS_ORIGIN: 'https://app.example.com' });
+        setEnvironment({ NODE_FRONTEND_URL: 'https://shop.example.com' });
         setEnvironment({ NODE_PSEUDONYM_KEY: 'a-long-enough-pseudonym-key' });
         setEnvironment({ NODE_MAIL_TRANSPORT: undefined });
 

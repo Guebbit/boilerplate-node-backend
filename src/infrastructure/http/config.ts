@@ -23,8 +23,13 @@ export const siteConfig = defineConfig({
         }),
         NODE_FRONTEND_URL: text({
             default: 'http://localhost:8080',
+            // Required in a deployment, though the default stays for a developer: unset, every
+            // reset, verify, delete and email-change link, and the OAuth landing page, would point
+            // at `localhost` and the app's own flows would break. The check reads the raw
+            // variable, so the default does not satisfy it.
+            required: { minLength: 1, productionOnly: true },
             describe:
-                'The paired frontend’s origin. Links in mail and the OAuth callback point here.'
+                'The paired frontend’s origin. Links in mail and the OAuth callback point here. Unset allows `http://localhost:8080` in development and test only.'
         }),
         NODE_CORS_ORIGIN: csv({
             required: { minLength: 1, productionOnly: true },
