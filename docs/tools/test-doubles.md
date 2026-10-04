@@ -62,6 +62,17 @@ The registries live on `globalThis` under a `Symbol.for` key (`createSharedProvi
 `src/infrastructure/runtime/provider-registry.ts`): 23 test files use `resetModules` or
 `isolateModules`, and a module-local map would come back empty after one.
 
+## What else is not in `src/`
+
+| Left `src/`                                                      | Now                                                                                                                  |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| the `/__test/*` routes and the restore machinery                 | `scenarios/support/demo.ts`; `run-server.ts` hands it to `createApp` as an `extension`                               |
+| the demo clock                                                   | `scenarios/support/demo-clock.ts`                                                                                    |
+| the webhook sink's SSRF exemption (`NODE_WEBHOOK_DEMO_SINK_URL`) | registered by the preload through `src/infrastructure/adapters/ssrf-exemptions.ts`, as a whole origin, port included |
+
+Production code therefore has no demo flag, no `NODE_ENV` lock for a double and no exemption in
+the SSRF guard: the registries are empty until a dev-shaped process fills them.
+
 ## Add a double
 
 1. Put the file in `scenarios/support/doubles/`. A double that belongs to a `group: shop` module
