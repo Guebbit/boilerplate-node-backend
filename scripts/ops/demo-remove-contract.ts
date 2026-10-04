@@ -2,7 +2,7 @@
  * @module
  * The one contract fragment that still names shop modules by hand:
  * `shared/contracts/openapi.root.yaml` — "what belongs to no module" (CLAUDE.md's contract
- * workflow) — carries `POST /account/export`'s `AccountExportResponse` (one field per
+ * workflow) — carries the data export's `AccountExportResponse` (one field per
  * contributing module, so it belongs to no one module). The path index
  * is not hand-edited on removal: the bundler completes it from the fragments on disk.
  *
