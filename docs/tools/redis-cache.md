@@ -68,7 +68,11 @@ filters unequal on its own, with nobody needing to remember to touch the cache k
 this middleware owns, and decides whether the request is even a candidate for the Redis lookup
 `serveOrArm` does next.
 
-**`Cache-Control` itself:**
+**`Cache-Control` itself:** every response starts as `no-store` (`installRoutes`, after the static
+files, so an image keeps its year-long cache), and the rules below overwrite it on the routes that
+opt in. A response is uncacheable unless a route says it is, so a secret in one (`POST /api-keys`,
+a webhook secret, an audit page) cannot be kept by a shared cache or a browser's disk because an
+opt-in was forgotten.
 
 - A cached POST (`POST /x/search`, keyed the same as its GET twin) is a SERVER-side arrangement
   only — the wire always says `no-store`, since a shared cache holding a POST response could

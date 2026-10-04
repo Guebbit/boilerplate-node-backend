@@ -22,6 +22,22 @@ import { router as systemRoutes } from './system-routes';
  * @param app - the express application to configure
  */
 export const installRoutes = (app: Express): void => {
+    /*
+     * `no-store` unless a route says otherwise: a response is uncacheable by default, so one that
+     * carries a secret (a minted API key, a webhook secret, an audit page) can never be kept by a
+     * shared cache or a browser's disk because someone forgot an opt-in.
+     *
+     * Here and not in `installSecurity`: `installStatic` runs between the two, so a header set
+     * earlier would strip the year-long cache from every image. The bare header, not the `noStore`
+     * middleware: that one marks the response, and `setCache` refuses a route carrying the mark.
+     * `setCache` and `privateNoCache` simply overwrite this on the routes that do cache.
+     * https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html
+     */
+    app.use((_request, response, next) => {
+        response.setHeader('Cache-Control', 'no-store');
+        next();
+    });
+
     /**
      * Registered modules, each at the base path its own manifest declares.
      *

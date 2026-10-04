@@ -69,6 +69,17 @@ describe('POST /api-keys', () => {
         expect(response.body.data.permissions).toEqual(['orders.self.read']);
     });
 
+    it('answers no-store: the one-time secret is never kept by a cache', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+
+        const response = await api()
+            .post('/api-keys')
+            .set('Authorization', bearer)
+            .send({ name: 'partner integration', permissions: ['orders.self.read'] });
+
+        expect(response.headers['cache-control']).toBe('no-store');
+    });
+
     it('422s a permission the caller does not hold', async () => {
         const { bearer } = await authenticateAsRole('admin');
 

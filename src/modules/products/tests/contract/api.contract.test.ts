@@ -416,6 +416,12 @@ describe('GET /products/categories', () => {
         expect(response.body.data.tags).toEqual([{ name: 'cute', count: 1 }]);
     });
 
+    it('keeps its own cache header over the no-store default', async () => {
+        const response = await api().get('/products/categories');
+
+        expect(response.headers['cache-control']).toMatch(/^public, max-age=\d+/);
+    });
+
     it('matches the contract for an empty catalogue', async () => {
         const response = await api().get('/products/categories');
 
