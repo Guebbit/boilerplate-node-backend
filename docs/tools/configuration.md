@@ -177,9 +177,11 @@ variable, and the loader merges it into the URL, replacing any it carried:
 | `NODE_RABBITMQ_URL`         | `NODE_RABBITMQ_PASSWORD`         | `NODE_RABBITMQ_PASSWORD_FILE`         |
 | `NODE_RATE_LIMIT_REDIS_URL` | `NODE_RATE_LIMIT_REDIS_PASSWORD` | `NODE_RATE_LIMIT_REDIS_PASSWORD_FILE` |
 
-The merge is a small regular expression, not `URL`: the WHATWG parser refuses a multi-host Mongo
-URI (`mongodb://a:27017,b:27017/db`), which is a normal replica-set string. A password is
-percent-encoded on the way in.
+The merge uses a standard parser, not hand-written parsing. A Mongo URI (`mongodb://`,
+`mongodb+srv://`) goes through `mongodb-connection-string-url`, the parser the `mongodb` driver
+itself uses: the WHATWG `URL` refuses a multi-host replica-set string
+(`mongodb://a:27017,b:27017/db`). Every other URL goes through Node's `URL`. Both percent-encode
+the password, keep the user the URL names, and a URL that does not parse is left as it was.
 
 The generated reference below marks every secret that has a file form. `check:env-example` accepts
 a `NODE_X_FILE` line in `.env-example` for any such secret. How the production stack uses this:

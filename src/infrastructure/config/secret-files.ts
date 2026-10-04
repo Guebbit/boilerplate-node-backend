@@ -12,6 +12,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { ConnectionString } from 'mongodb-connection-string-url';
 
 /** A set of environment variables, as the store holds them. */
 type Variables = Readonly<Record<string, string | undefined>>;
@@ -48,10 +49,10 @@ export const URL_PASSWORDS: Readonly<Record<string, string>> = {
 };
 
 /**
- * `scheme://[user[:password]@]rest`, split. The WHATWG `URL` is not used because it refuses a
- * multi-host Mongo URI (`mongodb://a:27017,b:27017/db`), which is a normal replica-set string.
+ * The two Mongo schemes. Only these go to the Mongo parser: a replica-set URI
+ * (`mongodb://a:27017,b:27017/db`) lists several hosts, which the WHATWG `URL` refuses.
  */
-const URL_PARTS = /^([a-z][\d+.a-z-]*:\/\/)(?:([^#/?@]*)@)?(.*)$/i;
+const MONGO_SCHEME = /^mongodb(?:\+srv)?:\/\//i;
 
 /**
  * The text of a secret file, or `undefined` when it holds nothing.
@@ -83,19 +84,56 @@ const readSecretFile = (variable: string, filePath: string): string | undefined 
 };
 
 /**
- * Puts a password into a connection URL, replacing the one it carries, if any.
+ * A Mongo URI with the password set, or `undefined` when the parser refuses it.
+ *
+ * `mongodb-connection-string-url` is the parser the `mongodb` driver itself uses, so what it
+ * accepts here is what the driver will accept later. Assigning `.password` percent-encodes it.
+ * https://github.com/mongodb-js/mongodb-connection-string-url
+ *
+ * @param url - a `mongodb://` or `mongodb+srv://` URI
+ * @param password - the raw password
+ * @returns the URI carrying the password
+ */
+const mongoWithPassword = (url: string, password: string): string | undefined => {
+    // eslint-disable-next-line no-restricted-syntax -- the parser reports a malformed URI only by throwing, and there is no non-throwing form to chain
+    try {
+        const parsed = new ConnectionString(url);
+        parsed.password = password;
+        return parsed.toString();
+    } catch {
+        return undefined;
+    }
+};
+
+/**
+ * Any other URL (Redis, AMQP) with the password set, or `undefined` when it does not parse.
+ *
+ * Node's WHATWG `URL`: `URL.parse` returns `null` instead of throwing, and assigning `.password`
+ * percent-encodes it. https://nodejs.org/api/url.html#urlpassword
+ *
+ * @param url - a single-host URL
+ * @param password - the raw password
+ * @returns the URL carrying the password
+ */
+const genericWithPassword = (url: string, password: string): string | undefined => {
+    const parsed = URL.parse(url);
+    if (!parsed) return undefined;
+    parsed.password = password;
+    return parsed.toString();
+};
+
+/**
+ * Puts a password into a connection URL, replacing the one it carries, if any. The user the URL
+ * names is kept.
  *
  * @param url - the URL, with or without credentials
- * @param password - the password, percent-encoded here
- * @returns the URL carrying the password; one that is not `scheme://…` comes back untouched
+ * @param password - the raw password, percent-encoded by the parser
+ * @returns the URL carrying the password; one that does not parse comes back untouched
  */
-const withPassword = (url: string, password: string): string => {
-    const parts = URL_PARTS.exec(url);
-    if (!parts) return url;
-    const [, scheme = '', userinfo = '', rest = ''] = parts;
-    const user = userinfo.split(':', 1)[0] ?? '';
-    return `${scheme}${user}:${encodeURIComponent(password)}@${rest}`;
-};
+const withPassword = (url: string, password: string): string =>
+    (MONGO_SCHEME.test(url)
+        ? mongoWithPassword(url, password)
+        : genericWithPassword(url, password)) ?? url;
 
 /**
  * Applies every `NODE_X_FILE` over `NODE_X`: the file wins when both are set, no refusal.

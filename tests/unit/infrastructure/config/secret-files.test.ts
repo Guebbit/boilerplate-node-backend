@@ -139,15 +139,42 @@ describe('a password merged into its URL', () => {
         expect(resolved.NODE_DB_URI).toBe('mongodb://api:new@database:27017/api');
     });
 
-    it('handles a multi-host Mongo URI, which the WHATWG URL refuses', () => {
+    it('handles a multi-host Mongo URI, which the WHATWG URL refuses, and escapes the password', () => {
         const resolved = resolveSecretFiles({
             NODE_DB_URI: 'mongodb://api@a:27017,b:27017/api?replicaSet=rs0',
-            NODE_DB_PASSWORD: 'secret'
+            NODE_DB_PASSWORD: 'p@ss w/rd:'
         });
 
         expect(resolved.NODE_DB_URI).toBe(
-            'mongodb://api:secret@a:27017,b:27017/api?replicaSet=rs0'
+            'mongodb://api:p%40ss%20w%2Frd%3A@a:27017,b:27017/api?replicaSet=rs0'
         );
+    });
+
+    it('handles a mongodb+srv URI', () => {
+        const resolved = resolveSecretFiles({
+            NODE_DB_URI: 'mongodb+srv://api@cluster.example.net/api',
+            NODE_DB_PASSWORD: 'x'
+        });
+
+        expect(resolved.NODE_DB_URI).toBe('mongodb+srv://api:x@cluster.example.net/api');
+    });
+
+    it('escapes the password in an AMQP URL', () => {
+        const resolved = resolveSecretFiles({
+            NODE_RABBITMQ_URL: 'amqp://guest@queue:5672',
+            NODE_RABBITMQ_PASSWORD: 'p@ss w/rd:'
+        });
+
+        expect(resolved.NODE_RABBITMQ_URL).toBe('amqp://guest:p%40ss%20w%2Frd%3A@queue:5672');
+    });
+
+    it.each([
+        ['NODE_DB_URI', 'NODE_DB_PASSWORD', 'mongodb://'],
+        ['NODE_REDIS_URL', 'NODE_REDIS_PASSWORD', 'not a url']
+    ])('leaves an unparseable %s as it was', (urlName, passwordName, url) => {
+        const resolved = resolveSecretFiles({ [urlName]: url, [passwordName]: 'secret' });
+
+        expect(resolved[urlName]).toBe(url);
     });
 
     it('leaves a URL alone when no password is given, so a managed URI keeps its own', () => {
