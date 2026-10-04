@@ -39,7 +39,12 @@ import type {
     TwoFactorStatus
 } from '@types';
 import { accountAuditActions } from '../audit';
-import { twoFactorChangedEmail, recipientLocale, type TwoFactorChange } from '../emails';
+import {
+    twoFactorChangedEmail,
+    recipientLocale,
+    greetableName,
+    type TwoFactorChange
+} from '../emails';
 import { sendAccountMail } from './mail';
 import { findLiveTokenEntry, findLiveToken, spendLiveToken } from './tokens';
 import { resendTooSoon } from '../cooldown';
@@ -82,7 +87,12 @@ const notifyChange = (
 ): void => {
     void sendAccountMail(
         user.email,
-        twoFactorChangedEmail(recipientLocale(user.locale, context), user.username, change, method),
+        twoFactorChangedEmail(
+            recipientLocale(user.locale, context),
+            greetableName(user, user.email),
+            change,
+            method
+        ),
         'normal'
     ).catch((error: unknown) => {
         logger.warn({ message: 'Could not queue a two-factor change notice.', error });

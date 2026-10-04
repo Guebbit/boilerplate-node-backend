@@ -49,7 +49,7 @@ import { bootI18n, getDefaultLocale } from '@infrastructure/i18n';
 import { registerModules } from '@kernel/registry';
 import { enabledModules, enabledModuleLocales } from '../../src/modules';
 import { userService, type UserDocument } from '@modules/users';
-import { inactivityWarningEmail } from '@modules/account';
+import { inactivityWarningEmail, greetableName } from '@modules/account';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { withLease } from '@infrastructure/persistence/lease';
 import { systemCallerContext } from '@kernel/permissions';
@@ -83,9 +83,11 @@ const initI18n = (): Promise<unknown> => bootI18n(enabledModuleLocales());
 
 /** Stage one: warn, and stamp so this account is not warned twice. */
 const warn = (user: UserDocument): Promise<void> => {
+    // The name only when the address is the verified one: this mail also goes to accounts that
+    // never proved theirs, and a display name is user-supplied text.
     const mail = inactivityWarningEmail(
         user.locale ?? getDefaultLocale(),
-        user.username,
+        greetableName(user, user.email),
         GRACE_DAYS
     );
     return enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data).then(

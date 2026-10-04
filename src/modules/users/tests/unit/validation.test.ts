@@ -71,6 +71,23 @@ describe('username messages', () => {
     });
 });
 
+describe('username length ceiling', () => {
+    // A display name, printed in greetings and lists: bounded, with no charset rule (a charset
+    // would refuse real names).
+    it('accepts a name of exactly 50 characters, including non-ASCII ones', () => {
+        expect(messagesFor({ ...validUser, username: 'ä'.repeat(50) }, 'username')).not.toContain(
+            copy('field-username-max')
+        );
+    });
+
+    it('uses the maximum-length copy for a name past 50', () => {
+        const messages = messagesFor({ ...validUser, username: 'a'.repeat(51) }, 'username');
+
+        expect(messages).toContain(copy('field-username-max'));
+        expect(messages).not.toContain(copy('field-username-min'));
+    });
+});
+
 describe('password messages', () => {
     it('uses the required copy for an empty password', () => {
         expect(messagesFor({ ...validUser, password: '' }, 'password')).toContain(

@@ -386,6 +386,7 @@ components:
                 username:
                     type: string
                     minLength: 3
+                    maxLength: 50
                 role:
                     type: string
                     minLength: 1
@@ -411,6 +412,7 @@ components:
                 username:
                     type: string
                     minLength: 3
+                    maxLength: 50
                 role:
                     type: string
                     minLength: 1
@@ -436,6 +438,7 @@ components:
                 username:
                     type: string
                     minLength: 3
+                    maxLength: 50
                 role:
                     type: string
                     minLength: 1
@@ -468,6 +471,7 @@ components:
                 username:
                     type: string
                     minLength: 3
+                    maxLength: 50
                 role:
                     type: string
                     minLength: 1
@@ -500,6 +504,7 @@ components:
                 username:
                     type: string
                     minLength: 3
+                    maxLength: 50
                 role:
                     type: string
                     minLength: 1
@@ -530,6 +535,7 @@ components:
                 username:
                     type: string
                     minLength: 3
+                    maxLength: 50
                 role:
                     type: string
                     minLength: 1

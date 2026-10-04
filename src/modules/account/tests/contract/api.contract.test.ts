@@ -169,6 +169,37 @@ const expectSessionCookies = (response: { headers: Record<string, unknown> }) =>
     }
 };
 
+describe('the username ceiling', () => {
+    // The name prints in greetings, lists and mail, so its length is bounded at the edge (50).
+    it('refuses a signup whose username is past 50 characters', async () => {
+        const response = await api()
+            .post('/account/signup')
+            .send({
+                email: 'long-name@example.com',
+                username: 'x'.repeat(51),
+                password: PLAIN_PASSWORD,
+                passwordConfirm: PLAIN_PASSWORD,
+                termsAccepted: true
+            });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('accepts one of exactly 50', async () => {
+        const response = await api()
+            .post('/account/signup')
+            .send({
+                email: 'name-at-limit@example.com',
+                username: 'x'.repeat(50),
+                password: PLAIN_PASSWORD,
+                passwordConfirm: PLAIN_PASSWORD,
+                termsAccepted: true
+            });
+
+        expect(response.status).toBe(201);
+    });
+});
+
 describe('the "remember me" choice survives every re-mint', () => {
     const MEDIUM = getExpiryTime(RefreshTokenExpiryTime.MEDIUM);
 

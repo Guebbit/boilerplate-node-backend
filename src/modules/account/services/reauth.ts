@@ -31,7 +31,7 @@ import type {
     TwoFactorDelivery
 } from '@types';
 import { accountAuditActions } from '../audit';
-import { reauthCodeEmail, recipientLocale } from '../emails';
+import { reauthCodeEmail, recipientLocale, greetableName } from '../emails';
 import { resendTooSoon, cooldownRemaining } from '../cooldown';
 import {
     DELIVERED_CODE_RESEND_SECONDS,
@@ -124,7 +124,7 @@ const deliverCode = (
 
     const mail = reauthCodeEmail(
         recipientLocale(user.locale, context),
-        user.username,
+        greetableName(user, user.email),
         code,
         Math.round(DELIVERED_CODE_TTL_MS / 60_000)
     );

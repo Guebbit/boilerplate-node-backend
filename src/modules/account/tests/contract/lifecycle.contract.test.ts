@@ -97,6 +97,59 @@ describe('POST /account/reset', () => {
     });
 });
 
+/**
+ * The greeting line of the newest queued mail of a template.
+ *
+ * @param template - the mail template the flow sends
+ */
+const mailedGreeting = (template: string): string => {
+    const enqueueEmail = mailerPort.enqueueEmail as jest.MockedFunction<
+        typeof mailerPort.enqueueEmail
+    >;
+    const mail = enqueueEmail.mock.calls.findLast(([, name]) => name === template);
+    return (mail?.[2] as { greeting?: string } | undefined)?.greeting ?? '';
+};
+
+// `username` is a free display name. A mail to an address nobody has proven would print text of the
+// caller's choosing in a stranger's inbox, from the shop's own domain.
+describe('the name in a mailed greeting', () => {
+    it('prints the name in a reset mail to a VERIFIED address', async () => {
+        const user = await createUser({
+            email: 'proven@example.com',
+            username: 'Ada Proven',
+            verifiedAt: new Date()
+        });
+
+        await api().post('/account/reset').send({ email: user.email });
+
+        expect(mailedGreeting('account.reset-request')).toContain('Ada Proven');
+    });
+
+    it('withholds it from a reset mail to an address nobody has proven', async () => {
+        const user = await createUser({
+            email: 'unproven@example.com',
+            username: 'Click Here For A Prize',
+            verifiedAt: undefined
+        });
+
+        await api().post('/account/reset').send({ email: user.email });
+
+        expect(mailedGreeting('account.reset-request')).toBe('Hello!');
+    });
+
+    it('withholds it from the verification mail a signup sends, whoever the address belongs to', async () => {
+        await api().post('/account/signup').send({
+            email: 'stranger@example.com',
+            username: 'Attacker Chosen Text',
+            password: 'Str0ng!Passw0rd-xyz',
+            passwordConfirm: 'Str0ng!Passw0rd-xyz',
+            termsAccepted: true
+        });
+
+        expect(mailedGreeting('account.verify-request')).toBe('Hello!');
+    });
+});
+
 describe('POST /account/logout-all', () => {
     it('matches the contract, and ends every session the account had', async () => {
         const { user, bearer } = await authenticateAs('user');

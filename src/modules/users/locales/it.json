@@ -4,6 +4,7 @@
         "field-email-invalid": "Email non valida",
         "field-username-required": "Il nome utente è obbligatorio",
         "field-username-min": "Il nome è troppo corto",
+        "field-username-max": "Il nome è troppo lungo",
         "field-password-required": "La password è obbligatoria",
         "field-password-min": "La password è troppo corta",
         "field-password-lowercase": "La password deve contenere una lettera minuscola",

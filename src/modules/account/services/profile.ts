@@ -14,6 +14,7 @@ import {
     resetConfirmEmail,
     deleteConfirmEmail,
     emailChangeNoticeEmail,
+    greetableName,
     recipientLocale
 } from '../emails';
 import { sendAccountMail } from './mail';
@@ -246,7 +247,10 @@ const afterReset = (
          * Fire-and-forget: the password has already changed, and a queue that is briefly
          * unavailable must not turn a successful reset into an error.
          */
-        const mail = resetConfirmEmail(recipientLocale(user.locale, context), user.username);
+        const mail = resetConfirmEmail(
+            recipientLocale(user.locale, context),
+            greetableName(user, user.email)
+        );
         // Normal priority: a confirmation, not a link or code anyone is blocked on.
         void sendAccountMail(user.email, mail, 'normal');
     }
@@ -318,7 +322,9 @@ export const removeOwnAccount = (
      * from the membership store rather than the document, which holds none — `remove`'s own
      * erasure cascade may already have revoked the membership by the time this resolves.
      */
-    const { email, username, locale, _id } = user;
+    const { email, locale, _id } = user;
+    // The name only if this is the verified address, decided now, while the document exists.
+    const goodbyeName = greetableName(user, email);
 
     return isUnrestrictedCaller(String(_id)).then((unrestricted) =>
         userService.remove(user, true).then((result) => {
@@ -337,7 +343,7 @@ export const removeOwnAccount = (
 
                 // The recipient's own language first, the request's as fallback — see
                 // {@link passwordResetChange} for why the request is only ever the fallback.
-                const mail = deleteConfirmEmail(recipientLocale(locale, context), username);
+                const mail = deleteConfirmEmail(recipientLocale(locale, context), goodbyeName);
                 // Normal priority: a goodbye, not a link or code anyone is blocked on.
                 void sendAccountMail(email, mail, 'normal');
             }
@@ -480,7 +486,7 @@ const revokeCancelledChange = (
 const sendEmailChangeMail = (user: UserDocument, context: CallerContext): Promise<void> => {
     const mail = emailChangeNoticeEmail(
         recipientLocale(user.locale, context),
-        user.username,
+        greetableName(user, user.email),
         user.pendingEmail ?? ''
     );
     return sendAccountMail(user.email, mail).then(() =>

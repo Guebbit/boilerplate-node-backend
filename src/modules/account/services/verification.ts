@@ -13,7 +13,7 @@ import { t } from '@infrastructure/i18n';
 import { accountConfig } from '../config';
 import { userService, TokenType, type UserDocument } from '@modules/users';
 import { tokenAdd } from './authentication';
-import { verifyRequestEmail, recipientLocale } from '../emails';
+import { verifyRequestEmail, recipientLocale, greetableName } from '../emails';
 import { sendAccountMail } from './mail';
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
 import { cooldownRemaining, resendTooSoon } from '../cooldown';
@@ -114,7 +114,7 @@ export const sendVerificationEmail = (
              */
             const mail = verifyRequestEmail(
                 recipientLocale(user.locale, context),
-                user.username,
+                greetableName(user, address),
                 token,
                 target.route
             );

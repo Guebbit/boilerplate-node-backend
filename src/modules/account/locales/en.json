@@ -72,6 +72,7 @@
             "nothing-pending": "There is no pending email change."
         },
         "email": {
+            "greeting-anonymous": "Hello!",
             "verify-request": {
                 "subject": "Confirm your email address",
                 "meta-title": "Email verification",

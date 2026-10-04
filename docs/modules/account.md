@@ -158,6 +158,13 @@ Three things in that diagram are decisions rather than mechanics:
   because a `429` would tell a stranger which addresses have an account. Both also spend the
   recipient's mailbox budget ([security](../tools/security.md#mail-to-one-mailbox-the-victim-s-budget)),
   which a refused request does not.
+- **A display name is printed only to a mailbox that has proven itself.** `username` is free text
+  (up to 50 characters, no charset rule: one would refuse real names). A mail to an address nobody
+  has verified — a signup for a stranger's address, a pending new address — would put text of the
+  caller's choosing in a stranger's inbox, from the shop's own domain. So the greeting carries the
+  name only when the mail goes to the account's own VERIFIED address (`greetableName`), and a plain
+  "Hello!" otherwise; every template that greets goes through the same `greetingFor`. The notice to
+  the OLD address of an email change keeps the name, since that mailbox is the verified one.
 - **Confirming revokes every refresh token.** An email change is the stronger takeover primitive
   of the two, and this is the same treatment a changed password already gets.
 

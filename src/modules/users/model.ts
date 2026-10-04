@@ -13,7 +13,12 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { localeConfig } from '@infrastructure/i18n/config';
-import { CreateUserBody, createUserBodyUsernameMin, signupBodyPasswordMin } from '@api/schemas.zod';
+import {
+    CreateUserBody,
+    createUserBodyUsernameMax,
+    createUserBodyUsernameMin,
+    signupBodyPasswordMin
+} from '@api/schemas.zod';
 import { type User } from '@types';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
@@ -303,7 +308,10 @@ export const zodUserSchema = CreateUserBody.extend({
     username: z
         .string()
         .min(1, { error: () => t('users.field-username-required') })
-        .min(createUserBodyUsernameMin, { error: () => t('users.field-username-min') }),
+        .min(createUserBodyUsernameMin, { error: () => t('users.field-username-min') })
+        // The ceiling is the generated one too (50, a display-name length). A name is printed in
+        // greetings and lists, so an unbounded one is text of the caller's choosing in many places.
+        .max(createUserBodyUsernameMax, { error: () => t('users.field-username-max') }),
 
     // Complexity beyond length duplicates `PasswordNew`'s contract pattern in translated form —
     // the generated schema (`SignupBody`) would answer first in English, same reason as the

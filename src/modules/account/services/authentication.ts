@@ -19,6 +19,7 @@ import {
     deleteRequestEmail,
     resetRequestEmail,
     setupRequestEmail,
+    greetableName,
     recipientLocale
 } from '../emails';
 import { sendAccountMail } from './mail';
@@ -88,7 +89,7 @@ export const requestAccountDeletion = (user: UserDocument, context: CallerContex
          */
         const mail = deleteRequestEmail(
             recipientLocale(user.locale, context),
-            user.username,
+            greetableName(user, user.email),
             token
         );
         // High priority: a token-bearing link the user is actively waiting on, not a notification.
@@ -188,7 +189,7 @@ export const requestPasswordReset = (
                    */
                   const mail = resetRequestEmail(
                       recipientLocale(user.locale, context),
-                      user.username,
+                      greetableName(user, user.email),
                       token
                   );
                   // High priority: a token-bearing link the user is actively waiting on.
@@ -222,7 +223,11 @@ export const requestPasswordReset = (
  */
 export const requestAccountSetup = (user: UserDocument): Promise<void> =>
     issueResetToken(user).then((token) => {
-        const mail = setupRequestEmail(recipientLocale(user.locale), user.username, token);
+        const mail = setupRequestEmail(
+            recipientLocale(user.locale),
+            greetableName(user, user.email),
+            token
+        );
         // High priority: a token-bearing link the user is actively waiting on, not a notification.
         void sendAccountMail(user.email, mail);
     });

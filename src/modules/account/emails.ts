@@ -11,6 +11,38 @@ import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale, translator } from '@infrastructure/i18n';
 import { accountFrontendLink, type AccountLinkKind } from './config';
 import type { CallerContext } from '@types';
+import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
+
+/**
+ * The greeting line of an account mail: the name, or a plain "Hello!" when there is none to print.
+ *
+ * One place for every template that greets by name, so an empty name is handled once. A name is
+ * user-supplied text; {@link greetableName} decides when it may appear.
+ *
+ * @param t - the translator bound to the recipient's locale
+ * @param key - the template's own `...greeting` key (takes a `name`)
+ * @param name - the display name, or `''` for none
+ */
+const greetingFor = (t: ReturnType<typeof translator>, key: string, name: string): string =>
+    name === '' ? t('account.email.greeting-anonymous') : t(key, { name });
+
+/**
+ * The name an account mail may print for the mailbox it goes to: the account's own `username`
+ * ONLY when the mail goes to that account's VERIFIED address, otherwise `''`.
+ *
+ * `username` is a free display name. A mail to an address nobody has proven — a signup for a
+ * stranger's address, a pending new address — would put attacker-chosen text in a stranger's inbox,
+ * from the shop's own domain. One rule at the send site, so no template has to remember it.
+ *
+ * @param user - the account the mail concerns
+ * @param address - the address the mail is going to
+ * @returns the name to pass to a builder, or `''`
+ */
+export const greetableName = (
+    user: { username: string; email: string; verifiedAt?: Date | null },
+    address: string
+): string =>
+    user.verifiedAt && normalizeEmail(address) === normalizeEmail(user.email) ? user.username : '';
 
 /**
  * Email verification: the email carrying the one-time confirmation link. Shared by both
@@ -33,7 +65,7 @@ export const verifyRequestEmail = (
             locale,
             pageMetaTitle: t('account.email.verify-request.meta-title'),
             pageMetaLinks: [],
-            greeting: t('account.email.verify-request.greeting', { name }),
+            greeting: greetingFor(t, 'account.email.verify-request.greeting', name),
             intro: t('account.email.verify-request.intro'),
             linkLabel: t('account.email.verify-request.link-label'),
             linkUrl: accountFrontendLink(kind, { locale, token }),
@@ -62,7 +94,7 @@ export const emailChangeNoticeEmail = (
             locale,
             pageMetaTitle: t('account.email.email-change-notice.meta-title'),
             pageMetaLinks: [],
-            greeting: t('account.email.email-change-notice.greeting', { name }),
+            greeting: greetingFor(t, 'account.email.email-change-notice.greeting', name),
             body: t('account.email.email-change-notice.body', { newEmail }),
             footer: t('email.footer')
         }
@@ -79,7 +111,7 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
             locale,
             pageMetaTitle: t('account.email.reset-request.meta-title'),
             pageMetaLinks: [],
-            greeting: t('account.email.reset-request.greeting', { name }),
+            greeting: greetingFor(t, 'account.email.reset-request.greeting', name),
             intro: t('account.email.reset-request.intro'),
             linkLabel: t('account.email.reset-request.link-label'),
             linkUrl: accountFrontendLink('reset', { locale, token }),
@@ -104,7 +136,7 @@ export const setupRequestEmail = (locale: string, name: string, token: string): 
             locale,
             pageMetaTitle: t('account.email.setup-request.meta-title'),
             pageMetaLinks: [],
-            greeting: t('account.email.setup-request.greeting', { name }),
+            greeting: greetingFor(t, 'account.email.setup-request.greeting', name),
             intro: t('account.email.setup-request.intro'),
             linkLabel: t('account.email.setup-request.link-label'),
             linkUrl: accountFrontendLink('reset', { locale, token }),
@@ -140,7 +172,7 @@ export const twoFactorCodeEmail = (
             locale,
             pageMetaTitle: t('account.email.two-factor-code.meta-title'),
             pageMetaLinks: [],
-            greeting: t('account.email.two-factor-code.greeting', { name }),
+            greeting: greetingFor(t, 'account.email.two-factor-code.greeting', name),
             intro: t('account.email.two-factor-code.intro'),
             code,
             expiry: t('account.email.two-factor-code.expiry', { minutes }),
@@ -172,7 +204,7 @@ export const reauthCodeEmail = (
             locale,
             pageMetaTitle: t('account.email.reauth-code.meta-title'),
             pageMetaLinks: [],
-            greeting: t('account.email.reauth-code.greeting', { name }),
+            greeting: greetingFor(t, 'account.email.reauth-code.greeting', name),
             intro: t('account.email.reauth-code.intro'),
             code,
             expiry: t('account.email.reauth-code.expiry', { minutes }),
@@ -207,7 +239,7 @@ export const twoFactorChangedEmail = (
             locale,
             pageMetaTitle: t('account.email.two-factor-changed.meta-title'),
             pageMetaLinks: [],
-            greeting: t('account.email.two-factor-changed.greeting', { name }),
+            greeting: greetingFor(t, 'account.email.two-factor-changed.greeting', name),
             body: t(`account.email.two-factor-changed.body-${change}`, { method }),
             advice: t('account.email.two-factor-changed.advice'),
             footer: t('email.footer')
@@ -225,7 +257,7 @@ export const resetConfirmEmail = (locale: string, name: string): EmailContent =>
             locale,
             pageMetaTitle: t('account.email.reset-confirm.meta-title'),
             pageMetaLinks: [],
-            greeting: t('account.email.reset-confirm.greeting', { name }),
+            greeting: greetingFor(t, 'account.email.reset-confirm.greeting', name),
             body: t('account.email.reset-confirm.body'),
             footer: t('email.footer')
         }
@@ -242,7 +274,7 @@ export const deleteRequestEmail = (locale: string, name: string, token: string):
             locale,
             pageMetaTitle: t('account.email.delete-request.meta-title'),
             pageMetaLinks: [],
-            greeting: t('account.email.delete-request.greeting', { name }),
+            greeting: greetingFor(t, 'account.email.delete-request.greeting', name),
             intro: t('account.email.delete-request.intro'),
             linkLabel: t('account.email.delete-request.link-label'),
             linkUrl: accountFrontendLink('delete', { locale, token }),
@@ -262,7 +294,7 @@ export const deleteConfirmEmail = (locale: string, name: string): EmailContent =
             locale,
             pageMetaTitle: t('account.email.delete-confirm.meta-title'),
             pageMetaLinks: [],
-            greeting: t('account.email.delete-confirm.greeting', { name }),
+            greeting: greetingFor(t, 'account.email.delete-confirm.greeting', name),
             body: t('account.email.delete-confirm.body'),
             farewell: t('account.email.delete-confirm.farewell'),
             footer: t('email.footer')
@@ -287,7 +319,7 @@ export const inactivityWarningEmail = (
             locale,
             pageMetaTitle: t('account.email.inactivity-warning.meta-title'),
             pageMetaLinks: [],
-            greeting: t('account.email.inactivity-warning.greeting', { name }),
+            greeting: greetingFor(t, 'account.email.inactivity-warning.greeting', name),
             body: t('account.email.inactivity-warning.body', { days: graceDays }),
             footer: t('email.footer')
         }

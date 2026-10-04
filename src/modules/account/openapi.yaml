@@ -1381,6 +1381,7 @@ components:
                 username:
                     type: string
                     minLength: 3
+                    maxLength: 50
                 password:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 passwordConfirm:
@@ -1442,6 +1443,7 @@ components:
                 username:
                     type: string
                     minLength: 3
+                    maxLength: 50
                 # `null` clears the override, falling back to the deployment default/negotiated locale.
                 locale:
                     type: string
@@ -1475,6 +1477,7 @@ components:
                 username:
                     type: string
                     minLength: 3
+                    maxLength: 50
                 locale:
                     type: string
                     allOf:
@@ -1505,6 +1508,7 @@ components:
                 username:
                     type: string
                     minLength: 3
+                    maxLength: 50
                 locale:
                     type: string
                     nullable: true
@@ -1534,6 +1538,7 @@ components:
                 username:
                     type: string
                     minLength: 3
+                    maxLength: 50
                 locale:
                     type: string
                     allOf:

@@ -13,7 +13,8 @@ import {
     resetConfirmEmail,
     deleteRequestEmail,
     deleteConfirmEmail,
-    twoFactorChangedEmail
+    twoFactorChangedEmail,
+    greetableName
 } from '@modules/account/emails';
 import { accountFrontendLink } from '@modules/account/config';
 
@@ -198,5 +199,48 @@ describe('account emails — the two-factor change notice', () => {
         expect(bodies[0]).toContain('totp');
         expect(bodies[1]).toContain('totp');
         expect(new Set(bodies).size).toBe(3);
+    });
+});
+
+describe('account emails — the name in a greeting', () => {
+    const everyBuilder = [
+        ...LINK_EMAILS.map(
+            ([name, build]) => [name, (n: string) => build('en', n, TOKEN)] as const
+        ),
+        ...CONFIRM_EMAILS.map(([name, build]) => [name, (n: string) => build('en', n)] as const)
+    ];
+
+    it.each(everyBuilder)('%s greets by name when it has one', (_name, build) => {
+        expect(build(NAME).data.greeting).toContain(NAME);
+    });
+
+    // The name is user-supplied text. For a mailbox nobody has proven it is withheld, and every
+    // template that greets must cope with having none.
+    it.each(everyBuilder)('%s says a plain Hello! when it has none', (_name, build) => {
+        expect(build('').data.greeting).toBe('Hello!');
+    });
+
+    it('speaks the recipient language when it has no name too', () => {
+        expect(resetRequestEmail('it', '', TOKEN).data.greeting).toBe('Ciao!');
+    });
+});
+
+describe('greetableName — when the name may appear', () => {
+    const user = { username: NAME, email: 'ada@example.com', verifiedAt: new Date() };
+
+    it('prints the name for the account’s own VERIFIED address, however it is cased', () => {
+        expect(greetableName(user, 'ada@example.com')).toBe(NAME);
+        expect(greetableName(user, ' ADA@Example.com ')).toBe(NAME);
+    });
+
+    it('withholds it from an address nobody has proven', () => {
+        expect(greetableName({ ...user, verifiedAt: undefined }, 'ada@example.com')).toBe('');
+        expect(greetableName({ ...user, verifiedAt: null }, 'ada@example.com')).toBe('');
+    });
+
+    // A pending new address is never the verified one, even on a verified account.
+    it('withholds it from any address that is not the account’s own', () => {
+        expect(greetableName(user, 'someone-else@example.com')).toBe('');
+        expect(greetableName(user, 'ada+tag@example.com')).toBe('');
     });
 });

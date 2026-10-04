@@ -72,6 +72,7 @@
             "nothing-pending": "Non c'è nessuna modifica dell'indirizzo email in sospeso."
         },
         "email": {
+            "greeting-anonymous": "Ciao!",
             "verify-request": {
                 "subject": "Conferma il tuo indirizzo email",
                 "meta-title": "Verifica email",

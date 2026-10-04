@@ -12,7 +12,7 @@ import { t } from '@infrastructure/i18n';
 import type { CallerContext } from '@types';
 import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
 import type { TwoFactorDelivery } from '@types';
-import { twoFactorCodeEmail, recipientLocale } from '../../emails';
+import { twoFactorCodeEmail, recipientLocale, greetableName } from '../../emails';
 import { sendAccountMail } from '../../services/mail';
 import type { TwoFactorMethodHandler } from '../registry';
 import {
@@ -50,7 +50,7 @@ const deliver = (
     // the copy is finished before the job is published, so the worker needs no locale at all.
     const mail = twoFactorCodeEmail(
         recipientLocale(user.locale, context),
-        user.username,
+        greetableName(user, user.email),
         code,
         Math.round(DELIVERED_CODE_TTL_MS / 60_000)
     );
