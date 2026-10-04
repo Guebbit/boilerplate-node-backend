@@ -86,8 +86,8 @@ export interface ProductImageExtras {
  * multilingual product write surface. Two validations run before anything is WRITTEN: the product
  * fields' shape (`zodProductCreateSchema`, which also refuses a missing/`null` fallback locale)
  * and the translations batch's locale/field-name legality (`planTranslations`, the
- * `kernel/translation.ts` port, validates without writing). Nothing in this codebase runs a
- * cross-collection transaction, so the achievable guarantee stops there: nothing is written until
+ * `kernel/translation.ts` port, validates without writing). This write does not run in a
+ * transaction, so the achievable guarantee stops there: nothing is written until
  * both validations have already passed, not that the product write and the translations write
  * that follow are atomic with each other.
  *

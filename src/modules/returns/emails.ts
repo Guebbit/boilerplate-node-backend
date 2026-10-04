@@ -36,7 +36,7 @@ export interface ReturnNoticeInput {
     declineReason?: string;
     /** What went back, on a closed return. */
     refund?: { amount: number; currency: string };
-    /** Where to send the goods, on an approval — absent until the deployment configures one. */
+    /** Where to send the goods, on an approval. */
     returnAddress?: ReturnAddress;
 }
 

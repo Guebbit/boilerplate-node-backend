@@ -304,7 +304,7 @@ export const refreshAccessToken = (
 /**
  * Everything `POST /account/signup` collects. One object rather than a positional list because
  * some of these are optional and two are booleans — an argument order nothing but a comment
- * would keep honest. No image: signup takes none, the new account starts on the default one.
+ * would keep honest. No image: signup takes none, so the new account has none.
  */
 export interface SignupInput {
     /** The submitted address; `zodUserSchema` owns its shape. */
