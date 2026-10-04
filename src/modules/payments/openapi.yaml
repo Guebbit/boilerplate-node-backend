@@ -609,7 +609,8 @@ components:
                     description: >-
                         Whether `POST /payments/{id}/confirm` would be accepted — the payment is
                         awaiting confirmation or retryable after a decline, AND the order can still
-                        reach `paid`.
+                        reach `paid`, AND the caller is the payer and holds `cart.self.checkout`
+                        (staff reading the payment are never offered it).
                 refund:
                     type: boolean
                     description: >-

@@ -45,6 +45,18 @@ export const getForOrder = (
     });
 
 /**
+ * Whether the caller is the account that made this payment and may spend a basket at all.
+ *
+ * @param payment - the payment being served
+ * @param authContext - the caller, or `undefined` for no request behind this read
+ * @returns `false` for staff, for another customer, and for a payment whose account was erased
+ */
+const isPayerWithCheckout = (payment: PaymentDocument, authContext?: AuthContext): boolean =>
+    authContext !== undefined &&
+    payment.userId?.toString() === authContext.id &&
+    holdsKey(callerForSubject(authContext, 'Payment'), 'cart.self.checkout');
+
+/**
  * What this caller may do to a payment, as the contract's `PaymentActions`. Async because the
  * refund is also the own-money rule's question: an operator returns a customer's money, never
  * their own, nor an equal's or a superior's.
@@ -65,10 +77,14 @@ export const withActions = (
                 // anyone may complete. An in-flight payment is deliberately NOT payable: its next
                 // step is `sync`, not a second method, and offering the form again is how a
                 // customer pays twice.
+                // Then the caller's half, the same two questions `Order.actions.pay` asks: paying
+                // is the payer's own step, and only an account that shops holds `checkout`. Staff
+                // reading the payment are never offered a card form they could not submit.
                 pay:
                     CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) &&
                     Boolean(order) &&
-                    isPayable(order!.status),
+                    isPayable(order!.status) &&
+                    isPayerWithCheckout(payment, authContext),
                 // Only an operator returns money, only money that actually arrived, and only for
                 // a buyer the operator ranks above and is not. `payments.any.update` by name — a
                 // moderator holds exactly this key, and asking for anything broader would have

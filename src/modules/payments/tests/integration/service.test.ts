@@ -28,6 +28,7 @@ import {
     applyWebhookDelivery,
     applyWebhookSettlement,
     getForOrder,
+    withActions,
     refundByOrder,
     recordOfflinePayment,
     retryPendingEffects
@@ -1592,10 +1593,34 @@ describe('getForOrder — what the caller may do', () => {
         await createIntent(String(order._id), auth(user));
         await orderService.cancelById(String(order._id), auth(user));
 
-        const result = await getForOrder(String(order._id), asAdmin());
+        // Read as the payer: any other reader is refused `pay` for the caller's half alone.
+        const result = await getForOrder(String(order._id), auth(user));
 
         expect((result as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
             pay: false
         });
+    });
+
+    // The caller's half of `pay`, the same two questions `Order.actions.pay` asks: the payer, and
+    // an account that shops.
+    it('offers `pay` to the payer and withholds it from staff reading the same payment', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+
+        const asPayer = await getForOrder(String(order._id), auth(user));
+        const asStaff = await getForOrder(String(order._id), asModerator());
+
+        expect([asPayer.data?.actions?.pay, asStaff.data?.actions?.pay]).toEqual([true, false]);
+    });
+
+    it('withholds `pay` from a customer who is not the payer, key or no key', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        const stranger = await createUser({ email: 'not-the-payer@example.com' });
+
+        const body = await withActions(payment!, order, auth(stranger));
+
+        expect(body.actions?.pay).toBe(false);
     });
 });
