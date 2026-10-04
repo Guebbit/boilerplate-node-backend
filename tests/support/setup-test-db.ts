@@ -1,3 +1,4 @@
+import { settleOutboxNudges } from '@kernel/outbox';
 import { connect, disconnect, clearAll } from './database';
 
 /**
@@ -16,6 +17,13 @@ import { connect, disconnect, clearAll } from './database';
  * cost is a `deleteMany` per collection per test, which is microseconds against an in-memory
  * server — far cheaper than the afternoon spent on a suite that only passes in one order.
  *
+ * ── Why it drains event deliveries ───────────────────────────────────────────────────────────
+ * A write that announces an event starts a relay pass in the background, and that pass runs the
+ * listeners. Left running, it would write into the NEXT test's wiped database, outlive the file's
+ * own `resetDomainEvents`, or touch the client after `disconnect`. So each test waits for its own
+ * passes to finish. Declared first, so the drain runs before a file's own `afterEach` unregisters
+ * the listeners (jest-circus runs `afterEach` hooks in declaration order).
+ *
  * ── What it deliberately does NOT do ─────────────────────────────────────────────────────────
  * It seeds nothing. A test that needs data creates it through a module's `tests/factories.ts`, so
  * what a case depends on is visible in the case itself rather than inherited from a shared seed
@@ -23,6 +31,7 @@ import { connect, disconnect, clearAll } from './database';
  */
 export const setupTestDb = () => {
     beforeAll(connect);
-    afterAll(disconnect);
+    afterEach(settleOutboxNudges);
+    afterAll(() => settleOutboxNudges().then(disconnect));
     beforeEach(clearAll);
 };
