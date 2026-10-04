@@ -3,8 +3,15 @@
  */
 import mongoose from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
-import { isPermanentConnectError, start, stopDatabase } from '@infrastructure/runtime/database';
-import { setEnvironment } from '@tests/environment';
+import {
+    JOB_MAX_TIME_MS,
+    configureMongoose,
+    isPermanentConnectError,
+    start,
+    startJob,
+    stopDatabase
+} from '@infrastructure/runtime/database';
+import { setEnvironment, withoutEnvironment } from '@tests/environment';
 
 describe('isPermanentConnectError', () => {
     it.each([
@@ -17,6 +24,53 @@ describe('isPermanentConnectError', () => {
 
     it('keeps retrying a server that is simply not up yet', () => {
         expect(isPermanentConnectError({ name: 'MongoServerSelectionError' })).toBe(false);
+    });
+});
+
+describe('the per-query time limit', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('sets the configured limit as a Mongoose global, defaulting to 5 s', async () => {
+        const setSpy = jest.spyOn(mongoose, 'set');
+        await withoutEnvironment(['NODE_MONGO_MAX_TIME_MS'], () => {
+            configureMongoose();
+            return Promise.resolve();
+        });
+
+        expect(setSpy).toHaveBeenCalledWith('maxTimeMS', 5000);
+    });
+
+    it('takes the limit from NODE_MONGO_MAX_TIME_MS', () => {
+        setEnvironment({ NODE_MONGO_MAX_TIME_MS: '1234' });
+        const setSpy = jest.spyOn(mongoose, 'set');
+
+        configureMongoose();
+
+        expect(setSpy).toHaveBeenCalledWith('maxTimeMS', 1234);
+    });
+
+    it('applies it before connecting, in start()', async () => {
+        const setSpy = jest.spyOn(mongoose, 'set');
+        const connect = jest.spyOn(mongoose, 'connect').mockImplementation(() => {
+            expect(setSpy).toHaveBeenCalledWith('maxTimeMS', expect.any(Number));
+            return Promise.resolve(mongoose);
+        });
+
+        await start();
+
+        expect(connect).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives a scheduled job the longer job limit instead', async () => {
+        const setSpy = jest.spyOn(mongoose, 'set');
+        jest.spyOn(mongoose, 'connect').mockResolvedValue(mongoose);
+
+        await startJob();
+
+        expect(setSpy).toHaveBeenCalledWith('maxTimeMS', JOB_MAX_TIME_MS);
+        expect(JOB_MAX_TIME_MS).toBeGreaterThan(60_000);
     });
 });
 

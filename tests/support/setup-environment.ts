@@ -192,6 +192,13 @@ process.env.NODE_VAT_RATE_REDUCED ??= '0.10';
 process.env.NODE_RATE_LIMIT_REDIS_URL ??= '';
 
 /**
+ * The per-query time limit stays wired in, at a ceiling a contended machine cannot trip: the real
+ * 5 s default is a production number, and a suite that fails when the host is busy is not testing
+ * the code. `tests/integration/persistence/query-time-limit.test.ts` sets its own, small one.
+ */
+process.env.NODE_MONGO_MAX_TIME_MS ??= '60000';
+
+/**
  * Rung 2 of the breached-password check (`checkHibpRange`) is a REAL outbound call to
  * `api.pwnedpasswords.com`. This project's own `.env` turns it on so the demo exercises it, but a
  * suite must never depend on a live third party — it is slow enough to distort a race assertion

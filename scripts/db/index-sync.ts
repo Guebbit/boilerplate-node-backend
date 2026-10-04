@@ -22,6 +22,7 @@ import type { IndexDefinition, IndexOptions } from 'mongoose';
  * alone rather than dropping indexes a disabled domain still owns.
  */
 import { enabledModules } from '../../src/modules';
+import { JOB_MAX_TIME_MS } from '@infrastructure/runtime/database';
 
 /**
  * One collection's difference between what is stored and what its schema declares.
@@ -109,20 +110,31 @@ const uniqueIndexes = (): UniqueIndex[] =>
 const findDuplicates = (collection: string, keys: string[]) =>
     mongoose.connection
         .collection(collection)
-        .aggregate<{ _id: Record<string, unknown>; count: number; ids: unknown[] }>([
-            { $match: Object.fromEntries(keys.map((key) => [key, { $exists: true, $ne: null }])) },
+        .aggregate<{ _id: Record<string, unknown>; count: number; ids: unknown[] }>(
+            [
+                {
+                    $match: Object.fromEntries(
+                        keys.map((key) => [key, { $exists: true, $ne: null }])
+                    )
+                },
+                {
+                    $group: {
+                        _id: Object.fromEntries(
+                            keys.map((key) => [key.replaceAll('.', '_'), `$${key}`])
+                        ),
+                        count: { $sum: 1 },
+                        ids: { $push: '$_id' }
+                    }
+                },
+                { $match: { count: { $gt: 1 } } },
+                { $sort: { count: -1 } }
+            ],
             {
-                $group: {
-                    _id: Object.fromEntries(
-                        keys.map((key) => [key.replaceAll('.', '_'), `$${key}`])
-                    ),
-                    count: { $sum: 1 },
-                    ids: { $push: '$_id' }
-                }
-            },
-            { $match: { count: { $gt: 1 } } },
-            { $sort: { count: -1 } }
-        ])
+                // A raw driver call: Mongoose's global `maxTimeMS` does not reach it, and this scans
+                // a whole collection. The job ceiling, set by hand.
+                maxTimeMS: JOB_MAX_TIME_MS
+            }
+        )
         .toArray();
 
 /**

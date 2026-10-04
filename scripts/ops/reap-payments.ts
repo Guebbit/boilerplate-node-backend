@@ -19,13 +19,13 @@
  * See: docs/reference/ops.md
  */
 import '@infrastructure/config/dotenv';
-import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { paymentService } from '@modules/payments';
 import { runScript } from '../run-script';
 
 /** Connect, delete every abandoned payment attempt past its retention window, and resolve nothing. */
 const main = (): Promise<void> =>
-    start()
+    startJob()
         .then(() => paymentService.reapAbandonedPayments())
         .then(() => undefined);
 

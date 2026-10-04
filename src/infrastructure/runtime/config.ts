@@ -130,6 +130,12 @@ export const databaseConfig = defineConfig({
         NODE_MONGODB_NAME: text({
             default: 'boilerplate-node-backend',
             describe: 'Database name.'
+        }),
+        NODE_MONGO_MAX_TIME_MS: int({
+            default: 5000,
+            min: 0,
+            describe:
+                'Server-side time limit, in ms, on every query and aggregation that names none of its own. The scheduled jobs run with a longer one. 0 lifts the limit.'
         })
     }
 });

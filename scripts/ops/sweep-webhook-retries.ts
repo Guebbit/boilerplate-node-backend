@@ -22,12 +22,12 @@
  * See: docs/reference/ops.md
  */
 import '@infrastructure/config/dotenv';
-import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { sweepDueWebhookDeliveries } from '@modules/webhooks';
 import { runScript } from '../run-script';
 
 /** Connect, publish or send every due retry, and resolve nothing. */
-const main = (): Promise<void> => start().then(() => sweepDueWebhookDeliveries());
+const main = (): Promise<void> => startJob().then(() => sweepDueWebhookDeliveries());
 
 // Entry point: run `main`, record the outcome under `sweep:webhook-retries` for `/observability/health`, and close
 // the connections on both paths. See `scripts/run-script.ts`.

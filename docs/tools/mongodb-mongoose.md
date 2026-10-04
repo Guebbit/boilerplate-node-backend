@@ -100,6 +100,25 @@ idempotent, and deleted once they have run everywhere. See
 
 ---
 
+## A time limit on every query
+
+`configureMongoose()` (`infrastructure/runtime/database.ts`, called by `start()` in every process:
+the server, the cluster workers and every script) sets Mongoose's global `maxTimeMS` to
+`NODE_MONGO_MAX_TIME_MS` (default **5 s**). mongod then kills any query or aggregation that runs
+past it, instead of letting it hold a connection and a core for as long as it likes.
+
+- **Global and late.** It is a Mongoose option read when a query runs, not a plugin applied when a
+  schema compiles, so there is no load order to get wrong.
+- **Opting into more.** A query that names its own limit keeps it, `0` meaning none:
+  `.maxTimeMS(60_000)`. The scheduled jobs go through `startJob()`, which sets the longer
+  `JOB_MAX_TIME_MS` (10 min) for every query they run.
+- **What it cannot reach.** `save`, `insertMany`, `bulkWrite` and raw `collection.*` calls. The
+  writes are accepted, with a comment at each site; the raw reads (`db:sync`'s duplicate scan, the
+  demo snapshot) set a limit by hand.
+- **Tests** run with a ceiling a busy host cannot trip (`tests/support/setup-environment.ts`);
+  `tests/integration/persistence/query-time-limit.test.ts` proves the server really kills a slow
+  find and a slow aggregate.
+
 ## Seeds
 
 Seeds populate the database with **known test data** for local development.

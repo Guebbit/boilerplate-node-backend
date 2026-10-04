@@ -26,13 +26,13 @@
  * See: docs/reference/ops.md
  */
 import '@infrastructure/config/dotenv';
-import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { paymentService } from '@modules/payments';
 import { runScript } from '../run-script';
 
 /** Connect, retry every owed effect and every open refund, and resolve nothing. */
 const main = (): Promise<void> =>
-    start()
+    startJob()
         .then(() => paymentService.retryPendingEffects())
         .then(() => paymentService.retryOpenRefunds())
         .then(() => undefined);

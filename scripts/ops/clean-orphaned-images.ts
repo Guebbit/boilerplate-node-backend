@@ -24,7 +24,7 @@
 import '@infrastructure/config/dotenv';
 import path from 'node:path';
 import mongoose from 'mongoose';
-import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { pruneUnreferenced } from '@infrastructure/adapters/filesystem';
 import {
@@ -74,7 +74,7 @@ const referencedFilenames = async (): Promise<Set<string>> => {
  * the same carve-out `.gitignore`'s own `public/images/*` rule makes.
  */
 const main = (): Promise<void> =>
-    start().then(async () => {
+    startJob().then(async () => {
         const root = publicRoot();
         const keep = await referencedFilenames();
 

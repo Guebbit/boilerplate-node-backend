@@ -44,6 +44,14 @@ export const isPermanentConnectError = (error: unknown): boolean => {
 };
 
 /**
+ * The server-side time limit for a scheduled job's queries, in ms. A reaper or a sweep scans more
+ * than a request ever does, so it gets minutes where a request gets seconds
+ * (`NODE_MONGO_MAX_TIME_MS`), but still a ceiling: a job stuck behind a hung query is not one that
+ * can be noticed.
+ */
+export const JOB_MAX_TIME_MS = 600_000;
+
+/**
  * Backoff delays should yield to the event loop instead of blocking the whole process.
  *
  * Promisified `setTimeout` — a busy-wait loop here would freeze the event loop and, in a
@@ -70,6 +78,28 @@ export const getDatabaseUri = () => {
 };
 
 /**
+ * Apply this process's Mongoose settings, once, before the first query.
+ *
+ * `autoIndex` goes off in production, `maxTimeMS` is set for every query. Both are Mongoose GLOBAL
+ * options, read when a query runs rather than when a schema compiles, so there is no load order to
+ * get wrong: no entry point can build a model "too early" for them.
+ *
+ * `maxTimeMS` is attached to every query and aggregate that did not set its own, and a query that
+ * did (even `0`, "no limit") keeps it. It cannot reach `save`, `insertMany`, `bulkWrite` or a raw
+ * `collection.*` call: those are writes (accepted, a comment at each site) or set a limit by hand.
+ * https://mongoosejs.com/docs/api/mongoose.html#Mongoose.prototype.set()
+ * https://www.mongodb.com/docs/manual/reference/method/cursor.maxTimeMS/
+ *
+ * @param maxTimeMs - the limit for queries naming none; defaults to `NODE_MONGO_MAX_TIME_MS`
+ */
+export const configureMongoose = (
+    maxTimeMs: number = databaseConfig().NODE_MONGO_MAX_TIME_MS
+): void => {
+    if (!isRelaxedEnvironment()) mongoose.set('autoIndex', false);
+    mongoose.set('maxTimeMS', maxTimeMs);
+};
+
+/**
  * Connect to MongoDB with exponential-backoff retry, capped at 30s; throws once attempts run out.
  *
  * Exists for orchestrated environments: when the API container starts alongside the database
@@ -80,9 +110,12 @@ export const getDatabaseUri = () => {
  * `createApp()`'s `boot`. Never turns it on: `scripts/db/sync-indexes.ts` already ran `false` in
  * production, and dev/test keep Mongoose's own default (on), which is what gives the test suites
  * their constraints for free. https://mongoosejs.com/docs/guide.html#autoIndex
+ *
+ * @param maxTimeMs - the per-query time limit, see {@link configureMongoose}; a scheduled job passes
+ *   {@link JOB_MAX_TIME_MS} through {@link startJob}
  */
-export const start = () => {
-    if (!isRelaxedEnvironment()) mongoose.set('autoIndex', false);
+export const start = (maxTimeMs?: number) => {
+    configureMongoose(maxTimeMs);
 
     // Recursive rather than a `for` loop so each retry chains onto the previous promise
     // without `async`/`await` — this codebase stays on explicit promise chains throughout.
@@ -118,6 +151,12 @@ export const start = () => {
     watchConnection();
     return attemptConnect(0);
 };
+
+/**
+ * {@link start}, for a scheduled job (a reaper, a sweep, a one-shot setup script): the same
+ * connection with the longer per-query limit {@link JOB_MAX_TIME_MS}.
+ */
+export const startJob = () => start(JOB_MAX_TIME_MS);
 
 /** Whether {@link watchConnection} already attached its listeners — `start()` can run again. */
 let watching = false;

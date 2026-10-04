@@ -18,7 +18,7 @@
  * See: docs/tools/outbox.md
  */
 import '@infrastructure/config/dotenv';
-import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { registerModules } from '@kernel/registry';
 import { relayOutbox } from '@kernel/outbox';
 import { logger } from '@infrastructure/adapters/logger';
@@ -27,7 +27,7 @@ import { runScript } from '../run-script';
 
 /** Connect, install the event subscriptions, publish every due event, and resolve nothing. */
 const main = (): Promise<void> =>
-    start()
+    startJob()
         .then(() => {
             registerModules(enabledModules);
         })

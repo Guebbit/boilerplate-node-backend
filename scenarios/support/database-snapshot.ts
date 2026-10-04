@@ -11,7 +11,7 @@
 // The driver's own raw-document type: what `collection.find()` yields and `collection.insertMany()`
 // takes, with no Mongoose hydration in between. https://mongodb.github.io/node-mongodb-native/
 import type { Document } from 'mongodb';
-import { connection } from '@infrastructure/runtime/database';
+import { connection, JOB_MAX_TIME_MS } from '@infrastructure/runtime/database';
 
 /**
  * Empty every collection, never drop the database.
@@ -65,7 +65,7 @@ export const captureDatabase = (): Promise<DatabaseCopy> =>
     Promise.all(
         Object.entries(connection.collections).map(([name, collection]) =>
             collection
-                .find({})
+                .find({}, { maxTimeMS: JOB_MAX_TIME_MS })
                 .toArray()
                 .then((documents): [string, Document[]] => [name, documents])
         )

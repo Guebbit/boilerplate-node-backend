@@ -22,13 +22,13 @@
  * See: docs/reference/ops.md
  */
 import '@infrastructure/config/dotenv';
-import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { orderService } from '@modules/orders';
 import { runScript } from '../run-script';
 
 /** Connect, anonymize every order past its retention window, and resolve nothing. */
 const main = (): Promise<void> =>
-    start()
+    startJob()
         .then(() => orderService.anonymizeDueOrders())
         .then(() => undefined);
 

@@ -19,7 +19,7 @@
  * See: docs/tools/image-processing.md
  */
 import '@infrastructure/config/dotenv';
-import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { reapDirectory } from '@infrastructure/adapters/filesystem';
 import { imageConfig } from '@infrastructure/adapters/config';
@@ -41,7 +41,7 @@ const main = (): Promise<void> => {
         .then(({ checked, reaped }) =>
             logger.info({ message: 'Quarantine reaped.', root, checked, reaped })
         )
-        .then(() => start());
+        .then(() => startJob());
 };
 
 // Entry point: run `main`, record the outcome under `reap:quarantine` for `/observability/health`, and close

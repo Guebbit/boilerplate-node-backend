@@ -17,7 +17,7 @@
  */
 import '@infrastructure/config/dotenv';
 import mongoose from 'mongoose';
-import { start, connection } from '@infrastructure/runtime/database';
+import { startJob, connection } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
 import { applyIndexSync, planIndexSync, type IndexDiff } from './index-sync';
@@ -54,7 +54,7 @@ const sync = async (): Promise<void> => {
      */
     mongoose.set('autoIndex', false);
 
-    await start();
+    await startJob();
 
     if (checkOnly) {
         const plan = await planIndexSync();

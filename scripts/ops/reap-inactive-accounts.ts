@@ -43,7 +43,7 @@
 import '@infrastructure/config/dotenv';
 import { logger } from '@infrastructure/adapters/logger';
 import { accountConfig } from '@modules/account/config';
-import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { bootI18n, getDefaultLocale } from '@infrastructure/i18n';
 import { registerModules } from '@kernel/registry';
@@ -104,7 +104,7 @@ const main = async (): Promise<void> => {
     }
 
     const ran = await withLease('reap:inactive-accounts', LEASE_TTL_MS, async () => {
-        await start();
+        await startJob();
         registerModules(enabledModules);
         await initI18n();
 

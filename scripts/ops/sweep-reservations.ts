@@ -16,7 +16,7 @@
  *            `sweep:reservations` npm script and its `docker/crontab` line.
  */
 import '@infrastructure/config/dotenv';
-import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { bootI18n } from '@infrastructure/i18n';
 import { registerModules } from '@kernel/registry';
@@ -26,7 +26,7 @@ import { runScript } from '../run-script';
 
 /** Connect, install the event subscriptions, expire every stale hold, and resolve nothing. */
 const main = (): Promise<void> =>
-    start()
+    startJob()
         .then(() => {
             registerModules(enabledModules);
             return bootI18n(enabledModuleLocales());

@@ -15,7 +15,7 @@
  * See: docs/tools/email-and-rendering.md
  */
 import '@infrastructure/config/dotenv';
-import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { reapSpooled } from '@infrastructure/adapters/mail-spool';
 import { mailFilesConfig } from '@infrastructure/adapters/config';
@@ -35,7 +35,7 @@ const main = (): Promise<void> =>
         .then((reaped) => {
             if (reaped > 0) logger.info({ message: 'Spooled mail attachments reaped.', reaped });
         })
-        .then(() => start());
+        .then(() => startJob());
 
 // Entry point: run `main`, record the outcome under `reap:mail-spool` for `/observability/health`, and close
 // the connections on both paths. See `scripts/run-script.ts`.

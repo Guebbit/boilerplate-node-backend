@@ -241,6 +241,8 @@ const importEntries = async (
     const changedEntries = [...incoming].filter(([key, value]) => existing.get(key) !== value);
 
     await withTransaction(async (session) => {
+        // `bulkWrite` is a write, outside Mongoose's global `maxTimeMS` on purpose: its size is the
+        // caller's own bounded body, and cutting a transaction's write short is worse than waiting.
         if (changedEntries.length > 0)
             await localeEntryModel.bulkWrite(
                 changedEntries.map(([key, value]) => ({

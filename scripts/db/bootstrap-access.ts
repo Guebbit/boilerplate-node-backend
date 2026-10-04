@@ -15,14 +15,14 @@
  * See: docs/reference/ops.md
  */
 import '@infrastructure/config/dotenv';
-import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { bootstrapAccessModel } from '@modules/access';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
 
 /** Connect, upsert the shop, and log its id for the operator's records. */
 const main = (): Promise<void> =>
-    start()
+    startJob()
         .then(() => bootstrapAccessModel('Shop'))
         .then((tenant) => {
             logger.info(`Access model bootstrapped: shop "${String(tenant._id)}".`);

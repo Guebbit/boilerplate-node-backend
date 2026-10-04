@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
+import { configureMongoose } from '@infrastructure/runtime/database';
 
 /**
  * Connects this test file to the jest instance's shared in-memory Mongo.
@@ -33,6 +34,9 @@ export const connect = async () => {
                 'in-memory Mongo and publishes it. Run through jest, which is wired to it in ' +
                 'jest.config.js (`globalSetup`), rather than importing this module directly.'
         );
+
+    // The same Mongoose settings `start()` applies in every real process.
+    configureMongoose();
 
     // Unique per call, and `connect` is called once per file, so this is effectively per-file.
     await mongoose.connect(uri, { dbName: `test-${randomUUID().slice(0, 8)}` });
