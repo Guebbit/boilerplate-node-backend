@@ -617,12 +617,13 @@ It is **off by default**, so a fork never publishes the author's contact:
 | `NODE_SECURITY_POLICY_URL` | optional `Policy:` link                                 |
 
 `Expires` is a renewal duty. It is a fixed date on purpose: a rolling one always looks fresh and
-so says nothing. Boot logs a warning when it is missing, past, or within 30 days. Not published:
-PGP `Encryption:` and signatures.
+so says nothing. Once it passes the route answers 404 (RFC 9116 §2.5.5: an expired file must not be
+trusted), judged on every request rather than at boot. Not published: PGP `Encryption:` and
+signatures.
 
 ```mermaid
 flowchart LR
-    R[GET /.well-known/security.txt] --> C{contact + valid Expires?}
+    R[GET /.well-known/security.txt] --> C{contact + Expires still ahead?}
     C -- yes --> T[200 text/plain]
     C -- no --> N[404 envelope]
 ```

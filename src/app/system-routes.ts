@@ -44,7 +44,8 @@ router.get('/readyz', (_request, response) => {
 /**
  * GET /.well-known/security.txt — RFC 9116 disclosure contact. An Express route, never a static
  * file: `express.static` runs with `dotfiles: 'ignore'`, which 404s any `.well-known` path.
- * 404 until the deployment sets `NODE_SECURITY_CONTACT` and `NODE_SECURITY_EXPIRES`.
+ * 404 until the deployment sets `NODE_SECURITY_CONTACT` and `NODE_SECURITY_EXPIRES`, and again once
+ * that date has passed (checked per request).
  */
 router.get('/.well-known/security.txt', (_request, response, next) => {
     const body = buildSecurityTxt(securityTxtSettings());

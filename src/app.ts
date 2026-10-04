@@ -50,8 +50,7 @@ import { settleWithin } from '@infrastructure/runtime/settle';
 
 import { registerModules } from '@kernel/registry';
 import { enabledModules, enabledModuleLocales, enabledModuleTemplateDirectories } from './modules';
-import { APP_CONFIG_SLICES, securityTxtSettings } from '@app/config';
-import { securityTxtWarning } from '@app/security-txt';
+import { APP_CONFIG_SLICES } from '@app/config';
 
 import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
@@ -238,10 +237,6 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
     };
 
     registerModules(enabledModules, APP_CONFIG_SLICES);
-
-    // Not a refusal: a boilerplate must boot unconfigured. But a stale security.txt is worse than none.
-    const securityTxtProblem = securityTxtWarning(securityTxtSettings());
-    if (securityTxtProblem) logger.warn({ message: securityTxtProblem });
 
     // `locales` being absent is a supported deployment shape, not a
     // misconfiguration — this is the one line that says so, once, rather than a reader inferring it

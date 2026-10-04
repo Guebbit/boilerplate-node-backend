@@ -1,7 +1,7 @@
 /**
- * `buildSecurityTxt` and `securityTxtWarning` — the pure halves of `/.well-known/security.txt`.
+ * `buildSecurityTxt` — the pure half of `/.well-known/security.txt`.
  */
-import { buildSecurityTxt, securityTxtWarning } from '@app/security-txt';
+import { buildSecurityTxt } from '@app/security-txt';
 
 const NOW = new Date('2026-09-29T00:00:00Z');
 
@@ -31,6 +31,29 @@ describe('buildSecurityTxt', () => {
         );
     });
 
+    it('is undefined once Expires has passed, since an expired file must not be trusted', () => {
+        const settings = {
+            NODE_SECURITY_CONTACT: 'mailto:a@b.c',
+            NODE_SECURITY_EXPIRES: '2026-09-01T00:00:00Z'
+        };
+
+        expect(buildSecurityTxt(settings, NOW)).toBeUndefined();
+        // Expiring at this very instant counts as expired.
+        expect(
+            buildSecurityTxt({ ...settings, NODE_SECURITY_EXPIRES: NOW.toISOString() }, NOW)
+        ).toBeUndefined();
+    });
+
+    it('is judged against the clock at each call, so a running server stops publishing', () => {
+        const settings = {
+            NODE_SECURITY_CONTACT: 'mailto:a@b.c',
+            NODE_SECURITY_EXPIRES: '2026-10-01T00:00:00Z'
+        };
+
+        expect(buildSecurityTxt(settings, new Date('2026-09-30T23:59:59Z'))).toBeDefined();
+        expect(buildSecurityTxt(settings, new Date('2026-10-01T00:00:01Z'))).toBeUndefined();
+    });
+
     it('adds Policy and Canonical when their sources are set', () => {
         const body = buildSecurityTxt({
             NODE_SECURITY_CONTACT: 'https://x.test/advisories/new',
@@ -41,32 +64,5 @@ describe('buildSecurityTxt', () => {
 
         expect(body).toContain('Policy: https://x.test/SECURITY.md\n');
         expect(body).toContain('Canonical: https://api.x.test/.well-known/security.txt\n');
-    });
-});
-
-describe('securityTxtWarning', () => {
-    const contact = { NODE_SECURITY_CONTACT: 'mailto:a@b.c' };
-
-    it('is silent when unconfigured', () => {
-        expect(securityTxtWarning({}, NOW)).toBeUndefined();
-    });
-
-    it('warns when Expires is missing, invalid, past or within 30 days', () => {
-        expect(securityTxtWarning(contact, NOW)).toContain('NOT published');
-        expect(securityTxtWarning({ ...contact, NODE_SECURITY_EXPIRES: 'x' }, NOW)).toContain(
-            'NOT published'
-        );
-        expect(
-            securityTxtWarning({ ...contact, NODE_SECURITY_EXPIRES: '2026-09-01T00:00:00Z' }, NOW)
-        ).toContain('past');
-        expect(
-            securityTxtWarning({ ...contact, NODE_SECURITY_EXPIRES: '2026-10-15T00:00:00Z' }, NOW)
-        ).toContain('within 30 days');
-    });
-
-    it('is silent when Expires is comfortably in the future', () => {
-        expect(
-            securityTxtWarning({ ...contact, NODE_SECURITY_EXPIRES: '2027-09-29T00:00:00Z' }, NOW)
-        ).toBeUndefined();
     });
 });

@@ -66,6 +66,15 @@ describe('GET /.well-known/security.txt', () => {
         expect(response.text).toContain('Expires: 2099-01-01T00:00:00.000Z');
     });
 
+    it('answers 404 once its Expires has passed, though a contact is set', async () => {
+        setEnvironment({ NODE_SECURITY_CONTACT: 'https://example.test/advisories/new' });
+        setEnvironment({ NODE_SECURITY_EXPIRES: '2020-01-01T00:00:00Z' });
+
+        const response = await api().get('/.well-known/security.txt');
+
+        expect(response.status).toBe(404);
+    });
+
     it('matches the contract when unconfigured (404)', async () => {
         const response = await api().get('/.well-known/security.txt');
 
