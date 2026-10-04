@@ -1,6 +1,6 @@
 /**
  * @module
- * The seed accounts' passwords, as a config slice: the twelve `NODE_SEED_*_PASSWORD` variables, each
+ * The seed accounts' passwords, as a config slice: the thirteen `NODE_SEED_*_PASSWORD` variables, each
  * with its committed, public fallback.
  *
  * Not part of the app's boot gate — the seeder is a script, not the app — but read through the
@@ -43,6 +43,10 @@ export const seedPasswordsConfig = defineConfig({
             'Demo-PendingEmail1!'
         ),
         NODE_SEED_BANNED_PASSWORD: seedPassword('banned persona', 'Demo-Banned1!'),
+        NODE_SEED_SECOND_SHOPPER_PASSWORD: seedPassword(
+            'second-shopper persona',
+            'Demo-SecondShopper1!'
+        ),
         NODE_SEED_MANAGER_PASSWORD: seedPassword('manager', 'Demo-Manager1!'),
         NODE_SEED_WAREHOUSE_PASSWORD: seedPassword('warehouse', 'Demo-Warehouse1!'),
         NODE_SEED_SUPPORT_PASSWORD: seedPassword('support', 'Demo-Support1!'),

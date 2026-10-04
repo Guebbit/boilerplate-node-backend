@@ -49,6 +49,7 @@ import {
     SEED_MANAGER_ID,
     SEED_MODERATOR_ID,
     SEED_PENDING_EMAIL_ID,
+    SEED_SECOND_SHOPPER_ID,
     SEED_PENDING_EMAIL_TARGET,
     SEED_SUPPORT_ID,
     SEED_WAREHOUSE_ID,
@@ -530,7 +531,8 @@ describe('conformance: a produced row parses as the response the API would serve
         const holders = await addressBookModel.find().exec();
         const owners = holders.map((book) => book.userId.toString());
 
-        expect(owners).toContain(SEED_PENDING_EMAIL_ID);
+        expect(owners).toContain(SEED_SECOND_SHOPPER_ID);
+        expect(owners).not.toContain(SEED_PENDING_EMAIL_ID);
         for (const staffId of [SEED_EDITOR_ID, SEED_MANAGER_ID, SEED_MODERATOR_ID, SEED_SUPPORT_ID])
             expect(owners).not.toContain(staffId);
     });

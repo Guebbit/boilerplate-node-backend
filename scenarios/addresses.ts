@@ -5,12 +5,12 @@
  * every order the flow runner places for that customer freezes a copy of as its `shippingAddress`
  * (and `billingAddress`) — which is what makes "an order remembers where it was sent" checkable
  * against a book that can still change. Staff and administrators do not shop, so no staff persona
- * keeps an address for checkout; the pending-email persona does, as the SECOND customer — the
- * shopper a two-shoppers journey needs once no staff persona can stand in for one.
+ * keeps an address for checkout; the second-shopper persona does — the buyer a two-shoppers
+ * journey needs once no staff persona can stand in for one.
  */
 
 import { Types } from 'mongoose';
-import { SEED_ADMIN_ID, SEED_PENDING_EMAIL_ID, SEED_USER_ID } from '@scenarios/accounts';
+import { SEED_ADMIN_ID, SEED_SECOND_SHOPPER_ID, SEED_USER_ID } from '@scenarios/accounts';
 import { type SeedOutcome, insertIfAbsentForOwner } from '@scenarios/seed';
 import { makeAddressBook } from '@modules/addresses/factories';
 import { addressBookRepository } from '@modules/addresses/repository';
@@ -78,12 +78,12 @@ export const addressBookFixtures = [
         ]
     }),
     makeAddressBook({
-        userId: SEED_PENDING_EMAIL_ID,
+        userId: SEED_SECOND_SHOPPER_ID,
         items: [
             {
                 id: new Types.ObjectId().toHexString(),
                 label: 'home',
-                fullName: 'Pia Pending',
+                fullName: 'Sam Second',
                 street: 'Via Pendente 3',
                 city: 'Parma',
                 zip: '43121',

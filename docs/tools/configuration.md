@@ -562,20 +562,21 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### scenario-seeds
 
-| Variable                           | Type | Default               | Rules                | What it does                                                                                              |
-| ---------------------------------- | ---- | --------------------- | -------------------- | --------------------------------------------------------------------------------------------------------- |
-| `NODE_SEED_ADMIN_PASSWORD`         | text | `Demo-Admin1!`        | secret: never logged | The owner (`admin`) seed account's password. Keep it identical to the paired frontend's own `.env`.       |
-| `NODE_SEED_USER_PASSWORD`          | text | `Demo-User1!`         | secret: never logged | The customer seed account's password. Keep it identical to the paired frontend's own `.env`.              |
-| `NODE_SEED_EDITOR_PASSWORD`        | text | `Demo-Editor1!`       | secret: never logged | The editor seed account's password. Keep it identical to the paired frontend's own `.env`.                |
-| `NODE_SEED_MODERATOR_PASSWORD`     | text | `Demo-Moderator1!`    | secret: never logged | The moderator seed account's password. Keep it identical to the paired frontend's own `.env`.             |
-| `NODE_SEED_UNVERIFIED_PASSWORD`    | text | `Demo-Unverified1!`   | secret: never logged | The unverified persona seed account's password. Keep it identical to the paired frontend's own `.env`.    |
-| `NODE_SEED_TWO_FACTOR_PASSWORD`    | text | `Demo-TwoFactor1!`    | secret: never logged | The two-factor persona seed account's password. Keep it identical to the paired frontend's own `.env`.    |
-| `NODE_SEED_PENDING_EMAIL_PASSWORD` | text | `Demo-PendingEmail1!` | secret: never logged | The pending-email persona seed account's password. Keep it identical to the paired frontend's own `.env`. |
-| `NODE_SEED_BANNED_PASSWORD`        | text | `Demo-Banned1!`       | secret: never logged | The banned persona seed account's password. Keep it identical to the paired frontend's own `.env`.        |
-| `NODE_SEED_MANAGER_PASSWORD`       | text | `Demo-Manager1!`      | secret: never logged | The manager seed account's password. Keep it identical to the paired frontend's own `.env`.               |
-| `NODE_SEED_WAREHOUSE_PASSWORD`     | text | `Demo-Warehouse1!`    | secret: never logged | The warehouse seed account's password. Keep it identical to the paired frontend's own `.env`.             |
-| `NODE_SEED_SUPPORT_PASSWORD`       | text | `Demo-Support1!`      | secret: never logged | The support seed account's password. Keep it identical to the paired frontend's own `.env`.               |
-| `NODE_SEED_OPERATOR_PASSWORD`      | text | `Demo-Operator1!`     | secret: never logged | The platform operator seed account's password. Keep it identical to the paired frontend's own `.env`.     |
+| Variable                            | Type | Default                | Rules                | What it does                                                                                               |
+| ----------------------------------- | ---- | ---------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `NODE_SEED_ADMIN_PASSWORD`          | text | `Demo-Admin1!`         | secret: never logged | The owner (`admin`) seed account's password. Keep it identical to the paired frontend's own `.env`.        |
+| `NODE_SEED_USER_PASSWORD`           | text | `Demo-User1!`          | secret: never logged | The customer seed account's password. Keep it identical to the paired frontend's own `.env`.               |
+| `NODE_SEED_EDITOR_PASSWORD`         | text | `Demo-Editor1!`        | secret: never logged | The editor seed account's password. Keep it identical to the paired frontend's own `.env`.                 |
+| `NODE_SEED_MODERATOR_PASSWORD`      | text | `Demo-Moderator1!`     | secret: never logged | The moderator seed account's password. Keep it identical to the paired frontend's own `.env`.              |
+| `NODE_SEED_UNVERIFIED_PASSWORD`     | text | `Demo-Unverified1!`    | secret: never logged | The unverified persona seed account's password. Keep it identical to the paired frontend's own `.env`.     |
+| `NODE_SEED_TWO_FACTOR_PASSWORD`     | text | `Demo-TwoFactor1!`     | secret: never logged | The two-factor persona seed account's password. Keep it identical to the paired frontend's own `.env`.     |
+| `NODE_SEED_PENDING_EMAIL_PASSWORD`  | text | `Demo-PendingEmail1!`  | secret: never logged | The pending-email persona seed account's password. Keep it identical to the paired frontend's own `.env`.  |
+| `NODE_SEED_BANNED_PASSWORD`         | text | `Demo-Banned1!`        | secret: never logged | The banned persona seed account's password. Keep it identical to the paired frontend's own `.env`.         |
+| `NODE_SEED_SECOND_SHOPPER_PASSWORD` | text | `Demo-SecondShopper1!` | secret: never logged | The second-shopper persona seed account's password. Keep it identical to the paired frontend's own `.env`. |
+| `NODE_SEED_MANAGER_PASSWORD`        | text | `Demo-Manager1!`       | secret: never logged | The manager seed account's password. Keep it identical to the paired frontend's own `.env`.                |
+| `NODE_SEED_WAREHOUSE_PASSWORD`      | text | `Demo-Warehouse1!`     | secret: never logged | The warehouse seed account's password. Keep it identical to the paired frontend's own `.env`.              |
+| `NODE_SEED_SUPPORT_PASSWORD`        | text | `Demo-Support1!`       | secret: never logged | The support seed account's password. Keep it identical to the paired frontend's own `.env`.                |
+| `NODE_SEED_OPERATOR_PASSWORD`       | text | `Demo-Operator1!`      | secret: never logged | The platform operator seed account's password. Keep it identical to the paired frontend's own `.env`.      |
 
 <!-- config-reference:end -->
 

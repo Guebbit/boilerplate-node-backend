@@ -25,7 +25,7 @@ export const SEED_EDITOR_ID = '65df1a2b3c4d5e6f7a8b9c01';
 export const SEED_MODERATOR_ID = '65df1a2b3c4d5e6f7a8b9c03';
 
 /**
- * The four persona accounts — each is a customer in one particular state the e2e journeys start
+ * The five persona accounts — each is a customer in one particular state the e2e journeys start
  * from. Same id format as {@link SEED_ADMIN_ID}; `scenarios/users.ts` builds the rows.
  */
 export const SEED_UNVERIFIED_ID = '65df1a2b3c4d5e6f7a8b9c10';
@@ -38,6 +38,9 @@ export const SEED_PENDING_EMAIL_ID = '65df1a2b3c4d5e6f7a8b9c12';
 
 /** The persona an admin switched off (`active: false`): every login is refused. */
 export const SEED_BANNED_ID = '65df1a2b3c4d5e6f7a8b9c13';
+
+/** The persona with no special state: a plain customer, the second buyer a two-shoppers journey needs. */
+export const SEED_SECOND_SHOPPER_ID = '65df1a2b3c4d5e6f7a8b9c14';
 
 /**
  * The four staff accounts: three shop roles (manager, warehouse, support) and a platform-only
@@ -101,6 +104,9 @@ export const SEED_PENDING_EMAIL_EMAIL = 'pending-email@example.com';
 /** Login email of the switched-off persona. */
 export const SEED_BANNED_EMAIL = 'banned@example.com';
 
+/** Login email of the second-shopper persona. */
+export const SEED_SECOND_SHOPPER_EMAIL = 'second-shopper@example.com';
+
 /** Login emails of the staff accounts — see {@link SEED_MANAGER_ID}. */
 export const SEED_MANAGER_EMAIL = 'manager@example.com';
 
@@ -148,7 +154,11 @@ export const seedPersonaCredentials = {
         email: SEED_PENDING_EMAIL_EMAIL,
         password: personaPasswords.NODE_SEED_PENDING_EMAIL_PASSWORD
     },
-    banned: { email: SEED_BANNED_EMAIL, password: personaPasswords.NODE_SEED_BANNED_PASSWORD }
+    banned: { email: SEED_BANNED_EMAIL, password: personaPasswords.NODE_SEED_BANNED_PASSWORD },
+    secondShopper: {
+        email: SEED_SECOND_SHOPPER_EMAIL,
+        password: personaPasswords.NODE_SEED_SECOND_SHOPPER_PASSWORD
+    }
 } as const;
 
 /** The logins for the staff accounts, by the name a spec asks for. */
@@ -198,7 +208,8 @@ export const seedAccessModel = (): Promise<void> =>
                     SEED_UNVERIFIED_ID,
                     SEED_TWO_FACTOR_ID,
                     SEED_PENDING_EMAIL_ID,
-                    SEED_BANNED_ID
+                    SEED_BANNED_ID,
+                    SEED_SECOND_SHOPPER_ID
                 ].map((id) => assignRole(id, String(tenant._id), 'tenant', 'customer')),
                 assignRole(SEED_MANAGER_ID, String(tenant._id), 'tenant', 'manager'),
                 assignRole(SEED_WAREHOUSE_ID, String(tenant._id), 'tenant', 'warehouse'),

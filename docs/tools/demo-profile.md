@@ -135,16 +135,17 @@ reading them back off a serialized user.
 
 ## The persona accounts
 
-Four more customers, each in one state a journey starts from. They are written straight to the
+Five more customers, each in one state a journey starts from. They are written straight to the
 collection (`scenarios/users.ts`), because reaching the state through the API needs a mail or a
 code the seeder never reads. Each password is `NODE_SEED_<NAME>_PASSWORD`.
 
-| Persona        | Login                       | State                                                                                            |
-| -------------- | --------------------------- | ------------------------------------------------------------------------------------------------ |
-| `unverified`   | `unverified@example.com`    | signed up, never proved the address                                                              |
-| `twoFactor`    | `two-factor@example.com`    | email 2FA armed; five known single-use backup codes (published as `backupCodes`)                 |
-| `pendingEmail` | `pending-email@example.com` | asked to move to another address, has not confirmed; the second customer, with a billing address |
-| `banned`       | `banned@example.com`        | switched off (`active: false`), so a login is refused                                            |
+| Persona         | Login                        | State                                                                                                |
+| --------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `unverified`    | `unverified@example.com`     | signed up, never proved the address                                                                  |
+| `twoFactor`     | `two-factor@example.com`     | email 2FA armed; five known single-use backup codes (published as `backupCodes`)                     |
+| `pendingEmail`  | `pending-email@example.com`  | asked to move to another address, has not confirmed                                                  |
+| `banned`        | `banned@example.com`         | switched off (`active: false`), so a login is refused                                                |
+| `secondShopper` | `second-shopper@example.com` | a plain verified customer with a default billing address: the second buyer of a two-shoppers journey |
 
 The banned persona is separate from `marcus`, whom the shop flow bans through the API so the audit
 trail records it. The persona exists so `blank` carries one too.
@@ -164,7 +165,7 @@ platform role only, with no shop membership, so it holds none of a shop's keys. 
 
 None of them keeps an address book of its own seeding: staff and administrators do not shop, so
 no persona above needs a billing address to check out. The second shopper a two-customer journey
-needs is `pendingEmail`, whose book holds one default entry. The orders in the dataset all belong to the
+needs is `secondShopper`, whose book holds one default entry. The orders in the dataset all belong to the
 customer base; the operator, the staff and the owner own none.
 
 ## How a scenario is built

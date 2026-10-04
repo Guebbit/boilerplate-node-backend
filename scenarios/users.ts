@@ -32,6 +32,7 @@ import {
     SEED_TWO_FACTOR_ID,
     SEED_TWO_FACTOR_BACKUP_CODES,
     SEED_PENDING_EMAIL_ID,
+    SEED_SECOND_SHOPPER_ID,
     SEED_PENDING_EMAIL_TARGET,
     SEED_BANNED_ID,
     seedStaffCredentials,
@@ -83,7 +84,7 @@ export const SEED_CUSTOMER_IDS = {
 const twoFactorBackupCodeSalt = generateBackupCodeSalt();
 
 /**
- * The four personas — customers in one particular state each, written straight to the collection
+ * The five personas — customers in one particular state each, written straight to the collection
  * because reaching the state through the API needs a mail or a code the seeder does not read.
  * Ids, addresses and passwords come from `@scenarios/accounts`.
  */
@@ -128,6 +129,14 @@ const personaUsers = [
         ...seedPersonaCredentials.banned,
         verifiedAt: new Date(),
         active: false,
+        ...userImages.customer
+    }),
+    // No special state: verified, so it can shop. Its address book is seeded by `addresses.ts`.
+    makeUser({
+        id: SEED_SECOND_SHOPPER_ID,
+        username: 'second-shopper',
+        ...seedPersonaCredentials.secondShopper,
+        verifiedAt: new Date(),
         ...userImages.customer
     })
 ];
