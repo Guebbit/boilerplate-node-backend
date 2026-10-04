@@ -1,0 +1,36 @@
+# One client's route, for the shared Traefik of `docker-compose.proxy.yml`.
+#
+# Copy to `traefik/dynamic/<COMPOSE_PROJECT_NAME>.yml`, replace `acme` (three times), the host and
+# the port, and Traefik picks it up on its own — `--providers.file.watch=true` reloads it, no restart
+# of `traefik` and no change to any other client. Delete the file to take the client off the proxy.
+#
+# This file sits OUTSIDE `traefik/dynamic/` on purpose: that directory is what Traefik watches, and
+# a template in it would be loaded as a live route. Client files there are gitignored.
+#
+# The service URL names the network alias the overlay gives `app` (`<COMPOSE_PROJECT_NAME>-app`),
+# NOT a bare `app`: on the shared `proxy` network every client's `app` answers to that name, and
+# Traefik would balance one client's traffic across all of them.
+#
+# https://doc.traefik.io/traefik/providers/file/
+http:
+    routers:
+        acme:
+            rule: 'Host(`acme.example.com`)'
+            entryPoints: [websecure]
+            service: acme
+            tls:
+                # The resolver `docker-compose.proxy.yml` declares (Let's Encrypt, HTTP challenge).
+                certResolver: le
+    services:
+        acme:
+            loadBalancer:
+                servers:
+                    # `NODE_PORT` from the client's own env file.
+                    - url: 'http://acme-app:3000'
+                # Off by default: with one `app` replica an unready instance has nowhere else to
+                # send traffic, and Traefik's own 503 carries no CORS headers. With two or more
+                # replicas, uncomment — docs/tools/health-checks.md#readiness-at-the-load-balancer.
+                # healthCheck:
+                #     path: /readyz
+                #     interval: 10s
+                #     timeout: 3s

@@ -213,14 +213,14 @@ it on a public interface — plain HTTP, carrying the auth cookies this applicat
 easy path. Put nginx, Caddy, Traefik or a managed load balancer in front, terminate TLS there, and
 proxy to `127.0.0.1:${NODE_PORT}`.
 
-Then set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`). It defaults to
-`0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
+Then set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`; the Traefik overlay
+below sets it for you). It defaults to `0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
 address for every request, so every caller shares one rate-limit bucket and every audit row names
 the proxy. See [trust proxy](./tools/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong).
 
 Running **several client stacks on one host** is different enough to have its own recipe —
-`docker-compose.proxy.yml` fronts them all with one shared Traefik, discovering each stack straight
-off its own container labels. See [Two Client Stacks](./tools/two-client-stacks.md).
+`docker-compose.proxy.yml` fronts them all with one shared Traefik that serves each stack from its
+own route file, with no Docker socket mounted. See [Two Client Stacks](./tools/two-client-stacks.md).
 
 ## Uploaded images do not outlive the container
 

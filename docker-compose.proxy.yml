@@ -13,41 +13,47 @@
 #
 # `traefik` is started once per HOST, not once per client — bring it up from whichever client's
 # compose invocation happens to run first; every later `up` against a different
-# `COMPOSE_PROJECT_NAME` just adds that client's `app` to the shared `proxy` network, and Traefik's
-# Docker provider picks the new router up on its own, no restart.
+# `COMPOSE_PROJECT_NAME` just adds that client's `app` to the shared `proxy` network.
 #
 # ── BEFORE THE FIRST DEPLOY ──────────────────────────────────────────────────────────────────────
 # Create the shared network once, on the host, outside any single client's project:
 #   docker network create proxy
 #
 # Add to the client's own `.env` (see `.env-example`'s production block):
-#   NODE_PROXY_DOMAIN=acme.example.com
 #   NODE_PROXY_ACME_EMAIL=ops@example.com
 #
-# ── WHY LABELS RATHER THAN A CENTRAL ROUTES FILE ─────────────────────────────────────────────────
-# Traefik's Docker provider reads routing straight off each container's own labels, so adding
-# client #11 is "start its stack" — nothing central to edit, no restart of `traefik` itself.
+# Then give the client a route: copy `traefik/client.example.yml` to
+# `traefik/dynamic/<COMPOSE_PROJECT_NAME>.yml` and set its host. Traefik reloads it by itself.
 #
-# ── v2 → v3, the one thing that bit real deployments ─────────────────────────────────────────────
-# Docker label KEYS were always lowercase-dotted in both v2 and v3 (`tls.certresolver`, not
-# `tls.certResolver`) — that confusion comes from copying a static-config YAML snippet, which DOES
-# use camelCase, into a label. What actually changed in v3: the Docker provider no longer accepts
-# `swarmMode: true` (Swarm has its own `providers.swarm` now) — irrelevant here, this is plain
-# Compose, not `docker stack deploy`.
+# ── WHY A ROUTES DIRECTORY AND NOT THE DOCKER SOCKET ─────────────────────────────────────────────
+# Traefik's Docker provider reads each container's labels through the Docker socket. That socket is
+# the Docker API: `:ro` protects the socket FILE, not the API behind it, so owning the one container
+# that faces the internet would mean starting a privileged container that mounts `/` — root on the
+# host. Even a filtered read-only socket answers `GET /containers/{id}/json`, whose `Config.Env`
+# carries every client's environment. Traefik's FILE provider needs neither: it reads one small YAML
+# per client from `traefik/dynamic/`, which holds nothing but routes.
+# "Add client #11" is then "start its stack, drop one file in" — still nothing central to restart.
+# OWASP Docker Security Cheat Sheet, rule 1.
+# https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
+#
+# Mount `traefik/dynamic/` and NEVER `clients/`: that directory holds every client's secrets.
 
 services:
     traefik:
         image: docker.io/library/traefik:v3
         restart: unless-stopped
         command:
-            - '--providers.docker=true'
-            # Never route a container unless it opts in with `traefik.enable=true` — the default
-            # ("route everything") would put every bundled service (`database`, `cache`, `queue`)
-            # on the public internet the moment they joined this network.
-            - '--providers.docker.exposedByDefault=false'
-            - '--providers.docker.network=proxy'
+            # The file provider, watching one directory: a changed or added file is a hot reload.
+            # https://doc.traefik.io/traefik/providers/file/
+            - '--providers.file.directory=/etc/traefik/dynamic'
+            - '--providers.file.watch=true'
             - '--entrypoints.web.address=:80'
             - '--entrypoints.websecure.address=:443'
+            # Port 80 only redirects. Traefik exempts the ACME HTTP challenge from the redirect, so
+            # certificate issuance below still works.
+            # https://doc.traefik.io/traefik/routing/entrypoints/#redirection
+            - '--entrypoints.web.http.redirections.entryPoint.to=websecure'
+            - '--entrypoints.web.http.redirections.entryPoint.scheme=https'
             - '--certificatesresolvers.le.acme.email=${NODE_PROXY_ACME_EMAIL:?set NODE_PROXY_ACME_EMAIL in the client env file}'
             - '--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json'
             - '--certificatesresolvers.le.acme.httpchallenge.entrypoint=web'
@@ -55,30 +61,37 @@ services:
             - '80:80'
             - '443:443'
         volumes:
-            - /var/run/docker.sock:/var/run/docker.sock:ro
+            # Routes only, read-only. Never `clients/` (see above).
+            - ./traefik/dynamic:/etc/traefik/dynamic:ro
             - traefik-acme:/letsencrypt
         networks:
             - proxy
 
     app:
         # `default` (this project's own network — reaches `database`/`cache`/`queue`) AND `proxy`
-        # (the shared network Traefik watches) — both, explicitly. Compose's per-service
-        # `networks:` list REPLACES rather than merges across files, so naming only `proxy` here
-        # would silently cut `app` off from its own database.
+        # (the shared network Traefik reaches `app` on) — both, explicitly. Compose's per-service
+        # `networks:` REPLACES rather than merges across files, so naming only `proxy` here would
+        # silently cut `app` off from its own database.
+        #
+        # The alias is what a route's service URL names (`http://<COMPOSE_PROJECT_NAME>-app:<port>`).
+        # A bare `app` resolves on the shared network to EVERY client's `app` and round-robins
+        # across them, which would hand one client's requests to another.
         networks:
-            - default
-            - proxy
+            default: {}
+            proxy:
+                aliases:
+                    - '${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME}-app'
         # The loopback publish has no reader once Traefik fronts this stack — every client sharing
         # the same default `NODE_PORT` would otherwise collide on the HOST's own 127.0.0.1:3000.
         ports: !reset []
-        labels:
-            - 'traefik.enable=true'
-            - 'traefik.docker.network=proxy'
-            - 'traefik.http.routers.${COMPOSE_PROJECT_NAME}.rule=Host(`${NODE_PROXY_DOMAIN:?set NODE_PROXY_DOMAIN in the client env file}`)'
-            - 'traefik.http.routers.${COMPOSE_PROJECT_NAME}.entrypoints=websecure'
-            - 'traefik.http.routers.${COMPOSE_PROJECT_NAME}.tls=true'
-            - 'traefik.http.routers.${COMPOSE_PROJECT_NAME}.tls.certresolver=le'
-            - 'traefik.http.services.${COMPOSE_PROJECT_NAME}.loadbalancer.server.port=${NODE_PORT:-3000}'
+        environment:
+            # One hop: Traefik. It drops an `X-Forwarded-For` from an untrusted source
+            # (`forwardedHeaders.insecure` is off by default) and writes the real peer's address, so
+            # `request.ip` is the caller. With `0` every client is the proxy: the global budget and
+            # each per-address login and signup budget become site-wide, and every audit row names
+            # the proxy. A client env file that sets its own value still wins.
+            # https://doc.traefik.io/traefik/routing/entrypoints/#forwarded-headers
+            NODE_TRUST_PROXY_HOPS: '${NODE_TRUST_PROXY_HOPS:-1}'
 
 networks:
     # Declared explicitly so `app` can name it alongside `proxy` — the base file never declares a

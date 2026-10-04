@@ -124,26 +124,53 @@ GDPR-erasure story for a client relationship ending, demonstrated rather than as
 The base compose file stays proxy-agnostic — publish `127.0.0.1:${NODE_PORT}` and put any
 TLS-terminating proxy in front, same as a single-stack deployment. `docker-compose.proxy.yml` is
 the recipe for the case that specifically needs SHARED infrastructure: several client stacks on one
-box, fronted by one proxy that discovers each stack automatically.
+box, fronted by one proxy that serves each stack from its own small route file.
 
-**Traefik v3**, not Caddy: adding client #11 is "start its stack" — Traefik's Docker provider reads
-the new router straight off the container's own labels, nothing central to edit or restart. It is
-also k3s's own default ingress controller, so if a fleet of Compose stacks ever outgrows Compose,
+**Traefik v3**, not Caddy, with its **file provider**: adding client #11 is "start its stack, drop
+one route file in" — Traefik watches the directory and reloads, nothing else to edit or restart. It
+is also k3s's own default ingress controller, so if a fleet of Compose stacks ever outgrows Compose,
 the proxy is one part of the stack that carries over unchanged.
+
+**No Docker socket.** Traefik's Docker provider would need `/var/run/docker.sock` in the one
+container facing the internet. `:ro` protects the socket file, not the Docker API behind it: owning
+Traefik would mean starting a privileged container that mounts `/`, and even a filtered read-only
+socket exposes every client's environment through `GET /containers/{id}/json`. The file provider
+needs neither. It reads `traefik/dynamic/` (routes only, never `clients/`, which holds every
+client's secrets).
+
+```mermaid
+flowchart LR
+    Net["internet"] -->|"80: redirect only"| T["traefik"]
+    Net -->|"443"| T
+    Dir["traefik/dynamic/<br/>one route file per client"] -->|"watched, hot reload"| T
+    T -->|"acme-app:PORT"| A1["acme: app"]
+    T -->|"brava-app:PORT"| A2["brava: app"]
+```
 
 ```bash
 docker network create proxy   # once, per host
 export COMPOSE_PROJECT_NAME=acme
+cp traefik/client.example.yml traefik/dynamic/acme.yml   # then set its host and port
 docker compose --env-file "clients/acme/.env" \
     -f docker-compose.production.yml -f docker-compose.proxy.yml up -d
 ```
 
-**Verified structurally, not against a real certificate:** Traefik's Docker-provider discovery was
-confirmed live — with `app`'s labels in place, Traefik's own log shows the router it built,
-`acme@docker`, with the exact `Host(...)` rule the labels declare. Real ACME issuance needs a
-public DNS record and ports 80/443 reachable from Let's Encrypt, neither of which a sandboxed build
-environment can offer; on a real host with a real domain this is the same mechanism, just reachable
-from the internet.
+- **The alias.** The overlay gives `app` the network alias `<COMPOSE_PROJECT_NAME>-app` on `proxy`,
+  and a route's service URL names it. A bare `app` resolves on the shared network to _every_
+  client's `app` and round-robins across them.
+- **Port 80 only redirects** to 443; Traefik exempts the ACME HTTP challenge, so issuance still
+  works.
+- **Trust proxy.** The overlay sets `NODE_TRUST_PROXY_HOPS` to `1` (a client env file that sets its
+  own value still wins): Traefik drops an untrusted `X-Forwarded-For` and writes the real peer, so
+  `request.ip` is the caller. With `0` every client is the proxy, and one attacker's failed logins
+  exhaust the per-address budget for everyone.
+
+**Verified against a real Traefik, not a real certificate:** a route file in the watched directory
+produced the router `acme@file` with the file's exact `Host(...)` rule and `certResolver`; a second
+file added a second router and deleting it removed it, with no restart; plain HTTP answered a
+redirect to `https`, and the ACME challenge path stayed reachable on port 80. Real ACME issuance
+needs a public DNS record and ports 80/443 reachable from Let's Encrypt, neither of which a
+sandboxed build environment can offer.
 
 Two podman-compose 1.6 quirks worth knowing if you run this on podman rather than Docker (a real
 Docker host hits neither):

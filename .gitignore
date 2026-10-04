@@ -2,6 +2,12 @@ node_modules
 .env*
 !.env-example
 clients
+
+# Each client's Traefik route (docker-compose.proxy.yml). Names a client's domain, so it stays out of
+# the repository; `traefik/client.example.yml` is the template.
+traefik/dynamic/*
+!traefik/dynamic/.gitkeep
+
 .idea
 dist
 *.log
