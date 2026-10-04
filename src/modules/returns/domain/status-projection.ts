@@ -4,6 +4,7 @@
  * so every state and its boundaries are testable without a database.
  */
 
+import type { OrderReturnStatus } from '@types';
 import { QUANTITY_HOLDING_RETURN_STATUSES } from './lifecycle';
 import type { ReturnStatus } from './lifecycle';
 
@@ -14,12 +15,7 @@ export interface ProjectedReturn {
 }
 
 /** What `orders` shows — `undefined` is `none`, the absence of a stamp. */
-export type ProjectedReturnStatus =
-    | 'requested'
-    | 'in_progress'
-    | 'partially_returned'
-    | 'returned'
-    | undefined;
+export type ProjectedReturnStatus = Exclude<OrderReturnStatus, 'none'> | undefined;
 
 /**
  * Work out where the returns stand.

@@ -15,7 +15,7 @@ import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { RETURN_POSTAGE_PAYERS } from '@modules/orders';
 import type { ReturnPostagePayer } from '@modules/orders';
-import type { ReturnReason, ReturnStatus } from './domain';
+import { ReturnReason, ReturnStatus } from '@types';
 
 /** One line of a return — a snapshot of what is coming back, so it reads the same later. */
 export interface ReturnLine {
@@ -84,12 +84,12 @@ export const returnSchema = new Schema<ReturnDocument>(
         currency: { type: String, required: true },
         status: {
             type: String,
-            enum: ['requested', 'approved', 'declined', 'received', 'closed'],
-            default: 'requested'
+            enum: Object.values(ReturnStatus),
+            default: ReturnStatus.requested
         },
         reason: {
             type: String,
-            enum: ['withdrawal', 'defective', 'wrong_item', 'other'],
+            enum: Object.values(ReturnReason),
             required: true
         },
         note: { type: String, maxlength: 1000 },
