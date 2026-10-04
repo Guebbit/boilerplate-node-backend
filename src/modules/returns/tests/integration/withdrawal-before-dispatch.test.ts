@@ -11,6 +11,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
 import { inventoryService } from '@modules/inventory';
@@ -39,7 +40,10 @@ beforeEach(() => {
 
 afterEach(() => resetDomainEvents());
 
-/** Waits for a fire-and-forget listener's write — the credit note follows `PAYMENT_REFUNDED`. */
+/**
+ * Waits for work no relay pass awaits: the refund mail starts inside `announceRefund` with `void`,
+ * so `settleOutboxNudges` returns before it is sent.
+ */
 const waitFor = async (check: () => Promise<boolean>): Promise<void> => {
     const startedAt = Date.now();
     while (!(await check())) {
@@ -88,13 +92,8 @@ describe('a withdrawal before dispatch on a paid order', () => {
         const [written] = await returnRepository.findByOrderId(orderId);
         expect(written).toMatchObject({ status: 'closed', refundAmount: 40, lines: [] });
 
-        // Both listeners of the one event: the credit note is written by the module's own, this
-        // test's runs after it, so seeing the note alone is not seeing the event captured.
-        await waitFor(() =>
-            invoicingService
-                .findCreditNotesForOrder(orderId)
-                .then((notes) => notes.length > 0 && refunds.length > 0)
-        );
+        // Both listeners of the one event run inside the relay pass; the drain waits for both.
+        await settleOutboxNudges();
         // The refund is the order's own, not the return's: it carries no `returnId`, and the
         // return — closed already — is not closed a second time by it.
         expect(refunds).toEqual([expect.objectContaining({ amount: 40, full: true })]);
@@ -132,12 +131,10 @@ describe('a withdrawal before dispatch on a paid order', () => {
             testCallerContext
         );
 
-        // The refund mail is fire-and-forget behind `PAYMENT_REFUNDED`'s own write.
         const named = (template: string) =>
             mockEnqueueEmail.mock.calls.filter(([, name]) => name === template);
+        await settleOutboxNudges();
         await waitFor(() => Promise.resolve(named('orders.order-refunded').length > 0));
-        // Let any second, wrongly sent copy surface before counting.
-        await new Promise((resolve) => setTimeout(resolve, 100));
 
         expect(named('orders.order-refunded')).toHaveLength(1);
         expect(named('returns.notice')).toHaveLength(1);
