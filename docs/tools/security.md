@@ -526,7 +526,6 @@ below reads it. The failure it closes: a safety switch that turned on only for t
 | Presence rules marked production-only, `forbiddenOutsideRelaxed` | checked                      | skipped                           |
 | The demo profile (`/__test` routes)                              | refused, and logged          | mounted when asked                |
 | Stripe `sk_test_` key                                            | refused at boot              | accepted                          |
-| `NODE_MAIL_TRANSPORT=outbox`                                     | refused                      | accepted                          |
 | Webhook demo sink exemption (address check only)                 | none                         | the sink host is exempt           |
 | Stack traces in logs                                             | left out                     | kept                              |
 | Log level, console format                                        | `info`, JSON                 | `debug`, pretty on a terminal     |

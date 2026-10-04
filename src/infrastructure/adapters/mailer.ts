@@ -1,6 +1,7 @@
 /**
  * @module
- * Email adapter: EJS template rendering + SMTP delivery, optionally via the queue.
+ * Email adapter: EJS template rendering + delivery through the named transport, optionally via the
+ * queue.
  *
  * See: docs/tools/email-and-rendering.md
  */
@@ -8,24 +9,17 @@
 // EJS = the HTML templating engine used for email bodies. `Data` is its type for the
 // variables interpolated into a template (`<%= user.name %>`).
 import ejs, { type Data } from 'ejs';
-// nodemailer: `createTransport` builds a reusable SMTP sender; `SentMessageInfo` is the server's
-// reply (messageId, accepted/rejected recipients); `SendMailOptions` is `sendMail`'s own envelope
-// shape — https://nodemailer.com/message/
-import {
-    createTransport,
-    type SendMailOptions,
-    type SentMessageInfo,
-    type Transporter
-} from 'nodemailer';
+// nodemailer: `SendMailOptions` is `sendMail`'s own envelope shape — https://nodemailer.com/message/
+// The sending itself is a transport's job (`./mail-transports`); `smtp` is `./smtp-transport`.
+import type { SendMailOptions } from 'nodemailer';
 // OTel semantic-convention keys for messaging spans — using the standard names lets tracing
 // backends render this as a messaging operation instead of an opaque span. Still incubating,
 // hence the `/incubating` subpath: the older `SEMATTRS_*` aliases are deprecated.
 import { ATTR_MESSAGING_SYSTEM } from '@opentelemetry/semantic-conventions/incubating';
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
-import { mailConfig, type MAIL_TRANSPORTS } from '@infrastructure/adapters/config';
-import { isRelaxedEnvironment, isTestEnvironment } from '@infrastructure/runtime/config';
-import { recordDemoEmail } from '@infrastructure/adapters/demo-outbox';
+import { mailConfig } from '@infrastructure/adapters/config';
+import { resolveMailTransport } from '@infrastructure/adapters/mail-transports';
 import { resolveSpooled, discardSpooled } from '@infrastructure/adapters/mail-spool';
 import { withSpan } from '@infrastructure/observability/tracer';
 // The queue name comes from the adapter, not from the worker that drains it: producer and
@@ -41,115 +35,6 @@ export {
     templateFile,
     registeredTemplateNames
 } from '@infrastructure/adapters/template-registry';
-
-/**
- * How this deployment treats an email.
- *
- * `smtp`    hand it to the configured mail server.
- * `log`     render it and log the send, opening no socket — nodemailer's own `jsonTransport`.
- * `outbox`  keep it in memory, where `GET /__test/emails` can read it back.
- *
- * The pattern is Laravel's `MAIL_MAILER` and Symfony's `MAILER_DSN`: one named setting rather
- * than a condition per caller. No `none`, deliberately — it would differ from `log` only by
- * skipping the render, and the render is where a template bug surfaces.
- */
-export type MailTransport = (typeof MAIL_TRANSPORTS)[number];
-
-/**
- * Which transport this process uses, resolved per send.
- *
- * One safety rail sits ABOVE the setting: a test run must never open a socket whatever the
- * environment says, or the suite delivers real mail using the real credentials `dotenv` just
- * loaded. The demo profile's own guarantee — its outbox IS its control surface
- * (`GET /__test/emails`), so nothing may quietly empty it — is not this adapter's job:
- * `scenarios/run-server.ts` forces `NODE_MAIL_TRANSPORT=outbox` itself, the same
- * unconditional override it already uses to force Redis and RabbitMQ off, so this reads it back
- * through the ordinary setting below rather than through a second, demo-aware branch.
- *
- * `NODE_MAIL_TRANSPORT` decides, and SMTP is what a deployment that says nothing gets — the
- * behaviour every existing caller already had.
- *
- * @throws {Error} when it is set to something none of the three transports recognise, or to
- *   `outbox` outside development/test
- */
-export const resolveMailTransport = (): MailTransport => {
-    if (isTestEnvironment()) return 'log';
-
-    const named = mailConfig().NODE_MAIL_TRANSPORT;
-    // The outbox sends nothing and keeps every message, reset tokens included, in memory for
-    // good. In a deployment that is silent non-delivery, so the boot gate refuses it.
-    if (named === 'outbox' && !isRelaxedEnvironment())
-        throw new Error(
-            'NODE_MAIL_TRANSPORT=outbox sends no mail and is for the demo profile only; use smtp outside development/test.'
-        );
-    return named;
-};
-
-/** The memoised transport. See {@link getTransporter}. */
-let transport: Transporter | undefined;
-
-/**
- * Reset the memoised transport. Test seam: a suite that varies SMTP configuration changes the
- * environment and asks for a fresh transport, instead of resetting the module registry and
- * re-importing this file to get one.
- */
-export const resetTransporter = (): void => {
-    transport = undefined;
-};
-
-/**
- * The transport, built on first use and reused rather than rebuilt per email. LAZY rather than module-scope,
- * so the environment is read when first needed, not frozen at import — which is also what lets
- * {@link resetTransporter} hand a suite a fresh one after it varies the configuration.
- *
- * `log` is nodemailer's own `jsonTransport`: it renders and returns the message, and opens no
- * socket.
- *
- * See: docs/tools/email-and-rendering.md#smtp-configuration
- */
-const getTransporter = (): Transporter => {
-    if (transport) return transport;
-
-    /** The port the SMTP client dials, and the one fact `secure` is derived from. */
-    const smtp = mailConfig();
-    const port = smtp.NODE_SMTP_PORT;
-
-    transport =
-        // Two calls rather than one with a ternary argument: `createTransport` is overloaded per
-        // transport kind, and a union argument matches no single overload.
-        resolveMailTransport() === 'log'
-            ? createTransport({ jsonTransport: true })
-            : createTransport({
-                  // Hostname this client announces in the SMTP EHLO greeting. Some strict servers
-                  // check it.
-                  name: smtp.NODE_SMTP_NAME ?? '',
-                  // SMTP server to connect to.
-                  host: smtp.NODE_SMTP_HOST ?? '',
-                  // 587 = submission with STARTTLS (the modern default); 465 = implicit TLS;
-                  // 25 = relay.
-                  port,
-                  // `secure: true` means TLS from the first byte, which is only correct on 465.
-                  // On 587 it must be false — the connection starts plaintext and is upgraded via
-                  // STARTTLS. Compared as a NUMBER, so a zero-padded `0465` cannot read as "not
-                  // 465" and open a plaintext connection to a port expecting TLS immediately.
-                  secure: port === 465,
-                  // On 587, refuse to go on without STARTTLS. nodemailer otherwise upgrades only
-                  // when the server advertises it, so an attacker who strips the advertisement
-                  // gets the AUTH credentials in cleartext.
-                  // https://nodemailer.com/smtp/#tls-options
-                  requireTLS: port === 587,
-                  // SMTP AUTH credentials. Empty strings when unset, in which case nodemailer
-                  // attempts an unauthenticated send and the server rejects it — the failure
-                  // surfaces at send time, not at boot, because email is not a hard startup
-                  // dependency.
-                  auth: {
-                      user: smtp.NODE_SMTP_USER ?? '',
-                      pass: smtp.NODE_SMTP_PASS ?? ''
-                  }
-              });
-
-    return transport;
-};
 
 /** What `resolveSpooled` turns one spooled attachment into — nodemailer's own `{filename, path}` shape. */
 interface ResolvedAttachment {
@@ -183,20 +68,60 @@ const resolveAttachments = (
     });
 
 /**
- * nodemailer: hands the transporter one fully-built message and returns its `sendMail` promise —
- * the ONE call site this module routes every outbound message through.
- * https://nodemailer.com/message/
+ * Renders one email into the complete envelope nodemailer takes: the EJS template becomes the HTML
+ * body, the sender defaults in, and the spooled attachments resolve to paths.
  *
- * @param message - the complete envelope to send as-is; {@link sendTemplatedEmail} is what fills
- *   in the defaults (`from`, `html`, resolved `attachments`) before reaching here.
+ * @param envelope - the request without its attachments; its fields override the defaults
+ * @param attachments - the request's `{ filename, key }` spool references
+ * @param templateName - the outbox name, without extension
+ * @param data - variables interpolated into the EJS template
  */
-const send = (message: SendMailOptions): Promise<SentMessageInfo> =>
-    getTransporter().sendMail(message);
+const renderMessage = (
+    envelope: Omit<EmailJobPayload['request'], 'attachments'>,
+    attachments: EmailJobPayload['request']['attachments'],
+    templateName: string,
+    data: Data
+): Promise<SendMailOptions> => {
+    const resolvedAttachments = resolveAttachments(attachments);
+
+    return (
+        ejs
+            // `renderFile` reads the template from disk and returns the interpolated HTML.
+            // EJS caches compiled templates internally, so repeat sends skip recompilation.
+            /*
+             * `data` is the WHOLE render context — no `t`, no locale lookup, nothing
+             * ambient. Every string a template prints was translated by the producer while
+             * the request that asked for the email was still alive, so this function (and
+             * the worker that calls it, possibly in another process, hours later) does not
+             * need to know what a locale is.
+             */
+            // `root: process.cwd()` — a template's own `/shared/templates/layouts/...`
+            // include is root-relative (EJS: a leading `/` resolves against `root`, not
+            // against the including file's own directory), so this stays correct however
+            // deep under `src/modules/<name>/templates` the file itself now lives.
+            // https://ejs.co/#docs (Includes)
+            .renderFile(templateFile(templateName), { ...data }, { root: process.cwd() })
+            .then((html) => ({
+                // Default sender; spread below lets a caller override it.
+                from: mailConfig().NODE_SMTP_SENDER,
+                // The rendered template becomes the HTML body.
+                html,
+                // Spread last, so caller-supplied fields (to/subject, and even
+                // `from`/`html`) take precedence over the defaults above.
+                ...envelope,
+                // Resolved separately, after the spread: nothing in `envelope` ever
+                // carries a raw `attachments` field (destructured out by the caller), and a
+                // caller must never be able to hand nodemailer anything but a path this
+                // adapter resolved itself.
+                ...(resolvedAttachments.length > 0 ? { attachments: resolvedAttachments } : {})
+            }))
+    );
+};
 
 /**
- * Send an email via SMTP for the requested template and options.
+ * Send an email through the configured transport for the requested template and options.
  *
- * Sends synchronously — the caller's promise doesn't settle until the mail server accepts the
+ * Sends synchronously — the caller's promise doesn't settle until the transport accepts the
  * message. Prefer `enqueueEmail` below on request paths, so a slow SMTP server can't stretch
  * out an HTTP response.
  *
@@ -209,20 +134,15 @@ const send = (message: SendMailOptions): Promise<SentMessageInfo> =>
  *                  are filled in here, but anything passed in overrides them.
  * @param templateName - the outbox name, without extension — see {@link EmailContent.template}
  * @param data - variables interpolated into the EJS template
+ * @throws {Error} (as a rejection) when `NODE_MAIL_TRANSPORT` names a transport this process
+ *   does not register
  */
 export const sendTemplatedEmail = (
     request: EmailJobPayload['request'],
     templateName: string,
     data: Data
 ): Promise<void> => {
-    const { attachments = [], ...envelope } = request;
-
-    // The outbox keeps the message where `GET /__test/emails` can read it, and renders nothing:
-    // the paired suite asserts on the template NAME and the data, never on the HTML.
-    if (resolveMailTransport() === 'outbox') {
-        recordDemoEmail(request, templateName, data);
-        return Promise.resolve();
-    }
+    const { attachments, ...envelope } = request;
 
     // Wrap the entire email operation in an OTel span to track latency and failures.
     return withSpan('email.send', (span) => {
@@ -232,53 +152,30 @@ export const sendTemplatedEmail = (
         span.setAttributes({
             // `messaging.system` — the transport being used. Standard key, so backends group
             // this alongside other messaging spans.
-            [ATTR_MESSAGING_SYSTEM]: 'smtp',
+            [ATTR_MESSAGING_SYSTEM]: mailConfig().NODE_MAIL_TRANSPORT,
             // Custom attribute: email template used to render the body.
             'email.template': templateName
         });
 
-        const resolvedAttachments = resolveAttachments(attachments);
-
         return (
-            ejs
-                // `renderFile` reads the template from disk and returns the interpolated HTML.
-                // EJS caches compiled templates internally, so repeat sends skip recompilation.
-                /*
-                 * `data` is the WHOLE render context — no `t`, no locale lookup, nothing
-                 * ambient. Every string a template prints was translated by the producer while
-                 * the request that asked for the email was still alive, so this function (and
-                 * the worker that calls it, possibly in another process, hours later) does not
-                 * need to know what a locale is.
-                 */
-                // `root: process.cwd()` — a template's own `/shared/templates/layouts/...`
-                // include is root-relative (EJS: a leading `/` resolves against `root`, not
-                // against the including file's own directory), so this stays correct however
-                // deep under `src/modules/<name>/templates` the file itself now lives.
-                // https://ejs.co/#docs (Includes)
-                .renderFile(templateFile(templateName), { ...data }, { root: process.cwd() })
-                .then((html) =>
-                    send({
-                        // Default sender; spread below lets a caller override it.
-                        from: mailConfig().NODE_SMTP_SENDER,
-                        // The rendered template becomes the HTML body.
-                        html,
-                        // Spread last, so caller-supplied fields (to/subject, and even
-                        // `from`/`html`) take precedence over the defaults above.
-                        ...envelope,
-                        // Resolved separately, after the spread: nothing in `envelope` ever
-                        // carries a raw `attachments` field (destructured out above), and a
-                        // caller must never be able to hand nodemailer anything but a path this
-                        // adapter resolved itself.
-                        ...(resolvedAttachments.length > 0
-                            ? { attachments: resolvedAttachments }
-                            : {})
+            // Inside the chain: an unknown transport name throws, and a throw from a function
+            // typed as returning a promise would need every caller to try/catch as well.
+            Promise.resolve()
+                .then(resolveMailTransport)
+                .then((transport) =>
+                    transport.send({
+                        request,
+                        templateName,
+                        data,
+                        render: () => renderMessage(envelope, attachments, templateName, data)
                     })
                 )
                 .then((info) => {
-                    // `messageId` is the SMTP server's identifier — the handle you need to trace
-                    // a specific email through mail-server logs or a provider dashboard.
+                    // `messageId` is the transport's identifier — the handle you need to trace a
+                    // specific email through mail-server logs or a provider dashboard. A
+                    // transport that keeps the mail for a test to read has no receipt to log.
                     // Stryker disable next-line all
-                    logger.info({ message: 'Message sent.', messageId: info.messageId });
+                    if (info) logger.info({ message: 'Message sent.', messageId: info.messageId });
                 })
             // No .catch(): a rejection propagates so `withSpan` can mark the span as errored
             // and the caller (or the queue worker's nack path) can react.

@@ -1,18 +1,17 @@
 /**
  * @module
- * The demo profile's email sink. Under `npm run demo` there is no SMTP server or broker, but the
- * e2e suite still needs to read the emails the app "sent" — a password-reset spec is the token in
- * the email, or it is nothing. So in demo mode the mailer records every send here instead of
- * talking to nodemailer, and the demo router (`src/app/demo.ts`) serves it at `GET
- * /__test/emails`. Infrastructure-tier on purpose: the mailer may not reach up into `app`, so the
- * sink lives beside it. Inert unless `enableDemoProfile` (`runtime/demo-profile.ts`) was called —
- * this file only records; deciding whether the process is a demo lives there, since the boot
- * gate, the mailer, `app.ts` and `scenarios/run-server.ts` all need that answer too and none of
- * them are about an email sink.
+ * The `outbox` mail transport — a test double, never shipped. It keeps every email in memory
+ * instead of sending it, where the demo's `GET /__test/emails` and a test can read it back: a
+ * password-reset spec is the token in the email, or it is nothing.
+ *
+ * It renders nothing — the suite asserts on the template NAME and the data, never on the HTML —
+ * and it says it `delivers`, because a second factor that mails a code is available when a person
+ * can read the mail, which the outbox lets them do. Registered by `./register`.
  */
 
 import type { Data } from 'ejs';
 import type { EmailJobPayload } from '@types';
+import type { MailTransportAdapter } from '@infrastructure/adapters/mail-transports';
 
 /** One recorded send, shaped for the e2e suite's outbox reader. */
 export interface DemoOutboxEmail {
@@ -20,7 +19,7 @@ export interface DemoOutboxEmail {
     to: string;
     /** The subject line, already translated. */
     subject: string;
-    /** The outbox name that rendered this send — see {@link EmailContent.template} in `mailer.ts`. */
+    /** The outbox name that rendered this send — see `EmailContent.template` in `mailer.ts`. */
     template: string;
     /**
      * The `token` variable when the template carries one — the reset/verify flows' payload,
@@ -73,4 +72,13 @@ export const readDemoOutbox = (): DemoOutboxEmail[] => [...outbox];
 /** Empty the outbox. Called between e2e specs so one test's emails do not leak into the next. */
 export const clearDemoOutbox = (): void => {
     outbox.length = 0;
+};
+
+/** The transport: record the message, send nothing. Mail kept here is mail a person can read. */
+export const outboxMailTransport: MailTransportAdapter = {
+    delivers: () => true,
+    send: (mail) => {
+        recordDemoEmail(mail.request, mail.templateName, mail.data);
+        return Promise.resolve(undefined);
+    }
 };

@@ -17,7 +17,7 @@ jest.mock('nodemailer', () => ({
     createTransport: () => ({ sendMail: sendMailMock })
 }));
 
-import { sendTemplatedEmail, resetTransporter } from '@infrastructure/adapters/mailer';
+import { sendTemplatedEmail } from '@infrastructure/adapters/mailer';
 import { spoolAttachment } from '@infrastructure/adapters/mail-spool';
 import { setEnvironment } from '@tests/environment';
 
@@ -40,7 +40,6 @@ let spoolRoot: string;
 beforeEach(async () => {
     jest.clearAllMocks();
     sendMailMock.mockResolvedValue({ messageId: 'smtp-1' });
-    resetTransporter();
     spoolRoot = await mkdtemp(path.join(tmpdir(), 'mailer-attachments-test-'));
     setEnvironment({ NODE_MAIL_SPOOL_PATH: spoolRoot });
 });

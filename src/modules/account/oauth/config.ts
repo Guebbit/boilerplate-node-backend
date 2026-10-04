@@ -9,7 +9,7 @@ import type { MfaChallenge } from '@types';
 import { defineConfig } from '@infrastructure/config/define';
 import { text } from '@infrastructure/config/fields';
 import { isRelaxedIn } from '@infrastructure/config/define';
-import { mailDeliversIn } from '@infrastructure/adapters/config';
+import { mailDeliversIn } from '@infrastructure/adapters/mail-transports';
 import { siteConfig } from '@infrastructure/http/config';
 
 /**

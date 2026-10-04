@@ -247,16 +247,16 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### mail
 
-| Variable              | Type                     | Default | Rules                | What it does                                                                                      |
-| --------------------- | ------------------------ | ------- | -------------------- | ------------------------------------------------------------------------------------------------- |
-| `NODE_MAIL_TRANSPORT` | one of smtp, log, outbox | `smtp`  | —                    | smtp sends, log renders and drops, outbox keeps in memory (demo only). A deployment must name it. |
-| `NODE_SMTP_HOST`      | text                     | —       | —                    | SMTP server. Unset leaves email second factors off.                                               |
-| `NODE_SMTP_PORT`      | whole number 1..65535    | `587`   | —                    | 587 STARTTLS, 465 implicit TLS, 25 relay.                                                         |
-| `NODE_SMTP_NAME`      | text                     | —       | —                    | Hostname announced in the SMTP EHLO greeting.                                                     |
-| `NODE_SMTP_USER`      | text                     | —       | —                    | SMTP AUTH user.                                                                                   |
-| `NODE_SMTP_PASS`      | text                     | —       | secret: never logged | SMTP AUTH password.                                                                               |
-| `NODE_SMTP_SENDER`    | text                     | —       | —                    | Default From address, e.g. `Shop <shop@example.com>`.                                             |
-| `NODE_E2E_RUN`        | switch                   | `off`   | —                    | Set by `e2e:serve`. Refuses a non-local SMTP host so a live suite cannot mail real people.        |
+| Variable              | Type                  | Default | Rules                | What it does                                                                                         |
+| --------------------- | --------------------- | ------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
+| `NODE_MAIL_TRANSPORT` | text                  | `smtp`  | —                    | The mail transport. Production has `smtp`; a name this process does not register is refused at boot. |
+| `NODE_SMTP_HOST`      | text                  | —       | —                    | SMTP server. Unset leaves email second factors off.                                                  |
+| `NODE_SMTP_PORT`      | whole number 1..65535 | `587`   | —                    | 587 STARTTLS, 465 implicit TLS, 25 relay.                                                            |
+| `NODE_SMTP_NAME`      | text                  | —       | —                    | Hostname announced in the SMTP EHLO greeting.                                                        |
+| `NODE_SMTP_USER`      | text                  | —       | —                    | SMTP AUTH user.                                                                                      |
+| `NODE_SMTP_PASS`      | text                  | —       | secret: never logged | SMTP AUTH password.                                                                                  |
+| `NODE_SMTP_SENDER`    | text                  | —       | —                    | Default From address, e.g. `Shop <shop@example.com>`.                                                |
+| `NODE_E2E_RUN`        | switch                | `off`   | —                    | Set by `e2e:serve`. Refuses a non-local SMTP host so a live suite cannot mail real people.           |
 
 ### mail-files
 

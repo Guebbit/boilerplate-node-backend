@@ -120,7 +120,7 @@ const FORCED_ABSENT = [
  * one unconditionally — the same mechanism {@link FORCED_ABSENT} uses, for a setting that is not
  * a preference this profile lets a copied `.env` express. `GET /__test/emails` is the
  * paired e2e suite's only way to read a reset token, so a `.env` naming `smtp` must not quietly
- * empty it — `mailer.ts#resolveMailTransport` no longer knows this profile exists at all, so the
+ * empty it — `mail-transports.ts#resolveMailTransport` no longer knows this profile exists at all, so the
  * guarantee has to live here instead, exactly the way it forces external services off below.
  */
 const FORCED_MAIL_TRANSPORT = 'outbox';

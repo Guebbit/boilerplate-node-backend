@@ -6,7 +6,8 @@
  * email.
  */
 
-import { mailConfig } from '@infrastructure/adapters/config';
+import { mailDeliversIn } from '@infrastructure/adapters/mail-transports';
+import { currentEnvironment } from '@infrastructure/config/store';
 import { t } from '@infrastructure/i18n';
 import type { CallerContext } from '@types';
 import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
@@ -77,13 +78,11 @@ export const emailMethod: TwoFactorMethodHandler = {
     name: 'email',
     delivers: true,
 
-    // The same condition every other account email already depends on. A deployment with no SMTP
-    // host and no outbox transport cannot deliver the code anywhere a caller can read it, so it
-    // must not offer the method. `NODE_MAIL_TRANSPORT=outbox` is what the demo profile forces on
-    // itself (`scenarios/run-server.ts`) — this reads the same setting `resolveMailTransport`
-    // would, rather than asking whether it is specifically the demo profile asking.
-    available: () =>
-        mailConfig().NODE_MAIL_TRANSPORT === 'outbox' || Boolean(mailConfig().NODE_SMTP_HOST),
+    // The same condition every other account email already depends on: the configured transport
+    // reaches a person's inbox (`smtp` with a host, or a transport that keeps mail where it can
+    // be read). A deployment whose mail goes nowhere cannot deliver the code anywhere a caller can
+    // read it, so it must not offer the method.
+    available: () => mailDeliversIn(currentEnvironment()),
 
     eligibility: (user) =>
         user.verifiedAt

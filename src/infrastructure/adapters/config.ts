@@ -11,12 +11,8 @@
  */
 
 import path from 'node:path';
-import { defineConfig, isRelaxedIn } from '@infrastructure/config/define';
-import type { Environment } from '@infrastructure/config/store';
+import { defineConfig } from '@infrastructure/config/define';
 import { choice, csv, flag, int, text } from '@infrastructure/config/fields';
-
-/** The three transports a mail send may go through. */
-export const MAIL_TRANSPORTS = ['smtp', 'log', 'outbox'] as const;
 
 /**
  * SMTP hosts a live e2e run may dial: this machine, or the compose `mailpit` service.
@@ -31,10 +27,11 @@ const SMTP_COMPANIONS = ['NODE_SMTP_USER', 'NODE_SMTP_PASS', 'NODE_SMTP_SENDER']
 export const mailConfig = defineConfig({
     name: 'mail',
     shape: {
-        NODE_MAIL_TRANSPORT: choice(MAIL_TRANSPORTS, {
+        NODE_MAIL_TRANSPORT: text({
             default: 'smtp',
+            lower: true,
             describe:
-                'smtp sends, log renders and drops, outbox keeps in memory (demo only). A deployment must name it.'
+                'The mail transport. Production has `smtp`; a name this process does not register is refused at boot.'
         }),
         NODE_SMTP_HOST: text({ describe: 'SMTP server. Unset leaves email second factors off.' }),
         NODE_SMTP_PORT: int({
@@ -56,7 +53,7 @@ export const mailConfig = defineConfig({
                 'Set by `e2e:serve`. Refuses a non-local SMTP host so a live suite cannot mail real people.'
         })
     },
-    check: (config, environment) => [
+    check: (config) => [
         // Selecting an SMTP host without its credentials builds a transport that only fails when
         // the first user asks for a reset link.
         ...(config.NODE_SMTP_HOST ? SMTP_COMPANIONS.filter((key) => !config[key]) : []),
@@ -66,37 +63,9 @@ export const mailConfig = defineConfig({
             ? [
                   `NODE_SMTP_HOST=${config.NODE_SMTP_HOST ?? '(unset)'} is not a local mail sink; an e2e run allows only ${E2E_LOCAL_SMTP_HOSTS.join(', ')} (or NODE_MAIL_TRANSPORT=log)`
               ]
-            : []),
-        // Unset means `smtp`: a deployment that never chose would mail for real by accident, or
-        // fail on the first reset link.
-        ...(!isRelaxedIn(environment) && !(environment.NODE_MAIL_TRANSPORT ?? '').trim()
-            ? ['NODE_MAIL_TRANSPORT']
-            : []),
-        // The outbox sends nothing and keeps every message, reset tokens included, in memory for
-        // good. In a deployment that is silent non-delivery.
-        ...(config.NODE_MAIL_TRANSPORT === 'outbox' && !isRelaxedIn(environment)
-            ? [
-                  'NODE_MAIL_TRANSPORT=outbox sends no mail and is for the demo profile only; use smtp outside development/test.'
-              ]
             : [])
     ]
 });
-
-/**
- * Whether this environment sends mail to a real inbox: the `smtp` transport with a host, or the
- * demo outbox. `log` renders and drops, so a code sent through it reaches nobody — a boot check
- * that depends on a person receiving mail (an account with no password passing step-up) must not
- * count it. Takes the raw environment because a slice's `check` runs against it, not the memo.
- *
- * @param environment - the environment a slice check was handed
- */
-export const mailDeliversIn = (environment: Environment): boolean => {
-    const transport = (environment.NODE_MAIL_TRANSPORT ?? '').trim() || 'smtp';
-    return (
-        transport === 'outbox' ||
-        (transport === 'smtp' && Boolean((environment.NODE_SMTP_HOST ?? '').trim()))
-    );
-};
 
 /** Where a spooled attachment and the email templates live. */
 export const mailFilesConfig = defineConfig({

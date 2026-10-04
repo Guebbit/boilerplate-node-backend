@@ -1,7 +1,7 @@
 /**
  * `installDemo`'s two routes, mounted on a throwaway Express app rather than the real
  * `src/app.ts` — except for the mount-gate case below, which imports the real app instead.
- * `demo-outbox.test.ts`'s `isDemoMode` unit tests prove the boolean logic, refusing production
+ * `demo-profile.test.ts`'s `isDemoMode` unit tests prove the boolean logic, refusing production
  * included; the mount-gate case here proves the HTTP behaviour a caller actually sees when the
  * flag is off, which a boolean assertion alone does not. What the rest of this file proves is the
  * route HANDLERS — the body validation and the status codes a caller sees once mounted.

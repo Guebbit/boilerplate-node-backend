@@ -2,7 +2,6 @@
     "generatedAt": "2026-08-27T19:29:50.475Z",
     "files": {
         "src/infrastructure/adapters/cache.ts": 77.78,
-        "src/infrastructure/adapters/demo-outbox.ts": 75,
         "src/infrastructure/adapters/email.worker.ts": 83.33,
         "src/infrastructure/adapters/filesystem.ts": 72.73,
         "src/infrastructure/adapters/image-signatures.ts": 82.22,

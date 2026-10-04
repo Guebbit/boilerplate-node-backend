@@ -238,6 +238,14 @@ process.env.NODE_PSEUDONYM_KEY ??= 'test-pseudonym-key-for-the-suite';
 process.env.NODE_PII_ENCRYPTION_KEY ??= 'test-pii-encryption-key';
 
 /**
+ * The mail transport every suite runs on: the `log` double, which renders the message and opens no
+ * socket. Assigned, not defaulted: a suite must never reach a real mail server whatever the shell
+ * or `.env` says. A suite that wants another (`smtp` with a mocked nodemailer, `outbox`) names it
+ * through `setEnvironment`.
+ */
+process.env.NODE_MAIL_TRANSPORT = 'log';
+
+/**
  * The card provider the suite runs against: the `fake` double, which `setup.ts` registers.
  * Production has no default — unset means no card payments, and a test of that unsets it through
  * `setEnvironment`.

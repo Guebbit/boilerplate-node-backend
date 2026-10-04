@@ -148,26 +148,12 @@ const e2eSmtp = (host: string): void => {
 };
 
 describe('the mail guards', () => {
-    it('refuses to boot outside development and test with NODE_MAIL_TRANSPORT unset', () => {
-        configure();
-        setEnvironment({ NODE_ENV: 'production' });
-
-        expect(assertApp).toThrow(/NODE_MAIL_TRANSPORT/);
-    });
-
-    it('refuses an unset NODE_ENV too, since unset is not development', () => {
-        configure();
-        setEnvironment({ NODE_ENV: undefined });
-
-        expect(assertApp).toThrow(/NODE_MAIL_TRANSPORT/);
-    });
-
-    it.each(['smtp', 'log'])('accepts an explicit NODE_MAIL_TRANSPORT=%s in production', (name) => {
+    it('accepts an unset NODE_MAIL_TRANSPORT in production: smtp is what a deployment gets', () => {
         configure();
         setEnvironment({ NODE_ENV: 'production' });
         setEnvironment({ NODE_CORS_ORIGIN: 'https://app.example.com' });
         setEnvironment({ NODE_PSEUDONYM_KEY: 'a-long-enough-pseudonym-key' });
-        setEnvironment({ NODE_MAIL_TRANSPORT: name });
+        setEnvironment({ NODE_MAIL_TRANSPORT: undefined });
 
         expect(assertApp).not.toThrow();
     });

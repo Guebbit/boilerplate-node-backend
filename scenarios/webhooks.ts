@@ -7,7 +7,7 @@
  * `docs/modules/webhooks.md`'s "Seeing it work" section: it reads the sink's base url from
  * `NODE_WEBHOOK_DEMO_SINK_URL` and seeds nothing when that is unset, so a developer who never
  * enables the profile never gets a dead subscription auto-disabling in their logs — the same
- * inert-by-default shape as `@infrastructure/adapters/demo-outbox.ts`.
+ * inert-by-default shape as `scenarios/support/doubles/mail-outbox.ts`.
  *
  * The URL is `https://` like every webhook URL, so the edit form can save it. Reachable at all only
  * because `@infrastructure/adapters/ssrf-guard`'s one exemption (`@modules/webhooks/config`'s

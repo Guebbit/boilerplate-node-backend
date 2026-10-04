@@ -31,35 +31,45 @@ flowchart LR
 ### Which transport, and who decides
 
 One named setting rather than a condition per caller — the pattern Laravel spells `MAIL_MAILER`
-and Symfony `MAILER_DSN`.
+and Symfony `MAILER_DSN`. The names are a **registry** (`src/infrastructure/adapters/mail-transports.ts`),
+the same shape as the other provider registries.
 
-| `NODE_MAIL_TRANSPORT` | What happens to the message                                                           |
-| --------------------- | ------------------------------------------------------------------------------------- |
-| `smtp` _(default)_    | Handed to the server configured below.                                                |
-| `log`                 | Rendered, and the send is logged. No socket is opened — nodemailer's `jsonTransport`. |
-| `outbox`              | Kept in memory, where `GET /__test/emails` reads it back.                             |
+| `NODE_MAIL_TRANSPORT` | Registered by                                    | `delivers`  | What happens to the message                                                           |
+| --------------------- | ------------------------------------------------ | ----------- | ------------------------------------------------------------------------------------- |
+| `smtp` _(default)_    | production                                       | with a host | Handed to the server configured below.                                                |
+| `log`                 | [a double](./test-doubles.md): dev, jest, seeder | no          | Rendered, and the send is logged. No socket is opened — nodemailer's `jsonTransport`. |
+| `outbox`              | [a double](./test-doubles.md): demo, some tests  | yes         | Kept in memory, where `GET /__test/emails` reads it back.                             |
+
+**Production has `smtp` only.** `log` renders then drops every reset, verification and 2FA email,
+and `outbox` keeps them in memory for good: both lie about a real effect, so neither is in `src/`.
+Naming one in a deployment is refused at boot like any unknown name — there is nothing to refuse
+in particular, they are simply absent.
+
+**`delivers` is what production code asks** instead of naming a transport: "does mail sent through
+you reach a person?" The email second factor and the boot check for OAuth accounts (which have no
+password, so step-up is a mailed code) both read it through `mailDeliversIn`.
 
 There is no `none`: it would differ from `log` only by skipping the render, and the render is
 where a broken template surfaces.
 
-Two cases are **not** a deployment's to set, and sit above the variable:
+How each caller gets its transport:
 
-- **The demo profile always uses its outbox.** `GET /__test/emails` is its control surface — the
-  paired e2e suite reads a password-reset token out of it — so a `.env` naming `smtp` must not
-  quietly empty it.
-- **A test run always uses `log`.** `dotenv/config` has already loaded real credentials by the
-  time a suite starts; without this rail a stray test delivers actual mail with them.
-
-`scenarios/apply.ts` sets `log` for the same reason a staging box would: seeding PLACES orders, so
-every one of them wants to email a recipient the seeder invented.
+- **The demo profile** forces `outbox`. `GET /__test/emails` is its control surface — the paired
+  e2e suite reads a password-reset token out of it — so a `.env` naming `smtp` must not quietly
+  empty it.
+- **A test run** is set to `log` by `tests/support/setup-environment.ts`, whatever the shell says:
+  `dotenv/config` may have loaded real credentials, and a stray test would deliver actual mail
+  with them. A suite that wants another names it.
+- **`scenarios/apply.ts`** sets `log` for the same reason a staging box would: seeding PLACES
+  orders, so every one of them wants to email a recipient the seeder invented.
 
 ### Boot rules
 
-Two refusals, both checks on `mailConfig` (`src/infrastructure/adapters/config.ts`):
+One refusal on `mailConfig` (`src/infrastructure/adapters/config.ts`) besides the SMTP ones, and
+one probe:
 
-- **Outside `development` and `test`, `NODE_MAIL_TRANSPORT` must be set.** Unset means `smtp`;
-  a deployment that never chose it would mail for real by accident, or fail at the first reset link.
-  `.env-example` ships `log`.
+- **An unknown `NODE_MAIL_TRANSPORT`** is refused at boot by `mailTransportProbe`, not on the
+  first email.
 - **The e2e guard** (below).
 
 ### The e2e guard

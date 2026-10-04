@@ -23,6 +23,7 @@ import {
     redisConfig
 } from '@infrastructure/adapters/config';
 import { humanChallengeProviderProbe } from '@infrastructure/adapters/antibot-providers';
+import { mailTransportProbe } from '@infrastructure/adapters/mail-transports';
 import {
     idempotencyConfig,
     rateLimitBudgetConfig,
@@ -130,6 +131,7 @@ export const APP_CONFIG_SLICES: readonly ConfigSlice[] = [
     piiConfig,
     breachedPasswordsConfig,
     mailConfig,
+    mailTransportProbe,
     mailFilesConfig,
     queueConfig,
     redisConfig,

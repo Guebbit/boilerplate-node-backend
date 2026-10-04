@@ -1,5 +1,5 @@
 /**
- * `src/infrastructure/adapters/demo-outbox.ts` — the demo profile's email sink.
+ * `scenarios/support/doubles/mail-outbox.ts` — the `outbox` mail transport, the demo profile's email sink.
  *
  * The paired frontend's password-reset and verification specs are only as good as this
  * recording: `token` in particular is lifted out of the templates' link URL, and a regression
@@ -9,7 +9,7 @@ import {
     clearDemoOutbox,
     readDemoOutbox,
     recordDemoEmail
-} from '@infrastructure/adapters/demo-outbox';
+} from '@scenarios/support/doubles/mail-outbox';
 
 afterEach(() => {
     clearDemoOutbox();

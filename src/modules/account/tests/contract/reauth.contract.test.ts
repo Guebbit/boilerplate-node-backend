@@ -8,6 +8,7 @@
 import '@tests/contract';
 import { decode } from 'jsonwebtoken';
 import { setupTestDb } from '@tests/setup-test-db';
+import { setEnvironment } from '@tests/environment';
 import { api } from '@tests/http';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
@@ -28,6 +29,12 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 }));
 
 setupTestDb();
+
+// A mailed code is offered only where mail reaches a person (`mailDeliversIn`): the suite's default
+// `log` drops it, the `outbox` keeps it. `enqueueEmail` is mocked below, so nothing is sent.
+beforeEach(() => {
+    setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' });
+});
 
 beforeEach(() => {
     mockOutbox.length = 0;

@@ -26,7 +26,7 @@ import {
     restoreDatabaseCopy,
     type DatabaseCopy
 } from '@infrastructure/runtime/database-snapshot';
-import { clearDemoOutbox, readDemoOutbox } from '@infrastructure/adapters/demo-outbox';
+import { clearDemoOutbox, readDemoOutbox } from '@scenarios/support/doubles/mail-outbox';
 import { getDemoClock } from '@infrastructure/runtime/demo-clock';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';

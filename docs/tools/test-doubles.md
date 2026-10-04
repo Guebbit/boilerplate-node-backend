@@ -19,12 +19,13 @@ flowchart LR
 
 ## What is a double, and what is not
 
-| Setting                 | Production                | Dev, demo, jest                          |
-| ----------------------- | ------------------------- | ---------------------------------------- |
-| `NODE_PAYMENT_PROVIDER` | no provider — card is off | `fake`, unless the environment names one |
-| OAuth `fake`            | not registered            | registered by the dev preload            |
-| analytics `none`        | stays: it is "off"        | same                                     |
-| antibot `none`          | stays: it is "off"        | same                                     |
+| Setting                 | Production                | Dev, demo, jest                           |
+| ----------------------- | ------------------------- | ----------------------------------------- |
+| `NODE_PAYMENT_PROVIDER` | no provider — card is off | `fake`, unless the environment names one  |
+| `NODE_MAIL_TRANSPORT`   | `smtp` only               | `log` (renders, drops), `outbox` (memory) |
+| OAuth `fake`            | not registered            | registered by the dev preload             |
+| analytics `none`        | stays: it is "off"        | same                                      |
+| antibot `none`          | stays: it is "off"        | same                                      |
 
 **"Off" is not a double.** It asks nothing and claims nothing, so it stays.
 
@@ -71,4 +72,5 @@ The registries live on `globalThis` under a `Symbol.for` key (`createSharedProvi
 `npm run demo:remove` deletes a removed module's doubles folder and its two lines in `register.ts`.
 
 See: [Payments provider port](../modules/payments-provider-port.md) ·
+[Email & rendering](./email-and-rendering.md#which-transport-and-who-decides) ·
 [Demo profile](./demo-profile.md)

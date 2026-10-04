@@ -1,9 +1,9 @@
 /**
- * The SMTP transport configuration in `src/infrastructure/adapters/mailer.ts`.
+ * The SMTP transport configuration in `src/infrastructure/adapters/smtp-transport.ts`, and which
+ * transport `NODE_MAIL_TRANSPORT` selects (`src/infrastructure/adapters/mail-transports.ts`).
  *
- * This is module-scope config, built once at import time from the environment, and the whole
- * production branch was unreachable from the test suite: `NODE_ENV === 'test'` selects the
- * `jsonTransport` branch, so nothing ever looked at the other one.
+ * The suite runs on the `log` double, so the production `smtp` branch is reached only by naming it
+ * here — with `nodemailer` mocked, so nothing opens a socket.
  *
  * It is worth looking at, because one line of it is a security decision rather than a setting:
  *
@@ -21,11 +21,12 @@ jest.mock('nodemailer', () => ({
     createTransport: (options: unknown) => createTransportMock(options)
 }));
 
-import {
-    sendTemplatedEmail,
-    resetTransporter,
-    resolveMailTransport
-} from '@infrastructure/adapters/mailer';
+import { sendTemplatedEmail } from '@infrastructure/adapters/mailer';
+import { resetTransporter } from '@infrastructure/adapters/smtp-transport';
+import { mailDeliversIn, resolveMailTransport } from '@infrastructure/adapters/mail-transports';
+import { logMailTransport } from '@scenarios/support/doubles/mail-log';
+import { outboxMailTransport } from '@scenarios/support/doubles/mail-outbox';
+import { currentEnvironment } from '@infrastructure/config/store';
 import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
 /**
@@ -61,15 +62,15 @@ const transportOptions = async (
 };
 
 const SMTP_ENVIRONMENT = {
-    NODE_ENV: 'production',
+    NODE_MAIL_TRANSPORT: 'smtp',
     NODE_SMTP_HOST: 'smtp.example.com'
 };
 
 describe('the test environment uses a transport that sends nothing', () => {
-    it('selects jsonTransport under NODE_ENV=test', async () => {
-        // The guarantee that a stray test cannot email a real person. Losing this is not a
-        // failing test, it is mail leaving the building.
-        const options = await transportOptions({ NODE_ENV: 'test' });
+    it('renders through nodemailer’s jsonTransport on the log double', async () => {
+        // The guarantee that a stray test cannot email a real person: the suite's default
+        // (`tests/support/setup-environment.ts`) is the log double, which opens no socket.
+        const options = await transportOptions({ NODE_MAIL_TRANSPORT: 'log' });
 
         expect(options).toEqual({ jsonTransport: true });
     });
@@ -165,52 +166,67 @@ describe('credentials and identity', () => {
 });
 
 /**
- * Which transport a process uses, as `NODE_MAIL_TRANSPORT` and the one rail above it decide.
- *
- * The rail is the point: a deployment may state a preference, but it may not state one that lets
- * a test run reach a real mail server. The demo profile's own guarantee — its `.env` naming
- * `smtp` must not quietly empty the outbox `GET /__test/emails` reads from — is no longer this
- * adapter's job: `scenarios/run-server.ts` forces the variable itself, covered by that
- * script's own tests rather than here.
+ * Which transport a process uses, as `NODE_MAIL_TRANSPORT` decides — and what each one claims about
+ * reaching a person. Production registers `smtp` alone; the other two are the doubles the jest
+ * setup registers.
  */
 describe('resolveMailTransport', () => {
     /** Every variable these cases drive, so each starts from "this deployment said nothing". */
-    withoutEnvironmentInThisFile(['NODE_MAIL_TRANSPORT', 'NODE_ENV']);
+    withoutEnvironmentInThisFile(['NODE_MAIL_TRANSPORT', 'NODE_SMTP_HOST']);
 
     it('sends over SMTP when the deployment names nothing', () => {
-        expect(resolveMailTransport()).toBe('smtp');
+        expect(resolveMailTransport().delivers({ NODE_SMTP_HOST: 'smtp.example.com' })).toBe(true);
+        expect(resolveMailTransport().delivers({})).toBe(false);
     });
 
-    it.each(['smtp', 'log', 'outbox'] as const)('honours a named %s transport', (named) => {
-        setEnvironment({ NODE_ENV: 'development' });
+    it.each([
+        ['log', logMailTransport],
+        ['outbox', outboxMailTransport]
+    ])('honours a named %s transport', (named, expected) => {
         setEnvironment({ NODE_MAIL_TRANSPORT: named });
 
-        expect(resolveMailTransport()).toBe(named);
+        expect(resolveMailTransport()).toBe(expected);
     });
 
     it('refuses an unrecognised value instead of silently falling back to SMTP', () => {
         setEnvironment({ NODE_MAIL_TRANSPORT: 'carrier-pigeon' });
 
         expect(() => resolveMailTransport()).toThrow(
-            /NODE_MAIL_TRANSPORT: expected one of smtp, log, outbox/
+            /Unknown NODE_MAIL_TRANSPORT: "carrier-pigeon". Allowed: smtp, /
         );
     });
+});
 
-    it.each(['production', 'staging', undefined])(
-        'refuses the outbox when NODE_ENV is %p, where it would silently send nothing',
-        (value) => {
-            setEnvironment({ NODE_ENV: value });
-            setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' });
+/** Whether a transport reaches a person — what a second factor and a boot check ask. */
+describe('mailDeliversIn', () => {
+    withoutEnvironmentInThisFile(['NODE_MAIL_TRANSPORT', 'NODE_SMTP_HOST']);
 
-            expect(() => resolveMailTransport()).toThrow(/demo profile only/);
-        }
-    );
+    it.each([
+        [
+            'smtp with a host',
+            { NODE_MAIL_TRANSPORT: 'smtp', NODE_SMTP_HOST: 'mail.example.com' },
+            true
+        ],
+        ['smtp with no host', { NODE_MAIL_TRANSPORT: 'smtp' }, false],
+        ['an unset transport (smtp) with a host', { NODE_SMTP_HOST: 'mail.example.com' }, true],
+        [
+            'the log, which drops everything',
+            { NODE_MAIL_TRANSPORT: 'log', NODE_SMTP_HOST: 'x' },
+            false
+        ],
+        [
+            'the outbox, which keeps it where it can be read',
+            { NODE_MAIL_TRANSPORT: 'outbox' },
+            true
+        ],
+        ['a name nobody registered', { NODE_MAIL_TRANSPORT: 'carrier-pigeon' }, false]
+    ])('%s', (_case, environment, expected) => {
+        expect(mailDeliversIn(environment)).toBe(expected);
+    });
 
-    it('refuses to let a test run reach a real mail server', () => {
-        // Losing this is not a failing test, it is mail leaving the building.
-        setEnvironment({ NODE_ENV: 'test' });
-        setEnvironment({ NODE_MAIL_TRANSPORT: 'smtp' });
+    it('reads the live environment when asked of it', () => {
+        setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' });
 
-        expect(resolveMailTransport()).toBe('log');
+        expect(mailDeliversIn(currentEnvironment())).toBe(true);
     });
 });
