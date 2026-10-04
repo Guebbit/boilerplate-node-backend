@@ -1,7 +1,7 @@
 /**
  * @module
- * The seed accounts' passwords, as a config slice: the thirteen `NODE_SEED_*_PASSWORD` variables, each
- * with its committed, public fallback.
+ * The seed accounts' passwords, as a config slice: the thirteen `NODE_SEED_*_PASSWORD` variables,
+ * each with its committed, public fallback.
  *
  * Not part of the app's boot gate — the seeder is a script, not the app — but read through the
  * same layer, so the variable list on `docs/tools/configuration.md` is complete and a blank value
