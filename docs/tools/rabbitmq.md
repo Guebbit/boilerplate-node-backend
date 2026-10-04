@@ -118,6 +118,16 @@ production:
 - **AMQP port**: `5672`
 - **Management UI**: `http://localhost:15672` (guest / guest)
 
+### Run broker tools as `rabbitmq`, never root
+
+The broker keeps an Erlang cookie at `/var/lib/rabbitmq/.erlang.cookie`, and its CLI tools
+(`rabbitmq-diagnostics`, `rabbitmqctl`) create it when it is missing. Run as root before the
+broker's first boot, a tool creates it owned by root with mode `400`; the broker then crashes on
+`eacces` and stays crashed, because the file lives in the data volume. So the production
+healthcheck is `su-exec rabbitmq rabbitmq-diagnostics -q ping` (the alpine image), and a manual
+check is `docker exec -u rabbitmq <container> rabbitmq-diagnostics -q ping`, never a plain
+`docker exec`. If it already happened, delete the volume's `.erlang.cookie` and restart.
+
 ## Usage
 
 ### Publishing a message

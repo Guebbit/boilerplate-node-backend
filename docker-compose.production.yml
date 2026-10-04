@@ -615,8 +615,13 @@ services:
             RABBITMQ_DEFAULT_USER: '${RABBITMQ_USER:-guest}'
         volumes:
             - rabbitmq-data:/var/lib/rabbitmq
+        # Runs as `rabbitmq`, never root. The CLI creates `/var/lib/rabbitmq/.erlang.cookie` when it
+        # is missing, and a ping that beats the broker's first boot would create it owned by root:
+        # the broker then dies on `eacces` and stays dead, because the file sits in the volume.
+        # `su-exec` is the image's own way to drop root (its entrypoint uses it).
+        # https://www.rabbitmq.com/docs/clustering#erlang-cookie
         healthcheck:
-            test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+            test: ['CMD', 'su-exec', 'rabbitmq', 'rabbitmq-diagnostics', '-q', 'ping']
             interval: 15s
             timeout: 10s
             retries: 5

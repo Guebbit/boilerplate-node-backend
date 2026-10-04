@@ -365,8 +365,10 @@ jobs:
                 ports:
                     - 5672:5672
                     - 15672:15672
+                # `gosu rabbitmq`: as root, a ping before the broker's first boot would create the
+                # Erlang cookie root-owned, and the broker would die on `eacces`.
                 options: >-
-                    --health-cmd "rabbitmq-diagnostics -q ping"
+                    --health-cmd "gosu rabbitmq rabbitmq-diagnostics -q ping"
                     --health-interval 5s
                     --health-timeout 5s
                     --health-retries 20
