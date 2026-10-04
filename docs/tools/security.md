@@ -530,7 +530,6 @@ below reads it. The failure it closes: a safety switch that turned on only for t
 | Stack traces in logs                  | left out                     | kept                              |
 | Log level, console format             | `info`, JSON                 | `debug`, pretty on a terminal     |
 | Cache `max-age`, `autoIndex`          | as declared, `autoIndex` off | clamped, Mongoose's default       |
-| Trust-proxy hops of `0`               | a boot warning               | silent                            |
 
 A staging server therefore cannot seed demo data or use a Stripe test key. That is intended: a
 switch that must differ gets its own explicit variable, never a relaxed `NODE_ENV`. Standards:
@@ -552,7 +551,14 @@ otherwise, and both failure modes are silent:
 The correct value is the **number of proxies you actually run**, so Express counts back from the
 right-hand end of `X-Forwarded-For` — the part a client cannot forge. `NODE_TRUST_PROXY_HOPS`
 carries it, and `0` (the default) means "no proxy, use the socket address", which is right for local
-development and for the compose stack, where the API is published directly.
+development and for the compose stack, where the API is published directly. The Traefik overlay sets
+it to `1`.
+
+`0` is handed to Express as `false`, and that is what lets express-rate-limit spot the one mistake
+worth a warning: an `X-Forwarded-For` arriving while no proxy is counted. The library checks **once
+per limiter**, on the first request that reaches it (the orchestrator probes are skipped before the
+check), and logs through the app logger as `rate-limit: express-rate-limit reports a
+misconfiguration`.
 
 ## 401 or 403, and why the guards agree
 

@@ -19,10 +19,8 @@ import cookieParser from 'cookie-parser';
 import { rateLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { requireDeclaredContentType } from '@infrastructure/http/middlewares/content-type';
 import { REQUEST_CONTENT_TYPES } from '@api/request-content-types';
-import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
 import { siteConfig } from '@infrastructure/http/config';
 import { appConfig } from './config';
-import { logger } from '@infrastructure/adapters/logger';
 import { enabledModules } from '../modules';
 
 /**
@@ -116,25 +114,15 @@ export const installSecurity = (app: Express): void => {
      * How many reverse proxies sit in front of this process — the COUNT, never `true`, so Express
      * counts back from the forgeable end of `X-Forwarded-For`. `0` means "use the socket address".
      *
+     * `false`, not `0`, for no proxy: express-rate-limit tells "trust proxy is off" from a number
+     * by `=== false`, and only then does it notice an `X-Forwarded-For` arriving from a proxy this
+     * deployment forgot to count — the one misconfiguration worth a warning, logged through the app
+     * logger (see `buildRateLimiter`). Express reads both the same way.
+     *
      * See: docs/tools/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong
      */
     const trustProxyHops = appConfig().NODE_TRUST_PROXY_HOPS;
-    app.set('trust proxy', trustProxyHops);
-
-    /*
-     * `0` is legitimate for the compose stack, which publishes the API
-     * directly — so this warns rather than refusing to boot. But a production deployment behind a
-     * reverse proxy with hops left at the default is either correct or catastrophic for the rate
-     * limiter, and the warning below reads the same either way — nothing here can tell which one
-     * this deployment is.
-     */
-    if (trustProxyHops === 0 && !isRelaxedEnvironment())
-        // Stryker disable all
-        logger.warn({
-            message:
-                'NODE_TRUST_PROXY_HOPS=0 outside development/test. Correct only if this API is reached directly, with no reverse proxy in front of it — otherwise the rate limiter is bucketing every caller together.'
-        });
-    // Stryker restore all
+    app.set('trust proxy', trustProxyHops === 0 ? false : trustProxyHops);
 
     /**
      * Secure headers

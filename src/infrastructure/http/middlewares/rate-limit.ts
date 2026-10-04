@@ -18,6 +18,7 @@ import type { Request, RequestHandler, Response } from 'express';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import type { RateLimitInfo } from 'express-rate-limit';
 import { t } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
 import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { rateLimitBudgetConfig, rateLimitConfig } from '@infrastructure/http/config';
@@ -82,6 +83,21 @@ const refuse =
     };
 
 /**
+ * Where express-rate-limit's own configuration checks report, in place of its default `console`.
+ *
+ * The one that matters is an `X-Forwarded-For` arriving while `trust proxy` is off: a proxy sits in
+ * front and nobody counted it, so every caller shares one bucket. The library checks once per
+ * limiter, on its first request.
+ * https://express-rate-limit.mintlify.app/reference/error-codes
+ */
+const limiterLogger = {
+    warn: (problem: unknown): void =>
+        logger.warn('rate-limit: express-rate-limit warns about this deployment', problem),
+    error: (problem: unknown): void =>
+        logger.error('rate-limit: express-rate-limit reports a misconfiguration', problem)
+};
+
+/**
  * The request ceiling a budget's variable configures, or its default.
  *
  * @param budget - the budget to read
@@ -110,6 +126,8 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
          */
         passOnStoreError: true,
         handler: refuse(budget.audited),
+        // `logger` shipped in express-rate-limit 8.5.0. https://github.com/express-rate-limit/express-rate-limit/releases
+        logger: limiterLogger,
         limit: budgetLimit(budget),
         skipSuccessfulRequests: budget.skipSuccessfulRequests ?? false,
         ...(budget.keyGenerator ? { keyGenerator: budget.keyGenerator } : {}),
