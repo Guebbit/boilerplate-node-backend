@@ -129,11 +129,11 @@ paths:
             parameters:
                 - name: actor
                   in: query
-                  schema: { type: string }
+                  schema: { type: string, maxLength: 64 }
                   description: Filter by actor user ID
                 - name: action
                   in: query
-                  schema: { type: string }
+                  schema: { type: string, maxLength: 100 }
                   description: 'Filter by action name (e.g. order.created)'
                 - name: outcome
                   in: query

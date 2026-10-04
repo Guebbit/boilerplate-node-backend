@@ -195,7 +195,7 @@ paths:
                 - name: secretId
                   in: path
                   required: true
-                  schema: { type: string }
+                  schema: { type: string, maxLength: 64 }
                   description: A ring entry's id, from `secretIds`.
             responses:
                 '200':
@@ -444,15 +444,17 @@ components:
             properties:
                 url:
                     type: string
+                    maxLength: 2048
                     format: uri
                     pattern: '(?:^https://)'
                     description: Must be `https://`. Validated again, against the resolved IP, on every delivery.
                 description:
                     type: string
+                    maxLength: 500
                     minLength: 1
                 eventTypes:
                     type: array
-                    items: { type: string, minLength: 1 }
+                    items: { type: string, minLength: 1, maxLength: 100 }
                     minItems: 1
 
         ReplaceWebhookSubscriptionRequest:
@@ -462,6 +464,7 @@ components:
             properties:
                 url:
                     type: string
+                    maxLength: 2048
                     format: uri
                     pattern: '(?:^https://)'
                     description: Must be `https://` — same rule `CreateWebhookSubscriptionRequest` states.
@@ -469,11 +472,12 @@ components:
                 # here clears too, since it has nothing to say by default.
                 description:
                     type: string
+                    maxLength: 500
                     minLength: 1
                     nullable: true
                 eventTypes:
                     type: array
-                    items: { type: string, minLength: 1 }
+                    items: { type: string, minLength: 1, maxLength: 100 }
                     minItems: 1
                 enabled:
                     type: boolean
@@ -485,17 +489,19 @@ components:
             properties:
                 url:
                     type: string
+                    maxLength: 2048
                     format: uri
                     pattern: '(?:^https://)'
                     description: Must be `https://` — same rule `CreateWebhookSubscriptionRequest` states.
                 # `null` clears it. Omitted leaves it unchanged; `''` is invalid.
                 description:
                     type: string
+                    maxLength: 500
                     minLength: 1
                     nullable: true
                 eventTypes:
                     type: array
-                    items: { type: string, minLength: 1 }
+                    items: { type: string, minLength: 1, maxLength: 100 }
                     minItems: 1
                 enabled:
                     type: boolean

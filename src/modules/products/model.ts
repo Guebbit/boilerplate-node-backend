@@ -11,7 +11,13 @@ import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import { z } from 'zod';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
-import { CreateProductBody, ReplaceProductByIdBody, UpdateProductByIdBody } from '@api/schemas.zod';
+import {
+    CreateProductBody,
+    ReplaceProductByIdBody,
+    UpdateProductByIdBody,
+    createProductBodyTranslationsOneDescriptionMax,
+    createProductBodyTranslationsOneTitleMax
+} from '@api/schemas.zod';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import type { TranslationFieldIssue } from '@kernel/registry';
@@ -84,10 +90,14 @@ const zodProductTranslationEntry = z.strictObject({
     title: z
         .string({ error: () => t('products.field-title-required') })
         .min(1, { error: () => t('products.field-title-required') })
-        .min(5, { error: () => t('products.field-title-min') }),
+        .min(5, { error: () => t('products.field-title-min') })
+        // The generated ceilings, restated: `.extend()` replaces `translations` outright, and a
+        // replaced field drops the bounds the contract put on it.
+        .max(createProductBodyTranslationsOneTitleMax),
     description: z
         .string()
         .min(1, { error: () => t('products.field-description-empty') })
+        .max(createProductBodyTranslationsOneDescriptionMax)
         .optional()
 });
 

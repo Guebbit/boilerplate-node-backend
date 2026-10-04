@@ -1140,10 +1140,12 @@ components:
             properties:
                 key:
                     type: string
+                    maxLength: 200
                     minLength: 1
                     example: products.list.title
                 value:
                     type: string
+                    maxLength: 2000
                     example: Catálogo
 
         CreateLocaleRequest:
@@ -1155,9 +1157,11 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 name:
                     type: string
+                    maxLength: 100
                     minLength: 1
                 nativeName:
                     type: string
+                    maxLength: 100
                     minLength: 1
                 direction:
                     $ref: '#/components/schemas/LocaleDirection'
@@ -1178,9 +1182,11 @@ components:
             properties:
                 name:
                     type: string
+                    maxLength: 100
                     minLength: 1
                 nativeName:
                     type: string
+                    maxLength: 100
                     minLength: 1
                 direction:
                     $ref: '#/components/schemas/LocaleDirection'
@@ -1196,9 +1202,11 @@ components:
             properties:
                 name:
                     type: string
+                    maxLength: 100
                     minLength: 1
                 nativeName:
                     type: string
+                    maxLength: 100
                     minLength: 1
                 direction:
                     $ref: '#/components/schemas/LocaleDirection'
@@ -1216,10 +1224,12 @@ components:
             properties:
                 key:
                     type: string
+                    maxLength: 200
                     minLength: 1
                     example: products.list.title
                 value:
                     type: string
+                    maxLength: 2000
                     example: Catálogo
 
         UpdateLocaleEntryRequest:
@@ -1229,6 +1239,7 @@ components:
             properties:
                 value:
                     type: string
+                    maxLength: 2000
 
         ReplaceLocaleEntriesRequest:
             type: object
@@ -1320,6 +1331,7 @@ components:
 
         TranslatableEntityType:
             type: string
+            maxLength: 64
             minLength: 1
             description: >-
                 A `translatables` registry key — `product` in V1. Not an enum: the set grows as
@@ -1430,6 +1442,7 @@ components:
                     type: object
                     additionalProperties:
                         type: string
+                        maxLength: 10000
                         minLength: 1
                     description: >-
                         The locale's WHOLE set of fields. Every key MUST be one the `translatables`
@@ -1456,6 +1469,7 @@ components:
                     type: object
                     additionalProperties:
                         type: string
+                        maxLength: 10000
                         minLength: 1
                         nullable: true
                     description: >-

@@ -34,6 +34,7 @@ paths:
                   in: query
                   schema:
                       type: string
+                      maxLength: 50
                 - name: active
                   in: query
                   schema:
@@ -365,6 +366,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 username:
                     type: string
+                    maxLength: 50
                 # Filters the stored `active` column. It does NOT filter soft-deletion — that is
                 # `deleted` below: the two are independent facts. `active: false` means
                 # "deactivated", never "deleted".
@@ -389,6 +391,7 @@ components:
                     maxLength: 50
                 role:
                     type: string
+                    maxLength: 64
                     minLength: 1
                 # Same reasoning as `CreateProductRequest.active`: independent of soft-deletion,
                 # and defaulted here so both implementations derive it rather than each choosing.
@@ -415,6 +418,7 @@ components:
                     maxLength: 50
                 role:
                     type: string
+                    maxLength: 64
                     minLength: 1
                 # Same default, same reasoning as `CreateUserRequest.active` above.
                 active:
@@ -441,6 +445,7 @@ components:
                     maxLength: 50
                 role:
                     type: string
+                    maxLength: 64
                     minLength: 1
                 active:
                     type: boolean
@@ -456,10 +461,12 @@ components:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 phone:
                     type: string
+                    maxLength: 32
                     minLength: 1
                     nullable: true
                 website:
                     type: string
+                    maxLength: 2048
                     minLength: 1
                     nullable: true
 
@@ -474,6 +481,7 @@ components:
                     maxLength: 50
                 role:
                     type: string
+                    maxLength: 64
                     minLength: 1
                 active:
                     type: boolean
@@ -488,9 +496,11 @@ components:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 phone:
                     type: string
+                    maxLength: 32
                     minLength: 1
                 website:
                     type: string
+                    maxLength: 2048
                     minLength: 1
 
         # PUT /users/{id} — RFC 9110 §9.3.4: the body IS the new resource, so every writable field
@@ -507,6 +517,7 @@ components:
                     maxLength: 50
                 role:
                     type: string
+                    maxLength: 64
                     minLength: 1
                 active:
                     type: boolean
@@ -519,10 +530,12 @@ components:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 phone:
                     type: string
+                    maxLength: 32
                     minLength: 1
                     nullable: true
                 website:
                     type: string
+                    maxLength: 2048
                     minLength: 1
                     nullable: true
 
@@ -538,6 +551,7 @@ components:
                     maxLength: 50
                 role:
                     type: string
+                    maxLength: 64
                     minLength: 1
                 active:
                     type: boolean
@@ -552,9 +566,11 @@ components:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 phone:
                     type: string
+                    maxLength: 32
                     minLength: 1
                 website:
                     type: string
+                    maxLength: 2048
                     minLength: 1
 
         DeleteUserRequest:

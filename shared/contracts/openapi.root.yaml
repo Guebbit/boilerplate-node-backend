@@ -254,6 +254,7 @@ components:
             required: false
             schema:
                 type: string
+                maxLength: 4096
             description: >
                 The token the active human-challenge provider issued to the client — see
                 `GET /antibot/config`. Absent when that provider is `none`.
@@ -510,9 +511,11 @@ components:
             description: Free-text search string
         Email:
             type: string
+            maxLength: 254
             format: email
         Password:
             type: string
+            maxLength: 128
             minLength: 8
             description: >-
                 An EXISTING password, being proved rather than set — login, the current-password
@@ -521,6 +524,7 @@ components:
                 to also announce the site's password policy to whoever is guessing it.
         PasswordNew:
             type: string
+            maxLength: 128
             minLength: 8
             # Lookahead, so every generator that walks this file needs a sample rather than a
             # generated string — registered once in `tests/support/pattern-samples.ts`, which both
@@ -536,6 +540,7 @@ components:
                 the paired frontend's form.
         Locale:
             type: string
+            maxLength: 35
             description: >-
                 BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports
                 is a runtime fact, not a contract one — ask `GET /locales`.
@@ -543,6 +548,7 @@ components:
             example: it
         CountryCode:
             type: string
+            maxLength: 2
             description: >-
                 ISO 3166-1 alpha-2 country code, e.g. `IT`. Shape-checked here; which codes a
                 deployment actually ships to is a runtime fact, not a contract one — see
@@ -982,6 +988,7 @@ components:
         # product, same cardinality as `Product` itself.
         Sku:
             type: string
+            maxLength: 64
             minLength: 1
             description: >-
                 An optional, deployment-chosen stock-keeping unit — unique across the catalogue

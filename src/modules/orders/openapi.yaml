@@ -53,6 +53,7 @@ paths:
                   in: query
                   schema:
                       type: string
+                      maxLength: 1000
                 - name: deleted
                   in: query
                   description: >-
@@ -501,6 +502,7 @@ components:
                     description: Must be `processing`, `shipped` or `delivered`, and forward of the order's current status — every other value is a 409.
                 reason:
                     type: string
+                    maxLength: 1000
                     minLength: 1
                     description: Why the normal door didn't apply. Recorded on the order's override history, never optional.
 
@@ -533,6 +535,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
                 notes:
                     type: string
+                    maxLength: 1000
                 # `true`: only soft-deleted rows; `false`: only live ones; absent: both.
                 # Admin-effective, like `active`: a caller who cannot see deleted rows at all
                 # gets an empty page for `true`.

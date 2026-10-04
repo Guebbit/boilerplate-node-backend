@@ -714,12 +714,13 @@ paths:
                   required: true
                   schema:
                       type: string
+                      maxLength: 32
                   description: One of the names `GET /account/oauth/providers` lists.
                 - name: continue
                   in: query
                   required: false
                   description: Same-origin relative path to send the browser back to once the login completes — the OAuth equivalent of the password-login flow's own `?continue=`. Saved as a cookie for the round trip to the provider and back; anything that is not a same-origin relative path (an absolute URL, a protocol-relative `//host/path`) is dropped silently rather than refused, since a browser navigation has nowhere to show a validation error.
-                  schema: { type: string }
+                  schema: { type: string, maxLength: 512 }
                 - name: locale
                   in: query
                   required: false
@@ -749,19 +750,20 @@ paths:
                   required: true
                   schema:
                       type: string
+                      maxLength: 32
                 - name: code
                   in: query
                   required: false
-                  schema: { type: string }
+                  schema: { type: string, maxLength: 2048 }
                 - name: state
                   in: query
                   required: false
-                  schema: { type: string }
+                  schema: { type: string, maxLength: 512 }
                 - name: error
                   in: query
                   required: false
                   description: Set by the provider instead of `code` when the user declines consent.
-                  schema: { type: string }
+                  schema: { type: string, maxLength: 256 }
             responses:
                 '302':
                     description: Redirect to the frontend, session cookies set on success
@@ -1068,10 +1070,12 @@ components:
             properties:
                 challenge:
                     type: string
+                    maxLength: 128
                     minLength: 1
                     description: The challenge token from POST /account/login. Omit it for an OAuth-originated login — that challenge was never sent to the client, and this endpoint reads it from the httpOnly cookie the callback set instead.
                 code:
                     type: string
+                    maxLength: 64
                     description: A code from any armed method, or an unused backup code. Which method it came from is the server's problem, not the client's.
                 remember:
                     $ref: '#/components/schemas/RememberTier'
@@ -1083,10 +1087,12 @@ components:
             properties:
                 challenge:
                     type: string
+                    maxLength: 128
                     minLength: 1
                     description: The challenge token from POST /account/login. Omit it for an OAuth-originated login — see LoginTwoFactorRequest.challenge.
                 method:
                     type: string
+                    maxLength: 32
                     description: Which armed delivered method to send through — a `method` from the challenge's own `methods` list whose `delivers` is true.
 
         TwoFactorMethodSummary:
@@ -1257,6 +1263,7 @@ components:
             properties:
                 code:
                     type: string
+                    maxLength: 64
                     description: A code from any armed method, or an unused backup code. Required once any factor is armed — a replace, or adding a second method — and ignored for the account's first factor.
 
         TwoFactorConfirmRequest:
@@ -1266,6 +1273,7 @@ components:
             properties:
                 code:
                     type: string
+                    maxLength: 64
                     description: 'The code for the method being armed — read off the device, or received through its channel. A backup code is NOT accepted here: the point of this call is to prove the new factor works.'
 
         TwoFactorCodeRequest:
@@ -1275,6 +1283,7 @@ components:
             properties:
                 code:
                     type: string
+                    maxLength: 64
                     description: A code from any armed method, or an unused backup code. Used to prove the factor being removed — or the account it protects — really belongs to the caller.
 
         TwoFactorConfirmed:
@@ -1398,6 +1407,7 @@ components:
             properties:
                 token:
                     type: string
+                    maxLength: 128
                     minLength: 1
                     description: One-time password reset token (NOT a JWT).
                 password:
@@ -1412,6 +1422,7 @@ components:
             properties:
                 token:
                     type: string
+                    maxLength: 128
                     minLength: 1
                     description: One-time account deletion token (NOT a JWT).
 
@@ -1442,10 +1453,12 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 phone:
                     type: string
+                    maxLength: 32
                     minLength: 1
                     nullable: true
                 website:
                     type: string
+                    maxLength: 2048
                     minLength: 1
                     nullable: true
                 # Absent means "leave it alone" like every other field here — a client withdraws
@@ -1475,9 +1488,11 @@ components:
                     description: Optional user profile image
                 phone:
                     type: string
+                    maxLength: 32
                     minLength: 1
                 website:
                     type: string
+                    maxLength: 2048
                     minLength: 1
                 analyticsConsent:
                     type: boolean
@@ -1504,10 +1519,12 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 phone:
                     type: string
+                    maxLength: 32
                     minLength: 1
                     nullable: true
                 website:
                     type: string
+                    maxLength: 2048
                     minLength: 1
                     nullable: true
                 analyticsConsent:
@@ -1536,9 +1553,11 @@ components:
                     description: Optional user profile image
                 phone:
                     type: string
+                    maxLength: 32
                     minLength: 1
                 website:
                     type: string
+                    maxLength: 2048
                     minLength: 1
                 analyticsConsent:
                     type: boolean
@@ -1581,6 +1600,7 @@ components:
                     enum: [email]
                 code:
                     type: string
+                    maxLength: 64
                     minLength: 1
                     description: The code from `POST /account/reauth/methods/email/send`.
 
@@ -1626,6 +1646,7 @@ components:
             properties:
                 password:
                     type: string
+                    maxLength: 128
                     minLength: 1
                     description: A CANDIDATE password, not `PasswordNew` — this runs while someone is still typing, so it accepts anything non-empty rather than the contract's own composition rule.
 
@@ -1669,6 +1690,7 @@ components:
             properties:
                 token:
                     type: string
+                    maxLength: 128
                     minLength: 1
                     description: One-time email verification token (NOT a JWT).
 
@@ -1740,4 +1762,5 @@ components:
             required: true
             schema:
                 type: string
+                maxLength: 32
             description: 'Wire name of a second factor — a `method` from `GET /account/2fa`. A bare string, not an enum: the set of methods is a deployment fact, and a contract that enumerated them would need regenerating to add a channel.'

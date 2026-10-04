@@ -329,6 +329,7 @@ components:
             properties:
                 trackingCode:
                     type: string
+                    maxLength: 100
                     minLength: 1
                     description: The carrier's handle on the parcel. Required when the order's shipping method is tracked; optional otherwise.
                 forced:
@@ -336,6 +337,7 @@ components:
                     description: Skip the normal `processing`-only gate — the caller must hold `orders.any.override`, and `reason` is then required. Still creates the parcel record and sends the shipped email; still refuses a tracked method with no `trackingCode`.
                 reason:
                     type: string
+                    maxLength: 1000
                     minLength: 1
                     description: Required exactly when `forced` is `true` — why the normal door didn't apply. Recorded on the order's override history.
 
@@ -348,6 +350,7 @@ components:
                     description: Skip the normal `shipped`-only gate — the caller must hold `orders.any.override`, and `reason` is then required. Still stamps the shipment delivered and reports the fact.
                 reason:
                     type: string
+                    maxLength: 1000
                     minLength: 1
                     description: Required exactly when `forced` is `true`.
 

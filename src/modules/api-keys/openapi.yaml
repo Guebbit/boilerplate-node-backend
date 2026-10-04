@@ -166,7 +166,7 @@ components:
                     description: A caller-chosen label — what this credential is for, shown back in the list.
                 permissions:
                     type: array
-                    items: { type: string }
+                    items: { type: string, maxLength: 100 }
                     minItems: 1
                     description: The permission keys to mint this credential with. Must be a subset of the caller's own current permissions, or the request is refused with 422.
                 expiresAt:

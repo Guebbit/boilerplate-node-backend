@@ -433,6 +433,7 @@ components:
             properties:
                 shippingMethodId:
                     type: string
+                    maxLength: 64
                     minLength: 1
                     nullable: true
                     description: >-
@@ -448,6 +449,7 @@ components:
             properties:
                 notes:
                     type: string
+                    maxLength: 1000
                     minLength: 1
                     description: Optional order notes. Left out when there are none; an empty string is a 422.
                 addressId:

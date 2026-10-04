@@ -112,3 +112,43 @@ rules:
             function: pattern
             functionOptions:
                 match: '^[a-z][a-zA-Z0-9]*$'
+
+    # --- Every string a request can carry declares how long it may be ---
+    #
+    # A string with no `maxLength` is bounded only by the 100 kB body limit, so one field can cost
+    # a hundred kilobytes of memory, a hundred kilobytes of Mongo document, a hundred kilobytes in
+    # a log line and, for a field that feeds a cache key or a mail, more than that. The shared
+    # `Text` (1 to 200) and the per-kind values in docs/api/field-limits.md exist so the choice is a
+    # one-liner.
+    #
+    # Exempt, because their length is already fixed or bounded elsewhere:
+    #   - an `enum` (its longest member is the bound);
+    #   - a fixed-length `format` (`date`, `date-time`, `uuid`, `time`);
+    #   - a file part (`format: binary`), bounded by the upload limit;
+    #   - a schema that composes (`allOf`/`oneOf`/`anyOf`): the bound is on the part it names.
+    # `pattern`, `format: email` and `format: uri` alone are NOT exemptions: none of them bounds a
+    # length. Only schemas a request reaches are checked (a body, a parameter): a response is the
+    # server's own text.
+    string-declares-max-length:
+        description: 'A string a request can carry must declare maxLength (see docs/api/field-limits.md for values by kind).'
+        severity: error
+        given:
+            - "$.paths[*][*].requestBody.content[*].schema..[?(@ && @.type === 'string' && !@.enum && !@.allOf && !@.oneOf && !@.anyOf && @.format !== 'date' && @.format !== 'date-time' && @.format !== 'uuid' && @.format !== 'time' && @.format !== 'binary')]"
+            - "$.paths[*][*].parameters[*].schema..[?(@ && @.type === 'string' && !@.enum && !@.allOf && !@.oneOf && !@.anyOf && @.format !== 'date' && @.format !== 'date-time' && @.format !== 'uuid' && @.format !== 'time' && @.format !== 'binary')]"
+            - "$.paths[*].parameters[*].schema..[?(@ && @.type === 'string' && !@.enum && !@.allOf && !@.oneOf && !@.anyOf && @.format !== 'date' && @.format !== 'date-time' && @.format !== 'uuid' && @.format !== 'time' && @.format !== 'binary')]"
+        then:
+            field: maxLength
+            function: defined
+
+    # The same rule for a parameter whose schema IS the string (`username`, a header, a path id):
+    # the recursive paths above match a schema's children, never the schema itself, so a bare string
+    # parameter needs its own selector, one level up.
+    string-parameter-declares-max-length:
+        description: 'A string parameter must declare maxLength on its schema (see docs/api/field-limits.md for values by kind).'
+        severity: error
+        given:
+            - "$.paths[*][*].parameters[?(@ && @.schema && @.schema.type === 'string' && !@.schema.enum && !@.schema.allOf && !@.schema.oneOf && !@.schema.anyOf && @.schema.format !== 'date' && @.schema.format !== 'date-time' && @.schema.format !== 'uuid' && @.schema.format !== 'time' && @.schema.format !== 'binary')]"
+            - "$.paths[*].parameters[?(@ && @.schema && @.schema.type === 'string' && !@.schema.enum && !@.schema.allOf && !@.schema.oneOf && !@.schema.anyOf && @.schema.format !== 'date' && @.schema.format !== 'date-time' && @.schema.format !== 'uuid' && @.schema.format !== 'time' && @.schema.format !== 'binary')]"
+        then:
+            field: schema.maxLength
+            function: defined

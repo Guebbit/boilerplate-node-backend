@@ -183,21 +183,3 @@ describe('POST /account/password/check', () => {
         expect(response.status).toBe(422);
     });
 });
-
-describe('DELETE /account/tokens/expired', () => {
-    it('matches the contract for an operator', async () => {
-        const { bearer } = await authenticateAs('admin');
-
-        const response = await api().delete('/account/tokens/expired').set('Authorization', bearer);
-
-        expect(response.status).toBe(200);
-    });
-
-    it('matches the error contract for a customer', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().delete('/account/tokens/expired').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
-});

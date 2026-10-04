@@ -21,11 +21,11 @@ paths:
             parameters:
                 - name: actor
                   in: query
-                  schema: { type: string }
+                  schema: { type: string, maxLength: 64 }
                   description: Filter by actor user ID
                 - name: action
                   in: query
-                  schema: { type: string }
+                  schema: { type: string, maxLength: 100 }
                   description: 'Filter by action name (e.g. order.created)'
                 - name: outcome
                   in: query
@@ -35,7 +35,7 @@ paths:
                   description: Filter by outcome
                 - name: target
                   in: query
-                  schema: { type: string }
+                  schema: { type: string, maxLength: 100 }
                   description: Filter by the id of the row the action was taken on (e.g. an order or a user)
                 - name: since
                   in: query

@@ -15,6 +15,7 @@ import { t } from '@infrastructure/i18n';
 import { localeConfig } from '@infrastructure/i18n/config';
 import {
     CreateUserBody,
+    createUserBodyEmailMax,
     createUserBodyUsernameMax,
     createUserBodyUsernameMin,
     signupBodyPasswordMin
@@ -300,7 +301,10 @@ export type UserModel = Model<UserDocument, Record<string, never>, UserMethods>;
 export const zodUserSchema = CreateUserBody.extend({
     email: z
         .email({ error: () => t('users.field-email-invalid') })
-        .min(1, { error: () => t('users.field-email-required') }),
+        .min(1, { error: () => t('users.field-email-required') })
+        // The generated ceiling (254, RFC 5321's path limit), restated like the username's: this
+        // `.extend()` replaces the generated field outright, and a replaced field drops its bound.
+        .max(createUserBodyEmailMax, { error: () => t('users.field-email-invalid') }),
 
     // The floor comes from the generated `CreateUserBody` (`users/openapi.yaml`), so an admin
     // creating or editing a user and a self-service signup share one number. It is restated here

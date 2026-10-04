@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { ChangePasswordBody } from '@api/schemas.zod';
+import { ChangePasswordBody, changePasswordBodyCurrentPasswordMax } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { ChangePasswordRequest, AuthTokens } from '@types';
@@ -27,7 +27,8 @@ import { callerContextOf } from '@infrastructure/http/request';
  * still has to be accounted for here.
  */
 const changePasswordShape = ChangePasswordBody.extend({
-    currentPassword: z.string(),
+    // The ceiling stays: it bounds the hash work on a password that is only being compared.
+    currentPassword: z.string().max(changePasswordBodyCurrentPasswordMax),
     password: z.string(),
     passwordConfirm: z.string()
 });

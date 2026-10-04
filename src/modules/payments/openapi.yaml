@@ -394,6 +394,7 @@ paths:
                   required: true
                   schema:
                       type: string
+                      maxLength: 200
                   description: >-
                       `t=<unix seconds>,v1=<hex hmac-sha256 of "<t>.<raw body>">`. `t` must be
                       within 300 seconds of the server's clock or the delivery is rejected as
@@ -590,6 +591,7 @@ components:
                         everything still refundable.
                 currency:
                     type: string
+                    maxLength: 3
                     description: >-
                         ISO-4217 code of `amount`. Optional; when sent it must equal the payment's
                         own currency, so an amount written in another unit is refused instead of
@@ -637,9 +639,11 @@ components:
             properties:
                 id:
                     type: string
+                    maxLength: 200
                     description: The provider's event id. Deduplicated, so a retry settles nothing twice.
                 providerRef:
                     type: string
+                    maxLength: 200
                     description: Which intent the event is about. Absent for an event this API ignores.
                 status:
                     type: string
@@ -647,6 +651,7 @@ components:
                     description: The provider's own vocabulary — `refunded` is not here, because a refund is a later act of ours. Absent for an event this API ignores.
                 cardLast4:
                     type: string
+                    maxLength: 4
                     description: The only card digits a payment system may remember, as the provider reports them.
 
         PaymentEnvelope:

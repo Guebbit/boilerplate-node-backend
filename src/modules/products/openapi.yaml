@@ -475,8 +475,10 @@ components:
             properties:
                 title:
                     type: string
+                    maxLength: 200
                 description:
                     type: string
+                    maxLength: 10000
                     minLength: 1
 
         # `PATCH`'s locale entry — RFC 7396 one level down: only the fields named change.
@@ -486,9 +488,11 @@ components:
             properties:
                 title:
                     type: string
+                    maxLength: 200
                     description: A title is never cleared — an empty locale is deleted with the locale's own `null`.
                 description:
                     type: string
+                    maxLength: 10000
                     minLength: 1
                     nullable: true
                     description: A string sets the description, `null` clears it, absent keeps it. `""` is a 422.
@@ -840,11 +844,13 @@ components:
                     type: array
                     items:
                         type: string
+                        maxLength: 100
                         minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        maxLength: 50
                         minLength: 1
 
         # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
@@ -858,6 +864,7 @@ components:
                 # `ProductTranslationsWrite` describes, parsed before validation.
                 translations:
                     type: string
+                    maxLength: 100000
                     description: JSON-encoded `ProductTranslationsWrite`.
                 price:
                     type: number
@@ -910,11 +917,13 @@ components:
                     type: array
                     items:
                         type: string
+                        maxLength: 100
                         minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        maxLength: 50
                         minLength: 1
 
         # PUT /products/{id} — RFC 9110 §9.3.4: every scalar field the resource has is required,
@@ -972,11 +981,13 @@ components:
                     type: array
                     items:
                         type: string
+                        maxLength: 100
                         minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        maxLength: 50
                         minLength: 1
 
         # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
@@ -987,6 +998,7 @@ components:
             properties:
                 translations:
                     type: string
+                    maxLength: 100000
                     description: JSON-encoded `ProductTranslationsWrite`.
                 price:
                     type: number
@@ -1026,11 +1038,13 @@ components:
                     type: array
                     items:
                         type: string
+                        maxLength: 100
                         minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        maxLength: 50
                         minLength: 1
 
         # PATCH /products/{id} — every field optional, since a merge may touch just one of them.
@@ -1088,11 +1102,13 @@ components:
                     type: array
                     items:
                         type: string
+                        maxLength: 100
                         minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        maxLength: 50
                         minLength: 1
 
         # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
@@ -1104,6 +1120,7 @@ components:
                 # field shape, same `ProductTranslationsPatch` contents.
                 translations:
                     type: string
+                    maxLength: 100000
                     description: JSON-encoded `ProductTranslationsPatch`.
                 price:
                     type: number
@@ -1143,11 +1160,13 @@ components:
                     type: array
                     items:
                         type: string
+                        maxLength: 100
                         minLength: 1
                 tags:
                     type: array
                     items:
                         type: string
+                        maxLength: 50
                         minLength: 1
 
         DeleteProductRequest:
