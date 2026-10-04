@@ -13,8 +13,7 @@ import type { Request } from 'express';
 import type { Caller, CallerContext, TenantCallerContext } from '@types';
 import { coerceStringArray, getJson } from '@guebbit/js-toolkit';
 import { parseBooleanWord } from '@infrastructure/runtime/environment';
-import { stripUndefined } from '@infrastructure/persistence/factories';
-import { isPlainObject } from '@infrastructure/object-guards';
+import { isPlainObject, stripUndefined } from '@infrastructure/object-guards';
 
 /**
  * Parse a string-transported value as a boolean.

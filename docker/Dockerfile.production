@@ -72,6 +72,14 @@ COPY . .
 # reaches for a database is a build that fails on a laptop with no network. Tests belong to CI.
 RUN npm run postinstall && npm run ts-check
 
+# Test code and test builders are not part of what runs. Deleted AFTER the gate, which type-checks
+# them, and BEFORE the runtime stage copies `src/`. No production file imports a `factories.ts`
+# (lint refuses it), so this cannot break boot; the doubles live in `scenarios/`, never copied.
+#   -prune   do not descend into a `tests/` directory it is about to remove
+#   -exec rm -rf {} +   remove each match, batching the arguments
+RUN find src -type d -name tests -prune -exec rm -rf {} + \
+    && find src -type f -name factories.ts -delete
+
 # ────────────────────────────────────────────────────────────────────────────────────────────────
 # Stage 2 — runtime: production dependencies, application source, and nothing else.
 # ────────────────────────────────────────────────────────────────────────────────────────────────

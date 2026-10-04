@@ -77,18 +77,18 @@ const bannedTryCatch = {
 };
 
 /**
- * A `factories.ts` builder import — matches `./factories`, `../factories` and a sibling module's
- * `@modules/<name>/factories`, whole-specifier so `@infrastructure/persistence/factories` (the
- * generic helpers a builder is built FROM, not a builder itself) does not also match a bare
- * `/factories$` suffix. `no-restricted-imports` does not merge across configs (see
- * `bannedDoubleCasts` above), so every block covering `src/modules/**` or `scripts/ops/**`
- * spreads this in, or the ban would silently lift for whichever of those files that block's
- * `no-restricted-imports` entry also configures.
+ * A `factories.ts` builder import — any specifier whose last segment is `factories`: `./factories`,
+ * `../factories`, a sibling module's `@modules/<name>/factories` and the generic helpers at
+ * `@infrastructure/persistence/factories` alike. The production image deletes every
+ * `src/**\/factories.ts`, so a production file that imports one would crash at boot there.
+ * `no-restricted-imports` does not merge across configs (see `bannedDoubleCasts` above), so every
+ * block covering production files spreads this in, or the ban would silently lift for whichever
+ * of those files that block's `no-restricted-imports` entry also configures.
  */
 const factoriesImportPattern = {
-    regex: String.raw`^(\.{1,2}/factories|@modules/[^/]+/factories)$`,
+    regex: '(^|/)factories$',
     message:
-        'A factories.ts builder is for tests and scenarios/, not production code — it writes past the domain rules a service enforces.'
+        'A factories.ts builder is for tests and scenarios/, not production code — it writes past the domain rules a service enforces, and the production image does not ship it.'
 };
 
 /**
@@ -724,6 +724,22 @@ export default tseslint.config(
     },
 
     /**
+     * No production file imports a test builder, wherever in `src/` it lives.
+     *
+     * The module-wide blocks below repeat the same pattern for their own globs (they replace this
+     * block's options for those files, so each spreads it in). This one reaches what they do not:
+     * `src/infrastructure/`, `src/kernel/` and `src/app/`. A module's own `factories.ts` is the
+     * builder itself, and tests are where builders belong.
+     */
+    {
+        files: ['src/**/*.ts'],
+        ignores: ['src/**/tests/**', 'src/**/factories.ts'],
+        rules: {
+            'no-restricted-imports': ['error', { patterns: [factoriesImportPattern] }]
+        }
+    },
+
+    /**
      * Controllers, where the same rule is absolute.
      *
      * A controller reads the request, calls one service, and turns a verdict into a status code.
@@ -789,6 +805,29 @@ export default tseslint.config(
                         }
                     ],
                     patterns: [factoriesImportPattern]
+                }
+            ]
+        }
+    },
+
+    /**
+     * A module's own `factories.ts` is itself a builder, so the one thing it may import is the
+     * generic helpers it is built from. Another builder — its own or a sibling's — is still
+     * refused: a factory that reaches into another module's factory couples two modules' seeds.
+     */
+    {
+        files: ['src/modules/*/factories.ts'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            regex: String.raw`^(\.{1,2}/factories|@modules/[^/]+/factories)$`,
+                            message:
+                                'A factory may use the generic helpers in `@infrastructure/persistence/factories`, not another module’s builder.'
+                        }
+                    ]
                 }
             ]
         }

@@ -8,11 +8,8 @@
  */
 
 import type { Types } from 'mongoose';
-import {
-    identityOf,
-    stripUndefined,
-    type OverridesFor
-} from '@infrastructure/persistence/factories';
+import { identityOf, type OverridesFor } from '@infrastructure/persistence/factories';
+import { stripUndefined } from '@infrastructure/object-guards';
 import type { Language, LocaleEntry } from '@types';
 import { deriveBaseLanguage } from './model';
 import type { LocaleDocument, LocaleEntryDocument } from './model';

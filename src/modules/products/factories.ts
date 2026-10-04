@@ -6,12 +6,8 @@
  * back through the real serializer instead of a guess.
  */
 
-import {
-    identityOf,
-    stripUndefined,
-    toDate,
-    type OverridesFor
-} from '@infrastructure/persistence/factories';
+import { identityOf, toDate, type OverridesFor } from '@infrastructure/persistence/factories';
+import { stripUndefined } from '@infrastructure/object-guards';
 import type { Product } from '@types';
 import type { ProductDocument, ProductRecord } from './model';
 

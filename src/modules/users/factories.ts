@@ -10,12 +10,8 @@
  * builder returns.
  */
 
-import {
-    identityOf,
-    stripUndefined,
-    toDate,
-    type OverridesFor
-} from '@infrastructure/persistence/factories';
+import { identityOf, toDate, type OverridesFor } from '@infrastructure/persistence/factories';
+import { stripUndefined } from '@infrastructure/object-guards';
 import type { User } from '@types';
 import type { Token, TwoFactorMethodRecord, UserDocument } from './model';
 

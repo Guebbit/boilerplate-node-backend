@@ -196,6 +196,13 @@ by never running `lint` at all, which is not an option here.
 font/rendering libraries, and the baked `mongod` all add up. None of it ships in
 `docker/Dockerfile.production`, which stays on Alpine — see the comment at the top of that file.
 
+**What the production image leaves out**: every `src/**/tests/` directory and every
+`src/**/factories.ts`. The build stage deletes them after the type-check gate and before the runtime
+`COPY`, so the image carries no test, no builder that writes past a service's domain rules and no
+fixture. Lint refuses a production import of any `factories` file, which is what makes the deletion
+safe. The test doubles (a fake payment provider, a mail log) are not deleted: they were never in
+`src/` — they live in `scenarios/`, which the image does not copy.
+
 ## How to think about the setup
 
 - **Compose is the local truth**: one file wires together the app plus all sidecars needed for demos and local debugging.

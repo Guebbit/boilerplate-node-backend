@@ -1,15 +1,12 @@
 /**
  * The shared helpers every module's `factories.ts` is built from.
  *
- * These four functions decide what a seeded record MEANS when a field was left out, and each one
+ * These three functions decide what a seeded record MEANS when a field was left out, and each one
  * has a failure that is silent by construction:
  *
  *   - `toObjectId` turns a hex string into a real BSON id. A string that stayed a string matches
  *     nothing inside an aggregation `$match` — the same failure `orderService.callerScope` guards
  *     at the other end — and reads as "no such record" rather than as an error.
- *   - `stripUndefined` drops `undefined` entries so an unspecified override falls through to the
- *     schema's `default:`. Kept instead, the key exists with `undefined` as its value, which
- *     Mongoose treats as "set to nothing" and the default never applies.
  *   - `toDate` accepts what the seed files actually write — ISO strings — while passing a `Date`
  *     through untouched.
  *   - `identityOf` derives `createdAt` from the id's own embedded timestamp when none is given,
@@ -17,12 +14,7 @@
  *     sharing the instant the seeder ran.
  */
 import { Types } from 'mongoose';
-import {
-    stripUndefined,
-    toDate,
-    toObjectId,
-    identityOf
-} from '@infrastructure/persistence/factories';
+import { toDate, toObjectId, identityOf } from '@infrastructure/persistence/factories';
 
 const HEX = '65dc8a99604c307b702b5ccc';
 
@@ -49,35 +41,6 @@ describe('toObjectId', () => {
         // The dangerous alternative: silently substituting a new id would seed a record nothing
         // else can reference, and the broken reference would surface far from here.
         expect(() => toObjectId('not-an-object-id')).toThrow();
-    });
-});
-
-describe('stripUndefined', () => {
-    it('drops keys whose value is undefined', () => {
-        expect(stripUndefined({ a: 1, b: undefined, c: 'x' })).toEqual({ a: 1, c: 'x' });
-    });
-
-    it('keeps null, zero, empty string and false', () => {
-        // Each of these is a VALUE a factory may deliberately state — `shippingCost: 0` and
-        // `active: false` both mean something. Only `undefined` means "not specified".
-        expect(stripUndefined({ n: null, z: 0, s: '', f: false })).toEqual({
-            n: null,
-            z: 0,
-            s: '',
-            f: false
-        });
-    });
-
-    it('returns an empty object when everything was unspecified', () => {
-        expect(stripUndefined({ a: undefined, b: undefined })).toEqual({});
-    });
-
-    it('does not mutate its input', () => {
-        const source = { a: 1, b: undefined };
-
-        stripUndefined(source);
-
-        expect(Object.keys(source)).toEqual(['a', 'b']);
     });
 });
 

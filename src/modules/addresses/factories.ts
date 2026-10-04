@@ -6,7 +6,7 @@
  */
 
 import { Types } from 'mongoose';
-import { stripUndefined } from '@infrastructure/persistence/factories';
+import { stripUndefined } from '@infrastructure/object-guards';
 import type { Address, Id } from '@types';
 import type { AddressBookDocument, AddressItem } from './model';
 

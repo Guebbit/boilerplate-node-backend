@@ -11,12 +11,8 @@
 
 import { Types } from 'mongoose';
 import { getDefaultLocale } from '@infrastructure/i18n';
-import {
-    identityOf,
-    stripUndefined,
-    toDate,
-    type OverridesFor
-} from '@infrastructure/persistence/factories';
+import { identityOf, toDate, type OverridesFor } from '@infrastructure/persistence/factories';
+import { stripUndefined } from '@infrastructure/object-guards';
 import type { Id, Order, OrderItem, Product } from '@types';
 import type { FrozenOrderLineProduct, OrderDocument } from './model';
 
