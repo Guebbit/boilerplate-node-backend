@@ -10,6 +10,7 @@
  * The blocks that are not about clamping switch it off with `NODE_REDIS_CACHE_DEV_TTL_MAX=0`,
  * which means "no cap" — otherwise every declared TTL would silently arrive as 30.
  */
+import { createHash } from 'node:crypto';
 import { asStub } from '@tests/stub';
 import type { NextFunction, Request, Response } from 'express';
 import {
@@ -180,6 +181,41 @@ const staleEnvelope = (body: unknown) =>
 const staleGetRequest = () =>
     asStub<Request>({ method: 'GET', originalUrl: '/products', query: {}, locale: 'en' });
 
+/** A `keyValues` that parses `minPrice` like a number, and refuses what is not one. */
+const parseNumber = (request: Request): Record<string, unknown> | undefined => {
+    const raw = (request.query as Record<string, unknown>).minPrice;
+    const value = Number(raw);
+    return Number.isNaN(value) ? undefined : { minPrice: value };
+};
+
+/** A `keyValues` that always answers one `sort` list. */
+const sortedBy = (sort: string[]) => (): Record<string, unknown> => ({ sort });
+
+/** The key `setCache` looked up for `query`, with `keyValues` and `ordered` as given. */
+const parsedKeyFor = async (
+    query: Record<string, unknown>,
+    keying: {
+        keyValues?: (request: Request) => Record<string, unknown> | undefined;
+        ordered?: readonly string[];
+    } = {}
+) => {
+    mockedCache.getCacheValue.mockReset();
+    mockedCache.getCacheValue.mockResolvedValue(undefined);
+    const middleware = setCache(60, {
+        tags: ['products'],
+        keyParameters: ['minPrice', 'sort'],
+        keyValues: keying.keyValues ?? parseNumber,
+        orderedKeyParameters: keying.ordered,
+        scopeKey: GUEST_SCOPE
+    });
+    await middleware(
+        asStub<Request>({ method: 'GET', originalUrl: '/products', query, locale: 'en' }),
+        createResponse().response,
+        jest.fn() as NextFunction
+    );
+    return mockedCache.getCacheValue.mock.calls.at(-1)?.[0];
+};
+
 describe('setCache', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -208,7 +244,9 @@ describe('setCache', () => {
 
         await middleware(request, response, next);
 
-        expect(mockedCache.getCacheValue).toHaveBeenCalledWith('GET:/products?page="1":guest:en');
+        expect(mockedCache.getCacheValue).toHaveBeenCalledWith(
+            `GET:/products?${createHash('sha256').update('page="1"').digest('hex')}:guest:en`
+        );
         expect(headers['x-cache']).toBe('HIT');
         expect(response.status).toHaveBeenCalledWith(200);
         expect(response.json).toHaveBeenCalledWith({ success: true });
@@ -468,10 +506,103 @@ describe('setCache', () => {
             );
         });
 
+        // A 90 kB value must not become a 90 kB Redis key (stored twice, once in the tag index).
+        it('hashes the parameters, so the key is a fixed size whatever the input', async () => {
+            const key = await keyFor({ title: 'x'.repeat(90_000) }, ['title']);
+
+            expect(key).toMatch(/^GET:\/products\?[0-9a-f]{64}:guest:en$/);
+        });
+
+        // Walking `[[[…]]]` is what once threw a RangeError out of the key builder; now it is
+        // simply not a cacheable question.
+        it('skips the cache for a value that is not a scalar or an array of scalars', async () => {
+            mockedCache.getCacheValue.mockClear();
+            const next = jest.fn() as NextFunction;
+            const nested = JSON.parse(`${'['.repeat(40_000)}1${']'.repeat(40_000)}`) as unknown;
+            const middleware = setCache(60, {
+                tags: ['products'],
+                keyParameters: ['title'],
+                scopeKey: GUEST_SCOPE
+            });
+
+            await middleware(
+                asStub<Request>({
+                    method: 'GET',
+                    originalUrl: '/products',
+                    query: { title: nested },
+                    locale: 'en'
+                }),
+                createResponse().response,
+                next
+            );
+
+            expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+            expect(next).toHaveBeenCalledWith();
+        });
+
+        it('skips the cache for an object where a scalar belongs', async () => {
+            mockedCache.getCacheValue.mockClear();
+            const next = jest.fn() as NextFunction;
+            const middleware = setCache(60, {
+                tags: ['products'],
+                keyParameters: ['title'],
+                scopeKey: GUEST_SCOPE
+            });
+
+            await middleware(
+                asStub<Request>({
+                    method: 'GET',
+                    originalUrl: '/products',
+                    query: { title: { $ne: 'x' } },
+                    locale: 'en'
+                }),
+                createResponse().response,
+                next
+            );
+
+            expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+            expect(next).toHaveBeenCalledWith();
+        });
+
         // `in` walks the prototype chain, so this would otherwise count as present on every
         // request and put `toString=undefined` into every key.
         it('does not mistake an inherited property for a supplied parameter', async () => {
             expect(await keyFor({}, ['toString'])).toBe(await keyFor({}, []));
+        });
+    });
+
+    /*
+     * With `keyValues` the key is built from what the controller will validate, so two spellings of
+     * one question share an entry and a request the controller would refuse never gets one.
+     */
+    describe('cache key from parsed values', () => {
+        it('gives every spelling of one number one key', async () => {
+            const canonical = await parsedKeyFor({ minPrice: '0' });
+
+            expect(await parsedKeyFor({ minPrice: '0'.repeat(500) })).toBe(canonical);
+            expect(await parsedKeyFor({ minPrice: '0e0' })).toBe(canonical);
+            expect(await parsedKeyFor({ minPrice: '0x0' })).toBe(canonical);
+        });
+
+        it('never looks the cache up for a request the parser refuses', async () => {
+            await expect(parsedKeyFor({ minPrice: 'abc' })).resolves.toBeUndefined();
+        });
+
+        it('keeps the order of a parameter declared as ordered, and sorts any other array', async () => {
+            expect(
+                await parsedKeyFor(
+                    {},
+                    { keyValues: sortedBy(['price', 'title']), ordered: ['sort'] }
+                )
+            ).not.toBe(
+                await parsedKeyFor(
+                    {},
+                    { keyValues: sortedBy(['title', 'price']), ordered: ['sort'] }
+                )
+            );
+            expect(await parsedKeyFor({}, { keyValues: sortedBy(['price', 'title']) })).toBe(
+                await parsedKeyFor({}, { keyValues: sortedBy(['title', 'price']) })
+            );
         });
     });
 

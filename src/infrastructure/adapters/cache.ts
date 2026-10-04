@@ -86,7 +86,7 @@ export const cacheState = (): DependencyStatus => cacheConnection.state();
 
 /**
  * Build one namespaced Redis key: `<prefix>:key:<hash>` for a cached value (a Redis string),
- * `<prefix>:tag:<name>` for the keys under a tag (a Redis set).
+ * `<prefix>:tag:<name>` for the keys under a tag (a Redis sorted set, scored by expiry).
  */
 const prefix = (value: string) => `${CACHE_PREFIX}:${value}`;
 
@@ -150,7 +150,7 @@ export const setCacheValue = (
 
     const cacheKey = prefix(`key:${key}`);
     // `filter(Boolean)` drops empty strings, `new Set` de-duplicates — both would otherwise
-    // create junk tag keys and redundant SADD round-trips.
+    // create junk tag keys and redundant index round-trips.
     const cacheTags = [...new Set(tags.filter(Boolean))];
 
     return cacheConnection
@@ -167,8 +167,8 @@ export const setCacheValue = (
                         EX: ttlSeconds
                     })
                     .then(() =>
-                        // Index this key by tags too — `sAdd`/SADD adds it to each tag's Redis
-                        // set, which is what makes group invalidation possible (Redis cannot
+                        // Index this key by tags too — each tag's sorted set gets it as a
+                        // member, which is what makes group invalidation possible (Redis cannot
                         // delete by pattern efficiently).
                         Promise.all(
                             cacheTags.map((tag) =>
@@ -181,7 +181,7 @@ export const setCacheValue = (
                             )
                         )
                     )
-                    // Collapse the SADD reply counts to void — callers only care that it finished.
+                    // Collapse the index reply counts to void — callers only care that it finished.
                     .then(() => undefined)
             );
         })
@@ -197,14 +197,18 @@ export const setCacheValue = (
 };
 
 /**
- * Add `cacheKey` to one tag's set, and keep the set alive at least as long as its newest member.
- * A tag nobody invalidates would otherwise keep its set forever, growing by one member per write.
+ * Add `cacheKey` to one tag's index, and keep the index alive at least as long as its newest member.
+ *
+ * The index is a sorted set scored by each member's own expiry (epoch ms), so a member leaves with
+ * its entry: every write first prunes the members whose score has passed. A plain set kept a member
+ * forever once its entry expired, growing by one per distinct key until the next invalidation.
+ * https://redis.io/docs/latest/commands/zadd/ · https://redis.io/docs/latest/commands/zremrangebyscore/
  *
  * Two EXPIREs because neither mode alone covers both cases: `NX` sets a TTL on a set that has
  * none yet, `GT` extends one that has a shorter TTL (Redis 7+). https://redis.io/commands/expire/
  *
  * @param redisClient - the connected client
- * @param tagKey - the tag set's own key
+ * @param tagKey - the tag index's own key
  * @param cacheKey - the entry being indexed
  * @param ttlSeconds - the entry's own TTL
  */
@@ -213,11 +217,19 @@ const indexUnderTag = (
     tagKey: string,
     cacheKey: string,
     ttlSeconds: number
-): Promise<unknown> =>
-    redisClient
-        .sAdd(tagKey, cacheKey)
-        .then(() => redisClient.expire(tagKey, ttlSeconds, 'NX'))
-        .then(() => redisClient.expire(tagKey, ttlSeconds, 'GT'));
+): Promise<unknown> => {
+    const now = Date.now();
+    return (
+        redisClient
+            // `'-inf'` to `now`: everything already expired. Exclusive of the entry being added.
+            .zRemRangeByScore(tagKey, '-inf', now)
+            .then(() =>
+                redisClient.zAdd(tagKey, { score: now + ttlSeconds * 1000, value: cacheKey })
+            )
+            .then(() => redisClient.expire(tagKey, ttlSeconds, 'NX'))
+            .then(() => redisClient.expire(tagKey, ttlSeconds, 'GT'))
+    );
+};
 
 /**
  * Claim `key` for `seconds`, once, across every worker and replica: `SET NX EX` succeeds for
@@ -330,8 +342,9 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
                     const tagKey = prefix(`tag:${tag}`);
                     return (
                         redisClient
-                            // `sMembers` = SMEMBERS, returning every key registered under this tag.
-                            .sMembers(tagKey)
+                            // `zRange 0 -1` = ZRANGE, every key registered under this tag. Members
+                            // already past their score are dead entries; deleting them is harmless.
+                            .zRange(tagKey, 0, -1)
                             // `del` accepts an array (variadic DEL) — one round-trip for the whole
                             // group instead of one per key. Guarded because DEL with zero
                             // arguments is a protocol error.

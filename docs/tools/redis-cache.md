@@ -134,13 +134,32 @@ cannot mint a new one:
 The first two rows are what costs something in ordinary traffic: query-string order is not stable
 across HTTP clients, so a URL-derived key stores the same request twice and pays for a second
 Mongo query behind the second copy. The third row is why an arbitrary parameter cannot mint an
-entry — not a vulnerability, since the app fails open and the rate limiter bounds the volume, but
-there is no reason to store the same body twice.
+entry, and the same body is never stored twice under two spellings.
 
 Note what the key still separates, and must: the path, the `guest` scope segment (see above), the
 locale, and any declared parameter that genuinely differs — including a repeated one
 (`?tag=a&tag=b` arrives as an array) and a blank one, which is not assumed to mean the same as
 absent.
+
+### What reaches the key, and how
+
+The key is built BEFORE the controller validates anything, so what feeds it is bounded on purpose:
+
+- **Parsed, where the route can.** A route may hand `setCache` a `keyValues` function: the search
+  routes run the controller's own merge and schema, so `minPrice: "0e0"`, `"0x0"` and `0` are one
+  key, and a request the controller would refuse never gets one. Without it, the raw body or
+  query value feeds the key.
+- **Scalars only.** A string, number, boolean or null, or an array of those. Anything else (a
+  nested array, an object) skips the cache for that request, uncached and unharmed. A recursive
+  walk would throw a `RangeError` on a 100 kB `[[[…]]]` body.
+- **Hashed.** The values become one `sha256`, so a 90 kB `title` costs a 64-character key, not a
+  90 kB one stored twice.
+- **Arrays are sets, unless declared ordered.** `?id=a&id=b` and `?id=b&id=a` share a key;
+  `sort` is declared in `orderedKeyParameters`, because its tokens apply in sequence.
+
+Every entry is also indexed under its tags in a **sorted set scored by the entry's expiry**. Each
+write first drops the members already past their score, so the index follows the live entries and
+cannot grow without bound between invalidations.
 
 ## Entry size is bounded
 
@@ -345,14 +364,14 @@ sequenceDiagram
     participant M as MongoDB
     C1->>W1: PUT /products/42
     W1->>M: update
-    W1->>R: SMEMBERS prefix:tag:products
-    W1->>R: DEL those keys + the tag set
+    W1->>R: ZRANGE prefix:tag:products 0 -1
+    W1->>R: DEL those keys + the tag index
     Note over R: the cached answers no longer exist<br/>for anyone
     C2->>W2: GET /products
     W2->>R: GET prefix:key:...
     R-->>W2: (miss)
     W2->>M: re-read
-    W2->>R: SET + SADD (fresh entry, new TTL)
+    W2->>R: SET + ZADD (fresh entry, new TTL)
     W2-->>C2: fresh response
 ```
 

@@ -29,10 +29,11 @@ const mockConnect = jest.fn();
 const mockScanIterator = jest.fn();
 const mockDel = jest.fn();
 const mockSet = jest.fn();
-const mockSAdd = jest.fn();
+const mockZAdd = jest.fn();
+const mockZRemRangeByScore = jest.fn();
 const mockExpire = jest.fn();
 const mockGet = jest.fn();
-const mockSMembers = jest.fn();
+const mockZRange = jest.fn();
 
 const mockQuit = jest.fn();
 const mockDestroy = jest.fn();
@@ -43,10 +44,11 @@ const mockClient = {
     scanIterator: mockScanIterator,
     del: mockDel,
     set: mockSet,
-    sAdd: mockSAdd,
+    zAdd: mockZAdd,
+    zRemRangeByScore: mockZRemRangeByScore,
     expire: mockExpire,
     get: mockGet,
-    sMembers: mockSMembers,
+    zRange: mockZRange,
     close: mockQuit,
     destroy: mockDestroy,
     // The lifecycle short-circuits on `isReady`; keeping it false forces the connect path, which
@@ -218,7 +220,8 @@ describe('setCacheValue tag index', () => {
         setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockConnect.mockImplementation(() => Promise.resolve());
         mockSet.mockImplementation(() => Promise.resolve('OK'));
-        mockSAdd.mockImplementation(() => Promise.resolve(1));
+        mockZAdd.mockImplementation(() => Promise.resolve(1));
+        mockZRemRangeByScore.mockImplementation(() => Promise.resolve(0));
         mockExpire.mockImplementation(() => Promise.resolve(1));
     });
 
@@ -247,14 +250,33 @@ describe('setCacheValue tag index', () => {
         // just serves stale data until its TTL runs out.
         await freshCache().setCacheValue('GET:/products', '{}', 60, ['products', 'catalog']);
 
-        expect(mockSAdd).toHaveBeenCalledTimes(2);
-        expect(mockSAdd).toHaveBeenCalledWith(
+        expect(mockZAdd).toHaveBeenCalledTimes(2);
+        expect(mockZAdd).toHaveBeenCalledWith(expect.stringContaining(':tag:products'), {
+            score: expect.any(Number),
+            value: expect.stringContaining(':key:GET:/products')
+        });
+        expect(mockZAdd).toHaveBeenCalledWith(expect.stringContaining(':tag:catalog'), {
+            score: expect.any(Number),
+            value: expect.stringContaining(':key:GET:/products')
+        });
+    });
+
+    // The index used to be a plain set: a member stayed after its entry expired, so a flood of
+    // distinct keys grew it until the next invalidation.
+    it('scores each member with its own expiry and prunes the ones already past it', async () => {
+        const before = Date.now();
+        await freshCache().setCacheValue('GET:/products', '{}', 60, ['products']);
+
+        const [[, member]] = mockZAdd.mock.calls as [[string, { score: number }]];
+        expect(member.score).toBeGreaterThanOrEqual(before + 60_000);
+        expect(mockZRemRangeByScore).toHaveBeenCalledWith(
             expect.stringContaining(':tag:products'),
-            expect.stringContaining(':key:GET:/products')
+            '-inf',
+            expect.any(Number)
         );
-        expect(mockSAdd).toHaveBeenCalledWith(
-            expect.stringContaining(':tag:catalog'),
-            expect.stringContaining(':key:GET:/products')
+        // Prune BEFORE adding: the entry being written must not be the one swept.
+        expect(mockZRemRangeByScore.mock.invocationCallOrder[0]).toBeLessThan(
+            mockZAdd.mock.invocationCallOrder[0] ?? 0
         );
     });
 
@@ -268,7 +290,7 @@ describe('setCacheValue tag index', () => {
             'catalog'
         ]);
 
-        expect(mockSAdd).toHaveBeenCalledTimes(2);
+        expect(mockZAdd).toHaveBeenCalledTimes(2);
     });
 
     it('resolves rather than rejecting when the write fails', async () => {
@@ -288,7 +310,7 @@ describe('setCacheValue tag index', () => {
         await freshCache().setCacheValue('GET:/products', '{}', ttlSeconds, ['products']);
 
         expect(mockSet).not.toHaveBeenCalled();
-        expect(mockSAdd).not.toHaveBeenCalled();
+        expect(mockZAdd).not.toHaveBeenCalled();
         expect(mockConnect).not.toHaveBeenCalled();
     });
 });
@@ -440,12 +462,12 @@ describe('invalidateCacheTags', () => {
     beforeEach(() => {
         setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockConnect.mockImplementation(() => Promise.resolve());
-        mockSMembers.mockImplementation(() => Promise.resolve([]));
+        mockZRange.mockImplementation(() => Promise.resolve([]));
         mockDel.mockImplementation(() => Promise.resolve(1));
     });
 
     it('deletes every entry in the tag, then the tag set itself', async () => {
-        mockSMembers.mockImplementation(() => Promise.resolve(['app:key:a', 'app:key:b']));
+        mockZRange.mockImplementation(() => Promise.resolve(['app:key:a', 'app:key:b']));
 
         await freshCache().invalidateCacheTags(['products']);
 
@@ -458,7 +480,7 @@ describe('invalidateCacheTags', () => {
     it('does not issue a DEL with no arguments for an empty tag', async () => {
         // `DEL` with zero keys is a protocol error, not a no-op, so an empty set has to be
         // detected here. The tag key itself is still deleted.
-        mockSMembers.mockImplementation(() => Promise.resolve([]));
+        mockZRange.mockImplementation(() => Promise.resolve([]));
 
         await freshCache().invalidateCacheTags(['products']);
 
@@ -470,19 +492,19 @@ describe('invalidateCacheTags', () => {
         await freshCache().invalidateCacheTags(['', '']);
 
         expect(mockConnect).not.toHaveBeenCalled();
-        expect(mockSMembers).not.toHaveBeenCalled();
+        expect(mockZRange).not.toHaveBeenCalled();
     });
 
     it('reads each distinct tag once', async () => {
         await freshCache().invalidateCacheTags(['products', 'products', 'catalog']);
 
-        expect(mockSMembers).toHaveBeenCalledTimes(2);
+        expect(mockZRange).toHaveBeenCalledTimes(2);
     });
 
     it('resolves rather than rejecting when Redis fails mid-invalidation', async () => {
         // The caller is a write that has already succeeded in Mongo. Rejecting here would turn a
         // completed write into an error response, and the client would retry a write that landed.
-        mockSMembers.mockImplementation(() => Promise.reject(new Error('connection reset')));
+        mockZRange.mockImplementation(() => Promise.reject(new Error('connection reset')));
 
         await expect(freshCache().invalidateCacheTags(['products'])).resolves.toEqual({
             deleted: 0,
@@ -501,7 +523,7 @@ describe('invalidateCacheTags', () => {
      */
     it('reports success with the number of cached responses removed', async () => {
         const cache = freshCache();
-        mockSMembers.mockImplementation(() => Promise.resolve(['a', 'b']));
+        mockZRange.mockImplementation(() => Promise.resolve(['a', 'b']));
         // Variadic DEL answers with how many keys it removed; the tag set's own deletion is not a
         // cached response and must not be counted with them.
         mockDel.mockImplementation((keys: string[] | string) =>
@@ -533,12 +555,12 @@ describe('invalidateCacheTagsLogged', () => {
     beforeEach(() => {
         setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
         mockConnect.mockImplementation(() => Promise.resolve());
-        mockSMembers.mockImplementation(() => Promise.resolve([]));
+        mockZRange.mockImplementation(() => Promise.resolve([]));
         mockDel.mockImplementation(() => Promise.resolve(1));
     });
 
     it('logs and counts the failure when invalidation could not reach Redis', async () => {
-        mockSMembers.mockImplementation(() => Promise.reject(new Error('connection reset')));
+        mockZRange.mockImplementation(() => Promise.reject(new Error('connection reset')));
 
         const cache = freshCache();
         const { logger, cacheInvalidationFailuresTotal } = freshObservability();

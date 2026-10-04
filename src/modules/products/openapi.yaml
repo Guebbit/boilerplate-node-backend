@@ -31,11 +31,13 @@ paths:
                   required: false
                   schema:
                       type: string
+                      maxLength: 200
                 - name: tag
                   in: query
                   required: false
                   schema:
                       type: string
+                      maxLength: 200
                 - name: minPrice
                   in: query
                   required: false
@@ -54,6 +56,7 @@ paths:
                   in: query
                   schema:
                       type: string
+                      maxLength: 200
                 - name: active
                   in: query
                   schema:
@@ -745,11 +748,14 @@ components:
                     minimum: 0
                 category:
                     type: string
+                    maxLength: 200
                 tag:
                     type: string
+                    maxLength: 200
                 # A title fragment, and the only one of this pair a stranger can use.
                 title:
                     type: string
+                    maxLength: 200
                 # Admin-effective: a stranger sending `active: false` meets the visibility
                 # scope, which pins `active: true` for them, so the two clauses contradict
                 # and the page is empty rather than revealing the unlisted catalogue.

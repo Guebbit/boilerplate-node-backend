@@ -20,7 +20,11 @@ import {
     pageSchema,
     pageSizeSchema
 } from '@infrastructure/http/schemas';
-import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
+import type { Request } from 'express';
+import {
+    createSearchController,
+    mergedSearchInput
+} from '@infrastructure/surfaces/create-search-controller';
 
 /**
  * Extends the orval-generated `SearchProductsBody` (kept in sync with openapi.yaml), coercing
@@ -52,6 +56,36 @@ const searchProductsQuerySchema = SearchProductsBody.extend({
 export const searchProductsKeyParameters = Object.keys(searchProductsQuerySchema.shape);
 
 /**
+ * OpenAPI models category/tag as single-value filters; if arrays/CSV are provided we pick the
+ * first one. Shared by the controller and the cache key, which must read the same value.
+ */
+const extendSearchInput = (input: Record<string, unknown>): Record<string, unknown> => ({
+    category: coerceStringArray(input.category)[0],
+    tag: coerceStringArray(input.tag)[0]
+});
+
+/**
+ * The validated search a request asks, for the response cache's key: the same merge and the same
+ * schema the controller uses, so `minPrice: "0e0"` and `minPrice: 0` are one key and a request the
+ * controller would refuse never gets one.
+ *
+ * @param request - the incoming request
+ * @returns the parsed search, or `undefined` when it does not validate (nothing to cache)
+ */
+export const searchProductsKeyValues = (request: Request): Record<string, unknown> | undefined => {
+    const parsed = searchProductsQuerySchema.safeParse(
+        mergedSearchInput(request, extendSearchInput)
+    );
+    return parsed.success ? parsed.data : undefined;
+};
+
+/**
+ * Array parameters whose ORDER is part of the question: `sort` applies its tokens in sequence.
+ * Every other array here (`id`) is a set, and the cache key sorts it.
+ */
+export const searchProductsOrderedParameters = ['sort'] as const;
+
+/**
  * GET /products
  * POST /products/search
  * List/search products via query parameters or request body.
@@ -60,11 +94,7 @@ export const searchProductsKeyParameters = Object.keys(searchProductsQuerySchema
 export const getProducts = createSearchController({
     entity: 'products',
     schema: searchProductsQuerySchema,
-    // OpenAPI currently models category/tag as single-value filters; if arrays/CSV are provided we pick the first one.
-    extendInput: (input) => ({
-        category: coerceStringArray(input.category)[0],
-        tag: coerceStringArray(input.tag)[0]
-    }),
+    extendInput: extendSearchInput,
     runSearch: (parsed, request) =>
         productService.searchViewed(
             parsed,

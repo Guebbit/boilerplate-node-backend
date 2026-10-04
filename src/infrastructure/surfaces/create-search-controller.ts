@@ -35,6 +35,34 @@ export interface SearchControllerSpec<TSchema extends ZodType, TResult> {
 }
 
 /**
+ * The search input as the controller sees it, before validation: `readInput` on the `search`
+ * surface, `sort` split into one list, then the module's own overlay.
+ *
+ * Shared so the response cache can key on the very value the controller will validate — a key
+ * built any other way could disagree with the controller about which question a request asks.
+ *
+ * @param request - the incoming request
+ * @param extendInput - the module's overlay, if it has one — see {@link SearchControllerSpec}
+ */
+export const mergedSearchInput = (
+    request: Request,
+    extendInput?: SearchControllerSpec<ZodType, unknown>['extendInput']
+): Record<string, unknown> => {
+    // readInput: merges params/query/body into one object, per the `search` surface's
+    // rules — see docs/theory/request-input.md. `id` is a batch filter (an array), so it
+    // goes through `stringArrays`, not `ids` — `ids` collapses a repeated key to its first
+    // entry, which is correct for `update`/`delete` (one row) but would silently turn
+    // `?id=a&id=b` into `?id=a` here.
+    const read = readInput(request, { surface: 'search', stringArrays: ['id'] });
+    // `sort` arrives as JSON:API CSV in a query and as an array in a body; one list either
+    // way, so the schema's enum validates each token. Blank stays absent.
+    const input = 'sort' in read ? { ...read, sort: splitSortParameter(read.sort) } : read;
+    // extendInput: the module's own overlay — coercions or request-derived values a plain
+    // field list can't express.
+    return extendInput ? { ...input, ...extendInput(input, request) } : input;
+};
+
+/**
  * Build a module's search controller.
  *
  * @param spec - the three things that differ per entity
@@ -50,18 +78,7 @@ export const createSearchController = <TSchema extends ZodType, TResult>({
     const operation = operationName('get', entity);
 
     return namedHandler(operation, (request: Request, response: Response) => {
-        // readInput: merges params/query/body into one object, per the `search` surface's
-        // rules — see docs/theory/request-input.md. `id` is a batch filter (an array), so it
-        // goes through `stringArrays`, not `ids` — `ids` collapses a repeated key to its first
-        // entry, which is correct for `update`/`delete` (one row) but would silently turn
-        // `?id=a&id=b` into `?id=a` here.
-        const read = readInput(request, { surface: 'search', stringArrays: ['id'] });
-        // `sort` arrives as JSON:API CSV in a query and as an array in a body; one list either
-        // way, so the schema's enum validates each token. Blank stays absent.
-        const input = 'sort' in read ? { ...read, sort: splitSortParameter(read.sort) } : read;
-        // extendInput: the module's own overlay — coercions or request-derived values a plain
-        // field list can't express.
-        const merged = extendInput ? { ...input, ...extendInput(input, request) } : input;
+        const merged = mergedSearchInput(request, extendInput);
 
         // parseBody: validates the merged input against the module's schema; 422s and returns
         // undefined on failure.

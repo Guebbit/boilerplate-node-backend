@@ -170,6 +170,31 @@ describe('POST /products/search', () => {
 
         expect(response.status).toBe(200);
     });
+
+    // `title`, `category` and `tag` build the response-cache key before the controller runs, so an
+    // unbounded one would let an anonymous caller mint a key as long as the body limit allows.
+    it.each(['title', 'category', 'tag'])('rejects a %s over 200 characters', async (field) => {
+        const body = await api()
+            .post('/products/search')
+            .send({ [field]: 'a'.repeat(201) });
+        const query = await api().get(`/products?${field}=${'a'.repeat(201)}`);
+
+        expect(body.status).toBe(422);
+        expect(query.status).toBe(422);
+    });
+
+    it('answers a body no key can carry without caching it and without a 500', async () => {
+        // 100,000 bytes of `[[[…]]]`: nested deeper than any walker's stack.
+        const nested = `{"title":${'['.repeat(49_990)}${']'.repeat(49_990)}}`;
+        const response = await api()
+            .post('/products/search')
+            .set('Content-Type', 'application/json')
+            .send(nested);
+
+        // A refusal for the wrong shape, never an unhandled RangeError. 4.11's depth limit
+        // narrows this to a 400 once built; until then any 4xx is the contract.
+        expect(response.status).toBeLessThan(500);
+    });
 });
 
 const titlesOf = (response: { body: { data: { items: { title: string }[] } } }) =>

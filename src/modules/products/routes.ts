@@ -10,7 +10,12 @@ import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
-import { getProducts, searchProductsKeyParameters } from './controllers/get-products';
+import {
+    getProducts,
+    searchProductsKeyParameters,
+    searchProductsKeyValues,
+    searchProductsOrderedParameters
+} from './controllers/get-products';
 import { createProduct } from './controllers/create-product';
 import { replaceProduct, updateProduct } from './controllers/update-product';
 import { deleteProducts } from './controllers/delete-products';
@@ -51,7 +56,16 @@ const cacheScopeKey = (request: Request): boolean =>
  * Shared cache middleware for both search entry points, keyed on the query parameters that
  * change the answer.
  */
-const cacheProductsSearch = searchCache('products', searchProductsKeyParameters, cacheScopeKey);
+const cacheProductsSearch = searchCache(
+    'products',
+    searchProductsKeyParameters,
+    cacheScopeKey,
+    undefined,
+    {
+        keyValues: searchProductsKeyValues,
+        orderedKeyParameters: searchProductsOrderedParameters
+    }
+);
 
 // POST /products/search — must come before /:id to avoid matching "search" as an id
 router.post('/search', cacheProductsSearch, getProducts);

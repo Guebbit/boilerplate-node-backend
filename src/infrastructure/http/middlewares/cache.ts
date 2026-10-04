@@ -10,6 +10,7 @@
  * See: docs/tools/redis-cache.md
  */
 
+import { createHash } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { getJson } from '@guebbit/js-toolkit';
 import {
@@ -83,8 +84,9 @@ export const resolveCacheTtl = (seconds: number): number => {
  * Serialize a response for storage, or refuse it for being too large.
  *
  * The ceiling is `NODE_REDIS_CACHE_MAX_BYTES`. A cache turns a cheap request into long-lived server
- * state: the key includes the full URL, so an unauthenticated caller can mint an entry per query
- * string and keep every one resident. Bounding the ENTRY is what stops that being an amplifier.
+ * state: the key varies with the declared key parameters, so an unauthenticated caller can mint
+ * an entry per distinct value and keep every one resident. Bounding the ENTRY is what stops that being an amplifier;
+ * bounding the KEY (see {@link getCacheKey}) is what stops the input being one.
  * See: docs/tools/redis-cache.md#entry-size-is-bounded
  *
  * Serialized once, here, so the size check measures exactly what would be written rather than an
@@ -158,6 +160,24 @@ interface CacheOptions {
     keyParameters: readonly string[];
 
     /**
+     * The values those parameters have for THIS request, parsed the way the controller will parse
+     * them — so two spellings of one question (`"0e0"` and `0`) share a key, and a request the
+     * controller would refuse never gets one.
+     *
+     * Omitted: the raw body or query values feed the key. Either way only scalars, or arrays of
+     * them, ever do; anything else skips the cache.
+     *
+     * @returns the parsed values, or `undefined` to skip the cache for this request
+     */
+    keyValues?: (request: Request) => Record<string, unknown> | undefined;
+
+    /**
+     * Array parameters whose ORDER is part of the question (`sort`). Every other array is a set:
+     * `?id=a&id=b` and `?id=b&id=a` are one entry, so its elements are sorted into the key.
+     */
+    orderedKeyParameters?: readonly string[];
+
+    /**
      * The cache identity two spellings of ONE question share.
      *
      * Default key starts with `METHOD:path`. Wrong for a search with two spellings, where `GET
@@ -192,53 +212,109 @@ interface CacheOptions {
     scopeKey: (request: Request) => boolean;
 }
 
+/** Whether a value is a string, a number, a boolean or null — the only leaves a key can carry. */
+const isScalar = (value: unknown): value is string | number | boolean | null =>
+    value === null || ['string', 'number', 'boolean'].includes(typeof value);
+
 /**
- * Build one cache key from method + path + the declared query parameters + the resolved scope +
- * language.
+ * One value's spelling inside a key, or `undefined` when it cannot be part of one.
  *
- * Locale is in the key because it changes the body (translated copy) — same reasoning as the
- * `Vary: Authorization` note in `setCache` below. The raw query string is deliberately NOT part of
- * the key: query-string order is not stable across clients, and only `keyParameters` —
- * pre-sorted, JSON-serialized — can reach the key, so `?anything=else` cannot mint its own entry.
+ * Only scalars, or arrays of scalars, qualify: a nested array or object is something no endpoint
+ * here keys on, and walking one is how a 100 kB body of `[[[…]]]` once threw a `RangeError` out
+ * of the key builder. A query string has no types (`?page=1` is the string `'1'`) while a JSON
+ * body keeps its own, so scalars are stringified: `{page: 1}` and `?page=1` share one entry.
+ *
+ * Arrays are sorted unless `ordered` says their sequence means something — the same argument as
+ * sorting the parameter NAMES in {@link setCache}.
+ *
+ * @param raw - the value as the request (or the parser) produced it
+ * @param ordered - whether the array's own order is part of the question
+ */
+const keySpelling = (raw: unknown, ordered: boolean): string | undefined => {
+    if (isScalar(raw)) return JSON.stringify(String(raw));
+    if (!Array.isArray(raw) || !raw.every(isScalar)) return undefined;
+    const spelled = raw.map(String);
+    return JSON.stringify(ordered ? spelled : spelled.toSorted());
+};
+
+/**
+ * The declared parameters a request carries, as the values that identify its answer.
+ *
+ * With `keyValues` they come from the parsed input; without, from the raw body then query.
+ * `Object.hasOwn`, not `in`: the latter walks the prototype chain, so a parameter named
+ * `toString` would count as present on every request. Body BEFORE query, which is the `search`
+ * surface's own precedence — the key has to be built from the same value the controller will
+ * read, or the two disagree about which request this entry answers.
+ *
+ * @param request - the incoming request
+ * @param sortedKeyParameters - the declared parameter names, sorted
+ * @param options - carries `keyValues`
+ * @returns `name=value` segments, or `undefined` when the cache must be skipped for this request
+ */
+const keySegments = (
+    request: Request,
+    sortedKeyParameters: readonly string[],
+    options: CacheOptions
+): string[] | undefined => {
+    const parsed = options.keyValues?.(request);
+    if (options.keyValues && !parsed) return undefined;
+    // Express 5 leaves `body` undefined when the request carries none, which every GET does.
+    const body = bodyRecordOf(request);
+    const source = (name: string): { present: boolean; value: unknown } => {
+        if (parsed) return { present: parsed[name] !== undefined, value: parsed[name] };
+        const fromBody = Object.hasOwn(body, name);
+        return {
+            present: fromBody || Object.hasOwn(request.query, name),
+            value: fromBody ? body[name] : request.query[name]
+        };
+    };
+
+    const segments: string[] = [];
+    for (const name of sortedKeyParameters) {
+        const { present, value } = source(name);
+        if (!present) continue;
+        const spelled = keySpelling(value, options.orderedKeyParameters?.includes(name) ?? false);
+        if (spelled === undefined) return undefined;
+        segments.push(`${name}=${spelled}`);
+    }
+    return segments;
+};
+
+/**
+ * Build one cache key from method + path + the declared parameters + the resolved scope +
+ * language, or `undefined` when this request must skip the cache.
+ *
+ * The parameters are never stored raw: their values are hashed (`sha256`), so the key is a fixed
+ * size however long the input was. Locale is in the key because it changes the body (translated
+ * copy) — same reasoning as the `Vary: Authorization` note in `setCache` below. The raw query
+ * string is deliberately NOT part of the key: query-string order is not stable across clients, and
+ * only `keyParameters` can reach the key, so `?anything=else` cannot mint its own entry.
  *
  * The scope segment is always the literal `guest` — `options.scopeKey` only ever gates whether
  * a key is built at all (see {@link CacheOptions.scopeKey}), never which one; `serveOrArm`
  * bypasses Redis entirely, with no key built, when it answers `false`.
  */
-const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], keyAs?: string) => {
+const getCacheKey = (
+    request: Request,
+    sortedKeyParameters: readonly string[],
+    options: CacheOptions
+): string | undefined => {
+    const segments = keySegments(request, sortedKeyParameters, options);
+    if (!segments) return undefined;
+
     // Path only. `originalUrl` is the sole place the mounted prefix and the route path are
     // already joined, so it is split rather than reassembled from `baseUrl` + `path`.
     const [path] = request.originalUrl.split('?', 1);
     // A declared identity replaces BOTH halves of the default prefix, because the two spellings
     // it unifies differ in both — `GET /products` and `POST /products/search`.
-    const identity = keyAs ?? `${request.method}:${path}`;
-    // Express 5 leaves `body` undefined when the request carries none, which every GET does.
-    const body = bodyRecordOf(request);
-    // `Object.hasOwn`, not `in`: the latter walks the prototype chain, so a parameter named
-    // `toString` would count as present on every request.
-    //
-    // Body BEFORE query, which is the `search` surface's own precedence — the key has to be built
-    // from the same value the controller will read, or the two disagree about which request this
-    // entry answers.
-    const values = sortedKeyParameters
-        .filter((name) => Object.hasOwn(body, name) || Object.hasOwn(request.query, name))
-        .map((name) => {
-            const raw = Object.hasOwn(body, name) ? body[name] : request.query[name];
-            // One spelling of a value, whichever transport carried it: a query string has no
-            // types (`?page=1` is the string `'1'`) while a JSON body keeps its own, so
-            // stringifying scalars lets `{page: 1}` and `?page=1` share one cache entry.
-            //
-            // Array values are sorted too — the same argument as `toSorted()` on the parameter
-            // NAMES below, applied to one parameter's VALUES: `?id=a&id=b` and `?id=b&id=a` are
-            // one question, and unsorted they would mint two cache entries for it. Safe today
-            // because no array-typed search filter is order-significant (`id` is a set — the
-            // contract already refuses duplicates meaning anything). An array parameter whose
-            // order ever carries meaning needs its own exemption here, not a silent conflation.
-            return `${name}=${JSON.stringify(Array.isArray(raw) ? raw.map(String).toSorted() : String(raw))}`;
-        })
-        .join('&');
+    const identity = options.keyAs ?? `${request.method}:${path}`;
+    // node:crypto SHA-256, hex: collision-safe for a cache identity, and the same digest whatever
+    // the length of what went in. https://nodejs.org/api/crypto.html#cryptocreatehashalgorithm-options
+    // No parameters, no digest: the key stays readable for the many routes that declare none.
+    const digest =
+        segments.length > 0 ? createHash('sha256').update(segments.join('&')).digest('hex') : '';
 
-    return `${identity}?${values}:guest:${request.locale ?? '-'}`;
+    return `${identity}?${digest}:guest:${request.locale ?? '-'}`;
 };
 
 /**
@@ -355,7 +431,7 @@ const applyCacheHeaders = (
  * @param cacheable - `options.scopeKey(request)`'s answer; `false` skips Redis entirely, same as
  *   `ttl <= 0` — see {@link CacheOptions.scopeKey}
  * @returns the pending Redis lookup, so a caller (a test, chiefly) can await the whole decision;
- *   `undefined` on the synchronous not-cacheable / ttl<=0 / no-scope exit
+ *   `undefined` on the synchronous not-cacheable / ttl<=0 / no-scope / no-key exit
  */
 const serveOrArm = (
     request: Request,
@@ -379,7 +455,12 @@ const serveOrArm = (
     // nearly a minute after it landed.
     const graceSeconds = Math.min(STALE_WHILE_REVALIDATE_SECONDS, ttl);
 
-    const cacheKey = getCacheKey(request, sortedKeyParameters, options.keyAs);
+    const cacheKey = getCacheKey(request, sortedKeyParameters, options);
+    // A value no key can carry (a nested array, say): serve this request uncached.
+    if (cacheKey === undefined) {
+        next();
+        return undefined;
+    }
     return (
         getCacheValue(cacheKey)
             .then((raw) => {
@@ -475,13 +556,22 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
  * @param keyParameters - the module's own schema-derived key parameters
  * @param scopeKey - see {@link CacheOptions.scopeKey} — the module's own guest-equivalence check
  * @param seconds - TTL; defaults to an hour
+ * @param keying - the module's parsed key values and its order-significant array parameters, if any
  */
 export const searchCache = (
     entity: string,
     keyParameters: readonly string[],
     scopeKey: CacheOptions['scopeKey'],
-    seconds = 3600
-) => setCache(seconds, { tags: [entity], keyParameters, keyAs: `${entity}:search`, scopeKey });
+    seconds = 3600,
+    keying: Pick<CacheOptions, 'keyValues' | 'orderedKeyParameters'> = {}
+) =>
+    setCache(seconds, {
+        tags: [entity],
+        keyParameters,
+        keyAs: `${entity}:search`,
+        scopeKey,
+        ...keying
+    });
 
 /**
  * Clear Redis cache groups after successful write operations — e.g. after writing a product,
