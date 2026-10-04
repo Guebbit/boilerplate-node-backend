@@ -221,6 +221,30 @@ describe('revoke', () => {
     });
 });
 
+describe('revoke across administrators', () => {
+    it('lets an administrator revoke another administrator’s key — revoking only takes access away', async () => {
+        const minter = await createRealUser('admin-minter');
+        const minterId = String(minter._id);
+        await assignRole(minterId, TEST_TENANT_ID, 'tenant', 'admin');
+        const minted = await mint(
+            { name: 'leaked', permissions: ['apikeys.any.read'] },
+            contextFor(minterId, permissionsOfRole('admin'))
+        );
+        if (!minted.data) throw new Error('setup failed: mint was refused');
+        const other = await createRealUser('admin-revoker');
+        const otherId = String(other._id);
+        await assignRole(otherId, TEST_TENANT_ID, 'tenant', 'admin');
+
+        const result = await revoke(
+            minted.data.id,
+            contextFor(otherId, permissionsOfRole('admin'))
+        );
+
+        expect(result.success).toBe(true);
+        expect(await resolveCredential(minted.data.secret)).toBeUndefined();
+    });
+});
+
 describe('an expired credential', () => {
     it('is unresolvable past its expiry, with no revoke needed', async () => {
         const { plaintext, publicPrefix, hash } = mintApiKey();

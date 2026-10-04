@@ -87,6 +87,12 @@ for one instead of throwing, exactly like a build with no `account` has no JWTs 
 
 ## Managing it
 
+**Revoking is not ranked.** Any holder of `apikeys.any.delete` revokes any key in the tenant, a
+fellow administrator's included: revoking only takes access away, so the
+[rank rule](../theory/authorization.md#acting-on-someone-else-s-things) has nothing to guard, and
+no administrator outranks another. Banning a compromised administrator is still a technician's
+edit of the database, [by decision](../theory/authorization.md#acting-on-someone-else-s-things).
+
 Minting, listing and revoking a credential all have an admin screen now, in the paired
 `boilerplate-vue-frontend` — `api-keys` there, its own two routes over this module's three
 endpoints. "Usable via any HTTP client" is still true (nothing here requires the UI), but no longer

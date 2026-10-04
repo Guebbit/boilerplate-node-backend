@@ -19,7 +19,6 @@ import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import { heldKeys } from '@kernel/ability';
-import { outrankedRefusal } from '@modules/access';
 import { findKey } from '@kernel/permissions';
 import type { Caller } from '@types';
 import type { MintApiKeyRequest, ApiKeyCreated, ApiKey } from '@types';
@@ -141,8 +140,10 @@ export const mint = (
 
 /**
  * Revoke a credential. Idempotent: revoking an already-revoked key is a no-op success, not a 404.
- * A key belongs to the person who minted it, so the rank rule applies: revoking an equal's or a
- * superior's key is `403 OUTRANKED`, revoking one's own is always fine.
+ *
+ * Not ranked (no `outrankedRefusal`): revoking only takes access away, so an administrator may
+ * revoke a fellow administrator's leaked key. Stripe and GitHub let any org admin do the same.
+ * The route's own key and the tenant check are the whole gate.
  */
 export const revoke = (
     id: string,
@@ -151,21 +152,17 @@ export const revoke = (
     apiKeyRepository.findById(id).then((apiKey) => {
         if (apiKey?.tenant !== context.caller.tenantId)
             return generateReject(404, [t('generic.error-not-found')]);
+        if (apiKey.revokedAt) return generateSuccess(undefined);
 
-        return outrankedRefusal(context, apiKey.createdByUserId, 'api_key', id).then((refusal) => {
-            if (refusal) return refusal;
-            if (apiKey.revokedAt) return generateSuccess(undefined);
-
-            apiKey.revokedAt = new Date();
-            return apiKeyRepository.save(apiKey).then(() => {
-                recordAudit(context, {
-                    action: apiKeysAuditActions.ADMIN_API_KEY_REVOKED,
-                    outcome: 'success',
-                    target_type: 'api_key',
-                    target_id: id,
-                    metadata: { credential: displayIdOf(apiKey.publicPrefix) }
-                });
-                return generateSuccess(undefined);
+        apiKey.revokedAt = new Date();
+        return apiKeyRepository.save(apiKey).then(() => {
+            recordAudit(context, {
+                action: apiKeysAuditActions.ADMIN_API_KEY_REVOKED,
+                outcome: 'success',
+                target_type: 'api_key',
+                target_id: id,
+                metadata: { credential: displayIdOf(apiKey.publicPrefix) }
             });
+            return generateSuccess(undefined);
         });
     });

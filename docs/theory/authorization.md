@@ -188,13 +188,16 @@ flowchart TD
 service that writes on a person's behalf asks first, **before** it reads the row, so the refusal
 never depends on the row existing:
 
-| Writes on                 | Asked in                                                          |
-| ------------------------- | ----------------------------------------------------------------- |
-| a user                    | `users`: edit, delete, restore                                    |
-| an order                  | `orders`: cancel, edit, delete, override; `delivery`: start, ship |
-| a payment                 | `payments`: record by hand, refund                                |
-| a return                  | `returns`: decide, receive                                        |
-| a key someone else minted | `api-keys`: revoke                                                |
+| Writes on | Asked in                                                          |
+| --------- | ----------------------------------------------------------------- |
+| a user    | `users`: edit, delete, restore                                    |
+| an order  | `orders`: cancel, edit, delete, override; `delivery`: start, ship |
+| a payment | `payments`: record by hand, refund                                |
+| a return  | `returns`: decide, receive                                        |
+
+Revoking someone else's API key is **not** ranked: it only takes access away, so any administrator
+may revoke a fellow administrator's leaked key (Stripe and GitHub work the same way). Banning a
+compromised administrator stays the technician's edit of the database.
 
 The owner of an order, payment or return is its buyer. The read side tells a client the same
 thing: the `actions` block on a user, order, payment or return already has the rank applied, so a

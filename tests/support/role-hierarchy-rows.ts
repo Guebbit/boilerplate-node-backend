@@ -15,8 +15,6 @@ import type { UserDocument } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { returnModel } from '@modules/returns/model';
-import { apiKeyRepository } from '@modules/api-keys/repository';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { RETURN_POSTAGE_PAYERS } from '@modules/orders';
 
 /** A person the request is aimed at: their account and the tenant role they hold, if any. */
@@ -236,22 +234,6 @@ export const HIERARCHY_ROWS: readonly HierarchyRow[] = [
         route: 'returns POST /:id/receive',
         key: 'returns.any.receive',
         prepare: onReturn('receive', 'approved')
-    },
-    {
-        route: 'api-keys DELETE /:id',
-        key: 'apikeys.any.delete',
-        prepare: async (owner) => {
-            const key = await apiKeyRepository.create({
-                tenant: DEPLOYMENT_TENANT_ID,
-                name: 'rank check',
-                publicPrefix: `rk${owner.user.id.slice(-10)}`,
-                hash: 'x'.repeat(64),
-                permissions: ['products.self.read'],
-                createdByUserId: owner.user.id
-            });
-
-            return { method: 'delete', url: `/api-keys/${String(key._id)}` };
-        }
     }
 ];
 
@@ -271,7 +253,8 @@ export const UNOWNED_WRITES: Readonly<Record<string, string>> = {
         'the payer’s own step, scoped to their own payments in the service',
     'payments POST /:id/sync': 'the payer’s own step, scoped to their own payments in the service',
     'returns POST /': 'the buyer opening a return on their own order',
-    'api-keys POST /': 'mints a key for the caller themselves'
+    'api-keys POST /': 'mints a key for the caller themselves',
+    'api-keys DELETE /:id': 'revoking only reduces access'
 };
 
 /** Creates an owner holding `role` in the shop (or nothing, when `role` is `null`). */
