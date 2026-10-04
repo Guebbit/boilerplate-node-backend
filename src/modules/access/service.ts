@@ -484,6 +484,61 @@ export const outrankedRefusal = (
     });
 
 /**
+ * Does `ownerId` name the caller themselves? The question behind "nobody handles their own
+ * money" — no context, the system actor and a thing nobody owns are never the caller's own.
+ *
+ * @param context - the caller, or `undefined` for a path with no request behind it
+ * @param ownerId - who the order, payment or return belongs to
+ */
+export const isOwnThing = (
+    context: CallerContext | undefined,
+    ownerId: string | null | undefined
+): boolean =>
+    context !== undefined &&
+    !context.caller.system &&
+    Boolean(ownerId) &&
+    context.caller.id === ownerId;
+
+/**
+ * The two-part refusal for a step that moves money: the caller may not be the owner (separation
+ * of duties — a person never pays, refunds or approves their own), and the owner must rank below
+ * the caller like any other write ({@link outrankedRefusal}).
+ *
+ * The own-thing refusal is a plain `403 FORBIDDEN` with its own message, never `OUTRANKED`: that
+ * code's contract text makes the caller's own thing the exception. It is recorded as a failed
+ * `security.forbidden` with `reason: 'own'`; the owner is the caller, so no `ownerId` rides along.
+ *
+ * See: docs/theory/authorization.md#nobody-handles-their-own-money
+ * @param context - the caller, or `undefined` for a path with no request behind it
+ * @param ownerId - who the thing belongs to
+ * @param targetType - the audit row's object, e.g. `order`
+ * @param targetId - the audit row's object id, when it is not the owner's own
+ */
+export const ownMoneyRefusal = (
+    context: CallerContext | undefined,
+    ownerId: string | null | undefined,
+    targetType: string,
+    targetId: string | undefined = ownerId ?? undefined
+): Promise<ResponseReject | undefined> => {
+    if (!context || !isOwnThing(context, ownerId))
+        return outrankedRefusal(context, ownerId, targetType, targetId);
+
+    recordAudit(context, {
+        action: coreAuditActions.SECURITY_FORBIDDEN,
+        outcome: 'failure',
+        target_type: targetType,
+        target_id: targetId,
+        metadata: { reason: 'own' }
+    });
+
+    return Promise.resolve(
+        generateReject(403, [
+            { code: ERROR_CODES.FORBIDDEN, message: t('generic.error-own-money') }
+        ])
+    );
+};
+
+/**
  * The one shop this boilerplate ships.
  *
  * A single-tenant deployment runs the whole model with one of these and never notices the rest —

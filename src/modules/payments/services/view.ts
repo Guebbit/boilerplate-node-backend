@@ -46,8 +46,8 @@ export const getForOrder = (
 
 /**
  * What this caller may do to a payment, as the contract's `PaymentActions`. Async because the
- * refund is also the rank rule's question: an operator returns a customer's money, never an
- * equal's or a superior's.
+ * refund is also the own-money rule's question: an operator returns a customer's money, never
+ * their own, nor an equal's or a superior's.
  *
  * @returns the serialized payment carrying its `actions`
  */
@@ -56,8 +56,8 @@ export const withActions = (
     order: OrderDocument | undefined,
     authContext?: AuthContext
 ): Promise<Payment> =>
-    (order ? orderService.reachesBuyer(order, authContext) : Promise.resolve(true)).then(
-        (reaches) => ({
+    (order ? orderService.handlesMoneyOf(order, authContext) : Promise.resolve(true)).then(
+        (handlesMoney) => ({
             ...presentPayment(payment),
             actions: {
                 // Confirmable, and the order can still get to `paid`. Both halves, because a
@@ -70,12 +70,12 @@ export const withActions = (
                     Boolean(order) &&
                     isPayable(order!.status),
                 // Only an operator returns money, only money that actually arrived, and only for
-                // a buyer the operator ranks above. `payments.any.update` by name — a moderator
-                // holds exactly this key, and asking for anything broader would have hidden the
-                // refund action despite the key they do hold.
+                // a buyer the operator ranks above and is not. `payments.any.update` by name — a
+                // moderator holds exactly this key, and asking for anything broader would have
+                // hidden the refund action despite the key they do hold.
                 refund:
                     authContext !== undefined &&
-                    reaches &&
+                    handlesMoney &&
                     holdsKey(callerForSubject(authContext, 'Payment'), 'payments.any.update') &&
                     payment.status === REFUNDABLE_PAYMENT_STATUS
             }

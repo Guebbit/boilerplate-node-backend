@@ -6,14 +6,14 @@
  * `shared/authorization-roles.yaml` read with its `level:`, so a new role, or a re-levelled one, is
  * tested with no edit here. Per cell:
  *
- * | caller → owner of the thing        | expect                                   |
- * | ---------------------------------- | ---------------------------------------- |
- * | lower level                        | passes the rule (the route's own answer) |
- * | same level, someone else           | 403 OUTRANKED                            |
- * | higher level                       | 403 OUTRANKED                            |
- * | the caller themself                | passes the rule                          |
- * | a platform-only account (operator) | 403 OUTRANKED for every shop caller      |
- * | caller lacks the route's key       | 403 FORBIDDEN, before the rule is asked  |
+ * | caller → owner of the thing        | expect                                                   |
+ * | ---------------------------------- | -------------------------------------------------------- |
+ * | lower level                        | passes the rule (the route's own answer)                 |
+ * | same level, someone else           | 403 OUTRANKED                                            |
+ * | higher level                       | 403 OUTRANKED                                            |
+ * | the caller themself                | passes the rule; a money step answers 403 FORBIDDEN      |
+ * | a platform-only account (operator) | 403 OUTRANKED for every shop caller                      |
+ * | caller lacks the route's key       | 403 FORBIDDEN, before the rule is asked                  |
  *
  * `tests/cross-cutting/role-hierarchy-routes.test.ts` holds the row list to the real route table, so the count below
  * cannot drift from what is mounted.
@@ -99,7 +99,11 @@ const runRow = async (row: HierarchyRow, callerRole: string) => {
             owner: await createOwner('owner-platform', null, 'operator'),
             expected: 'OUTRANKED'
         },
-        { kind: 'self', owner: { user: caller.user, role: callerRole }, expected: 'passed' }
+        {
+            kind: 'self',
+            owner: { user: caller.user, role: callerRole },
+            expected: row.selfRefused ? 'refused:FORBIDDEN' : 'passed'
+        }
     );
 
     const outcomes: Record<string, string> = {};
@@ -114,7 +118,7 @@ const runRow = async (row: HierarchyRow, callerRole: string) => {
 describe('the rank rule, row by row', () => {
     it('has a row for every route the rule covers', () => {
         // The count is pinned, and the sweep in `tests/cross-cutting/role-hierarchy-routes.test.ts` pins the names.
-        expect(HIERARCHY_ROWS).toHaveLength(27);
+        expect(HIERARCHY_ROWS).toHaveLength(28);
     });
 
     for (const row of HIERARCHY_ROWS) {

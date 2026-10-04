@@ -44,6 +44,7 @@ import {
     asCustomer,
     asAdmin,
     asModerator,
+    asRole,
     testCallerContext,
     callerContextAs
 } from '@tests/callers';
@@ -343,6 +344,26 @@ describe('getForOrder', () => {
     });
 });
 
+// Nobody handles their own money: a buyer promoted to staff keeps their orders, and still
+// cannot refund one — the refusal is a plain FORBIDDEN, and no refund is offered.
+describe('a refund on one’s own order', () => {
+    it('is refused, and not offered, to a buyer promoted to moderator', async () => {
+        const { user, order } = await paidOrder();
+        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'moderator');
+        const own = asRole('moderator', user.id);
+
+        const offered = await getForOrder(String(order._id), own);
+        const refused = asReject(
+            await refundByOrder(String(order._id), own, callerContextAs('moderator', user.id))
+        );
+
+        expect(offered.data?.actions?.refund).toBe(false);
+        expect([refused.status, refused.errors[0].code]).toEqual([403, 'FORBIDDEN']);
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('succeeded');
+    });
+});
+
 /*
  * The refund rides the ORDER_REFUND_OWED event, and the subscription only exists once the
  * registry has run — a test that skipped `registerCheckoutModules` would assert the refund never
@@ -572,7 +593,7 @@ const placedOrder = async (onHand = 10, quantity = 3, email?: string) => {
         user.id,
         user.email,
         [{ productId: String(product._id), quantity }],
-        testCallerContext
+        callerContextAs('admin')
     );
     return { user, product, order: created.data! };
 };
@@ -1248,6 +1269,25 @@ describe('recordOfflinePayment', () => {
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('paid');
         expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+    });
+
+    // Nobody handles their own money: an administrator who raised an order for themselves cannot
+    // also record the cash for it.
+    it('refuses the buyer recording cash on their own order, and leaves it pending', async () => {
+        const { user, order } = await orderFor();
+        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
+
+        const result = await recordOfflinePayment(
+            String(order._id),
+            { method: 'cash' },
+            callerContextAs('admin', user.id)
+        );
+
+        expect([asReject(result).status, asReject(result).errors[0].code]).toEqual([
+            403,
+            'FORBIDDEN'
+        ]);
+        expect((await orderService.getById(String(order._id)))!.status).toBe('pending');
     });
 
     it('refuses an order that is not pending, the same code createIntent uses', async () => {

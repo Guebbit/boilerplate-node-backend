@@ -65,8 +65,9 @@ const notifyDecision = (
     });
 
 /**
- * The shared shape of both decisions: the rank rule, the conditional move, then the audit row and
- * the mail.
+ * The shared shape of both decisions: the buyer rule, the conditional move, then the audit row and
+ * the mail. Approving is a step that moves money (it opens the way to a refund), so the caller may
+ * not be the buyer; declining gives nothing away, so it is the rank rule alone.
  *
  * @param id - the return being decided
  * @param to - `approved` or `declined`
@@ -79,7 +80,7 @@ const decide = (
     stamp: ReturnStamp,
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
-    outrankedDecision(id, context).then<ResponseSuccess<ReturnDocument> | ResponseReject>(
+    refusalForDecision(id, to, context).then<ResponseSuccess<ReturnDocument> | ResponseReject>(
         (refusal) =>
             refusal ??
             returnRepository
@@ -93,24 +94,28 @@ const decide = (
     );
 
 /**
- * The rank rule for a decision: the buyer of the order this return belongs to must rank below the
- * staff member deciding. A return that does not exist has no buyer to outrank — the claim below
+ * The refusal for a decision: the buyer of the order this return belongs to must rank below the
+ * staff member deciding, and for an approval must also not BE that staff member (nobody handles
+ * their own money). A return that does not exist has no buyer to outrank — the claim below
  * answers 404 for it.
  *
  * @param id - the return about to be decided
+ * @param to - `approved` or `declined`
  * @param context - the staff member
  */
-const outrankedDecision = (
+const refusalForDecision = (
     id: string,
+    to: 'approved' | 'declined',
     context: CallerContext
 ): Promise<ResponseReject | undefined> =>
-    returnRepository
-        .findById(id)
-        .then((returned) =>
-            returned
-                ? orderService.outrankedOrderRefusal(String(returned.orderId), context)
-                : undefined
-        );
+    returnRepository.findById(id).then((returned) => {
+        if (!returned) return undefined;
+
+        const orderId = String(returned.orderId);
+        return to === 'approved'
+            ? orderService.ownMoneyOrderRefusal(orderId, context)
+            : orderService.outrankedOrderRefusal(orderId, context);
+    });
 
 /**
  * What follows a won claim: the audit row, the order's projection and the customer's mail.

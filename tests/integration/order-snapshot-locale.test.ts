@@ -8,7 +8,7 @@
 
 import '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/callers';
+import { testCallerContext, callerContextAs } from '@tests/callers';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -56,7 +56,7 @@ describe("orderService.create freezes the snapshot in the buyer's stored locale"
             String(user._id),
             user.email,
             [{ productId: String(product._id), quantity: 1 }],
-            { ...testCallerContext, locale: 'en' }
+            { ...callerContextAs('admin'), locale: 'en' }
         );
 
         const order = asSuccess(result).data;
@@ -76,7 +76,7 @@ describe("orderService.create freezes the snapshot in the buyer's stored locale"
             String(user._id),
             user.email,
             [{ productId: String(product._id), quantity: 1 }],
-            { ...testCallerContext, locale: 'en' }
+            { ...callerContextAs('admin'), locale: 'en' }
         );
 
         const order = asSuccess(result).data;

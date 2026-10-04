@@ -24,6 +24,7 @@ import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
 import { placeOrder } from './place';
+import { outrankedRefusal } from '@modules/access';
 import { outrankedOrderRefusal } from './scope';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { ERROR_CODES } from '@api/error-codes';
@@ -82,6 +83,12 @@ export const create = async (
     items: CartItem[],
     context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
+    // The rank rule, asked of the buyer named in the body: an operator raises an order for a
+    // customer, never for an equal or a superior. Raising one for themselves is allowed — the
+    // steps that move its money then refuse them (`ownMoneyRefusalFor`).
+    const outranked = await outrankedRefusal(context, userId, 'user');
+    if (outranked) return outranked;
+
     // The snapshot each line freezes wants the BUYER's stored language, never the caller's: this
     // endpoint lets an admin place an order for someone else, and `context.locale` there is the
     // admin's own UI language, not the recipient's. Same rule as `@modules/cart`'s checkout.

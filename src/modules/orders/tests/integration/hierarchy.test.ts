@@ -186,6 +186,15 @@ describe('what an order offers each caller — what a client renders', () => {
         expect([byBuyer.recordPayment, byBuyer.pay]).toEqual([false, true]);
     });
 
+    // Nobody handles their own money: an administrator's own unpaid order offers them no cash step.
+    it('withholds the offline payment from the buyer on their own order, whatever they rank', async () => {
+        const order = await orderOf('admin');
+
+        const actions = await actionsFor(String(order._id), 'admin', String(order.userId));
+
+        expect(actions.recordPayment).toBe(false);
+    });
+
     it('withholds the offline payment once the order is paid, from a role without the key and over a higher rank', async () => {
         const paid = await orderOf('customer', OrderStatus.paid);
         const unpaid = await orderOf('unverified');

@@ -540,6 +540,20 @@ describe('deciding a request', () => {
         expect(asReject(result).status).toBe(409);
     });
 
+    // Approving opens the way to a refund, so nobody approves their own; declining gives nothing
+    // away, so a buyer promoted to staff may still decline theirs.
+    it('refuses a promoted buyer approving their own return, but lets them decline it', async () => {
+        const { user, returnId } = await requestedReturn();
+        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
+        const own = callerContextAs('manager', user.id);
+
+        const approval = asReject(await approveReturn(returnId, own));
+        const declined = await declineReturn(returnId, 'Changed my mind', own);
+
+        expect([approval.status, approval.errors[0].code]).toEqual([403, 'FORBIDDEN']);
+        expect(declined.success && declined.data.status).toBe('declined');
+    });
+
     it('answers 404 for a return that does not exist', async () => {
         const result = await approveReturn('a'.repeat(24), callerContextAs('admin'));
 
@@ -627,6 +641,18 @@ describe('who sees which return', () => {
         });
         expect(await actionsOf(stored!, asAdmin())).toEqual({
             approve: true,
+            decline: true,
+            receive: false
+        });
+    });
+
+    it('offers a promoted buyer a decline on their own return, and neither approve nor receive', async () => {
+        const { user, returnId } = await requestedReturn();
+        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
+        const stored = await returnRepository.findById(returnId);
+
+        expect(await actionsOf(stored!, asRole('manager', user.id))).toEqual({
+            approve: false,
             decline: true,
             receive: false
         });

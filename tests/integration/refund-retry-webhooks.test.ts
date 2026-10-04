@@ -11,7 +11,13 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { withEnvironment } from '@tests/environment';
 import { resetDomainEvents } from '@kernel/events';
-import { callerAs, testCallerContext, asCustomer, TEST_TENANT_ID } from '@tests/callers';
+import {
+    callerAs,
+    testCallerContext,
+    asCustomer,
+    TEST_TENANT_ID,
+    callerContextAs
+} from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
@@ -37,7 +43,7 @@ const paidOrder = async () => {
         user.id,
         user.email,
         [{ productId: String(product._id), quantity: 1 }],
-        testCallerContext
+        callerContextAs('admin')
     );
     const order = created.data!;
     const intent = await createIntent(String(order._id), asCustomer(user.id));

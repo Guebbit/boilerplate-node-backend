@@ -574,13 +574,13 @@ export const refundByOrder = (
     context: CallerContext,
     body: { amount?: number; currency?: string } = {}
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    // The rank rule first: the buyer must rank below the operator returning their money, and an
-    // operator who may not touch this order is told so before anything about its payment.
+    // The own-money rule first: the operator may not be the buyer, who must also rank below them,
+    // and one who may not touch this order is told so before anything about its payment.
     orderService
-        .outrankedOrderRefusal(orderId, context)
+        .ownMoneyOrderRefusal(orderId, context)
         .then<ResponseSuccess<PaymentDocument> | ResponseReject>(
-            (outranked) =>
-                outranked ??
+            (refusal) =>
+                refusal ??
                 paymentRepository
                     .findByOrderId(orderId, callerScope(authContext))
                     .then((payment) => {

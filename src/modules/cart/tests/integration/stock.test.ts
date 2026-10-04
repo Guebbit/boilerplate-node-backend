@@ -21,7 +21,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { resetDomainEvents } from '@kernel/events';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { asCustomer, testCallerContext } from '@tests/callers';
+import { asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 
 setupTestDb();
 
@@ -274,7 +274,7 @@ describe('the admin order create holds units like checkout', () => {
             user.id,
             user.email,
             [{ productId: String(product._id), quantity: 4 }],
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(true);
@@ -297,7 +297,7 @@ describe('the admin order create holds units like checkout', () => {
                 { productId: String(plenty._id), quantity: 2 },
                 { productId: String(scarce._id), quantity: 5 }
             ],
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(false);

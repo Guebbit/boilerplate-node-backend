@@ -41,8 +41,8 @@ export interface OfflinePaymentInput {
  * would.
  *
  * The order lookup is unscoped: this is an operator action reached only once `payments.any.create` has
- * already been checked at the route, not a customer reading their own order. The rank rule is
- * asked next: the order's buyer must rank below the caller.
+ * already been checked at the route, not a customer reading their own order. The own-money rule is
+ * asked next: the caller may not be the buyer, and the buyer must rank below the caller.
  *
  * @param orderId - the order the money arrived for
  * @param input - the method, an optional reference, and when the money actually arrived
@@ -61,10 +61,10 @@ export const recordOfflinePayment = async (
 
     const order = await orderService.getById(orderId);
     if (!order) return generateReject(404, [t('payments.order-not-found')]);
-    // The rank rule: an operator records money against a customer's order, never against an
-    // equal's or a superior's — and since staff do not shop, never against their own either.
-    const outranked = await orderService.outrankedRefusalFor(order, context);
-    if (outranked) return outranked;
+    // Nobody handles their own money: an operator records it against a customer's order, never
+    // against their own, nor an equal's or a superior's.
+    const refused = await orderService.ownMoneyRefusalFor(order, context);
+    if (refused) return refused;
     // Asked of the order lifecycle rather than compared against a literal here, so this
     // module cannot drift from the owner of the rule.
     if (!isPayable(order.status)) return notPayable();

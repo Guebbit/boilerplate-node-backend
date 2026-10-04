@@ -43,7 +43,7 @@ const paidOrder = async (price: number) => {
         user.id,
         user.email,
         [{ productId: String(product._id), quantity: 1 }],
-        testCallerContext
+        callerContextAs('admin')
     );
     const order = created.data!;
     const intent = await createIntent(String(order._id), asCustomer(user.id));

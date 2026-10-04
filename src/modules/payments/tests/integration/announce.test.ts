@@ -20,7 +20,7 @@ import { paymentRepository } from '@modules/payments/repository';
 import { PAYMENT_FAILED, PAYMENT_SUCCEEDED } from '@modules/payments/events';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { asCustomer, testCallerContext } from '@tests/callers';
+import { asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 
 setupTestDb();
 
@@ -48,7 +48,7 @@ const placedOrder = async () => {
         user.id,
         user.email,
         [{ productId: String(product._id), quantity: 2 }],
-        testCallerContext
+        callerContextAs('admin')
     );
     return { user, order: created.data! };
 };

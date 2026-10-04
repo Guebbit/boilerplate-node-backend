@@ -66,7 +66,7 @@ const seedOrder = async () => {
             { productId: String(keyboard._id), quantity: 2 },
             { productId: String(mouse._id), quantity: 1 }
         ],
-        testCallerContext
+        callerContextAs('admin')
     );
 
     return { user, keyboard, mouse, order: asSuccess(result).data };
@@ -81,12 +81,31 @@ describe('create', () => {
             String(user._id),
             user.email,
             [{ productId: String(product._id), quantity: 2 }],
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(true);
         expect(result.status).toBe(201);
         expect(asSuccess(result).data.email).toBe(user.email);
+    });
+
+    // The rank rule is asked of the buyer in the body: an operator raises orders for customers,
+    // and for themselves (the money steps then refuse them), never for an equal.
+    it('refuses an order for an equal’s account, writes nothing, and allows one for oneself', async () => {
+        const peer = await createUser({ email: 'peer@example.com' }, 'admin');
+        const me = await createUser({ email: 'me@example.com' }, 'admin');
+        const product = await createProduct({ title: 'Keyboard', price: 25 });
+        const items = [{ productId: String(product._id), quantity: 1 }];
+
+        const forPeer = await create(peer.id, peer.email, items, callerContextAs('admin', me.id));
+        const forMe = await create(me.id, me.email, items, callerContextAs('admin', me.id));
+
+        expect([asReject(forPeer).status, asReject(forPeer).errors[0].code]).toEqual([
+            403,
+            'OUTRANKED'
+        ]);
+        expect(forMe.success).toBe(true);
+        expect(await countOrders()).toBe(1);
     });
 
     it('assigns each new order its own sequential order number', async () => {
@@ -102,7 +121,7 @@ describe('create', () => {
                 String(user._id),
                 user.email,
                 [{ productId: String(product._id), quantity: 1 }],
-                testCallerContext
+                callerContextAs('admin')
             )
         ).data;
         const second = asSuccess(
@@ -110,7 +129,7 @@ describe('create', () => {
                 String(user._id),
                 user.email,
                 [{ productId: String(product._id), quantity: 1 }],
-                testCallerContext
+                callerContextAs('admin')
             )
         ).data;
 
@@ -134,7 +153,7 @@ describe('create', () => {
                     String(user._id),
                     user.email,
                     [{ productId: String(product._id), quantity: 1 }],
-                    testCallerContext
+                    callerContextAs('admin')
                 )
             ).data;
             expect(order.currency).toBe('GBP');
@@ -184,7 +203,7 @@ describe('create', () => {
     it('rejects an empty item list with 422', async () => {
         const user = await createUser();
 
-        const result = await create(String(user._id), user.email, [], testCallerContext);
+        const result = await create(String(user._id), user.email, [], callerContextAs('admin'));
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(422);
@@ -201,7 +220,7 @@ describe('create', () => {
                 { productId: String(product._id), quantity: 1 },
                 { productId: MISSING_ID, quantity: 1 }
             ],
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(asReject(result).status).toBe(404);
@@ -215,7 +234,7 @@ describe('create', () => {
             String(user._id),
             user.email,
             [{ productId: MISSING_ID, quantity: 1 }],
-            testCallerContext
+            callerContextAs('admin')
         );
 
         await expect(orderRepository.count({})).resolves.toBe(0);
@@ -234,7 +253,7 @@ describe('create', () => {
             String(user._id),
             user.email,
             [{ productId: String(product._id), quantity: 1 }],
-            testCallerContext
+            callerContextAs('admin')
         );
         await flush();
 
@@ -270,7 +289,7 @@ describe('create', () => {
             user.id,
             user.email,
             [{ productId: String(scarce._id), quantity: 5 }],
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(false);
@@ -295,7 +314,7 @@ describe('create', () => {
                 user.id,
                 user.email,
                 [{ productId: String(product._id), quantity: 2 }],
-                testCallerContext
+                callerContextAs('admin')
             )
         ).rejects.toThrow('mongo is down');
 
@@ -317,7 +336,7 @@ describe('create', () => {
                 user.id,
                 user.email,
                 [{ productId: String(product._id), quantity: 2 }],
-                testCallerContext
+                callerContextAs('admin')
             )
         ).rejects.toThrow('mongo is down');
 

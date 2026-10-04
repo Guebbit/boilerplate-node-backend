@@ -40,7 +40,7 @@ x-error-codes:
     OUTRANKED:
         {
             status: 403,
-            description: "The caller holds the permission this route requires, but the person whose account, order, payment, return or API key it would change ranks at or above the caller. The one exception is the caller's own: staff and administrators change what is theirs, never what belongs to an equal or a superior."
+            description: "The caller holds the permission this route requires, but the person whose account, order, payment, return or API key it would change ranks at or above the caller. The one exception is the caller's own: staff and administrators change what is theirs, never what belongs to an equal or a superior. The four steps that move money (recording a payment by hand, a refund, approving a return, receiving a return) refuse the caller's own order too, with a plain `FORBIDDEN`."
         }
     NOT_FOUND:
         {
@@ -1362,7 +1362,9 @@ components:
                 depend on the caller's role, and a second copy in a separately deployed client is
                 how the two come to disagree. Cancel and pay are the BUYER's (reading an order is
                 not owning it), and every move an operator makes is withheld when the buyer ranks
-                at or above them — a staff member's order is one only an admin handles.
+                at or above them — a staff member's order is one only an admin handles. Nobody
+                handles their own money: recording a payment by hand is withheld on the caller's
+                own order too.
             properties:
                 transitions:
                     type: array
@@ -1391,7 +1393,7 @@ components:
                         caller: an operator recording money that arrived another way. True while
                         the order is still awaiting payment, the caller holds the key that records
                         one and their rank reaches the buyer. Never true for the buyer, whose own
-                        step is `pay`.
+                        step is `pay` — not even for a buyer who is staff or an administrator.
                 start:
                     type: boolean
                     description: >-

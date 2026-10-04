@@ -16,7 +16,7 @@ import {
     countOrders,
     toOrderItem
 } from '@modules/orders/tests/factories';
-import { callerContextAs, asCustomer, testCallerContext } from '@tests/callers';
+import { callerContextAs, asCustomer } from '@tests/callers';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '../../services';
 import { overrideStatus } from '../../services/override';
@@ -45,7 +45,7 @@ const place = async () => {
         user.id,
         user.email,
         [{ productId: String(product._id), quantity: 1 }],
-        testCallerContext
+        callerContextAs('admin')
     );
 };
 

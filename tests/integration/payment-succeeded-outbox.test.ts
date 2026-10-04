@@ -22,7 +22,7 @@ import {
 } from '@modules/webhooks/repository';
 import { mintRingSecret } from '@modules/webhooks/secrets';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { asCustomer, testCallerContext } from '@tests/callers';
+import { asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 
 setupTestDb();
 
@@ -52,7 +52,7 @@ const settlementDiesAfterCharging = async () => {
         user.id,
         user.email,
         [{ productId: String(product._id), quantity: 1 }],
-        testCallerContext
+        callerContextAs('admin')
     );
     const order = created.data!;
     jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(

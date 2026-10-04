@@ -10,7 +10,7 @@ import type { CallerContext } from '@types';
 import { callerContextAs, testCallerContext } from '@tests/callers';
 import { systemCallerContext } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { canActOn, levelOfUser, outrankedRefusal } from '../../service';
+import { canActOn, levelOfUser, outrankedRefusal, ownMoneyRefusal } from '../../service';
 
 /** One membership row, as `findByUserId` returns it. */
 interface Row {
@@ -177,5 +177,57 @@ describe('outrankedRefusal', () => {
                 metadata: { reason: 'outranked', ownerId: 'owner' }
             }
         ]);
+    });
+});
+
+describe('ownMoneyRefusal', () => {
+    it('answers a plain 403 FORBIDDEN for the caller’s own thing, audited as reason own with no owner', async () => {
+        hold('me', 'admin');
+
+        const refusal = await ownMoneyRefusal(
+            callerContextAs('admin', 'me'),
+            'me',
+            'order',
+            'order-1'
+        );
+
+        expect(refusal).toMatchObject({
+            success: false,
+            status: 403,
+            errors: [{ code: 'FORBIDDEN' }]
+        });
+        expect(recorded).toEqual([
+            {
+                action: 'security.forbidden',
+                outcome: 'failure',
+                target_type: 'order',
+                target_id: 'order-1',
+                metadata: { reason: 'own' }
+            }
+        ]);
+    });
+
+    it('falls back to the rank rule for someone else’s thing', async () => {
+        hold('owner', 'admin');
+        hold('lower', 'customer');
+        const caller = callerContextAs('support', 'caller');
+
+        expect(await ownMoneyRefusal(caller, 'lower', 'order')).toBe(undefined);
+        expect(await ownMoneyRefusal(caller, 'owner', 'order')).toMatchObject({
+            errors: [{ code: 'OUTRANKED' }]
+        });
+    });
+
+    it('skips the check for a missing context, the system actor and a thing nobody owns', async () => {
+        hold('owner', 'admin');
+
+        expect(await ownMoneyRefusal(undefined, 'owner', 'order')).toBe(undefined);
+        expect(await ownMoneyRefusal(systemCallerContext('User'), 'owner', 'order')).toBe(
+            undefined
+        );
+        expect(
+            await ownMoneyRefusal(callerContextAs('support', 'caller'), undefined, 'order')
+        ).toBe(undefined);
+        expect(recorded).toEqual([]);
     });
 });

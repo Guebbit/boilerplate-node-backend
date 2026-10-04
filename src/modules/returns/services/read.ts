@@ -36,26 +36,37 @@ const isStaff = (authContext: AuthContext): boolean =>
     holdsKey(callerForSubject(authContext, 'Return'), 'returns.any.read');
 
 /**
+ * What the caller's rank allows on the buyer of a return's order, as {@link actionsFor} reads it.
+ */
+interface BuyerStanding {
+    /** The caller's rank reaches the buyer (the rank rule alone — the caller's own order counts). */
+    reaches: boolean;
+    /** The caller's rank reaches the buyer AND the buyer is not the caller (nobody handles their own money). */
+    handlesMoney: boolean;
+}
+
+/**
  * What this caller may do to this return, decided here so no client re-implements the lifecycle.
  * Staff act on a customer's return only: the rank rule, asked of the buyer of its order, is part
- * of every answer.
+ * of every answer. Approving and receiving move money, so they also need the buyer to be someone
+ * else; declining does not.
  * @param returned - the return
  * @param authContext - the caller
- * @param reaches - whether the caller's rank reaches the buyer of the return's order
+ * @param standing - how the caller stands to the buyer of the return's order
  */
 export const actionsFor = (
     returned: ReturnDocument,
     authContext: AuthContext,
-    reaches: boolean
+    standing: BuyerStanding
 ): ReturnActions => {
     const caller = callerForSubject(authContext, 'Return');
     const decidable = DECIDABLE_RETURN_STATUSES.includes(returned.status);
-    const canDecide = reaches && holdsKey(caller, 'returns.any.update') && decidable;
+    const holdsUpdate = holdsKey(caller, 'returns.any.update');
     return {
-        approve: canDecide,
-        decline: canDecide,
+        approve: standing.handlesMoney && holdsUpdate && decidable,
+        decline: standing.reaches && holdsUpdate && decidable,
         receive:
-            reaches &&
+            standing.handlesMoney &&
             holdsKey(caller, 'returns.any.receive') &&
             RECEIVABLE_RETURN_STATUSES.includes(returned.status)
     };
@@ -67,9 +78,12 @@ export const actionsFor = (
  * @param authContext - the caller
  */
 export const withActions = (returned: ReturnDocument, authContext: AuthContext): Promise<Return> =>
-    orderService.reachesBuyerOf(String(returned.orderId), authContext).then((reaches) => ({
+    Promise.all([
+        orderService.reachesBuyerOf(String(returned.orderId), authContext),
+        orderService.handlesMoneyOfOrder(String(returned.orderId), authContext)
+    ]).then(([reaches, handlesMoney]) => ({
         ...presentReturn(returned),
-        actions: actionsFor(returned, authContext, reaches)
+        actions: actionsFor(returned, authContext, { reaches, handlesMoney })
     }));
 
 /**

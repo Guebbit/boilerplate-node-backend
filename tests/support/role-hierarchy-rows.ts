@@ -51,6 +51,11 @@ export interface HierarchyRow {
     key: string;
     /** `false` when a customer passes the route's own key (it mounts none, or a `self` key they hold). */
     keyed?: boolean;
+    /**
+     * `true` for a step that moves money: the caller's OWN thing is refused (`403 FORBIDDEN`,
+     * "nobody handles their own money") rather than exempt, as it is for every other row.
+     */
+    selfRefused?: boolean;
     /** Builds the resource for `owner` and the request that changes it. */
     prepare: (owner: Owner) => Promise<HierarchyRequest>;
 }
@@ -228,6 +233,21 @@ export const HIERARCHY_ROWS: readonly HierarchyRow[] = [
         prepare: onOrder('post', '/status-override', { to: 'paid', reason: 'rank check' })
     },
     {
+        route: 'orders POST /',
+        key: 'orders.any.create',
+        prepare: async (owner) => ({
+            method: 'post',
+            url: '/orders',
+            body: {
+                userId: owner.user.id,
+                email: owner.user.email,
+                items: [
+                    { productId: String(await createProduct().then((p) => p._id)), quantity: 1 }
+                ]
+            }
+        })
+    },
+    {
         route: 'orders POST /:id/cancel',
         key: 'orders.any.update',
         keyed: false,
@@ -255,16 +275,19 @@ export const HIERARCHY_ROWS: readonly HierarchyRow[] = [
     },
     {
         route: 'payments POST /order/:orderId/refund',
+        selfRefused: true,
         key: 'payments.any.update',
         prepare: onPayment('refund')
     },
     {
         route: 'payments POST /order/:orderId/offline',
+        selfRefused: true,
         key: 'payments.any.create',
         prepare: onPayment('offline', { method: 'cash' })
     },
     {
         route: 'returns POST /:id/approve',
+        selfRefused: true,
         key: 'returns.any.update',
         prepare: onReturn('approve', 'requested')
     },
@@ -275,6 +298,7 @@ export const HIERARCHY_ROWS: readonly HierarchyRow[] = [
     },
     {
         route: 'returns POST /:id/receive',
+        selfRefused: true,
         key: 'returns.any.receive',
         prepare: onReturn('receive', 'approved')
     },
@@ -313,7 +337,6 @@ export const UNOWNED_WRITES: Readonly<Record<string, string>> = {
     'users POST /search': 'a read wearing a POST',
     'users POST /': 'creates an account; there is no owner yet',
     'orders POST /search': 'a read wearing a POST',
-    'orders POST /': 'places an order; the buyer is named in the body, nothing exists to change',
     'payments POST /webhook': 'the provider reporting an outcome, signed, no account',
     'payments POST /intent': 'the buyer’s own step, scoped to their own orders in the service',
     'payments POST /:id/confirm':

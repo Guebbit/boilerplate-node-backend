@@ -15,6 +15,8 @@ import {
     readOrder,
     toOrderItem
 } from '@modules/orders/tests/factories';
+import { assignRole } from '@modules/access';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
@@ -277,6 +279,23 @@ describe('receiving a return', () => {
             ([, template]) => template === 'returns.notice'
         );
         expect(JSON.stringify(mail?.[2])).toContain('70');
+    });
+});
+
+describe('nobody receives their own return', () => {
+    it('refuses a promoted buyer taking back their own goods, and refunds nothing', async () => {
+        const fixture = await paidAndDelivered();
+        const id = await approvedReturn(fixture);
+        await assignRole(fixture.user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'warehouse');
+
+        const result = asReject(
+            await receiveReturn(id, {}, callerContextAs('warehouse', fixture.user.id))
+        );
+
+        expect([result.status, result.errors[0].code]).toEqual([403, 'FORBIDDEN']);
+        const stored = await returnRepository.findById(id);
+        const payment = await paymentOf(fixture.orderId);
+        expect([stored?.status, payment.status]).toEqual(['approved', 'succeeded']);
     });
 });
 

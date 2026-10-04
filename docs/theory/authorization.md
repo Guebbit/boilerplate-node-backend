@@ -154,7 +154,8 @@ person's thing must clear it.
 Four details carry the rule:
 
 - **Your own things are exempt** from the comparison, so an administrator still edits their own
-  account. But nobody changes their **own role**: promotion is somebody else's act.
+  account. Two exceptions: nobody changes their **own role** (promotion is somebody else's act),
+  and nobody handles **their own money** ([below](#nobody-handles-their-own-money)).
 - **Two roles count at the higher one**: an account that is a `support` agent and the platform
   `operator` is an `admin`-level owner.
 - **An API key acts at its minter's level**, re-read on every request, so demoting the minter
@@ -167,11 +168,13 @@ Four details carry the rule:
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
 flowchart TD
     accTitle: How a write on someone else's thing is decided
-    accDescr: The route first requires the key. A write on the caller's own thing is allowed, except changing their own role. Otherwise the owner's level is read from the database and compared with the caller's, and a caller who does not rank strictly above the owner is refused with OUTRANKED.
+    accDescr: The route first requires the key. A write on the caller's own thing is allowed, except changing their own role and the four steps that move money, which answer FORBIDDEN. Otherwise the owner's level is read from the database and compared with the caller's, and a caller who does not rank strictly above the owner is refused with OUTRANKED.
 
     K{"holds the route's key?"} -- no --> F403["403 FORBIDDEN"]
     K -- yes --> O{"the caller's own thing?"}
-    O -- yes --> R{"changing their own role?"}
+    O -- yes --> M{"a step that moves money?"}
+    M -- yes --> OWN["403 FORBIDDEN<br/><i>nobody handles their own money</i>"]
+    M -- no --> R{"changing their own role?"}
     R -- yes --> F403
     R -- no --> OK["allowed"]
     O -- no --> L{"caller's level above the owner's?"}
@@ -181,7 +184,7 @@ flowchart TD
     classDef good fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
     class OK good;
-    class F403,OUT bad;
+    class F403,OUT,OWN bad;
 ```
 
 **Where it is applied.** `canActOn` and `outrankedRefusal` in `@modules/access` answer it; each
@@ -214,6 +217,36 @@ alone lock them out.
 and are flagged `shopperOnly` so that an administrator still counts as holding every _other_ key.
 An order a staff member could place would be one only an administrator may handle, so the demo
 shop's history has none.
+
+## Nobody handles their own money
+
+The rank rule frees a person's own things, so alone it would let a customer who is later promoted to
+staff, or an administrator who raised an order for themselves, pay, refund and return that order
+without a second pair of eyes. Separation of duties closes it: **the person an order belongs to is
+never the one who moves its money.** The rule on top of R1 is `ownMoneyRefusal` in `@modules/access`,
+asked through `orders` (`ownMoneyRefusalFor`) by:
+
+| Step                      | Asked in                           |
+| ------------------------- | ---------------------------------- |
+| record a payment by hand  | `payments`: `recordOfflinePayment` |
+| refund an order's payment | `payments`: `refundByOrder`        |
+| approve a return          | `returns`: `approveReturn`         |
+| receive a return's goods  | `returns`: `receiveReturn`         |
+
+- **The answer is a plain `403 FORBIDDEN`** with its own message, audited as `security.forbidden` with
+  `reason: own` (and no `ownerId`, since it is the caller). It is not `OUTRANKED`, whose contract text
+  makes the caller's own thing the exception.
+- **Declining a return stays R1 only**: refusing your own return gives nothing away.
+- **`POST /orders` is ranked by `userId`** (R1 only): an administrator may raise an order for
+  themselves, and the four steps then stop them paying, refunding or returning it alone.
+- **`actions` follows.** `recordPayment`, a payment's `refund`, and a return's `approve` and
+  `receive` are false on one's own order, so a client never offers what would be refused.
+- **An administrator's own order is then handled by nobody**: no one outranks an administrator and
+  they may not handle their own. Fixing one is the technician's edit of the database, by decision.
+
+Standard: OWASP's
+[Business Logic Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Business_Logic_Security_Cheat_Sheet.html)
+and the maker-checker (four-eyes) rule of payment practice.
 
 ## Where it lives
 

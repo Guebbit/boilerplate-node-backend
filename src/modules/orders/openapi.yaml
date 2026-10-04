@@ -74,7 +74,11 @@ paths:
         post:
             tags: [Orders]
             summary: Create order
-            description: Creates a new order directly from the supplied payload.
+            description: >-
+                Creates a new order directly from the supplied payload, for the account named in
+                `userId`. The rank rule applies to that account: an operator raises orders for
+                customers, never for an equal or a superior (`OUTRANKED`). Raising one for oneself
+                is allowed, but the steps that move its money then refuse the caller.
             operationId: createOrder
             security:
                 - bearerAuth: []

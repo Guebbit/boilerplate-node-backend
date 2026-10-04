@@ -11,6 +11,7 @@
         "error-unauthorized": "You are not signed in, or your session has expired.",
         "error-forbidden": "You do not have permission to do that.",
         "error-outranked": "You cannot change something that belongs to someone at your level or above.",
+        "error-own-money": "Nobody handles their own money: someone else has to do this for your order.",
         "error-not-found": "That item no longer exists.",
         "error-rate-limited": "Too many requests. Try again shortly.",
         "error-reauth-required": "Please confirm it's you before continuing.",
