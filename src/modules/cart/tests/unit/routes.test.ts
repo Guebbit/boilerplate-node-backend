@@ -15,6 +15,10 @@ jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
 );
 
+jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
+);
+
 import { router } from '@modules/cart/routes';
 
 const ALL = [
@@ -59,6 +63,23 @@ describe('cart routes — who shops', () => {
 
         expect(guards).toContain('requirePermissionGuard');
         expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
+    });
+});
+
+describe('cart routes — the checkout budget', () => {
+    it('budgets the checkout, and only the checkout', () => {
+        expect(chainOf(router, 'POST /checkout')).toContain('checkout');
+        for (const signature of ALL.filter((entry) => entry !== 'POST /checkout'))
+            expect(chainOf(router, signature)).not.toContain('checkout');
+    });
+
+    // Before the permission, a refused caller would spend it; after the idempotency ledger, a
+    // replayed request would escape it, and a loop of retries is the thing being bounded.
+    it('spends after the permission check and before the idempotency ledger', () => {
+        const chain = chainOf(router, 'POST /checkout');
+
+        expect(chain.indexOf('checkout')).toBeGreaterThan(chain.indexOf('requirePermissionGuard'));
+        expect(chain.indexOf('checkout')).toBeLessThan(chain.indexOf('idempotencyKey'));
     });
 });
 

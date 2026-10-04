@@ -128,6 +128,17 @@ winner's order — the request has been **superseded, not defeated**. Re-running
 "empty cart" anyway.
 :::
 
+## The checkout budget
+
+`POST /cart/checkout` has a budget of its own: `NODE_CHECKOUT_RATE_LIMIT_MAX` (10 per window, per
+**account**, audited as `security.rate_limit_hit`), answering `429` through the shared envelope.
+Every attempt counts, refused or placed: a refused one still read the basket and the stock, and a
+placed one holds stock, burns an order number, sends a mail and wipes the products cache, so a loop
+of them is the cheap half of a denial of inventory. It sits after the permission check (a refused
+caller spends nothing) and before the idempotency ledger (a replay still counts). During a Redis
+outage it counts in this process instead of switching off — see
+[the rate-limit budgets](../tools/security.md#when-the-limits-redis-is-down).
+
 ## The analytics pair
 
 `checkout_completed` and `checkout_failed` are emitted here rather than from

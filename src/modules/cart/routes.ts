@@ -33,6 +33,7 @@ import { postReorder } from './controllers/post-reorder';
 import { putCartShippingMethod } from './controllers/put-cart-shipping-method';
 import { invalidateCache } from '@infrastructure/http/middlewares/cache';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
+import { checkoutLimiter } from './rate-limits';
 
 /** Express router for cart operations (add, update, remove items; checkout). */
 export const router = Router();
@@ -53,6 +54,9 @@ router.post(
     '/checkout',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
     requirePermission('cart.self.checkout'),
+    // After the permission, so a refused caller never spends it; before the idempotency ledger, so
+    // a replayed request still counts (a loop of retries is the thing being bounded).
+    checkoutLimiter,
     idempotencyKey,
     invalidateCache(['products']),
     postCheckout

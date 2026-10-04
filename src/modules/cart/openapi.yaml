@@ -304,6 +304,8 @@ paths:
                 # (`CART_BILLING_ADDRESS_REQUIRED`). A `billingAddressId` that names none of the
                 # caller's addresses is the same 404 as `addressId`.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # The per-account checkout budget (`NODE_CHECKOUT_RATE_LIMIT_MAX`, 10 per window).
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /cart/reorder/{orderId}:

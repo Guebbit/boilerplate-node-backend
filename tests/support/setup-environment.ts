@@ -102,6 +102,12 @@ process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_INVOICING_RATE_LIMIT_MAX ??= '1000';
 
 /**
+ * `checkoutLimiter` needs the same treatment: keyed on the ACCOUNT, and a contract suite checks
+ * out many baskets as the one seeded customer.
+ */
+process.env.NODE_CHECKOUT_RATE_LIMIT_MAX ??= '1000';
+
+/**
  * `returnsWriteLimiter` needs the same treatment: keyed on the ACCOUNT, and a contract suite opens
  * many returns from the one seeded customer.
  */
