@@ -277,7 +277,7 @@ services:
         # so this Mongo runs with no authentication at all — every interface would hand a whole
         # database to anyone who can reach it.
         ports:
-            - '${NODE_HOST:-127.0.0.1}:${NODE_MONGODB_PORT:-27017}:27017'
+            - '127.0.0.1:${NODE_MONGODB_PORT:-27017}:27017'
 
         # The app's boot-time db:bootstrap waits on this before it runs. Also initiates the
         # replica set on the very first check: `rs.status()` throws until `rs.initiate()` has run
@@ -325,7 +325,11 @@ services:
             --maxmemory ${NODE_REDIS_MAXMEMORY:-256mb}
             --maxmemory-policy ${NODE_REDIS_MAXMEMORY_POLICY:-allkeys-lru}
         ports:
-            - '${NODE_REDIS_PORT:-6379}:6379'
+            # Every data and observability port below binds loopback, hard-coded: Redis has no auth,
+            # RabbitMQ is `guest`/`guest`, Grafana is an anonymous Admin, Umami is `admin`/`umami`.
+            # On café Wi-Fi anyone could otherwise read queued reset links or take Grafana. Only
+            # the API and the Faro receiver follow `NODE_HOST`, since a device on the LAN may need them.
+            - '127.0.0.1:${NODE_REDIS_PORT:-6379}:6379'
 
     # RabbitMQ: message broker for async tasks (email, PDF generation, etc.). Matches production
     # (docker-compose.production.yml) — quorum-queue message priority is a 4.x feature, and dev
@@ -338,8 +342,8 @@ services:
             RABBITMQ_DEFAULT_USER: guest
             RABBITMQ_DEFAULT_PASS: guest
         ports:
-            - '${RABBITMQ_AMQP_PORT:-5672}:5672' # AMQP protocol
-            - '${RABBITMQ_MANAGEMENT_PORT:-15672}:15672' # Management UI
+            - '127.0.0.1:${RABBITMQ_AMQP_PORT:-5672}:5672' # AMQP protocol
+            - '127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672' # Management UI
         volumes:
             - rabbitmq_volume:/var/lib/rabbitmq
 
@@ -366,8 +370,8 @@ services:
         volumes:
             - ./docker/observability/otel-collector.config.yaml:/etc/otel-collector-config.yaml:Z
         ports:
-            - '${OTEL_OTLP_HTTP_PORT:-4318}:4318' # OTLP/HTTP (used by the app)
-            - '${OTEL_OTLP_GRPC_PORT:-4317}:4317' # OTLP/gRPC (optional direct use)
+            - '127.0.0.1:${OTEL_OTLP_HTTP_PORT:-4318}:4318' # OTLP/HTTP (used by the app)
+            - '127.0.0.1:${OTEL_OTLP_GRPC_PORT:-4317}:4317' # OTLP/gRPC (optional direct use)
         depends_on:
             - tempo
 
@@ -387,7 +391,7 @@ services:
             # Written by `npm run setup`, read-only here — see prometheus.config.yaml's own comment.
             - ./tmp/secrets/prometheus-metrics-token:/etc/prometheus/secrets/metrics-token:ro,Z
         ports:
-            - '${PROMETHEUS_PORT:-9090}:9090'
+            - '127.0.0.1:${PROMETHEUS_PORT:-9090}:9090'
         depends_on:
             - alertmanager
 
@@ -401,7 +405,7 @@ services:
         volumes:
             - ./docker/observability/alertmanager.config.yaml:/etc/alertmanager/alertmanager.yml:Z
         ports:
-            - '${ALERTMANAGER_PORT:-9093}:9093'
+            - '127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093'
 
     # Loki: stores log lines shipped by Promtail. Grafana queries it for log exploration.
     loki:
@@ -414,7 +418,7 @@ services:
             - ./docker/observability/loki.config.yaml:/etc/loki/loki-config.yaml:Z
             - loki_volume:/var/loki
         ports:
-            - '${LOKI_PORT:-3100}:3100'
+            - '127.0.0.1:${LOKI_PORT:-3100}:3100'
 
     # Promtail: tails Docker container log files and ships them to Loki.
     promtail:
@@ -452,7 +456,7 @@ services:
             - ./docker/observability/grafana.dashboard-providers.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:Z
             - ./docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:Z
         ports:
-            - '${GRAFANA_PORT:-3001}:3000'
+            - '127.0.0.1:${GRAFANA_PORT:-3001}:3000'
         depends_on:
             - tempo
             - prometheus
@@ -474,8 +478,9 @@ services:
         volumes:
             - ./docker/observability/alloy.config.alloy:/etc/alloy/config.alloy:Z
         ports:
-            - '${ALLOY_FARO_PORT:-12347}:12347' # Faro receiver — the frontend posts telemetry here
-            - '${ALLOY_UI_PORT:-12345}:12345' # Alloy UI — inspect the ingest pipeline while debugging
+            # `NODE_HOST`, like the API: a phone on the LAN testing the frontend posts telemetry here.
+            - '${NODE_HOST:-127.0.0.1}:${ALLOY_FARO_PORT:-12347}:12347' # Faro receiver — the frontend posts telemetry here
+            - '127.0.0.1:${ALLOY_UI_PORT:-12345}:12345' # Alloy UI — inspect the ingest pipeline while debugging
         depends_on:
             - loki
             - otel-collector
@@ -495,7 +500,7 @@ services:
         ports:
             # 3080, not 8090: 8080-8099 is the paired frontend's port block (see the port map in
             # the README) and 8090 is where its docs container lives.
-            - '${UMAMI_PORT:-3080}:3000'
+            - '127.0.0.1:${UMAMI_PORT:-3080}:3000'
         depends_on:
             umami-db:
                 condition: service_healthy
@@ -553,7 +558,7 @@ services:
         ports:
             # 3090 sits in this repo's 3000-3099 block. It used to be 4173, which the paired
             # frontend also claimed — for its own docs AND for its e2e vite server.
-            - '${DOCS_PORT:-3090}:80'
+            - '127.0.0.1:${DOCS_PORT:-3090}:80'
 
     # webhook-tester: a self-hosted webhook.site. Somewhere for outbound webhooks to be delivered
     # TO during development — and specifically somewhere that shows the request headers, which is

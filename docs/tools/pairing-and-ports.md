@@ -233,7 +233,11 @@ than on the release that ships the mismatch.
 
 ## Reaching the stack from another device on the Wi-Fi
 
-Publish to all interfaces rather than to loopback, then reach the host by its LAN address:
+Set `NODE_HOST=0.0.0.0` in `.env`, so the API (and the Faro telemetry receiver, which a phone's
+frontend posts to) publish to every interface rather than to loopback, then reach the host by its
+LAN address. Nothing else follows it: Mongo, Redis, RabbitMQ and every dashboard (Grafana, Prometheus,
+Umami, the Alloy UI, the docs) bind `127.0.0.1` in `docker-compose.yml`, hard-coded, because several
+have no login at all and Grafana is an anonymous Admin.
 
 ```bash
 podman ps                      # confirm the mapping is 0.0.0.0:3000->3000/tcp
