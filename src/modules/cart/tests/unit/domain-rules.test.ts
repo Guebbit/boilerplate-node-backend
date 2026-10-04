@@ -72,8 +72,17 @@ describe('evaluateCheckout', () => {
         expect(evaluateCheckout([line(1, 5), line(6, 5)])).toMatchObject({
             ok: false,
             reason: 'insufficient-stock',
-            shortfalls: [{ requested: 6, available: 5 }]
+            shortfalls: [{ requested: 6 }]
         });
+    });
+
+    // Exact stock is for stock readers (`inventory.any.read`), and no shopper is one.
+    it('names the short line without the number left', () => {
+        const verdict = evaluateCheckout([line(6, 5)]);
+
+        expect(
+            !verdict.ok && verdict.reason === 'insufficient-stock' && verdict.shortfalls
+        ).toEqual([{ productId: '', title: '', requested: 6 }]);
     });
 
     it('accepts a line taking exactly the last units', () => {
@@ -90,7 +99,7 @@ describe('evaluateCheckout', () => {
         expect(evaluateCheckout([line(1, 0)])).toMatchObject({
             ok: false,
             reason: 'insufficient-stock',
-            shortfalls: [{ requested: 1, available: 0 }]
+            shortfalls: [{ requested: 1 }]
         });
     });
 
@@ -107,7 +116,7 @@ describe('evaluateCheckout', () => {
         expect(evaluateCheckout([line(1)])).toMatchObject({
             ok: false,
             reason: 'insufficient-stock',
-            shortfalls: [{ requested: 1, available: 0 }]
+            shortfalls: [{ requested: 1 }]
         });
     });
 

@@ -288,8 +288,15 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
                 code: ERROR_CODES.CART_INSUFFICIENT_STOCK,
                 message: t('cart.insufficient-stock'),
                 // Every short line, so the customer fixes the basket in one pass instead of one
-                // refusal per line.
-                details: { lines: refusal.shortfalls }
+                // refusal per line. Copied field by field: the reserve's own shortfall also carries
+                // the exact count left, which a shopper is not told.
+                details: {
+                    lines: refusal.shortfalls.map(({ productId, title, requested }) => ({
+                        productId,
+                        title,
+                        requested
+                    }))
+                }
             }
         ]);
     return generateReject(refusal.status, [

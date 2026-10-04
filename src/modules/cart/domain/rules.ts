@@ -36,12 +36,14 @@ export interface UnavailableCartLine {
     title?: string;
 }
 
-/** One line the cart cannot check out, and what is actually left. */
+/**
+ * One line the cart cannot check out. Names the product and what was asked for, never the number
+ * left: exact stock is for whoever holds `inventory.any.read`, and no shopper does.
+ */
 export interface CheckoutShortfall {
     productId: string;
     title: string;
     requested: number;
-    available: number;
 }
 
 /** A cart line as {@link basketWeight} sees it — only the fields it actually sums or filters on. */
@@ -165,8 +167,7 @@ export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutV
         .map(({ productId, product, quantity }) => ({
             productId: productId ?? '',
             title: product?.title ?? '',
-            requested: quantity ?? 0,
-            available: product?.available ?? 0
+            requested: quantity ?? 0
         }));
     if (shortfalls.length > 0) return { ok: false, reason: 'insufficient-stock', shortfalls };
 

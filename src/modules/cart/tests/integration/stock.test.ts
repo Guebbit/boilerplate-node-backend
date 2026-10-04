@@ -77,16 +77,10 @@ describe('checkout holds units without selling them', () => {
         expect(result.status).toBe(409);
         expect(!result.success && result.errors[0]).toMatchObject({
             code: 'CART_INSUFFICIENT_STOCK',
-            // Which line, and what is actually left. Without this the customer is editing the
-            // cart by trial and error.
+            // Which line, and how much was asked for — the number left is not told to a shopper.
+            // Without the line the customer is editing the cart by trial and error.
             details: {
-                lines: [
-                    {
-                        productId: String(product._id),
-                        requested: 3,
-                        available: 2
-                    }
-                ]
+                lines: [{ productId: String(product._id), title: product.title, requested: 3 }]
             }
         });
         expect(await countersOf(product._id)).toEqual({
@@ -147,8 +141,8 @@ describe('checkout holds units without selling them', () => {
         // Both short lines, with titles, and the healthy one absent — a customer trimming one
         // line only to be refused on the next is being made to binary-search their own basket.
         expect(details?.lines).toEqual([
-            { productId: String(shortA._id), title: 'Short A', requested: 5, available: 1 },
-            { productId: String(shortB._id), title: 'Short B', requested: 5, available: 2 }
+            { productId: String(shortA._id), title: 'Short A', requested: 5 },
+            { productId: String(shortB._id), title: 'Short B', requested: 5 }
         ]);
     });
 
@@ -196,15 +190,15 @@ describe('checkout holds units without selling them', () => {
         /*
          * The loser is refused by the RESERVE, not by the pre-flight — both pre-flights saw the
          * unit as available, which is the whole point of the conditional write. So this is the
-         * path that reports a shortfall read back at the moment it refused, and `available: 0` is
-         * the state the winner left behind rather than anything the loser saw earlier.
+         * path that reports a shortfall read back at the moment it refused — and, like the
+         * pre-flight, names the line without the number left, which a shopper is not told.
          */
         const loser = first.success ? second : first;
-        expect(!loser.success && loser.errors[0]).toMatchObject({
-            code: 'CART_INSUFFICIENT_STOCK',
-            details: {
-                lines: [{ productId: String(lastOne._id), requested: 1, available: 0 }]
-            }
+        const refusal = !loser.success && loser.errors[0];
+        expect(refusal && refusal.code).toBe('CART_INSUFFICIENT_STOCK');
+        // `toEqual`, not `toMatchObject`: an extra `available` on the line must fail.
+        expect(refusal && refusal.details).toEqual({
+            lines: [{ productId: String(lastOne._id), title: lastOne.title, requested: 1 }]
         });
     });
 });

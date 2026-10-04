@@ -672,15 +672,15 @@ describe('POST /cart/checkout', () => {
         expect(response.body.errors[0].code).toBe('CART_INSUFFICIENT_STOCK');
         /*
          * The refusal has to be actionable over the wire, not just in the service: which line and
-         * what is actually left. `ErrorItem.details` is `additionalProperties: true`, so this
-         * rides the existing contract rather than widening it.
+         * how much was asked for — never the exact number left, which is for stock readers only.
+         * `ErrorItem.details` is `additionalProperties: true`, so this rides the existing contract
+         * rather than widening it.
          */
         expect(response.body.errors[0].details.lines).toEqual([
             {
                 productId: String(scarce._id),
                 title: expect.any(String),
-                requested: 2,
-                available: 1
+                requested: 2
             }
         ]);
     });

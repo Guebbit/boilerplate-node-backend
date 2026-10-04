@@ -11,7 +11,7 @@ x-error-codes:
     CART_BILLING_ADDRESS_REQUIRED: { status: 422, description: 'No billing address could be resolved — none was named, nothing ships, and the address book has no default.' }
     CART_CHANGED: { status: 409, description: 'The cart changed between the request that read it and this write — reload and retry.' }
     CART_EMPTY: { status: 409, description: 'Checkout was attempted on a cart with no lines.' }
-    CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines exceed the product''s available stock — see `errors[].details.lines`.' }
+    CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines exceed the product''s available stock — see `errors[].details.lines`, one entry per short line with its `productId`, `title` and the `requested` quantity. The number left is not part of the answer: exact stock is for callers who read it (`inventory.any.read`).' }
     CART_PAYMENT_METHOD_NOT_AVAILABLE: { status: 409, description: 'The chosen payment method is not enabled for this deployment or this cart.' }
     CART_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line references a product that was deleted or deactivated since it was added.' }
     CART_QUANTITY_LIMIT: { status: 422, description: 'The requested quantity exceeds the per-line limit.' }
@@ -282,7 +282,7 @@ paths:
                 # refuses rather than shipping nowhere. `errors[].code` is `CART_ADDRESS_NOT_FOUND`.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Checking out an empty cart (`CART_EMPTY`), insufficient stock
-                # (`CART_INSUFFICIENT_STOCK`), a race with another checkout (`CART_CHANGED`), an
+                # (`CART_INSUFFICIENT_STOCK`, naming each short line but not the number left), a race with another checkout (`CART_CHANGED`), an
                 # `addressId` sent for a chosen method whose `requiresAddress` is false
                 # (`CART_ADDRESS_NOT_APPLICABLE`: that method ships to no address at all — and
                 # neither does an all-digital basket — so naming one is a client error, not a
