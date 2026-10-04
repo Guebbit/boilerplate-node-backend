@@ -35,8 +35,11 @@ import {
 import { outboxConfig } from '@kernel/config';
 import { withTransaction } from '@infrastructure/runtime/database';
 
+/** Every state an outbox row can be in — the schema's `enum`, and the source of {@link OutboxStatus}. */
+const OUTBOX_STATUSES = ['pending', 'published', 'dead'] as const;
+
 /** Where an outbox row is in its life. `dead` is terminal and needs an operator. */
-export type OutboxStatus = 'pending' | 'published' | 'dead';
+export type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
 
 /** One stored outbox row. */
 export interface OutboxEventDocument extends Document {
@@ -68,7 +71,7 @@ export const outboxEventSchema = new Schema<OutboxEventDocument, OutboxEventMode
         name: { type: String, required: true },
         payload: { type: Schema.Types.Mixed, required: true },
         aggregateId: { type: String, required: true },
-        status: { type: String, enum: ['pending', 'published', 'dead'], default: 'pending' },
+        status: { type: String, enum: [...OUTBOX_STATUSES], default: 'pending' },
         attempts: { type: Number, default: 0 },
         nextAttemptAt: { type: Date, required: true },
         lockedUntil: { type: Date },

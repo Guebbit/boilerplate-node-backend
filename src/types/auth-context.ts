@@ -8,8 +8,11 @@
  * live request, stay in `http/request.ts` — that is HTTP work, not a type.
  */
 
+/** The two worlds a caller can act in — a schema's `enum`, and the source of {@link AuthorizationScope}. */
+export const AUTHORIZATION_SCOPES = ['tenant', 'platform'] as const;
+
 /** Which of the two worlds a caller acts in. Spelled here because `Caller` is the type everything reads. */
-export type AuthorizationScope = 'tenant' | 'platform';
+export type AuthorizationScope = (typeof AUTHORIZATION_SCOPES)[number];
 
 /**
  * Where a person ranks, read off the `level:` of their role in `shared/authorization-roles.yaml`.

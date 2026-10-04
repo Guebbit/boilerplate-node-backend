@@ -24,6 +24,9 @@ export type {
     TenantCallerContext
 } from './auth-context';
 
+// The scopes, as a value a schema's `enum` can use.
+export { AUTHORIZATION_SCOPES } from './auth-context';
+
 // The server-decided image half of a write (wire `imageUrl` is `null`-only).
 export type { WithServerImage } from './server-image';
 

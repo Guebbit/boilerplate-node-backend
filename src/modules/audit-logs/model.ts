@@ -12,7 +12,13 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import type { AuditEntry } from '@infrastructure/observability/audit';
+import {
+    AUDIT_ACTOR_ROLES,
+    AUDIT_LEVELS,
+    AUDIT_OUTCOMES,
+    type AuditEntry
+} from '@infrastructure/observability/audit';
+import { AUTHORIZATION_SCOPES } from '@types';
 import { auditLogsConfig } from './config';
 
 /**
@@ -53,7 +59,7 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         },
         actor_role: {
             type: String,
-            enum: ['admin', 'user', 'anonymous', 'system'],
+            enum: [...AUDIT_ACTOR_ROLES],
             required: true
         },
         // Open where `actor_role` is closed — no enum, so a renamed or newly added preset role
@@ -65,7 +71,7 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         // "unknown which world" rather than failing validation on the way back out.
         actor_scope: {
             type: String,
-            enum: ['tenant', 'platform']
+            enum: [...AUTHORIZATION_SCOPES]
         },
         action: {
             type: String,
@@ -73,7 +79,7 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         },
         outcome: {
             type: String,
-            enum: ['success', 'failure'],
+            enum: [...AUDIT_OUTCOMES],
             required: true
         },
         ip: {
@@ -105,7 +111,7 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         },
         level: {
             type: String,
-            enum: ['info', 'warn'],
+            enum: [...AUDIT_LEVELS],
             required: true
         }
     },

@@ -10,7 +10,7 @@
 
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
-import type { CallerContext } from '@types';
+import type { AuthorizationScope, CallerContext } from '@types';
 
 /**
  * Action constants — domain.resource.verb dot-notation, so a log backend can filter by prefix
@@ -51,6 +51,15 @@ export interface AuditActionMap {}
  */
 export type AuditAction = CoreAuditAction | AuditActionMap[keyof AuditActionMap];
 
+/** Every privilege level an entry can record — the schema's `enum` for `actor_role`. */
+export const AUDIT_ACTOR_ROLES = ['admin', 'user', 'anonymous', 'system'] as const;
+
+/** Whether an audited action worked — the schema's `enum` for `outcome`. */
+export const AUDIT_OUTCOMES = ['success', 'failure'] as const;
+
+/** The log level of an emitted entry — the schema's `enum` for `level`. */
+export const AUDIT_LEVELS = ['info', 'warn'] as const;
+
 /**
  * See docs/tools/winston.md for field descriptions and examples.
  * snake_case field names (unlike the camelCase used elsewhere in the codebase) because these
@@ -64,7 +73,7 @@ export interface AuditEvent {
      * `system` is `SYSTEM_ACTOR` — a background job, never a real account — kept apart from
      * `admin` so the trail can tell "an operator did this" from "a sweep did".
      */
-    actor_role: 'admin' | 'user' | 'anonymous' | 'system';
+    actor_role: (typeof AUDIT_ACTOR_ROLES)[number];
     /**
      * The tenant role name behind `actor_role`, e.g. `moderator` — open where `actor_role` is
      * closed, so a reader can ask "which moderator did this" without a renamed role invalidating
@@ -85,11 +94,11 @@ export interface AuditEvent {
      * explicitly with the scope the guard actually resolved, or every platform refusal records as
      * a tenant one. `requirePermissionGuard` is the one caller that does.
      */
-    actor_scope?: 'tenant' | 'platform';
+    actor_scope?: AuthorizationScope;
     /** What was attempted (see the enum above). */
     action: AuditAction;
     /** Whether it worked. Failures are the security-relevant half: repeated ones signal attack. */
-    outcome: 'success' | 'failure';
+    outcome: (typeof AUDIT_OUTCOMES)[number];
     /** Source IP — the primary pivot when investigating an incident. */
     ip?: string;
     /** Client user-agent string; useful for spotting scripted traffic. */
@@ -113,7 +122,7 @@ export interface AuditEntry extends AuditEvent {
     /** When the action happened, not when the write landed. */
     timestamp: Date;
     /** Derived from `outcome`; retained so a stored entry matches what was logged. */
-    level: 'info' | 'warn';
+    level: (typeof AUDIT_LEVELS)[number];
 }
 
 /**

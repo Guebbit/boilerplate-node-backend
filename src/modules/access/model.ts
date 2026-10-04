@@ -23,7 +23,7 @@
 
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import type { AuthorizationScope } from '@types';
+import { AUTHORIZATION_SCOPES, type AuthorizationScope } from '@types';
 
 /**
  * One shop — and this deployment holds exactly one, deliberately, because serving many clients is
@@ -70,7 +70,7 @@ const membershipSchema = new Schema<MembershipDocument>(
         userId: { type: String, required: true },
         tenantId: { type: String, default: null },
         role: { type: String, required: true, lowercase: true, trim: true },
-        scope: { type: String, required: true, enum: ['tenant', 'platform'] }
+        scope: { type: String, required: true, enum: [...AUTHORIZATION_SCOPES] }
     },
     { timestamps: true }
 );
