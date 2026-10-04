@@ -227,9 +227,9 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### pseudonymisation
 
-| Variable             | Type | Default | Rules                                                                                                          | What it does                                                                                                  |
-| -------------------- | ---- | ------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `NODE_PSEUDONYM_KEY` | text | —       | required, 16+ characters, never the `.env-example` placeholder, outside development/test; secret: never logged | Root secret for keyed hashes of personal data in logs and fingerprints. A fixed dev key outside a deployment. |
+| Variable             | Type | Default | Rules                                                                                                          | What it does                                                                                            |
+| -------------------- | ---- | ------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `NODE_PSEUDONYM_KEY` | text | —       | required, 16+ characters, never the `.env-example` placeholder, outside development/test; secret: never logged | Root secret for keyed hashes of personal data in logs and fingerprints. Every digest throws without it. |
 
 ### pii-encryption
 

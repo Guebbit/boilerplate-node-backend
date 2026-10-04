@@ -228,6 +228,12 @@ process.env.NODE_TOTP_ENCRYPTION_KEY ??= 'test-totp-encryption-key';
 /** Same reasoning again — a webhook subscription's secret ring (`modules/webhooks/secrets.ts`). */
 process.env.NODE_WEBHOOK_SECRET_ENCRYPTION_KEY ??= 'test-webhook-secret-encryption-key';
 
+/**
+ * Same reasoning again — the pseudonymisation root. There is no built-in key: with it unset every
+ * keyed digest (a logged email, a rate-limit identity, an idempotency fingerprint) throws.
+ */
+process.env.NODE_PSEUDONYM_KEY ??= 'test-pseudonym-key-for-the-suite';
+
 /** Same reasoning again — address-book and user-phone PII (`src/infrastructure/security/pii-encryption.ts`). */
 process.env.NODE_PII_ENCRYPTION_KEY ??= 'test-pii-encryption-key';
 

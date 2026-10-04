@@ -125,6 +125,10 @@ const claimInstanceRoot = async (root: string): Promise<string> => {
  * `file-sandbox.ts`.
  */
 const globalSetup = async () => {
+    // `logger.ts` is on this file's import chain and pseudonymises personal fields; `setup-environment`
+    // has not run in this process, and the pseudonymisation root has no built-in fallback.
+    process.env.NODE_PSEUDONYM_KEY ??= 'test-pseudonym-key-for-the-suite';
+
     process.env[FILE_SANDBOX_ROOT_VARIABLE] = await claimInstanceRoot(instanceFilesRoot());
 
     const root = await claimInstanceRoot(instanceDataRoot());

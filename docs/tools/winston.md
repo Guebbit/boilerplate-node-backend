@@ -218,12 +218,12 @@ why `db:bootstrap` syncs before the server starts.
 
 ## Configuration
 
-| Env var                    | Effect                                                                                                                                                                           |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_LOG_LEVEL`           | logger level (`error`, `warn`, `info`, `debug`, …). Defaults to `info` in production, `debug` elsewhere.                                                                         |
-| `NODE_SERVICE_NAME`        | tag on every log entry. Useful when several services ship logs to the same aggregator.                                                                                           |
-| `NODE_LOG_PERSONAL_FIELDS` | `hash` (default), `redact`, or `plain` — see [Personal data](#personal-data) below.                                                                                              |
-| `NODE_PSEUDONYM_KEY`       | Root secret for `hash` mode (and every other [pseudonymised identifier](./security.md#pseudonymised-identifiers)). Required in production; unset elsewhere uses a fixed dev key. |
+| Env var                    | Effect                                                                                                                                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_LOG_LEVEL`           | logger level (`error`, `warn`, `info`, `debug`, …). Defaults to `info` in production, `debug` elsewhere.                                                                                                   |
+| `NODE_SERVICE_NAME`        | tag on every log entry. Useful when several services ship logs to the same aggregator.                                                                                                                     |
+| `NODE_LOG_PERSONAL_FIELDS` | `hash` (default), `redact`, or `plain` — see [Personal data](#personal-data) below.                                                                                                                        |
+| `NODE_PSEUDONYM_KEY`       | Root secret for `hash` mode (and every other [pseudonymised identifier](./security.md#pseudonymised-identifiers)). Required: unset, every digest throws (the dev preload and the test setup each set one). |
 
 ## Redaction
 

@@ -398,19 +398,19 @@ describe('the personal-data policy', () => {
     it('hashes the SAME input to a DIFFERENT digest under a different NODE_PSEUDONYM_KEY', () => {
         // The whole point of a KEYED hash (D7, GDPR pseudonymisation): a digest is only stable
         // for callers who share the key, not universally guessable like a bare sha256 would be.
-        setEnvironment({ NODE_PSEUDONYM_KEY: undefined });
-        const withDefaultKey = redactSensitiveFields({ email: 'user@example.com' }) as Record<
+        setEnvironment({ NODE_PSEUDONYM_KEY: 'the-first-key-of-the-pair' });
+        const withFirstKey = redactSensitiveFields({ email: 'user@example.com' }) as Record<
             string,
             unknown
         >;
 
         setEnvironment({ NODE_PSEUDONYM_KEY: 'a-different-key-entirely' });
-        const withCustomKey = redactSensitiveFields({ email: 'user@example.com' }) as Record<
+        const withSecondKey = redactSensitiveFields({ email: 'user@example.com' }) as Record<
             string,
             unknown
         >;
 
-        expect(withCustomKey.email).not.toBe(withDefaultKey.email);
+        expect(withSecondKey.email).not.toBe(withFirstKey.email);
     });
 
     it('drops personal fields entirely under NODE_LOG_PERSONAL_FIELDS=redact', () => {

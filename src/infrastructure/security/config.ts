@@ -21,7 +21,7 @@ export const pseudonymConfig = defineConfig({
             placeholder: 'your-pseudonym-key-here',
             productionOnly: true,
             describe:
-                'Root secret for keyed hashes of personal data in logs and fingerprints. A fixed dev key outside a deployment.'
+                'Root secret for keyed hashes of personal data in logs and fingerprints. Every digest throws without it.'
         })
     }
 });

@@ -44,8 +44,8 @@ describe('pseudonymise', () => {
         );
     });
 
-    it('falls back to a stable dev key when the root is unset', () => {
+    it('refuses to digest when the root is unset, rather than use a built-in key', () => {
         setEnvironment({ NODE_PSEUDONYM_KEY: undefined });
-        expect(pseudonymise('log', 'x')).toBe(pseudonymise('log', 'x'));
+        expect(() => pseudonymise('log', 'x')).toThrow(/NODE_PSEUDONYM_KEY is not set/u);
     });
 });

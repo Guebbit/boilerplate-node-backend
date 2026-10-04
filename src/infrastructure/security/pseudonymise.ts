@@ -21,13 +21,6 @@ import { pseudonymConfig } from './config';
 export type PseudonymPurpose = 'log' | 'rate-limit' | 'idempotency';
 
 /**
- * Non-secret root outside production, where `NODE_PSEUDONYM_KEY` is not required
- * (`security/config.ts`): a dev or test digest still needs to be stable, and a machine with this
- * source tree has nothing to protect.
- */
-const DEV_PSEUDONYM_KEY = 'dev-pseudonym-key';
-
-/**
  * Subkeys already derived, keyed by `root` then purpose. Keyed on the root because tests change
  * the environment between cases; HKDF is cheap but this sits on the request path.
  */
@@ -38,9 +31,12 @@ const subkeys = new Map<string, Map<PseudonymPurpose, Buffer>>();
  * `info` binds the key to its purpose and to this scheme's version.
  *
  * @param purpose - what the digest is for
+ * @throws {Error} when `NODE_PSEUDONYM_KEY` is unset: there is no built-in key, so a digest
+ *   under a guessable one is refused rather than made
  */
 const subkeyFor = (purpose: PseudonymPurpose): Buffer => {
-    const root = pseudonymConfig().NODE_PSEUDONYM_KEY ?? DEV_PSEUDONYM_KEY;
+    const root = pseudonymConfig().NODE_PSEUDONYM_KEY;
+    if (root === undefined) throw new Error('NODE_PSEUDONYM_KEY is not set.');
     const forRoot = subkeys.get(root) ?? new Map<PseudonymPurpose, Buffer>();
     subkeys.set(root, forRoot);
 
