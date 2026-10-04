@@ -54,7 +54,7 @@ export const update = (
      * The caller MAKING the change, passed on to `assignRole` as its `granter` — the keys behind
      * `data.role` must be a subset of the keys behind this. Without it a role editor is a
      * privilege-escalation endpoint: any caller who can reach this function at all could grant
-     * any role, including their own promotion to `owner`.
+     * any role, including their own promotion to `admin`.
      */
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {

@@ -52,7 +52,8 @@ technician gives that account the `admin` role by writing its membership into th
 
 Verified end to end on this exact sequence: signup, the verification email arriving (a local
 Mailpit stood in for real SMTP), the hand-written admin grant, login, and a real checkout — all against a stack
-that started from nothing.
+that started from nothing. The checkout needs a customer account: an administrator cannot shop
+(`cart.self.checkout` is a shopper's key), so it ran as a customer, not as the promoted admin.
 
 ## Why the database is a replica set of one
 
