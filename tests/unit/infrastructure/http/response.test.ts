@@ -21,6 +21,7 @@ import {
     generateSuccess,
     resolveErrorMessage,
     successResponse,
+    createdOrOk,
     rejectResponse
 } from '@infrastructure/http/response';
 import { makeResponseStub } from '@tests/express';
@@ -268,6 +269,50 @@ describe('successResponse', () => {
         const response = makeResponseStub();
 
         successResponse(response, { id: 'x' });
+
+        expect(response.status).toHaveBeenCalledWith(200);
+    });
+});
+
+/**
+ * The shared stub has no `location`; this adds the one method `createdResponse` calls.
+ */
+const stubWithLocation = () => {
+    const response = makeResponseStub();
+    const location = jest.fn();
+    Object.assign(response, { location });
+    return { response, location };
+};
+
+describe('createdOrOk', () => {
+    it('answers 201 and names the new resource when the call created it', () => {
+        const { response, location } = stubWithLocation();
+
+        createdOrOk(response, { id: 'x' }, 201, '/things/x', 'Made');
+
+        expect(location).toHaveBeenCalledWith('/things/x');
+        expect(response.status).toHaveBeenCalledWith(201);
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({ status: 201, message: 'Made' })
+        );
+    });
+
+    it('answers the given status without a Location when nothing was created', () => {
+        const { response, location } = stubWithLocation();
+
+        createdOrOk(response, { id: 'x' }, 200, '/things/x', 'Grew');
+
+        expect(location).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(200);
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({ status: 200, message: 'Grew' })
+        );
+    });
+
+    it('answers 200 when the status is unset', () => {
+        const { response } = stubWithLocation();
+
+        createdOrOk(response, { id: 'x' }, undefined, '/things/x');
 
         expect(response.status).toHaveBeenCalledWith(200);
     });

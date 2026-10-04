@@ -120,6 +120,27 @@ export const createdResponse = <T>(response: Response, data: T, location: string
 };
 
 /**
+ * The answer of a write that may or may not create: {@link createdResponse} when `status` is 201,
+ * otherwise {@link successResponse} with that status.
+ *
+ * @param response - Express response
+ * @param data - payload
+ * @param status - what the service answered; 201 only when this call created the resource, unset is 200
+ * @param location - the new resource's path, sent only on a 201
+ * @param message - optional envelope message
+ */
+export const createdOrOk = <T>(
+    response: Response,
+    data: T,
+    status: number | undefined,
+    location: string,
+    message = ''
+) =>
+    status === 201
+        ? createdResponse(response, data, location, message)
+        : successResponse(response, data, status, message);
+
+/**
  * Every status the envelope names, with the code and the message it answers with.
  *
  * One list, so adding 402 or 423 cannot reach the message and miss the code. An absent `code` is

@@ -12,7 +12,7 @@
 
 import type { Request, Response } from 'express';
 import type { Payment } from '@types';
-import { createdResponse, successResponse } from '@infrastructure/http/response';
+import { createdOrOk } from '@infrastructure/http/response';
 import { CreatePaymentIntentBody } from '@api/schemas.zod';
 import { paymentService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
@@ -29,9 +29,12 @@ export const postPaymentIntent = (request: Request, response: Response) => {
             // Already the wire shape: this is the one endpoint whose answer carries a field the
             // document does not have (`clientSecret`), so the service serializes it, not this.
             // 201 when this ask inserted the payment; 200 when it refreshed the one already there.
-            if (result.status === 201)
-                createdResponse<Payment>(response, result.data, `/payments/${result.data.id}`);
-            else successResponse<Payment>(response, result.data);
+            createdOrOk<Payment>(
+                response,
+                result.data,
+                result.status,
+                `/payments/${result.data.id}`
+            );
         })
         .catch(catchAs(response, 'postPaymentIntent'));
 };

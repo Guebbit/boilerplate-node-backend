@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { AddCartItemBody } from '@api/schemas.zod';
 import { cartService } from '../services';
-import { createdResponse, successResponse } from '@infrastructure/http/response';
+import { createdOrOk } from '@infrastructure/http/response';
 import type { CartResponse, AddCartItemRequest } from '@types';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
@@ -37,14 +37,13 @@ export const postCart = (
             if (refused(response, result)) return;
 
             // 201 when the product got a line, 200 when the line it already had grew.
-            if (result.status === 201)
-                createdResponse<CartResponse>(
-                    response,
-                    result.data,
-                    `/cart/${productId}`,
-                    t('cart.product-added')
-                );
-            else successResponse<CartResponse>(response, result.data, 200, t('cart.product-added'));
+            createdOrOk<CartResponse>(
+                response,
+                result.data,
+                result.status,
+                `/cart/${productId}`,
+                t('cart.product-added')
+            );
         })
         .catch(catchAs(response, 'addCartItem'));
 };

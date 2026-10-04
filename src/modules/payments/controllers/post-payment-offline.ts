@@ -8,7 +8,7 @@
 
 import type { Request, Response } from 'express';
 import type { Payment } from '@types';
-import { createdResponse, successResponse } from '@infrastructure/http/response';
+import { createdOrOk } from '@infrastructure/http/response';
 import { RecordOfflinePaymentBody } from '@api/schemas.zod';
 import { paymentService } from '../services';
 import { presentPayment } from '../presenter';
@@ -33,14 +33,13 @@ export const postPaymentOffline = (request: Request<{ orderId?: string }>, respo
             if (refused(response, result)) return;
             const payment = presentPayment(result.data);
             // 201 when a row was inserted; 200 when this converted an unpaid card intent's row.
-            if (result.status === 201)
-                createdResponse<Payment>(
-                    response,
-                    payment,
-                    `/payments/${payment.id}`,
-                    result.message
-                );
-            else successResponse<Payment>(response, payment, 200, result.message);
+            createdOrOk<Payment>(
+                response,
+                payment,
+                result.status,
+                `/payments/${payment.id}`,
+                result.message
+            );
         })
         .catch(catchAs(response, 'postPaymentOffline'));
 };

@@ -10,7 +10,7 @@
 import type { Response } from 'express';
 import { orderService } from '../services';
 import type { AuthContext, Order } from '@types';
-import { createdResponse, successResponse } from '@infrastructure/http/response';
+import { createdOrOk } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 
 /**
@@ -45,8 +45,6 @@ export const respondWithOrder = (
         .withActions(order, authContext)
         .then((resolved) => {
             // A 201 always names the new order (RFC 9110 §9.3.3).
-            if (status === 201)
-                createdResponse<Order>(response, resolved, `/orders/${resolved.id}`, message);
-            else successResponse<Order>(response, resolved, status, message);
+            createdOrOk<Order>(response, resolved, status, `/orders/${resolved.id}`, message);
         })
         .catch(catchAs(response, context));

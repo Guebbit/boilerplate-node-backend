@@ -6,7 +6,7 @@
 import type { Request, Response } from 'express';
 import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '../services';
-import { createdResponse, successResponse } from '@infrastructure/http/response';
+import { createdOrOk } from '@infrastructure/http/response';
 import type { CartResponse, UpdateCartItemByIdRequest } from '@types';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
@@ -43,9 +43,7 @@ export const putCartItem = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            if (result.status === 201)
-                createdResponse<CartResponse>(response, result.data, `/cart/${productId}`);
-            else successResponse<CartResponse>(response, result.data);
+            createdOrOk<CartResponse>(response, result.data, result.status, `/cart/${productId}`);
         })
         .catch(catchAs(response, 'updateCartItemById'));
 };
