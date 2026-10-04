@@ -46,12 +46,12 @@ Four concerns resolve a named provider at runtime. Each registry re-checks confi
 call, so a provider is active when its variables are set in the environment the process started
 with (or a test override), and the registry holds no copy of its own to go stale.
 
-| Concern               | Registry                                         | Ships with                                    | What a vendor adds                                                          |
-| --------------------- | ------------------------------------------------ | --------------------------------------------- | --------------------------------------------------------------------------- |
-| **Payments**          | `src/modules/payments/providers/`                | `fake` — deterministic test cards, no network | Actually taking money. Also a fraud engine you cannot build (see below)     |
-| **Social login**      | `src/modules/account/oauth/providers/`           | `google`, `github`, `fake`                    | More identity providers; any OIDC-shaped one fits the same port             |
-| **Human challenge**   | `src/infrastructure/adapters/antibot-providers/` | `none`, `altcha`, `turnstile`                 | Managed bot scoring. **`altcha` is self-hosted** — no vendor needed         |
-| **Product analytics** | `src/infrastructure/observability/analytics/`    | `none`, `umami`, `posthog`                    | Hosted retention, funnels, session replay — see [Analytics](./analytics.md) |
+| Concern               | Registry                                         | Ships with                                             | What a vendor adds                                                          |
+| --------------------- | ------------------------------------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| **Payments**          | `src/modules/payments/providers/`                | nothing — `fake` is a [test double](./test-doubles.md) | Actually taking money. Also a fraud engine you cannot build (see below)     |
+| **Social login**      | `src/modules/account/oauth/providers/`           | `google`, `github`                                     | More identity providers; any OIDC-shaped one fits the same port             |
+| **Human challenge**   | `src/infrastructure/adapters/antibot-providers/` | `none`, `altcha`, `turnstile`                          | Managed bot scoring. **`altcha` is self-hosted** — no vendor needed         |
+| **Product analytics** | `src/infrastructure/observability/analytics/`    | `none`, `umami`, `posthog`                             | Hosted retention, funnels, session replay — see [Analytics](./analytics.md) |
 
 **The human-challenge row is the one worth studying**, because it is the shape the others should
 grow towards: three providers, one of them a real defence that phones nobody
@@ -87,14 +87,14 @@ Honest entries. Each is a decision someone has to make before a vendor can help.
 
 The column that matters, and the reason this page is not just a list of vendors.
 
-| Choose nothing for… | And you still have                                                           | But you do not have                                                                                                   |
-| ------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Payments            | a complete checkout, order lifecycle, refunds, webhooks — all against `fake` | money. `fake` is for building and testing against, never for a real shop                                              |
-| Human challenge     | rate limits, the antibot ladder, and `altcha` if you enable it               | managed bot scoring — but `altcha` closes most of the gap without a vendor                                            |
-| Analytics           | audit logs, Prometheus counters, structured logs                             | funnels and retention                                                                                                 |
-| Fraud scoring       | per-account velocity and decline limits, once they are built                 | cross-merchant signal. Nobody can build that alone — it is the one category where a vendor is genuinely irreplaceable |
-| Object storage      | uploads, on one disk, for one instance                                       | horizontal scaling of the upload path                                                                                 |
-| Managed email       | SMTP to anything, including your own server                                  | deliverability reputation — see [Email authentication](./deployment-hardening.md#email-authentication-spf-dkim-dmarc) |
+| Choose nothing for… | And you still have                                                                                         | But you do not have                                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Payments            | checkout by bank transfer, the order lifecycle, refunds — and, in dev, all of it against the `fake` double | card payments. Production has no provider until you write one; `fake` is never in the image                           |
+| Human challenge     | rate limits, the antibot ladder, and `altcha` if you enable it                                             | managed bot scoring — but `altcha` closes most of the gap without a vendor                                            |
+| Analytics           | audit logs, Prometheus counters, structured logs                                                           | funnels and retention                                                                                                 |
+| Fraud scoring       | per-account velocity and decline limits, once they are built                                               | cross-merchant signal. Nobody can build that alone — it is the one category where a vendor is genuinely irreplaceable |
+| Object storage      | uploads, on one disk, for one instance                                                                     | horizontal scaling of the upload path                                                                                 |
+| Managed email       | SMTP to anything, including your own server                                                                | deliverability reputation — see [Email authentication](./deployment-hardening.md#email-authentication-spf-dkim-dmarc) |
 
 ## 4 · Adding a provider to a port
 

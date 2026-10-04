@@ -20,13 +20,14 @@ import { inventoryService } from '@modules/inventory';
 import { onDomainEvent } from '@kernel/events';
 import { ORDER_STATUS_CHANGED } from '@modules/orders';
 import { MISSING_ID } from '@tests/ids';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
-// Literals, not imported from `providers/fake` — a contract test's inputs come from what the
-// contract itself publishes (openapi.yaml: "recognises `pm_card_visa` (succeeds),
-// `pm_card_declined`, …"), not from the code the contract describes. Importing the module under
-// test would make a rename of either value pass silently while the contract quietly became a lie.
+// Literals, not imported from the fake PSP's file — a contract test's inputs come from what the
+// provider's own documentation publishes (`pm_card_visa` succeeds, `pm_card_declined` is refused),
+// not from the code the contract describes. Importing the double would make a rename of either
+// value pass silently while this test quietly stopped meaning anything.
 const GOOD_METHOD = 'pm_card_visa';
 const DECLINE_METHOD = 'pm_card_declined';
 
@@ -97,6 +98,54 @@ describe('GET /payments/methods', () => {
         expect(response.body.data.methods.map((method: { id: string }) => method.id)).toContain(
             'card'
         );
+    });
+});
+
+/**
+ * A deployment with no card payment provider: `NODE_PAYMENT_PROVIDER` unset. Nothing can take a
+ * card, so nothing about cards exists: no method, no intent, no webhook route.
+ */
+describe('with no card payment provider configured', () => {
+    beforeEach(() => {
+        setEnvironment({ NODE_PAYMENT_PROVIDER: undefined });
+    });
+
+    it('GET /payments/methods does not list card', async () => {
+        const response = await api().get('/payments/methods');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.methods.map((method: { id: string }) => method.id)).not.toContain(
+            'card'
+        );
+    });
+
+    it('POST /payments/intent answers 409 PAYMENT_CARD_NOT_AVAILABLE and opens nothing', async () => {
+        const { bearer, order } = await authenticateWithOrder();
+
+        const response = await api()
+            .post('/payments/intent')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('PAYMENT_CARD_NOT_AVAILABLE');
+        expect(await paymentRepository.findByOrderId(String(order._id))).toBeNull();
+    });
+
+    it('POST /payments/webhook answers 404, signed or not', async () => {
+        const body = JSON.stringify({
+            id: 'evt_no_provider',
+            providerRef: 'x',
+            status: 'succeeded'
+        });
+
+        const response = await api()
+            .post('/payments/webhook')
+            .set('Content-Type', 'application/json')
+            .set(WEBHOOK_SIGNATURE_HEADER, signWebhookPayload(body))
+            .send(body);
+
+        expect(response.status).toBe(404);
     });
 });
 

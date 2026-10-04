@@ -703,6 +703,28 @@ describe('POST /cart/checkout', () => {
             }
         ));
 
+    // `paymentMethod` defaults to `card`, so with no card provider a request that names no method
+    // is refused exactly as one that names `card`: checkout is off until some method is offered.
+    it.each([
+        ['names card', { paymentMethod: 'card' }],
+        ['names no method', {}]
+    ])('refuses a checkout that %s when no card provider is configured', (_case, body) =>
+        withoutEnvironment(
+            ['NODE_PAYMENT_PROVIDER', 'NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],
+            async () => {
+                const { bearer } = await authenticateWithCart();
+
+                const response = await api()
+                    .post('/cart/checkout')
+                    .set('Authorization', bearer)
+                    .send(body);
+
+                expect(response.status).toBe(409);
+                expect(response.body.errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
+            }
+        )
+    );
+
     it('matches the contract for a bank_transfer checkout, transferInstructions included', () =>
         withEnvironment('NODE_BANK_TRANSFER_BENEFICIARY', 'Guebbit Shop', () =>
             withEnvironment('NODE_BANK_TRANSFER_IBAN', 'DE89370400440532013000', async () => {

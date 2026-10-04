@@ -24,7 +24,7 @@ import { api } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
 import { registerOAuthProvider } from '../../oauth/providers';
-import { fakeOAuthProvider } from '../../oauth/providers/fake';
+import { fakeOAuthProvider } from '@scenarios/support/doubles/oauth-fake';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { accountAuditActions } from '../../audit';

@@ -19,3 +19,13 @@ export const notPayable = (): ResponseReject =>
     generateReject(409, [
         { code: ERROR_CODES.PAYMENT_ORDER_NOT_PAYABLE, message: t('payments.order-not-payable') }
     ]);
+
+/**
+ * This deployment has no card payment provider (`NODE_PAYMENT_PROVIDER` is unset), so no card
+ * intent can be opened. `GET /payments/methods` does not list `card` either, and checkout refuses
+ * it with its own 409; this is the same answer for a client that skips both.
+ */
+export const cardNotAvailable = (): ResponseReject =>
+    generateReject(409, [
+        { code: ERROR_CODES.PAYMENT_CARD_NOT_AVAILABLE, message: t('payments.card-not-available') }
+    ]);

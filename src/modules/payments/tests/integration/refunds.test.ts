@@ -24,7 +24,7 @@ import { PAYMENT_REFUNDED } from '@modules/payments/events';
 import { paymentRepository } from '@modules/payments/repository';
 import { presentPayment } from '@modules/payments/presenter';
 import { withEnvironment } from '@tests/environment';
-import { fakePaymentProvider } from '@modules/payments/providers/fake';
+import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';

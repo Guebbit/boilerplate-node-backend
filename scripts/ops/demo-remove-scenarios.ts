@@ -13,7 +13,7 @@
  * instead of writing something half right.
  */
 
-import { readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { RemovalNote } from './demo-remove-registry';
 
@@ -125,6 +125,50 @@ export const stripScenarioModuleEntries = (
 
     writeFileSync(file, content);
     return { file: 'scenarios/shop-modules.ts', detail: `removed ${names.join(', ')} fixtures` };
+};
+
+/**
+ * Remove each removed module's test doubles: its folder under `scenarios/support/doubles/<name>/`
+ * and, from `scenarios/support/doubles/register.ts`, the import of its `register` file and the
+ * call that registers it. A module with no doubles folder is left alone.
+ *
+ * The convention this reads: the folder holds a `register.ts` exporting one function, which the
+ * shared `register.ts` imports and calls once. The function's name is read off the import, so no
+ * module's double is named here.
+ * @param repoRoot - the checkout to edit
+ * @param names - the removed module names
+ * @returns one note per module whose doubles were removed
+ */
+export const stripModuleDoubles = (repoRoot: string, names: readonly string[]): RemovalNote[] => {
+    const doublesRoot = path.join(repoRoot, 'scenarios', 'support', 'doubles');
+    const registerFile = path.join(doublesRoot, 'register.ts');
+
+    return names
+        .filter((name) => existsSync(path.join(doublesRoot, name)))
+        .map((name) => {
+            rmSync(path.join(doublesRoot, name), { recursive: true, force: true });
+
+            const content = readFileSync(registerFile, 'utf8');
+            const imported = new RegExp(
+                String.raw`^import \{ (\w+) \} from './${name}/register';\n`,
+                'm'
+            ).exec(content);
+            if (!imported)
+                throw new Error(
+                    `[demo-remove] scenarios/support/doubles/register.ts does not import ./${name}/register`
+                );
+
+            writeFileSync(
+                registerFile,
+                content
+                    .replace(imported[0], '')
+                    .replace(new RegExp(String.raw`^ {4}${imported[1]}\(\);\n`, 'm'), '')
+            );
+            return {
+                file: `scenarios/support/doubles/${name}`,
+                detail: `deleted, and unregistered from register.ts (${imported[1]})`
+            };
+        });
 };
 
 /**

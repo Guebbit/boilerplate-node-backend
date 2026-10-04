@@ -238,6 +238,13 @@ process.env.NODE_PSEUDONYM_KEY ??= 'test-pseudonym-key-for-the-suite';
 process.env.NODE_PII_ENCRYPTION_KEY ??= 'test-pii-encryption-key';
 
 /**
+ * The card provider the suite runs against: the `fake` double, which `setup.ts` registers.
+ * Production has no default — unset means no card payments, and a test of that unsets it through
+ * `setEnvironment`.
+ */
+process.env.NODE_PAYMENT_PROVIDER ??= 'fake';
+
+/**
  * Same again for the payment webhook: signing and verifying both refuse an absent secret, which is
  * the right production behaviour and would otherwise fail every webhook suite in CI.
  */

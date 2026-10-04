@@ -57,6 +57,17 @@ describe('listPaymentMethods', () => {
             { id: 'bank_transfer', holdHours: 48 }
         ]);
     });
+
+    it('leaves card out when no provider is configured', () => {
+        setEnvironment({ NODE_PAYMENT_PROVIDER: undefined });
+        configureBankTransfer();
+        expect(listPaymentMethods()).toEqual([{ id: 'bank_transfer', holdHours: 168 }]);
+    });
+
+    it('offers nothing at all with no provider and no transfer: checkout is off', () => {
+        setEnvironment({ NODE_PAYMENT_PROVIDER: undefined });
+        expect(listPaymentMethods()).toEqual([]);
+    });
 });
 
 describe('validateBankTransferConfig', () => {

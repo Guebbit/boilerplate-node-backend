@@ -484,6 +484,8 @@ components:
                         for `NODE_BANK_TRANSFER_HOLD_HOURS` instead, and the response carries
                         `transferInstructions`. A method this deployment does not offer refuses
                         the checkout with 409, `errors[].code` `CART_PAYMENT_METHOD_NOT_AVAILABLE`.
+                        That includes the default: a request that names no method asks for `card`,
+                        so a deployment with no card provider refuses it the same way.
 
         CartSummaryResponse:
             type: object

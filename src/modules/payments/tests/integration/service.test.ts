@@ -34,7 +34,7 @@ import {
 } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { withEnvironment } from '@tests/environment';
-import { FAKE_DECLINE_METHOD, fakePaymentProvider } from '@modules/payments/providers/fake';
+import { FAKE_DECLINE_METHOD, fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';

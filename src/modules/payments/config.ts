@@ -33,13 +33,14 @@ export interface PaymentMethodInfo {
 }
 
 /**
- * Which methods this deployment offers. `card` always; `bank_transfer` only once its beneficiary
- * and IBAN are both configured — the check `GET /payments/methods` and checkout both defer to,
- * so neither can drift from the other.
+ * Which methods this deployment offers. `card` only once a provider is configured
+ * (`NODE_PAYMENT_PROVIDER`); `bank_transfer` only once its beneficiary and IBAN are both
+ * configured — the check `GET /payments/methods` and checkout both defer to, so neither can drift
+ * from the other. With neither, the list is empty and checkout is off.
  * @returns the offered methods, in the order a client should present them
  */
 export const listPaymentMethods = (): PaymentMethodInfo[] => [
-    { id: 'card' },
+    ...(paymentsConfig().NODE_PAYMENT_PROVIDER === undefined ? [] : [{ id: 'card' as const }]),
     ...(bankTransferEnabled()
         ? [{ id: 'bank_transfer' as const, holdHours: bankTransferHoldHours() }]
         : [])
@@ -70,28 +71,34 @@ export const validateBankTransferConfig = (): string[] => {
     return problems;
 };
 
+/** Shortest webhook signing secret a deployment may set. */
+const WEBHOOK_SECRET_MIN_LENGTH = 16;
+
 /**
  * What a deployment tunes about payments, and what refuses boot.
  *
- * `NODE_PAYMENT_WEBHOOK_SECRET` is `productionOnly`: `tests/support/setup-environment.ts` supplies a dev
- * value, and the `fake` provider needs none locally — booting without it there is not the failure
- * this guards against. `NODE_PAYMENT_PROVIDER`'s own probe lives in `./module` (the resolver
- * imports this file, so it cannot be probed from here).
+ * `NODE_PAYMENT_PROVIDER` has no default: unset means no card provider, so card payments are off.
+ * `NODE_PAYMENT_WEBHOOK_SECRET` is therefore not required either — with no provider there is
+ * nothing to sign; the provider that is named reads it when it verifies a delivery.
+ * `NODE_PAYMENT_PROVIDER`'s own probe lives in `./module` (the resolver imports this file, so it
+ * cannot be probed from here).
  */
 export const paymentsConfig = defineConfig({
     name: 'payments',
     shape: {
         NODE_PAYMENT_PROVIDER: text({
-            default: 'fake',
             lower: true,
             describe:
-                'The payment provider implementation: `fake` or whatever a deployment registers.'
+                'The card payment provider a deployment registers. Unset: no card payments, and checkout offers only the other methods.'
         }),
         NODE_PAYMENT_WEBHOOK_SECRET: secret({
-            minLength: 16,
+            // `0`: may stay unset (no provider, nothing to sign). Never the `.env-example`
+            // placeholder in a deployment; the 16-character floor of a SET value is `check` below.
+            minLength: 0,
             placeholder: 'your-payment-webhook-secret-here',
             productionOnly: true,
-            describe: 'The secret the provider signs webhook deliveries with.'
+            describe:
+                'The secret the provider signs webhook deliveries with. Unset when no provider is configured; 16+ characters once set.'
         }),
         NODE_STRIPE_SECRET_KEY: text({
             sensitive: true,
@@ -109,6 +116,10 @@ export const paymentsConfig = defineConfig({
         })
     },
     check: (config, environment) => [
+        ...(config.NODE_PAYMENT_WEBHOOK_SECRET !== undefined &&
+        config.NODE_PAYMENT_WEBHOOK_SECRET.length < WEBHOOK_SECRET_MIN_LENGTH
+            ? ['NODE_PAYMENT_WEBHOOK_SECRET']
+            : []),
         ...validateBankTransferConfig(),
         ...validateStripeSecretKey(config.NODE_STRIPE_SECRET_KEY, environment)
     ]

@@ -27,7 +27,7 @@ flowchart LR
     R["GET /account/oauth/:provider"] --> RG["providers/index.ts<br/><i>registry</i>"]
     RG --> G["google.ts"]
     RG --> H["github.ts"]
-    RG --> F["fake.ts<br/><i>demo mode only</i>"]
+    RG --> F["fake<br/><i>a double: dev preload only</i>"]
     G --> P["OAuthProvider<br/><i>authorizeUrl · exchangeCode</i>"]
     H --> P
     F --> P
@@ -48,7 +48,7 @@ of its own to go stale. An unconfigured provider resolves `undefined`
 and the route answers 404 — the same "loud, never silently wrong" stance an unset
 `NODE_PAYMENT_PROVIDER` gets.
 
-`fake` is the demo profile's stand-in: no network call and no consent screen, so a Cypress spec
+`fake` is the dev preload's stand-in (a [test double](../tools/test-doubles.md), not in `src/`): no network call and no consent screen, so a Cypress spec
 clicking "Continue with Google" never leaves this app. It still round-trips the real `state` cookie,
 so the CSRF check gets genuine coverage rather than being skipped in the suite that exercises it
 most.

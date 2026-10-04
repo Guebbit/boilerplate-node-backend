@@ -3,8 +3,8 @@
  * Contract tests for the OAuth surface: `GET /account/oauth/providers`, and the full
  * start → callback round trip through the `fake` provider — the same path a Cypress spec walks
  * against a real browser, exercised here against the real routes, the real CSRF cookie, and a
- * real database. Registers `fake` the same way `scenarios/run-server.ts` does: production
- * seeds no such entry, so this suite has to put it there itself.
+ * real database. Registers `fake` the way the dev preload does: production seeds no such
+ * entry, so this suite has to put it there itself.
  */
 
 import '@tests/contract';
@@ -15,7 +15,7 @@ import { setCookie, cookieHeader } from '@tests/cookies';
 import { codeFor } from '@tests/totp';
 import { userRepository } from '@modules/users/tests/factories';
 import { registerOAuthProvider } from '../../oauth/providers';
-import { fakeOAuthProvider } from '../../oauth/providers/fake';
+import { fakeOAuthProvider } from '@scenarios/support/doubles/oauth-fake';
 
 setupTestDb();
 

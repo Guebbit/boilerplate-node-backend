@@ -318,7 +318,7 @@ the build rather than shipping a short collection. See
 
 `providers/` is a **module-tier port**: the same inversion as `AuditSink` and `ImageStore`, owned
 by a domain instead of by the substrate. `payments/providers/` declares what a payment provider must
-do, ships a `fake` implementation, and picks between them on `NODE_PAYMENT_PROVIDER` — so going live
+do, ships no implementation (the `fake` is a test double outside `src/`), and selects one on `NODE_PAYMENT_PROVIDER` — so going live
 means writing `stripe.ts` beside it and changing an env var, while the contract, the service and the <!-- doc-paths:ignore -->
 frontend hear nothing. It belongs to `payments` and not to `infrastructure` for the reason the
 `infrastructure` / `kernel` line already gives: charging a card is this domain's business, and a

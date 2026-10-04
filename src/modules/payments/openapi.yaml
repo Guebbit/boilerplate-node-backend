@@ -11,13 +11,14 @@ x-error-codes:
     PAYMENT_NOT_REFUNDABLE: { status: 409, description: 'The payment is not in a state that can still be refunded, or nothing of it is left to refund.' }
     PAYMENT_REFUND_EXCEEDS_REMAINING: { status: 422, description: 'The refund asks for more than the payment still has left to give back.' }
     PAYMENT_ORDER_NOT_PAYABLE: { status: 409, description: 'The order is not in a state that can still accept a payment.' }
+    PAYMENT_CARD_NOT_AVAILABLE: { status: 409, description: 'This deployment has no card payment provider, so a card payment cannot be started.' }
 
 paths:
     /payments/methods:
         get:
             tags: [Payments]
             summary: List payment methods
-            description: Which methods this deployment offers, so the frontend hard-codes none. `card` is always present; `bank_transfer` only once its beneficiary and IBAN are configured. Public — like `GET /delivery/methods`, this is pre-purchase information.
+            description: Which methods this deployment offers, so the frontend hard-codes none. `card` is present only when a card payment provider is configured; `bank_transfer` only once its beneficiary and IBAN are configured. With neither the list is empty, and checkout is off until a method is configured. Public — like `GET /delivery/methods`, this is pre-purchase information.
             operationId: listPaymentMethods
             security: []
             responses:
@@ -33,7 +34,7 @@ paths:
         post:
             tags: [Payments]
             summary: Create a payment intent
-            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact) and answers 200 — 201 says a payment was created, and a refresh created nothing (RFC 9110 §15.3.2). An order whose money already moved answers 409. The intent is the thing the card dialog confirms.
+            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact) and answers 200 — 201 says a payment was created, and a refresh created nothing (RFC 9110 §15.3.2). An order whose money already moved answers 409, and so does a deployment with no card payment provider (`PAYMENT_CARD_NOT_AVAILABLE`). The intent is the thing the card dialog confirms.
             operationId: createPaymentIntent
             security:
                 - bearerAuth: []
@@ -74,8 +75,9 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Not `pending`, or already paid (`PAYMENT_ORDER_NOT_PAYABLE`), or
-                # `Idempotency-Key` names a request still in flight.
+                # Not `pending`, or already paid (`PAYMENT_ORDER_NOT_PAYABLE`), or no card provider
+                # is configured (`PAYMENT_CARD_NOT_AVAILABLE`), or `Idempotency-Key` names a request
+                # still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -381,7 +383,9 @@ paths:
                 deduplicated by event id, so a provider retrying for days settles once.
 
                 Answers 200 to anything it has authenticated, including events it does not act on:
-                a provider reads a non-2xx as a failure and retries harder.
+                a provider reads a non-2xx as a failure and retries harder. Answers 404 when no
+                card payment provider is configured: nobody can sign a delivery, so the route
+                does not exist for that deployment.
             operationId: receivePaymentWebhook
             security: []
             parameters:
@@ -409,6 +413,8 @@ paths:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/MessageResponse'
                 # The signature did not verify, is stale, or the body is not an event.
                 '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
+                # No card payment provider is configured (`NODE_PAYMENT_PROVIDER` unset).
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Keyed on the caller's address, not a signed identity — see
                 # docs/tools/security.md#the-rate-limit-budgets.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -471,9 +477,9 @@ components:
                 provider:
                     type: string
                     description: >-
-                        Which provider implementation handled it — `fake` in the demo, `manual` for
-                        a payment recorded by hand (`POST /payments/order/{orderId}/offline`), or a
-                        real PSP's name.
+                        Which provider implementation handled it — the name the deployment registered
+                        (`NODE_PAYMENT_PROVIDER`), or `manual` for a payment recorded by hand
+                        (`POST /payments/order/{orderId}/offline`).
                 method:
                     type: string
                     enum: [card, bank_transfer, cash, other]
@@ -678,10 +684,7 @@ components:
                         The provider's opaque handle for the payment method, produced in the
                         BROWSER by the provider's own widget. Never a card number — a card number
                         reaching this API would put the whole deployment in the heavyweight PCI
-                        bracket, which is the reason this field is shaped the way it is. The fake
-                        provider recognises `pm_card_visa` (succeeds), `pm_card_declined`,
-                        `pm_card_authentication_required` and `pm_card_processing`; anything else
-                        succeeds.
+                        bracket, which is the reason this field is shaped the way it is.
 
         PaymentMethodOption:
             type: object

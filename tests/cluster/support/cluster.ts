@@ -146,61 +146,67 @@ const startCluster = ({
             ])
         )
         .then(([mongo, port]) => {
-            const child: ChildProcess = spawn('npx', ['tsx', 'src/cluster.ts'], {
-                cwd: REPO_ROOT,
-                // A new process group, PGID == this PID: `stop()` below signals the whole group, not
-                // just this one process — see its own docblock for why that is the point.
-                detached: true,
-                env: {
-                    ...process.env,
-                    /*
-                     * NOT `test`: `assertModuleConfig` (`kernel/module-config.ts`) skips its
-                     * presence checks under `NODE_ENV=test`, and this suite wants them run for real
-                     * against the secrets set below.
-                     */
-                    NODE_ENV: 'development',
-                    NODE_PORT: String(port),
-                    PORT: String(port),
-                    NODE_DB_URI: mongo.uri,
-                    NODE_TOKEN_ACCESS: 'cluster-suite-access-secret',
-                    NODE_TOKEN_REFRESH: 'cluster-suite-refresh-secret',
-                    /*
-                     * `NODE_ENV: 'development'` above means `assertModuleConfig` runs for real —
-                     * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local
-                     * `.env` (via `dotenv/config` in `src/app.ts`) supplies these on a dev machine;
-                     * CI has none, so the child refuses to boot without them
-                     * (`src/kernel/module-config.ts`).
-                     */
-                    NODE_URL: `http://127.0.0.1:${String(port)}`,
-                    NODE_TOTP_ENCRYPTION_KEY: 'cluster-suite-totp-encryption-key',
-                    NODE_WEBHOOK_SECRET_ENCRYPTION_KEY:
-                        'cluster-suite-webhook-secret-encryption-key',
-                    NODE_PII_ENCRYPTION_KEY: 'cluster-suite-pii-encryption-key',
-                    /*
-                     * The shop's identity and VAT rates are required at boot too
-                     * (`orders/config.ts`) — the invoice and the withdrawal notice print them. Same
-                     * values `.env-example` ships, so the child boots the way a fresh checkout does.
-                     */
-                    NODE_SHOP_COUNTRY: 'IT',
-                    NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
-                    NODE_SHOP_STREET: 'Via Roma 1',
-                    NODE_SHOP_CITY: 'Milano',
-                    NODE_SHOP_ZIP: '20100',
-                    NODE_SHOP_EMAIL: 'shop@example.com',
-                    NODE_SHOP_PHONE: '+39 02 1234567',
-                    NODE_VAT_RATE_DEFAULT: '0.22',
-                    NODE_VAT_RATE_REDUCED: '0.10',
-                    /*
-                     * Clustering is OFF by default — `NODE_ENABLE_CLUSTERING` gates the fork, and
-                     * `NODE_CLUSTER_WORKERS` alone does nothing. Without this the child is a single
-                     * process, and every assertion about crossing workers passes for the wrong reason.
-                     */
-                    NODE_ENABLE_CLUSTERING: '1',
-                    NODE_CLUSTER_WORKERS: String(workers),
-                    ...env
-                },
-                stdio: ['ignore', 'pipe', 'pipe']
-            });
+            // The preload is what registers the doubles production does not have (the fake payment
+            // provider, the mail log) — the same door `npm run dev` uses.
+            const child: ChildProcess = spawn(
+                'npx',
+                ['tsx', '--import', './scenarios/support/development-doubles.ts', 'src/cluster.ts'],
+                {
+                    cwd: REPO_ROOT,
+                    // A new process group, PGID == this PID: `stop()` below signals the whole group, not
+                    // just this one process — see its own docblock for why that is the point.
+                    detached: true,
+                    env: {
+                        ...process.env,
+                        /*
+                         * NOT `test`: `assertModuleConfig` (`kernel/module-config.ts`) skips its
+                         * presence checks under `NODE_ENV=test`, and this suite wants them run for real
+                         * against the secrets set below.
+                         */
+                        NODE_ENV: 'development',
+                        NODE_PORT: String(port),
+                        PORT: String(port),
+                        NODE_DB_URI: mongo.uri,
+                        NODE_TOKEN_ACCESS: 'cluster-suite-access-secret',
+                        NODE_TOKEN_REFRESH: 'cluster-suite-refresh-secret',
+                        /*
+                         * `NODE_ENV: 'development'` above means `assertModuleConfig` runs for real —
+                         * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local
+                         * `.env` (via `dotenv/config` in `src/app.ts`) supplies these on a dev machine;
+                         * CI has none, so the child refuses to boot without them
+                         * (`src/kernel/module-config.ts`).
+                         */
+                        NODE_URL: `http://127.0.0.1:${String(port)}`,
+                        NODE_TOTP_ENCRYPTION_KEY: 'cluster-suite-totp-encryption-key',
+                        NODE_WEBHOOK_SECRET_ENCRYPTION_KEY:
+                            'cluster-suite-webhook-secret-encryption-key',
+                        NODE_PII_ENCRYPTION_KEY: 'cluster-suite-pii-encryption-key',
+                        /*
+                         * The shop's identity and VAT rates are required at boot too
+                         * (`orders/config.ts`) — the invoice and the withdrawal notice print them. Same
+                         * values `.env-example` ships, so the child boots the way a fresh checkout does.
+                         */
+                        NODE_SHOP_COUNTRY: 'IT',
+                        NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
+                        NODE_SHOP_STREET: 'Via Roma 1',
+                        NODE_SHOP_CITY: 'Milano',
+                        NODE_SHOP_ZIP: '20100',
+                        NODE_SHOP_EMAIL: 'shop@example.com',
+                        NODE_SHOP_PHONE: '+39 02 1234567',
+                        NODE_VAT_RATE_DEFAULT: '0.22',
+                        NODE_VAT_RATE_REDUCED: '0.10',
+                        /*
+                         * Clustering is OFF by default — `NODE_ENABLE_CLUSTERING` gates the fork, and
+                         * `NODE_CLUSTER_WORKERS` alone does nothing. Without this the child is a single
+                         * process, and every assertion about crossing workers passes for the wrong reason.
+                         */
+                        NODE_ENABLE_CLUSTERING: '1',
+                        NODE_CLUSTER_WORKERS: String(workers),
+                        ...env
+                    },
+                    stdio: ['ignore', 'pipe', 'pipe']
+                }
+            );
 
             /*
              * Kept so a boot failure can say WHY. Discarding the child's output made every failure

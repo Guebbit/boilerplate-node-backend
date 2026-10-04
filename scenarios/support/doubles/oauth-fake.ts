@@ -1,8 +1,8 @@
 /**
  * @module
- * The fake identity provider — mirrors `payments/providers/fake.ts`: no network call, no consent
- * screen. Registered into `../providers`' registry only by `scenarios/run-server.ts`,
- * never by production code. `authorizeUrl` skips straight to the callback with a fixed
+ * The fake identity provider — a test double, never shipped: no network call, no consent screen.
+ * Registered into the OAuth registry only by the dev preload (`./register`) and by the tests that
+ * need it, never by production code. `authorizeUrl` skips straight to the callback with a fixed
  * `code`, so clicking "Continue with Google" in a Cypress spec never has to leave this app; the
  * `state` still round-trips through the real cookie, so the CSRF check gets genuine coverage too.
  *
@@ -13,8 +13,8 @@
  * no-op that would let a broken caller pass unnoticed.
  */
 
-import { codeChallengeOf } from '../state';
-import type { OAuthProvider } from './port';
+import { codeChallengeOf } from '@modules/account/oauth/state';
+import type { OAuthProvider } from '@modules/account/oauth/providers/port';
 
 /** Every fake `code` starts with this — `exchangeCode` refuses anything else. */
 export const FAKE_OAUTH_CODE = 'fake-oauth-code';

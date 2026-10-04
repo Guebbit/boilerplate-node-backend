@@ -12,7 +12,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createIntent, confirmPayment } from '@modules/payments/services';
-import { FAKE_DECLINE_METHOD } from '@modules/payments/providers/fake';
+import { FAKE_DECLINE_METHOD } from '@scenarios/support/doubles/payments/fake';
 import { asCustomer, testCallerContext } from '@tests/callers';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({

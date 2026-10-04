@@ -1,6 +1,7 @@
 {
     "payments": {
         "order-not-found": "L'ordine da pagare non è stato trovato",
+        "card-not-available": "I pagamenti con carta non sono offerti da questo negozio.",
         "order-not-payable": "Questo ordine non può essere pagato nel suo stato attuale.",
         "order-product-unavailable": "Uno o più prodotti di questo ordine non sono più disponibili — vedi `details.lines`.",
         "not-found": "Nessun pagamento trovato",
@@ -15,6 +16,7 @@
         "received-at-future": "La data di arrivo del pagamento non può essere nel futuro.",
         "offline-recorded": "Pagamento registrato — l'ordine è pagato.",
         "webhook-accepted": "Accettato.",
+        "webhook-not-configured": "Questo negozio non accetta pagamenti con carta.",
         "webhook-unverified": "Non è stato possibile verificare questa notifica.",
         "refund-exceeds-remaining": "L'importo supera quanto resta da rimborsare su questo pagamento.",
         "refund-currency-mismatch": "La valuta del rimborso non è quella del pagamento.",

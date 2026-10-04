@@ -22,7 +22,7 @@ import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/
 import { invoicingRepository } from '../../repository';
 import { issueCreditNote } from '../../services';
 
-/** `payments/providers/fake.ts`'s own "always succeeds" reference — the demo panel's default. */
+/** The fake PSP's "always succeeds" reference (`scenarios/support/doubles/payments/fake.ts`). */
 const FAKE_SUCCESS_METHOD = 'pm_card_visa';
 
 setupTestDb();

@@ -169,6 +169,7 @@ export default withMermaid(
                             { text: 'Runtime', link: '/tools/runtime' },
                             { text: 'Internationalisation', link: '/tools/i18n' },
                             { text: 'Demo profile', link: '/tools/demo-profile' },
+                            { text: 'Test doubles', link: '/tools/test-doubles' },
                             { text: 'Module scaffolder', link: '/tools/module-scaffolder' },
                             { text: 'The Flow Runner', link: '/tools/flow-runner' },
                             { text: 'Configuration', link: '/tools/configuration' },

@@ -180,7 +180,6 @@
         "src/modules/payments/metrics.ts": 0,
         "src/modules/payments/model.ts": 0,
         "src/modules/payments/module.ts": 55,
-        "src/modules/payments/providers/fake.ts": 85.71,
         "src/modules/payments/providers/index.ts": 81.82,
         "src/modules/payments/repository.ts": 0,
         "src/modules/payments/routes.ts": 0,

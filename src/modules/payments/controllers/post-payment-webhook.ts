@@ -13,6 +13,9 @@
  *    provider the delivery failed, and it comes back harder. Only an unverifiable body is a 400,
  *    because that is not a delivery — and a genuine fault is left to become a 500, since that IS
  *    a retry worth having.
+ *
+ * No provider configured (`NODE_PAYMENT_PROVIDER` unset) answers 404: nobody here can sign a
+ * delivery, so the route does not exist for this deployment.
  */
 
 import type { Request, Response } from 'express';
@@ -40,15 +43,18 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
     }
 
     return Promise.resolve()
-        .then(() =>
-            resolvePaymentProvider().parseWebhook(
-                rawBody,
-                String(headers[WEBHOOK_SIGNATURE_HEADER] ?? '')
-            )
-        )
-        .then((event) => paymentService.applyWebhookDelivery(event))
-        .then(() => {
-            successResponse(response, undefined, 200, t('payments.webhook-accepted'));
+        .then(resolvePaymentProvider)
+        .then((provider) => {
+            if (!provider) {
+                rejectResponse(response, 404, [t('payments.webhook-not-configured')]);
+                return;
+            }
+            return provider
+                .parseWebhook(rawBody, String(headers[WEBHOOK_SIGNATURE_HEADER] ?? ''))
+                .then((event) => paymentService.applyWebhookDelivery(event))
+                .then(() => {
+                    successResponse(response, undefined, 200, t('payments.webhook-accepted'));
+                });
         })
         .catch((error: unknown) => {
             if (error instanceof WebhookRejected) {

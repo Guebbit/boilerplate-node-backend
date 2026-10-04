@@ -284,10 +284,11 @@ may own a port of its own, in `providers/`**, when the thing behind it is its bu
 the application's.
 
 `payments/providers/` and `account/oauth/providers/` are the two in the tree. `payments/providers/`
-declares what a payment provider must do, ships `fake.ts`, and selects on `NODE_PAYMENT_PROVIDER` —
+declares what a payment provider must do, ships none, and selects on `NODE_PAYMENT_PROVIDER` —
 so a project going live writes `stripe.ts` beside it and changes an env var, while the service, the <!-- doc-paths:ignore -->
 contract and the frontend hear nothing. `account/oauth/providers/` is the same shape one step
-further along: `github.ts` and `google.ts` are both real, alongside `fake.ts` for tests. Neither is
+further along: `github.ts` and `google.ts` are both real; the `fake` used in dev and tests is a
+[test double](../tools/test-doubles.md), outside `src/`. Neither is
 `infrastructure` for the reason the table above gives: a substrate that knew what a charge or an
 OAuth handshake was would be holding a business rule.
 

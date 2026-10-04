@@ -1,18 +1,22 @@
 /**
  * @module
  * The payment provider port — the seam a real PSP plugs into. Which implementation answers is a
- * deployment decision (`NODE_PAYMENT_PROVIDER`), not a code path; the boilerplate ships `fake`
- * and a live project adds one file plus one line to the registry below.
+ * deployment decision (`NODE_PAYMENT_PROVIDER`), not a code path. The boilerplate ships NO
+ * provider: production has no card payments until a live project adds one file and one
+ * `registerPaymentProvider` call. The `fake` used by dev, demo and tests is a double under
+ * `scenarios/support/doubles/`, registered before the app loads.
  *
  * The shape is the one every real PSP imposes: the card never reaches this server, an intent is
  * prepared before anything is charged, and the authoritative answer arrives asynchronously by
  * webhook. See `docs/modules/payments.md` for why that is not negotiable.
  */
 
-import { createProviderRegistry, requireProvider } from '@infrastructure/runtime/provider-registry';
+import { requireProvider } from '@infrastructure/runtime/provider-registry';
 import { defineConfig, probe } from '@infrastructure/config/define';
 import { paymentsConfig } from '../config';
-import { fakePaymentProvider } from './fake';
+import { paymentProviderRegistry } from './registry';
+
+export { registerPaymentProvider } from './registry';
 
 /** Re-exported from `./errors` — see there for why it isn't declared in this file. */
 export { PaymentInFlightError } from './errors';
@@ -67,8 +71,8 @@ export interface ProviderWebhookEvent {
 /**
  * What an implementation must provide — and, for a REAL one, what it must additionally defend.
  *
- * `fake` never leaves the process, which is the only reason callback forgery and callback replay
- * read as "no surface" here. A live PSP sends THIS server the request that decides an order is
+ * The `fake` double never leaves the process, which is the only reason callback forgery and
+ * callback replay read as "no surface" in dev and tests. A live PSP sends THIS server the request that decides an order is
  * paid: {@link PaymentProvider.parseWebhook} must verify the provider's signature over the raw
  * body and trust no payment status reported by the browser.
  *
@@ -160,31 +164,19 @@ export interface PaymentProvider {
 }
 
 /**
- * Every implementation this build knows. A live deployment adds one file and calls
- * {@link registerPaymentProvider} — no edit here required.
- */
-const registry = createProviderRegistry<PaymentProvider>({
-    fake: fakePaymentProvider
-});
-
-/** Add (or, in a test, override) one implementation without editing this file. */
-export const registerPaymentProvider = (name: string, provider: PaymentProvider): void =>
-    registry.register(name, provider);
-
-/**
  * The configured provider, read fresh per call rather than memoised — a registry lookup costs less
  * than the branch that would cache it, and the antibot ladder reads its own env fresh too.
  *
- * @returns the implementation `NODE_PAYMENT_PROVIDER` names (default `fake`)
- * @throws {Error} when the variable names an implementation this build does not have; falling back
- *   to `fake` would turn a deployment's typo into an order marked paid that nobody was charged for
+ * @returns the implementation `NODE_PAYMENT_PROVIDER` names, or `undefined` when it is unset:
+ *   no card provider is configured, so card payments are off (not an error)
+ * @throws {Error} when the variable names an implementation this process does not have; falling
+ *   back to "off" would turn a deployment's typo into a checkout that quietly refuses cards
  */
-export const resolvePaymentProvider = (): PaymentProvider => {
-    return requireProvider(
-        registry,
-        'NODE_PAYMENT_PROVIDER',
-        paymentsConfig().NODE_PAYMENT_PROVIDER
-    );
+export const resolvePaymentProvider = (): PaymentProvider | undefined => {
+    const named = paymentsConfig().NODE_PAYMENT_PROVIDER;
+    return named === undefined
+        ? undefined
+        : requireProvider(paymentProviderRegistry, 'NODE_PAYMENT_PROVIDER', named);
 };
 
 /**
@@ -195,20 +187,20 @@ export const resolvePaymentProvider = (): PaymentProvider => {
  * `NODE_PAYMENT_PROVIDER` must not silently redirect an old payment's refund to the new one.
  *
  * @param name - a payment's own `provider` field
- * @throws {Error} when this build has no implementation registered under that name — dormant
- *   today (only `fake` is ever written), live the day a second provider is added and a deployment
- *   switches
+ * @throws {Error} when this process has no implementation registered under that name — a payment
+ *   written under a provider the deployment no longer registers
  */
 export const providerNamed = (name: string): PaymentProvider => {
-    const provider = registry.resolve(name);
+    const provider = paymentProviderRegistry.resolve(name);
     if (!provider) throw new Error(`Unknown payment provider: ${name}`);
     return provider;
 };
 
 /**
  * Boot probe for `NODE_PAYMENT_PROVIDER`: a typo would otherwise throw on the first payment, in the
- * middle of a checkout. A shape-less slice, because the resolver imports the config and the
- * config therefore cannot import the resolver.
+ * middle of a checkout. Unset passes: no provider is a deployment without card payments.
+ * A shape-less slice, because the resolver imports the config and the config therefore cannot
+ * import the resolver.
  */
 export const paymentProviderProbe = defineConfig({
     name: 'payments-provider',

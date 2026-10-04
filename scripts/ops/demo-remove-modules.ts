@@ -1,7 +1,7 @@
 /**
  * @module
  * Taking any set of modules out of the tree — the part of a removal that does not care WHICH
- * modules: their folders, the registry line that names them, the shared authorization files, the reap/sweep scripts they own and the tests that need them.
+ * modules: their folders, the registry line that names them, the shared authorization files, the reap/sweep scripts they own, their test doubles and the tests that need them.
  *
  * `demo-remove.ts` calls this with every `group: shop` module and then does the shop-only work
  * (the demo catalogue, the scenarios); `measure-demo-strip.ts` calls it with `locales` for its
@@ -19,7 +19,7 @@ import {
     stripModuleRegistry,
     type RemovalNote
 } from './demo-remove-registry';
-import { stripScenarioModuleEntries } from './demo-remove-scenarios';
+import { stripModuleDoubles, stripScenarioModuleEntries } from './demo-remove-scenarios';
 import { removeResidueTests } from './demo-remove-tests';
 
 /**
@@ -39,6 +39,7 @@ export const removeModules = (repoRoot: string, names: readonly string[]): Remov
         stripModuleRegistry(repoRoot, names),
         ...removeShopOwnedOpsScripts(repoRoot, names),
         stripScenarioModuleEntries(repoRoot, names),
+        ...stripModuleDoubles(repoRoot, names),
         stripRoleGrants(repoRoot, removedAuthorization),
         stripConformanceCases(repoRoot, removedAuthorization),
         ...removeResidueTests(repoRoot, names)

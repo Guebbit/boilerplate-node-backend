@@ -25,7 +25,7 @@ import { resolvePaymentProvider, providerNamed } from '../providers';
 import type { PaymentDocument } from '../model';
 import { presentPayment } from '../presenter';
 import { paymentRepository } from '../repository';
-import { notPayable } from './errors';
+import { cardNotAvailable, notPayable } from './errors';
 import { buyerOrderScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -112,7 +112,9 @@ export const createIntent = async (
 
     // The provider is asked for an intent only when this payment does not already have one — a
     // second intent for the same order is a second thing the customer could pay.
+    // No provider configured: this deployment takes no card payments, and the order stays unpaid.
     const provider = resolvePaymentProvider();
+    if (!provider) return cardNotAvailable();
     const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
     const currency = orderCurrency(order);
     const upserted = await paymentRepository.upsertIntent(orderId, payerId, {

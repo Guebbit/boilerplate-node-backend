@@ -20,7 +20,7 @@ import {
     refundByOrder,
     refundForReturn
 } from '@modules/payments/services';
-import { fakePaymentProvider } from '@modules/payments/providers/fake';
+import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';

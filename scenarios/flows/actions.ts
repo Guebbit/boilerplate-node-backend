@@ -28,7 +28,7 @@ interface PaymentData {
     status: string;
 }
 
-/** The fake provider's method handles — `src/modules/payments/providers/fake.ts` declares them. */
+/** The fake provider's method handles — `scenarios/support/doubles/payments/fake.ts` declares them. */
 export const CARD = {
     /** Settles immediately. */
     visa: 'pm_card_visa',

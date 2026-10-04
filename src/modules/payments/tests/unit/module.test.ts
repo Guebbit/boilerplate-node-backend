@@ -13,7 +13,12 @@ import { assertModuleConfig } from '@kernel/module-config';
 import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 import paymentsModule from '../../module';
 
-withoutEnvironmentInThisFile(['NODE_ENV', 'NODE_PAYMENT_PROVIDER', 'NODE_STRIPE_SECRET_KEY']);
+withoutEnvironmentInThisFile([
+    'NODE_ENV',
+    'NODE_PAYMENT_PROVIDER',
+    'NODE_PAYMENT_WEBHOOK_SECRET',
+    'NODE_STRIPE_SECRET_KEY'
+]);
 
 /** A deployment that satisfies every unconditional check, for a case to break one thing in. */
 const configure = (): void => {
@@ -21,13 +26,13 @@ const configure = (): void => {
 };
 
 describe('the payment provider selector', () => {
-    it('accepts an unset NODE_PAYMENT_PROVIDER — fake, the default', () => {
+    it('accepts an unset NODE_PAYMENT_PROVIDER: no card payments, not an error', () => {
         configure();
 
         expect(() => assertModuleConfig([paymentsModule], [])).not.toThrow();
     });
 
-    it('accepts the shipped fake provider named explicitly', () => {
+    it('accepts a registered provider named explicitly', () => {
         configure();
         setEnvironment({ NODE_PAYMENT_PROVIDER: 'fake' });
 
@@ -39,6 +44,36 @@ describe('the payment provider selector', () => {
         setEnvironment({ NODE_PAYMENT_PROVIDER: 'not-a-provider' });
 
         expect(() => assertModuleConfig([paymentsModule], [])).toThrow(/NODE_PAYMENT_PROVIDER/);
+    });
+});
+
+/**
+ * The webhook secret is optional (no provider, nothing to sign) but is never weak or a
+ * placeholder once set.
+ */
+describe('the payment webhook secret', () => {
+    it('may stay unset, in production too', () => {
+        setEnvironment({ NODE_ENV: 'production' });
+
+        expect(() => assertModuleConfig([paymentsModule], [])).not.toThrow();
+    });
+
+    it('refuses a value under 16 characters', () => {
+        configure();
+        setEnvironment({ NODE_PAYMENT_WEBHOOK_SECRET: 'too-short' });
+
+        expect(() => assertModuleConfig([paymentsModule], [])).toThrow(
+            /NODE_PAYMENT_WEBHOOK_SECRET/
+        );
+    });
+
+    it('refuses the .env-example placeholder in production', () => {
+        setEnvironment({ NODE_ENV: 'production' });
+        setEnvironment({ NODE_PAYMENT_WEBHOOK_SECRET: 'your-payment-webhook-secret-here' });
+
+        expect(() => assertModuleConfig([paymentsModule], [])).toThrow(
+            /NODE_PAYMENT_WEBHOOK_SECRET/
+        );
     });
 });
 

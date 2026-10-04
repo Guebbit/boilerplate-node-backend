@@ -1297,6 +1297,25 @@ export default tseslint.config(
                                     }
                                 }
                             }
+                        },
+
+                        /*
+                         * The doubles, and only the doubles. A module's own test drives a payment
+                         * through the fake PSP (and spies on it), but the fake is not in `src/` —
+                         * production has none — so the spec reaches out to where it lives.
+                         * Nothing else under `scenarios/` is open to a spec: a seed is not a
+                         * module's business.
+                         */
+                        {
+                            from: { file: { categories: ['spec'] } },
+                            allow: {
+                                to: {
+                                    element: {
+                                        type: 'scenarios',
+                                        fileInternalPath: 'support/doubles/**'
+                                    }
+                                }
+                            }
                         }
                     ]
                 }

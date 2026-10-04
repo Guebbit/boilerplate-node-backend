@@ -4,8 +4,8 @@ The seam a real payment service provider plugs into — and the reason nothing a
 one is wired in.
 
 ::: tip At a glance
-**Selected by** — `NODE_PAYMENT_PROVIDER`, read fresh per call. Default `fake`.
-**Shipped with** — one implementation, which never talks to the outside world.
+**Selected by** — `NODE_PAYMENT_PROVIDER`, read fresh per call. No default: unset means no card payments.
+**Shipped with** — no implementation. `fake` is a [test double](../tools/test-doubles.md) outside `src/`, registered by the dev preload and by jest.
 **Breaks if you change** — the `PaymentProvider` interface. It is the contract a real PSP has to satisfy.
 :::
 
@@ -43,7 +43,7 @@ implementation answers is a deployment decision rather than a code path.
 flowchart TD
     S["payments/services/"] --> P["PaymentProvider<br/><i>the port</i>"]
     W["POST /payments/webhook"] --> P
-    P --> F["fake.ts<br/><i>shipped</i>"]
+    P --> F["fake.ts<br/><i>a double, not shipped</i>"]
     P -.-> X["stripe.ts<br/><i>yours, one file</i>"]
     E["NODE_PAYMENT_PROVIDER"] -.->|"selects"| P
 
@@ -68,9 +68,16 @@ flowchart TD
 | `parseWebhook(rawBody, signature)`                | Verifies the delivery and translates the provider's own event shape into this module's. Takes the **unparsed** body — a signature covers exact bytes.                                                                                                                                                                              |
 
 ::: warning A typo'd env value fails loudly
-`resolvePaymentProvider` throws when the environment names a provider this build does not carry.
-Falling back to `fake` would turn a deployment's typo into orders marked paid that nobody was ever
-charged for.
+`resolvePaymentProvider` throws when the environment names a provider this process does not carry.
+Falling back to "no provider" would turn a deployment's typo into a checkout that quietly refuses
+cards. Only an UNSET variable means no provider.
+:::
+
+::: tip No provider is a valid deployment
+Unset, `GET /payments/methods` lists no `card`, `POST /payments/intent` answers 409
+`PAYMENT_CARD_NOT_AVAILABLE`, `POST /payments/webhook` answers 404, and checkout refuses `card` (and
+a request that names no method, which defaults to it) with `CART_PAYMENT_METHOD_NOT_AVAILABLE`.
+With a bank transfer configured, checkout still works.
 :::
 
 ## The raw body is load-bearing
@@ -116,10 +123,10 @@ and never more, the same rule the payment document follows.
 
 ## Going live is one file and one variable
 
-1. Write `stripe.ts` beside `fake.ts`, implementing `PaymentProvider`. Its `parseWebhook` calls the <!-- doc-paths:ignore -->
+1. Write `stripe.ts` in `providers/`, implementing `PaymentProvider`. Its `parseWebhook` calls the <!-- doc-paths:ignore -->
    vendor's own verifier (`stripe.webhooks.constructEvent`) and maps `payment_intent.succeeded` /
    `.payment_failed` onto this module's state shape.
-2. Add one line to the `PROVIDERS` registry.
+2. Call `registerPaymentProvider('stripe', …)` (from `providers/registry.ts`) where the module loads.
 3. Set `NODE_PAYMENT_PROVIDER`, `NODE_STRIPE_SECRET_KEY` to the vendor's own secret key, and
    `NODE_PAYMENT_WEBHOOK_SECRET` to the vendor's webhook signing secret.
 4. Point the vendor's dashboard at `POST /payments/webhook`, which needs a public HTTPS endpoint.

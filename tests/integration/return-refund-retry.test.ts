@@ -17,7 +17,7 @@ import { OrderStatus } from '@types';
 import { inventoryService } from '@modules/inventory';
 import paymentsModule from '@modules/payments/module';
 import { createIntent, confirmPayment, paymentService } from '@modules/payments';
-import { fakePaymentProvider } from '@modules/payments/providers/fake';
+import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import returnsModule from '@modules/returns/module';
 import { createReturn, receiveReturn } from '@modules/returns';
 import { returnRepository } from '@modules/returns/repository';

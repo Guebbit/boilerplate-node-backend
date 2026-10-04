@@ -23,7 +23,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
 import paymentsModule from '@modules/payments/module';
 import { createIntent, confirmPayment } from '@modules/payments/services';
-import { fakePaymentProvider } from '@modules/payments/providers/fake';
+import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import webhooksModule from '@modules/webhooks/module';
 import { create as createSubscription } from '@modules/webhooks/services/subscriptions';
 import { webhookDeliveryRepository } from '@modules/webhooks/repository';

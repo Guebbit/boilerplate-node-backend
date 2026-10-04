@@ -1,18 +1,19 @@
 /**
  * @module
- * The OAuth provider registry (`oauth/providers/index.ts`) and the `fake` implementation only the
- * demo profile ever registers into it. Google/GitHub each get their own file for the
- * token-exchange parsing; this one is about "which providers show up at all", the same question
- * `payments/tests/unit/providers.test.ts` answers for the single-active-provider registry.
+ * The OAuth provider registry (`oauth/providers/index.ts`) and the `fake` double
+ * (`scenarios/support/doubles/oauth-fake.ts`) only the dev preload ever registers into it.
+ * Google/GitHub each get their own file for the token-exchange parsing; this one is about
+ * "which providers show up at all", the same question `payments/tests/unit/providers.test.ts`
+ * answers for the single-active-provider registry.
  */
 
 import {
     enabledProviders,
     resolveOAuthProvider,
     registerOAuthProvider
-} from '../../oauth/providers';
-import { FAKE_OAUTH_CODE, fakeOAuthProvider } from '../../oauth/providers/fake';
-import { generateCodeVerifier, codeChallengeOf } from '../../oauth/state';
+} from '@modules/account/oauth/providers';
+import { FAKE_OAUTH_CODE, fakeOAuthProvider } from '@scenarios/support/doubles/oauth-fake';
+import { generateCodeVerifier, codeChallengeOf } from '@modules/account/oauth/state';
 import { setEnvironment, withoutEnvironmentInThisFile } from '@tests/environment';
 
 /** Every env var a provider's "configured" check reads, restored after each test. */
@@ -50,9 +51,9 @@ describe('the OAuth provider registry', () => {
     });
 
     it('lists fake once something registers it, with no credentials of its own', () => {
-        // Production seeds no `fake` entry at all — only the demo entry
-        // (`scenarios/run-server.ts`) calls `registerOAuthProvider('fake', ...)`, which this
-        // reproduces directly rather than through the demo profile flag.
+        // Production seeds no `fake` entry at all — only the dev preload
+        // (`scenarios/support/development-doubles.ts`) calls `registerOAuthProvider('fake', ...)`,
+        // which this reproduces directly.
         expect(enabledProviders()).not.toContain('fake');
 
         registerOAuthProvider('fake', () => fakeOAuthProvider);

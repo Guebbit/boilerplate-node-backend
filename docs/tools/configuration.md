@@ -536,13 +536,13 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### payments
 
-| Variable                                | Type              | Default | Rules                                                                                                          | What it does                                                                    |
-| --------------------------------------- | ----------------- | ------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `NODE_PAYMENT_PROVIDER`                 | text              | `fake`  | —                                                                                                              | The payment provider implementation: `fake` or whatever a deployment registers. |
-| `NODE_PAYMENT_WEBHOOK_SECRET`           | text              | —       | required, 16+ characters, never the `.env-example` placeholder, outside development/test; secret: never logged | The secret the provider signs webhook deliveries with.                          |
-| `NODE_STRIPE_SECRET_KEY`                | text              | —       | secret: never logged                                                                                           | Stripe secret key. A test-mode key refuses boot outside development/test.       |
-| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`     | whole number >= 0 | `1`     | —                                                                                                              | Age a `pendingEffects` marker must reach before the sweep acts on it.           |
-| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | whole number >= 1 | `30`    | —                                                                                                              | Days an abandoned payment attempt is kept before the sweep deletes it.          |
+| Variable                                | Type              | Default | Rules                                                                                          | What it does                                                                                                           |
+| --------------------------------------- | ----------------- | ------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_PROVIDER`                 | text              | —       | —                                                                                              | The card payment provider a deployment registers. Unset: no card payments, and checkout offers only the other methods. |
+| `NODE_PAYMENT_WEBHOOK_SECRET`           | text              | —       | required, never the `.env-example` placeholder, outside development/test; secret: never logged | The secret the provider signs webhook deliveries with. Unset when no provider is configured; 16+ characters once set.  |
+| `NODE_STRIPE_SECRET_KEY`                | text              | —       | secret: never logged                                                                           | Stripe secret key. A test-mode key refuses boot outside development/test.                                              |
+| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`     | whole number >= 0 | `1`     | —                                                                                              | Age a `pendingEffects` marker must reach before the sweep acts on it.                                                  |
+| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | whole number >= 1 | `30`    | —                                                                                              | Days an abandoned payment attempt is kept before the sweep deletes it.                                                 |
 
 ### products
 

@@ -1,9 +1,8 @@
 /**
  * @module
  * The payment provider port's own error types — split out from `index.ts` so an implementation
- * (`fake.ts`, or a future real adapter) can throw one without importing the port interface file
- * that in turn imports every implementation, which is exactly the `no-circular` cycle that
- * keeping them in `index.ts` would create.
+ * (a real adapter, or the fake double) can throw one without importing the port interface file,
+ * which imports the config and the registry an implementation is registered in.
  */
 
 /**

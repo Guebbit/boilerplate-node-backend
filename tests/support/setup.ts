@@ -23,6 +23,7 @@ import { registerValidationMessages } from '@infrastructure/http/validation-mess
 // hoisted. Importing the mailer here would hand every mocking test file an already-evaluated,
 // un-mockable `nodemailer` — see `template-registry.ts`'s own header.
 import { registerTemplateDirectories } from '@infrastructure/adapters/template-registry';
+import { registerDoubles } from '@scenarios/support/doubles/register';
 import { MODULES_ROOT } from '@tests/paths';
 
 /**
@@ -84,3 +85,12 @@ jest.mock('node:dns/promises', () => ({
         Promise.reject(Object.assign(new Error('no AAAA'), { code: 'ENODATA' }))
     )
 }));
+
+/*
+ * The doubles production does not have — the fake payment provider, and the mail log and outbox.
+ * Registered here, in `setupFiles`, because a test's own `jest.mock` is hoisted after this file
+ * runs: `register.ts` loads nothing but the registries, and each double loads what it needs on
+ * its first call, by which time a test's mocks are in place. The registries hang on `globalThis`,
+ * so a test that resets modules keeps them.
+ */
+registerDoubles();

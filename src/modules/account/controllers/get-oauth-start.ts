@@ -34,8 +34,8 @@ import { oauthRedirectUri } from '../oauth/config';
 export const getOAuthStart = (request: Request, response: Response) => {
     const provider = resolveOAuthProvider(String(request.params.provider).toLowerCase());
     if (!provider) {
-        // Loud, not silent — same shape as an unset `NODE_PAYMENT_PROVIDER`: a deployment that
-        // never configured this provider must not pretend it exists.
+        // Loud, not silent: a deployment that never configured this provider must not pretend it
+        // exists.
         rejectResponse(response, 404, [t('account.oauth.unknown-provider')]);
         return;
     }

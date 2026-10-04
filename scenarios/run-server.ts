@@ -27,8 +27,6 @@ import { currentEnvironment, installEnvironment } from '@infrastructure/config/s
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 import { registerDemoClock } from '@infrastructure/runtime/demo-clock';
 import { installDemoClock } from './support/demo-clock';
-import { registerOAuthProvider } from '@modules/account/oauth/providers';
-import { fakeOAuthProvider } from '@modules/account/oauth/providers/fake';
 import { startEphemeralMongo } from './support/ephemeral-mongo';
 import { startInProcessMongod } from './support/ephemeral-mongod';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from './rate-limits';
@@ -205,11 +203,6 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
         // module sees the fake `Date` from its first read; a time journey moves it, and the next
         // restore puts it back. See `scenarios/support/demo-clock.ts`.
         registerDemoClock(installDemoClock());
-
-        // This profile's own OAuth identity provider — production's registry seeds none,
-        // so a Cypress spec clicking "Continue with Google" needs this profile to put one there
-        // itself, the same composition `Mail::fake()` does in Laravel.
-        registerOAuthProvider('fake', () => fakeOAuthProvider);
 
         // Import AFTER the environment is shaped. `createApp()` builds the app; its own
         // `start()` seeds `shop` (via `restoreScenario`, since `enableDemoProfile()` above turned

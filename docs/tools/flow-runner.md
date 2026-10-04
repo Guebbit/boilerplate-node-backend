@@ -33,7 +33,7 @@ response — the failure mode you saw if you have ever watched a seed die partwa
 
 ## The magic payment methods
 
-The fake PSP (`src/modules/payments/providers/fake.ts`) answers to a handful of fixed method
+The fake PSP (`scenarios/support/doubles/payments/fake.ts`) answers to a handful of fixed method
 handles instead of a real card network, and the flows use them to script every payment outcome the
 demo shop needs:
 

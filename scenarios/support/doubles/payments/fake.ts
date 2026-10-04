@@ -1,10 +1,11 @@
 /**
  * @module
- * The fake PSP — a provider that never talks to the outside world, but imposes the same shape a
- * real one does: it hands back an intent reference the browser finishes against, it answers with
- * the asynchronous states (`requires_action`, `processing`) as well as the terminal ones, and it
- * signs its webhooks. That is what lets the demo and every e2e walk the 3-D Secure and the
- * webhook paths without an account anywhere.
+ * The fake PSP — a test double, never shipped: it lives outside `src/` and is registered only by
+ * the dev preload and the jest setup (`./register`). It never talks to the outside world, but
+ * imposes the same shape a real PSP does: it hands back an intent reference the browser finishes
+ * against, it answers with the asynchronous states (`requires_action`, `processing`) as well as
+ * the terminal ones, and it signs its webhooks. That is what lets the demo and every e2e walk the
+ * 3-D Secure and the webhook paths without an account anywhere.
  *
  * The method references below mirror the shape of a real provider's test tokens: an opaque
  * handle the browser produced, never a card number.
@@ -12,9 +13,14 @@
 
 import { createHmac } from 'node:crypto';
 import { logger } from '@infrastructure/adapters/logger';
-import { verifyWebhookSignature, WebhookRejected } from './webhook-signature';
-import { PaymentInFlightError } from './errors';
-import type { PaymentProvider, ProviderPaymentState, ProviderPaymentStatus } from './index';
+import {
+    PaymentInFlightError,
+    verifyWebhookSignature,
+    WebhookRejected,
+    type PaymentProvider,
+    type ProviderPaymentState,
+    type ProviderPaymentStatus
+} from '@modules/payments/providers';
 
 /** The webhook body as it arrives — the contract's `PaymentWebhookEvent`, flat. `status` is
  * unchecked JSON at this point; the cast is `unknown` wearing the union's name until

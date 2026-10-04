@@ -35,6 +35,19 @@ export interface ProviderRegistry<T> {
 }
 
 /**
+ * The seam over a backing map — shared by the private and the process-wide registries below.
+ *
+ * @param providers - where the implementations live
+ */
+const registryOver = <T>(providers: Map<string, T>): ProviderRegistry<T> => ({
+    register: (name, provider) => {
+        providers.set(name, provider);
+    },
+    names: () => [...providers.keys()],
+    resolve: (name) => providers.get(name)
+});
+
+/**
  * Build a registry seeded with the given implementations.
  *
  * `T` is deliberately unconstrained: a plain implementation for antibot, analytics and payments,
@@ -44,16 +57,36 @@ export interface ProviderRegistry<T> {
  *
  * @param initial - implementations to seed the registry with, keyed by name
  */
-export const createProviderRegistry = <T>(initial: Record<string, T> = {}): ProviderRegistry<T> => {
-    const providers = new Map<string, T>(Object.entries(initial));
+export const createProviderRegistry = <T>(initial: Record<string, T> = {}): ProviderRegistry<T> =>
+    registryOver(new Map<string, T>(Object.entries(initial)));
 
-    return {
-        register: (name, provider) => {
-            providers.set(name, provider);
-        },
-        names: () => [...providers.keys()],
-        resolve: (name) => providers.get(name)
-    };
+/**
+ * The `globalThis` slot one shared registry's map hangs on. `Symbol.for` hands every module
+ * instance the same key.
+ */
+const sharedKey = (name: string): symbol =>
+    Symbol.for(`boilerplate-node-backend.provider-registry.${name}`);
+
+/**
+ * A registry that every copy of this module in the process shares, by `name`.
+ *
+ * Why: the doubles (a fake payment provider, a mail log) are registered once, before the
+ * application loads — by the dev preload, or by jest's `setupFiles` — and a module registry that
+ * is reset or isolated (`jest.resetModules`, `isolateModules`) re-evaluates the file that owns
+ * the registry. A private map would come back empty and lose every double. The map lives on
+ * `globalThis` instead, like the config store's state (`config/store.ts`).
+ *
+ * @param name - which registry; two calls with the same name get the same implementations
+ * @param initial - implementations to seed it with, applied only by the call that creates it
+ */
+export const createSharedProviderRegistry = <T>(
+    name: string,
+    initial: Record<string, T> = {}
+): ProviderRegistry<T> => {
+    const key = sharedKey(name);
+    const holder = globalThis as typeof globalThis & Record<symbol, Map<string, T> | undefined>;
+    holder[key] ??= new Map<string, T>(Object.entries(initial));
+    return registryOver(holder[key]);
 };
 
 /**

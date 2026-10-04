@@ -200,6 +200,10 @@ services:
             NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
             OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
             NODE_SERVICE_NAME: 'cron'
+            # The doubles a job here needs (a cancelled order closes its fake card intent; a job's
+            # mail goes through the log): production's image has none. `--require tsx/cjs` first so
+            # the `.ts` preload loads. `--import` here would hang `npx tsx`.
+            NODE_OPTIONS: '--require tsx/cjs --require ./scenarios/support/development-doubles.ts'
         volumes:
             - .:/app:Z
             - /app/node_modules

@@ -107,11 +107,13 @@ const isGone = (resolved: string, gone: readonly string[]): boolean =>
  */
 export const removeResidueTests = (repoRoot: string, names: readonly string[]): RemovalNote[] => {
     const files = testRoots(repoRoot).flatMap((root) => walkTypeScript(root));
-    // A module's own scenario fixtures (`scenarios/<name>.ts`) go with it, so a test importing them
-    // is as orphaned as one importing the module.
+    // A module's own scenario fixtures (`scenarios/<name>.ts`) and its test doubles
+    // (`scenarios/support/doubles/<name>/`) go with it, so a test importing either is as orphaned as
+    // one importing the module.
     const gone = names.flatMap((name) => [
         path.join(repoRoot, 'src', 'modules', name),
-        path.join(repoRoot, 'scenarios', name)
+        path.join(repoRoot, 'scenarios', name),
+        path.join(repoRoot, 'scenarios', 'support', 'doubles', name)
     ]);
     const deleted: string[] = [];
 

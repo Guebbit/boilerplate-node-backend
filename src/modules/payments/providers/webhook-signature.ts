@@ -24,7 +24,7 @@ const TOLERANCE_SECONDS = 300;
 
 /**
  * A delivery this application refuses to act on — an unverifiable signature, but also (thrown
- * elsewhere, by `providers/fake.ts`) an unparseable body or an event carrying no id. Answered 400,
+ * elsewhere, by a provider's own `parseWebhook`) an unparseable body or an event carrying no id. Answered 400,
  * never 500 — see the controller. Named for what it IS, not for the one case this file itself
  * throws it for: the controller logs `error.message` as the headline, and a class named after only
  * the signature case would make that message look like a lie for the other two.
