@@ -56,6 +56,10 @@
             "revoked": "Session revoked.",
             "not-found": "Session not found."
         },
+        "export": {
+            "requested": "Export requested. We will email you a link when it is ready.",
+            "not-found": "Export not found."
+        },
         "verify": {
             "email-sent": "A verification email has been sent, click the link to confirm your address.",
             "already-verified": "This account is already verified.",
@@ -123,6 +127,15 @@
                 "meta-title": "Inactivity warning",
                 "greeting": "Hello, {{name}}!",
                 "body": "We haven't seen you sign in for a while. To keep your account, sign in within the next {{days}} days — after that it will be deactivated, and eventually permanently deleted."
+            },
+            "export-ready": {
+                "subject": "Your data export is ready",
+                "meta-title": "Data export",
+                "greeting": "Hello, {{name}}!",
+                "intro": "The copy of your data you asked for is ready. Sign in and open this link to download it:",
+                "link-label": "Download my data",
+                "expiry": "The file is kept for {{days}} days, then deleted.",
+                "ignore": "If you didn't ask for this, change your password and sign out everywhere."
             },
             "two-factor-code": {
                 "subject": "Your sign-in code",

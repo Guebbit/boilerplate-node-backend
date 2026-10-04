@@ -14,12 +14,13 @@
  * Below this:      `../session/` — JWT signing, the refresh cookie, shared expiry. Nothing
  *                  outside this module imports it directly; see `../index`.
  *
- * `./export` is NOT imported here, on purpose. It reaches `cart`/`wishlist`/`orders`/… for the
- * data-export payload, and this file is what the barrel (`../index.ts`) publishes wholesale — one
- * static import away from `exportOwnData` puts every one of those modules' barrels in this
- * module's own reachability, which is how a sibling importing `@modules/account` for anything at
- * all risks a cycle. `../controllers/post-account-export` imports `./export` directly instead —
- * this module's own file, not a barrel concern.
+ * `./export` and `./export-job` are NOT imported here, on purpose. The build reaches
+ * `cart`/`wishlist`/`orders`/… for the data-export payload, and this file is what the barrel
+ * (`../index.ts`) publishes wholesale — one static import away from it puts every one of those
+ * modules' barrels in this module's own reachability, which is how a sibling importing
+ * `@modules/account` for anything at all risks a cycle. The export controllers and `../module.ts`
+ * import them directly instead — this module's own files, not a barrel concern. `./export-rows`
+ * (the reaper) reaches nothing but this module's own store, so it is published.
  */
 
 import * as authentication from './authentication';
@@ -27,6 +28,7 @@ import * as profile from './profile';
 import * as verification from './verification';
 import * as tokens from './tokens';
 import * as tokenCleanup from './token-cleanup';
+import * as exportRows from './export-rows';
 import * as oauth from './oauth';
 import * as twoFactor from './two-factor';
 import * as reauth from './reauth';
@@ -53,6 +55,7 @@ export {
     completeEmailChange
 } from './verification';
 export { reapExpiredTokens } from './token-cleanup';
+export { reapExpiredExports } from './export-rows';
 export { pruneOwnExpiredTokens } from '../session/prune';
 export { sendAccountMail } from './mail';
 export {
@@ -102,6 +105,7 @@ export const accountService = {
     redeemLiveToken: tokens.redeemLiveToken,
     sessionsList: tokens.sessionsList,
     reapExpiredTokens: tokenCleanup.reapExpiredTokens,
+    reapExpiredExports: exportRows.reapExpiredExports,
     pruneOwnExpiredTokens,
     loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,
     recordOAuthFailure: oauth.recordOAuthFailure

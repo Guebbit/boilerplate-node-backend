@@ -11,7 +11,7 @@ Current scope of `asyncapi.yaml`:
 
 - SSE observability channels (`observability.*`)
 - RabbitMQ worker queues: the domainless ones (`worker.email.send`, `worker.image.digest`) plus
-  each module's own (`webhooks`' `worker.webhook.deliver`, `orders`' `worker.orders.invoice-generate`)
+  each module's own (`webhooks`' `worker.webhook.deliver`, `account`'s `worker.account.export`, `orders`' `worker.orders.invoice-generate`)
 
 ## Two bundles: the whole contract, and the shared half
 
@@ -195,6 +195,9 @@ Everything else is module-owned, declared in that module's own private `asyncapi
 (see [Contract Fragmentation](./contract-fragmentation.md)):
 
 - **`worker.webhook.deliver`** — outbound webhook delivery, consumed by `webhooks`' own worker
+- **`worker.account.export`** — one account's data export build, consumed by `account`'s own
+  worker (`src/modules/account/asyncapi.internal.yaml`); with no broker the build runs inline after
+  the `202`. See [account: data export](../modules/account.md#data-export)
 
 Every queue's NAME is its channel name: `src/infrastructure/adapters/queue.ts` exports `EMAIL_QUEUE`
 and `IMAGE_QUEUE` as aliases of `WORKER_CHANNELS.EMAIL_SEND`/`WORKER_CHANNELS.IMAGE_DIGEST`, and a

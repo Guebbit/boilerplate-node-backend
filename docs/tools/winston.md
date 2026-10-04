@@ -92,7 +92,8 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_2FA_ENROLLED`                         | `auth.two_factor.enrolled`                  | —                      |
 | `account`        | `AUTH_ACCOUNT_DELETE_COMPLETED`             | `auth.account_delete.completed`             | —                      |
 | `account`        | `AUTH_ACCOUNT_DELETE_REQUESTED`             | `auth.account_delete.requested`             | —                      |
-| `account`        | `AUTH_DATA_EXPORTED`                        | `auth.data_export.completed`                | —                      |
+| `account`        | `AUTH_DATA_EXPORT_DOWNLOADED`               | `auth.data_export.downloaded`               | `account_export`       |
+| `account`        | `AUTH_DATA_EXPORT_REQUESTED`                | `auth.data_export.requested`                | `account_export`       |
 | `account`        | `AUTH_EMAIL_CHANGE_CANCELLED`               | `auth.email_change.cancelled`               | —                      |
 | `account`        | `AUTH_EMAIL_CHANGE_COMPLETED`               | `auth.email_change.completed`               | —                      |
 | `account`        | `AUTH_EMAIL_CHANGE_REQUESTED`               | `auth.email_change.requested`               | —                      |

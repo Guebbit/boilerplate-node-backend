@@ -91,13 +91,16 @@ export const readAll = <TItem>(
     fetchPage: (page: number) => Promise<TItem[]>,
     pageSize: number
 ): Promise<TItem[]> => {
-    const collectFrom = (page: number, collected: TItem[]): Promise<TItem[]> =>
+    // One array pushed to, not rebuilt per page: spreading `[...collected, ...items]` copies every
+    // item already collected on every page, which is quadratic in the number of pages.
+    const collected: TItem[] = [];
+    const collectFrom = (page: number): Promise<TItem[]> =>
         fetchPage(page).then((items) => {
-            const soFar = [...collected, ...items];
-            return items.length < pageSize ? soFar : collectFrom(page + 1, soFar);
+            collected.push(...items);
+            return items.length < pageSize ? collected : collectFrom(page + 1);
         });
 
-    return collectFrom(1, []);
+    return collectFrom(1);
 };
 
 /**

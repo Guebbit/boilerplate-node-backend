@@ -2,6 +2,7 @@
 # Sources: shared/contracts/asyncapi.root.yaml
 #          src/modules/observability/asyncapi.yaml
 #          src/modules/webhooks/asyncapi.yaml
+#          src/modules/account/asyncapi.internal.yaml
 #          src/modules/webhooks/asyncapi.internal.yaml
 #          shared/contracts/asyncapi.workers.yaml
 asyncapi: 3.0.0
@@ -167,6 +168,15 @@ channels:
         messages:
             ExamplePublishedEvent:
                 $ref: '#/components/messages/ExamplePublishedEvent'
+    worker.account.export:
+        address: worker.account.export
+        description: >-
+            Personal-data export job queue — `POST /account/export` enqueues one message per request, the account module's consumer builds the file.
+        servers:
+            - $ref: '#/servers/rabbitmqLocal'
+        messages:
+            AccountExportJobMessage:
+                $ref: '#/components/messages/AccountExportJobMessage'
     worker.webhook.deliver:
         address: worker.webhook.deliver
         description: >-
@@ -314,6 +324,24 @@ operations:
             One-to-one with the `example.published` domain event — see `example/services/crud.ts`. Fired each time an example moves to `published`, including after being archived and brought back.
         messages:
             - $ref: '#/channels/example.published/messages/ExamplePublishedEvent'
+    workerAccountExportPublish:
+        action: receive
+        channel:
+            $ref: '#/channels/worker.account.export'
+        summary: Enqueue one account's export build.
+        description: >-
+            One live export per account, so at most one job per account is outstanding. The job carries the subject the request saw, so the file answers exactly what the caller was entitled to when they asked.
+        messages:
+            - $ref: '#/channels/worker.account.export/messages/AccountExportJobMessage'
+    workerAccountExportConsume:
+        action: send
+        channel:
+            $ref: '#/channels/worker.account.export'
+        summary: The worker collects every section, writes the file, and mails the link.
+        description: >-
+            Sections are collected one at a time and written to the private export store, so peak memory is one section, not the whole export. A failure marks the record `failed`; a record still `building` past the job's time limit counts as `failed` too.
+        messages:
+            - $ref: '#/channels/worker.account.export/messages/AccountExportJobMessage'
     workerWebhookDeliverPublish:
         action: receive
         channel:
@@ -462,6 +490,11 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/ReturnRequestedEnvelope'
+        AccountExportJobMessage:
+            name: AccountExportJobMessage
+            title: Account export job
+            payload:
+                $ref: '#/components/schemas/AccountExportJobPayload'
         WebhookDeliverJobMessage:
             name: WebhookDeliverJobMessage
             title: Webhook delivery job
@@ -873,6 +906,34 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/ExamplePublishedPayload'
+            additionalProperties: false
+        AccountExportJobPayload:
+            type: object
+            required:
+                - exportId
+                - userId
+                - email
+                - emailVerified
+                - locale
+            properties:
+                exportId:
+                    type: string
+                    description: >-
+                        The `accountexports` row this job fills in — created `building` before the job is published, so a lost message still leaves a queryable trace (Claim Check, EIP: the row is the source of truth for the rest).
+                userId:
+                    type: string
+                    description: The account the export is about.
+                email:
+                    type: string
+                    description: >-
+                        The address the request saw. The mailbox the link goes to, and the key the `feedback` section matches by.
+                emailVerified:
+                    type: boolean
+                    description: >-
+                        Whether the account had proved `email` when it asked. A section that matches by address answers only when this is true (GDPR Art. 12(6)).
+                locale:
+                    type: string
+                    description: The language the mail is written in.
             additionalProperties: false
         WebhookDeliverJobPayload:
             type: object

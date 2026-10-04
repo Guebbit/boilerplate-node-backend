@@ -8,6 +8,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { requestAndDownloadExport } from '@tests/account-export';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -27,18 +28,17 @@ describe('POST /account/export', () => {
         const intent = await createIntent(String(order._id), asCustomer(user.id));
         const payment = (intent as ResponseSuccess<Payment>).data;
 
-        const response = await api().post('/account/export').set('Authorization', bearer).send();
+        const response = await requestAndDownloadExport(bearer);
 
+        expect(response.request.status).toBe(202);
         expect(response.status).toBe(200);
-        const { data } = response.body as {
-            data: {
-                profile: { email: string };
-                orders: { id: string }[];
-                payments: { id: string; orderId: string }[];
-                cart: unknown[];
-                wishlist: unknown[];
-                sessions: { id: string; type: string }[];
-            };
+        const data = response.data as {
+            profile: { email: string };
+            orders: { id: string }[];
+            payments: { id: string; orderId: string }[];
+            cart: unknown[];
+            wishlist: unknown[];
+            sessions: { id: string; type: string }[];
         };
         expect(data.profile.email).toBe(user.email);
         expect(data.orders.map((each) => each.id)).toContain(String(order._id));
@@ -58,9 +58,9 @@ describe('POST /account/export', () => {
         const product = await createProduct();
         const strangerOrder = await createOrder(stranger, [toOrderItem(product, 1)]);
 
-        const response = await api().post('/account/export').set('Authorization', bearer).send();
+        const response = await requestAndDownloadExport(bearer);
 
-        const { data } = response.body as { data: { orders: { id: string }[] } };
+        const data = response.data as { orders: { id: string }[] };
         expect(data.orders.map((each) => each.id)).not.toContain(String(strangerOrder._id));
     });
 });

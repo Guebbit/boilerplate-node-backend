@@ -65,6 +65,7 @@ import { postVerifyRequest } from './controllers/post-verify-request';
 import { postVerifyConfirm } from './controllers/post-verify-confirm';
 import { postEmailChangeConfirm } from './controllers/post-email-change-confirm';
 import { postAccountExport } from './controllers/post-account-export';
+import { getAccountExport } from './controllers/get-account-export';
 import { deleteAccountRequest } from './controllers/delete-account-request';
 import { deleteAccountConfirm } from './controllers/delete-account-confirm';
 import { getOAuthProviders } from './controllers/get-oauth-providers';
@@ -252,9 +253,14 @@ router.post('/verify-confirm', credentialLimiters, postVerifyConfirm);
 // reasoning as verify-confirm. A DIFFERENT token type — see `services/verification.ts`.
 router.post('/email-change-confirm', credentialLimiters, postEmailChangeConfirm);
 
-// POST /account/export — the caller's full data export. Sensitive tier: requireFreshAuth is the
-// identity proof here, not a bespoke password check in the body.
+// POST /account/export — ask for the caller's full data export; 202, built in the background.
+// Sensitive tier: requireFreshAuth is the identity proof here, not a bespoke password check in the
+// body.
 router.post('/export', isAuth, requireFreshAuth(REAUTH_TIME_SENSITIVE), postAccountExport);
+
+// GET /account/export/:id — download the finished export. Same tier as the request: the mailed
+// link only opens a page, and the data leaves only for a session that is fresh.
+router.get('/export/:id', isAuth, requireFreshAuth(REAUTH_TIME_SENSITIVE), getAccountExport);
 
 // POST /account/login/2fa/send — mail a login code. Registered ABOVE `/login/2fa` so the more
 // specific path is matched first. Public like /login, and limited twice over: this is the only

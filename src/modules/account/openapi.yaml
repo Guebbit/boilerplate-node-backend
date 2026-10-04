@@ -899,24 +899,95 @@ paths:
     /account/export:
         post:
             tags: [Auth]
-            summary: Export the caller's own data
-            description: One JSON answer to "give me my data" (Art. 15, 20), assembled from every collection that holds something of the caller's — profile, address book, orders, payments, shipments, cart, wishlist, live sessions (metadata only, never a token value), and their own audit trail. Requires a FRESH session (`requireFreshAuth`) rather than a request body — a full personal-data dump is worth re-proving identity for, and this repository already has the mechanism.
-            operationId: exportAccountData
+            summary: Request an export of the caller's own data
+            description: >-
+                Starts "give me my data" (Art. 15, 20) and answers at once with `202` and the export's
+                `id` and `status`. The file is built in the background from every collection that holds
+                something of the caller's — profile, address book, orders, payments, shipments, cart,
+                wishlist, live sessions (metadata only, never a token value), and their own audit
+                trail — and a LINK to it is mailed to the account's address when it is ready, never
+                the data itself. Fetch it with `GET /account/export/{id}`.
+
+
+                One live export per account. Asking while one is `building` returns that one; asking
+                after one is `ready` or `failed` replaces it (the old file and record are deleted
+                first). A file is kept for `NODE_ACCOUNT_EXPORT_TTL_DAYS` days. Requires a FRESH session
+                (`requireFreshAuth`) rather than a request body — a personal-data dump is worth
+                re-proving identity for, and this repository already has the mechanism.
+            operationId: requestAccountExport
             security:
                 - bearerAuth: []
             responses:
-                '200':
-                    description: The caller's own data
+                '202':
+                    description: The export is queued (or is the one already building)
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountExportEnvelope'
+                                $ref: '#/components/schemas/AccountExportRequestEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/export/{id}:
+        get:
+            tags: [Auth]
+            summary: Download an export of the caller's own data
+            description: >-
+                Streams the finished export — the JSON document `AccountExportResponse` describes — as
+                an attachment. This is the page the mailed link opens. Owner only, and a FRESH session
+                (`requireFreshAuth`), same as the request. `404` for an export that is not the
+                caller's, is still `building`, `failed`, or is already gone (past its retention, or
+                replaced by a newer request): the caller cannot tell these apart, by design.
+            operationId: downloadAccountExport
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The caller's own data
+                    headers:
+                        Content-Disposition:
+                            description: '`attachment`, with the file name `account-export.json`.'
+                            schema: { type: string }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountExportResponse'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
     schemas:
         # ---------- account — the schemas only this module's paths reference. ----------
+        AccountExportRequest:
+            type: object
+            additionalProperties: false
+            required: [id, status]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                status:
+                    type: string
+                    enum: [building, ready, failed]
+                    description: >-
+                        `building` on a fresh request. A request never answers `ready` or `failed`:
+                        asking again after either REPLACES the export with a new `building` one.
+
+        AccountExportRequestEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AccountExportRequest'
+
         OAuthProviders:
             type: object
             additionalProperties: false

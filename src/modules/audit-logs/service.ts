@@ -8,14 +8,13 @@
  */
 
 import { auditLogRepository, AUDIT_SORT } from './repository';
-import type { AuditLogSearchFilters } from './repository';
+import type { AuditLogSearchFilters, OwnEntriesCursor } from './repository';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import type { AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from './model';
 import type { AuditEntryItem } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { auditSinkFailuresTotal } from './metrics';
-import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
 
 /**
@@ -134,22 +133,28 @@ export const searchIncidents = (
             }))
         }));
 
+/** Entries read per query when an export walks an account's whole trail. */
+export const OWN_ENTRIES_PAGE = 500;
+
 /**
  * Every audit entry recorded against this account, actor-only — for the account's own data
  * export. An actor's own rows only: an export that read past the caller would be the exact leak
  * Art. 15 exists to prevent. Unpaginated on purpose: an export is a one-time full answer, not a
- * listing a client pages through.
+ * listing a client pages through. Read by cursor (`ownEntriesPage`), so a long trail costs one
+ * pass, not a count and a skip per page.
  *
  * @param userId - the caller's own id
  */
-export const findOwnAuditEntries = (userId: string): Promise<AuditEntryItem[]> =>
-    readAll(
-        (page) =>
-            search({ actor: userId, page, pageSize: MAX_CONFIGURED_PAGE_SIZE }).then(
-                (result) => result.items
-            ),
-        MAX_CONFIGURED_PAGE_SIZE
-    );
+export const findOwnAuditEntries = (userId: string): Promise<AuditEntryItem[]> => {
+    const entries: AuditEntryItem[] = [];
+    const readFrom = (after: OwnEntriesCursor | undefined): Promise<AuditEntryItem[]> =>
+        auditLogRepository.ownEntriesPage(userId, after, OWN_ENTRIES_PAGE).then((page) => {
+            entries.push(...page.items);
+            return page.next ? readFrom(page.next) : entries;
+        });
+
+    return readFrom(undefined);
+};
 
 /**
  * The module's barrel export — `record` is registered as the audit sink, `search` serves a

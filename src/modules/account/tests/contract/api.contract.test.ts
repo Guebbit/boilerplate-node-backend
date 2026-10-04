@@ -10,6 +10,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { requestAndDownloadExport } from '@tests/account-export';
 import { setCookie, cookieHeader } from '@tests/cookies';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
@@ -821,17 +822,81 @@ describe('POST /account/reauth', () => {
 });
 
 describe('POST /account/export', () => {
-    it("returns the caller's profile and sessions, and satisfies the contract", async () => {
+    it('answers 202 with the export id, and the finished file holds the caller’s profile and sessions', async () => {
         const { user, bearer } = await loginWithCookie();
 
-        const response = await api().post('/account/export').set('Authorization', bearer).send();
+        const { request, status, data } = await requestAndDownloadExport(bearer);
+
+        expect(request.status).toBe(202);
+        expect(status).toBe(200);
+        const { profile, sessions } = data as {
+            profile: { email: string };
+            sessions: { id: string; type: string }[];
+        };
+        expect(profile.email).toBe(user.email);
+        expect(sessions.some((session) => session.type === 'refresh')).toBe(true);
+    });
+});
+
+describe('POST /account/export without a session', () => {
+    it('answers 401', async () => {
+        const response = await api().post('/account/export').send();
+
+        expect(response.status).toBe(401);
+    });
+});
+
+describe('GET /account/export/{id}', () => {
+    it('streams the export as a JSON attachment, never cached', async () => {
+        const { bearer } = await loginWithCookie();
+        const { request } = await requestAndDownloadExport(bearer);
+
+        const response = await api()
+            .get(`/account/export/${request.id}`)
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        const { data } = response.body as {
-            data: { profile: { email: string }; sessions: { id: string; type: string }[] };
-        };
-        expect(data.profile.email).toBe(user.email);
-        expect(data.sessions.some((session) => session.type === 'refresh')).toBe(true);
+        expect(response.headers['content-type']).toContain('application/json');
+        expect(response.headers['content-disposition']).toBe(
+            'attachment; filename="account-export.json"'
+        );
+        expect(response.headers['cache-control']).toBe('private, no-store');
+    });
+
+    it('answers 401 with no session', async () => {
+        const response = await api().get(`/account/export/${MISSING_ID}`);
+
+        expect(response.status).toBe(401);
+    });
+
+    it('answers 404 for an export that does not exist', async () => {
+        const { bearer } = await loginWithCookie();
+
+        const response = await api()
+            .get(`/account/export/${MISSING_ID}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('answers 404 for a malformed id, the same as an unknown one', async () => {
+        const { bearer } = await loginWithCookie();
+
+        const response = await api().get('/account/export/not-an-id').set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('answers 404 for another account’s export, not 403', async () => {
+        const owner = await loginWithCookie({ email: 'owner-export@example.com' });
+        const { request } = await requestAndDownloadExport(owner.bearer);
+        const stranger = await loginWithCookie({ email: 'stranger-export@example.com' });
+
+        const response = await api()
+            .get(`/account/export/${request.id}`)
+            .set('Authorization', stranger.bearer);
+
+        expect(response.status).toBe(404);
     });
 });
 

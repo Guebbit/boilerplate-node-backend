@@ -159,12 +159,14 @@ it('publishes the set the pair agreed on', () => {
      * `account.reauth-code`, the step-up code an account with no password passes with. So are
      * `orders.order-cancelled` (a person's cancel, saying what became of the money) and
      * `orders.order-refunded` (money back outside a return) — new here, appended to the message
-     * for the twin's session. The other eight are the agreed, mirrored set.
+     * for the twin's session. So is `account.export-ready`, the link to a finished data export: the
+     * twin's export is still one synchronous answer. The other eight are the agreed, mirrored set.
      */
     const agreedByPair = [
         'account.delete-confirm',
         'account.delete-request',
         'account.email-change-notice',
+        'account.export-ready',
         'account.inactivity-warning',
         'account.reauth-code',
         'account.reset-confirm',

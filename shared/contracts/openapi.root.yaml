@@ -1811,20 +1811,6 @@ components:
                     items:
                         $ref: '../../src/modules/example/openapi.yaml#/components/schemas/Example'
 
-        AccountExportEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/AccountExportResponse'
-
         # For the path-form deletes, which need no id — `{id}` already carries it — but do
         # read the flag from a body as readily as from the query.
         HardDeleteRequest:

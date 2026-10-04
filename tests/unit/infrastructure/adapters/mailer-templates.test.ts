@@ -27,7 +27,8 @@ import {
     twoFactorCodeEmail,
     reauthCodeEmail,
     emailChangeNoticeEmail,
-    twoFactorChangedEmail
+    twoFactorChangedEmail,
+    exportReadyEmail
 } from '@modules/account/emails';
 import { contactRequestEmail } from '@modules/feedback/emails';
 import { examplePublishedEmail } from '@modules/example';
@@ -94,6 +95,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'account.reauth-code': reauthCodeEmail(locale, 'Ada', '492013', 10),
     'account.email-change-notice': emailChangeNoticeEmail(locale, 'Ada', 'new@example.com'),
     'account.two-factor-changed': twoFactorChangedEmail(locale, 'Ada', 'enrolled', 'email'),
+    'account.export-ready': exportReadyEmail(locale, 'Ada', '64b0c0ffee64b0c0ffee64b0', 7),
     'orders.order-confirm': orderConfirmEmail(
         locale,
         'Ada',

@@ -14,6 +14,7 @@ import { freezeDate, advanceDate } from '@tests/clock';
 import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { REAUTH_TIME_SENSITIVE } from '@kernel/middlewares/authorizations';
 import { createAccessToken, createRefreshToken } from '../../session/jwt';
+import { settleInlineExports } from '../../services/export';
 
 /** Every queued mail, newest last — what the recipient would read. */
 const mockOutbox: { template: string; data: Record<string, unknown> }[] = [];
@@ -265,7 +266,22 @@ describe('POST /account/reauth with a mailed code', () => {
             .set('Authorization', `Bearer ${fresh.body.data.token as string}`)
             .send();
 
-        expect(allowed.status).toBe(200);
+        // 202: asking is what a fresh session unlocks; the build runs behind it.
+        expect(allowed.status).toBe(202);
+        await settleInlineExports();
+    });
+
+    it('asks a stale session to prove itself again before a download, too', async () => {
+        freezeDate();
+        const { jwtCookie } = await sessionFor(['pwd'], true);
+        advanceDate((REAUTH_TIME_SENSITIVE + 1) * 1000);
+        const stale = await api().get('/account/refresh').set('Cookie', jwtCookie);
+
+        const response = await api()
+            .get(`/account/export/${'0'.repeat(24)}`)
+            .set('Authorization', `Bearer ${stale.body.data.token as string}`);
+
+        expect(response.status).toBe(401);
     });
 });
 

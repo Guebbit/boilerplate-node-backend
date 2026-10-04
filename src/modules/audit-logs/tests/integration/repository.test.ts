@@ -8,6 +8,7 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { auditLogRepository, AUDIT_SORT } from '@modules/audit-logs/repository';
+import { findOwnAuditEntries, OWN_ENTRIES_PAGE } from '@modules/audit-logs/service';
 import { coreAuditActions, type AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from '@modules/audit-logs/model';
 
@@ -240,5 +241,91 @@ describe('auditLogRepository', () => {
             expect(seen).toHaveLength(TOTAL);
             expect(new Set(seen).size).toBe(TOTAL);
         });
+    });
+});
+
+/** Walk every page of an actor's trail the way the export does. */
+const walk = async (actor: string, limit: number) => {
+    const collected: string[] = [];
+    let after: Parameters<typeof auditLogRepository.ownEntriesPage>[1];
+    let pages = 0;
+    do {
+        const page = await auditLogRepository.ownEntriesPage(actor, after, limit);
+        collected.push(...page.items.map((item) => item.request_id ?? ''));
+        after = page.next;
+        pages += 1;
+    } while (after);
+    return { collected, pages };
+};
+
+describe('reading an actor’s own trail by cursor', () => {
+    const AT = new Date('2026-08-01T10:00:00.000Z');
+
+    /** `count` entries for one actor, all at the same instant: the worst case for a cursor. */
+    const tied = (actor: string, count: number, prefix: string) =>
+        Array.from({ length: count }, (_, index) =>
+            makeEntry({
+                actor_user_id: actor,
+                request_id: `${prefix}-${String(index)}`,
+                timestamp: AT
+            })
+        );
+
+    it('returns every entry exactly once even when a page boundary splits entries at one instant', async () => {
+        await Promise.all(tied('ada', 7, 'tied').map((entry) => auditLogRepository.create(entry)));
+
+        const { collected, pages } = await walk('ada', 3);
+
+        expect(collected.toSorted()).toEqual(
+            Array.from({ length: 7 }, (_, index) => `tied-${String(index)}`).toSorted()
+        );
+        expect(pages).toBe(3);
+    });
+
+    it('reads newest first across different instants', async () => {
+        for (const [index, minutes] of [0, 5, 10, 15].entries())
+            await auditLogRepository.create(
+                makeEntry({
+                    actor_user_id: 'ada',
+                    request_id: `at-${String(index)}`,
+                    timestamp: new Date(AT.getTime() + minutes * 60_000)
+                })
+            );
+
+        const { collected } = await walk('ada', 2);
+
+        expect(collected).toEqual(['at-3', 'at-2', 'at-1', 'at-0']);
+    });
+
+    it('never reads another actor’s entries', async () => {
+        await auditLogRepository.create(makeEntry({ actor_user_id: 'ada', request_id: 'mine' }));
+        await auditLogRepository.create(
+            makeEntry({ actor_user_id: 'grace', request_id: 'theirs' })
+        );
+
+        const { collected } = await walk('ada', 10);
+
+        expect(collected).toEqual(['mine']);
+    });
+
+    it('reports no next page when the trail ends inside one, and when it is empty', async () => {
+        await auditLogRepository.create(makeEntry({ actor_user_id: 'ada' }));
+
+        const short = await auditLogRepository.ownEntriesPage('ada', undefined, 5);
+        const none = await auditLogRepository.ownEntriesPage('nobody', undefined, 5);
+
+        expect(short.next).toBeUndefined();
+        expect(none).toEqual({ items: [], next: undefined });
+    });
+
+    it('findOwnAuditEntries returns the whole trail, past one page', async () => {
+        const total = OWN_ENTRIES_PAGE + 1;
+        await Promise.all(tied('ada', total, 'e').map((entry) => auditLogRepository.create(entry)));
+        await auditLogRepository.create(makeEntry({ actor_user_id: 'grace' }));
+
+        const entries = await findOwnAuditEntries('ada');
+
+        expect(entries).toHaveLength(total);
+        expect(entries.every((entry) => entry.actor_user_id === 'ada')).toBe(true);
     });
 });

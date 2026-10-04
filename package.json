@@ -83,6 +83,7 @@
         "reap:quarantine": "tsx scripts/ops/reap-quarantine.ts",
         "reap:mail-spool": "tsx scripts/ops/reap-mail-spool.ts",
         "reap:inactive-accounts": "tsx scripts/ops/reap-inactive-accounts.ts",
+        "reap:account-exports": "tsx scripts/ops/reap-account-exports.ts",
         "reap:expired-tokens": "tsx scripts/ops/reap-expired-tokens.ts",
         "reap:invoice-pdfs": "tsx scripts/ops/reap-invoice-pdfs.ts",
         "reap:orders": "tsx scripts/ops/reap-orders.ts",

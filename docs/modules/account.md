@@ -1,7 +1,7 @@
 # account
 
 ::: tip At a glance
-**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, two-step deletion. No collection of its own — see [`addresses`](./addresses.md) for the one that used to live here.
+**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, two-step deletion, and the [data export](#data-export). One collection of its own, `accountexports`; the address book that used to live here is [`addresses`](./addresses.md).
 **Depends on** — [`users`](./users.md), whose record it authenticates. The repo's only `shared-kernel` edge.
 **Breaks if you change** — the token lifetimes or the cookie flags. Every guard in the app resolves through this module.
 :::
@@ -42,8 +42,9 @@ merely on import — because installing a function touches no connection, and ev
 application depends on it existing before the first request arrives. Registering there rather than
 at import time means importing this file for a type or a test no longer installs the resolver too.
 
-It owns no collection of its own. The User record belongs to [`users`](./users.md) and is reached
-through that module's barrel; the address book that used to live here moved to its own module,
+Its one collection is `accountexports`, a row per account that asked for its data
+([below](#data-export)). The User record belongs to [`users`](./users.md) and is reached through
+that module's barrel; the address book that used to live here moved to its own module,
 [`addresses`](./addresses.md), once nothing else needed `account` to hold it — see that page for
 why.
 
@@ -172,6 +173,67 @@ Collision is checked twice, because the two checks catch different things. At **
 the requested address is compared against every account's `email` _and_ `pendingEmail`. At **swap
 time**, the `users_email` and `users_pending_email` unique indexes catch whatever changed in the
 up-to-24-hours between the two.
+
+## Data export {#data-export}
+
+"Give me my data" (GDPR Art. 15 and 20) is a job, not a request. Building the answer reads every
+module's section of the account, and doing that inside the HTTP request held all of them in one
+object, per call, for as long as the slowest took. So asking only records a row and queues a
+build; a **link** is mailed when the file is ready, never the data. Google Takeout, GitHub and
+Facebook all do the same.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
+flowchart LR
+    A["POST /account/export<br/><i>fresh session</i>"] --> R["row: building<br/><i>one per account</i>"]
+    R --> Q{"broker?"}
+    Q -->|yes| W["worker.account.export"]
+    Q -->|no| I["inline, after the 202"]
+    W --> B["build<br/><i>one section at a time</i>"]
+    I --> B
+    B --> F["file in the private store"]
+    F --> M["mail: a link"]
+    M --> D["GET /account/export/{id}<br/><i>owner · fresh session</i>"]
+    B -. "throws" .-> X["row: failed<br/><i>logged, no mail</i>"]
+
+    classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef warn fill:#fee2e2,stroke:#dc2626,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class A,D entry;
+    class X warn;
+    class R,W,I,B,F,M done;
+```
+
+Decisions rather than mechanics:
+
+- **One live export per account.** Asking while one is `building` returns that one (and starts no
+  second build). Asking after one is `ready` or `failed` _replaces_ it: the old file and row are
+  deleted first. The unique index on `userId` settles two simultaneous requests: one wins, the other
+  gets the winner back. A `building` row older than 30 minutes counts as lost with its process and is
+  replaced too.
+- **Peak memory is one section.** The worker collects the sections one at a time and appends each to
+  the file as it arrives, so the largest section is the ceiling, not the sum. The audit section reads
+  by cursor on the `{ actor_user_id, timestamp }` index: no count and no skip per page, which made
+  reading a long trail cost work quadratic in its length.
+- **The job carries the subject the request saw**, including whether the address had been proven. A
+  section that matches by address (`feedback`) answers only for a proven one, so the file says what
+  the caller was entitled to when they asked, not what became true later.
+- **A failed build is a state.** The worker logs the error and marks the row `failed`; no mail goes
+  out, and asking again replaces it. Two runs of one job (a broker redelivery) are safe: only a row
+  still `building` is built, and only the run that settles it mails the link.
+- **The download asks for a fresh session, like the request.** The mailed link opens a frontend page
+  that calls `GET /account/export/{id}`; a forwarded mail hands nobody the file. A row that is not
+  yours, not ready, past its retention or already gone are the same `404`.
+- **Kept `NODE_ACCOUNT_EXPORT_TTL_DAYS` days (7), then gone.** The nightly `reap:account-exports`
+  deletes file and row, and sweeps files no row points at by age. A hard account delete (and so
+  `reap:inactive-accounts`) deletes the export with the rest of the account: the row inside the
+  erasure's transaction, the file after its commit, because a file cannot roll back.
+- **Plaintext on disk, on purpose.** The file sits unencrypted in `NODE_ACCOUNT_EXPORT_STORE_PATH`,
+  like the Mongo data files: private (never under the public directory), regenerable (not backed up),
+  at-rest protection is the host's. See
+  [crypto and secrets](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
+- **Audited at both ends.** `auth.data_export.requested` when it is asked for, and
+  `auth.data_export.downloaded` when the data actually leaves.
 
 ## Related pages
 

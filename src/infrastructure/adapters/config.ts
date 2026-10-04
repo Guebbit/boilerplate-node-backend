@@ -213,6 +213,18 @@ export const pdfConfig = defineConfig({
     }
 });
 
+/** The private store a built personal-data export is kept in until it is downloaded or expires. */
+export const exportStoreConfig = defineConfig({
+    name: 'exportStore',
+    shape: {
+        NODE_ACCOUNT_EXPORT_STORE_PATH: text({
+            default: path.join('tmp', 'storage', 'exports'),
+            describe:
+                'Where a built personal-data export is kept until it is downloaded or expires. Private, plaintext on disk, regenerable: mount a volume in a deployment, do not back it up.'
+        })
+    }
+});
+
 /** The anti-abuse ladder: email policy, and the human-challenge provider with its credentials. */
 export const antibotConfig = defineConfig({
     name: 'antibot',

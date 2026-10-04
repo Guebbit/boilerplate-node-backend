@@ -42,8 +42,10 @@ export const accountAuditActions = {
     AUTH_LOGGED_OUT: 'auth.logout',
     AUTH_LOGGED_OUT_EVERYWHERE: 'auth.logout_all',
     AUTH_SESSION_REVOKED: 'auth.session.revoked',
-    /** The caller pulled a full copy of their own data. */
-    AUTH_DATA_EXPORTED: 'auth.data_export.completed',
+    /** The caller asked for a full copy of their own data — `metadata.reused` when one was already building. */
+    AUTH_DATA_EXPORT_REQUESTED: 'auth.data_export.requested',
+    /** The caller downloaded the finished copy — the moment the data actually left. */
+    AUTH_DATA_EXPORT_DOWNLOADED: 'auth.data_export.downloaded',
     /** One second factor was confirmed and armed — `metadata.method` names which. */
     AUTH_2FA_ENROLLED: 'auth.two_factor.enrolled',
     /** One factor was removed, or all of them — `metadata.method` is the wire name, or `all`. */

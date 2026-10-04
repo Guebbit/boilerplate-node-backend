@@ -69,8 +69,8 @@ The asymmetry that matters: a value this server must **compare** is hashed; a va
 | Unencrypted at rest                    | no disk or field encryption; backups in plaintext                                                                                                  | Disk-level encryption is the host's. Field-level, the two rows above cover every secret and the PII named above; everything else in Mongo relies on transport (wire TLS) and disk encryption only.                                                                                                                                                                              |
 
 **Files on disk are plaintext, on purpose.** A stored invoice or credit-note PDF
-(`NODE_DOCUMENT_STORE_PATH`) and, once built, a prepared data export sit unencrypted on the host's
-disk, like the Mongo data files: at-rest protection is the host's (disk encryption), not this
+(`NODE_DOCUMENT_STORE_PATH`) and a built data export (`NODE_ACCOUNT_EXPORT_STORE_PATH`) sit
+unencrypted on the host's disk, like the Mongo data files: at-rest protection is the host's (disk encryption), not this
 code's. They are kept apart from what that would make worse: private (never under the public
 directory), regenerable (the frozen rows in Mongo are the record, so they are not backed up), and
 reaped after a retention window.

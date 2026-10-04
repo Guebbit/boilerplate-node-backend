@@ -56,6 +56,10 @@
             "revoked": "Sessione revocata.",
             "not-found": "Sessione non trovata."
         },
+        "export": {
+            "requested": "Esportazione richiesta. Ti invieremo un link via email quando sarà pronta.",
+            "not-found": "Esportazione non trovata."
+        },
         "verify": {
             "email-sent": "È stata inviata un'email di verifica, clicca sul link per confermare il tuo indirizzo.",
             "already-verified": "Questo account è già verificato.",
@@ -123,6 +127,15 @@
                 "meta-title": "Avviso di inattività",
                 "greeting": "Ciao, {{name}}!",
                 "body": "Non ti vediamo accedere da un po'. Per mantenere il tuo account, accedi entro i prossimi {{days}} giorni — trascorsi i quali verrà disattivato e, in seguito, eliminato definitivamente."
+            },
+            "export-ready": {
+                "subject": "L'esportazione dei tuoi dati è pronta",
+                "meta-title": "Esportazione dei dati",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "La copia dei tuoi dati che hai richiesto è pronta. Accedi e apri questo link per scaricarla:",
+                "link-label": "Scarica i miei dati",
+                "expiry": "Il file viene conservato per {{days}} giorni, poi eliminato.",
+                "ignore": "Se non l'hai richiesta tu, cambia la password ed esci da tutti i dispositivi."
             },
             "two-factor-code": {
                 "subject": "Il tuo codice di accesso",

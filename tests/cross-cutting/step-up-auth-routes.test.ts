@@ -65,6 +65,7 @@ const STEP_UP_ROUTES: Record<string, string> = {
     // The data export adopts this same guard in place of a bespoke password check — see the
     // route's own comment in `account/routes.ts`.
     'account POST /export': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
+    'account GET /export/:id': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
     // Enrolling, confirming or disabling a second factor is itself a sensitive action —
     // critical tier, same as `DELETE /` and the checkout/payment routes above.
     'account POST /2fa/methods/:method/setup': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,

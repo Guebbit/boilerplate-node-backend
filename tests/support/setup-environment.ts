@@ -301,3 +301,9 @@ process.env.NODE_SMTP_HOST ??= 'smtp.test.invalid';
  * which is different in every test database.
  */
 process.env.NODE_DOCUMENT_STORE_PATH ??= path.join(tmpdir(), 'node-api-test-documents');
+
+/**
+ * Built account exports go to the system temp directory too, for the same reason as the stored
+ * PDFs above. A stored name is the export record's own Mongo id, so one directory per run is fine.
+ */
+process.env.NODE_ACCOUNT_EXPORT_STORE_PATH ??= path.join(tmpdir(), 'node-api-test-exports');

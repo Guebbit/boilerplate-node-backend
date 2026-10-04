@@ -15,7 +15,7 @@ import { frontendLink } from '@infrastructure/http/frontend-link';
 export type AccountLinkKind = 'verify' | 'reset' | 'delete' | 'email-change';
 
 /**
- * The frontend link templates and the two mail-link lifetimes.
+ * The frontend link templates, the two mail-link lifetimes and how long a data export is kept.
  *
  * Each template defaults to the paired frontend's own route
  * (`<paired-frontend>/src/modules/account/routes.ts`). `{token}` is filled in by
@@ -40,6 +40,10 @@ export const accountConfig = defineConfig({
             default: 'email-change/confirm?token={token}',
             describe: 'Template of the email-change link.'
         }),
+        NODE_FRONTEND_LINK_EXPORT: text({
+            default: 'account-export/{id}',
+            describe: 'Template of the link in the "your data export is ready" mail.'
+        }),
         NODE_PASSWORD_RESET_TTL_MS: int({
             default: 3_600_000,
             min: 1,
@@ -55,6 +59,12 @@ export const accountConfig = defineConfig({
             default: 86_400_000,
             min: 1,
             describe: 'How long a verification link works.'
+        }),
+        NODE_ACCOUNT_EXPORT_TTL_DAYS: int({
+            default: 7,
+            min: 1,
+            describe:
+                'Days a built data export stays downloadable. After that the nightly reaper deletes the file and the account can ask for a new one.'
         })
     }
 });
@@ -81,3 +91,21 @@ export const accountFrontendLink = (
     frontendLink(accountConfig()[LINK_ENV_VAR[kind]], parameters.locale, {
         token: parameters.token
     });
+
+/**
+ * The link in the "your data export is ready" mail: the frontend page that downloads it. Not one
+ * of {@link AccountLinkKind}: it carries an export's id, not a token, and the page needs a signed-in
+ * session anyway (the download route asks for a fresh one).
+ *
+ * @param locale - the mail's own locale
+ * @param exportId - the export the page downloads
+ */
+export const accountExportLink = (locale: string, exportId: string): string =>
+    frontendLink(accountConfig().NODE_FRONTEND_LINK_EXPORT, locale, { id: exportId });
+
+/**
+ * How long a built export is kept, in milliseconds. Read at use, so changing it applies to the
+ * next export built and to the next reaper run.
+ */
+export const exportRetentionMs = (): number =>
+    accountConfig().NODE_ACCOUNT_EXPORT_TTL_DAYS * 24 * 60 * 60 * 1000;

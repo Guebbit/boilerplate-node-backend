@@ -10,6 +10,7 @@ import '@tests/contract';
 import sharp from 'sharp';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { requestAndDownloadExport } from '@tests/account-export';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { MISSING_ID } from '@tests/ids';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
@@ -519,11 +520,11 @@ describe('POST /account/export', () => {
         await createExample({ userId: user.id, title: 'Mine' });
         await createExample({ userId: other.id, title: 'Theirs' });
 
-        const response = await api().post('/account/export').set('Authorization', bearer).send();
+        const response = await requestAndDownloadExport(bearer);
 
         expect(response.status).toBe(200);
         expect(
-            response.body.data.examples.map((example: { title: string }) => example.title)
+            (response.data.examples as { title: string }[]).map((example) => example.title)
         ).toEqual(['Mine']);
     });
 });

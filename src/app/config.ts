@@ -19,6 +19,7 @@ import {
     mailConfig,
     mailFilesConfig,
     pdfConfig,
+    exportStoreConfig,
     queueConfig,
     redisConfig
 } from '@infrastructure/adapters/config';
@@ -137,6 +138,7 @@ export const APP_CONFIG_SLICES: readonly ConfigSlice[] = [
     redisConfig,
     imageConfig,
     pdfConfig,
+    exportStoreConfig,
     antibotConfig,
     humanChallengeProviderProbe,
     siteConfig,

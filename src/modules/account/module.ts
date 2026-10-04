@@ -4,21 +4,25 @@
  * everywhere, and the two-step account deletion. A second service over `users`' record rather
  * than a merged one — `/account` and `/users` are different mounts.
  *
- * Owns:        no collection of its own — the address book moved to `addresses`. The User record
- *              stays with `users`, kept replaceable for a future identity provider.
+ * Owns:        `accountexports`, one row per account that asked for its data. The address book
+ *              moved to `addresses`; the User record stays with `users`, kept replaceable for a
+ *              future identity provider.
  * Shares:      the User document with `users` — the repo's one shared kernel, invisible to the
  *              import graph. Both read and write it, so a schema change there is agreed twice.
  * Reaches far: `POST /account/export`, without an import graph to show for it — every module
  *              declares its own `personalData` section (`@kernel/registry.ts`), this module's own
  *              `onRegistered` hook resolves the list once every module is known and hands it in
- *              through `./services/personal-data-registry.ts`, and this module only assembles
- *              what it is given. See `services/export.ts`.
+ *              through `./services/personal-data-registry.ts`, and the export worker only
+ *              assembles what it is given. See `services/export-job.ts`.
+ * Queue:       `worker.account.export`, consumed here (`consumers`), declared in
+ *              `./asyncapi.internal.yaml`.
  *
  * See: docs/modules/account.md
  */
 
 import path from 'node:path';
 import { type AppModule, resolvePersonalDataSections } from '@kernel/registry';
+import { WORKER_CHANNELS, AccountExportJobPayloadSchema } from '@types';
 import { registerAuthResolver } from '@kernel/authentication';
 import { onDomainEvent } from '@kernel/events';
 import { userService, USER_SETUP_REQUESTED } from '@modules/users';
@@ -30,6 +34,8 @@ import { requestAccountSetup } from './services/authentication';
 import { router } from './routes';
 import { accountRateLimits } from './rate-limits';
 import { setPersonalDataSections } from './services/personal-data-registry';
+import { eraseExports } from './services/export';
+import { runExportJob } from './services/export-job';
 
 /**
  * Everything this module installs once every enabled module is known: the auth resolver the whole
@@ -57,9 +63,31 @@ export default {
     routes: router,
     /** The credential/signup/reset/MFA/password-check budgets — see `./rate-limits.ts`. */
     rateLimits: accountRateLimits,
-    // No collection of its own — see the module docblock. `POST /account/export` assembles every
-    // OTHER module's section; this module contributes none of its own data to it.
-    personalData: 'none',
+    /*
+     * The export build assembles every OTHER module's section; this module's own collection holds
+     * the export itself, which is a COPY of what the sections already say. So it contributes no
+     * data to an export (`collect` resolves `undefined`, which omits the section) and only
+     * declares how an account's export row and file are erased with the account.
+     */
+    personalData: [
+        {
+            section: 'accountExports',
+            collect: () => Promise.resolve(undefined),
+            erase: eraseExports
+        }
+    ],
+    /*
+     * `prefetch: 1` — a build reads every section of one account, the heaviest job this module
+     * runs; one at a time per worker keeps a burst of requests from starving the others.
+     */
+    consumers: [
+        {
+            queue: WORKER_CHANNELS.ACCOUNT_EXPORT,
+            handler: runExportJob,
+            schema: AccountExportJobPayloadSchema,
+            prefetch: 1
+        }
+    ],
     // Token rings, the token windows and the second-factor key: see `./session/config.ts`.
     config: [accountConfig.slice, sessionConfig.slice, oauthConfig.slice],
     onRegistered,

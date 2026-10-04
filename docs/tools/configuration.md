@@ -354,6 +354,12 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | `PUPPETEER_EXECUTABLE_PATH` | text | `/usr/bin/chromium-browser` | —     | The Chromium binary (puppeteer-core ships none).                                                                                                                   |
 | `NODE_DOCUMENT_STORE_PATH`  | text | `tmp/storage/documents`     | —     | Where a rendered invoice or credit-note PDF is kept between downloads. Private, plaintext on disk, regenerable: mount a volume in a deployment, do not back it up. |
 
+### exportStore
+
+| Variable                         | Type | Default               | Rules | What it does                                                                                                                                                              |
+| -------------------------------- | ---- | --------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ACCOUNT_EXPORT_STORE_PATH` | text | `tmp/storage/exports` | —     | Where a built personal-data export is kept until it is downloaded or expires. Private, plaintext on disk, regenerable: mount a volume in a deployment, do not back it up. |
+
 ### antibot
 
 | Variable                            | Type                       | Default  | Rules                                                         | What it does                                                                   |
@@ -464,15 +470,17 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### account
 
-| Variable                          | Type              | Default                                | Rules | What it does                                                                                                                   |
-| --------------------------------- | ----------------- | -------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `NODE_FRONTEND_LINK_VERIFY`       | text              | `verify-email/confirm?token={token}`   | —     | Template of the email-verification link.                                                                                       |
-| `NODE_FRONTEND_LINK_RESET`        | text              | `password-reset/confirm?token={token}` | —     | Template of the password-reset link.                                                                                           |
-| `NODE_FRONTEND_LINK_DELETE`       | text              | `account-delete/confirm?token={token}` | —     | Template of the account-deletion link.                                                                                         |
-| `NODE_FRONTEND_LINK_EMAIL_CHANGE` | text              | `email-change/confirm?token={token}`   | —     | Template of the email-change link.                                                                                             |
-| `NODE_PASSWORD_RESET_TTL_MS`      | whole number >= 1 | `3600000`                              | —     | How long a reset link works. Shorter is safer.                                                                                 |
-| `NODE_INACTIVE_ACCOUNT_DAYS`      | whole number >= 0 | `0`                                    | —     | Days of inactivity before the reaper warns, then deletes, a customer account (never staff or an administrator). 0 disables it. |
-| `NODE_EMAIL_VERIFY_TTL_MS`        | whole number >= 1 | `86400000`                             | —     | How long a verification link works.                                                                                            |
+| Variable                          | Type              | Default                                | Rules | What it does                                                                                                                       |
+| --------------------------------- | ----------------- | -------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_FRONTEND_LINK_VERIFY`       | text              | `verify-email/confirm?token={token}`   | —     | Template of the email-verification link.                                                                                           |
+| `NODE_FRONTEND_LINK_RESET`        | text              | `password-reset/confirm?token={token}` | —     | Template of the password-reset link.                                                                                               |
+| `NODE_FRONTEND_LINK_DELETE`       | text              | `account-delete/confirm?token={token}` | —     | Template of the account-deletion link.                                                                                             |
+| `NODE_FRONTEND_LINK_EMAIL_CHANGE` | text              | `email-change/confirm?token={token}`   | —     | Template of the email-change link.                                                                                                 |
+| `NODE_FRONTEND_LINK_EXPORT`       | text              | `account-export/{id}`                  | —     | Template of the link in the "your data export is ready" mail.                                                                      |
+| `NODE_PASSWORD_RESET_TTL_MS`      | whole number >= 1 | `3600000`                              | —     | How long a reset link works. Shorter is safer.                                                                                     |
+| `NODE_INACTIVE_ACCOUNT_DAYS`      | whole number >= 0 | `0`                                    | —     | Days of inactivity before the reaper warns, then deletes, a customer account (never staff or an administrator). 0 disables it.     |
+| `NODE_EMAIL_VERIFY_TTL_MS`        | whole number >= 1 | `86400000`                             | —     | How long a verification link works.                                                                                                |
+| `NODE_ACCOUNT_EXPORT_TTL_DAYS`    | whole number >= 1 | `7`                                    | —     | Days a built data export stays downloadable. After that the nightly reaper deletes the file and the account can ask for a new one. |
 
 ### account-sessions
 

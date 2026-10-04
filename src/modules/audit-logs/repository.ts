@@ -13,6 +13,7 @@ import { auditLogModel, applyAuditLogTransform } from './model';
 import type { AuditLogDocument } from './model';
 import { createRepository } from '@infrastructure/persistence/create-repository';
 import type { AuditEntryItem } from '@types';
+import type { Types } from 'mongoose';
 
 /**
  * What `search` accepts, mirroring the query parameters `GET /observability/audit` and
@@ -66,12 +67,79 @@ export const AUDIT_SORT: Record<string, 1 | -1> = { timestamp: -1, _id: -1 };
 const sinceScope = (since?: Date): Record<string, unknown> =>
     since ? { timestamp: { $gt: since } } : {};
 
+/**
+ * Where the next page of an actor's own entries starts, newest first. `timestamp` alone is not
+ * unique, so `seen` names the ids already returned AT that timestamp: the next page takes everything
+ * at or before it except those.
+ */
+export interface OwnEntriesCursor {
+    timestamp: Date;
+    seen: Types.ObjectId[];
+}
+
+/** One page of an actor's own entries, and where the one after it starts. */
+export interface OwnEntriesPage {
+    items: AuditEntryItem[];
+    /** `undefined` when this page was the last. */
+    next: OwnEntriesCursor | undefined;
+}
+
+/**
+ * The cursor for the page after `rows`: the oldest timestamp reached, with every id already
+ * returned at that timestamp (carried over from `after` when the page did not move past it).
+ *
+ * @param rows - the page just read, newest first, never empty
+ * @param after - the cursor the page was read from
+ */
+const cursorAfter = (
+    rows: { _id: Types.ObjectId; timestamp: Date }[],
+    after: OwnEntriesCursor | undefined
+): OwnEntriesCursor => {
+    const { timestamp } = rows.at(-1)!;
+    const atEdge = rows.filter((row) => row.timestamp.getTime() === timestamp.getTime());
+    const carried = after?.timestamp.getTime() === timestamp.getTime() ? after.seen : [];
+    return { timestamp, seen: [...carried, ...atEdge.map((row) => row._id)] };
+};
+
+/**
+ * One page of an actor's OWN entries by keyset cursor, for the account's data export.
+ *
+ * No `countDocuments` and no `skip`: the shared `search` counts and skips on every page, so reading
+ * an actor's whole trail that way costs work quadratic in its length. This walks the
+ * `{ actor_user_id, timestamp }` index from where the last page ended, so each page costs a page.
+ *
+ * @param actor - the account whose entries are read; never anyone else's
+ * @param after - the cursor the previous page returned, or `undefined` for the first page
+ * @param limit - the page size
+ */
+const ownEntriesPage = (
+    actor: string,
+    after: OwnEntriesCursor | undefined,
+    limit: number
+): Promise<OwnEntriesPage> =>
+    auditLogModel
+        .find({
+            actor_user_id: actor,
+            ...(after ? { timestamp: { $lte: after.timestamp }, _id: { $nin: after.seen } } : {})
+        })
+        .sort({ timestamp: -1 })
+        .limit(limit)
+        .lean<{ _id: Types.ObjectId; timestamp: Date }[]>()
+        .exec()
+        .then((rows) => {
+            // The cursor first: `normalize` rewrites each row in place (`timestamp` becomes a
+            // string, `_id` goes), and the cursor needs both as they were stored.
+            const next = rows.length < limit ? undefined : cursorAfter(rows, after);
+            return { items: base.normalize(rows), next };
+        });
+
 /*
- * Three members, not the base repository's full surface. An audit trail is append-and-read: no
+ * Four members, not the base repository's full surface. An audit trail is append-and-read: no
  * `save`, no `deleteOne`, so the type is what refuses an edit rather than a reviewer.
  */
 export const auditLogRepository = {
     create: base.create,
     search: base.search,
-    sinceScope
+    sinceScope,
+    ownEntriesPage
 };

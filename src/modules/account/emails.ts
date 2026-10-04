@@ -9,7 +9,7 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale, translator } from '@infrastructure/i18n';
-import { accountFrontendLink, type AccountLinkKind } from './config';
+import { accountExportLink, accountFrontendLink, type AccountLinkKind } from './config';
 import type { CallerContext } from '@types';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
@@ -321,6 +321,40 @@ export const inactivityWarningEmail = (
             pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.inactivity-warning.greeting', name),
             body: t('account.email.inactivity-warning.body', { days: graceDays }),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * Data export ready: the mail carrying the LINK to the file, never the data. The link opens a
+ * page that needs a signed-in session, so a forwarded mail hands nobody the file.
+ *
+ * @param locale - the recipient's language
+ * @param name - the display name, or `''` (see {@link greetableName})
+ * @param exportId - the export the link downloads
+ * @param days - how long the file is kept, for the "works until" sentence
+ */
+export const exportReadyEmail = (
+    locale: string,
+    name: string,
+    exportId: string,
+    days: number
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'account.export-ready',
+        subject: t('account.email.export-ready.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.export-ready.meta-title'),
+            pageMetaLinks: [],
+            greeting: greetingFor(t, 'account.email.export-ready.greeting', name),
+            intro: t('account.email.export-ready.intro'),
+            linkLabel: t('account.email.export-ready.link-label'),
+            linkUrl: accountExportLink(locale, exportId),
+            expiry: t('account.email.export-ready.expiry', { days }),
+            ignore: t('account.email.export-ready.ignore'),
             footer: t('email.footer')
         }
     };
